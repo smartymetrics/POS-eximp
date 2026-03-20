@@ -1,0 +1,179 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #1A1A1A; font-size: 13px; }
+  .page { padding: 40px; max-width: 800px; margin: 0 auto; }
+  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 32px; padding-bottom: 20px; border-bottom: 3px solid #F5A623; }
+  .logo-area { display: flex; align-items: center; gap: 12px; }
+  .company-name { font-size: 22px; font-weight: 800; color: #1A1A1A; }
+  .company-sub { font-size: 10px; letter-spacing: 2px; color: #888; text-transform: uppercase; }
+  .company-details { text-align: right; font-size: 11px; color: #555; line-height: 1.7; }
+
+  .statement-title { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 28px; }
+  .statement-title h1 { font-size: 26px; font-weight: 800; color: #1A1A1A; letter-spacing: 1px; }
+  .statement-title .period { font-size: 11px; color: #888; text-align: right; }
+
+  .client-block { background: #f9f9f9; border: 1px solid #eee; border-left: 4px solid #F5A623; padding: 16px 20px; margin-bottom: 28px; border-radius: 0 6px 6px 0; }
+  .client-block h4 { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #F5A623; margin-bottom: 8px; }
+  .client-block strong { font-size: 15px; color: #1A1A1A; }
+  .client-block p { font-size: 12px; color: #555; line-height: 1.8; margin-top: 4px; }
+
+  /* Summary cards */
+  .summary-row { display: flex; gap: 12px; margin-bottom: 32px; }
+  .summary-card { flex: 1; border-radius: 6px; padding: 14px 16px; text-align: center; }
+  .summary-card.opening { background: #f9f9f9; border: 1px solid #eee; }
+  .summary-card.invoiced { background: #fffbf0; border: 1px solid #F5A623; }
+  .summary-card.paid { background: #f0faf5; border: 1px solid #27ae60; }
+  .summary-card.balance { background: #1A1A1A; }
+  .summary-card .card-label { font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #888; margin-bottom: 6px; }
+  .summary-card.balance .card-label { color: #aaa; }
+  .summary-card .card-value { font-size: 15px; font-weight: 800; color: #1A1A1A; }
+  .summary-card.invoiced .card-value { color: #b07d10; }
+  .summary-card.paid .card-value { color: #27ae60; }
+  .summary-card.balance .card-value { color: #F5A623; font-size: 17px; }
+
+  /* Transaction table */
+  .tx-table { width: 100%; border-collapse: collapse; margin-bottom: 32px; }
+  .tx-table thead tr { background: #1A1A1A; }
+  .tx-table thead th { padding: 11px 14px; text-align: left; font-size: 10px; letter-spacing: 1px; text-transform: uppercase; color: #F5A623; }
+  .tx-table thead th:last-child, .tx-table thead th:nth-last-child(2), .tx-table thead th:nth-last-child(3) { text-align: right; }
+  .tx-table tbody tr { border-bottom: 1px solid #f0f0f0; }
+  .tx-table tbody tr:nth-child(even) { background: #fafafa; }
+  .tx-table tbody tr.invoice-row td { color: #333; }
+  .tx-table tbody tr.payment-row td { color: #27ae60; }
+  .tx-table tbody td { padding: 11px 14px; font-size: 12px; }
+  .tx-table tbody td.right { text-align: right; }
+  .tx-table tbody td.type-badge { }
+  .badge { display: inline-block; font-size: 9px; padding: 2px 7px; border-radius: 3px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; }
+  .badge.invoice { background: #fffbf0; color: #b07d10; border: 1px solid #F5A623; }
+  .badge.payment { background: #f0faf5; color: #1e8449; border: 1px solid #27ae60; }
+  .tx-table tfoot tr { background: #1A1A1A; }
+  .tx-table tfoot td { padding: 12px 14px; color: #fff; font-weight: 700; font-size: 13px; }
+  .tx-table tfoot td.right { text-align: right; color: #F5A623; font-size: 15px; }
+
+  .footer { border-top: 2px solid #F5A623; padding-top: 20px; display: flex; justify-content: space-between; align-items: center; margin-top: 20px; }
+  .footer-left { font-size: 11px; color: #888; line-height: 1.7; }
+  .signature-line { border-top: 1px solid #ccc; width: 180px; margin-bottom: 4px; margin-left: auto; }
+  .footer-right { text-align: right; font-size: 11px; color: #888; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <div class="header">
+    <div class="logo-area">
+      <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
+        <path d="M24 4L36 14V44H28V32H20V44H12V14L24 4Z" fill="#F5A623"/>
+        <path d="M18 14H22V20H18V14ZM26 14H30V20H26V14ZM18 24H22V30H18V24ZM26 24H30V30H26V24Z" fill="#fff" fill-opacity="0.6"/>
+        <path d="M6 44H42" stroke="#F5A623" stroke-width="2.5" stroke-linecap="round"/>
+      </svg>
+      <div>
+        <div class="company-name">Eximp &amp; Cloves</div>
+        <div class="company-sub">Infrastructure Limited</div>
+      </div>
+    </div>
+    <div class="company-details">
+      RC 8311800<br>57B, Isaac John Street, Yaba<br>Lagos, Nigeria<br>+234 912 686 4383
+    </div>
+  </div>
+
+  <!-- Title -->
+  <div class="statement-title">
+    <h1>Statement of Accounts</h1>
+    <div class="period">
+      Period: {{ period_start }} to {{ period_end }}<br>
+      Generated: {{ generated_at }}
+    </div>
+  </div>
+
+  <!-- Client -->
+  <div class="client-block">
+    <h4>Account Holder</h4>
+    <strong>{{ client.full_name }}</strong>
+    <p>
+      {{ client.email }}{% if client.phone %} · {{ client.phone }}{% endif %}
+      {% if client.address %}<br>{{ client.address }}{% if client.city %}, {{ client.city }}{% endif %}{% endif %}
+    </p>
+  </div>
+
+  <!-- Summary Cards -->
+  <div class="summary-row">
+    <div class="summary-card opening">
+      <div class="card-label">Opening Balance</div>
+      <div class="card-value">NGN 0.00</div>
+    </div>
+    <div class="summary-card invoiced">
+      <div class="card-label">Invoiced Amount</div>
+      <div class="card-value">{{ format_currency(total_invoiced) }}</div>
+    </div>
+    <div class="summary-card paid">
+      <div class="card-label">Amount Paid</div>
+      <div class="card-value">{{ format_currency(total_paid) }}</div>
+    </div>
+    <div class="summary-card balance">
+      <div class="card-label">Balance Due</div>
+      <div class="card-value">{{ format_currency(balance_due) }}</div>
+    </div>
+  </div>
+
+  <!-- Transaction Table -->
+  <table class="tx-table">
+    <thead>
+      <tr>
+        <th>Date</th>
+        <th>Type</th>
+        <th>Reference / Details</th>
+        <th style="text-align:right;">Amount</th>
+        <th style="text-align:right;">Payment</th>
+        <th style="text-align:right;">Balance</th>
+      </tr>
+    </thead>
+    <tbody>
+      <tr>
+        <td colspan="5">*** Opening Balance ***</td>
+        <td class="right">0.00</td>
+      </tr>
+      {% for tx in transactions %}
+      <tr class="{{ 'invoice-row' if tx.type == 'Invoice' else 'payment-row' }}">
+        <td>{{ tx.date }}</td>
+        <td><span class="badge {{ tx.type | lower }}">{{ tx.type }}</span></td>
+        <td>{{ tx.ref }}</td>
+        <td class="right">
+          {% if tx.amount %}{{ format_currency(tx.amount) }}{% else %}—{% endif %}
+        </td>
+        <td class="right">
+          {% if tx.payment %}{{ format_currency(tx.payment) }}{% else %}—{% endif %}
+        </td>
+        <td class="right" style="font-weight: 700;">{{ format_currency(tx.balance) }}</td>
+      </tr>
+      {% endfor %}
+    </tbody>
+    <tfoot>
+      <tr>
+        <td colspan="5">Balance Due</td>
+        <td class="right">{{ format_currency(balance_due) }}</td>
+      </tr>
+    </tfoot>
+  </table>
+
+  <!-- Footer -->
+  <div class="footer">
+    <div class="footer-left">
+      Eximp &amp; Cloves Infrastructure Limited | RC 8311800<br>
+      57B, Isaac John Street, Yaba, Lagos, Nigeria<br>
+      info@eximps-cloves.com | www.eximps-cloves.com
+    </div>
+    <div class="footer-right">
+      <div class="signature-line"></div>
+      <div>Authorized Signature</div>
+      <div style="margin-top: 4px; color: #aaa;">Generated: {{ generated_at }}</div>
+    </div>
+  </div>
+
+</div>
+</body>
+</html>
