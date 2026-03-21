@@ -1,0 +1,145 @@
+from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
+from models import WebhookFormPayload
+from database import get_db
+import os
+from datetime import date, timedelta
+from email_service import send_invoice_email, send_admin_alert_email
+
+router = APIRouter()
+
+WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
+
+@router.post("/form-submission")
+async def form_submission(
+    payload: WebhookFormPayload,
+    request: Request,
+    background_tasks: BackgroundTasks
+):
+    # 1. Validate secret
+    secret = request.headers.get("X-Webhook-Secret")
+    if not WEBHOOK_SECRET or secret != WEBHOOK_SECRET:
+        raise HTTPException(status_code=403, detail="Invalid webhook secret")
+
+    # 2. Validate consent
+    if payload.consent != "I Confirm and Agree":
+        return {"message": "Consent not given, ignoring", "status": "ignored"}
+
+    db = get_db()
+
+    try:
+        # 3. Upsert client
+        full_name = f"{payload.first_name} {payload.middle_name + ' ' if payload.middle_name else ''}{payload.last_name}".strip()
+        client_data = {
+            "full_name": full_name,
+            "email": payload.email,
+            "phone": payload.phone,
+            "address": payload.address,
+            "title": payload.title,
+            "middle_name": payload.middle_name,
+            "gender": payload.gender,
+            "dob": payload.dob,
+            "marital_status": payload.marital_status,
+            "occupation": payload.occupation,
+            "nin": payload.nin,
+            "id_number": payload.id_number,
+            "id_document_url": payload.id_document_url,
+            "nationality": payload.nationality,
+            "passport_photo_url": payload.passport_photo_url,
+            "nok_name": payload.nok_name,
+            "nok_phone": payload.nok_phone,
+            "nok_email": payload.nok_email,
+            "nok_occupation": payload.nok_occupation,
+            "nok_relationship": payload.nok_relationship,
+            "nok_address": payload.nok_address,
+            "source_of_income": payload.source_of_income,
+            "referral_source": payload.referral_source,
+        }
+
+        # Search by email
+        client_res = db.table("clients").select("*").eq("email", payload.email).execute()
+        if client_res.data:
+            client_id = client_res.data[0]["id"]
+            db.table("clients").update(client_data).eq("id", client_id).execute()
+        else:
+            new_client = db.table("clients").insert(client_data).execute()
+            client_id = new_client.data[0]["id"]
+
+        # 4. Create invoice
+        # Generate invoice number via DB function
+        seq_result = db.rpc("generate_invoice_number").execute()
+        invoice_number = seq_result.data
+
+        # Parse plot size sqm if possible (strip non-numeric except dot)
+        import re
+        plot_size_numeric = None
+        if payload.plot_size:
+            cleaned_size = re.sub(r'[^\d.]+', '', payload.plot_size)
+            if cleaned_size:
+                try: plot_size_numeric = float(cleaned_size)
+                except: pass
+
+        # Dates
+        invoice_date = date.today()
+        due_date = invoice_date + timedelta(days=7) # Default 7 days due for deposit balance if any
+
+        invoice_insert = {
+            "invoice_number": invoice_number,
+            "client_id": client_id,
+            "property_name": payload.property_name,
+            "plot_size_sqm": plot_size_numeric,
+            "amount": payload.total_amount,
+            "amount_paid": payload.deposit_amount,
+            "payment_terms": payload.payment_terms,
+            "invoice_date": str(invoice_date),
+            "due_date": str(due_date),
+            "sales_rep_name": payload.sales_rep_name,
+            "co_owner_name": payload.co_owner_name,
+            "co_owner_email": payload.co_owner_email,
+            "signature_url": payload.signature_url,
+            "payment_proof_url": payload.payment_proof_url,
+            "passport_photo_url": payload.passport_photo_url,
+            "source": "google_form"
+        }
+
+        invoice_res = db.table("invoices").insert(invoice_insert).execute()
+        invoice = invoice_res.data[0]
+
+        # 5. Record deposit payment
+        if payload.deposit_amount > 0:
+            db.table("payments").insert({
+                "invoice_id": invoice["id"],
+                "client_id": client_id,
+                "reference": f"{payload.payment_date or str(invoice_date)}_form_deposit",
+                "amount": payload.deposit_amount,
+                "payment_method": "Bank Transfer", # Default for form
+                "payment_date": payload.payment_date or str(invoice_date),
+                "notes": "Initial deposit via subscription form"
+            }).execute()
+
+        # 6. Create pending verification
+        db.table("pending_verifications").insert({
+            "invoice_id": invoice["id"],
+            "client_id": client_id,
+            "payment_proof_url": payload.payment_proof_url,
+            "deposit_amount": payload.deposit_amount,
+            "payment_date": payload.payment_date,
+            "sales_rep_name": payload.sales_rep_name,
+            "status": "pending"
+        }).execute()
+
+        # 7. Emails
+        # Fetch full client data for email (with nested info if needed)
+        full_client = db.table("clients").select("*").eq("id", client_id).execute().data[0]
+        
+        background_tasks.add_task(send_invoice_email, invoice, full_client, "system_webhook")
+        background_tasks.add_task(send_admin_alert_email, invoice, full_client)
+
+        return {
+            "message": "Processed successfully",
+            "invoice_number": invoice_number,
+            "client_id": client_id
+        }
+
+    except Exception as e:
+        print(f"WEBHOOK ERROR: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal error processing webhook: {str(e)}")

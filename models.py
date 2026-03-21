@@ -106,3 +106,67 @@ class PaymentCreate(BaseModel):
     payment_method: str = "Bank Transfer"
     payment_date: date
     notes: Optional[str] = None
+
+
+# ─── WEBHOOKS & VERIFICATIONS ────────────────────────────────
+class WebhookFormPayload(BaseModel):
+    # Client
+    title: Optional[str] = None
+    first_name: str
+    last_name: str
+    middle_name: Optional[str] = None
+    gender: Optional[str] = None
+    dob: Optional[str] = None
+    address: Optional[str] = None
+    email: str
+    marital_status: Optional[str] = None
+    phone: Optional[str] = None
+    occupation: Optional[str] = None
+    nin: Optional[str] = None
+    id_number: Optional[str] = None
+    id_document_url: Optional[str] = None
+    nationality: Optional[str] = None
+    passport_photo_url: Optional[str] = None
+    # Next of kin
+    nok_name: Optional[str] = None
+    nok_phone: Optional[str] = None
+    nok_email: Optional[str] = None
+    nok_occupation: Optional[str] = None
+    nok_relationship: Optional[str] = None
+    nok_address: Optional[str] = None
+    # Ownership
+    ownership_type: Optional[str] = None
+    co_owner_name: Optional[str] = None
+    co_owner_email: Optional[str] = None
+    signature_url: Optional[str] = None
+    # Property
+    property_name: str
+    plot_size: Optional[str] = None
+    # Payment
+    payment_duration: Optional[str] = None
+    deposit_amount: float = 0
+    payment_date: Optional[str] = None
+    payment_proof_url: Optional[str] = None
+    outstanding_amount: float = 0
+    total_amount: float = 0
+    payment_terms: str = "Outright"
+    # Other
+    source_of_income: Optional[str] = None
+    referral_source: Optional[str] = None
+    sales_rep_name: Optional[str] = None
+    consent: Optional[str] = None
+    timestamp: Optional[str] = None
+    submitter_email: Optional[str] = None
+
+
+class VerificationConfirm(BaseModel):
+    pass  # No body needed — invoice_id is in the URL
+
+
+class VerificationReject(BaseModel):
+    reason: str
+
+
+class VoidReceiptRequest(BaseModel):
+    reason: str
+    notify_client: bool = False

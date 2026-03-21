@@ -26,7 +26,7 @@
   body { font-family: 'DM Sans', sans-serif; background: #f0f0ee; color: var(--dark); display: flex; min-height: 100vh; }
 
   /* ── SEARCH-SELECT COMPONENT ─────────────── */
-  .search-select-container { position: relative; width: 100%; }
+  .search-select-container { position: relative; width: 100%; display: block; }
   .search-select-results {
     position: absolute; top: calc(100% + 5px); left: 0; right: 0;
     background: var(--white); border: 1px solid #e2e8f0; border-radius: 8px;
@@ -153,12 +153,12 @@
   .form-grid { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
   .form-grid.full { grid-template-columns: 1fr; }
   .form-group { display: flex; flex-direction: column; gap: 6px; width: 100%; }
-  .form-group.span2 { grid-column: 1 / -1; }
+  .form-group.span2 { grid-column: 1 / -1 !important; }
   .form-label { font-size: 12px; font-weight: 500; color: var(--dark); }
   .form-label .req { color: var(--red); margin-left: 2px; }
-  .form-control { padding: 9px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; font-family: 'DM Sans', sans-serif; color: var(--dark); transition: border-color 0.2s; background: var(--white); }
+  .form-control { width: 100%; padding: 9px 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 13px; font-family: 'DM Sans', sans-serif; color: var(--dark); transition: border-color 0.2s; background: var(--white); display: block; }
   .form-control:focus { outline: none; border-color: var(--gold); box-shadow: 0 0 0 3px rgba(245,166,35,0.12); }
-  select.form-control { cursor: pointer; }
+  select.form-control { cursor: pointer; width: 100%; }
   .form-hint { font-size: 11px; color: var(--gray); }
   .form-actions { display: flex; gap: 10px; justify-content: flex-end; padding-top: 16px; border-top: 1px solid #f0f0f0; margin-top: 8px; }
 
@@ -211,7 +211,7 @@
     .content { padding: 16px; }
     .modal { width: 95%; margin: 10px; }
     .form-grid { grid-template-columns: 1fr; }
-    .form-group.span2 { grid-column: span 1; }
+    .form-group.span2 { grid-column: 1 / -1 !important; }
     .topbar-actions .btn span { display: none; }
     .btn { padding: 8px 12px; }
     .admin-info { display: none; }
@@ -220,8 +220,9 @@
   .sidebar-logo-img { width: 140px; height: auto; margin-bottom: 5px; filter: brightness(1.2); }
   .sidebar-logo .brand { font-family: 'Playfair Display', serif; font-size: 16px; color: var(--white); line-height: 1.2; display: none; }
 
-  .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
-</style>
+   .table-responsive { width: 100%; overflow-x: auto; -webkit-overflow-scrolling: touch; }
+   .badge-count { background: var(--red); color: white; font-size: 10px; font-weight: 700; padding: 1px 6px; border-radius: 10px; margin-left: auto; min-width: 18px; text-align: center; }
+ </style>
 </head>
 <body>
 
@@ -251,9 +252,14 @@
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><path d="M23 21v-2a4 4 0 0 0-3-3.87"/><path d="M16 3.13a4 4 0 0 1 0 7.75"/></svg>
       Clients
     </a>
-    <a class="nav-item" href="#" onclick="showSection('properties')">
+    <a class="nav-item" href="#" onclick="showSection('properties')" id="nav-properties">
       <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M3 9l9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z"/><polyline points="9 22 9 12 15 12 15 22"/></svg>
       Properties
+    </a>
+    <a class="nav-item" href="#" onclick="showSection('verifications')" id="nav-verifications">
+      <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M22 11.08V12a10 10 0 1 1-5.93-9.14"/><polyline points="22 4 12 14.01 9 11.01"/></svg>
+      Verifications
+      <span id="verifications-badge" class="badge-count" style="display:none;">0</span>
     </a>
 
     <div class="nav-label" style="margin-top:8px;" id="nav-label-admin">Admin</div>
@@ -428,6 +434,22 @@
       </div>
       <div id="propertiesTable">
         <div class="loading"><span class="spinner"></span>Loading properties...</div>
+      </div>
+    </div>
+  </div>
+
+  <!-- VERIFICATIONS SECTION -->
+  <div class="content" id="section-verifications" style="display:none;">
+    <div class="card">
+      <div class="card-header">
+        <span class="card-title">Pending Verifications</span>
+        <button class="btn btn-ghost" onclick="loadVerifications()">
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
+          Refresh
+        </button>
+      </div>
+      <div id="verificationsTable">
+        <div class="loading"><span class="spinner"></span>Loading pending submissions...</div>
       </div>
     </div>
   </div>
@@ -743,25 +765,25 @@
           <label class="form-label">Estate Name <span class="req">*</span></label>
           <input type="text" class="form-control" id="prop-name" placeholder="e.g. Olive Park Estate">
         </div>
-        <div class="form-group">
-          <label class="form-label">Plot/Block Number</label>
+        <div class="form-group span2">
+          <label class="form-label">Plot / Block Reference (Optional)</label>
           <input type="text" class="form-control" id="prop-estate" placeholder="e.g. Block A, Plot 45">
         </div>
         <div class="form-group">
           <label class="form-label">Location <span class="req">*</span></label>
-          <input type="text" class="form-control" id="prop-location" placeholder="e.g. Lekki Phase 1, Lagos">
+          <input type="text" class="form-control" id="prop-location" placeholder="e.g. Ibeju-Lekki, Lagos">
         </div>
         <div class="form-group">
           <label class="form-label">Plot Size (sqm)</label>
-          <input type="number" class="form-control" id="prop-size" placeholder="e.g. 500">
+          <input type="number" class="form-control" id="prop-size" placeholder="e.g. 600">
         </div>
         <div class="form-group">
-          <label class="form-label">Total Price (NGN) <span class="req">*</span></label>
-          <input type="number" class="form-control" id="prop-price" placeholder="e.g. 85000000">
+          <label class="form-label">Total Selling Price (NGN) <span class="req">*</span></label>
+          <input type="number" class="form-control" id="prop-price" placeholder="e.g. 10000000">
         </div>
         <div class="form-group span2">
-          <label class="form-label">Price Description</label>
-          <input type="text" class="form-control" id="prop-desc" placeholder="e.g. Inclusive of survey and legal fees">
+          <label class="form-label">Property Description / Notes</label>
+          <textarea class="form-control" id="prop-desc" rows="2" placeholder="e.g. Inclusive of survey and legal fees. Details about land features, title, etc."></textarea>
         </div>
       </div>
       <div class="form-actions">
@@ -820,6 +842,84 @@
           <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
           Send Email(s)
         </button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- VERIFICATION CONFIRM MODAL -->
+<div class="modal-overlay" id="verifyConfirmModal">
+  <div class="modal" style="max-width:450px;">
+    <div class="modal-header">
+      <div class="modal-title">Confirm Subscription Payment</div>
+      <button class="modal-close" onclick="closeModal('verifyConfirmModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--gray); font-size:14px; margin-bottom:20px;">
+        Confirming this payment will auto-generate the Receipt and Statement, and email them to the client.
+      </p>
+      <ul style="color:var(--dark); font-size:13px; margin-bottom:24px; padding-left:20px;">
+        <li style="margin-bottom:8px;">Generate Professional Receipt</li>
+        <li style="margin-bottom:8px;">Update Statement of Account</li>
+        <li>Notify client via email</li>
+      </ul>
+      <input type="hidden" id="verify-confirm-id">
+      <div class="form-actions">
+        <button class="btn btn-ghost" onclick="closeModal('verifyConfirmModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="processConfirmVerification()">Confirm & Send</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- VERIFICATION REJECT MODAL -->
+<div class="modal-overlay" id="verifyRejectModal">
+  <div class="modal" style="max-width:450px;">
+    <div class="modal-header">
+      <div class="modal-title" style="color:var(--red);">Reject Submission</div>
+      <button class="modal-close" onclick="closeModal('verifyRejectModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <p style="color:var(--gray); font-size:14px; margin-bottom:16px;">
+        Provide a reason for rejection (this will be emailed to the client):
+      </p>
+      <div class="form-group">
+        <textarea id="verify-reject-reason" class="form-control" rows="3" placeholder="e.g. Blurred payment proof, transaction not found..."></textarea>
+      </div>
+      <input type="hidden" id="verify-reject-id">
+      <div class="form-actions">
+        <button class="btn btn-ghost" onclick="closeModal('verifyRejectModal')">Cancel</button>
+        <button class="btn btn-primary" style="background:var(--red);" onclick="processRejectVerification()">Reject & Notify</button>
+      </div>
+    </div>
+  </div>
+</div>
+
+<!-- VOID RECEIPT MODAL -->
+<div class="modal-overlay" id="voidReceiptModal">
+  <div class="modal" style="max-width:480px;">
+    <div class="modal-header">
+      <div class="modal-title" style="color:var(--red);">Void Receipt / Reverse Payment</div>
+      <button class="modal-close" onclick="closeModal('voidReceiptModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <div style="background:#fff5f5; border:1px solid #feb2b2; border-radius:8px; padding:16px; margin-bottom:20px;">
+        <p style="color:#c53030; font-size:13px; margin:0; line-height:1.5;">
+          <strong>Warning:</strong> This will void the receipt, reverse the balance on the invoice, and log the action. This cannot be undone.
+        </p>
+      </div>
+      <div class="form-group">
+        <label class="form-label">Reason for Voiding</label>
+        <textarea id="void-reason" class="form-control" rows="3" placeholder="Administrative correction, bounced cheque, etc..."></textarea>
+      </div>
+      <div class="form-group" style="display:flex; align-items:center; gap:8px;">
+        <input type="checkbox" id="void-notify-client" style="width:16px; height:16px; accent-color:var(--gold);">
+        <label for="void-notify-client" style="font-size:13px; color:var(--dark); cursor:pointer;">Notify client via email</label>
+      </div>
+      <input type="hidden" id="void-invoice-id">
+      <div class="form-actions">
+        <button class="btn btn-ghost" onclick="closeModal('voidReceiptModal')">Cancel</button>
+        <button class="btn btn-primary" style="background:var(--red);" onclick="processVoidInvoice()">Void Receipt</button>
       </div>
     </div>
   </div>
@@ -963,6 +1063,14 @@ async function checkAuth() {
   if (!TOKEN) { window.location.href = '/login'; return; }
   try {
     const res = await apiFetch('/auth/me');
+    if (!res.ok) {
+      if (res.status === 401) {
+        localStorage.removeItem('ec_token');
+        window.location.href = '/login';
+        return;
+      }
+      throw new Error('Auth fetch failed');
+    }
     const admin = await res.json();
     currentUserRole = admin.role;
     document.getElementById('adminName').textContent = admin.full_name;
@@ -973,7 +1081,11 @@ async function checkAuth() {
     if (admin.role === 'admin') {
       document.getElementById('nav-team').style.display = 'flex';
     }
-  } catch { window.location.href = '/login'; }
+  } catch (e) {
+    console.error('Auth check error:', e);
+    localStorage.removeItem('ec_token');
+    window.location.href = '/login';
+  }
 }
 
 function logout() {
@@ -997,12 +1109,13 @@ function showSection(name) {
   if (name === 'team' && currentUserRole !== 'admin') {
     toast('Only admins can access Team Management', 'error'); return;
   }
-  ['dashboard','invoices','clients','properties','team','profile'].forEach(s => {
-    document.getElementById('section-' + s).style.display = s === name ? '' : 'none';
+  ['dashboard','invoices','clients','properties','team','profile','verifications'].forEach(s => {
+    const el = document.getElementById('section-' + s);
+    if (el) el.style.display = s === name ? '' : 'none';
   });
   document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
   document.getElementById('nav-' + name)?.classList?.add('active');
-  const titles = { dashboard:'Dashboard', invoices:'Invoices', clients:'Clients', properties:'Properties', team:'Team Members', profile:'My Profile' };
+  const titles = { dashboard:'Dashboard', invoices:'Invoices', clients:'Clients', properties:'Properties', team:'Team Members', profile:'My Profile', verifications:'Pending Verifications' };
   document.getElementById('pageTitle').textContent = titles[name] || name;
   
   if (window.innerWidth <= 1024) {
@@ -1014,6 +1127,7 @@ function showSection(name) {
   if (name === 'properties') loadProperties();
   if (name === 'team') loadTeam();
   if (name === 'profile') loadProfile();
+  if (name === 'verifications') loadVerifications();
 }
 
 // ── DASHBOARD ─────────────────────────────
@@ -1057,6 +1171,7 @@ async function loadDashboard() {
               <td>
                 <button class="action-btn gold" onclick="openSendModal('${inv.id}', '${inv.invoice_number}', '${inv.clients?.full_name}', '${inv.clients?.email}')">Send</button>
                 <a href="/api/invoices/${inv.id}/pdf/invoice" target="_blank" class="action-btn" style="text-decoration:none;display:inline-block;">PDF</a>
+                ${currentUserRole === 'admin' ? `<button class="action-btn" style="color:var(--red);border-color:#feb2b2;" onclick="openVoidModal('${inv.id}')">Void</button>` : ''}
               </td>
             </tr>`).join('')}
         </tbody>
@@ -1088,6 +1203,7 @@ async function loadInvoices() {
                 <a href="/api/invoices/${inv.id}/pdf/invoice" target="_blank" class="action-btn" style="text-decoration:none;display:inline-block;">Invoice</a>
                 ${inv.amount_paid > 0 ? `<a href="/api/invoices/${inv.id}/pdf/receipt" target="_blank" class="action-btn" style="text-decoration:none;display:inline-block;">Receipt</a>` : ''}
                 <a href="/api/invoices/${inv.id}/pdf/statement" target="_blank" class="action-btn" style="text-decoration:none;display:inline-block;">Statement</a>
+                ${currentUserRole === 'admin' ? `<button class="action-btn" style="color:var(--red);border-color:#feb2b2;" onclick="openVoidModal('${inv.id}')">Void</button>` : ''}
               </td>
             </tr>`).join('')}
         </tbody>
@@ -1654,8 +1770,155 @@ document.addEventListener('click', (e) => {
   }
 });
 
+// ── VERIFICATIONS ─────────────────────────
+async function updateVerificationsBadge() {
+  try {
+    const res = await apiFetch('/api/verifications/count');
+    const data = await res.json();
+    const badge = document.getElementById('verifications-badge');
+    if (data.count > 0) {
+      badge.textContent = data.count;
+      badge.style.display = 'block';
+    } else {
+      badge.style.display = 'none';
+    }
+  } catch(e) { console.error('Badge update failed', e); }
+}
+
+async function loadVerifications() {
+  const container = document.getElementById('verificationsTable');
+  container.innerHTML = '<div class="loading"><span class="spinner"></span>Loading submissions...</div>';
+  try {
+    const data = await apiFetch('/api/verifications/').then(r => r.json());
+    const pending = data.filter(v => v.status === 'pending');
+    
+    if (!pending.length) {
+      container.innerHTML = '<div class="empty-state"><p>No pending verifications at the moment.</p></div>';
+      return;
+    }
+    
+    container.innerHTML = `
+      <div class="table-responsive">
+        <table class="data-table">
+          <thead>
+            <tr>
+              <th>Submitted</th>
+              <th>Client</th>
+              <th>Property</th>
+              <th>Deposit</th>
+              <th>Status</th>
+              <th>Proof</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            ${pending.map(v => `
+              <tr>
+                <td style="font-size:12px;color:var(--gray);">${new Date(v.created_at).toLocaleString()}</td>
+                <td>
+                  <div class="client-name">${v.clients?.full_name || '—'}</div>
+                  <div class="client-email">${v.clients?.email || ''}</div>
+                </td>
+                <td style="font-size:12px;">
+                   <strong>${v.invoices?.invoice_number || '—'}</strong><br>
+                   ${v.invoices?.property_name || '—'}
+                </td>
+                <td style="font-weight:600;color:var(--gold-dark);">${fmtNGN(v.deposit_amount)}</td>
+                <td><span class="status unpaid"><span class="status-dot"></span>${v.status}</span></td>
+                <td>
+                  <a href="${v.payment_proof_url}" target="_blank" class="action-btn" style="text-decoration:none;display:inline-block;border-color:#ccc;">View Proof</a>
+                </td>
+                <td>
+                  <div style="display:flex;gap:4px;">
+                    <button class="action-btn gold" onclick="openConfirmVerification('${v.id}')">Confirm</button>
+                    <button class="action-btn" style="color:var(--red);border-color:#feb2b2;" onclick="openRejectVerification('${v.id}')">Reject</button>
+                  </div>
+                </td>
+              </tr>
+            `).join('')}
+          </tbody>
+        </table>
+      </div>
+    `;
+    updateVerificationsBadge();
+  } catch(e) { container.innerHTML = '<div class="empty-state"><p>Error loading data.</p></div>'; }
+}
+
+function openConfirmVerification(id) {
+  document.getElementById('verify-confirm-id').value = id;
+  openModal('verifyConfirmModal');
+}
+
+async function processConfirmVerification() {
+  const id = document.getElementById('verify-confirm-id').value;
+  try {
+    const res = await apiFetch(`/api/verifications/${id}/confirm`, { method: 'PATCH' });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Failed');
+    toast('Payment confirmed and documents sent!', 'success');
+    closeModal('verifyConfirmModal');
+    loadVerifications();
+    if (document.getElementById('section-dashboard').style.display === '') loadDashboard(); 
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+function openRejectVerification(id) {
+  document.getElementById('verify-reject-id').value = id;
+  document.getElementById('verify-reject-reason').value = '';
+  openModal('verifyRejectModal');
+}
+
+async function processRejectVerification() {
+  const id = document.getElementById('verify-reject-id').value;
+  const reason = document.getElementById('verify-reject-reason').value.trim();
+  if (!reason) return toast('Please provide a reason', 'error');
+  
+  try {
+    const res = await apiFetch(`/api/verifications/${id}/reject`, { 
+      method: 'PATCH', 
+      body: JSON.stringify({ reason }) 
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Failed');
+    toast('Submission rejected and client notified', 'info');
+    closeModal('verifyRejectModal');
+    loadVerifications();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
+// ── VOID LOGIC ────────────────────────────
+function openVoidModal(invoiceId) {
+  document.getElementById('void-invoice-id').value = invoiceId;
+  document.getElementById('void-reason').value = '';
+  document.getElementById('void-notify-client').checked = true;
+  openModal('voidReceiptModal');
+}
+
+async function processVoidInvoice() {
+  const id = document.getElementById('void-invoice-id').value;
+  const reason = document.getElementById('void-reason').value.trim();
+  const notify = document.getElementById('void-notify-client').checked;
+  if (!reason) return toast('Please provide a reason', 'error');
+  
+  try {
+    const res = await apiFetch(`/api/invoices/${id}/void`, {
+      method: 'POST',
+      body: JSON.stringify({ reason, notify_client: notify })
+    });
+    const data = await res.json();
+    if (!res.ok) throw new Error(data.detail || 'Failed');
+    toast('Receipt voided and payment reversed', 'info');
+    closeModal('voidReceiptModal');
+    loadInvoices();
+    if (document.getElementById('section-dashboard').style.display === '') loadDashboard();
+  } catch(e) { toast(e.message, 'error'); }
+}
+
 // ── INIT ──────────────────────────────────
-checkAuth().then(() => loadDashboard());
+checkAuth().then(() => {
+  loadDashboard();
+  updateVerificationsBadge();
+});
 </script>
 </body>
 </html>

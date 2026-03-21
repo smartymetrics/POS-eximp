@@ -1,10 +1,11 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from fastapi.responses import StreamingResponse
-from models import InvoiceCreate, SendDocumentRequest
+from models import InvoiceCreate, SendDocumentRequest, VoidReceiptRequest
 from database import get_db
 from routers.auth import verify_token
-from email_service import send_invoice_email, send_receipt_email, send_statement_email
+from email_service import send_invoice_email, send_receipt_email, send_statement_email, send_void_notification_email
 from pdf_service import generate_invoice_pdf, generate_receipt_pdf, generate_statement_pdf
+from datetime import datetime
 import io
 
 router = APIRouter()
@@ -123,6 +124,59 @@ async def send_documents(
         }).execute()
 
     return {"message": f"Sent: {', '.join(sent)}", "sent": sent}
+
+
+@router.post("/{invoice_id}/void")
+async def void_invoice_receipts(
+    invoice_id: str,
+    payload: VoidReceiptRequest,
+    current_admin: dict = Depends(verify_token)
+):
+    """
+    Voids all receipts for an invoice and reverses payments.
+    Only Admins can perform this.
+    """
+    db = get_db()
+    if current_admin.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Only administrators can void receipts")
+    
+    # 1. Fetch invoice to get client_id and check existence
+    inv = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).single().execute()
+    if not inv.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    
+    invoice_data = inv.data
+    client_name = invoice_data.get("clients", {}).get("full_name", "Client")
+    client_email = invoice_data.get("clients", {}).get("email")
+    
+    # 2. Update all payments for this invoice to is_voided = True
+    # In a real scenario, we might want to void specific payments, 
+    # but the PRD says "Void Receipt" which usually refers to the collective status.
+    # We'll void all non-voided payments for this invoice.
+    db.table("payments").update({
+        "is_voided": True,
+        "voided_at": datetime.utcnow().isoformat(),
+        "voided_by": current_admin["sub"]
+    }).eq("invoice_id", invoice_id).eq("is_voided", False).execute()
+    
+    # 3. Log the void action
+    db.table("void_log").insert({
+        "invoice_id": invoice_id,
+        "admin_id": current_admin["sub"],
+        "reason": payload.reason,
+        "client_notified": payload.notify_client
+    }).execute()
+    
+    # 4. Notify client if requested
+    if payload.notify_client and client_email:
+        await send_void_notification_email(
+            client_email,
+            client_name,
+            invoice_data.get("invoice_number", "N/A"),
+            payload.reason
+        )
+        
+    return {"message": "Invoice receipts voided successfully", "client_notified": payload.notify_client}
 
 
 @router.get("/{invoice_id}/pdf/{doc_type}")

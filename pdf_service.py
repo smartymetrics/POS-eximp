@@ -3,6 +3,9 @@ from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
 import io
 import os
+import requests
+import base64
+from urllib.parse import urlparse, parse_qs
 
 env = Environment(loader=FileSystemLoader("pdf_templates"))
 
@@ -38,13 +41,49 @@ def _html_to_pdf(html_content: str) -> bytes:
     return buffer.getvalue()
 
 
+def _get_google_drive_direct_link(url):
+    """Converts a Google Drive viewer/sharing link to a direct download link."""
+    if not url or "drive.google.com" not in url:
+        return url
+    try:
+        if "/file/d/" in url:
+            file_id = url.split("/file/d/")[1].split("/")[0]
+        else:
+            parsed = urlparse(url)
+            file_id = parse_qs(parsed.query).get("id", [None])[0]
+        
+        if file_id:
+            return f"https://drive.google.com/uc?export=download&id={file_id}"
+    except Exception:
+        pass
+    return url
+
+
+def _get_image_as_base64(url):
+    """Fetches an image and returns as base64 string."""
+    try:
+        direct_url = _get_google_drive_direct_link(url)
+        res = requests.get(direct_url, timeout=10)
+        if res.ok:
+            return base64.b64encode(res.content).decode("utf-8")
+    except Exception as e:
+        print(f"Failed to fetch image: {e}")
+    return None
+
+
 def generate_invoice_pdf(invoice: dict) -> bytes:
     template = env.get_template("invoice.html")
     client = invoice.get("clients", {})
+    
+    signature_base64 = None
+    if invoice.get("signature_url"):
+        signature_base64 = _get_image_as_base64(invoice["signature_url"])
+        
     html_content = template.render(
         company=COMPANY,
         invoice=invoice,
         client=client,
+        signature_img_base64=signature_base64,
         format_currency=format_currency,
         generated_at=datetime.now().strftime("%d %b %Y")
     )

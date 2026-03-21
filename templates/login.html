@@ -131,7 +131,7 @@ async function submitLogin() {
 }
 
 // Redirect if already logged in
-if (localStorage.getItem('ec_token')) window.location.href = '/dashboard';
+// No auto-redirect; let the user sign in or be redirected by dashboard if 401
 </script>
 </body>
 </html>

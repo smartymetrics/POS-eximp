@@ -10,3 +10,5 @@ xhtml2pdf==0.2.16
 resend==0.8.0
 python-multipart==0.0.9
 email-validator
+gunicorn==21.2.0
+requests==2.31.0

@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from routers import auth, clients, properties, invoices, payments
+from routers import auth, clients, properties, invoices, payments, webhooks, verifications
 from database import init_db
 
 app = FastAPI(title="Eximp & Cloves - Finance System", version="1.0.0")
@@ -26,6 +26,8 @@ app.include_router(clients.router, prefix="/api/clients", tags=["clients"])
 app.include_router(properties.router, prefix="/api/properties", tags=["properties"])
 app.include_router(invoices.router, prefix="/api/invoices", tags=["invoices"])
 app.include_router(payments.router, prefix="/api/payments", tags=["payments"])
+app.include_router(webhooks.router, prefix="/api/webhooks", tags=["webhooks"])
+app.include_router(verifications.router, prefix="/api/verifications", tags=["verifications"])
 
 
 @app.on_event("startup")

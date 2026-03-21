@@ -1,17 +1,21 @@
 services:
   - type: web
-    name: eximp-cloves-finance
+    name: pos-eximp-finance
     env: python
     buildCommand: pip install -r requirements.txt
-    startCommand: uvicorn main:app --host 0.0.0.0 --port $PORT
+    startCommand: gunicorn main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT
     envVars:
       - key: SUPABASE_URL
         sync: false
-      - key: SUPABASE_SERVICE_KEY
+      - key: SUPABASE_KEY
         sync: false
-      - key: JWT_SECRET
+      - key: SECRET_KEY
         sync: false
       - key: RESEND_API_KEY
         sync: false
-      - key: FROM_EMAIL
+      - key: WEBHOOK_SECRET
+        sync: false
+      - key: ADMIN_ALERT_EMAIL
+        sync: false
+      - key: APP_URL
         sync: false

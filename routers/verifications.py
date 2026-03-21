@@ -1,0 +1,132 @@
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from models import VerificationConfirm, VerificationReject
+from database import get_db
+from routers.auth import verify_token
+from email_service import send_receipt_and_statement_email, send_rejection_email
+from datetime import datetime
+
+router = APIRouter()
+
+@router.get("/")
+async def list_verifications(current_admin=Depends(verify_token)):
+    db = get_db()
+    # Fetch pending verifications with client and invoice info
+    result = db.table("pending_verifications")\
+        .select("*, clients(full_name, email), invoices(invoice_number, property_name, plot_size_sqm, amount, amount_paid)")\
+        .order("created_at", desc=True)\
+        .execute()
+    return result.data
+
+@router.get("/count")
+async def get_pending_count(current_admin=Depends(verify_token)):
+    db = get_db()
+    result = db.table("pending_verifications")\
+        .select("id", count="exact")\
+        .eq("status", "pending")\
+        .execute()
+    return {"count": result.count or 0}
+
+@router.patch("/{id}/confirm")
+async def confirm_verification(
+    id: str, 
+    background_tasks: BackgroundTasks,
+    current_admin=Depends(verify_token)
+):
+    db = get_db()
+    
+    # 1. Fetch verification record
+    v_res = db.table("pending_verifications").select("*").eq("id", id).execute()
+    if not v_res.data:
+        raise HTTPException(status_code=404, detail="Verification record not found")
+    
+    verify_rec = v_res.data[0]
+    if verify_rec["status"] != "pending":
+        raise HTTPException(status_code=400, detail=f"Already {verify_rec['status']}")
+
+    # 2. Update verification status
+    db.table("pending_verifications").update({
+        "status": "confirmed",
+        "reviewed_by": current_admin["sub"],
+        "reviewed_at": datetime.now().isoformat()
+    }).eq("id", id).execute()
+
+    # 3. Fetch invoice and client for email
+    inv_res = db.table("invoices").select("*, clients(*)").eq("id", verify_rec["invoice_id"]).execute()
+    invoice = inv_res.data[0]
+    client = invoice["clients"]
+
+    # Fetch all invoices for statement
+    all_inv = db.table("invoices")\
+        .select("*, payments(*)")\
+        .eq("client_id", client["id"])\
+        .order("invoice_date")\
+        .execute()
+
+    # 4. Send Documents
+    background_tasks.add_task(send_receipt_and_statement_email, invoice, client, all_inv.data)
+
+    # 5. Log emails
+    for doc_type in ["receipt", "statement"]:
+        db.table("email_logs").insert({
+            "client_id": client["id"],
+            "invoice_id": invoice["id"],
+            "email_type": doc_type,
+            "recipient_email": client["email"],
+            "subject": f"Payment Confirmed — {invoice['invoice_number']}",
+            "status": "sent",
+            "sent_by": current_admin["sub"]
+        }).execute()
+
+    return {"message": "Payment confirmed and documents sent"}
+
+@router.patch("/{id}/reject")
+async def reject_verification(
+    id: str, 
+    data: VerificationReject,
+    background_tasks: BackgroundTasks,
+    current_admin=Depends(verify_token)
+):
+    db = get_db()
+    
+    # 1. Fetch verification record
+    v_res = db.table("pending_verifications").select("*").eq("id", id).execute()
+    if not v_res.data:
+        raise HTTPException(status_code=404, detail="Verification record not found")
+    
+    verify_rec = v_res.data[0]
+    
+    # 2. Update verification status
+    db.table("pending_verifications").update({
+        "status": "rejected",
+        "rejection_reason": data.reason,
+        "reviewed_by": current_admin["sub"],
+        "reviewed_at": datetime.now().isoformat()
+    }).eq("id", id).execute()
+
+    # 3. Mark invoice as unpaid (reverse local amount_paid tracking if any? 
+    # Actually the trigger handles it via payments. 
+    # But if there was a payment record created during webhook, it stays there. 
+    # The PRD says "Marks the invoice status back to unpaid".
+    
+    # Let's find the payment record tied to this form deposit and mark it as voided?
+    # PRD Section 4.5 doesn't explicitly say to delete the payment record, 
+    # but 5.3 mentions is_voided for manual voiding.
+    # I'll mark the payment as voided to be consistent.
+    
+    ref = f"{verify_rec['payment_date']}_form_deposit"
+    db.table("payments").update({
+        "is_voided": True,
+        "voided_by": current_admin["sub"],
+        "voided_at": datetime.now().isoformat(),
+        "notes": f"Rejected during verification: {data.reason}"
+    }).eq("invoice_id", verify_rec["invoice_id"]).eq("reference", ref).execute()
+
+    # 4. Fetch invoice and client for email
+    inv_res = db.table("invoices").select("*, clients(*)").eq("id", verify_rec["invoice_id"]).execute()
+    invoice = inv_res.data[0]
+    client = invoice["clients"]
+
+    # 5. Send Rejection Email
+    background_tasks.add_task(send_rejection_email, invoice, client, data.reason)
+
+    return {"message": "Submission rejected and client notified"}

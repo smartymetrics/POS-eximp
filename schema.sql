@@ -27,6 +27,28 @@ CREATE TABLE IF NOT EXISTS clients (
     city VARCHAR(100),
     state VARCHAR(100),
     added_by UUID REFERENCES admins(id),
+    
+    -- KYC fields for PRD v2
+    title VARCHAR(20),
+    middle_name VARCHAR(100),
+    gender VARCHAR(20),
+    dob VARCHAR(50),
+    marital_status VARCHAR(50),
+    occupation VARCHAR(100),
+    nin VARCHAR(50),
+    id_number VARCHAR(100),
+    id_document_url TEXT,
+    nationality VARCHAR(100),
+    passport_photo_url TEXT,
+    nok_name VARCHAR(255),
+    nok_phone VARCHAR(50),
+    nok_email VARCHAR(255),
+    nok_occupation VARCHAR(100),
+    nok_relationship VARCHAR(100),
+    nok_address TEXT,
+    source_of_income VARCHAR(100),
+    referral_source VARCHAR(100),
+
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -78,9 +100,18 @@ CREATE TABLE IF NOT EXISTS invoices (
     invoice_date DATE NOT NULL DEFAULT CURRENT_DATE,
     due_date DATE NOT NULL,
     
-    status VARCHAR(50) DEFAULT 'unpaid' CHECK (status IN ('unpaid', 'partial', 'paid')),
+    status VARCHAR(50) DEFAULT 'unpaid' CHECK (status IN ('unpaid', 'partial', 'paid', 'voided')),
     notes TEXT,
     
+    -- New fields for PRD v2
+    sales_rep_name VARCHAR(255),
+    co_owner_name VARCHAR(255),
+    co_owner_email VARCHAR(255),
+    signature_url TEXT,
+    payment_proof_url TEXT,
+    passport_photo_url TEXT,
+    source VARCHAR(50) DEFAULT 'manual', -- manual / google_form
+
     created_by UUID REFERENCES admins(id),
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
@@ -98,6 +129,11 @@ CREATE TABLE IF NOT EXISTS payments (
     payment_date DATE NOT NULL DEFAULT CURRENT_DATE,
     notes TEXT,
     
+    -- Voiding fields for PRD v2
+    is_voided BOOLEAN DEFAULT false,
+    voided_by UUID REFERENCES admins(id),
+    voided_at TIMESTAMPTZ,
+
     recorded_by UUID REFERENCES admins(id),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -146,11 +182,11 @@ BEGIN
         amount_paid = (
             SELECT COALESCE(SUM(amount), 0)
             FROM payments
-            WHERE invoice_id = NEW.invoice_id
+            WHERE invoice_id = NEW.invoice_id AND is_voided = false
         ),
         status = CASE
-            WHEN (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE invoice_id = NEW.invoice_id) >= amount THEN 'paid'
-            WHEN (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE invoice_id = NEW.invoice_id) > 0 THEN 'partial'
+            WHEN (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE invoice_id = NEW.invoice_id AND is_voided = false) >= amount THEN 'paid'
+            WHEN (SELECT COALESCE(SUM(amount), 0) FROM payments WHERE invoice_id = NEW.invoice_id AND is_voided = false) > 0 THEN 'partial'
             ELSE 'unpaid'
         END,
         updated_at = NOW()
@@ -174,5 +210,39 @@ ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE email_logs ENABLE ROW LEVEL SECURITY;
 
--- Service role has full access (used by your backend)
--- Frontend uses service role key only through the backend API
+-- ============================================================
+-- NEW TABLES FOR PRD V2
+-- ============================================================
+
+-- PENDING VERIFICATIONS TABLE
+CREATE TABLE IF NOT EXISTS pending_verifications (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    invoice_id UUID NOT NULL REFERENCES invoices(id),
+    client_id UUID NOT NULL REFERENCES clients(id),
+    payment_proof_url TEXT,
+    deposit_amount DECIMAL(15,2),
+    payment_date VARCHAR(100),
+    sales_rep_name VARCHAR(255),
+    status VARCHAR(50) DEFAULT 'pending'
+        CHECK (status IN ('pending', 'confirmed', 'rejected')),
+    reviewed_by UUID REFERENCES admins(id),
+    reviewed_at TIMESTAMPTZ,
+    rejection_reason TEXT,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- VOID LOG TABLE
+CREATE TABLE IF NOT EXISTS void_log (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    invoice_id UUID NOT NULL REFERENCES invoices(id),
+    client_id UUID NOT NULL REFERENCES clients(id),
+    voided_by UUID NOT NULL REFERENCES admins(id),
+    reason TEXT NOT NULL,
+    amount_reversed DECIMAL(15,2),
+    notify_client BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- RLS for new tables
+ALTER TABLE pending_verifications ENABLE ROW LEVEL SECURITY;
+ALTER TABLE void_log ENABLE ROW LEVEL SECURITY;

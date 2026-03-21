@@ -135,7 +135,7 @@ async def send_receipt_email(invoice: dict, client: dict, sent_by: str):
 async def send_statement_email(invoices: list, client: dict, sent_by: str):
     pdf = generate_statement_pdf(invoices, client)
     total_invoiced = sum(float(i["amount"]) for i in invoices)
-    total_paid = sum(float(p["amount"]) for i in invoices for p in (i.get("payments") or []))
+    total_paid = sum(float(p["amount"]) for i in (inv.get("payments") or [] for inv in invoices))
     balance = total_invoiced - total_paid
 
     resend.Emails.send({
@@ -144,4 +144,127 @@ async def send_statement_email(invoices: list, client: dict, sent_by: str):
         "subject": f"Statement of Account — {client['full_name']}",
         "html": _statement_html(client, total_invoiced, total_paid, balance),
         "attachments": [{"filename": f"Statement_{client['full_name'].replace(' ', '_')}.pdf", "content": list(pdf)}],
+    })
+
+
+def _admin_alert_html(invoice: dict, client: dict) -> str:
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: #1A1A1A; padding: 24px; text-align: center;">
+        <h1 style="color: #F5A623; margin: 0; font-size: 20px;">New Form Submission</h1>
+      </div>
+      <div style="padding: 24px; background: #fff; border: 1px solid #eee;">
+        <p style="color: #333;">A new subscription has been received via Google Forms.</p>
+        <table style="width: 100%; font-size: 13px; border-collapse: collapse; margin: 20px 0;">
+          <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #888;">Client</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">{client['full_name']}</td></tr>
+          <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #888;">Email</td><td style="padding: 8px; border-bottom: 1px solid #eee;">{client['email']}</td></tr>
+          <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #888;">Property</td><td style="padding: 8px; border-bottom: 1px solid #eee;">{invoice['property_name']}</td></tr>
+          <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #888;">Invoice No</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold; color: #F5A623;">{invoice['invoice_number']}</td></tr>
+          <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #888;">Deposit Amount</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">NGN {float(invoice['amount_paid']):,.2f}</td></tr>
+        </table>
+        <div style="text-align: center; margin-top: 24px;">
+          <a href="{invoice.get('payment_proof_url', '#')}" target="_blank" style="background: #F5A623; color: #1A1A1A; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; display: inline-block;">View Payment Proof</a>
+        </div>
+        <p style="color: #888; font-size: 12px; margin-top: 24px; text-align: center;">Review this submission in the <strong>Pending Verifications</strong> section of the dashboard.</p>
+      </div>
+    </div>"""
+
+
+async def send_admin_alert_email(invoice: dict, client: dict):
+    admin_email = os.getenv("ADMIN_ALERT_EMAIL", FROM_EMAIL)
+    resend.Emails.send({
+        "from": f"EC Systems <{FROM_EMAIL}>",
+        "to": [admin_email],
+        "subject": f"New Subscription — {client['full_name']} — {invoice['invoice_number']}",
+        "html": _admin_alert_html(invoice, client)
+    })
+
+
+def _rejection_html(invoice: dict, client: dict, reason: str) -> str:
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: #1A1A1A; padding: 24px; text-align: center;">
+        <h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1>
+      </div>
+      <div style="padding: 32px 24px; background: #fff; border: 1px solid #eee;">
+        <p style="color: #333;">Dear <strong>{client['full_name']}</strong>,</p>
+        <p style="color: #555;">Thank you for your subscription to {invoice.get('property_name', 'our property')}.</p>
+        <p style="color: #e74c3c; font-weight: bold; margin: 20px 0;">Unfortunately, we were unable to verify your payment proof for Invoice {invoice['invoice_number']}.</p>
+        <div style="background: #fff5f5; border-left: 4px solid #e74c3c; padding: 16px; margin: 20px 0; font-size: 14px; color: #c0392b;">
+          <strong>Reason:</strong> {reason}
+        </div>
+        <p style="color: #555; font-size: 13px;">Please contact us or resubmit your payment evidence at your earliest convenience so we can process your subscription.</p>
+        <p style="color: #555; font-size: 13px;">We apologise for any inconvenience.</p>
+        <hr style="border-color: #eee; margin: 24px 0;">
+        <p style="color: #999; font-size: 12px; margin: 0;">
+          Eximp & Cloves Infrastructure Limited | RC 8311800<br>
+          57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383
+        </p>
+      </div>
+    </div>"""
+
+
+async def send_rejection_email(invoice: dict, client: dict, reason: str):
+    resend.Emails.send({
+        "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
+        "to": [client["email"]],
+        "subject": f"Action Required — Payment Verification Issue | Eximp & Cloves",
+        "html": _rejection_html(invoice, client, reason)
+    })
+
+
+async def send_receipt_and_statement_email(invoice: dict, client: dict, invoices: list):
+    receipt_pdf = generate_receipt_pdf(invoice)
+    statement_pdf = generate_statement_pdf(invoices, client)
+    
+    total_invoiced = sum(float(i["amount"]) for i in invoices)
+    total_paid = sum(float(p["amount"]) for i in (inv.get("payments") or [] for inv in invoices))
+    balance = total_invoiced - total_paid
+
+    # Combine receipt and statement content into a nice hybrid HTML or just use receipt HTML with a mention
+    html = _receipt_html(invoice, client).replace(
+        "The full receipt PDF is attached to this email.",
+        "Your payment receipt and latest statement of account are attached to this email."
+    )
+
+    resend.Emails.send({
+        "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
+        "to": [client["email"]],
+        "subject": f"Payment Confirmed & Documents attached — {invoice['invoice_number']}",
+        "html": html,
+        "attachments": [
+            {"filename": f"Receipt_{invoice['invoice_number']}.pdf", "content": list(receipt_pdf)},
+            {"filename": f"Statement_{client['full_name'].replace(' ', '_')}.pdf", "content": list(statement_pdf)}
+        ],
+    })
+
+
+def _void_html(invoice: dict, client: dict, reason: str) -> str:
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: #1A1A1A; padding: 24px; text-align: center;">
+        <h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1>
+      </div>
+      <div style="padding: 32px 24px; background: #fff; border: 1px solid #eee;">
+        <p style="color: #333;">Dear <strong>{client['full_name']}</strong>,</p>
+        <p style="color: #555;">We are writing to inform you that Receipt for {invoice['invoice_number']}, issued on {invoice['invoice_date']}, has been voided due to an administrative correction.</p>
+        <div style="background: #fdf3e3; border-left: 4px solid #f5a623; padding: 16px; margin: 20px 0; font-size: 14px; color: #7d5a0a;">
+          <strong>Reason:</strong> {reason}
+        </div>
+        <p style="color: #555; font-size: 13px;">Please contact our office immediately so we can resolve this matter.</p>
+        <hr style="border-color: #eee; margin: 24px 0;">
+        <p style="color: #999; font-size: 12px; margin: 0;">
+          Eximp & Cloves Infrastructure Limited | RC 8311800<br>
+          57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383
+        </p>
+      </div>
+    </div>"""
+
+
+async def send_void_notification_email(invoice: dict, client: dict, reason: str):
+    resend.Emails.send({
+        "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
+        "to": [client["email"]],
+        "subject": f"Important Notice — Receipt Correction | Eximp & Cloves",
+        "html": _void_html(invoice, client, reason)
     })
