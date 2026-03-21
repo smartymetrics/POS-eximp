@@ -65,6 +65,7 @@ async def new_transaction_page(request: Request):
     return templates.TemplateResponse("new_transaction.html", {"request": request})
 
 
+@app.head("/health")
 @app.get("/health")
 async def health():
     return {"status": "ok", "service": "Eximp & Cloves Finance System"}
