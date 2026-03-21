@@ -1537,6 +1537,12 @@ async function loadAnalyticsRevenue() {
 }
 
 function renderAnaRevenueChart(data) {
+  const container = document.getElementById('anaRevenueChart').parentElement;
+  if (!data.labels || data.labels.length === 0 || (data.invoiced.every(v => v === 0) && data.collected.every(v => v === 0))) {
+    container.innerHTML = '<div class="empty-state" style="height:100%; display:flex; align-items:center; justify-content:center; color:var(--gray); font-size:13px;">No revenue data for this period</div>';
+    return;
+  }
+  container.innerHTML = '<canvas id="anaRevenueChart"></canvas>';
   if (charts.anaRevenue) charts.anaRevenue.destroy();
   const ctx = document.getElementById('anaRevenueChart').getContext('2d');
   charts.anaRevenue = new Chart(ctx, {
@@ -1553,6 +1559,12 @@ function renderAnaRevenueChart(data) {
 }
 
 function renderAnaEstateChart(data) {
+  const container = document.getElementById('anaEstateChart').parentElement;
+  if (!data.length) {
+    container.innerHTML = '<div class="empty-state" style="height:100%; display:flex; align-items:center; justify-content:center; color:var(--gray); font-size:13px;">No estate sales data for this period</div>';
+    return;
+  }
+  container.innerHTML = '<canvas id="anaEstateChart"></canvas>';
   if (charts.anaEstate) charts.anaEstate.destroy();
   const ctx = document.getElementById('anaEstateChart').getContext('2d');
   charts.anaEstate = new Chart(ctx, {
@@ -1570,6 +1582,12 @@ function renderAnaEstateChart(data) {
 }
 
 function renderAnaStatusChart(data) {
+  const container = document.getElementById('anaStatusChart').parentElement;
+  if (data.paid === 0 && data.partial === 0 && data.unpaid === 0) {
+    container.innerHTML = '<div class="empty-state" style="height:100%; display:flex; align-items:center; justify-content:center; color:var(--gray); font-size:13px;">No payment status data</div>';
+    return;
+  }
+  container.innerHTML = '<canvas id="anaStatusChart"></canvas>';
   if (charts.anaStatus) charts.anaStatus.destroy();
   const ctx = document.getElementById('anaStatusChart').getContext('2d');
   charts.anaStatus = new Chart(ctx, {
@@ -1641,6 +1659,12 @@ function updateKPIs(data) {
 }
 
 function renderRevenueChart(data) {
+  const container = document.getElementById('revenueChart').parentElement;
+  if (!data.labels || data.labels.length === 0 || (data.invoiced.every(v => v === 0) && data.collected.every(v => v === 0))) {
+    container.innerHTML = '<div class="empty-state" style="height:100%; display:flex; align-items:center; justify-content:center; color:var(--gray); font-size:13px;">No revenue data for this period</div>';
+    return;
+  }
+  container.innerHTML = '<canvas id="revenueChart"></canvas>';
   if (charts.revenue) charts.revenue.destroy();
   const ctx = document.getElementById('revenueChart').getContext('2d');
   charts.revenue = new Chart(ctx, {
@@ -1657,6 +1681,12 @@ function renderRevenueChart(data) {
 }
 
 function renderStatusChart(data) {
+  const container = document.getElementById('statusChart').parentElement;
+  if (data.paid === 0 && data.partial === 0 && data.unpaid === 0) {
+    container.innerHTML = '<div class="empty-state" style="height:100%; display:flex; align-items:center; justify-content:center; color:var(--gray); font-size:13px;">No payment status data</div>';
+    return;
+  }
+  container.innerHTML = '<canvas id="statusChart"></canvas>';
   if (charts.status) charts.status.destroy();
   const ctx = document.getElementById('statusChart').getContext('2d');
   charts.status = new Chart(ctx, {
@@ -1674,6 +1704,12 @@ function renderStatusChart(data) {
 }
 
 function renderEstateChart(data) {
+  const container = document.getElementById('estateChart').parentElement;
+  if (!data.length) {
+    container.innerHTML = '<div class="empty-state" style="height:100%; display:flex; align-items:center; justify-content:center; color:var(--gray); font-size:13px;">No estate data available</div>';
+    return;
+  }
+  container.innerHTML = '<canvas id="estateChart"></canvas>';
   if (charts.estate) charts.estate.destroy();
   const ctx = document.getElementById('estateChart').getContext('2d');
   charts.estate = new Chart(ctx, {

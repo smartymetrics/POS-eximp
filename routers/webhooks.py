@@ -137,6 +137,7 @@ async def form_submission(
 
         # 5. Record deposit payment
         if payload.deposit_amount > 0:
+            print(f"DEBUG: Inserting payment for {payload.deposit_amount}")
             db.table("payments").insert({
                 "invoice_id": invoice["id"],
                 "client_id": client_id,
@@ -148,6 +149,7 @@ async def form_submission(
             }).execute()
 
         # 6. Create pending verification
+        print(f"DEBUG: Inserting verification for {invoice['id']}")
         db.table("pending_verifications").insert({
             "invoice_id": invoice["id"],
             "client_id": client_id,
