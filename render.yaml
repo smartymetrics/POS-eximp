@@ -19,3 +19,5 @@ services:
         sync: false
       - key: APP_URL
         sync: false
+      - key: PYTHON_VERSION
+        value: 3.11.8
