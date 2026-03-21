@@ -1,5 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
-from models import VerificationConfirm, VerificationReject
+from fastapi.encoders import jsonable_encoder
+from models import VerificationConfirm, VerificationReject, VerificationUpdate
 from database import get_db
 from routers.auth import verify_token
 from email_service import send_receipt_and_statement_email, send_rejection_email
@@ -45,11 +46,12 @@ async def confirm_verification(
         raise HTTPException(status_code=400, detail=f"Already {verify_rec['status']}")
 
     # 2. Update verification status
-    db.table("pending_verifications").update({
+    update_data = jsonable_encoder({
         "status": "confirmed",
         "reviewed_by": current_admin["sub"],
         "reviewed_at": datetime.now().isoformat()
-    }).eq("id", id).execute()
+    })
+    db.table("pending_verifications").update(update_data).eq("id", id).execute()
 
     # 3. Fetch invoice and client for email
     inv_res = db.table("invoices").select("*, clients(*)").eq("id", verify_rec["invoice_id"]).execute()
@@ -68,7 +70,7 @@ async def confirm_verification(
 
     # 5. Log emails
     for doc_type in ["receipt", "statement"]:
-        db.table("email_logs").insert({
+        log_data = jsonable_encoder({
             "client_id": client["id"],
             "invoice_id": invoice["id"],
             "email_type": doc_type,
@@ -76,7 +78,8 @@ async def confirm_verification(
             "subject": f"Payment Confirmed — {invoice['invoice_number']}",
             "status": "sent",
             "sent_by": current_admin["sub"]
-        }).execute()
+        })
+        db.table("email_logs").insert(log_data).execute()
 
     background_tasks.add_task(
         log_activity,
@@ -149,3 +152,44 @@ async def reject_verification(
     )
 
     return {"message": "Submission rejected and client notified"}
+
+@router.patch("/{id}/edit")
+async def edit_verification(
+    id: str,
+    payload: VerificationUpdate,
+    current_admin=Depends(verify_token)
+):
+    db = get_db()
+    role = current_admin.get("role")
+    
+    # 1. Fetch verification
+    v_res = db.table("pending_verifications").select("*").eq("id", id).execute()
+    if not v_res.data:
+        raise HTTPException(status_code=404, detail="Verification record not found")
+    
+    verify_rec = v_res.data[0]
+    
+    update_data = jsonable_encoder(payload, exclude_none=True)
+    if not update_data:
+        return {"message": "No changes applied"}
+
+    # Field-level role checks
+    admin_only_fields = ["deposit_amount", "payment_date"]
+    
+    if role != "admin":
+        for field in admin_only_fields:
+            if field in update_data:
+                raise HTTPException(status_code=403, detail=f"Permission denied to edit {field}")
+
+    # 2. Update verification
+    db.table("pending_verifications").update(update_data).eq("id", id).execute()
+    
+    # If deposit amount changed, update the linked payment record if it exists
+    if "deposit_amount" in update_data:
+        ref = f"{verify_rec['payment_date']}_form_deposit"
+        db.table("payments").update({"amount": update_data["deposit_amount"]})\
+            .eq("invoice_id", verify_rec["invoice_id"])\
+            .eq("reference", ref)\
+            .execute()
+
+    return {"message": "Verification updated successfully"}

@@ -54,6 +54,19 @@ class ClientUpdate(BaseModel):
     address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
+    occupation: Optional[str] = None
+    marital_status: Optional[str] = None
+    nationality: Optional[str] = None
+    nok_name: Optional[str] = None
+    nok_phone: Optional[str] = None
+    nok_email: Optional[str] = None
+    nok_occupation: Optional[str] = None
+    nok_relationship: Optional[str] = None
+    nok_address: Optional[str] = None
+    nin: Optional[str] = None
+    id_number: Optional[str] = None
+    passport_photo_url: Optional[str] = None
+    id_document_url: Optional[str] = None
 
 
 # ─── PROPERTIES ──────────────────────────────────────────────
@@ -63,8 +76,10 @@ class PropertyCreate(BaseModel):
     estate_name: Optional[str] = None
     plot_size_sqm: Optional[Decimal] = None
     price_per_sqm: Optional[Decimal] = None
-    total_price: Decimal
+    starting_price: Decimal
     description: Optional[str] = None
+    available_plot_sizes: Optional[str] = None
+    is_active: bool = True
 
 
 class PropertyUpdate(BaseModel):
@@ -73,9 +88,11 @@ class PropertyUpdate(BaseModel):
     estate_name: Optional[str] = None
     plot_size_sqm: Optional[Decimal] = None
     price_per_sqm: Optional[Decimal] = None
-    total_price: Optional[Decimal] = None
+    starting_price: Optional[Decimal] = None
     description: Optional[str] = None
+    available_plot_sizes: Optional[str] = None
     is_active: Optional[bool] = None
+    is_archived: Optional[bool] = None
 
 
 # ─── INVOICES ────────────────────────────────────────────────
@@ -91,6 +108,14 @@ class InvoiceCreate(BaseModel):
     due_date: date
     notes: Optional[str] = None
 
+class InvoiceUpdate(BaseModel):
+    due_date: Optional[date] = None
+    payment_terms: Optional[str] = None
+    sales_rep_name: Optional[str] = None
+    property_name: Optional[str] = None
+    notes: Optional[str] = None
+    reason: Optional[str] = None # For due date changes
+
 
 class SendDocumentRequest(BaseModel):
     invoice_id: str
@@ -105,6 +130,13 @@ class PaymentCreate(BaseModel):
     amount: Decimal
     payment_method: str = "Bank Transfer"
     payment_date: date
+    notes: Optional[str] = None
+
+class PaymentUpdate(BaseModel):
+    payment_date: Optional[date] = None
+    reference: Optional[str] = None
+    payment_method: Optional[str] = None
+    amount: Optional[Decimal] = None
     notes: Optional[str] = None
 
 
@@ -167,6 +199,11 @@ class VerificationConfirm(BaseModel):
 class VerificationReject(BaseModel):
     reason: str
 
+class VerificationUpdate(BaseModel):
+    payment_proof_url: Optional[str] = None
+    deposit_amount: Optional[Decimal] = None
+    payment_date: Optional[str] = None
+
 
 class VoidReceiptRequest(BaseModel):
     reason: str
@@ -188,6 +225,8 @@ class KPISummary(BaseModel):
     avg_deal_size: Optional[float] = None
     collection_rate: Optional[float] = None
     pending_verifications: int
+    overdue_count: int = 0
+    partial_count: int = 0
     delta: Optional[KPIDelta] = None
 
 class RevenueTrend(BaseModel):
@@ -204,6 +243,7 @@ class PaymentStatusStats(BaseModel):
     paid: int
     partial: int
     unpaid: int
+    overdue: int = 0
 
 class ReferralSourceStat(BaseModel):
     source: str

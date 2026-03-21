@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from fastapi.encoders import jsonable_encoder
 from database import get_db
 from routers.auth import verify_token
 from routers.analytics import log_activity
@@ -41,10 +42,10 @@ async def create_client(
     current_admin=Depends(verify_token)
 ):
     db = get_db()
-    result = db.table("clients").insert({
-        **data.dict(),
-        "added_by": current_admin["sub"]
-    }).execute()
+    client_data = jsonable_encoder(data)
+    client_data["added_by"] = current_admin["sub"]
+    
+    result = db.table("clients").insert(client_data).execute()
     
     background_tasks.add_task(
         log_activity,
@@ -60,6 +61,29 @@ async def create_client(
 @router.put("/{client_id}")
 async def update_client(client_id: str, data: ClientUpdate, current_admin=Depends(verify_token)):
     db = get_db()
-    update_data = {k: v for k, v in data.dict().items() if v is not None}
+    role = current_admin.get("role")
+    update_data = jsonable_encoder(data, exclude_none=True)
+    
+    if not update_data:
+        return {"message": "No changes applied"}
+
+    # Admin-only fields
+    admin_only_fields = ["email", "nin", "id_number", "passport_photo_url", "id_document_url"]
+    
+    if role != "admin":
+        for field in admin_only_fields:
+            if field in update_data:
+                raise HTTPException(status_code=403, detail=f"Permission denied to edit {field}")
+
     result = db.table("clients").update(update_data).eq("id", client_id).execute()
+    if not result.data:
+         raise HTTPException(status_code=404, detail="Client not found")
+         
+    log_activity(
+        "client_updated",
+        f"Client {result.data[0]['full_name']} updated by {role}",
+        current_admin["sub"],
+        client_id=client_id
+    )
+    
     return {"message": "Client updated", "client": result.data[0]}

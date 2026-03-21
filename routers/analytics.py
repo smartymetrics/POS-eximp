@@ -7,6 +7,7 @@ from models import (
     KPISummary, KPIDelta, RevenueTrend, EstateStat, 
     PaymentStatusStats, ReferralSourceStat, RepLeaderboardEntry, ActivityLogEntry
 )
+from utils import resolve_invoice_status
 
 router = APIRouter()
 
@@ -43,6 +44,25 @@ async def get_kpis(
     # 4. Pending Verifications (Always live)
     pending_count = db.table("pending_verifications").select("id", count="exact").eq("status", "pending").execute().count
     
+    # 5. Dynamic Status Counts (Overdue / Partial)
+    # Fetch all relevant invoices to resolve status dynamically
+    all_inv_query = db.table("invoices").select("amount, amount_paid, due_date, status")
+    if not is_admin:
+         # Staff might only see limited data? PRD doesn't specify filter for staff here, 
+         # but usually KPIs are restricted. Line 31 already handles is_admin for totals.
+         pass
+    
+    all_inv_data = all_inv_query.execute().data
+    overdue_count = 0
+    partial_count = 0
+    
+    for inv in all_inv_data:
+        status = resolve_invoice_status(inv)
+        if status == "overdue":
+            overdue_count += 1
+        elif status == "partial":
+            partial_count += 1
+
     # Outstanding & Rate
     outstanding = (total_revenue - amount_collected) if is_admin and total_revenue is not None else None
     collection_rate = (amount_collected / total_revenue * 100) if is_admin and total_revenue and total_revenue > 0 else 0
@@ -78,6 +98,8 @@ async def get_kpis(
         avg_deal_size=avg_deal,
         collection_rate=collection_rate,
         pending_verifications=pending_count,
+        overdue_count=overdue_count,
+        partial_count=partial_count,
         delta=delta
     )
 
@@ -144,13 +166,15 @@ async def get_payment_status(
     admin: dict = Depends(verify_token)
 ):
     db = get_db()
-    data = db.table("invoices").select("status").filter("invoice_date", "gte", start.isoformat()).filter("invoice_date", "lte", end.isoformat()).execute().data
+    data = db.table("invoices").select("amount, amount_paid, due_date, status").filter("invoice_date", "gte", start.isoformat()).filter("invoice_date", "lte", end.isoformat()).execute().data
     
-    return PaymentStatusStats(
-        paid=len([i for i in data if i["status"] == "paid"]),
-        partial=len([i for i in data if i["status"] == "partial"]),
-        unpaid=len([i for i in data if i["status"] == "unpaid"])
-    )
+    stats = {"paid": 0, "partial": 0, "unpaid": 0, "overdue": 0}
+    for inv in data:
+        status = resolve_invoice_status(inv)
+        if status in stats:
+            stats[status] += 1
+            
+    return PaymentStatusStats(**stats)
 
 @router.get("/referral-sources", response_model=List[ReferralSourceStat])
 async def get_referral_sources(

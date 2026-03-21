@@ -61,9 +61,11 @@ CREATE TABLE IF NOT EXISTS properties (
     estate_name VARCHAR(255),
     plot_size_sqm DECIMAL(10,2),
     price_per_sqm DECIMAL(15,2),
-    total_price DECIMAL(15,2) NOT NULL,
+    starting_price DECIMAL(15,2) NOT NULL,
     description TEXT,
+    available_plot_sizes TEXT,
     is_active BOOLEAN DEFAULT true,
+    is_archived BOOLEAN DEFAULT false,
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()
 );
@@ -100,7 +102,7 @@ CREATE TABLE IF NOT EXISTS invoices (
     invoice_date DATE NOT NULL DEFAULT CURRENT_DATE,
     due_date DATE NOT NULL,
     
-    status VARCHAR(50) DEFAULT 'unpaid' CHECK (status IN ('unpaid', 'partial', 'paid', 'voided')),
+    status VARCHAR(50) DEFAULT 'unpaid' CHECK (status IN ('unpaid', 'partial', 'paid', 'voided', 'overdue')),
     notes TEXT,
     
     -- New fields for PRD v2
@@ -280,6 +282,19 @@ CREATE TABLE IF NOT EXISTS void_log (
 -- RLS for new tables
 ALTER TABLE pending_verifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE void_log ENABLE ROW LEVEL SECURITY;
+
+-- DUE DATE CHANGES TABLE
+CREATE TABLE IF NOT EXISTS due_date_changes (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    invoice_id UUID NOT NULL REFERENCES invoices(id),
+    old_date DATE,
+    new_date DATE NOT NULL,
+    reason TEXT NOT NULL,
+    changed_by UUID REFERENCES admins(id),
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE due_date_changes ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================
 -- SALES REPRESENTATIVES (PRD 2)

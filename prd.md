@@ -1,743 +1,760 @@
-# Product Requirements Document
-## Eximp & Cloves Infrastructure Limited — Finance & Receipt System
-### Remaining Features: Google Form Automation, Pending Verifications, Void Receipt
+# Product Requirements Document — Addendum
+## Eximp & Cloves Infrastructure Limited
+### Post-PRD3 Changes & Additions
+### Version 1.0
 
 ---
 
-## 1. Project Context
+## Overview
 
-This PRD covers the remaining features to be built on top of an existing FastAPI + Supabase + Resend finance system already in development. The existing system handles:
-
-- Admin dashboard (HTML/CSS/JS served from FastAPI root)
-- Invoice creation with auto-incrementing numbers (EC-000001, EC-000002...)
-- Payment recording and status tracking
-- PDF generation for Invoice, Receipt, and Statement of Account using `xhtml2pdf`
-- Email sending via Resend API
-- JWT-based admin authentication with Admin and Staff role hierarchy
-- Client and property management
-- Team member management (create, deactivate, archive, reset password)
-- My Profile page (change name, change password)
-
-**Tech stack:** Python + FastAPI, Supabase (PostgreSQL), xhtml2pdf, Resend API, HTML/CSS/JS frontend, hosted on Render free tier.
-
-**Brand:** Eximp & Cloves Infrastructure Limited. Primary colour `#F5A623` (gold), dark colour `#1A1A1A`. RC 8311800. Address: 57B, Isaac John Street, Yaba, Lagos, Nigeria.
+This document covers all feature additions and clarifications discussed after PRD 3 was written. It should be read alongside PRD 1, PRD 2, and PRD 3 — not as a standalone document. Where this addendum conflicts with any earlier PRD, this document takes precedence.
 
 ---
 
-## 2. Features to Build
+## 1. Invoice Due Date for Installment Clients
 
-### Feature A — Google Form to Supabase Webhook
-### Feature B — Pending Verifications Dashboard Section
-### Feature C — Void / Reverse Receipt
-### Feature D — Updated Invoice PDF with Full Price Breakdown, Co-owner, and Client Signature
+### 1.1 The Requirement
+
+Every invoice must have a `due_date` representing when the full outstanding balance must be cleared. For outright payments, the due date equals the payment date. For installment clients, the due date is calculated by adding the payment duration (in months) to the deposit date.
+
+### 1.2 Due Date Calculation
+
+Add `python-dateutil` to `requirements.txt`:
+```
+python-dateutil==2.9.0
+```
+
+Add this utility function to the webhook handler (`routers/webhooks.py`):
+
+```python
+from dateutil.relativedelta import relativedelta
+from datetime import datetime
+
+def calculate_due_date(payment_date_str: str, payment_duration: str) -> str:
+    """
+    Calculate final due date from deposit date + installment duration.
+
+    payment_date_str:  "3/18/2026" (Google Form format MM/DD/YYYY)
+    payment_duration:  "3 months", "6 months", "Outright", etc.
+
+    Returns: ISO date string "YYYY-MM-DD"
+    """
+    if not payment_duration or payment_duration.strip().lower() == "outright":
+        try:
+            base = datetime.strptime(payment_date_str.strip(), "%m/%d/%Y")
+            return base.strftime("%Y-%m-%d")
+        except:
+            return payment_date_str
+
+    try:
+        months = int(
+            payment_duration.lower()
+            .replace("months", "")
+            .replace("month", "")
+            .strip()
+        )
+        base = datetime.strptime(payment_date_str.strip(), "%m/%d/%Y")
+        due = base + relativedelta(months=months)
+        return due.strftime("%Y-%m-%d")
+    except:
+        return payment_date_str
+```
+
+Call this function in the webhook handler when building the invoice payload:
+
+```python
+due_date = calculate_due_date(
+    payment_date_str=data.payment_date,
+    payment_duration=data.payment_duration
+)
+```
+
+Pass `due_date` when inserting the invoice into Supabase.
+
+### 1.3 Invoice Status — Four States
+
+The invoice `status` field must support four values. Update the CHECK constraint in the schema:
+
+```sql
+ALTER TABLE invoices DROP CONSTRAINT IF EXISTS invoices_status_check;
+ALTER TABLE invoices ADD CONSTRAINT invoices_status_check
+    CHECK (status IN ('unpaid', 'partial', 'paid', 'overdue'));
+```
+
+Status must be **resolved dynamically** at query time — never stored as "overdue" permanently, because an invoice becomes overdue overnight without any system action. Add a helper function to the backend that is called whenever invoice data is returned to the frontend:
+
+```python
+from datetime import date
+
+def resolve_invoice_status(invoice: dict) -> str:
+    """
+    Dynamically calculate the correct status for an invoice.
+    Overrides the stored status if the due date has passed.
+    """
+    balance = float(invoice.get("balance_due") or 0)
+    amount_paid = float(invoice.get("amount_paid") or 0)
+    due_date_str = invoice.get("due_date")
+
+    if balance <= 0:
+        return "paid"
+
+    if due_date_str:
+        try:
+            due = date.fromisoformat(str(due_date_str))
+            if date.today() > due:
+                return "overdue"
+        except:
+            pass
+
+    if amount_paid > 0:
+        return "partial"
+
+    return "unpaid"
+```
+
+Apply this function in every endpoint that returns invoice data before sending the response.
+
+### 1.4 Invoice PDF — Due Date Display
+
+Update `pdf_templates/invoice.html` to show the due date clearly in the invoice details block:
+
+```
+Invoice Date:     20 Mar 2026
+Payment Plan:     3 Months Installment
+Deposit Date:     20 Mar 2026
+Final Due Date:   20 Jun 2026        ← new line
+```
+
+For outright payments, show:
+```
+Invoice Date:     20 Mar 2026
+Payment Terms:    Outright
+Due Date:         20 Mar 2026
+```
+
+### 1.5 Dashboard — Outstanding KPI Card Update (PRD 2 Addition)
+
+Update the Outstanding Balance KPI card (from PRD 2) to include an overdue sub-label:
+
+```
+Outstanding Balance
+NGN 3,450,000.00
+↳ 3 overdue · 8 partial
+```
+
+The overdue count is returned from the `/api/analytics/kpis` endpoint. Add `overdue_count` and `partial_count` to the KPI response:
+
+```json
+{
+  "outstanding_balance": 3450000,
+  "overdue_count": 3,
+  "partial_count": 8,
+  ...
+}
+```
+
+### 1.6 Payment Status Doughnut Chart (PRD 2 Addition)
+
+Update the Payment Status doughnut chart (from PRD 2) to show four segments:
+
+| Segment | Colour |
+|---|---|
+| Paid | Green `#2ecc71` |
+| Partial | Amber `#f39c12` |
+| Unpaid | Blue `#3498db` |
+| Overdue | Red `#e74c3c` |
+
+Update the `/api/analytics/payment-status` endpoint response:
+
+```json
+{
+  "paid": 8,
+  "partial": 4,
+  "unpaid": 2,
+  "overdue": 3
+}
+```
+
+### 1.7 Outstanding Payments Report (PRD 3 Addition)
+
+Update the Outstanding Payments Report (PRD 3, Report 3) to include:
+
+- A **"Days Overdue"** column — calculated as `today - due_date` for overdue invoices, blank for non-overdue
+- Sort order: overdue invoices first (sorted by days overdue descending), then partial, then unpaid
+- In the PDF version: overdue rows highlighted with a light red background (`#fdecea`)
+- In the Excel version: overdue rows with red font in the "Days Overdue" column
 
 ---
 
-## 3. Feature A — Google Form Automation
+## 2. Google Form — One Submission Per Client Clarification
 
-### 3.1 Overview
+### 2.1 Clarification
 
-When a client submits the Google Form (a land subscription/KYC form), an Apps Script on the connected Google Sheet fires a webhook to the FastAPI backend. The backend automatically:
+Every client fills the Google Form **exactly once**. There is no scenario where the same client resubmits the form. Subsequent installment payments are handled entirely through the admin dashboard (admin manually records payments via the "Record Payment" modal).
 
-1. Creates or finds the client record in Supabase
-2. Creates an invoice showing the full property price, deposit paid, and outstanding balance
-3. Sends the invoice email to the client immediately
-4. Creates a "pending verification" entry for the admin to review the payment proof
-5. Sends an alert email to the admin/finance team notifying them of the new submission
+### 2.2 Impact on Webhook Logic
 
-No receipt is sent at this stage. Receipt is only sent after admin manually confirms the payment.
+Remove the "find existing invoice" logic that was discussed as a possibility. The webhook should always:
+
+1. Create or update the client record (upsert by email)
+2. **Always create a new invoice** — never attach to an existing one
+3. Create a new pending verification
+4. Send invoice email to client
+5. Send admin alert email
+
+There is no duplicate invoice risk because each form submission is a unique property purchase.
 
 ---
 
-### 3.2 Google Sheet Column Mapping
+## 3. Properties — Archive, Restore, and Edit
 
-The Google Form responses are stored in a Google Sheet. The Apps Script reads each row on form submission using the following column mapping. Column indices are **1-based**.
+### 3.1 Schema Changes
 
-> **Important:** Column numbers must be verified against the actual sheet before deploying. The column names below are the exact question text from the form.
+```sql
+-- Add missing columns to properties table
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS is_archived BOOLEAN DEFAULT false;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS available_plot_sizes TEXT;
+ALTER TABLE properties ADD COLUMN IF NOT EXISTS description TEXT;
 
-| Column # | Form Field Name | Variable Name in Script | Used For |
+-- Rename total_price to starting_price for clarity
+-- Only run if column exists as total_price
+ALTER TABLE properties RENAME COLUMN total_price TO starting_price;
+```
+
+### 3.2 Starting Price — Behaviour and Labelling
+
+The `starting_price` column is **reference data only** — it is never enforced on any invoice. Its sole purposes are:
+
+1. **Auto-fill helper** — when admin creates a manual invoice and selects a property from the dropdown, the price field pre-fills with `starting_price`. Admin can change it freely before saving.
+2. **Quick reference** — staff can see current pricing on the Properties page without asking management.
+
+The UI must display this label next to the starting price field everywhere it appears:
+
+> *"Reference only — actual invoice price is set per transaction and may differ."*
+
+This label must appear:
+- On the Properties page (next to the price column header)
+- In the Add/Edit Property modal (below the price input field)
+- In the New Invoice modal (below the pre-filled amount field as a hint)
+
+### 3.3 Updated Pydantic Models
+
+Update `models.py`:
+
+```python
+class PropertyCreate(BaseModel):
+    name: str
+    location: str
+    estate_name: Optional[str] = None
+    description: Optional[str] = None
+    available_plot_sizes: Optional[str] = None  # e.g. "300 sqm, 500 sqm, 1000 sqm"
+    starting_price: Optional[Decimal] = None
+    is_active: bool = True
+
+class PropertyUpdate(BaseModel):
+    name: Optional[str] = None
+    location: Optional[str] = None
+    estate_name: Optional[str] = None
+    description: Optional[str] = None
+    available_plot_sizes: Optional[str] = None
+    starting_price: Optional[Decimal] = None
+    is_active: Optional[bool] = None
+    is_archived: Optional[bool] = None
+```
+
+### 3.4 New and Updated API Endpoints
+
+| Method | Endpoint | Description | Auth |
 |---|---|---|---|
-| 1 | Timestamp | `timestamp` | Record keeping |
-| 2 | Email (form submitter email) | `submitterEmail` | Fallback email |
-| 3 | Upload a passport photograph | `passportPhotoUrl` | Stored in DB |
-| 4 | Title | `title` | Client name prefix (Mr., Mrs., etc.) |
-| 5 | Customer first name | `firstName` | Client full name |
-| 6 | Customer last name (surname) | `lastName` | Client full name |
-| 7 | Customer middle name | `middleName` | Client full name |
-| 8 | Gender | `gender` | Client record |
-| 9 | Date of birth | `dob` | Client record |
-| 10 | Client's residential address | `address` | Client record |
-| 11 | Client's email address | `email` | **Primary email — documents sent here** |
-| 12 | Marital Status | `maritalStatus` | Client record |
-| 13 | Client's phone number (Whatsapp line) | `phone` | Client record |
-| 14 | Occupation | `occupation` | Client record |
-| 15 | NIN | `nin` | KYC — stored in DB |
-| 16 | International Passport No/NIN Number | `idNumber` | KYC — stored in DB |
-| 17 | Upload NIN/International Passport | `idDocumentUrl` | Stored in DB |
-| 18 | Nationality | `nationality` | Client record |
-| 19 | Property name | `propertyName` | Invoice line item |
-| 20 | Next of kin's full name | `nokName` | Client record |
-| 21 | Next of kin phone number | `nokPhone` | Client record |
-| 22 | Next of kin's email address | `nokEmail` | Client record |
-| 23 | Next of kin's occupation | `nokOccupation` | Client record |
-| 24 | Relationship | `nokRelationship` | Client record |
-| 25 | Next of kin's home address | `nokAddress` | Client record |
-| 26 | Ownership Type | `ownershipType` | Invoice — determines if co-owner shown |
-| 27 | Full name of the Second Owner | `coOwnerName` | Invoice — shown if co-ownership selected |
-| 28 | Email address (Co-owner) | `coOwnerEmail` | Client record |
-| 29 | Upload Signature | `signatureUrl` | Embedded on Invoice PDF |
-| 30 | Plot size | `plotSize` | Invoice line item |
-| 31 | Payment Duration | `paymentDuration` | Invoice payment terms |
-| 32 | Deposit Made (In Naira) | `depositAmount` | Payment record — amount paid |
-| 33 | Date of Payment/Deposit | `paymentDate` | Payment record |
-| 34 | Upload receipt of payment/deposit | `paymentProofUrl` | Stored for admin verification |
-| 35 | Outstanding Payment, if any | `outstandingAmount` | Invoice — balance due |
-| 36 | Source of Income | `sourceOfIncome` | Client record |
-| 37 | How did you get to know about our property | `referralSource` | Client record |
-| 38 | Sales Rep / Marketer Name | `salesRepName` | Shown on invoice and receipt |
-| 39 | Consent checkbox | `consent` | Stored — must equal "I Confirm and Agree" |
+| GET | `/api/properties/` | List active properties | JWT |
+| GET | `/api/properties/archived` | List archived properties | JWT |
+| POST | `/api/properties/` | Create new property | JWT |
+| PUT | `/api/properties/{id}` | Edit property details | JWT |
+| PATCH | `/api/properties/{id}/archive` | Archive a property | JWT |
+| PATCH | `/api/properties/{id}/restore` | Restore archived property | JWT |
 
-> **Note on Property Name field:** The form uses checkboxes with predefined estate names (Coinfield Estate, Xylara Court, Prime Circle Estate, Northstar Residence, Baclay Estate, Conrad Residence, Other). The value in the sheet may be a single estate name or a comma-separated string if multiple are somehow selected. Use the raw value as the property name on the invoice.
+The existing `GET /api/properties/` endpoint must only return properties where `is_archived = false`. A separate endpoint handles archived properties.
 
-> **Note on Deposit Amount:** The raw value may include commas (e.g. `"200,000"`). Strip commas and convert to float before sending to the API.
+### 3.5 Properties Page — Updated UI
 
-> **Note on Outstanding Amount:** May contain the string `"N/A"` for outright payments. If `"N/A"` or empty, set `outstanding_amount` to `0` and `payment_terms` to `"Outright"`. Otherwise set `payment_terms` based on `paymentDuration`.
+**Active properties section:**
+
+Table columns:
+| Estate Name | Location | Plot Sizes | Starting Price | Status | Actions |
+|---|---|---|---|---|---|
+
+Starting Price column header must include a tooltip or sub-label: *"Reference only"*
+
+Actions per active property row:
+- **Edit** — opens edit modal
+- **Archive** — opens confirmation modal
+
+**Edit Property Modal:**
+
+Fields:
+- Estate Name (required)
+- Location (required)
+- Description (optional, textarea)
+- Available Plot Sizes (optional, e.g. "300 sqm, 500 sqm")
+- Starting Price (optional, number input)
+- Label below starting price input: *"Reference only — actual invoice price may differ"*
+
+**Archive Confirmation Modal:**
+
+> "Are you sure you want to archive [Estate Name]? It will no longer appear in the invoice creation dropdown. All existing invoices referencing this estate are unaffected."
+
+Buttons: Cancel | Archive
+
+**Archived properties section:**
+
+Collapsible section at the bottom of the page — same pattern as archived team members in the Team Management page. Shows a count badge next to the section header.
+
+Columns: Estate Name | Location | Archived Date | Actions
+
+Actions per archived row:
+- **Restore** — restores to active immediately, no confirmation needed, shows success toast
+
+**Invoice Creation Dropdown:**
+
+The property dropdown in the New Invoice modal must only show properties where `is_archived = false AND is_active = true`. Archived or inactive properties must never appear in this dropdown.
 
 ---
 
-### 3.3 Apps Script Code
+## 4. Sales Rep — Edit Functionality Confirmation
 
-Create an Apps Script bound to the Google Sheet (Tools → Script Editor). The script is triggered on form submission (`onFormSubmit` trigger).
+This was already specified in PRD 3 (Section 2.5, Actions per row: Edit) and the `SalesRepUpdate` Pydantic model in Section 6. This addendum confirms the edit modal fields explicitly:
+
+**Edit Sales Rep Modal fields:**
+- Full Name (required)
+- Phone Number (optional)
+- Email Address (optional)
+- Region (optional, default "Lagos")
+
+No other fields are editable from the dashboard. The `admin_id` link (for future rep login) is set programmatically, not manually.
+
+The edit button must be visible for both **active and inactive** reps so admin can correct a name spelling even on a deactivated rep.
+
+---
+
+## 5. Summary of All Files Changed by This Addendum
+
+```
+requirements.txt          → Add python-dateutil==2.9.0
+schema.sql                → Update invoices status CHECK constraint
+                          → Add is_archived, available_plot_sizes,
+                            description to properties
+                          → Rename total_price → starting_price
+models.py                 → Update PropertyCreate, PropertyUpdate
+routers/webhooks.py       → Add calculate_due_date() function
+                          → Remove "find existing invoice" logic
+                          → Pass due_date when creating invoice
+routers/invoices.py       → Apply resolve_invoice_status() to all
+                            invoice query responses
+routers/properties.py     → Add archive, restore, archived list endpoints
+                          → Update edit endpoint
+routers/analytics.py      → Add overdue_count, partial_count to KPI response
+                          → Add overdue segment to payment-status endpoint
+pdf_templates/invoice.html → Add due date / final due date display
+templates/dashboard.html  → Update Properties section UI
+                          → Add archive/restore buttons and modals
+                          → Add edit modal for properties
+                          → Update outstanding KPI card sub-label
+                          → Update payment status chart to 4 segments
+```
+
+---
+
+## 6. Testing Checklist
+
+- [ ] Submit Google Form → invoice created with correct `due_date` (deposit date + payment duration months)
+- [ ] Submit Google Form with "Outright" payment → `due_date` equals `payment_date`
+- [ ] Invoice with passed due date and outstanding balance → status resolves to "overdue" dynamically
+- [ ] Invoice with balance paid in full → status resolves to "paid" regardless of due date
+- [ ] Invoice PDF shows "Final Due Date" line for installment, "Due Date" for outright
+- [ ] Outstanding KPI card shows overdue count and partial count sub-label
+- [ ] Payment status doughnut shows 4 segments (paid, partial, unpaid, overdue)
+- [ ] Outstanding Payments Report shows Days Overdue column, overdue rows sorted first
+- [ ] Properties page shows edit button per row → modal pre-fills with existing data
+- [ ] Editing a property updates all fields correctly
+- [ ] Archive button shows confirmation modal with correct estate name
+- [ ] Archived property disappears from active properties table
+- [ ] Archived property appears in collapsible archived section
+- [ ] Archived property does NOT appear in invoice creation dropdown
+- [ ] Restore button restores property to active list immediately
+- [ ] Starting price label "Reference only" appears in properties table, edit modal, and new invoice modal
+- [ ] Edit Sales Rep modal pre-fills with existing rep data
+- [ ] Editing rep name updates the display on the leaderboard and rep profile page
+
+---
+
+## 7. Admin-Editable Fields Across All Entities
+
+This section specifies every field that should be editable after creation, who can edit it, and how.
+
+---
+
+### 7.1 Invoice Editable Fields
+
+Accessible via an **"Edit Invoice"** button on the invoice row and invoice detail view. Only visible when `status ≠ 'paid'` — a fully paid invoice is locked and cannot be edited.
+
+| Field | Who Can Edit | Notes |
+|---|---|---|
+| Due date | Admin + Staff | Staff must provide a mandatory reason. Logged in `due_date_changes` table. |
+| Payment terms | Admin only | e.g. change "3 Months" to "6 Months". Logged in `activity_log`. |
+| Notes | Admin + Staff | Internal notes not shown on client-facing documents. |
+| Sales rep name | Admin only | Correct if client typed wrong rep name on form. Updates `sales_rep_name` and re-runs fuzzy match to update `sales_rep_id`. |
+| Property name | Admin only | Fix typo or wrong estate. Logged in `activity_log`. |
+
+**Edit Invoice Modal fields (what the modal shows):**
+- Due Date (date picker) — with label "Final payment due date"
+- Payment Terms (text input or dropdown)
+- Sales Rep Name (text input)
+- Property Name (text input)
+- Notes (textarea — multi-line)
+
+**Backend endpoint:**
+```
+PATCH /api/invoices/{id}/edit
+Body: {
+  "due_date": "2026-07-04",
+  "payment_terms": "6 months",
+  "sales_rep_name": "Funke Adeyemi",
+  "property_name": "Coinfield Estate",
+  "notes": "Client called 15 Apr, extension granted",
+  "reason": "Client requested extension"   ← required if due_date changes
+}
+Auth: JWT — role checked per field in backend
+```
+
+The backend must enforce field-level role restrictions:
+- If `payment_terms`, `sales_rep_name`, or `property_name` are in the request body and the caller is Staff → return `403`
+- `due_date` and `notes` are allowed for both roles
+
+---
+
+### 7.2 Client Editable Fields
+
+Accessible via an **"Edit Client"** button on the client row and client profile page. Available to both Admin and Staff.
+
+| Field | Who Can Edit |
+|---|---|
+| Full name | Admin + Staff |
+| Email address | Admin only — changing email affects document delivery |
+| Phone number | Admin + Staff |
+| Residential address | Admin + Staff |
+| Occupation | Admin + Staff |
+| Marital status | Admin + Staff |
+| Nationality | Admin + Staff |
+| Next of kin name | Admin + Staff |
+| Next of kin phone | Admin + Staff |
+| Next of kin email | Admin + Staff |
+| Next of kin occupation | Admin + Staff |
+| Next of kin relationship | Admin + Staff |
+| Next of kin address | Admin + Staff |
+| NIN / ID Number | Admin only — sensitive KYC data |
+| Passport photo URL | Admin only |
+| ID document URL | Admin only |
+
+**Backend endpoint:**
+```
+PUT /api/clients/{id}
+Body: { all editable fields as optional }
+Auth: JWT — role checked per field in backend
+```
+
+Email and KYC fields return `403` if caller is Staff.
+
+---
+
+### 7.3 Payment Editable Fields
+
+Accessible via an **"Edit"** button on each payment row within an invoice detail view. Admin only — Staff cannot edit recorded payments.
+
+| Field | Notes |
+|---|---|
+| Payment date | Correct if entered wrongly |
+| Payment reference | Fix typo in teller/transfer ref |
+| Payment method | Correct if wrong method selected |
+| Amount | Admin only — changing amount triggers recalculation of `invoice.amount_paid` and `invoice.balance_due` and `invoice.status` |
+| Notes | Add context |
+
+**Important:** When `amount` is edited, the backend must:
+1. Update the payment record
+2. Recalculate `invoices.amount_paid` = sum of all non-voided payments for this invoice
+3. Recalculate `invoices.balance_due` = `invoices.amount` − `invoices.amount_paid`
+4. Recalculate `invoices.status` using `resolve_invoice_status()`
+5. Log the change in `activity_log`
+
+**Backend endpoint:**
+```
+PATCH /api/payments/{id}
+Body: {
+  "payment_date": "2026-03-20",
+  "reference": "TXN-8821944",
+  "payment_method": "Bank Transfer",
+  "amount": 250000,
+  "notes": "Corrected teller reference"
+}
+Auth: JWT — Admin only
+```
+
+---
+
+### 7.4 Pending Verification Editable Fields
+
+Accessible via an **"Edit"** button on each pending verification row. Admin + Staff.
+
+| Field | Who Can Edit | Notes |
+|---|---|---|
+| Payment proof URL | Admin + Staff | Replace blurry proof with clearer one client resent |
+| Deposit amount | Admin only | Correct if client typed wrong amount on form |
+| Payment date | Admin only | Correct if client entered wrong date |
+
+**Backend endpoint:**
+```
+PATCH /api/verifications/{id}/edit
+Body: {
+  "payment_proof_url": "https://drive.google.com/...",
+  "deposit_amount": 200000,
+  "payment_date": "2026-03-18"
+}
+Auth: JWT — role checked per field
+```
+
+---
+
+### 7.5 Due Date Change — Staff Permission
+
+Staff **can** change invoice due dates. This decision is based on operational practicality — staff are the primary point of contact with clients and should not need to escalate routine extension requests to admin.
+
+**Rules:**
+- A reason is **mandatory** for all due date changes regardless of role
+- Minimum 10 characters for the reason field
+- Every change is logged in `due_date_changes` table with: old date, new date, reason, changed by, timestamp
+- Admins can view the full `due_date_changes` log from the invoice detail view
+- The reason field placeholder text: *"e.g. Client requested 2-week extension, confirmed via call"*
+
+---
+
+## 8. Role-Based UI — Complete Hidden Elements Specification
+
+### 8.1 Implementation Pattern
+
+A single CSS class `admin-only` is applied to every element that should be completely invisible to Staff. A JavaScript function runs immediately after `checkAuth()` resolves and hides all such elements if the current user is Staff.
 
 ```javascript
-const WEBHOOK_URL = "https://your-render-app.onrender.com/api/webhooks/form-submission";
-const WEBHOOK_SECRET = "your-secret-key-here"; // Must match WEBHOOK_SECRET in .env
+function applyRoleRestrictions(role) {
+  if (role !== 'admin') {
+    // Hide every element marked admin-only
+    document.querySelectorAll('.admin-only').forEach(el => {
+      el.style.display = 'none';
+      el.setAttribute('aria-hidden', 'true');
+    });
 
-function onFormSubmit(e) {
-  const row = e.values; // 1-based from trigger, 0-based in array
-
-  // Parse deposit — strip commas, handle empty
-  function parseAmount(val) {
-    if (!val || val.trim() === "" || val.trim().toUpperCase() === "N/A") return 0;
-    return parseFloat(val.toString().replace(/,/g, "").trim()) || 0;
-  }
-
-  const depositAmount = parseAmount(row[31]);   // col 32 → index 31
-  const outstandingRaw = row[34];               // col 35 → index 34
-  const outstandingAmount = parseAmount(outstandingRaw);
-  const isOutright = outstandingRaw.trim().toUpperCase() === "N/A" || outstandingRaw.trim() === "";
-  const totalAmount = depositAmount + outstandingAmount;
-
-  const payload = {
-    // Client
-    title:           row[3],
-    first_name:      row[4],
-    last_name:       row[5],
-    middle_name:     row[6],
-    gender:          row[7],
-    dob:             row[8],
-    address:         row[9],
-    email:           row[10],   // Primary email
-    marital_status:  row[11],
-    phone:           row[12],
-    occupation:      row[13],
-    nin:             row[14],
-    id_number:       row[15],
-    id_document_url: row[16],
-    nationality:     row[17],
-
-    // Property
-    property_name:   row[18],
-    plot_size:       row[29],
-
-    // Next of kin
-    nok_name:         row[19],
-    nok_phone:        row[20],
-    nok_email:        row[21],
-    nok_occupation:   row[22],
-    nok_relationship: row[23],
-    nok_address:      row[24],
-
-    // Ownership
-    ownership_type:  row[25],
-    co_owner_name:   row[26],
-    co_owner_email:  row[27],
-    signature_url:   row[28],
-
-    // Payment
-    payment_duration:    row[30],
-    deposit_amount:      depositAmount,
-    payment_date:        row[32],
-    payment_proof_url:   row[33],
-    outstanding_amount:  outstandingAmount,
-    total_amount:        totalAmount,
-    payment_terms:       isOutright ? "Outright" : row[30],
-
-    // Other
-    source_of_income:   row[35],
-    referral_source:    row[36],
-    sales_rep_name:     row[37],
-    consent:            row[38],
-    timestamp:          row[0],
-    submitter_email:    row[1],
-    passport_photo_url: row[2],
-  };
-
-  const options = {
-    method: "post",
-    contentType: "application/json",
-    payload: JSON.stringify(payload),
-    headers: { "X-Webhook-Secret": WEBHOOK_SECRET },
-    muteHttpExceptions: true,
-  };
-
-  try {
-    const response = UrlFetchApp.fetch(WEBHOOK_URL, options);
-    Logger.log("Status: " + response.getResponseCode());
-    Logger.log("Response: " + response.getContentText());
-  } catch (err) {
-    Logger.log("Error: " + err.toString());
+    // Redirect if staff tries to access admin-only section directly
+    const adminSections = ['team', 'analytics-revenue', 'analytics-clients',
+                           'analytics-estates', 'reports', 'sales-reps'];
+    adminSections.forEach(section => {
+      const el = document.getElementById('section-' + section);
+      if (el) el.style.display = 'none';
+    });
   }
 }
 ```
 
-**Setup Instructions for the Apps Script:**
-1. In Google Sheets, go to **Extensions → Apps Script**
-2. Paste the script above, replacing `WEBHOOK_URL` and `WEBHOOK_SECRET`
-3. Save the script
-4. Go to **Triggers** (clock icon in sidebar) → **Add Trigger**
-5. Choose function: `onFormSubmit`
-6. Event source: `From spreadsheet`
-7. Event type: `On form submit`
-8. Save — grant permissions when prompted
+Call this in `checkAuth()` after the role is known:
+
+```javascript
+async function checkAuth() {
+  // ... existing auth code ...
+  currentUserRole = admin.role;
+  applyRoleRestrictions(admin.role);  // ← add this line
+}
+```
+
+The backend **always** enforces role restrictions independently via JWT role checks. Frontend hiding is purely for UX — a Staff member should never see a button they cannot use. The real security gate is always the API.
 
 ---
 
-### 3.4 New FastAPI Webhook Endpoint
+### 8.2 Complete `admin-only` Elements List
 
-**File:** `routers/webhooks.py` (new file)
+Every element below must have `class="admin-only"` (or include it in existing class list) in `dashboard.html`.
 
-**Endpoint:** `POST /api/webhooks/form-submission`
+**Sidebar Navigation Items**
+```
+- Team Members nav item
+- Analytics nav section label
+- Revenue Analysis nav item
+- Client Analysis nav item
+- Estate Analysis nav item
+- Reports nav item
+- Sales Reps nav item
+```
 
-**Authentication:** Validates `X-Webhook-Secret` header against `WEBHOOK_SECRET` environment variable. Returns `403` if missing or incorrect.
+**Dashboard KPI Cards (entire cards)**
+```
+- Total Revenue card
+- Amount Collected card
+- Outstanding Balance card
+- Avg Deal Size card
+- Collection Rate card
+```
 
-**Logic (in order):**
+**Dashboard Charts (entire chart containers)**
+```
+- Revenue Trend chart container
+- Estate Breakdown chart container
+- Payment Status chart container
+- Referral Sources chart container
+```
 
-1. **Validate secret** — check `X-Webhook-Secret` header
-2. **Validate consent** — if `consent` field is not `"I Confirm and Agree"`, log and return `400`
-3. **Upsert client** — search for existing client by `email`. If found, update record. If not found, create new client. Store all KYC fields.
-4. **Create invoice** — generate invoice number via `generate_invoice_number()` DB function. Set:
-   - `amount` = `total_amount` (full property price = deposit + outstanding)
-   - `amount_paid` = `deposit_amount`
-   - `balance_due` = `outstanding_amount`
-   - `payment_terms` = `"Outright"` if outstanding is 0, else value from `payment_duration`
-   - `property_name` = `property_name` from form
-   - `plot_size_sqm` = parsed numeric value from `plot_size` (e.g. strip "SQM", "sqm")
-   - `sales_rep_name` = `sales_rep_name` from form
-   - `co_owner_name` = `co_owner_name` if ownership type is not sole
-   - `signature_url` = `signature_url` from form
-   - `payment_proof_url` = `payment_proof_url` from form
-   - `passport_photo_url` = `passport_photo_url` from form
-   - `source` = `"google_form"` (to distinguish from manually created invoices)
-5. **Record deposit payment** — if `deposit_amount > 0`, insert a row into the `payments` table with `reference = payment_date + "_form_deposit"` and `amount = deposit_amount`
-6. **Create pending verification** — insert a row into `pending_verifications` table (see schema below)
-7. **Send invoice email** — call `send_invoice_email(invoice, client)` as a background task
-8. **Send admin alert email** — call `send_admin_alert_email(invoice, client)` as a background task
-9. **Return** `{"message": "Processed", "invoice_number": "EC-XXXXXX"}`
+**Dashboard Sections**
+```
+- Sales Rep Leaderboard section (entire div)
+```
 
----
+**Invoices Table — Action Buttons**
+```
+- "Void Receipt" button (per row)
+- "Edit Payment Terms" option in edit modal
+- "Edit Sales Rep" option in edit modal
+- "Edit Property Name" option in edit modal
+```
 
-### 3.5 Database Schema Changes
+**Invoice Edit Modal — Fields**
+```
+- Payment Terms field + label
+- Sales Rep Name field + label
+- Property Name field + label
+```
 
-Add the following to `schema.sql` and run in Supabase SQL Editor:
+**Payments — Actions**
+```
+- "Edit Payment" button (entire payments edit functionality)
+```
 
-```sql
--- Add new columns to invoices table
-ALTER TABLE invoices ADD COLUMN IF NOT EXISTS sales_rep_name VARCHAR(255);
-ALTER TABLE invoices ADD COLUMN IF NOT EXISTS co_owner_name VARCHAR(255);
-ALTER TABLE invoices ADD COLUMN IF NOT EXISTS co_owner_email VARCHAR(255);
-ALTER TABLE invoices ADD COLUMN IF NOT EXISTS signature_url TEXT;
-ALTER TABLE invoices ADD COLUMN IF NOT EXISTS payment_proof_url TEXT;
-ALTER TABLE invoices ADD COLUMN IF NOT EXISTS passport_photo_url TEXT;
-ALTER TABLE invoices ADD COLUMN IF NOT EXISTS source VARCHAR(50) DEFAULT 'manual';
+**Pending Verifications**
+```
+- "Edit Deposit Amount" field in edit modal
+- "Edit Payment Date" field in edit modal
+```
 
--- Add KYC columns to clients table
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS title VARCHAR(20);
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS middle_name VARCHAR(100);
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS gender VARCHAR(20);
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS dob VARCHAR(50);
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS marital_status VARCHAR(50);
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS occupation VARCHAR(100);
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS nin VARCHAR(50);
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS id_number VARCHAR(100);
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS id_document_url TEXT;
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS nationality VARCHAR(100);
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS passport_photo_url TEXT;
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS nok_name VARCHAR(255);
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS nok_phone VARCHAR(50);
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS nok_email VARCHAR(255);
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS nok_occupation VARCHAR(100);
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS nok_relationship VARCHAR(100);
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS nok_address TEXT;
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS source_of_income VARCHAR(100);
-ALTER TABLE clients ADD COLUMN IF NOT EXISTS referral_source VARCHAR(100);
+**Clients**
+```
+- "Edit Email" field in client edit modal
+- NIN / ID Number field in client edit modal
+- Passport Photo URL field in client edit modal
+- ID Document URL field in client edit modal
+```
 
--- PENDING VERIFICATIONS TABLE
-CREATE TABLE IF NOT EXISTS pending_verifications (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    invoice_id UUID NOT NULL REFERENCES invoices(id),
-    client_id UUID NOT NULL REFERENCES clients(id),
-    payment_proof_url TEXT,
-    deposit_amount DECIMAL(15,2),
-    payment_date VARCHAR(100),
-    sales_rep_name VARCHAR(255),
-    status VARCHAR(50) DEFAULT 'pending'
-        CHECK (status IN ('pending', 'confirmed', 'rejected')),
-    reviewed_by UUID REFERENCES admins(id),
-    reviewed_at TIMESTAMPTZ,
-    rejection_reason TEXT,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
+**Team Management**
+```
+- Entire #section-team div
+```
 
-ALTER TABLE pending_verifications ENABLE ROW LEVEL SECURITY;
+**Reports**
+```
+- Entire #section-reports div (if it exists as a section)
+- Reports nav item
+```
+
+**Analytics**
+```
+- Entire #section-analytics-revenue div
+- Entire #section-analytics-clients div
+- Entire #section-analytics-estates div
 ```
 
 ---
 
-### 3.6 New Environment Variable
+### 8.3 Staff-Only Elements
 
-Add to `.env` and Render environment settings:
+Conversely, some elements should only be visible to Staff and hidden from Admins. Use class `staff-only` for these.
 
-```env
-WEBHOOK_SECRET=your-long-random-secret-string
-ADMIN_ALERT_EMAIL=finance@eximps-cloves.com  # or team email for notifications
+Currently there are none — but this class should be available for future use if Staff-specific UI elements are needed (e.g. a "Request Admin Approval" button for actions that exceed Staff permissions).
+
+---
+
+### 8.4 Role Badge in Sidebar
+
+The existing sidebar footer shows the logged-in user's name and role. Update the role display to be visually distinct:
+
+**Admin:**
+```
+Role badge: gold background, dark text — "Admin"
+```
+
+**Staff:**
+```
+Role badge: blue background, white text — "Staff"
+```
+
+This makes it immediately obvious to the user what role they are operating under, reducing confusion if someone has multiple accounts.
+
+```javascript
+// In checkAuth(), after role is known:
+const roleEl = document.getElementById('adminRole');
+if (admin.role === 'admin') {
+  roleEl.innerHTML = '<span style="background:var(--gold);color:var(--dark);padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;">Admin</span>';
+} else {
+  roleEl.innerHTML = '<span style="background:#3498db;color:#fff;padding:2px 8px;border-radius:10px;font-size:10px;font-weight:700;">Staff</span>';
+}
 ```
 
 ---
 
-### 3.7 Admin Alert Email
+### 8.5 Section Guard Function
 
-When a new form submission arrives, send an alert email to `ADMIN_ALERT_EMAIL` containing:
+Add a guard to `showSection()` so if a Staff user somehow triggers navigation to an admin-only section (e.g. via browser console), they are silently redirected to the dashboard instead of seeing a broken page:
 
-- Client full name and email
-- Property name, plot size, deposit amount
-- Invoice number generated
-- Payment proof URL (clickable link to Google Drive file)
-- A direct link to the Pending Verifications section of the dashboard
+```javascript
+const ADMIN_ONLY_SECTIONS = [
+  'team', 'analytics-revenue', 'analytics-clients',
+  'analytics-estates', 'reports', 'sales-reps'
+];
 
-Subject: `New Subscription — [Client Name] — [Invoice Number]`
-
----
-
-## 4. Feature B — Pending Verifications Dashboard Section
-
-### 4.1 Overview
-
-A new section in the admin dashboard where all unverified form submissions are listed. Admins review the payment proof and either confirm or reject each one.
-
-### 4.2 Navigation
-
-Add a **"Pending Verifications"** nav item in the sidebar. It should show a **badge count** of how many items are pending (e.g. a red dot with a number). Both Admin and Staff roles can access this section.
-
-### 4.3 Pending Verifications Table
-
-Each row shows:
-
-| Column | Content |
-|---|---|
-| Client Name | Full name |
-| Property | Property name + plot size |
-| Deposit | Amount deposited |
-| Payment Date | Date from form |
-| Sales Rep | Who facilitated the sale |
-| Submitted | Timestamp of form submission |
-| Proof | "View Proof" button — opens payment proof URL in new tab |
-| Actions | "Confirm Payment" button (green) + "Reject" button (red) |
-
-Only show rows with `status = 'pending'`. Confirmed and rejected entries move to a collapsible "History" section below, sorted by most recent.
-
-### 4.4 Confirm Payment Flow
-
-When admin clicks **"Confirm Payment"**:
-
-1. Open a confirmation modal showing:
-   - Client name, invoice number, deposit amount
-   - The payment proof image/link
-   - A note: "Confirming this will mark the payment as verified and send the Receipt + Statement of Account to the client."
-2. Admin clicks **"Confirm & Send Documents"**
-3. Backend:
-   - Updates `pending_verifications.status` to `'confirmed'`
-   - Records `reviewed_by` and `reviewed_at`
-   - Calls `send_receipt_and_statement_email()` — sends both PDFs in one email
-4. Show success toast: "Payment confirmed. Receipt + Statement sent to [client email]."
-
-### 4.5 Reject Payment Flow
-
-When admin clicks **"Reject"**:
-
-1. Open a rejection modal with:
-   - Client name and invoice number
-   - A required text field: "Reason for rejection" (e.g. "Payment proof blurry, cannot verify", "Amount on proof does not match deposit stated")
-2. Admin clicks **"Reject Submission"**
-3. Backend:
-   - Updates `pending_verifications.status` to `'rejected'`
-   - Stores `rejection_reason`, `reviewed_by`, `reviewed_at`
-   - Marks the invoice `status` back to `'unpaid'`
-   - Sends a polite rejection email to the client (see below)
-4. Show toast: "Submission rejected. Client has been notified."
-
-### 4.6 Rejection Email to Client
-
-**Subject:** `Action Required — Payment Verification Issue | Eximp & Cloves`
-
-**Body:**
-> Dear [Client Name],
->
-> Thank you for your subscription to [Property Name].
->
-> Unfortunately, we were unable to verify your payment proof for Invoice [EC-XXXXXX]. Reason: [rejection_reason].
->
-> Please contact us or resubmit your payment evidence at your earliest convenience so we can process your subscription.
->
-> We apologise for any inconvenience.
-
-Signed with company footer (address, phone, website).
-
----
-
-## 5. Feature C — Void / Reverse Receipt
-
-### 5.1 Overview
-
-Admins can void a receipt that was issued incorrectly (e.g. after a payment was confirmed but later found to be fraudulent, or entered in error).
-
-### 5.2 Where to Access
-
-On the **Invoices** table, add a **"Void"** action button that is only visible when `invoice.status = 'paid'` or `'partial'`. Only users with `role = 'admin'` can see and use this button.
-
-### 5.3 Void Flow
-
-1. Admin clicks **"Void Receipt"** on an invoice
-2. A modal opens showing:
-   - Invoice number, client name, amount paid so far
-   - A required **"Reason for voiding"** text field
-   - A warning: "This will reverse all payments on this invoice, mark it as unpaid, and log the action. This cannot be undone."
-3. Admin clicks **"Void Receipt"**
-4. Backend:
-   - Inserts a row into a new `void_log` table (see schema below)
-   - Soft-deletes all payments on this invoice by setting `is_voided = true` on each payment row
-   - Recalculates `amount_paid = 0` and sets `invoice.status = 'unpaid'`
-   - If the invoice originated from a Google Form, also sets the associated `pending_verifications.status` back to `'pending'`
-5. Show toast: "Receipt voided successfully. Invoice [EC-XXXXXX] is now marked as unpaid."
-6. Optionally (admin can tick a checkbox in the modal): **Send void notification email to client**
-
-### 5.4 Void Notification Email to Client (Optional)
-
-**Subject:** `Important Notice — Receipt Correction | Eximp & Cloves`
-
-**Body:**
-> Dear [Client Name],
->
-> We are writing to inform you that Receipt [EC-XXXXXX], issued on [date], has been voided due to an administrative correction.
->
-> Reason: [void_reason]
->
-> Please contact our office immediately so we can resolve this matter.
-
-### 5.5 Database Schema for Void Log
-
-```sql
--- Add is_voided column to payments table
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS is_voided BOOLEAN DEFAULT false;
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS voided_by UUID REFERENCES admins(id);
-ALTER TABLE payments ADD COLUMN IF NOT EXISTS voided_at TIMESTAMPTZ;
-
--- VOID LOG TABLE
-CREATE TABLE IF NOT EXISTS void_log (
-    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
-    invoice_id UUID NOT NULL REFERENCES invoices(id),
-    client_id UUID NOT NULL REFERENCES clients(id),
-    voided_by UUID NOT NULL REFERENCES admins(id),
-    reason TEXT NOT NULL,
-    amount_reversed DECIMAL(15,2),
-    notify_client BOOLEAN DEFAULT false,
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-ALTER TABLE void_log ENABLE ROW LEVEL SECURITY;
+function showSection(name) {
+  // Guard: redirect Staff away from admin sections
+  if (ADMIN_ONLY_SECTIONS.includes(name) && currentUserRole !== 'admin') {
+    toast('You do not have permission to access this section', 'error');
+    showSection('dashboard');
+    return;
+  }
+  // ... rest of existing showSection() code ...
+}
 ```
 
 ---
 
-## 6. Feature D — Updated Invoice PDF
+## 9. Updated Testing Checklist (Sections 7 and 8)
 
-### 6.1 Full Price Breakdown
+### Editable Fields
+- [ ] Admin can edit invoice due date — change saved, logged in `due_date_changes`
+- [ ] Staff can edit invoice due date — requires mandatory reason (min 10 chars)
+- [ ] Staff cannot edit invoice payment terms — field hidden in modal, `403` from API if attempted
+- [ ] Staff cannot edit invoice sales rep — field hidden, API blocks it
+- [ ] Admin can edit client email — field visible and saves correctly
+- [ ] Staff cannot edit client email — field completely hidden in edit modal
+- [ ] Staff cannot edit client NIN/ID fields — fields completely hidden
+- [ ] Admin can edit payment amount — invoice `amount_paid`, `balance_due`, and `status` recalculate correctly
+- [ ] Staff cannot access payment edit — button not shown, API returns `403`
+- [ ] Admin can update pending verification deposit amount
+- [ ] Staff can update pending verification payment proof URL
+- [ ] Staff cannot update pending verification deposit amount — field hidden
 
-The invoice PDF must show the complete financial picture, not just the deposit. Layout for the totals section:
-
-```
-Property:           [Property Name] — [Plot Size]
-─────────────────────────────────────────────
-Total Property Price:          NGN X,XXX,XXX.00
-Deposit Paid:              (−) NGN   XXX,XXX.00
-─────────────────────────────────────────────
-Balance Due:                   NGN   XXX,XXX.00
-Payment Plan:                  [Outright / X Months Installment]
-```
-
-For outright payments where `outstanding = 0`, the Balance Due line shows `NGN 0.00` and a green "PAID IN FULL" badge appears next to it.
-
-### 6.2 Co-owner Display
-
-When `co_owner_name` is present and `ownership_type` is not sole ownership, add a co-owner line in the "Bill To" section:
-
-```
-Primary Owner:    Mr. Adebayo Okonkwo
-Co-owner:         Mrs. Chioma Okonkwo
-```
-
-### 6.3 Sales Rep Block
-
-Already exists in the current system. Ensure `sales_rep_name` from the form is passed through to the PDF template. The block shows:
-
-```
-SALES REPRESENTATIVE
-[Sales Rep Name]
-Sales Team · Eximp & Cloves Infrastructure Limited
-```
-
-### 6.4 Client Signature on Invoice
-
-The `signature_url` field contains a Google Drive link to the client's uploaded signature image. The invoice PDF should:
-
-1. Attempt to download the image from the URL and embed it in the PDF
-2. If the download fails or the URL is empty, show a blank signature line instead
-3. Display it in the footer area under "Client Signature" on the left side, with "Authorized Signature" on the right side (existing)
-
-**Important:** Google Drive "open" links (`https://drive.google.com/open?id=XXX`) must be converted to direct download links (`https://drive.google.com/uc?export=download&id=XXX`) before attempting to embed. Extract the file ID from the URL and reconstruct it.
-
-```python
-def drive_url_to_direct(url: str) -> str:
-    """Convert Google Drive share URL to direct download URL."""
-    import re
-    match = re.search(r'[?&]id=([a-zA-Z0-9_-]+)', url)
-    if match:
-        file_id = match.group(1)
-        return f"https://drive.google.com/uc?export=download&id={file_id}"
-    return url
-```
-
-### 6.5 Next of Kin Section on Invoice
-
-Add a small "Next of Kin" section to the invoice PDF below the client details block:
-
-```
-NEXT OF KIN
-[NOK Full Name] — [Relationship]
-[NOK Phone]
-```
-
-This makes the invoice a more complete subscription document.
+### Role-Based UI
+- [ ] Staff logs in — all `admin-only` elements invisible (not just disabled, fully gone)
+- [ ] Staff logs in — sidebar shows no Team, Analytics, Reports, Sales Reps nav items
+- [ ] Staff logs in — dashboard shows no revenue KPI cards
+- [ ] Staff logs in — dashboard shows no charts (revenue, estate, payment status, referral)
+- [ ] Staff logs in — dashboard shows no leaderboard
+- [ ] Staff logs in — invoices table shows no "Void Receipt" button
+- [ ] Staff types `/dashboard` with `showSection('reports')` in console — redirected to dashboard with error toast
+- [ ] Admin logs in — all elements visible, no restrictions
+- [ ] Role badge in sidebar shows gold "Admin" or blue "Staff" correctly
+- [ ] Switching between admin and staff test accounts shows correct UI for each
 
 ---
 
-## 7. New API Endpoints Summary
-
-| Method | Endpoint | Description | Auth |
-|---|---|---|---|
-| POST | `/api/webhooks/form-submission` | Receives Google Form data | Webhook secret header |
-| GET | `/api/verifications/` | List all pending verifications | JWT |
-| PATCH | `/api/verifications/{id}/confirm` | Confirm payment + send docs | JWT |
-| PATCH | `/api/verifications/{id}/reject` | Reject + notify client | JWT |
-| POST | `/api/invoices/{id}/void` | Void a receipt | JWT — Admin only |
-| GET | `/api/verifications/count` | Returns count of pending items (for badge) | JWT |
-
----
-
-## 8. Updated Pydantic Models
-
-Add to `models.py`:
-
-```python
-class WebhookFormPayload(BaseModel):
-    # Client
-    title: Optional[str] = None
-    first_name: str
-    last_name: str
-    middle_name: Optional[str] = None
-    gender: Optional[str] = None
-    dob: Optional[str] = None
-    address: Optional[str] = None
-    email: str
-    marital_status: Optional[str] = None
-    phone: Optional[str] = None
-    occupation: Optional[str] = None
-    nin: Optional[str] = None
-    id_number: Optional[str] = None
-    id_document_url: Optional[str] = None
-    nationality: Optional[str] = None
-    passport_photo_url: Optional[str] = None
-    # Next of kin
-    nok_name: Optional[str] = None
-    nok_phone: Optional[str] = None
-    nok_email: Optional[str] = None
-    nok_occupation: Optional[str] = None
-    nok_relationship: Optional[str] = None
-    nok_address: Optional[str] = None
-    # Ownership
-    ownership_type: Optional[str] = None
-    co_owner_name: Optional[str] = None
-    co_owner_email: Optional[str] = None
-    signature_url: Optional[str] = None
-    # Property
-    property_name: str
-    plot_size: Optional[str] = None
-    # Payment
-    payment_duration: Optional[str] = None
-    deposit_amount: float = 0
-    payment_date: Optional[str] = None
-    payment_proof_url: Optional[str] = None
-    outstanding_amount: float = 0
-    total_amount: float = 0
-    payment_terms: str = "Outright"
-    # Other
-    source_of_income: Optional[str] = None
-    referral_source: Optional[str] = None
-    sales_rep_name: Optional[str] = None
-    consent: Optional[str] = None
-    timestamp: Optional[str] = None
-    submitter_email: Optional[str] = None
-
-
-class VerificationConfirm(BaseModel):
-    pass  # No body needed — invoice_id is in the URL
-
-
-class VerificationReject(BaseModel):
-    reason: str
-
-
-class VoidReceiptRequest(BaseModel):
-    reason: str
-    notify_client: bool = False
-```
-
----
-
-## 9. Register New Router in main.py
-
-```python
-from routers import auth, clients, properties, invoices, payments, webhooks, verifications
-
-app.include_router(webhooks.router, prefix="/api/webhooks", tags=["webhooks"])
-app.include_router(verifications.router, prefix="/api/verifications", tags=["verifications"])
-```
-
----
-
-## 10. Dashboard UI Changes Summary
-
-### Sidebar additions
-- Add **"Pending Verifications"** nav item with a live count badge (red circle with number, updates on load)
-- Badge should disappear when count is 0
-
-### Pending Verifications section (new)
-- Table of pending items (columns described in Feature B)
-- "View Proof" button opens Google Drive URL in new tab
-- "Confirm Payment" button → confirmation modal → sends Receipt + Statement
-- "Reject" button → rejection modal with required reason field
-- Collapsible "History" section below showing confirmed/rejected entries
-
-### Invoices table additions
-- "Void" button visible only on paid/partial invoices, visible only to Admin role
-- Void modal with required reason field and optional "notify client" checkbox
-
-### Pending Verifications confirm modal
-- Shows client name, invoice number, deposit amount
-- Shows payment proof as a clickable link (not embedded — just a link since it's a Google Drive URL)
-- Warning text explaining what will happen
-- "Confirm & Send Documents" primary button
-- "Cancel" ghost button
-
----
-
-## 11. Email Templates Summary
-
-### New emails to build
-
-| Email | Trigger | Recipient |
-|---|---|---|
-| Admin alert | New form submission | `ADMIN_ALERT_EMAIL` env var |
-| Rejection notice | Admin rejects verification | Client |
-| Void notification | Admin voids receipt (optional) | Client |
-
-All emails follow the existing style: dark `#1A1A1A` header with gold `#F5A623` accent bar, company footer with address and contact details.
-
----
-
-## 12. Security Considerations
-
-- The webhook endpoint does **not** require a JWT token — it is called by Google Apps Script, not a logged-in admin. It is secured instead by the `X-Webhook-Secret` header.
-- The secret must be a long random string stored in `.env` as `WEBHOOK_SECRET` and set in Render environment variables. It must also be hardcoded in the Apps Script (see Section 3.3).
-- The webhook should validate that `consent == "I Confirm and Agree"` before processing — reject silently if not.
-- Voiding a receipt is Admin-only — the backend must enforce `role == "admin"` even if the frontend button is hidden from Staff.
-- Google Drive URLs in `signature_url` and `payment_proof_url` are stored as-is. They are not downloaded and re-hosted — only the signature is downloaded at PDF generation time and only in a try/except block so a failed download never breaks PDF generation.
-
----
-
-## 13. Error Handling
-
-| Scenario | Behaviour |
-|---|---|
-| Webhook secret missing/wrong | Return `403 Forbidden` |
-| Consent not given | Return `400 Bad Request`, log the row |
-| Client email already exists | Upsert — update existing record, create new invoice |
-| `deposit_amount` is 0 | Still create invoice and pending verification, do not create payment record |
-| Signature image download fails | Use blank signature line on PDF, do not crash |
-| Google Drive URL malformed | Skip signature embed, log warning |
-| `total_amount` is 0 | Return `400` — cannot create an invoice with zero value |
-| Admin confirms already-confirmed verification | Return `400 Already confirmed` |
-
----
-
-## 14. File Structure Changes
-
-```
-eximp-cloves/
-├── routers/
-│   ├── webhooks.py        ← NEW — handles Google Form submissions
-│   └── verifications.py   ← NEW — pending verification CRUD
-├── templates/
-│   └── dashboard.html     ← UPDATE — add pending verifications section + void modal
-├── pdf_templates/
-│   └── invoice.html       ← UPDATE — full price breakdown, co-owner, NOK, signature
-├── email_service.py       ← UPDATE — add admin alert, rejection, void notification emails
-├── models.py              ← UPDATE — add new Pydantic models
-├── main.py                ← UPDATE — register new routers
-└── schema.sql             ← UPDATE — add new columns and tables
-```
-
----
-
-## 15. Testing Checklist
-
-Before going live, verify the following manually:
-
-- [ ] Submit the Google Form with a test entry → confirm webhook fires and invoice is created
-- [ ] Check the invoice email arrives at the client's email address
-- [ ] Check the admin alert email arrives at `ADMIN_ALERT_EMAIL`
-- [ ] Confirm the pending verification appears in the dashboard
-- [ ] Click "View Proof" — confirm it opens the Google Drive file
-- [ ] Click "Confirm Payment" → confirm receipt + statement email sent to client
-- [ ] Click "Reject" with a reason → confirm rejection email sent to client
-- [ ] Void a paid invoice → confirm invoice status resets to unpaid
-- [ ] Submit a form with `Outstanding = N/A` → confirm `payment_terms = "Outright"`
-- [ ] Submit a form with a co-owner → confirm both names appear on invoice PDF
-- [ ] Submit a form with a signature → confirm signature appears on invoice PDF
-- [ ] Submit a form with a missing signature URL → confirm PDF generates without crashing
-- [ ] Try hitting the webhook with wrong secret → confirm `403` response
-- [ ] Try voiding as a Staff user → confirm it is blocked
-
----
-
-*End of PRD — Eximp & Cloves Infrastructure Limited Finance System v2*
+*End of Addendum — Eximp & Cloves Infrastructure Limited*
+*Read alongside PRD 1, PRD 2, and PRD 3*

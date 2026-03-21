@@ -1,10 +1,12 @@
 from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
+from fastapi.encoders import jsonable_encoder
 from models import WebhookFormPayload
 from database import get_db
 import os
 from datetime import date, timedelta
 from email_service import send_invoice_email, send_admin_alert_email
 from routers.analytics import log_activity
+from utils import calculate_due_date
 
 router = APIRouter()
 
@@ -60,9 +62,9 @@ async def form_submission(
         client_res = db.table("clients").select("*").eq("email", payload.email).execute()
         if client_res.data:
             client_id = client_res.data[0]["id"]
-            db.table("clients").update(client_data).eq("id", client_id).execute()
+            db.table("clients").update(jsonable_encoder(client_data)).eq("id", client_id).execute()
         else:
-            new_client = db.table("clients").insert(client_data).execute()
+            new_client = db.table("clients").insert(jsonable_encoder(client_data)).execute()
             client_id = new_client.data[0]["id"]
 
         # 4. Sales Rep Detection
@@ -111,7 +113,11 @@ async def form_submission(
 
         # Dates
         invoice_date = date.today()
-        due_date = invoice_date + timedelta(days=7) # Default 7 days due for deposit balance if any
+        # Calculate due date based on payment duration (installment)
+        due_date_str = calculate_due_date(
+            payment_date_str=payload.payment_date or str(invoice_date),
+            payment_duration=payload.payment_duration
+        )
 
         invoice_insert = {
             "invoice_number": invoice_number,
@@ -122,7 +128,7 @@ async def form_submission(
             "amount_paid": payload.deposit_amount,
             "payment_terms": payload.payment_terms,
             "invoice_date": str(invoice_date),
-            "due_date": str(due_date),
+            "due_date": due_date_str,
             "sales_rep_name": rep_name_to_use,
             "co_owner_name": payload.co_owner_name,
             "co_owner_email": payload.co_owner_email,
@@ -132,13 +138,13 @@ async def form_submission(
             "source": "google_form"
         }
 
-        invoice_res = db.table("invoices").insert(invoice_insert).execute()
+        invoice_res = db.table("invoices").insert(jsonable_encoder(invoice_insert)).execute()
         invoice = invoice_res.data[0]
 
         # 5. Record deposit payment
         if payload.deposit_amount > 0:
             print(f"DEBUG: Inserting payment for {payload.deposit_amount}")
-            db.table("payments").insert({
+            payment_data = {
                 "invoice_id": invoice["id"],
                 "client_id": client_id,
                 "reference": f"{payload.payment_date or str(invoice_date)}_form_deposit",
@@ -146,11 +152,11 @@ async def form_submission(
                 "payment_method": "Bank Transfer", # Default for form
                 "payment_date": payload.payment_date or str(invoice_date),
                 "notes": "Initial deposit via subscription form"
-            }).execute()
+            }
+            db.table("payments").insert(jsonable_encoder(payment_data)).execute()
 
         # 6. Create pending verification
-        print(f"DEBUG: Inserting verification for {invoice['id']}")
-        db.table("pending_verifications").insert({
+        verify_data = {
             "invoice_id": invoice["id"],
             "client_id": client_id,
             "payment_proof_url": payload.payment_proof_url,
@@ -158,7 +164,8 @@ async def form_submission(
             "payment_date": payload.payment_date,
             "sales_rep_name": rep_name_to_use,
             "status": "pending"
-        }).execute()
+        }
+        db.table("pending_verifications").insert(jsonable_encoder(verify_data)).execute()
 
         # 7. Emails
         # Fetch full client data for email (with nested info if needed)

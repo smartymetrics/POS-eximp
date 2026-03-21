@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from fastapi.encoders import jsonable_encoder
 from typing import List, Optional
 from database import supabase
 from models import SalesRepCreate, SalesRepUpdate, ResolveUnmatchedRequest
@@ -32,11 +33,9 @@ async def create_sales_rep(
     background_tasks: BackgroundTasks,
     admin: dict = Depends(get_current_admin)
 ):
-    """Create a new sales representative."""
-    if admin["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Only admins can manage reps")
-        
-    res = supabase.table("sales_reps").insert(rep.dict()).execute()
+    # Use jsonable_encoder to handle Decimal/date types for Supabase
+    rep_data = jsonable_encoder(rep)
+    res = supabase.table("sales_reps").insert(rep_data).execute()
     if not res.data:
         raise HTTPException(status_code=400, detail="Failed to create rep")
     
@@ -60,7 +59,8 @@ async def update_sales_rep(
     if admin["role"] != "admin":
         raise HTTPException(status_code=403, detail="Only admins can manage reps")
         
-    update_data = {k: v for k, v in rep_update.dict().items() if v is not None}
+    # Filter out None values and encode for Supabase
+    update_data = jsonable_encoder(rep_update, exclude_none=True)
     res = supabase.table("sales_reps").update(update_data).eq("id", rep_id).execute()
     if not res.data:
         raise HTTPException(status_code=404, detail="Rep not found")

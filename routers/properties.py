@@ -10,7 +10,21 @@ router = APIRouter()
 @router.get("/")
 async def list_properties(current_admin=Depends(verify_token)):
     db = get_db()
-    result = db.table("properties").select("*").eq("is_active", True).order("name").execute()
+    result = db.table("properties")\
+        .select("*")\
+        .eq("is_archived", False)\
+        .order("name")\
+        .execute()
+    return result.data
+
+@router.get("/archived")
+async def list_archived_properties(current_admin=Depends(verify_token)):
+    db = get_db()
+    result = db.table("properties")\
+        .select("*")\
+        .eq("is_archived", True)\
+        .order("name")\
+        .execute()
     return result.data
 
 
@@ -34,3 +48,19 @@ async def update_property(property_id: str, data: PropertyUpdate, current_admin=
     if not result.data:
         raise HTTPException(status_code=404, detail="Property not found or update failed")
     return {"message": "Property updated", "property": result.data[0]}
+
+@router.patch("/{property_id}/archive")
+async def archive_property(property_id: str, current_admin=Depends(verify_token)):
+    db = get_db()
+    result = db.table("properties").update({"is_archived": True}).eq("id", property_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Property not found")
+    return {"message": "Property archived", "property": result.data[0]}
+
+@router.patch("/{property_id}/restore")
+async def restore_property(property_id: str, current_admin=Depends(verify_token)):
+    db = get_db()
+    result = db.table("properties").update({"is_archived": False, "is_active": True}).eq("id", property_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Property not found")
+    return {"message": "Property restored", "property": result.data[0]}

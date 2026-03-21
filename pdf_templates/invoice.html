@@ -124,39 +124,40 @@
       <h4>Invoice Details</h4>
       <p>
         <strong>Invoice Date:</strong> {{ invoice.invoice_date }}<br>
+        <strong>Payment Plan:</strong> {{ invoice.payment_terms }}<br>
+        {% if invoice.payment_terms != 'Outright' %}
+        <strong>Deposit Date:</strong> {{ invoice.invoice_date }}<br>
+        <strong>Final Due Date:</strong> {{ invoice.due_date }}<br>
+        {% else %}
         <strong>Due Date:</strong> {{ invoice.due_date }}<br>
-        <strong>Payment Terms:</strong> {{ invoice.payment_terms }}<br>
+        {% endif %}
         <strong>Subject:</strong> Property Purchase
       </p>
     </div>
   </div>
   
-  <!-- KYC & Details -->
+  <!-- Owner & Next of Kin -->
   <div class="info-grid">
     <div class="info-block">
-      <h4>Co-Ownership / Next of Kin</h4>
+      <h4>Ownership Information</h4>
       <p>
+        <strong>Primary Owner:</strong> {{ client.full_name }}<br>
         {% if invoice.co_owner_name %}
         <strong>Co-Owner:</strong> {{ invoice.co_owner_name }}<br>
-        {% if invoice.co_owner_email %}<em>{{ invoice.co_owner_email }}</em><br>{% endif %}
-        {% endif %}
-        
-        {% if client.nok_name %}
-        <strong>Next of Kin:</strong> {{ client.nok_name }}<br>
-        {% if client.nok_relationship %}({{ client.nok_relationship }})<br>{% endif %}
-        {{ client.nok_phone }}
-        {% else %}
-        <span style="color:#aaa;">No Next of Kin provided</span>
+        {% if invoice.co_owner_email %}<em>{{ invoice.co_owner_email }}</em>{% endif %}
         {% endif %}
       </p>
     </div>
     <div class="info-block">
-      <h4>Sales Representative</h4>
+      <h4>Next of Kin</h4>
       <p>
-        {% if invoice.sales_rep_name %}
-        <strong>Rep Name:</strong> {{ invoice.sales_rep_name }}<br>
+        {% if client.nok_name %}
+        <strong>Name:</strong> {{ client.nok_name }}<br>
+        <strong>Relationship:</strong> {{ client.nok_relationship or 'N/A' }}<br>
+        <strong>Phone:</strong> {{ client.nok_phone }}
+        {% else %}
+        <span style="color:#aaa;">Not provided</span>
         {% endif %}
-        <strong>Estate/Property:</strong> {{ invoice.property_name }}
       </p>
     </div>
   </div>
@@ -192,21 +193,27 @@
   <div class="totals">
     <div class="totals-box">
       <div class="totals-row">
-        <span>Sub Total</span>
-        <span>{{ format_currency(invoice.amount) }}</span>
-      </div>
-      <div class="totals-row total">
-        <span>Total</span>
+        <span>Total Property Price</span>
         <span>{{ format_currency(invoice.amount) }}</span>
       </div>
       {% if invoice.amount_paid and invoice.amount_paid > 0 %}
       <div class="totals-row">
-        <span>Payment Made</span>
+        <span>Amount Paid to Date</span>
         <span style="color: #27ae60;">(–) {{ format_currency(invoice.amount_paid) }}</span>
       </div>
-      <div class="totals-row balance">
+      <div class="totals-row total">
         <span>Balance Due</span>
         <span>{{ format_currency(invoice.balance_due) }}</span>
+      </div>
+      {% if invoice.balance_due <= 0 %}
+      <div style="text-align: right; margin-top: 5px;">
+        <span class="badge">PAID IN FULL</span>
+      </div>
+      {% endif %}
+      {% else %}
+      <div class="totals-row total">
+        <span>Total Amount Due</span>
+        <span>{{ format_currency(invoice.amount) }}</span>
       </div>
       {% endif %}
     </div>

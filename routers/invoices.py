@@ -1,4 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse
 from models import InvoiceCreate, SendDocumentRequest, VoidReceiptRequest
 from database import get_db
@@ -6,6 +7,7 @@ from routers.auth import verify_token
 from routers.analytics import log_activity
 from email_service import send_invoice_email, send_receipt_email, send_statement_email, send_void_notification_email
 from pdf_service import generate_invoice_pdf, generate_receipt_pdf, generate_statement_pdf
+from utils import resolve_invoice_status
 from datetime import datetime
 import io
 
@@ -19,7 +21,12 @@ async def list_invoices(current_admin=Depends(verify_token)):
         .select("*, clients(full_name, email)")\
         .order("created_at", desc=True)\
         .execute()
-    return result.data
+    
+    invoices = result.data
+    for inv in invoices:
+        inv["status"] = resolve_invoice_status(inv)
+    
+    return invoices
 
 
 @router.get("/{invoice_id}")
@@ -31,7 +38,10 @@ async def get_invoice(invoice_id: str, current_admin=Depends(verify_token)):
         .execute()
     if not result.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    return result.data[0]
+    
+    invoice = result.data[0]
+    invoice["status"] = resolve_invoice_status(invoice)
+    return invoice
 
 
 @router.post("/")
@@ -55,20 +65,24 @@ async def create_invoice(data: InvoiceCreate, current_admin=Depends(verify_token
             property_location = property_location or p["location"]
             plot_size = plot_size or p["plot_size_sqm"]
 
-    result = db.table("invoices").insert({
+    invoice_data = {
         "invoice_number": invoice_number,
         "client_id": data.client_id,
         "property_id": data.property_id,
         "property_name": property_name,
         "property_location": property_location,
-        "plot_size_sqm": float(plot_size) if plot_size else None,
-        "amount": float(data.amount),
+        "plot_size_sqm": plot_size,
+        "amount": data.amount,
         "payment_terms": data.payment_terms,
-        "invoice_date": str(data.invoice_date),
-        "due_date": str(data.due_date),
+        "invoice_date": data.invoice_date,
+        "due_date": data.due_date,
         "notes": data.notes,
         "created_by": current_admin["sub"]
-    }).execute()
+    }
+    
+    # Use jsonable_encoder to handle Decimal/date types for Supabase
+    encoded_data = jsonable_encoder(invoice_data)
+    result = db.table("invoices").insert(encoded_data).execute()
 
     background_tasks.add_task(
         log_activity,
@@ -204,6 +218,69 @@ async def void_invoice_receipts(
     )
 
     return {"message": "Invoice receipts voided successfully", "client_notified": payload.notify_client}
+
+
+@router.patch("/{invoice_id}/edit")
+async def edit_invoice(
+    invoice_id: str,
+    payload: dict, # Using dict to handle field-level role checks easily
+    current_admin=Depends(verify_token)
+):
+    db = get_db()
+    role = current_admin.get("role")
+    
+    # Fetch existing invoice
+    inv_res = db.table("invoices").select("*").eq("id", invoice_id).execute()
+    if not inv_res.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    
+    invoice = inv_res.data[0]
+    
+    # Locked if paid
+    if resolve_invoice_status(invoice) == "paid":
+         raise HTTPException(status_code=400, detail="Fully paid invoices cannot be edited")
+
+    update_data = {}
+    
+    # Field-level role checks
+    admin_only_fields = ["payment_terms", "sales_rep_name", "property_name"]
+    staff_allowed_fields = ["due_date", "notes"]
+    
+    for field, value in payload.items():
+        if field in admin_only_fields and role != "admin":
+            raise HTTPException(status_code=403, detail=f"Permission denied to edit {field}")
+        
+        if field in admin_only_fields or field in staff_allowed_fields:
+            update_data[field] = value
+            
+    if not update_data:
+        return {"message": "No changes applied"}
+
+    # Special handling for due_date change logging
+    if "due_date" in update_data:
+        reason = payload.get("reason")
+        if not reason or len(reason) < 10:
+             raise HTTPException(status_code=400, detail="A detailed reason (min 10 chars) is required for due date changes")
+        
+        db.table("due_date_changes").insert({
+            "invoice_id": invoice_id,
+            "old_date": invoice["due_date"],
+            "new_date": update_data["due_date"],
+            "reason": reason,
+            "changed_by": current_admin["sub"]
+        }).execute()
+
+    # Update database
+    db.table("invoices").update(jsonable_encoder(update_data)).eq("id", invoice_id).execute()
+    
+    log_activity(
+        "invoice_edited",
+        f"Invoice {invoice['invoice_number']} updated by {role}",
+        current_admin["sub"],
+        invoice_id=invoice_id
+    )
+    
+    return {"message": "Invoice updated successfully"}
 
 
 @router.get("/{invoice_id}/pdf/{doc_type}")
