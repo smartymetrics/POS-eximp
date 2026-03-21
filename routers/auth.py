@@ -34,6 +34,10 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
+# Alias for dependency consistency
+get_current_admin = verify_token
+
+
 # LOGIN
 @router.post("/login", response_model=TokenResponse)
 async def login(data: AdminLogin):

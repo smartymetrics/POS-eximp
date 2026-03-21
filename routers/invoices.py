@@ -3,6 +3,7 @@ from fastapi.responses import StreamingResponse
 from models import InvoiceCreate, SendDocumentRequest, VoidReceiptRequest
 from database import get_db
 from routers.auth import verify_token
+from routers.analytics import log_activity
 from email_service import send_invoice_email, send_receipt_email, send_statement_email, send_void_notification_email
 from pdf_service import generate_invoice_pdf, generate_receipt_pdf, generate_statement_pdf
 from datetime import datetime
@@ -69,6 +70,15 @@ async def create_invoice(data: InvoiceCreate, current_admin=Depends(verify_token
         "created_by": current_admin["sub"]
     }).execute()
 
+    background_tasks.add_task(
+        log_activity,
+        "invoice_created",
+        f"Invoice {invoice_number} created for {data.client_id}",
+        current_admin["sub"],
+        client_id=data.client_id,
+        invoice_id=result.data[0]["id"]
+    )
+
     return {"message": "Invoice created", "invoice": result.data[0]}
 
 
@@ -98,6 +108,14 @@ async def send_documents(
         if doc_type == "invoice":
             background_tasks.add_task(send_invoice_email, invoice, client, current_admin["sub"])
             sent.append("invoice")
+            background_tasks.add_task(
+                log_activity,
+                "receipt_sent",
+                f"Invoice {invoice['invoice_number']} sent to {client['email']}",
+                current_admin["sub"],
+                client_id=client["id"],
+                invoice_id=invoice["id"]
+            )
         elif doc_type == "receipt" and invoice["amount_paid"] > 0:
             background_tasks.add_task(send_receipt_email, invoice, client, current_admin["sub"])
             sent.append("receipt")
@@ -176,6 +194,15 @@ async def void_invoice_receipts(
             payload.reason
         )
         
+    background_tasks.add_task(
+        log_activity,
+        "receipt_voided",
+        f"Receipt for {invoice_data['invoice_number']} voided by Admin",
+        current_admin["sub"],
+        client_id=invoice_data["client_id"],
+        invoice_id=invoice_id
+    )
+
     return {"message": "Invoice receipts voided successfully", "client_notified": payload.notify_client}
 
 

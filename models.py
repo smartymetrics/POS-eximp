@@ -154,6 +154,7 @@ class WebhookFormPayload(BaseModel):
     source_of_income: Optional[str] = None
     referral_source: Optional[str] = None
     sales_rep_name: Optional[str] = None
+    sales_rep_phone: Optional[str] = None
     consent: Optional[str] = None
     timestamp: Optional[str] = None
     submitter_email: Optional[str] = None
@@ -170,3 +171,85 @@ class VerificationReject(BaseModel):
 class VoidReceiptRequest(BaseModel):
     reason: str
     notify_client: bool = False
+
+# --- ANALYTICS MODELS (PRD 1) ---
+
+class KPIDelta(BaseModel):
+    total_revenue: Optional[float] = None
+    amount_collected: Optional[float] = None
+    new_clients: Optional[float] = None
+
+class KPISummary(BaseModel):
+    total_revenue: Optional[float] = None
+    amount_collected: Optional[float] = None
+    outstanding_balance: Optional[float] = None
+    new_clients: int
+    plots_sold: int
+    avg_deal_size: Optional[float] = None
+    collection_rate: Optional[float] = None
+    pending_verifications: int
+    delta: Optional[KPIDelta] = None
+
+class RevenueTrend(BaseModel):
+    labels: list[str]
+    invoiced: list[float]
+    collected: list[float]
+
+class EstateStat(BaseModel):
+    name: str
+    revenue: float
+    deals: int
+
+class PaymentStatusStats(BaseModel):
+    paid: int
+    partial: int
+    unpaid: int
+
+class ReferralSourceStat(BaseModel):
+    source: str
+    count: int
+
+class RepLeaderboardEntry(BaseModel):
+    rep_name: str
+    deals: int
+    total_value: float
+    avg_deal_size: float
+    top_estate: str
+    collected: float
+    collection_rate: float
+
+class ActivityLogEntry(BaseModel):
+    id: str
+    event_type: str
+    description: str
+    client_id: Optional[str] = None
+    invoice_id: Optional[str] = None
+    performed_by_name: Optional[str] = None
+    created_at: str
+
+# --- SALES REP MODELS (PRD 2) ---
+
+class SalesRepCreate(BaseModel):
+    name: str
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    commission_rate: Decimal = Decimal("5.0")
+
+class SalesRepUpdate(BaseModel):
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    commission_rate: Optional[Decimal] = None
+    is_active: Optional[bool] = None
+
+class ResolveUnmatchedRequest(BaseModel):
+    unmatched_id: str
+    target_rep_id: str  # The ID of the existing/newly created rep to map to
+
+# --- REPORT MODELS (PRD 2) ---
+
+class ReportScheduleCreate(BaseModel):
+    report_type: str
+    frequency: str  # "daily", "weekly", "monthly"
+    recipients: list[EmailStr]
+    format: str = "pdf"

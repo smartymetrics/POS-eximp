@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends
-from models import ClientCreate, ClientUpdate
+from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from database import get_db
 from routers.auth import verify_token
+from routers.analytics import log_activity
+from models import ClientCreate, ClientUpdate
 
 router = APIRouter()
 
@@ -34,12 +35,25 @@ async def get_client_invoices(client_id: str, current_admin=Depends(verify_token
 
 
 @router.post("/")
-async def create_client(data: ClientCreate, current_admin=Depends(verify_token)):
+async def create_client(
+    data: ClientCreate, 
+    background_tasks: BackgroundTasks,
+    current_admin=Depends(verify_token)
+):
     db = get_db()
     result = db.table("clients").insert({
         **data.dict(),
         "added_by": current_admin["sub"]
     }).execute()
+    
+    background_tasks.add_task(
+        log_activity,
+        "client_created",
+        f"New client registered: {data.full_name}",
+        current_admin["sub"],
+        client_id=result.data[0]["id"]
+    )
+
     return {"message": "Client created", "client": result.data[0]}
 
 

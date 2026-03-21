@@ -196,8 +196,15 @@ BEGIN
 END;
 $$ LANGUAGE plpgsql;
 
+DROP TRIGGER IF EXISTS after_payment_insert ON payments;
 CREATE TRIGGER after_payment_insert
 AFTER INSERT ON payments
+FOR EACH ROW EXECUTE FUNCTION update_invoice_status();
+
+-- Trigger for updates (voiding payments)
+DROP TRIGGER IF EXISTS after_payment_update ON payments;
+CREATE TRIGGER after_payment_update
+AFTER UPDATE ON payments
 FOR EACH ROW EXECUTE FUNCTION update_invoice_status();
 
 -- ============================================================
@@ -209,6 +216,33 @@ ALTER TABLE properties ENABLE ROW LEVEL SECURITY;
 ALTER TABLE invoices ENABLE ROW LEVEL SECURITY;
 ALTER TABLE payments ENABLE ROW LEVEL SECURITY;
 ALTER TABLE email_logs ENABLE ROW LEVEL SECURITY;
+
+-- ============================================================
+-- ANALYTICS & ACTIVITY LOGGING (PRD 1)
+-- ============================================================
+
+-- ACTIVITY LOG TABLE
+CREATE TABLE IF NOT EXISTS activity_log (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    event_type VARCHAR(100) NOT NULL,
+    description TEXT NOT NULL,
+    client_id UUID REFERENCES clients(id),
+    invoice_id UUID REFERENCES invoices(id),
+    performed_by UUID REFERENCES admins(id),
+    metadata JSONB,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- Indexes for performance
+CREATE INDEX IF NOT EXISTS idx_activity_log_created_at ON activity_log(created_at DESC);
+CREATE INDEX IF NOT EXISTS idx_invoices_created_at ON invoices(created_at);
+CREATE INDEX IF NOT EXISTS idx_invoices_invoice_date ON invoices(invoice_date);
+CREATE INDEX IF NOT EXISTS idx_invoices_sales_rep ON invoices(sales_rep_name);
+CREATE INDEX IF NOT EXISTS idx_invoices_property_name ON invoices(property_name);
+CREATE INDEX IF NOT EXISTS idx_payments_payment_date ON payments(payment_date);
+CREATE INDEX IF NOT EXISTS idx_clients_created_at ON clients(created_at);
+
+ALTER TABLE activity_log ENABLE ROW LEVEL SECURITY;
 
 -- ============================================================
 -- NEW TABLES FOR PRD V2
@@ -246,3 +280,54 @@ CREATE TABLE IF NOT EXISTS void_log (
 -- RLS for new tables
 ALTER TABLE pending_verifications ENABLE ROW LEVEL SECURITY;
 ALTER TABLE void_log ENABLE ROW LEVEL SECURITY;
+
+-- ============================================================
+-- SALES REPRESENTATIVES (PRD 2)
+-- ============================================================
+
+-- SALES REPS TABLE
+CREATE TABLE IF NOT EXISTS sales_reps (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    name VARCHAR(255) UNIQUE NOT NULL,
+    email VARCHAR(255),
+    phone VARCHAR(50),
+    commission_rate DECIMAL(5,2) DEFAULT 5.0, -- Default 5%
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- UNMATCHED REPS TABLE (To capture misspelled or new names from forms)
+CREATE TABLE IF NOT EXISTS unmatched_reps (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    name_from_form VARCHAR(255) UNIQUE NOT NULL,
+    times_seen INTEGER DEFAULT 1,
+    last_seen TIMESTAMPTZ DEFAULT NOW(),
+    is_resolved BOOLEAN DEFAULT false,
+    resolved_to UUID REFERENCES sales_reps(id)
+);
+
+-- INDEXES
+CREATE INDEX IF NOT EXISTS idx_sales_reps_name ON sales_reps(name);
+CREATE INDEX IF NOT EXISTS idx_unmatched_reps_unresolved ON unmatched_reps(is_resolved) WHERE is_resolved = false;
+
+ALTER TABLE sales_reps ENABLE ROW LEVEL SECURITY;
+ALTER TABLE unmatched_reps ENABLE ROW LEVEL SECURITY;
+
+-- ============================================================
+-- REPORT SCHEDULES (PRD 2)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS report_schedules (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    report_type VARCHAR(100) NOT NULL,
+    frequency VARCHAR(50) NOT NULL, -- Daily, Weekly, Monthly
+    recipients TEXT[] NOT NULL,
+    format VARCHAR(20) DEFAULT 'pdf',
+    last_run TIMESTAMPTZ,
+    next_run TIMESTAMPTZ,
+    is_active BOOLEAN DEFAULT true,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE report_schedules ENABLE ROW LEVEL SECURITY;

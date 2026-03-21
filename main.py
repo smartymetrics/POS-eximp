@@ -5,8 +5,9 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from routers import auth, clients, properties, invoices, payments, webhooks, verifications
+from routers import auth, clients, properties, invoices, payments, webhooks, verifications, analytics, sales_reps, reports
 from database import init_db
+from scheduler import start_scheduler, stop_scheduler
 
 app = FastAPI(title="Eximp & Cloves - Finance System", version="1.0.0")
 
@@ -28,11 +29,21 @@ app.include_router(invoices.router, prefix="/api/invoices", tags=["invoices"])
 app.include_router(payments.router, prefix="/api/payments", tags=["payments"])
 app.include_router(webhooks.router, prefix="/api/webhooks", tags=["webhooks"])
 app.include_router(verifications.router, prefix="/api/verifications", tags=["verifications"])
+app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
+app.include_router(sales_reps.router, prefix="/api/sales-reps", tags=["sales-reps"])
+app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 
 
 @app.on_event("startup")
 async def startup():
     await init_db()
+    # Start the background scheduler
+    await start_scheduler()
+
+@app.on_event("shutdown")
+async def shutdown():
+    # Stop the background scheduler
+    await stop_scheduler()
 
 
 @app.get("/", response_class=HTMLResponse)

@@ -3,6 +3,7 @@ from models import VerificationConfirm, VerificationReject
 from database import get_db
 from routers.auth import verify_token
 from email_service import send_receipt_and_statement_email, send_rejection_email
+from routers.analytics import log_activity
 from datetime import datetime
 
 router = APIRouter()
@@ -77,6 +78,15 @@ async def confirm_verification(
             "sent_by": current_admin["sub"]
         }).execute()
 
+    background_tasks.add_task(
+        log_activity,
+        "payment_confirmed",
+        f"Payment confirmed for {invoice['invoice_number']}",
+        current_admin["sub"],
+        client_id=client["id"],
+        invoice_id=invoice["id"]
+    )
+
     return {"message": "Payment confirmed and documents sent"}
 
 @router.patch("/{id}/reject")
@@ -128,5 +138,14 @@ async def reject_verification(
 
     # 5. Send Rejection Email
     background_tasks.add_task(send_rejection_email, invoice, client, data.reason)
+
+    background_tasks.add_task(
+        log_activity,
+        "submission_rejected",
+        f"Form submission for {invoice['invoice_number']} rejected: {data.reason}",
+        current_admin["sub"],
+        client_id=client["id"],
+        invoice_id=invoice["id"]
+    )
 
     return {"message": "Submission rejected and client notified"}

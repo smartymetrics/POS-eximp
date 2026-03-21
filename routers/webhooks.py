@@ -4,6 +4,7 @@ from database import get_db
 import os
 from datetime import date, timedelta
 from email_service import send_invoice_email, send_admin_alert_email
+from routers.analytics import log_activity
 
 router = APIRouter()
 
@@ -64,7 +65,37 @@ async def form_submission(
             new_client = db.table("clients").insert(client_data).execute()
             client_id = new_client.data[0]["id"]
 
-        # 4. Create invoice
+        # 4. Sales Rep Detection
+        rep_name_to_use = payload.sales_rep_name
+        if payload.sales_rep_phone or payload.sales_rep_name:
+            # Try phone first
+            matched_rep = None
+            if payload.sales_rep_phone:
+                rep_res = db.table("sales_reps").select("*").eq("phone", payload.sales_rep_phone).eq("is_active", True).execute()
+                if rep_res.data:
+                    matched_rep = rep_res.data[0]
+            
+            # Try name if no phone match
+            if not matched_rep and payload.sales_rep_name:
+                rep_res = db.table("sales_reps").select("*").eq("name", payload.sales_rep_name).eq("is_active", True).execute()
+                if rep_res.data:
+                    matched_rep = rep_res.data[0]
+            
+            if matched_rep:
+                rep_name_to_use = matched_rep["name"]
+            else:
+                # Log as unmatched if we have a name/phone but no DB match
+                name_to_log = payload.sales_rep_name or f"Phone: {payload.sales_rep_phone}"
+                unmatched_res = db.table("unmatched_reps").select("*").eq("name_from_form", name_to_log).execute()
+                if unmatched_res.data:
+                    db.table("unmatched_reps").update({
+                        "times_seen": unmatched_res.data[0]["times_seen"] + 1,
+                        "last_seen": "now()"
+                    }).eq("id", unmatched_res.data[0]["id"]).execute()
+                else:
+                    db.table("unmatched_reps").insert({"name_from_form": name_to_log}).execute()
+
+        # 5. Create invoice
         # Generate invoice number via DB function
         seq_result = db.rpc("generate_invoice_number").execute()
         invoice_number = seq_result.data
@@ -92,7 +123,7 @@ async def form_submission(
             "payment_terms": payload.payment_terms,
             "invoice_date": str(invoice_date),
             "due_date": str(due_date),
-            "sales_rep_name": payload.sales_rep_name,
+            "sales_rep_name": rep_name_to_use,
             "co_owner_name": payload.co_owner_name,
             "co_owner_email": payload.co_owner_email,
             "signature_url": payload.signature_url,
@@ -123,7 +154,7 @@ async def form_submission(
             "payment_proof_url": payload.payment_proof_url,
             "deposit_amount": payload.deposit_amount,
             "payment_date": payload.payment_date,
-            "sales_rep_name": payload.sales_rep_name,
+            "sales_rep_name": rep_name_to_use,
             "status": "pending"
         }).execute()
 
@@ -133,6 +164,15 @@ async def form_submission(
         
         background_tasks.add_task(send_invoice_email, invoice, full_client, "system_webhook")
         background_tasks.add_task(send_admin_alert_email, invoice, full_client)
+        
+        background_tasks.add_task(
+            log_activity,
+            "form_submission",
+            f"New subscription for {full_name} via Google Form",
+            "system", # Webhook is system-triggered
+            client_id=client_id,
+            invoice_id=invoice["id"]
+        )
 
         return {
             "message": "Processed successfully",
