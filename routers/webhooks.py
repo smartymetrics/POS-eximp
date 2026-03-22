@@ -120,33 +120,30 @@ async def form_submission(
         )
 
         # 5. Get Property Price from DB
-        # If not provided in form, lookup by name and size
+        # If not provided in form, lookup by name and exact size
         total_amount_to_use = payload.total_amount
         if total_amount_to_use <= 0 and payload.property_name:
-            # Try to match both name and size for estates that have different prices per size
-            query = db.table("properties").select("starting_price, price_per_sqm")\
+            query = db.table("properties").select("total_price, price_per_sqm")\
                 .ilike("name", f"%{payload.property_name}%")\
                 .eq("is_active", True)
             
-            if payload.plot_size:
-                # If plot size is like "500 sqm", try to find a property name that contains "500"
-                size_digits = re.sub(r'[^\d]+', '', payload.plot_size)
-                if size_digits:
-                    query = query.ilike("name", f"%{size_digits}%")
+            # Filter by exact plot size if we parsed one
+            if plot_size_numeric:
+                query = query.eq("plot_size_sqm", plot_size_numeric)
             
             prop_res = query.execute()
             
             if prop_res.data:
                 prop = prop_res.data[0]
+                total_price = prop.get("total_price")
                 price_per_sqm = prop.get("price_per_sqm")
-                starting_price = prop.get("starting_price") or 0
                 
-                if price_per_sqm and plot_size_numeric:
+                if total_price and float(total_price) > 0:
+                    total_amount_to_use = float(total_price)
+                elif price_per_sqm and plot_size_numeric:
                     total_amount_to_use = float(price_per_sqm) * plot_size_numeric
-                else:
-                    total_amount_to_use = float(starting_price)
                 
-                print(f"DEBUG: Calculated price for {payload.property_name} {payload.plot_size}: {total_amount_to_use}")
+                print(f"DEBUG: Found price for {payload.property_name} (Size: {plot_size_numeric}): {total_amount_to_use}")
 
         invoice_insert = {
             "invoice_number": invoice_number,
