@@ -196,7 +196,12 @@
 
   /* ── LOADING ─────────────────────────────── */
   .loading { text-align: center; padding: 24px; color: var(--gray); font-size: 13px; }
-  .spinner { display: inline-block; width: 20px; height: 20px; border: 2px solid #eee; border-top-color: var(--gold); border-radius: 50%; animation: spin 0.7s linear infinite; vertical-align: middle; margin-right: 8px; }
+  .spinner { 
+    display: inline-block; width: 14px; height: 14px; 
+    border: 2px solid rgba(255,166,35,0.2); border-radius: 50%; 
+    border-top-color: var(--gold); animation: spin 0.8s linear infinite; 
+    margin-right: 8px; vertical-align: middle;
+  }
   @keyframes spin { to { transform: rotate(360deg); } }
 
   /* ── MOBILE RESPONSIVENESS ───────────────── */
@@ -955,6 +960,8 @@
       </div>
     </div>
   </div>
+</div>
+
 <!-- Edit Invoice Modal -->
 <div class="modal-overlay" id="editInvoiceModal">
   <div class="modal">
@@ -2058,27 +2065,29 @@ async function downloadReport(event, reportType, format) {
   const end = document.getElementById('report-end').value;
 
   if (!start || !end) return toast('Please select a date range using the period selector above', 'error');
-  if (new Date(start) > new Date(end)) return toast('Start date must be before end date', 'error');
-
+  
   const btn = event ? event.currentTarget : null;
   const originalHtml = btn ? btn.innerHTML : '';
   if (btn) {
     btn.disabled = true;
-    btn.innerHTML = '<span class="spinner"></span>';
+    btn.innerHTML = '<span class="spinner"></span>Processing...';
   }
 
   try {
     const query = `?report_type=${reportType}&start_date=${start}&end_date=${end}&format=${format}`;
+    console.log('--- REPORT DOWNLOAD REQUEST ---', query);
+    
     const res = await apiFetch('/api/reports/download' + query);
 
     if (!res.ok) {
-      // Try to extract error detail from JSON response
       let errMsg = 'Report generation failed';
       try { const d = await res.json(); errMsg = d.detail || errMsg; } catch(_) {}
       throw new Error(errMsg);
     }
 
     const blob = await res.blob();
+    if (blob.size < 100) throw new Error('Captured invalid report file.');
+    
     const url = window.URL.createObjectURL(blob);
     const a = document.createElement('a');
     a.href = url;
@@ -2086,9 +2095,15 @@ async function downloadReport(event, reportType, format) {
     a.download = `${REPORT_LABELS[reportType] || reportType}_${start}_to_${end}.${ext}`;
     document.body.appendChild(a);
     a.click();
-    setTimeout(() => { a.remove(); window.URL.revokeObjectURL(url); }, 1000);
-    toast(`${REPORT_LABELS[reportType]} downloaded successfully`, 'success');
+    
+    setTimeout(() => { 
+        a.remove(); 
+        window.URL.revokeObjectURL(url); 
+    }, 1000);
+    
+    toast('Report downloaded successfully', 'success');
   } catch(e) {
+    console.error('Download error:', e);
     toast(e.message, 'error');
   } finally {
     if (btn) { btn.disabled = false; btn.innerHTML = originalHtml; }
