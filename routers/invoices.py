@@ -251,14 +251,18 @@ async def edit_invoice(
     update_data = {}
     
     # Field-level role checks
-    admin_only_fields = ["payment_terms", "sales_rep_name", "property_name"]
+    admin_only_fields = [
+        "amount", "plot_size_sqm", "property_name", "property_location", 
+        "property_id", "payment_terms", "sales_rep_name", "invoice_date"
+    ]
     staff_allowed_fields = ["due_date", "notes"]
     
     for field, value in payload.items():
-        if field in admin_only_fields and role != "admin":
-            raise HTTPException(status_code=403, detail=f"Permission denied to edit {field}")
-        
-        if field in admin_only_fields or field in staff_allowed_fields:
+        if field in admin_only_fields:
+            if role != "admin":
+                raise HTTPException(status_code=403, detail=f"Permission denied to edit {field}")
+            update_data[field] = value
+        elif field in staff_allowed_fields:
             update_data[field] = value
             
     if not update_data:
