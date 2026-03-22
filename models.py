@@ -45,6 +45,10 @@ class ClientCreate(BaseModel):
     address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
+    title: Optional[str] = None
+    middle_name: Optional[str] = None
+    gender: Optional[str] = None
+    dob: Optional[str] = None
 
 
 class ClientUpdate(BaseModel):
@@ -54,6 +58,10 @@ class ClientUpdate(BaseModel):
     address: Optional[str] = None
     city: Optional[str] = None
     state: Optional[str] = None
+    title: Optional[str] = None
+    middle_name: Optional[str] = None
+    gender: Optional[str] = None
+    dob: Optional[str] = None
     occupation: Optional[str] = None
     marital_status: Optional[str] = None
     nationality: Optional[str] = None
