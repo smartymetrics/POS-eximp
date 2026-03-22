@@ -146,7 +146,7 @@ async def send_invoice_email(invoice: dict, client: dict, sent_by: str):
         "to": [client["email"]],
         "subject": f"Invoice {invoice['invoice_number']} — Eximp & Cloves",
         "html": _invoice_html(invoice, client),
-        "attachments": [{"filename": f"Invoice_{invoice['invoice_number']}.pdf", "content": list(pdf)}],
+        "attachments": [{"filename": f"Invoice_{invoice['invoice_number']}.pdf", "content": pdf}],
     })
 
 
@@ -157,7 +157,7 @@ async def send_receipt_email(invoice: dict, client: dict, sent_by: str):
         "to": [client["email"]],
         "subject": f"Payment Receipt — {invoice['invoice_number']}",
         "html": _receipt_html(invoice, client),
-        "attachments": [{"filename": f"Receipt_{invoice['invoice_number']}.pdf", "content": list(pdf)}],
+        "attachments": [{"filename": f"Receipt_{invoice['invoice_number']}.pdf", "content": pdf}],
     })
 
 
@@ -172,7 +172,7 @@ async def send_statement_email(invoices: list, client: dict, sent_by: str):
         "to": [client["email"]],
         "subject": f"Statement of Account — {client['full_name']}",
         "html": _statement_html(client, total_invoiced, total_paid, balance),
-        "attachments": [{"filename": f"Statement_{client['full_name'].replace(' ', '_')}.pdf", "content": list(pdf)}],
+        "attachments": [{"filename": f"Statement_{client['full_name'].replace(' ', '_')}.pdf", "content": pdf}],
     })
 
 

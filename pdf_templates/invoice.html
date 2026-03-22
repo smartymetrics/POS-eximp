@@ -3,182 +3,122 @@
 <head>
 <meta charset="utf-8">
 <style>
+  @page {
+    size: a4 portrait;
+    margin: 2cm;
+  }
   * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: Arial, Helvetica, sans-serif; color: #1A1A1A; font-size: 13px; }
-  .page { padding: 40px; max-width: 800px; margin: 0 auto; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #1A1A1A; font-size: 11pt; line-height: 1.4; }
+  
+  .header-table { width: 100%; border-bottom: 3px solid #F5A623; padding-bottom: 20px; margin-bottom: 30px; }
+  .logo-cell { vertical-align: middle; text-align: left; }
+  .company-cell { vertical-align: middle; text-align: right; font-size: 9pt; color: #555; line-height: 1.5; }
+  .company-name { font-size: 18pt; font-weight: 800; color: #1A1A1A; }
+  .company-sub { font-size: 8pt; letter-spacing: 2px; color: #888; text-transform: uppercase; }
 
-  /* Header */
-  .header { display: flex; justify-content: space-between; align-items: flex-start; margin-bottom: 40px; padding-bottom: 24px; border-bottom: 3px solid #F5A623; }
-  .logo-area { display: flex; align-items: center; gap: 12px; }
-  .logo-icon { width: 48px; height: 48px; }
-  .company-name { font-size: 22px; font-weight: 800; color: #1A1A1A; letter-spacing: -0.5px; }
-  .company-sub { font-size: 10px; letter-spacing: 2px; color: #888; text-transform: uppercase; }
-  .company-details { text-align: right; font-size: 11px; color: #555; line-height: 1.7; }
+  .title-bar { background: #1A1A1A; color: #fff; padding: 15px 20px; margin-bottom: 30px; border-radius: 4px; }
+  .title-bar h1 { font-size: 20pt; font-weight: 800; color: #F5A623; margin: 0; display: inline-block; }
+  .inv-meta { float: right; text-align: right; }
+  .inv-num { font-size: 14pt; font-weight: 700; color: #F5A623; }
+  .badge { background: #E74C3C; color: #fff; font-size: 8pt; padding: 3px 8px; border-radius: 3px; font-weight: 700; text-transform: uppercase; }
+  .badge.paid { background: #27AE60; }
+  .badge.partial { background: #F39C12; }
 
-  /* Invoice title bar */
-  .title-bar { background: #1A1A1A; color: #fff; padding: 16px 24px; display: flex; justify-content: space-between; align-items: center; margin-bottom: 32px; border-radius: 4px; }
-  .title-bar h1 { font-size: 24px; font-weight: 800; letter-spacing: 2px; color: #F5A623; }
-  .invoice-meta { text-align: right; }
-  .invoice-meta .inv-num { font-size: 16px; font-weight: 700; color: #F5A623; }
-  .badge { background: #27ae60; color: #fff; font-size: 10px; padding: 3px 8px; border-radius: 3px; font-weight: 700; letter-spacing: 1px; text-transform: uppercase; display: inline-block; margin-top: 4px; }
-  .badge.unpaid { background: #e74c3c; }
-  .badge.partial { background: #f39c12; }
+  .bill-to-table { width: 100%; margin-bottom: 30px; }
+  .info-title { font-size: 8pt; letter-spacing: 2px; text-transform: uppercase; color: #F5A623; border-bottom: 1px solid #F5A623; padding-bottom: 3px; margin-bottom: 8px; font-weight: bold; }
+  .info-body { font-size: 10pt; color: #333; }
+  .info-body strong { color: #1A1A1A; font-size: 11pt; }
 
-  /* Bill to / details grid */
-  .info-grid { display: flex; gap: 40px; margin-bottom: 32px; }
-  .info-block { flex: 1; }
-  .info-block h4 { font-size: 10px; letter-spacing: 2px; text-transform: uppercase; color: #F5A623; border-bottom: 1px solid #F5A623; padding-bottom: 4px; margin-bottom: 10px; }
-  .info-block p { line-height: 1.8; color: #333; font-size: 12px; }
-  .info-block strong { color: #1A1A1A; font-size: 14px; }
+  .items-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; }
+  .items-table th { background: #1A1A1A; color: #fff; padding: 10px; text-align: left; font-size: 9pt; text-transform: uppercase; }
+  .items-table td { padding: 12px 10px; border-bottom: 1px solid #eee; font-size: 10pt; }
+  .items-table .text-right { text-align: right; }
+  .item-name { font-weight: 700; color: #1A1A1A; }
+  .item-sub { font-size: 8pt; color: #888; }
 
-  /* Items table */
-  .items-table { width: 100%; border-collapse: collapse; margin-bottom: 32px; }
-  .items-table thead tr { background: #1A1A1A; color: #fff; }
-  .items-table thead th { padding: 12px 16px; text-align: left; font-size: 11px; letter-spacing: 1px; text-transform: uppercase; }
-  .items-table thead th:last-child { text-align: right; }
-  .items-table tbody tr { border-bottom: 1px solid #f0f0f0; }
-  .items-table tbody tr:nth-child(even) { background: #fafafa; }
-  .items-table tbody td { padding: 14px 16px; font-size: 13px; color: #333; }
-  .items-table tbody td:last-child { text-align: right; font-weight: 700; }
-  .items-table tbody td.item-name { font-weight: 600; color: #1A1A1A; }
-  .items-table tbody td.item-sub { font-size: 11px; color: #888; }
+  .totals-table { width: 40%; margin-left: 60%; margin-bottom: 30px; }
+  .totals-row td { padding: 6px 0; border-bottom: 1px solid #eee; font-size: 10pt; }
+  .totals-row.grand-total td { background: #1A1A1A; color: #fff; font-weight: 800; padding: 10px; border: none; }
+  .totals-row.grand-total .amount { color: #F5A623; font-size: 14pt; }
+  .totals-balance td { background: #F9F9F9; font-weight: 700; padding: 8px 10px; border: 1px solid #eee; }
 
-  /* Totals */
-  .totals { display: flex; justify-content: flex-end; margin-bottom: 40px; }
-  .totals-box { width: 280px; }
-  .totals-row { display: flex; justify-content: space-between; padding: 8px 0; border-bottom: 1px solid #f0f0f0; font-size: 13px; }
-  .totals-row.total { background: #1A1A1A; color: #fff; padding: 12px 16px; border-radius: 4px; margin-top: 8px; }
-  .totals-row.total span:last-child { color: #F5A623; font-size: 18px; font-weight: 800; }
-  .totals-row.balance { background: #f9f9f9; padding: 10px 16px; border-radius: 4px; margin-top: 4px; border: 1px solid #eee; }
-  .totals-row.balance span:last-child { color: #27ae60; font-weight: 700; }
-  .totals-row span:first-child { color: #888; }
+  .signature-box { margin-top: 50px; width: 100%; }
+  .sig-img { max-height: 60px; max-width: 200px; }
+  .sig-label { font-size: 8pt; color: #888; text-transform: uppercase; margin-top: 5px; border-top: 1px solid #eee; width: 200px; padding-top: 3px; }
 
-  /* Notes */
-  .notes-section { background: #fffbf0; border-left: 4px solid #F5A623; padding: 16px 20px; margin-bottom: 32px; border-radius: 0 4px 4px 0; }
-  .notes-section h4 { font-size: 11px; letter-spacing: 1px; text-transform: uppercase; color: #F5A623; margin-bottom: 6px; }
-  .notes-section p { font-size: 12px; color: #555; line-height: 1.6; }
-
-  /* Footer */
-  .footer { border-top: 2px solid #F5A623; padding-top: 20px; display: flex; justify-content: space-between; align-items: center; }
-  .footer-left { font-size: 11px; color: #888; line-height: 1.7; }
-  .footer-right { text-align: right; font-size: 11px; color: #888; }
-  .signature-line { border-top: 1px solid #ccc; width: 180px; margin-bottom: 4px; margin-left: auto; }
-  .client-signature { text-align: left; margin-top: 40px; }
-  .sig-img { max-height: 60px; max-width: 200px; display: block; border-bottom: 1px solid #eee; margin-bottom: 5px; }
-  .sig-label { font-size: 10px; color: #888; text-transform: uppercase; letter-spacing: 1px; }
-  .sales-rep-box { margin-top: 20px; font-size: 11px; color: #555; border-top: 1px dashed #eee; padding-top: 10px; }
-
-  /* SVG logo (building icon in brand color) */
-  .logo-svg { color: #F5A623; }
+  .footer { border-top: 2px solid #F5A623; padding-top: 15px; margin-top: 40px; font-size: 8pt; color: #888; width: 100%; }
 </style>
 </head>
 <body>
 <div class="page">
 
-  <!-- Header -->
-  <div class="header">
-    <div class="logo-area">
-      {% if company.logo_b64 %}
-      <img src="{{ company.logo_b64 }}" alt="Eximp & Cloves" style="max-height: 50px;">
-      <div style="display: none;">
+  <!-- Header Section -->
+  <table class="header-table" border="0" cellspacing="0" cellpadding="0">
+    <tr>
+      <td class="logo-cell">
+        {% if company.logo_b64 %}
+        <img src="{{ company.logo_b64 }}" alt="Logo" style="max-height: 50px;">
+        {% else %}
         <div class="company-name">Eximp &amp; Cloves</div>
-        <div class="company-sub">Infrastructure Limited</div>
-      </div>
-      {% else %}
-      <svg class="logo-icon" viewBox="0 0 48 48" fill="none" xmlns="http://www.w3.org/2000/svg">
-        <path d="M24 4L36 14V44H28V32H20V44H12V14L24 4Z" fill="#F5A623"/>
-        <path d="M18 14H22V20H18V14ZM26 14H30V20H26V14ZM18 24H22V30H18V24ZM26 24H30V30H26V24Z" fill="#fff" fill-opacity="0.6"/>
-        <path d="M6 44H42" stroke="#F5A623" stroke-width="2.5" stroke-linecap="round"/>
-      </svg>
-      <div>
-        <div class="company-name">Eximp &amp; Cloves</div>
-        <div class="company-sub">Infrastructure Limited</div>
-      </div>
-      {% endif %}
-    </div>
-    <div class="company-details">
-      RC 8311800<br>
-      57B, Isaac John Street, Yaba<br>
-      Lagos, Nigeria<br>
-      +234 912 686 4383<br>
-      www.eximps-cloves.com
-    </div>
-  </div>
+        {% endif %}
+      </td>
+      <td class="company-cell">
+        <div class="company-name" style="font-size: 14pt;">{{ company.name }}</div>
+        {{ company.rc }}<br>
+        {{ company.address }}<br>
+        {{ company.phone }} | {{ company.website }}
+      </td>
+    </tr>
+  </table>
+
+  <!-- Bill To & Details -->
+  <table class="bill-to-table" border="0" cellspacing="0" cellpadding="0">
+    <tr>
+      <td width="55%" style="vertical-align: top; padding-right: 20px;">
+        <div class="info-title">BILL TO</div>
+        <div class="info-body">
+          <strong>{{ client.full_name }}</strong><br>
+          {% if client.address %}{{ client.address }}<br>{% endif %}
+          {% if client.city %}{{ client.city }}{% if client.state %}, {{ client.state }}{% endif %}<br>{% endif %}
+          {{ client.email }}<br>
+          {{ client.phone }}
+        </div>
+      </td>
+      <td width="45%" style="vertical-align: top;">
+        <div class="info-title">INVOICE DETAILS</div>
+        <table width="100%" border="0" cellspacing="0" cellpadding="0" style="font-size: 9pt; line-height: 1.6;">
+          <tr><td><strong>Invoice Date:</strong></td><td align="right">{{ invoice.invoice_date }}</td></tr>
+          <tr><td><strong>Due Date:</strong></td><td align="right">{{ invoice.due_date }}</td></tr>
+          <tr><td><strong>Payment Plan:</strong></td><td align="right">{{ invoice.payment_terms }}</td></tr>
+          <tr><td><strong>Property:</strong></td><td align="right">{{ invoice.property_name }}</td></tr>
+        </table>
+      </td>
+    </tr>
+  </table>
 
   <!-- Title Bar -->
   <div class="title-bar">
-    <h1>INVOICE</h1>
-    <div class="invoice-meta">
-      <div class="inv-num"># {{ invoice.invoice_number }}</div>
-      <span class="badge {% if invoice.status == 'paid' %}{% elif invoice.status == 'partial' %}partial{% else %}unpaid{% endif %}">
-        {{ invoice.status | upper }}
-      </span>
-    </div>
-  </div>
-
-  <!-- Bill To + Invoice Details -->
-  <div class="info-grid">
-    <div class="info-block">
-      <h4>Bill To</h4>
-      <p>
-        <strong>{{ client.full_name }}</strong><br>
-        {% if client.address %}{{ client.address }}<br>{% endif %}
-        {% if client.city %}{{ client.city }}{% if client.state %}, {{ client.state }}{% endif %}<br>{% endif %}
-        {{ client.email }}<br>
-        {% if client.phone %}{{ client.phone }}{% endif %}
-      </p>
-    </div>
-    <div class="info-block">
-      <h4>Invoice Details</h4>
-      <p>
-        <strong>Invoice Date:</strong> {{ invoice.invoice_date }}<br>
-        <strong>Payment Plan:</strong> {{ invoice.payment_terms }}<br>
-        {% if invoice.payment_terms != 'Outright' %}
-        <strong>Deposit Date:</strong> {{ invoice.invoice_date }}<br>
-        <strong>Final Due Date:</strong> {{ invoice.due_date }}<br>
-        {% else %}
-        <strong>Due Date:</strong> {{ invoice.due_date }}<br>
-        {% endif %}
-        <strong>Subject:</strong> Property Purchase
-      </p>
-    </div>
-  </div>
-  
-  <!-- Owner & Next of Kin -->
-  <div class="info-grid">
-    <div class="info-block">
-      <h4>Ownership Information</h4>
-      <p>
-        <strong>Primary Owner:</strong> {{ client.full_name }}<br>
-        {% if invoice.co_owner_name %}
-        <strong>Co-Owner:</strong> {{ invoice.co_owner_name }}<br>
-        {% if invoice.co_owner_email %}<em>{{ invoice.co_owner_email }}</em>{% endif %}
-        {% endif %}
-      </p>
-    </div>
-    <div class="info-block">
-      <h4>Next of Kin</h4>
-      <p>
-        {% if client.nok_name %}
-        <strong>Name:</strong> {{ client.nok_name }}<br>
-        <strong>Relationship:</strong> {{ client.nok_relationship or 'N/A' }}<br>
-        <strong>Phone:</strong> {{ client.nok_phone }}
-        {% else %}
-        <span style="color:#aaa;">Not provided</span>
-        {% endif %}
-      </p>
-    </div>
+    <table width="100%" border="0" cellspacing="0" cellpadding="0">
+      <tr>
+        <td><h1>INVOICE</h1></td>
+        <td align="right">
+          <div class="inv-num"># {{ invoice.invoice_number }}</div>
+          <div class="badge {{ invoice.status }}">
+            {{ invoice.status | upper }}
+          </div>
+        </td>
+      </tr>
+    </table>
   </div>
 
   <!-- Items Table -->
   <table class="items-table">
     <thead>
       <tr>
-        <th>#</th>
-        <th>Item &amp; Description</th>
-        <th>Qty</th>
-        <th>Rate</th>
-        <th>Amount</th>
+        <th width="5%">#</th>
+        <th width="60%">Item Description</th>
+        <th width="10%" class="text-right">Qty</th>
+        <th width="25%" class="text-right">Total Price</th>
       </tr>
     </thead>
     <tbody>
@@ -186,74 +126,65 @@
         <td>1</td>
         <td>
           <div class="item-name">{{ invoice.property_name or 'Property Purchase' }}</div>
-          {% if invoice.property_location %}
-          <div class="item-sub">{{ invoice.property_location }}{% if invoice.plot_size_sqm %} — {{ invoice.plot_size_sqm }} sqm{% endif %}</div>
-          {% endif %}
+          <div class="item-sub">
+            {% if invoice.property_location %}{{ invoice.property_location }}{% endif %}
+            {% if invoice.plot_size_sqm %} — Plot Size: {{ invoice.plot_size_sqm }} sqm{% endif %}
+          </div>
         </td>
-        <td>1</td>
-        <td>{{ format_currency(invoice.amount) }}</td>
-        <td>{{ format_currency(invoice.amount) }}</td>
+        <td class="text-right">1</td>
+        <td class="text-right"><strong>{{ format_currency(invoice.amount) }}</strong></td>
       </tr>
     </tbody>
   </table>
 
   <!-- Totals -->
-  <div class="totals">
-    <div class="totals-box">
-      <div class="totals-row">
-        <span>Total Property Price</span>
-        <span>{{ format_currency(invoice.amount) }}</span>
-      </div>
-      {% if invoice.amount_paid and invoice.amount_paid > 0 %}
-      <div class="totals-row">
-        <span>Amount Paid to Date</span>
-        <span style="color: #27ae60;">(–) {{ format_currency(invoice.amount_paid) }}</span>
-      </div>
-      <div class="totals-row total">
-        <span>Balance Due</span>
-        <span>{{ format_currency(invoice.balance_due) }}</span>
-      </div>
-      {% if invoice.balance_due <= 0 %}
-      <div style="text-align: right; margin-top: 5px;">
-        <span class="badge">PAID IN FULL</span>
-      </div>
-      {% endif %}
-      {% else %}
-      <div class="totals-row total">
-        <span>Total Amount Due</span>
-        <span>{{ format_currency(invoice.amount) }}</span>
-      </div>
-      {% endif %}
-    </div>
-  </div>
+  <table class="totals-table" border="0" cellspacing="0" cellpadding="0">
+    <tr class="totals-row">
+      <td>Total Price</td>
+      <td align="right">{{ format_currency(invoice.amount) }}</td>
+    </tr>
+    {% if invoice.amount_paid > 0 %}
+    <tr class="totals-row">
+      <td>Amount Paid</td>
+      <td align="right" style="color: #27AE60;">({{ format_currency(invoice.amount_paid) }})</td>
+    </tr>
+    <tr class="totals-row grand-total">
+      <td>Balance Due</td>
+      <td align="right" class="amount">{{ format_currency(invoice.balance_due) }}</td>
+    </tr>
+    {% else %}
+    <tr class="totals-row grand-total">
+      <td>Amount Due</td>
+      <td align="right" class="amount">{{ format_currency(invoice.amount) }}</td>
+    </tr>
+    {% endif %}
+  </table>
 
-  <!-- Client Signature -->
+  <!-- Signature Section -->
   {% if signature_img_base64 %}
-  <div class="client-signature">
+  <div class="signature-box">
     <img src="data:image/png;base64,{{ signature_img_base64 }}" class="sig-img">
-    <div class="sig-label">Client Digital Signature</div>
-  </div>
-  {% elif invoice.signature_url %}
-  <div class="client-signature">
-    <p style="font-size:11px; color:#555;">Document Signed Electronically</p>
-    <div class="sig-label">Status: Verified</div>
+    <div class="sig-label">Customer Digital Signature</div>
   </div>
   {% endif %}
 
   <!-- Footer -->
   <div class="footer">
-    <div class="footer-left">
-      Eximp &amp; Cloves Infrastructure Limited | RC 8311800<br>
-      57B, Isaac John Street, Yaba, Lagos, Nigeria<br>
-      info@eximps-cloves.com | www.eximps-cloves.com
-    </div>
-    <div class="footer-right">
-      <div class="signature-line"></div>
-      <div>Authorized Signature</div>
-      <div style="margin-top: 4px; color: #aaa;">Generated: {{ generated_at }}</div>
-    </div>
+    <table width="100%">
+      <tr>
+        <td width="70%">
+          {{ company.name }} | RC {{ company.rc }}<br>
+          {{ company.address }}<br>
+          Generated on {{ generated_at }}
+        </td>
+        <td width="30%" align="right">
+          Authorized Signature
+        </td>
+      </tr>
+    </table>
   </div>
 
 </div>
 </body>
 </html>
+
