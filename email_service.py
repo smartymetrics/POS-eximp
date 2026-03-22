@@ -11,6 +11,38 @@ FROM_EMAIL = "onboarding@resend.dev"
 def _b64(pdf_bytes: bytes) -> str:
     return base64.b64encode(pdf_bytes).decode()
 
+def _welcome_html(client: dict, property_name: str) -> str:
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: #1A1A1A; padding: 24px; text-align: center;">
+        {f'<img src="{COMPANY.get("logo_b64", "")}" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">' if COMPANY.get("logo_b64") else '<h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1><p style="color: #aaa; margin: 4px 0 0; font-size: 12px;">INFRASTRUCTURE LIMITED</p>'}
+      </div>
+      <div style="background: #F5A623; padding: 12px 24px;">
+        <h2 style="color: #1A1A1A; margin: 0; font-size: 16px;">Welcome to Eximp & Cloves!</h2>
+      </div>
+      <div style="padding: 32px 24px; background: #fff; border: 1px solid #eee;">
+        <p style="color: #333;">Dear <strong>{client['full_name']}</strong>,</p>
+        <p style="color: #555;">Thank you for choosing Eximp & Cloves Infrastructure Limited! We are thrilled to welcome you to our community.</p>
+        <p style="color: #555;">We have successfully received your subscription form for <strong>{property_name}</strong>.</p>
+        <p style="color: #555;">Our team is currently reviewing your submission and verifying your payment details. Once confirmed, you will receive your official invoice and receipt via email.</p>
+        <p style="color: #555;">If you have any questions in the meantime, please reply to this email or contact your Sales Representative.</p>
+        <p style="color: #555; margin-top: 30px;">Warm regards,<br>The Eximp & Cloves Team</p>
+        <hr style="border-color: #eee;">
+        <p style="color: #999; font-size: 12px; margin: 0;">
+          Eximp & Cloves Infrastructure Limited | RC 8311800<br>
+          57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383<br>
+          www.eximps-cloves.com
+        </p>
+      </div>
+    </div>"""
+
+async def send_welcome_email(client: dict, property_name: str):
+    resend.Emails.send({
+        "from": f"Eximp & Cloves <{FROM_EMAIL}>",
+        "to": [client["email"]],
+        "subject": "Welcome to Eximp & Cloves!",
+        "html": _welcome_html(client, property_name)
+    })
 
 def _invoice_html(invoice: dict, client: dict) -> str:
     amount = float(invoice["amount"])
