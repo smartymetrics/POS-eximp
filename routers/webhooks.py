@@ -120,16 +120,24 @@ async def form_submission(
         )
 
         # 5. Get Property Price from DB
-        # If not provided in form, lookup by name
+        # If not provided in form, lookup by name and calculate based on size
         total_amount_to_use = payload.total_amount
         if total_amount_to_use <= 0 and payload.property_name:
-            prop_res = db.table("properties").select("starting_price")\
+            prop_res = db.table("properties").select("starting_price, price_per_sqm")\
                 .ilike("name", f"%{payload.property_name}%")\
                 .eq("is_active", True)\
                 .execute()
             if prop_res.data:
-                total_amount_to_use = prop_res.data[0]["starting_price"]
-                print(f"DEBUG: Found price for {payload.property_name}: {total_amount_to_use}")
+                prop = prop_res.data[0]
+                price_per_sqm = prop.get("price_per_sqm")
+                starting_price = prop.get("starting_price") or 0
+                
+                if price_per_sqm and plot_size_numeric:
+                    total_amount_to_use = float(price_per_sqm) * plot_size_numeric
+                else:
+                    total_amount_to_use = float(starting_price)
+                
+                print(f"DEBUG: Calculated price for {payload.property_name} (Size: {plot_size_numeric}): {total_amount_to_use}")
 
         invoice_insert = {
             "invoice_number": invoice_number,
