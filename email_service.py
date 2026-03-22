@@ -336,3 +336,62 @@ async def send_report_email(emails: list, subject: str, message: str, attachment
         "html": _report_html(message),
         "attachments": [attachment]
     })
+
+
+def _commission_html(rep: dict, client: dict, invoice: dict, earning: dict) -> str:
+    amount = float(earning["payment_amount"])
+    rate = float(earning["commission_rate"])
+    comm = float(earning["commission_amount"])
+    
+    balance = float(invoice.get("balance_due", 0))
+    balance_note = ""
+    if balance > 0:
+        balance_note = f"""
+        <div style="background: #f9f9f9; padding: 12px; margin-top: 20px; font-size: 13px; color: #555; border-left: 3px solid #F5A623;">
+          <strong>Note:</strong> This client has a remaining balance of NGN {balance:,.2f} due by {invoice.get('due_date', 'N/A')}. 
+          Additional commission will be earned when further payments are verified.
+        </div>"""
+        
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: #1A1A1A; padding: 24px; text-align: center;">
+        <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">
+      </div>
+      <div style="padding: 32px 24px; background: #fff; border: 1px solid #eee;">
+        <p style="color: #333;">Dear <strong>{rep.get('name', 'Rep')}</strong>,</p>
+        <p style="color: #555;">Great news! A payment has been verified for one of your clients, and your commission has been recorded.</p>
+        
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
+          <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #777;">Client:</td><td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; color: #333;"><strong>{client.get('full_name')}</strong></td></tr>
+          <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #777;">Property:</td><td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; color: #333;">{invoice.get('property_name')}</td></tr>
+          <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #777;">Invoice:</td><td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; color: #333;">{invoice.get('invoice_number')}</td></tr>
+          <tr><td style="padding: 8px 0; border-bottom: 1px solid #333; color: #777;">Payment:</td><td style="padding: 8px 0; border-bottom: 1px solid #333; text-align: right; color: #333;"><strong>NGN {amount:,.2f}</strong></td></tr>
+        </table>
+        
+        <div style="background: #1A1A1A; padding: 20px; text-align: center; color: #fff; border-radius: 6px;">
+          <p style="margin: 0; font-size: 12px; color: #aaa; text-transform: uppercase;">Your Commission</p>
+          <p style="margin: 8px 0 0; font-size: 28px; color: #27ae60; font-weight: bold;">NGN {comm:,.2f}</p>
+          <p style="margin: 4px 0 0; font-size: 13px; color: #888;">Rate applied: {rate}%</p>
+        </div>
+        
+        {balance_note}
+        
+        <p style="color: #555; font-size: 13px; margin-top: 24px;">Your commission will be processed in the next payout cycle. Contact finance@eximps-cloves.com for any enquiries.</p>
+        
+        <hr style="border-color: #eee; margin: 24px 0;">
+        <p style="color: #999; font-size: 12px; margin: 0; text-align: center;">
+          Eximp & Cloves Infrastructure Limited | RC 8311800<br>
+          57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383
+        </p>
+      </div>
+    </div>"""
+
+async def send_commission_earned_email(rep: dict, client: dict, invoice: dict, earning: dict):
+    if not rep.get("email"):
+        return
+    resend.Emails.send({
+        "from": f"Eximp & Cloves <{FROM_EMAIL}>",
+        "to": [rep["email"]],
+        "subject": f"Commission Earned — {client.get('full_name', 'Client')} | Eximp & Cloves",
+        "html": _commission_html(rep, client, invoice, earning)
+    })

@@ -5,7 +5,7 @@ from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 
-from routers import auth, clients, properties, invoices, payments, webhooks, verifications, analytics, sales_reps, reports
+from routers import auth, clients, properties, invoices, payments, webhooks, verifications, analytics, sales_reps, reports, commission
 from database import init_db
 from scheduler import start_scheduler, stop_scheduler
 
@@ -32,6 +32,7 @@ app.include_router(verifications.router, prefix="/api/verifications", tags=["ver
 app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
 app.include_router(sales_reps.router, prefix="/api/sales-reps", tags=["sales-reps"])
 app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
+app.include_router(commission.router, prefix="/api/commission", tags=["commission"])
 
 
 @app.on_event("startup")

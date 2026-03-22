@@ -126,6 +126,25 @@ class ReportService:
                 })
             return {"items": rows, "stats": {"count": len(rows)}, "type": "Client Register"}
 
+        elif report_type == "commission_report":
+            end_timestamp = end_date + "T23:59:59"
+            res = supabase.table("commission_earnings").select("*, sales_reps(name), clients(full_name), invoices(invoice_number)").gte("created_at", start_date).lte("created_at", end_timestamp).order("created_at", desc=True).execute()
+            data = res.data or []
+            rows = []
+            for c in data:
+                rows.append({
+                    "Date": str(c.get("created_at"))[:10] if c.get("created_at") else "",
+                    "Sales Rep": c.get("sales_reps", {}).get("name", "Unknown") if c.get("sales_reps") else "Unknown",
+                    "Client": c.get("clients", {}).get("full_name", "") if c.get("clients") else "",
+                    "Invoice": c.get("invoices", {}).get("invoice_number", "") if c.get("invoices") else "",
+                    "Estate": c.get("estate_name", ""),
+                    "Deposit": f"₦{float(c.get('payment_amount', 0)):,.2f}",
+                    "Rate": f"{float(c.get('commission_rate', 0))}%",
+                    "Earning": f"₦{float(c.get('final_amount', 0)):,.2f}",
+                    "Status": "Paid" if c.get("is_paid") else "Unpaid"
+                })
+            return {"items": rows, "stats": {"count": len(rows)}, "type": "Commission Earned Report"}
+
         return {"items": [], "stats": {}, "type": "Report"}
 
     @staticmethod

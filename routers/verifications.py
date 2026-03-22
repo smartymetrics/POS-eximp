@@ -3,9 +3,28 @@ from fastapi.encoders import jsonable_encoder
 from models import VerificationConfirm, VerificationReject, VerificationUpdate
 from database import get_db
 from routers.auth import verify_token
-from email_service import send_receipt_and_statement_email, send_rejection_email
+from email_service import send_receipt_and_statement_email, send_rejection_email, send_commission_earned_email
 from routers.analytics import log_activity
-from datetime import datetime
+from datetime import datetime, date
+
+def get_commission_rate(sales_rep_id: str, estate_name: str, verification_date: date, db) -> float:
+    result = db.table("commission_rates")\
+        .select("rate")\
+        .eq("sales_rep_id", sales_rep_id)\
+        .eq("estate_name", estate_name)\
+        .lte("effective_from", str(verification_date))\
+        .or_(f"effective_to.is.null,effective_to.gte.{verification_date}")\
+        .order("effective_from", desc=True)\
+        .limit(1)\
+        .execute()
+    if result.data:
+        return float(result.data[0]["rate"])
+
+    default = db.table("system_settings")\
+        .select("value")\
+        .eq("key", "default_commission_rate")\
+        .execute()
+    return float(default.data[0]["value"]) if default.data else 5.0
 
 router = APIRouter()
 
@@ -64,6 +83,44 @@ async def confirm_verification(
         .eq("client_id", client["id"])\
         .order("invoice_date")\
         .execute()
+
+    if invoice.get("sales_rep_name"):
+        rep_res = db.table("sales_reps").select("*").eq("name", invoice["sales_rep_name"]).execute()
+        if rep_res.data:
+            rep = rep_res.data[0]
+            rep_id = rep["id"]
+            rate = get_commission_rate(
+                sales_rep_id=rep_id,
+                estate_name=invoice["property_name"],
+                verification_date=date.today(),
+                db=db
+            )
+            deposit = float(verify_rec["deposit_amount"])
+            commission_amount = round(deposit * rate / 100, 2)
+            
+            ref = f"{verify_rec['payment_date']}_form_deposit"
+            pay_res = db.table("payments").select("id").eq("invoice_id", invoice["id"]).eq("reference", ref).execute()
+            payment_id = pay_res.data[0]["id"] if pay_res.data else None
+            
+            if payment_id:
+                earning = db.table("commission_earnings").insert({
+                    "sales_rep_id": rep_id,
+                    "invoice_id": invoice["id"],
+                    "payment_id": payment_id,
+                    "client_id": client["id"],
+                    "estate_name": invoice["property_name"],
+                    "payment_amount": deposit,
+                    "commission_rate": rate,
+                    "commission_amount": commission_amount,
+                }).execute().data[0]
+                
+                background_tasks.add_task(
+                    send_commission_earned_email,
+                    rep=rep,
+                    client=client,
+                    invoice=invoice,
+                    earning=earning
+                )
 
     # 4. Send Documents
     background_tasks.add_task(send_receipt_and_statement_email, invoice, client, all_inv.data)

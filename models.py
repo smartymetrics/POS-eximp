@@ -312,3 +312,26 @@ class ReportEmailRequest(BaseModel):
     format: str = "pdf"
     emails: str
     message: Optional[str] = None
+
+# --- COMMISSION MODELS (PRD 4) ---
+
+class CommissionRateCreate(BaseModel):
+    sales_rep_id: str
+    estate_name: str
+    rate: Decimal
+    effective_from: date
+    reason: Optional[str] = None
+
+class CommissionAdjustment(BaseModel):
+    adjusted_amount: Decimal
+    adjustment_reason: str
+
+class CommissionPayout(BaseModel):
+    sales_rep_id: str
+    earning_ids: list[str]
+    reference: Optional[str] = None
+    notes: Optional[str] = None
+
+class DefaultRateUpdate(BaseModel):
+    rate: Decimal
+    reason: Optional[str] = None
