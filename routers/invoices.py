@@ -152,6 +152,7 @@ async def send_documents(
                 all_inv = db.table("invoices")\
                     .select("*, payments(*)")\
                     .eq("client_id", invoice["client_id"])\
+                    .neq("status", "voided")\
                     .order("invoice_date")\
                     .execute()
                 await send_statement_email(all_inv.data, client, current_admin["sub"])
@@ -337,6 +338,7 @@ async def download_pdf(invoice_id: str, doc_type: str, current_admin=Depends(ver
         all_inv = db.table("invoices")\
             .select("*, payments(*)")\
             .eq("client_id", invoice["client_id"])\
+            .neq("status", "voided")\
             .order("invoice_date")\
             .execute()
         

@@ -155,6 +155,8 @@ def generate_statement_pdf(invoices: list, client: dict) -> bytes:
             "balance": running_balance,
         })
         for pay in (inv.get("payments") or []):
+            if pay.get("is_voided"):
+                continue
             running_balance -= float(pay["amount"])
             transactions.append({
                 "date": pay["payment_date"],
@@ -169,7 +171,7 @@ def generate_statement_pdf(invoices: list, client: dict) -> bytes:
     total_paid = sum(
         float(p["amount"])
         for i in invoices
-        for p in (i.get("payments") or [])
+        for p in (i.get("payments") or []) if not p.get("is_voided")
     )
 
     html_content = template.render(
