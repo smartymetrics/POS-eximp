@@ -43,7 +43,7 @@ function onFormSubmit(e) {
             id_number: responses["International Passport No/NIN Number"] || responses["ID Card Number"] || "",
             id_document_url: responses["Upload NIN/International Passport "] || responses["Upload ID Card"] || "", 
             nationality: responses["Nationality"] || "",
-            passport_photo_url: responses["Upload Passport Photo"] || "",
+            passport_photo_url: responses["Upload a passport photograph"] || responses["Upload Passport Photo"] || "",
 
             // Next of Kin
             nok_name: responses["Next of kin's full name"] || responses["Next of Kin Name"] || "",
@@ -76,7 +76,7 @@ function onFormSubmit(e) {
             referral_source: responses["How did you hear about us?"] || "",
             sales_rep_name: responses["Sales Rep / Marketer Name  "] || responses["Name of Sales Rep"] || "",
             sales_rep_phone: responses["Sales Rep Phone Number"] || "",
-            consent: responses["Consent Checkbox"] || responses["Do you agree to the terms?"] || "I Confirm and Agree",
+            consent: responses["By checking this box, I confirm that I have read, understand, and consent to all of the following Land Republic documents: Terms and Conditions, Payment Protection Promise, and Resale and Refund Policies. I accept full responsibility for all legal implications and interpretations of this agreement. I understand that this subscription form becomes binding on all parties immediately upon the company's receipt of my payment.  "] || responses["Consent Checkbox"] || responses["Do you agree to the terms?"] || "I Confirm and Agree",
             submitter_email: submitterEmail,
             timestamp: e.range ? new Date().toISOString() : (e.response ? e.response.getTimestamp().toISOString() : new Date().toISOString())
         };

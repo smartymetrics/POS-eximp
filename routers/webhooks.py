@@ -24,8 +24,11 @@ async def form_submission(
         raise HTTPException(status_code=403, detail="Invalid webhook secret")
 
     # 2. Validate consent
-    if payload.consent != "I Confirm and Agree":
-        return {"message": "Consent not given, ignoring", "status": "ignored"}
+    # Basic verification: ensure the user at least checked the consent box
+    consent_text = (payload.consent or "").lower()
+    if "confirm" not in consent_text and "agree" not in consent_text:
+        print(f"DEBUG: Skipping form due to missing consent: {payload.consent}")
+        return {"status": "ignored", "message": "Consent not confirmed"}
 
     db = get_db()
 
