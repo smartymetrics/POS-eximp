@@ -1,0 +1,20 @@
+﻿--- CLIENTS ---
+ID: ba3a69ae-6951-44c2-b25f-8e30afb000da | Name: Chuks ifeanyi | Email: smartymetric@gmail.com | Invoices (2): TEST-123456, TEST-NO-REP
+ID: ace1e511-5023-4592-9c58-e8da2d6d3bf9 | Name: Maxwell Osakwe | Email: Oscarmaxwell05@gmail.com | Invoices (2): IMP-0001, IMP-MAX-18
+ID: 6aae7fd8-68ac-4832-b589-d92232467526 | Name: Test | Email: test@error.com | Invoices (0): 
+ID: 2d4e1d9e-a7e6-474e-beb0-25a7eaa06403 | Name: Charles Chiakpaoke Mbaogu | Email: doncharles376@gmail.com | Invoices (1): IMP-CHA-29
+ID: a5c91091-3b5a-4204-991f-c905c08f5e78 | Name: Donatus Okechukwu Mbaogu | Email: mbaogudona@gmail.com | Invoices (1): IMP-DON-31
+ID: f0a55832-34bd-4fca-b4b4-3e1c306fd45f | Name: Damilola David Adigun | Email: oluwadamilolaadigun2580@gmail.com | Invoices (1): IMP-DAM-18
+ID: 12a6b3ac-064f-4820-a8a4-1e1f1f618184 | Name:  | Email: eximpcloves@gmail.com | Invoices (7): EC-000001, EC-000002, EC-000003, EC-000004, EC-000005, EC-000006, EC-000007
+
+--- RECENT INVOICES ---
+Inv: EC-000007 | ClientID: 12a6b3ac-064f-4820-a8a4-1e1f1f618184
+Inv: EC-000006 | ClientID: 12a6b3ac-064f-4820-a8a4-1e1f1f618184
+Inv: EC-000005 | ClientID: 12a6b3ac-064f-4820-a8a4-1e1f1f618184
+Inv: EC-000004 | ClientID: 12a6b3ac-064f-4820-a8a4-1e1f1f618184
+Inv: EC-000003 | ClientID: 12a6b3ac-064f-4820-a8a4-1e1f1f618184
+Inv: EC-000002 | ClientID: 12a6b3ac-064f-4820-a8a4-1e1f1f618184
+Inv: EC-000001 | ClientID: 12a6b3ac-064f-4820-a8a4-1e1f1f618184
+Inv: IMP-DAM-18 | ClientID: f0a55832-34bd-4fca-b4b4-3e1c306fd45f
+Inv: IMP-DON-31 | ClientID: a5c91091-3b5a-4204-991f-c905c08f5e78
+Inv: IMP-CHA-29 | ClientID: 2d4e1d9e-a7e6-474e-beb0-25a7eaa06403

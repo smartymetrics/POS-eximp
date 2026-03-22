@@ -1016,6 +1016,26 @@
           <input type="text" class="form-control" id="edit-inv-prop">
           <div class="form-hint edit-inv-admin-lock" style="display:none; color:var(--red);">Only Admins can edit Property Name.</div>
         </div>
+        <div class="form-group">
+          <label class="form-label">Property Location</label>
+          <input type="text" class="form-control" id="edit-inv-location">
+          <div class="form-hint edit-inv-admin-lock" style="display:none; color:var(--red);">Only Admins can edit Location.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Amount (NGN)</label>
+          <input type="number" class="form-control" id="edit-inv-amount">
+          <div class="form-hint edit-inv-admin-lock" style="display:none; color:var(--red);">Only Admins can edit Amount.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Plot Size (SQM)</label>
+          <input type="number" class="form-control" id="edit-inv-size">
+          <div class="form-hint edit-inv-admin-lock" style="display:none; color:var(--red);">Only Admins can edit Plot Size.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Invoice Date</label>
+          <input type="date" class="form-control" id="edit-inv-date">
+          <div class="form-hint edit-inv-admin-lock" style="display:none; color:var(--red);">Only Admins can edit Invoice Date.</div>
+        </div>
         <div class="form-group span2">
           <label class="form-label">Notes</label>
           <textarea class="form-control" id="edit-inv-notes" rows="2"></textarea>
@@ -2126,6 +2146,28 @@ async function downloadReport(event, reportType, format) {
   }
 }
 
+async function downloadInvoicePDF(id, type, invNum) {
+  try {
+    const res = await apiFetch(`/api/invoices/${id}/pdf/${type}`);
+    if (!res.ok) {
+        let msg = 'Download failed';
+        try { const d = await res.json(); msg = d.detail || msg; } catch(_) {}
+        throw new Error(msg);
+    }
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = `${type.charAt(0).toUpperCase() + type.slice(1)}_${invNum}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(() => { a.remove(); window.URL.revokeObjectURL(url); }, 1000);
+  } catch(e) { 
+    console.error('Download error:', e);
+    toast(e.message, 'error'); 
+  }
+}
+
 function openScheduleModal(presetType) {
   const el = document.getElementById('scheduleModal');
   if (!el) return;
@@ -2575,9 +2617,9 @@ async function loadInvoices() {
                 <button class="action-btn" onclick="openEditInvoiceModal('${inv.id}')">Edit</button>
                 <button class="action-btn" onclick="openViewPaymentsModal('${inv.id}')">Payments</button>
                 <button class="action-btn gold" onclick="openSendModal('${inv.id}', '${inv.invoice_number}', '${inv.clients?.full_name}', '${inv.clients?.email}')">Send</button>
-                <a href="/api/invoices/${inv.id}/pdf/invoice" target="_blank" class="action-btn" style="text-decoration:none;display:inline-block;">Invoice</a>
-                ${inv.amount_paid > 0 ? `<a href="/api/invoices/${inv.id}/pdf/receipt" target="_blank" class="action-btn" style="text-decoration:none;display:inline-block;">Receipt</a>` : ''}
-                <a href="/api/invoices/${inv.id}/pdf/statement" target="_blank" class="action-btn" style="text-decoration:none;display:inline-block;">Statement</a>
+                <button class="action-btn" onclick="downloadInvoicePDF('${inv.id}', 'invoice', '${inv.invoice_number}')">Invoice</button>
+                ${inv.amount_paid > 0 ? `<button class="action-btn" onclick="downloadInvoicePDF('${inv.id}', 'receipt', '${inv.invoice_number}')">Receipt</button>` : ''}
+                <button class="action-btn" onclick="downloadInvoicePDF('${inv.id}', 'statement', '${inv.invoice_number}')">Statement</button>
                 ${currentUserRole === 'admin' ? `<button class="action-btn" style="color:var(--red);border-color:#feb2b2;" onclick="openVoidModal('${inv.id}')">Void</button>` : ''}
               </td>
             </tr>`).join('')}
@@ -2601,6 +2643,10 @@ async function openEditInvoiceModal(id) {
     document.getElementById('edit-inv-due').value = inv.due_date || '';
     document.getElementById('edit-inv-rep').value = inv.sales_rep_name || '';
     document.getElementById('edit-inv-prop').value = inv.property_name || '';
+    document.getElementById('edit-inv-location').value = inv.property_location || '';
+    document.getElementById('edit-inv-amount').value = inv.amount || '';
+    document.getElementById('edit-inv-size').value = inv.plot_size_sqm || '';
+    document.getElementById('edit-inv-date').value = inv.invoice_date || '';
     document.getElementById('edit-inv-notes').value = inv.notes || '';
     
     originalDueDate = inv.due_date;
@@ -2621,16 +2667,28 @@ async function openEditInvoiceModal(id) {
     const termsInput = document.getElementById('edit-inv-terms');
     const repInput = document.getElementById('edit-inv-rep');
     const propInput = document.getElementById('edit-inv-prop');
+    const locInput = document.getElementById('edit-inv-location');
+    const amountInput = document.getElementById('edit-inv-amount');
+    const sizeInput = document.getElementById('edit-inv-size');
+    const dateInput = document.getElementById('edit-inv-date');
     
     if (isStaff) {
       termsInput.classList.add('locked-field'); termsInput.disabled = true;
       repInput.classList.add('locked-field'); repInput.readOnly = true;
       propInput.classList.add('locked-field'); propInput.readOnly = true;
+      locInput.classList.add('locked-field'); locInput.readOnly = true;
+      amountInput.classList.add('locked-field'); amountInput.readOnly = true;
+      sizeInput.classList.add('locked-field'); sizeInput.readOnly = true;
+      dateInput.classList.add('locked-field'); dateInput.readOnly = true;
       document.querySelectorAll('.edit-inv-admin-lock').forEach(el => el.style.display = 'block');
     } else {
       termsInput.classList.remove('locked-field'); termsInput.disabled = false;
       repInput.classList.remove('locked-field'); repInput.readOnly = false;
       propInput.classList.remove('locked-field'); propInput.readOnly = false;
+      locInput.classList.remove('locked-field'); locInput.readOnly = false;
+      amountInput.classList.remove('locked-field'); amountInput.readOnly = false;
+      sizeInput.classList.remove('locked-field'); sizeInput.readOnly = false;
+      dateInput.classList.remove('locked-field'); dateInput.readOnly = false;
       document.querySelectorAll('.edit-inv-admin-lock').forEach(el => el.style.display = 'none');
     }
     
@@ -2651,12 +2709,16 @@ async function submitEditInvoice() {
     body.payment_terms = document.getElementById('edit-inv-terms').value;
     body.sales_rep_name = document.getElementById('edit-inv-rep').value || null;
     body.property_name = document.getElementById('edit-inv-prop').value || null;
+    body.property_location = document.getElementById('edit-inv-location').value || null;
+    body.amount = parseFloat(document.getElementById('edit-inv-amount').value) || 0;
+    body.plot_size_sqm = parseFloat(document.getElementById('edit-inv-size').value) || 0;
+    body.invoice_date = document.getElementById('edit-inv-date').value || null;
   }
   
   if (newDue !== originalDueDate) {
     const reason = document.getElementById('edit-inv-due-reason').value.trim();
-    if (!reason) return toast('Reason is required when changing due date', 'error');
-    body.reason_for_change = reason;
+    if (!reason || reason.length < 10) return toast('Reason (min 10 chars) is required when changing due date', 'error');
+    body.reason = reason;
   }
   
   try {

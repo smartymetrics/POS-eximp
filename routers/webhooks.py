@@ -72,24 +72,41 @@ async def form_submission(
 
         # 4. Sales Rep Detection
         rep_name_to_use = payload.sales_rep_name
+        matched_rep = None
+
         if payload.sales_rep_phone or payload.sales_rep_name:
-            # Try phone first
-            matched_rep = None
+            # Phase 1: Try Phone Match (Normalized)
             if payload.sales_rep_phone:
-                rep_res = db.table("sales_reps").select("*").eq("phone", payload.sales_rep_phone).eq("is_active", True).execute()
-                if rep_res.data:
-                    matched_rep = rep_res.data[0]
+                import re
+                cleaned_phone = re.sub(r'\D', '', payload.sales_rep_phone)
+                # Normalize (assuming Nigerian numbers: strip '234' or leading '0')
+                if cleaned_phone.startswith('234') and len(cleaned_phone) > 10:
+                    cleaned_phone = cleaned_phone[3:]
+                elif cleaned_phone.startswith('0') and len(cleaned_phone) == 11:
+                    cleaned_phone = cleaned_phone[1:]
+                
+                if len(cleaned_phone) >= 7: # Safety check
+                    rep_res = db.table("sales_reps").select("*").ilike("phone", f"%{cleaned_phone}%").eq("is_active", True).execute()
+                    if rep_res.data:
+                        matched_rep = rep_res.data[0] # Take first match for phone
             
-            # Try name if no phone match
+            # Phase 2: Try Exact Name Match
             if not matched_rep and payload.sales_rep_name:
                 rep_res = db.table("sales_reps").select("*").eq("name", payload.sales_rep_name).eq("is_active", True).execute()
                 if rep_res.data:
                     matched_rep = rep_res.data[0]
             
+            # Phase 3: Try Partial Name Match (ONLY if single result found)
+            if not matched_rep and payload.sales_rep_name:
+                rep_res = db.table("sales_reps").select("*").ilike("name", f"%{payload.sales_rep_name}%").eq("is_active", True).execute()
+                # Use ONLY if exactly one match found to prevent wrong commission assignment
+                if len(rep_res.data) == 1:
+                    matched_rep = rep_res.data[0]
+            
             if matched_rep:
                 rep_name_to_use = matched_rep["name"]
             else:
-                # Log as unmatched if we have a name/phone but no DB match
+                # Log as unmatched if we have a name/phone but no clear DB match
                 name_to_log = payload.sales_rep_name or f"Phone: {payload.sales_rep_phone}"
                 unmatched_res = db.table("unmatched_reps").select("*").eq("name_from_form", name_to_log).execute()
                 if unmatched_res.data:
@@ -125,8 +142,11 @@ async def form_submission(
         # 5. Get Property Price from DB
         # If not provided in form, lookup by name and exact size
         total_amount_to_use = payload.total_amount
-        if total_amount_to_use <= 0 and payload.property_name:
-            query = db.table("properties").select("total_price, price_per_sqm")\
+        property_location_to_use = None
+        property_id_to_use = None
+
+        if payload.property_name:
+            query = db.table("properties").select("id, total_price, price_per_sqm, location")\
                 .ilike("name", f"%{payload.property_name}%")\
                 .eq("is_active", True)
             
@@ -138,20 +158,26 @@ async def form_submission(
             
             if prop_res.data:
                 prop = prop_res.data[0]
-                total_price = prop.get("total_price")
-                price_per_sqm = prop.get("price_per_sqm")
+                property_id_to_use = prop.get("id")
+                property_location_to_use = prop.get("location")
                 
-                if total_price and float(total_price) > 0:
-                    total_amount_to_use = float(total_price)
-                elif price_per_sqm and plot_size_numeric:
-                    total_amount_to_use = float(price_per_sqm) * plot_size_numeric
+                if total_amount_to_use <= 0:
+                    total_price = prop.get("total_price")
+                    price_per_sqm = prop.get("price_per_sqm")
+                    
+                    if total_price and float(total_price) > 0:
+                        total_amount_to_use = float(total_price)
+                    elif price_per_sqm and plot_size_numeric:
+                        total_amount_to_use = float(price_per_sqm) * plot_size_numeric
                 
-                print(f"DEBUG: Found price for {payload.property_name} (Size: {plot_size_numeric}): {total_amount_to_use}")
+                print(f"DEBUG: Found property {payload.property_name} (ID: {property_id_to_use}, Location: {property_location_to_use})")
 
         invoice_insert = {
             "invoice_number": invoice_number,
             "client_id": client_id,
+            "property_id": property_id_to_use,
             "property_name": payload.property_name,
+            "property_location": property_location_to_use,
             "plot_size_sqm": plot_size_numeric,
             "amount": total_amount_to_use,
             "amount_paid": payload.deposit_amount,
@@ -201,7 +227,6 @@ async def form_submission(
         full_client = db.table("clients").select("*").eq("id", client_id).execute().data[0]
         
         background_tasks.add_task(send_welcome_email, full_client, payload.property_name)
-        background_tasks.add_task(send_invoice_email, invoice, full_client, "system_webhook")
         background_tasks.add_task(send_admin_alert_email, invoice, full_client)
         
         background_tasks.add_task(

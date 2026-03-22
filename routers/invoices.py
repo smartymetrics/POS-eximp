@@ -41,6 +41,13 @@ async def get_invoice(invoice_id: str, current_admin=Depends(verify_token)):
     
     invoice = result.data[0]
     invoice["status"] = resolve_invoice_status(invoice)
+    
+    # Fallback for missing location data
+    if not invoice.get("property_location") and invoice.get("property_name"):
+        prop_res = db.table("properties").select("location").ilike("name", f"%{invoice['property_name']}%").execute()
+        if prop_res.data:
+            invoice["property_location"] = prop_res.data[0]["location"]
+            
     return invoice
 
 
@@ -202,17 +209,17 @@ async def void_invoice_receipts(
     # 3. Log the void action
     db.table("void_log").insert({
         "invoice_id": invoice_id,
-        "admin_id": current_admin["sub"],
+        "client_id": invoice_data["client_id"],
+        "voided_by": current_admin["sub"],
         "reason": payload.reason,
-        "client_notified": payload.notify_client
+        "notify_client": payload.notify_client
     }).execute()
     
     # 4. Notify client if requested
     if payload.notify_client and client_email:
         await send_void_notification_email(
-            client_email,
-            client_name,
-            invoice_data.get("invoice_number", "N/A"),
+            invoice_data,
+            invoice_data.get("clients", {}),
             payload.reason
         )
         
@@ -307,6 +314,12 @@ async def download_pdf(invoice_id: str, doc_type: str, current_admin=Depends(ver
 
     invoice = inv.data[0]
 
+    # Fallback for missing location data
+    if not invoice.get("property_location") and invoice.get("property_name"):
+        prop_res = db.table("properties").select("location").ilike("name", f"%{invoice['property_name']}%").execute()
+        if prop_res.data:
+            invoice["property_location"] = prop_res.data[0]["location"]
+
     if doc_type == "invoice":
         pdf_bytes = generate_invoice_pdf(invoice)
         filename = f"Invoice_{invoice['invoice_number']}.pdf"
@@ -319,6 +332,14 @@ async def download_pdf(invoice_id: str, doc_type: str, current_admin=Depends(ver
             .eq("client_id", invoice["client_id"])\
             .order("invoice_date")\
             .execute()
+        
+        # Ensure property_location fallback for statement invoices too
+        for ai in all_inv.data:
+            if not ai.get("property_location") and ai.get("property_name"):
+                pr = db.table("properties").select("location").ilike("name", f"%{ai['property_name']}%").execute()
+                if pr.data:
+                    ai["property_location"] = pr.data[0]["location"]
+                    
         pdf_bytes = generate_statement_pdf(all_inv.data, invoice["clients"])
         filename = f"Statement_{invoice['clients']['full_name'].replace(' ', '_')}.pdf"
     else:
