@@ -148,17 +148,36 @@
     {% endif %}
   </div>
 
+  <!-- Signature Section -->
+  <table width="100%" style="margin-top: 50px; border-bottom: 2px solid #F5A623; padding-bottom: 10px; margin-bottom: 10px;">
+    <tr>
+      <td width="50%" style="vertical-align: bottom;">
+        {% if signature_img_base64 %}
+        <div class="signature-box" style="margin-top: 0;">
+          <img src="data:image/png;base64,{{ signature_img_base64 }}" class="sig-img">
+          <div class="sig-label" style="width: 250px; font-size: 8pt; color: #888; text-transform: uppercase; margin-top: 5px; border-top: 1px solid #1A1A1A; padding-top: 3px;">Customer Digital Signature</div>
+        </div>
+        {% else %}
+        <div style="height: 60px;"></div>
+        <div class="sig-label" style="width: 250px; font-size: 8pt; color: #888; text-transform: uppercase; margin-top: 5px; border-top: 1px solid #1A1A1A; padding-top: 3px;">Customer Digital Signature</div>
+        {% endif %}
+      </td>
+      <td width="50%" align="right" style="vertical-align: bottom;">
+        <div style="height: 60px;"></div>
+        <div style="border-top: 1px solid #eee; width: 200px; margin-left: auto; padding-top: 3px; font-size: 8pt; color: #888; text-transform: uppercase;">
+          Authorized Signature
+        </div>
+      </td>
+    </tr>
+  </table>
+
   <!-- Footer -->
-  <div class="footer">
+  <div class="footer" style="border-top: none; margin-top: 0;">
     <table width="100%">
       <tr>
-        <td width="70%">
+        <td width="100%">
           {{ company.name }} | RC {{ company.rc }}<br>
-          {{ company.address }}<br>
-          Authorized Electronic Receipt
-        </td>
-        <td width="30%" align="right">
-          Authorized Signature
+          {{ company.address }} | Authorized Electronic Receipt | Generated on {{ generated_at }}
         </td>
       </tr>
     </table>

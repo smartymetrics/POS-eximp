@@ -40,6 +40,8 @@ async def form_submission(
             "email": payload.email,
             "phone": payload.phone,
             "address": payload.address,
+            "city": payload.city,
+            "state": payload.state,
             "title": payload.title,
             "middle_name": payload.middle_name,
             "gender": payload.gender,
@@ -187,7 +189,7 @@ async def form_submission(
             "sales_rep_name": rep_name_to_use,
             "co_owner_name": payload.co_owner_name,
             "co_owner_email": payload.co_owner_email,
-            "signature_url": payload.signature_url,
+            "signature_url": payload.signature_base64 if payload.signature_base64 else payload.signature_url,
             "payment_proof_url": payload.payment_proof_url,
             "passport_photo_url": payload.passport_photo_url,
             "source": "google_form"

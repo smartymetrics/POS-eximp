@@ -14,7 +14,7 @@ async def list_verifications(current_admin=Depends(verify_token)):
     db = get_db()
     # Fetch pending verifications with client and invoice info
     result = db.table("pending_verifications")\
-        .select("*, clients(full_name, email), invoices(invoice_number, property_name, plot_size_sqm, amount, amount_paid)")\
+        .select("*, clients(full_name, email), invoices(invoice_number, property_name, plot_size_sqm, amount, amount_paid, signature_url)")\
         .order("created_at", desc=True)\
         .execute()
     return result.data

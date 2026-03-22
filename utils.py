@@ -69,3 +69,11 @@ def resolve_invoice_status(invoice: dict) -> str:
         return "partial"
 
     return "unpaid"
+    
+
+def sanitize_client_address(client: dict) -> dict:
+    """
+    Returns the client record as is.
+    (Address filtering for Yaba/Lagos is no longer required as form fields are now explicit).
+    """
+    return client

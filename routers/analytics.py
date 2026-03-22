@@ -27,7 +27,7 @@ async def get_kpis(
     is_admin = admin.get("role") == "admin"
     
     # 1. Total Invoiced (Revenue)
-    invoiced_query = db.table("invoices").select("amount").filter("invoice_date", "gte", start.isoformat()).filter("invoice_date", "lte", end.isoformat())
+    invoiced_query = db.table("invoices").select("amount").filter("invoice_date", "gte", start.isoformat()).filter("invoice_date", "lte", end.isoformat()).neq("status", "voided")
     invoiced_data = invoiced_query.execute().data
     total_revenue = sum(float(i["amount"]) for i in invoiced_data) if is_admin else None
     plots_sold = len(invoiced_data)
@@ -46,7 +46,7 @@ async def get_kpis(
     
     # 5. Dynamic Status Counts (Overdue / Partial)
     # Fetch all relevant invoices to resolve status dynamically
-    all_inv_query = db.table("invoices").select("amount, amount_paid, due_date, status")
+    all_inv_query = db.table("invoices").select("amount, amount_paid, due_date, status").neq("status", "voided")
     if not is_admin:
          # Staff might only see limited data? PRD doesn't specify filter for staff here, 
          # but usually KPIs are restricted. Line 31 already handles is_admin for totals.
@@ -73,7 +73,7 @@ async def get_kpis(
     if is_admin:
         prev_start, prev_end = get_previous_period(start, end)
         # Prev Revenue
-        prev_rev_data = db.table("invoices").select("amount").filter("invoice_date", "gte", prev_start.isoformat()).filter("invoice_date", "lte", prev_end.isoformat()).execute().data
+        prev_rev_data = db.table("invoices").select("amount").filter("invoice_date", "gte", prev_start.isoformat()).filter("invoice_date", "lte", prev_end.isoformat()).neq("status", "voided").execute().data
         prev_revenue = sum(float(i["amount"]) for i in prev_rev_data)
         
         # Prev Collected
@@ -115,7 +115,7 @@ async def get_revenue_trend(
         
     db = get_db()
     # Fetch all invoices and payments in period
-    invoices = db.table("invoices").select("amount", "invoice_date").filter("invoice_date", "gte", start.isoformat()).filter("invoice_date", "lte", end.isoformat()).execute().data
+    invoices = db.table("invoices").select("amount", "invoice_date").filter("invoice_date", "gte", start.isoformat()).filter("invoice_date", "lte", end.isoformat()).neq("status", "voided").execute().data
     payments = db.table("payments").select("amount", "payment_date").filter("payment_date", "gte", start.isoformat()).filter("payment_date", "lte", end.isoformat()).eq("is_voided", False).execute().data
     
     # Aggregate by date
@@ -147,7 +147,7 @@ async def get_estates(
         raise HTTPException(status_code=403, detail="Restricted")
         
     db = get_db()
-    data = db.table("invoices").select("property_name", "amount").filter("invoice_date", "gte", start.isoformat()).filter("invoice_date", "lte", end.isoformat()).execute().data
+    data = db.table("invoices").select("property_name", "amount").filter("invoice_date", "gte", start.isoformat()).filter("invoice_date", "lte", end.isoformat()).neq("status", "voided").execute().data
     
     stats = {}
     for item in data:
@@ -166,7 +166,7 @@ async def get_payment_status(
     admin: dict = Depends(verify_token)
 ):
     db = get_db()
-    data = db.table("invoices").select("amount, amount_paid, due_date, status").filter("invoice_date", "gte", start.isoformat()).filter("invoice_date", "lte", end.isoformat()).execute().data
+    data = db.table("invoices").select("amount, amount_paid, due_date, status").filter("invoice_date", "gte", start.isoformat()).filter("invoice_date", "lte", end.isoformat()).neq("status", "voided").execute().data
     
     stats = {"paid": 0, "partial": 0, "unpaid": 0, "overdue": 0}
     for inv in data:
@@ -234,6 +234,7 @@ async def get_rep_leaderboard(
         .select("sales_rep_name, amount, amount_paid, property_name")\
         .filter("invoice_date", "gte", start.isoformat())\
         .filter("invoice_date", "lte", end.isoformat())\
+        .neq("status", "voided")\
         .execute().data
         
     reps = {}

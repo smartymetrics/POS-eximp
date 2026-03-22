@@ -431,7 +431,11 @@
     <div class="card">
       <div class="card-header">
         <span class="card-title">All Invoices</span>
-        <div style="display:flex;gap:8px;">
+        <div style="display:flex;gap:12px;align-items:center;">
+          <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray);cursor:pointer;">
+            <input type="checkbox" id="show-voided-inv" onchange="loadInvoices()" style="width:16px;height:16px;accent-color:var(--gold);">
+            Show Voided
+          </label>
           <button class="btn btn-ghost" onclick="loadInvoices()">
             <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><polyline points="23 4 23 10 17 10"/><path d="M20.49 15a9 9 0 1 1-2.12-9.36L23 10"/></svg>
             Refresh
@@ -1991,13 +1995,15 @@ async function submitAddRep() {
         commission_rate: parseFloat(document.getElementById('sr-comm').value)
     };
     if (!body.name) return toast('Name is required', 'error');
+    const btn = document.querySelector('#addRepModal button.btn-primary');
+    const ogText = setLoading(btn, true, 'Adding rep...');
     try {
         const res = await apiFetch('/api/sales-reps/', { method: 'POST', body: JSON.stringify(body) });
         if (!res.ok) throw new Error('Failed to add rep');
         toast('Sales representative added successfully', 'success');
         closeModal('addRepModal');
         loadSalesReps();
-    } catch(e) { toast(e.message, 'error'); }
+    } catch(e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
 }
 
 async function openEditRepModal(id) {
@@ -2035,6 +2041,8 @@ async function submitEditRep() {
 
     if (!body.name) return toast('Name is required', 'error');
 
+    const btn = document.querySelector('#editRepModal button.btn-primary');
+    const ogText = setLoading(btn, true, 'Updating rep...');
     try {
         const res = await apiFetch(`/api/sales-reps/${id}`, {
             method: 'PATCH',
@@ -2044,7 +2052,7 @@ async function submitEditRep() {
         toast('Sales representative updated successfully', 'success');
         closeModal('editRepModal');
         loadSalesReps();
-    } catch(e) { toast(e.message, 'error'); }
+    } catch(e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
 }
 
 async function openResolveModal(id, name) {
@@ -2146,7 +2154,8 @@ async function downloadReport(event, reportType, format) {
   }
 }
 
-async function downloadInvoicePDF(id, type, invNum) {
+async function downloadInvoicePDF(btn, id, type, invNum) {
+  const ogText = setLoading(btn, true, 'Processing...');
   try {
     const res = await apiFetch(`/api/invoices/${id}/pdf/${type}`);
     if (!res.ok) {
@@ -2165,7 +2174,7 @@ async function downloadInvoicePDF(id, type, invNum) {
   } catch(e) { 
     console.error('Download error:', e);
     toast(e.message, 'error'); 
-  }
+  } finally { setLoading(btn, false, ogText); }
 }
 
 function openScheduleModal(presetType) {
@@ -2596,8 +2605,9 @@ function renderRepLeaderboard(data) {
 let originalDueDate = null;
 
 async function loadInvoices() {
+  const showVoided = document.getElementById('show-voided-inv')?.checked || false;
   document.getElementById('invoicesTable').innerHTML = '<div class="loading"><span class="spinner"></span>Loading...</div>';
-  const data = await apiFetch('/api/invoices/').then(r => r.json());
+  const data = await apiFetch(`/api/invoices/?show_voided=${showVoided}`).then(r => r.json());
   allInvoices = data;
   document.getElementById('invoicesTable').innerHTML = data.length ? `
     <div class="table-responsive">
@@ -2617,9 +2627,9 @@ async function loadInvoices() {
                 <button class="action-btn" onclick="openEditInvoiceModal('${inv.id}')">Edit</button>
                 <button class="action-btn" onclick="openViewPaymentsModal('${inv.id}')">Payments</button>
                 <button class="action-btn gold" onclick="openSendModal('${inv.id}', '${inv.invoice_number}', '${inv.clients?.full_name}', '${inv.clients?.email}')">Send</button>
-                <button class="action-btn" onclick="downloadInvoicePDF('${inv.id}', 'invoice', '${inv.invoice_number}')">Invoice</button>
-                ${inv.amount_paid > 0 ? `<button class="action-btn" onclick="downloadInvoicePDF('${inv.id}', 'receipt', '${inv.invoice_number}')">Receipt</button>` : ''}
-                <button class="action-btn" onclick="downloadInvoicePDF('${inv.id}', 'statement', '${inv.invoice_number}')">Statement</button>
+                <button class="action-btn" onclick="downloadInvoicePDF(this, '${inv.id}', 'invoice', '${inv.invoice_number}')">Invoice</button>
+                ${inv.amount_paid > 0 ? `<button class="action-btn" onclick="downloadInvoicePDF(this, '${inv.id}', 'receipt', '${inv.invoice_number}')">Receipt</button>` : ''}
+                <button class="action-btn" onclick="downloadInvoicePDF(this, '${inv.id}', 'statement', '${inv.invoice_number}')">Statement</button>
                 ${currentUserRole === 'admin' ? `<button class="action-btn" style="color:var(--red);border-color:#feb2b2;" onclick="openVoidModal('${inv.id}')">Void</button>` : ''}
               </td>
             </tr>`).join('')}
@@ -2721,6 +2731,8 @@ async function submitEditInvoice() {
     body.reason = reason;
   }
   
+  const btn = document.querySelector('#editInvoiceModal button.btn-primary');
+  const ogText = setLoading(btn, true, 'Saving...');
   try {
     const res = await apiFetch(`/api/invoices/${id}/edit`, { method: 'PATCH', body: JSON.stringify(body) });
     const data = await res.json();
@@ -2728,7 +2740,7 @@ async function submitEditInvoice() {
     toast('Invoice updated successfully', 'success');
     closeModal('editInvoiceModal');
     loadInvoices();
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
 }
 
 async function openViewPaymentsModal(invoiceId) {
@@ -2803,6 +2815,8 @@ async function submitEditPayment() {
   
   if (!body.reference || !body.amount || !body.payment_date) return toast('Reference, amount, and date are required', 'error');
   
+  const btn = document.querySelector('#editPaymentModal button.btn-primary');
+  const ogText = setLoading(btn, true, 'Updating...');
   try {
     const res = await apiFetch(`/api/payments/${id}`, { method: 'PATCH', body: JSON.stringify(body) });
     if (!res.ok) throw new Error('Failed to update payment');
@@ -2810,7 +2824,7 @@ async function submitEditPayment() {
     closeModal('editPaymentModal');
     loadInvoices(); // Refresh invoices list to reflect new totals
     if (document.getElementById('section-dashboard').style.display === '') loadDashboard();
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
 }
 
 // ── CLIENTS TABLE ─────────────────────────
@@ -2899,6 +2913,8 @@ async function submitProperty() {
     description: document.getElementById('prop-desc').value,
   };
   if (!body.name || !body.location || isNaN(body.total_price)) return toast('Name, location, and price are required', 'error');
+  const btn = document.querySelector('#addPropertyModal button.btn-primary');
+  const ogText = setLoading(btn, true, 'Adding...');
   try {
     const res = await apiFetch('/api/properties/', { method: 'POST', body: JSON.stringify(body) });
     const data = await res.json();
@@ -2907,7 +2923,7 @@ async function submitProperty() {
     closeModal('addPropertyModal');
     allProperties = [];
     loadProperties();
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
 }
 
 async function openEditPropertyModal(id) {
@@ -2937,13 +2953,15 @@ async function submitEditProperty() {
     description: document.getElementById('edit-prop-desc').value,
   };
   if (!body.name || !body.location || isNaN(body.starting_price)) return toast('Name, location, and price are required', 'error');
+  const btn = document.querySelector('#editPropertyModal button.btn-primary');
+  const ogText = setLoading(btn, true, 'Saving...');
   try {
     const res = await apiFetch(`/api/properties/${id}`, { method: 'PUT', body: JSON.stringify(body) });
     if (!res.ok) throw new Error('Failed to update property');
     toast('Property updated successfully', 'success');
     closeModal('editPropertyModal');
     loadProperties();
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
 }
 
 // ── MODALS ────────────────────────────────
@@ -3007,8 +3025,7 @@ async function submitInvoice() {
   }
 
   const btn = document.querySelector('#newInvoiceModal button.btn-primary');
-  const ogText = btn ? btn.innerHTML : '';
-  if (btn) { btn.innerHTML = '<span class="spinner" style="border-top-color:currentColor; width:14px; height:14px;"></span> Processing...'; btn.disabled = true; }
+  const ogText = setLoading(btn, true, 'Processing...');
 
   try {
     const res = await apiFetch('/api/invoices/', { method: 'POST', body: JSON.stringify(body) });
@@ -3029,7 +3046,7 @@ async function submitInvoice() {
     closeModal('newInvoiceModal');
     allInvoices = [];
     loadDashboard();
-  } catch(e) { toast(e.message, 'error'); } finally { if (btn) { btn.innerHTML = ogText; btn.disabled = false; } }
+  } catch(e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
 }
 
 async function openRecordPaymentModal() {
@@ -3061,8 +3078,7 @@ async function submitPayment() {
   if (!body.invoice_id || !body.reference || !body.amount) return toast('Fill all required fields', 'error');
 
   const btn = document.querySelector('#recordPaymentModal button.btn-primary');
-  const ogText = btn ? btn.innerHTML : '';
-  if (btn) { btn.innerHTML = '<span class="spinner" style="border-top-color:currentColor; width:14px; height:14px;"></span> Processing...'; btn.disabled = true; }
+  const ogText = setLoading(btn, true, 'Processing...');
 
   try {
     const res = await apiFetch('/api/payments/', { method: 'POST', body: JSON.stringify(body) });
@@ -3081,7 +3097,7 @@ async function submitPayment() {
     closeModal('recordPaymentModal');
     allInvoices = [];
     loadDashboard();
-  } catch(e) { toast(e.message, 'error'); } finally { if (btn) { btn.innerHTML = ogText; btn.disabled = false; } }
+  } catch(e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
 }
 
 function openAddClientModal() { openModal('addClientModal'); }
@@ -3098,8 +3114,7 @@ async function submitClient() {
   if (!body.full_name || !body.email) return toast('Name and email are required', 'error');
 
   const btn = document.querySelector('#addClientModal button.btn-primary');
-  const ogText = btn ? btn.innerHTML : '';
-  if (btn) { btn.innerHTML = '<span class="spinner" style="border-top-color:currentColor; width:14px; height:14px;"></span> Processing...'; btn.disabled = true; }
+  const ogText = setLoading(btn, true, 'Processing...');
 
   try {
     const res = await apiFetch('/api/clients/', { method: 'POST', body: JSON.stringify(body) });
@@ -3109,7 +3124,7 @@ async function submitClient() {
     closeModal('addClientModal');
     allClients = [];
     loadDashboard();
-  } catch(e) { toast(e.message, 'error'); } finally { if (btn) { btn.innerHTML = ogText; btn.disabled = false; } }
+  } catch(e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
 }
 
 async function openEditClientModal(id) {
@@ -3146,8 +3161,7 @@ async function submitEditClient() {
   if (!body.full_name || !body.email) return toast('Name and email are required', 'error');
 
   const btn = document.querySelector('#editClientModal button.btn-primary');
-  const ogText = btn ? btn.innerHTML : '';
-  if (btn) { btn.innerHTML = '<span class="spinner" style="border-top-color:currentColor; width:14px; height:14px;"></span> Processing...'; btn.disabled = true; }
+  const ogText = setLoading(btn, true, 'Processing...');
 
   try {
     const res = await apiFetch(`/api/clients/${id}`, { method: 'PUT', body: JSON.stringify(body) });
@@ -3157,7 +3171,7 @@ async function submitEditClient() {
     closeModal('editClientModal');
     allClients = [];
     loadDashboard();
-  } catch(e) { toast(e.message, 'error'); } finally { if (btn) { btn.innerHTML = ogText; btn.disabled = false; } }
+  } catch(e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
 }
 
 
@@ -3173,8 +3187,7 @@ async function submitSendDocs() {
   if (!types.length) return toast('Select at least one document', 'error');
 
   const btn = document.querySelector('#sendDocsModal button.btn-primary');
-  const ogText = btn ? btn.innerHTML : '';
-  if (btn) { btn.innerHTML = '<span class="spinner" style="border-top-color:currentColor; width:14px; height:14px;"></span> Sending...'; btn.disabled = true; }
+  const ogText = setLoading(btn, true, 'Sending...');
 
   try {
     const res = await apiFetch('/api/invoices/send', {
@@ -3185,10 +3198,27 @@ async function submitSendDocs() {
     if (!res.ok) throw new Error(data.detail || 'Failed');
     toast(`Sent: ${data.sent.join(', ')}`, 'success');
     closeModal('sendDocsModal');
-  } catch(e) { toast(e.message, 'error'); } finally { if (btn) { btn.innerHTML = ogText; btn.disabled = false; } }
+  } catch(e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
 }
 
 // ── HELPERS ───────────────────────────────
+function setLoading(btn, isLoading, text) {
+  if (!btn) return '';
+  const ogText = btn.innerHTML;
+  if (isLoading) {
+    btn.innerHTML = `<span class="spinner" style="border-top-color:currentColor; width:14px; height:14px; margin-right:6px;"></span> ${text || 'Processing...'}`;
+    btn.disabled = true;
+    btn.style.opacity = '0.7';
+    btn.style.cursor = 'not-allowed';
+  } else {
+    btn.innerHTML = text || ogText;
+    btn.disabled = false;
+    btn.style.opacity = '1';
+    btn.style.cursor = 'pointer';
+  }
+  return ogText;
+}
+
 function fmtNGN(amount) {
   if (!amount && amount !== 0) return 'NGN 0.00';
   return 'NGN ' + parseFloat(amount).toLocaleString('en-NG', { minimumFractionDigits: 2, maximumFractionDigits: 2 });
@@ -3226,6 +3256,8 @@ async function loadProfile() {
 async function saveProfileName() {
   const name = document.getElementById('profile-name-input').value.trim();
   if (!name) return toast('Name cannot be empty', 'error');
+  const btn = document.querySelector('#section-profile button.btn-primary');
+  const ogText = setLoading(btn, true, 'Updating...');
   try {
     const res = await apiFetch('/auth/me/profile', { method: 'PATCH', body: JSON.stringify({ full_name: name }) });
     const data = await res.json();
@@ -3236,7 +3268,7 @@ async function saveProfileName() {
     document.getElementById('profile-name-display').textContent = name;
     document.getElementById('profile-avatar').textContent = name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase();
     toast('Name updated successfully', 'success');
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
 }
 
 function checkPasswordStrength(pwd) {
@@ -3275,7 +3307,7 @@ async function submitChangePassword() {
     document.getElementById('cp-confirm').value = '';
     document.getElementById('cp-strength').textContent = '';
     toast('Password updated successfully', 'success');
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
 }
 
 // ── TEAM MANAGEMENT ───────────────────────
@@ -3353,6 +3385,8 @@ async function submitAddAdmin() {
   if (pass !== pass2) return toast('Passwords do not match', 'error');
   if (pass.length < 8) return toast('Password must be at least 8 characters', 'error');
 
+  const btn = document.querySelector('#addAdminModal button.btn-primary');
+  const ogText = setLoading(btn, true, 'Creating...');
   try {
     const res = await apiFetch('/auth/register', {
       method: 'POST', body: JSON.stringify({ full_name: name, email, password: pass, role })
@@ -3362,7 +3396,7 @@ async function submitAddAdmin() {
     toast(`${role === 'admin' ? 'Admin' : 'Staff'} account created for ${name}`, 'success');
     closeModal('addAdminModal');
     loadTeam();
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
 }
 
 function openDeactivateModal(adminId, adminName) {
@@ -3373,6 +3407,8 @@ function openDeactivateModal(adminId, adminName) {
 
 async function confirmDeactivate() {
   const id = document.getElementById('deactivateAdminId').value;
+  const btn = document.querySelector('#deactivateModal button.btn-primary') || document.querySelector('#deactivateModal button[onclick="confirmDeactivate()"]');
+  const ogText = setLoading(btn, true, 'Deactivating...');
   try {
     const res = await apiFetch(`/auth/admins/${id}/deactivate`, { method: 'PATCH' });
     const data = await res.json();
@@ -3380,7 +3416,7 @@ async function confirmDeactivate() {
     toast('Account deactivated', 'info');
     closeModal('deactivateModal');
     loadTeam();
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
 }
 
 async function reactivateAdmin(id, name) {
@@ -3401,6 +3437,8 @@ function openArchiveModal(adminId, adminName) {
 
 async function confirmArchive() {
   const id = document.getElementById('archiveAdminId').value;
+  const btn = document.querySelector('#archiveModal button.gold') || document.querySelector('#archiveModal button[onclick="confirmArchive()"]');
+  const ogText = setLoading(btn, true, 'Archiving...');
   try {
     const res = await apiFetch(`/auth/admins/${id}/archive`, { method: 'PATCH' });
     const data = await res.json();
@@ -3408,7 +3446,7 @@ async function confirmArchive() {
     toast(data.message, 'info');
     closeModal('archiveModal');
     loadTeam();
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
 }
 
 function openResetPasswordModal(adminId, adminName) {
@@ -3428,6 +3466,8 @@ async function confirmResetPassword() {
   if (newPwd !== confirm) return toast('Passwords do not match', 'error');
   if (newPwd.length < 8) return toast('Password must be at least 8 characters', 'error');
 
+  const btn = document.querySelector('#resetPasswordModal button.btn-primary');
+  const ogText = setLoading(btn, true, 'Resetting...');
   try {
     const res = await apiFetch(`/auth/admins/${id}/reset-password`, {
       method: 'PATCH', body: JSON.stringify({ new_password: newPwd })
@@ -3436,7 +3476,7 @@ async function confirmResetPassword() {
     if (!res.ok) throw new Error(data.detail || 'Failed');
     toast(data.message, 'success');
     closeModal('resetPasswordModal');
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
 }
 
 // ── SEARCH-SELECT LOGIC ──────────────────
@@ -3567,6 +3607,7 @@ async function loadVerifications() {
               <th>Deposit</th>
               <th>Status</th>
               <th>Proof</th>
+              <th>Signature</th>
               <th>Actions</th>
             </tr>
           </thead>
@@ -3586,6 +3627,11 @@ async function loadVerifications() {
                 <td><span class="status unpaid"><span class="status-dot"></span>${v.status}</span></td>
                 <td>
                   <a href="${v.payment_proof_url}" target="_blank" class="action-btn" style="text-decoration:none;display:inline-block;border-color:#ccc;">View Proof</a>
+                </td>
+                <td>
+                  ${v.invoices && v.invoices.signature_url ? `
+                    <a href="${v.invoices.signature_url}" target="_blank" class="action-btn" style="text-decoration:none;display:inline-block;border-color:#ccc;">View Signature</a>
+                  ` : '<span style="color:var(--gray);font-size:11px;">No Signature</span>'}
                 </td>
                 <td>
                   <div style="display:flex;gap:4px;">
@@ -3643,13 +3689,15 @@ async function submitEditVerification() {
     body.payment_date = document.getElementById('edit-ver-date').value;
   }
   
+  const btn = document.querySelector('#editVerificationModal button.btn-primary');
+  const ogText = setLoading(btn, true, 'Saving...');
   try {
     const res = await apiFetch(`/api/verifications/${id}/edit`, { method: 'PATCH', body: JSON.stringify(body) });
     if (!res.ok) throw new Error('Failed to update verification');
     toast('Verification updated successfully', 'success');
     closeModal('editVerificationModal');
     loadVerifications();
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
 }
 
 function openConfirmVerification(id) {
@@ -3659,6 +3707,8 @@ function openConfirmVerification(id) {
 
 async function processConfirmVerification() {
   const id = document.getElementById('verify-confirm-id').value;
+  const btn = document.querySelector('#verifyConfirmModal button.btn-primary');
+  const ogText = setLoading(btn, true, 'Processing...');
   try {
     const res = await apiFetch(`/api/verifications/${id}/confirm`, { method: 'PATCH' });
     const data = await res.json();
@@ -3667,7 +3717,7 @@ async function processConfirmVerification() {
     closeModal('verifyConfirmModal');
     loadVerifications();
     if (document.getElementById('section-dashboard').style.display === '') loadDashboard(); 
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
 }
 
 function openRejectVerification(id) {
@@ -3681,6 +3731,8 @@ async function processRejectVerification() {
   const reason = document.getElementById('verify-reject-reason').value.trim();
   if (!reason) return toast('Please provide a reason', 'error');
   
+  const btn = document.querySelector('#verifyRejectModal button.btn-primary');
+  const ogText = setLoading(btn, true, 'Rejecting...');
   try {
     const res = await apiFetch(`/api/verifications/${id}/reject`, { 
       method: 'PATCH', 
@@ -3691,7 +3743,7 @@ async function processRejectVerification() {
     toast('Submission rejected and client notified', 'info');
     closeModal('verifyRejectModal');
     loadVerifications();
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
 }
 
 // ── VOID LOGIC ────────────────────────────
@@ -3708,6 +3760,8 @@ async function processVoidInvoice() {
   const notify = document.getElementById('void-notify-client').checked;
   if (!reason) return toast('Please provide a reason', 'error');
   
+  const btn = document.querySelector('#voidReceiptModal button.btn-primary');
+  const ogText = setLoading(btn, true, 'Voiding...');
   try {
     const res = await apiFetch(`/api/invoices/${id}/void`, {
       method: 'POST',
@@ -3719,7 +3773,7 @@ async function processVoidInvoice() {
     closeModal('voidReceiptModal');
     loadInvoices();
     if (document.getElementById('section-dashboard').style.display === '') loadDashboard();
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
 }
 
 // ── EMAIL REPORTS LOGIC ───────────────────

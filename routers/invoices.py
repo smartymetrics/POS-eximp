@@ -15,12 +15,14 @@ router = APIRouter()
 
 
 @router.get("/")
-async def list_invoices(current_admin=Depends(verify_token)):
+async def list_invoices(show_voided: bool = False, current_admin=Depends(verify_token)):
     db = get_db()
-    result = db.table("invoices")\
-        .select("*, clients(full_name, email)")\
-        .order("created_at", desc=True)\
-        .execute()
+    query = db.table("invoices").select("*, clients(full_name, email)")
+    
+    if not show_voided:
+        query = query.neq("status", "voided")
+        
+    result = query.order("created_at", desc=True).execute()
     
     invoices = result.data
     for inv in invoices:
@@ -205,6 +207,9 @@ async def void_invoice_receipts(
         "voided_at": datetime.utcnow().isoformat(),
         "voided_by": current_admin["sub"]
     }).eq("invoice_id", invoice_id).eq("is_voided", False).execute()
+
+    # 2.5 Mark invoice itself as voided
+    db.table("invoices").update({"status": "voided"}).eq("id", invoice_id).execute()
     
     # 3. Log the void action
     db.table("void_log").insert({
@@ -251,9 +256,11 @@ async def edit_invoice(
     
     invoice = inv_res.data[0]
     
-    # Locked if paid
-    if resolve_invoice_status(invoice) == "paid":
-         raise HTTPException(status_code=400, detail="Fully paid invoices cannot be edited")
+    # Special handling for paid/voided:
+    # We allow editing even if paid (to adjust amounts/plans),
+    # but still block voided invoices from being resurrected via edit.
+    if invoice.get("status") == "voided":
+         raise HTTPException(status_code=400, detail="Voided invoices cannot be edited")
 
     update_data = {}
     

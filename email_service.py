@@ -3,6 +3,7 @@ import os
 import base64
 from pdf_service import generate_invoice_pdf, generate_receipt_pdf, generate_statement_pdf, COMPANY
 from database import get_db
+from utils import sanitize_client_address
 
 resend.api_key = os.getenv("RESEND_API_KEY")
 # Force onboarding test domain because eximps-cloves.com is unverified
@@ -15,7 +16,7 @@ def _welcome_html(client: dict, property_name: str) -> str:
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #1A1A1A; padding: 24px; text-align: center;">
-        {f'<img src="{COMPANY.get("logo_b64", "")}" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">' if COMPANY.get("logo_b64") else '<h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1><p style="color: #aaa; margin: 4px 0 0; font-size: 12px;">INFRASTRUCTURE LIMITED</p>'}
+        {f'<img src="{COMPANY.get("logo_url", "")}" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">' if COMPANY.get("logo_url") else '<h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1><p style="color: #aaa; margin: 4px 0 0; font-size: 12px;">INFRASTRUCTURE LIMITED</p>'}
       </div>
       <div style="background: #F5A623; padding: 12px 24px;">
         <h2 style="color: #1A1A1A; margin: 0; font-size: 16px;">Welcome to Eximp & Cloves!</h2>
@@ -37,6 +38,7 @@ def _welcome_html(client: dict, property_name: str) -> str:
     </div>"""
 
 async def send_welcome_email(client: dict, property_name: str):
+    client = sanitize_client_address(client.copy())
     resend.Emails.send({
         "from": f"Eximp & Cloves <{FROM_EMAIL}>",
         "to": [client["email"]],
@@ -49,7 +51,7 @@ def _invoice_html(invoice: dict, client: dict) -> str:
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #1A1A1A; padding: 24px; text-align: center;">
-        {f'<img src="{COMPANY.get("logo_b64", "")}" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">' if COMPANY.get("logo_b64") else '<h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1><p style="color: #aaa; margin: 4px 0 0; font-size: 12px;">INFRASTRUCTURE LIMITED</p>'}
+        {f'<img src="{COMPANY.get("logo_url", "")}" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">' if COMPANY.get("logo_url") else '<h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1><p style="color: #aaa; margin: 4px 0 0; font-size: 12px;">INFRASTRUCTURE LIMITED</p>'}
       </div>
       <div style="background: #F5A623; padding: 12px 24px;">
         <h2 style="color: #1A1A1A; margin: 0; font-size: 16px;">Invoice #{invoice['invoice_number']}</h2>
@@ -86,7 +88,7 @@ def _receipt_html(invoice: dict, client: dict) -> str:
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #1A1A1A; padding: 24px; text-align: center;">
-        {f'<img src="{COMPANY.get("logo_b64", "")}" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">' if COMPANY.get("logo_b64") else '<h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1><p style="color: #aaa; margin: 4px 0 0; font-size: 12px;">INFRASTRUCTURE LIMITED</p>'}
+        {f'<img src="{COMPANY.get("logo_url", "")}" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">' if COMPANY.get("logo_url") else '<h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1><p style="color: #aaa; margin: 4px 0 0; font-size: 12px;">INFRASTRUCTURE LIMITED</p>'}
       </div>
       <div style="background: #27ae60; padding: 12px 24px;">
         <h2 style="color: #fff; margin: 0; font-size: 16px;">✓ Payment Receipt — {invoice['invoice_number']}</h2>
@@ -116,7 +118,7 @@ def _statement_html(client: dict, total_invoiced: float, total_paid: float, bala
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #1A1A1A; padding: 24px; text-align: center;">
-        {f'<img src="{COMPANY.get("logo_b64", "")}" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">' if COMPANY.get("logo_b64") else '<h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1><p style="color: #aaa; margin: 4px 0 0; font-size: 12px;">INFRASTRUCTURE LIMITED</p>'}
+        {f'<img src="{COMPANY.get("logo_url", "")}" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">' if COMPANY.get("logo_url") else '<h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1><p style="color: #aaa; margin: 4px 0 0; font-size: 12px;">INFRASTRUCTURE LIMITED</p>'}
       </div>
       <div style="background: #F5A623; padding: 12px 24px;">
         <h2 style="color: #1A1A1A; margin: 0; font-size: 16px;">Statement of Account</h2>
@@ -140,6 +142,7 @@ def _statement_html(client: dict, total_invoiced: float, total_paid: float, bala
 
 
 async def send_invoice_email(invoice: dict, client: dict, sent_by: str):
+    client = sanitize_client_address(client.copy())
     pdf = generate_invoice_pdf(invoice)
     resend.Emails.send({
         "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
@@ -151,6 +154,7 @@ async def send_invoice_email(invoice: dict, client: dict, sent_by: str):
 
 
 async def send_receipt_email(invoice: dict, client: dict, sent_by: str):
+    client = sanitize_client_address(client.copy())
     pdf = generate_receipt_pdf(invoice)
     resend.Emails.send({
         "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
@@ -162,6 +166,7 @@ async def send_receipt_email(invoice: dict, client: dict, sent_by: str):
 
 
 async def send_statement_email(invoices: list, client: dict, sent_by: str):
+    client = sanitize_client_address(client.copy())
     pdf = generate_statement_pdf(invoices, client)
     total_invoiced = sum(float(i["amount"]) for i in invoices)
     total_paid = sum(float(p["amount"]) for inv in invoices for p in (inv.get("payments") or []))
@@ -200,6 +205,7 @@ def _admin_alert_html(invoice: dict, client: dict) -> str:
 
 
 async def send_admin_alert_email(invoice: dict, client: dict):
+    client = sanitize_client_address(client.copy())
     admin_email = os.getenv("ADMIN_ALERT_EMAIL", FROM_EMAIL)
     resend.Emails.send({
         "from": f"EC Systems <{FROM_EMAIL}>",
@@ -213,7 +219,7 @@ def _rejection_html(invoice: dict, client: dict, reason: str) -> str:
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #1A1A1A; padding: 24px; text-align: center;">
-        {f'<img src="{COMPANY.get("logo_b64", "")}" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">' if COMPANY.get("logo_b64") else '<h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1>'}
+        {f'<img src="{COMPANY.get("logo_url", "")}" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">' if COMPANY.get("logo_url") else '<h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1>'}
       </div>
       <div style="padding: 32px 24px; background: #fff; border: 1px solid #eee;">
         <p style="color: #333;">Dear <strong>{client['full_name']}</strong>,</p>
@@ -234,6 +240,7 @@ def _rejection_html(invoice: dict, client: dict, reason: str) -> str:
 
 
 async def send_rejection_email(invoice: dict, client: dict, reason: str):
+    client = sanitize_client_address(client.copy())
     resend.Emails.send({
         "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
         "to": [client["email"]],
@@ -243,6 +250,7 @@ async def send_rejection_email(invoice: dict, client: dict, reason: str):
 
 
 async def send_receipt_and_statement_email(invoice: dict, client: dict, invoices: list):
+    client = sanitize_client_address(client.copy())
     receipt_pdf = generate_receipt_pdf(invoice)
     statement_pdf = generate_statement_pdf(invoices, client)
     
@@ -272,7 +280,7 @@ def _void_html(invoice: dict, client: dict, reason: str) -> str:
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #1A1A1A; padding: 24px; text-align: center;">
-        {f'<img src="{COMPANY.get("logo_b64", "")}" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">' if COMPANY.get("logo_b64") else '<h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1>'}
+        {f'<img src="{COMPANY.get("logo_url", "")}" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">' if COMPANY.get("logo_url") else '<h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1>'}
       </div>
       <div style="padding: 32px 24px; background: #fff; border: 1px solid #eee;">
         <p style="color: #333;">Dear <strong>{client['full_name']}</strong>,</p>
@@ -291,6 +299,7 @@ def _void_html(invoice: dict, client: dict, reason: str) -> str:
 
 
 async def send_void_notification_email(invoice: dict, client: dict, reason: str):
+    client = sanitize_client_address(client.copy())
     resend.Emails.send({
         "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
         "to": [client["email"]],
@@ -303,8 +312,7 @@ def _report_html(message: str) -> str:
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #1A1A1A; padding: 24px; text-align: center;">
-        <h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1>
-        <p style="color: #aaa; margin: 4px 0 0; font-size: 12px;">INFRASTRUCTURE LIMITED</p>
+        {f'<img src="{COMPANY.get("logo_url", "")}" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">' if COMPANY.get("logo_url") else '<h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1><p style="color: #aaa; margin: 4px 0 0; font-size: 12px;">INFRASTRUCTURE LIMITED</p>'}
       </div>
       <div style="background: #F5A623; padding: 12px 24px;">
         <h2 style="color: #1A1A1A; margin: 0; font-size: 16px;">Financial Report Document</h2>

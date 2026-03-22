@@ -158,6 +158,8 @@ class WebhookFormPayload(BaseModel):
     gender: Optional[str] = None
     dob: Optional[str] = None
     address: Optional[str] = None
+    city: Optional[str] = None
+    state: Optional[str] = None
     email: str
     marital_status: Optional[str] = None
     phone: Optional[str] = None
@@ -179,6 +181,7 @@ class WebhookFormPayload(BaseModel):
     co_owner_name: Optional[str] = None
     co_owner_email: Optional[str] = None
     signature_url: Optional[str] = None
+    signature_base64: Optional[str] = None
     # Property
     property_name: str
     plot_size: Optional[str] = None

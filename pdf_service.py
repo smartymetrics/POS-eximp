@@ -6,6 +6,7 @@ import os
 import requests
 import base64
 from urllib.parse import urlparse, parse_qs
+from utils import sanitize_client_address
 
 env = Environment(loader=FileSystemLoader("pdf_templates"))
 
@@ -20,7 +21,7 @@ def get_company_logo_base64():
 
 COMPANY = {
     "name": "Eximp & Cloves Infrastructure Limited",
-    "rc": "RC 8311800",
+    "rc": "8311800",
     "address": "57B, Isaac John Street, Yaba, Lagos, Nigeria",
     "phone": "+234 912 686 4383",
     "email": "admin@eximps-cloves.com",
@@ -28,6 +29,7 @@ COMPANY = {
     "primary_color": "#F5A623",
     "dark_color": "#1A1A1A",
     "logo_b64": get_company_logo_base64(),
+    "logo_url": "https://eximpcloves.vercel.app/light%20theme%20logo.png",
 }
 
 
@@ -56,13 +58,18 @@ def _get_google_drive_direct_link(url):
     if not url or "drive.google.com" not in url:
         return url
     try:
+        file_id = None
         if "/file/d/" in url:
             file_id = url.split("/file/d/")[1].split("/")[0]
-        else:
+        elif "id=" in url:
+            parsed = urlparse(url)
+            file_id = parse_qs(parsed.query).get("id", [None])[0]
+        elif "/open?" in url:
             parsed = urlparse(url)
             file_id = parse_qs(parsed.query).get("id", [None])[0]
         
         if file_id:
+            # Add &confirm=t to bypass large file warnings if needed, but for small images it's fine
             return f"https://drive.google.com/uc?export=download&id={file_id}"
     except Exception:
         pass
@@ -83,11 +90,15 @@ def _get_image_as_base64(url):
 
 def generate_invoice_pdf(invoice: dict) -> bytes:
     template = env.get_template("invoice.html")
-    client = invoice.get("clients", {})
+    client = sanitize_client_address(invoice.get("clients", {}).copy())
     
     signature_base64 = None
     if invoice.get("signature_url"):
-        signature_base64 = _get_image_as_base64(invoice["signature_url"])
+        url = invoice["signature_url"]
+        if url.startswith("data:") or (len(url) > 1000 and "http" not in url):
+            signature_base64 = url.split("base64,")[-1] if "base64," in url else url
+        else:
+            signature_base64 = _get_image_as_base64(url)
         
     html_content = template.render(
         company=COMPANY,
@@ -102,13 +113,23 @@ def generate_invoice_pdf(invoice: dict) -> bytes:
 
 def generate_receipt_pdf(invoice: dict) -> bytes:
     template = env.get_template("receipt.html")
-    client = invoice.get("clients", {})
+    client = sanitize_client_address(invoice.get("clients", {}).copy())
     payments = invoice.get("payments", [])
+    
+    signature_base64 = None
+    if invoice.get("signature_url"):
+        url = invoice["signature_url"]
+        if url.startswith("data:") or (len(url) > 1000 and "http" not in url):
+            signature_base64 = url.split("base64,")[-1] if "base64," in url else url
+        else:
+            signature_base64 = _get_image_as_base64(url)
+        
     html_content = template.render(
         company=COMPANY,
         invoice=invoice,
         client=client,
         payments=payments,
+        signature_img_base64=signature_base64,
         format_currency=format_currency,
         generated_at=datetime.now().strftime("%d %b %Y")
     )
@@ -117,6 +138,7 @@ def generate_receipt_pdf(invoice: dict) -> bytes:
 
 def generate_statement_pdf(invoices: list, client: dict) -> bytes:
     template = env.get_template("statement.html")
+    client = sanitize_client_address(client.copy())
 
     # Build transaction timeline
     transactions = []
