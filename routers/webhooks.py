@@ -119,12 +119,24 @@ async def form_submission(
             payment_duration=payload.payment_duration
         )
 
+        # 5. Get Property Price from DB
+        # If not provided in form, lookup by name
+        total_amount_to_use = payload.total_amount
+        if total_amount_to_use <= 0 and payload.property_name:
+            prop_res = db.table("properties").select("starting_price")\
+                .ilike("name", f"%{payload.property_name}%")\
+                .eq("is_active", True)\
+                .execute()
+            if prop_res.data:
+                total_amount_to_use = prop_res.data[0]["starting_price"]
+                print(f"DEBUG: Found price for {payload.property_name}: {total_amount_to_use}")
+
         invoice_insert = {
             "invoice_number": invoice_number,
             "client_id": client_id,
             "property_name": payload.property_name,
             "plot_size_sqm": plot_size_numeric,
-            "amount": payload.total_amount,
+            "amount": total_amount_to_use,
             "amount_paid": payload.deposit_amount,
             "payment_terms": payload.payment_terms,
             "invoice_date": str(invoice_date),
