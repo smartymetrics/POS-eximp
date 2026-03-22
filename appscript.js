@@ -69,7 +69,7 @@ function onFormSubmit(e) {
             total_amount: parseFloat(stripCurrency(responses["Total Selling Price"] || responses["Property Price"] || 0)),
             payment_date: responses["Date of Payment/Deposit "] || responses["Payment Date"] || "",
             payment_proof_url: responses["Upload receipt of payment/deposit"] || responses["Upload Payment Proof"] || "",
-            payment_terms: responses["Payment Terms"] || "Outright",
+            payment_terms: responses["Payment Duration"] || "Outright",
 
             // Other
             source_of_income: responses["Source of Income"] || "",

@@ -4,7 +4,7 @@ from models import WebhookFormPayload
 from database import get_db
 import os
 from datetime import date, timedelta
-from email_service import send_invoice_email, send_admin_alert_email
+from email_service import send_invoice_email, send_admin_alert_email, send_welcome_email
 from routers.analytics import log_activity
 from utils import calculate_due_date
 
@@ -197,6 +197,7 @@ async def form_submission(
         # Fetch full client data for email (with nested info if needed)
         full_client = db.table("clients").select("*").eq("id", client_id).execute().data[0]
         
+        background_tasks.add_task(send_welcome_email, full_client, payload.property_name)
         background_tasks.add_task(send_invoice_email, invoice, full_client, "system_webhook")
         background_tasks.add_task(send_admin_alert_email, invoice, full_client)
         
