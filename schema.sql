@@ -168,6 +168,7 @@ DECLARE
 BEGIN
     UPDATE invoice_sequences
     SET last_number = last_number + 1, updated_at = NOW()
+    WHERE id = 1
     RETURNING last_number, invoice_sequences.prefix INTO new_number, prefix;
     
     formatted := prefix || '-' || LPAD(new_number::TEXT, 6, '0');

@@ -9,6 +9,15 @@ from urllib.parse import urlparse, parse_qs
 
 env = Environment(loader=FileSystemLoader("pdf_templates"))
 
+def get_company_logo_base64():
+    import base64
+    try:
+        with open("logo.png", "rb") as f:
+            return "data:image/png;base64," + base64.b64encode(f.read()).decode('utf-8')
+    except Exception:
+        pass
+    return ""
+
 COMPANY = {
     "name": "Eximp & Cloves Infrastructure Limited",
     "rc": "RC 8311800",
@@ -18,6 +27,7 @@ COMPANY = {
     "website": "www.eximps-cloves.com",
     "primary_color": "#F5A623",
     "dark_color": "#1A1A1A",
+    "logo_b64": get_company_logo_base64(),
 }
 
 

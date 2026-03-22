@@ -45,7 +45,11 @@ async def get_invoice(invoice_id: str, current_admin=Depends(verify_token)):
 
 
 @router.post("/")
-async def create_invoice(data: InvoiceCreate, current_admin=Depends(verify_token)):
+async def create_invoice(
+    data: InvoiceCreate, 
+    background_tasks: BackgroundTasks, 
+    current_admin=Depends(verify_token)
+):
     db = get_db()
 
     # Generate invoice number via DB function
@@ -118,30 +122,33 @@ async def send_documents(
 
     sent = []
 
-    for doc_type in data.document_types:
-        if doc_type == "invoice":
-            background_tasks.add_task(send_invoice_email, invoice, client, current_admin["sub"])
-            sent.append("invoice")
-            background_tasks.add_task(
-                log_activity,
-                "receipt_sent",
-                f"Invoice {invoice['invoice_number']} sent to {client['email']}",
-                current_admin["sub"],
-                client_id=client["id"],
-                invoice_id=invoice["id"]
-            )
-        elif doc_type == "receipt" and invoice["amount_paid"] > 0:
-            background_tasks.add_task(send_receipt_email, invoice, client, current_admin["sub"])
-            sent.append("receipt")
-        elif doc_type == "statement":
-            # Fetch all invoices for this client
-            all_inv = db.table("invoices")\
-                .select("*, payments(*)")\
-                .eq("client_id", invoice["client_id"])\
-                .order("invoice_date")\
-                .execute()
-            background_tasks.add_task(send_statement_email, all_inv.data, client, current_admin["sub"])
-            sent.append("statement")
+    try:
+        for doc_type in data.document_types:
+            if doc_type == "invoice":
+                await send_invoice_email(invoice, client, current_admin["sub"])
+                sent.append("invoice")
+                background_tasks.add_task(
+                    log_activity,
+                    "receipt_sent",
+                    f"Invoice {invoice['invoice_number']} sent to {client['email']}",
+                    current_admin["sub"],
+                    client_id=client["id"],
+                    invoice_id=invoice["id"]
+                )
+            elif doc_type == "receipt" and invoice["amount_paid"] > 0:
+                await send_receipt_email(invoice, client, current_admin["sub"])
+                sent.append("receipt")
+            elif doc_type == "statement":
+                # Fetch all invoices for this client
+                all_inv = db.table("invoices")\
+                    .select("*, payments(*)")\
+                    .eq("client_id", invoice["client_id"])\
+                    .order("invoice_date")\
+                    .execute()
+                await send_statement_email(all_inv.data, client, current_admin["sub"])
+                sent.append("statement")
+    except Exception as e:
+        raise HTTPException(status_code=400, detail=f"Email Provider Error: {str(e)}")
 
     # Log emails
     for doc_type in sent:
@@ -162,6 +169,7 @@ async def send_documents(
 async def void_invoice_receipts(
     invoice_id: str,
     payload: VoidReceiptRequest,
+    background_tasks: BackgroundTasks,
     current_admin: dict = Depends(verify_token)
 ):
     """

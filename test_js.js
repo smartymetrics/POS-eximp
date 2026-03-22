@@ -1005,6 +1005,9 @@ async function submitProperty() {
     description: document.getElementById('prop-desc').value,
   };
   if (!body.name || !body.location || isNaN(body.total_price)) return toast('Name, location, and price are required', 'error');
+  const btn = document.querySelector('#addPropertyModal button.btn-primary');
+  const ogText = btn ? btn.innerHTML : '';
+  if (btn) { btn.innerHTML = '<span class="spinner" style="border-top-color:currentColor; width:14px; height:14px;"></span> Processing...'; btn.disabled = true; }
   try {
     const res = await apiFetch('/api/properties/', { method: 'POST', body: JSON.stringify(body) });
     const data = await res.json();
@@ -1013,7 +1016,7 @@ async function submitProperty() {
     closeModal('addPropertyModal');
     allProperties = [];
     loadProperties();
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); } finally { if (btn) { btn.innerHTML = ogText; btn.disabled = false; } }
 }
 
 async function openEditPropertyModal(id) {
@@ -1043,13 +1046,16 @@ async function submitEditProperty() {
     description: document.getElementById('edit-prop-desc').value,
   };
   if (!body.name || !body.location || isNaN(body.starting_price)) return toast('Name, location, and price are required', 'error');
+  const btn = document.querySelector('#editPropertyModal button.btn-primary');
+  const ogText = btn ? btn.innerHTML : '';
+  if (btn) { btn.innerHTML = '<span class="spinner" style="border-top-color:currentColor; width:14px; height:14px;"></span> Processing...'; btn.disabled = true; }
   try {
     const res = await apiFetch(`/api/properties/${id}`, { method: 'PUT', body: JSON.stringify(body) });
     if (!res.ok) throw new Error('Failed to update property');
     toast('Property updated successfully', 'success');
     closeModal('editPropertyModal');
     loadProperties();
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); } finally { if (btn) { btn.innerHTML = ogText; btn.disabled = false; } }
 }
 
 // ── MODALS ────────────────────────────────
@@ -1095,6 +1101,10 @@ async function submitInvoice() {
     return toast('Please fill in all required fields', 'error');
   }
 
+  const btn = document.querySelector('#newInvoiceModal button.btn-primary');
+  const ogText = btn ? btn.innerHTML : '';
+  if (btn) { btn.innerHTML = '<span class="spinner" style="border-top-color:currentColor; width:14px; height:14px;"></span> Processing...'; btn.disabled = true; }
+
   try {
     const res = await apiFetch('/api/invoices/', { method: 'POST', body: JSON.stringify(body) });
     const data = await res.json();
@@ -1114,7 +1124,7 @@ async function submitInvoice() {
     closeModal('newInvoiceModal');
     allInvoices = [];
     loadDashboard();
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); } finally { if (btn) { btn.innerHTML = ogText; btn.disabled = false; } }
 }
 
 async function openRecordPaymentModal() {
@@ -1145,6 +1155,10 @@ async function submitPayment() {
   };
   if (!body.invoice_id || !body.reference || !body.amount) return toast('Fill all required fields', 'error');
 
+  const btn = document.querySelector('#recordPaymentModal button.btn-primary');
+  const ogText = btn ? btn.innerHTML : '';
+  if (btn) { btn.innerHTML = '<span class="spinner" style="border-top-color:currentColor; width:14px; height:14px;"></span> Processing...'; btn.disabled = true; }
+
   try {
     const res = await apiFetch('/api/payments/', { method: 'POST', body: JSON.stringify(body) });
     const data = await res.json();
@@ -1162,7 +1176,7 @@ async function submitPayment() {
     closeModal('recordPaymentModal');
     allInvoices = [];
     loadDashboard();
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); } finally { if (btn) { btn.innerHTML = ogText; btn.disabled = false; } }
 }
 
 function openAddClientModal() { openModal('addClientModal'); }
@@ -1177,6 +1191,9 @@ async function submitClient() {
     state: document.getElementById('cl-state').value,
   };
   if (!body.full_name || !body.email) return toast('Name and email are required', 'error');
+  const btn = document.querySelector('#addClientModal button.btn-primary');
+  const ogText = btn ? btn.innerHTML : '';
+  if (btn) { btn.innerHTML = '<span class="spinner" style="border-top-color:currentColor; width:14px; height:14px;"></span> Processing...'; btn.disabled = true; }
   try {
     const res = await apiFetch('/api/clients/', { method: 'POST', body: JSON.stringify(body) });
     const data = await res.json();
@@ -1185,7 +1202,7 @@ async function submitClient() {
     closeModal('addClientModal');
     allClients = [];
     loadDashboard();
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); } finally { if (btn) { btn.innerHTML = ogText; btn.disabled = false; } }
 }
 
 function openSendModal(invoiceId, invNum, clientName, clientEmail) {
@@ -1198,6 +1215,9 @@ function openSendModal(invoiceId, invNum, clientName, clientEmail) {
 async function submitSendDocs() {
   const types = [...document.querySelectorAll('#sendDocsModal input[type=checkbox]:checked')].map(el => el.value);
   if (!types.length) return toast('Select at least one document', 'error');
+  const btn = document.querySelector('#sendDocsModal button.btn-primary');
+  const ogText = btn ? btn.innerHTML : '';
+  if (btn) { btn.innerHTML = '<span class="spinner" style="border-top-color:currentColor; width:14px; height:14px;"></span> Sending...'; btn.disabled = true; }
   try {
     const res = await apiFetch('/api/invoices/send', {
       method: 'POST',
@@ -1207,7 +1227,7 @@ async function submitSendDocs() {
     if (!res.ok) throw new Error(data.detail || 'Failed');
     toast(`Sent: ${data.sent.join(', ')}`, 'success');
     closeModal('sendDocsModal');
-  } catch(e) { toast(e.message, 'error'); }
+  } catch(e) { toast(e.message, 'error'); } finally { if (btn) { btn.innerHTML = ogText; btn.disabled = false; } }
 }
 
 // ── HELPERS ───────────────────────────────

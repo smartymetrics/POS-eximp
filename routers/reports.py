@@ -8,6 +8,8 @@ from database import supabase
 from starlette.concurrency import run_in_threadpool
 import io
 import logging
+from models import ReportScheduleCreate, ReportEmailRequest
+from email_service import send_report_email
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -48,6 +50,35 @@ async def download_report(
         )
     except Exception as e:
         logger.error(f"DOWNLOAD ERROR: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.post("/email")
+async def email_report(
+    req: ReportEmailRequest,
+    admin: dict = Depends(get_current_admin)
+):
+    try:
+        data = await ReportService.get_report_data(req.report_type, req.start_date, req.end_date)
+        
+        if req.format == "excel":
+            file_obj = await run_in_threadpool(ReportService.generate_excel, data, data["type"])
+            filename = f"{req.report_type}_{datetime.now().strftime('%Y%m%d%H%M')}.xlsx"
+        else:
+            file_obj = await run_in_threadpool(ReportService.generate_pdf, data, data["type"])
+            filename = f"{req.report_type}_{datetime.now().strftime('%Y%m%d%H%M')}.pdf"
+
+        target_emails = [e.strip() for e in req.emails.split(",") if e.strip()]
+        if not target_emails:
+            raise HTTPException(status_code=400, detail="No valid email addresses provided.")
+
+        subject = f"Eximp & Cloves Report: {data.get('type', 'Generated Report')}"
+        attachment = {"filename": filename, "content": list(file_obj.getvalue())}
+        
+        await send_report_email(target_emails, subject, req.message or "", attachment, admin.get("email", "System"))
+
+        return {"status": "success", "message": f"Report sent to {len(target_emails)} recipients."}
+    except Exception as e:
+        logger.error(f"EMAIL REPORT ERROR: {str(e)}")
         raise HTTPException(status_code=500, detail=str(e))
 
 @router.get("/schedules")

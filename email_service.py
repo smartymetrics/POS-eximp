@@ -1,12 +1,12 @@
 import resend
 import os
 import base64
-from pdf_service import generate_invoice_pdf, generate_receipt_pdf, generate_statement_pdf
+from pdf_service import generate_invoice_pdf, generate_receipt_pdf, generate_statement_pdf, COMPANY
 from database import get_db
 
 resend.api_key = os.getenv("RESEND_API_KEY")
-FROM_EMAIL = os.getenv("FROM_EMAIL", "finance@eximps-cloves.com")
-
+# Force onboarding test domain because eximps-cloves.com is unverified
+FROM_EMAIL = "onboarding@resend.dev"
 
 def _b64(pdf_bytes: bytes) -> str:
     return base64.b64encode(pdf_bytes).decode()
@@ -17,8 +17,7 @@ def _invoice_html(invoice: dict, client: dict) -> str:
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #1A1A1A; padding: 24px; text-align: center;">
-        <h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1>
-        <p style="color: #aaa; margin: 4px 0 0; font-size: 12px;">INFRASTRUCTURE LIMITED</p>
+        {f'<img src="{COMPANY.get("logo_b64", "")}" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">' if COMPANY.get("logo_b64") else '<h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1><p style="color: #aaa; margin: 4px 0 0; font-size: 12px;">INFRASTRUCTURE LIMITED</p>'}
       </div>
       <div style="background: #F5A623; padding: 12px 24px;">
         <h2 style="color: #1A1A1A; margin: 0; font-size: 16px;">Invoice #{invoice['invoice_number']}</h2>
@@ -55,8 +54,7 @@ def _receipt_html(invoice: dict, client: dict) -> str:
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #1A1A1A; padding: 24px; text-align: center;">
-        <h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1>
-        <p style="color: #aaa; margin: 4px 0 0; font-size: 12px;">INFRASTRUCTURE LIMITED</p>
+        {f'<img src="{COMPANY.get("logo_b64", "")}" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">' if COMPANY.get("logo_b64") else '<h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1><p style="color: #aaa; margin: 4px 0 0; font-size: 12px;">INFRASTRUCTURE LIMITED</p>'}
       </div>
       <div style="background: #27ae60; padding: 12px 24px;">
         <h2 style="color: #fff; margin: 0; font-size: 16px;">✓ Payment Receipt — {invoice['invoice_number']}</h2>
@@ -86,8 +84,7 @@ def _statement_html(client: dict, total_invoiced: float, total_paid: float, bala
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #1A1A1A; padding: 24px; text-align: center;">
-        <h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1>
-        <p style="color: #aaa; margin: 4px 0 0; font-size: 12px;">INFRASTRUCTURE LIMITED</p>
+        {f'<img src="{COMPANY.get("logo_b64", "")}" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">' if COMPANY.get("logo_b64") else '<h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1><p style="color: #aaa; margin: 4px 0 0; font-size: 12px;">INFRASTRUCTURE LIMITED</p>'}
       </div>
       <div style="background: #F5A623; padding: 12px 24px;">
         <h2 style="color: #1A1A1A; margin: 0; font-size: 16px;">Statement of Account</h2>
@@ -135,7 +132,7 @@ async def send_receipt_email(invoice: dict, client: dict, sent_by: str):
 async def send_statement_email(invoices: list, client: dict, sent_by: str):
     pdf = generate_statement_pdf(invoices, client)
     total_invoiced = sum(float(i["amount"]) for i in invoices)
-    total_paid = sum(float(p["amount"]) for i in (inv.get("payments") or [] for inv in invoices))
+    total_paid = sum(float(p["amount"]) for inv in invoices for p in (inv.get("payments") or []))
     balance = total_invoiced - total_paid
 
     resend.Emails.send({
@@ -184,7 +181,7 @@ def _rejection_html(invoice: dict, client: dict, reason: str) -> str:
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #1A1A1A; padding: 24px; text-align: center;">
-        <h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1>
+        {f'<img src="{COMPANY.get("logo_b64", "")}" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">' if COMPANY.get("logo_b64") else '<h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1>'}
       </div>
       <div style="padding: 32px 24px; background: #fff; border: 1px solid #eee;">
         <p style="color: #333;">Dear <strong>{client['full_name']}</strong>,</p>
@@ -218,7 +215,7 @@ async def send_receipt_and_statement_email(invoice: dict, client: dict, invoices
     statement_pdf = generate_statement_pdf(invoices, client)
     
     total_invoiced = sum(float(i["amount"]) for i in invoices)
-    total_paid = sum(float(p["amount"]) for i in (inv.get("payments") or [] for inv in invoices))
+    total_paid = sum(float(p["amount"]) for inv in invoices for p in (inv.get("payments") or []))
     balance = total_invoiced - total_paid
 
     # Combine receipt and statement content into a nice hybrid HTML or just use receipt HTML with a mention
@@ -243,7 +240,7 @@ def _void_html(invoice: dict, client: dict, reason: str) -> str:
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #1A1A1A; padding: 24px; text-align: center;">
-        <h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1>
+        {f'<img src="{COMPANY.get("logo_b64", "")}" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">' if COMPANY.get("logo_b64") else '<h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1>'}
       </div>
       <div style="padding: 32px 24px; background: #fff; border: 1px solid #eee;">
         <p style="color: #333;">Dear <strong>{client['full_name']}</strong>,</p>
@@ -267,4 +264,35 @@ async def send_void_notification_email(invoice: dict, client: dict, reason: str)
         "to": [client["email"]],
         "subject": f"Important Notice — Receipt Correction | Eximp & Cloves",
         "html": _void_html(invoice, client, reason)
+    })
+
+def _report_html(message: str) -> str:
+    msg_html = f'<p style="color: #333; margin: 20px 0;">{message}</p>' if message else ''
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: #1A1A1A; padding: 24px; text-align: center;">
+        <h1 style="color: #F5A623; margin: 0; font-size: 22px;">Eximp & Cloves</h1>
+        <p style="color: #aaa; margin: 4px 0 0; font-size: 12px;">INFRASTRUCTURE LIMITED</p>
+      </div>
+      <div style="background: #F5A623; padding: 12px 24px;">
+        <h2 style="color: #1A1A1A; margin: 0; font-size: 16px;">Financial Report Document</h2>
+      </div>
+      <div style="padding: 32px 24px; background: #fff; border: 1px solid #eee;">
+        <p style="color: #555;">Please find the requested financial report attached to this email.</p>
+        {msg_html}
+        <hr style="border-color: #eee; margin: 24px 0;">
+        <p style="color: #999; font-size: 12px; margin: 0;">
+          Eximp & Cloves Infrastructure Limited | RC 8311800<br>
+          57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383
+        </p>
+      </div>
+    </div>"""
+
+async def send_report_email(emails: list, subject: str, message: str, attachment: dict, sent_by: str):
+    resend.Emails.send({
+        "from": f"Eximp & Cloves <{FROM_EMAIL}>",
+        "to": emails,
+        "subject": subject,
+        "html": _report_html(message),
+        "attachments": [attachment]
     })

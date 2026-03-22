@@ -66,6 +66,13 @@
   <!-- Header -->
   <div class="header">
     <div class="logo-area">
+      {% if company.logo_b64 %}
+      <img src="{{ company.logo_b64 }}" alt="Eximp & Cloves" style="max-height: 50px;">
+      <div style="display: none;">
+        <div class="company-name">Eximp &amp; Cloves</div>
+        <div class="company-sub">Infrastructure Limited</div>
+      </div>
+      {% else %}
       <svg width="48" height="48" viewBox="0 0 48 48" fill="none">
         <path d="M24 4L36 14V44H28V32H20V44H12V14L24 4Z" fill="#F5A623"/>
         <path d="M18 14H22V20H18V14ZM26 14H30V20H26V14ZM18 24H22V30H18V24ZM26 24H30V30H26V24Z" fill="#fff" fill-opacity="0.6"/>
@@ -75,6 +82,7 @@
         <div class="company-name">Eximp &amp; Cloves</div>
         <div class="company-sub">Infrastructure Limited</div>
       </div>
+      {% endif %}
     </div>
     <div class="company-details">
       RC 8311800<br>57B, Isaac John Street, Yaba<br>Lagos, Nigeria<br>+234 912 686 4383

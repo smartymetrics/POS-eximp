@@ -8,6 +8,7 @@ import pandas as pd
 from xhtml2pdf import pisa
 from database import supabase
 from utils import resolve_invoice_status
+from pdf_service import COMPANY
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -131,6 +132,7 @@ class ReportService:
     def generate_pdf(data: Dict[str, Any], title: str) -> io.BytesIO:
         """Constructs a professional PDF document."""
         items = data.get("items", [])
+        logo_html = f'<img src="{COMPANY.get("logo_b64", "")}" style="max-height: 48px; display: block; margin-bottom: 8px;">' if COMPANY.get("logo_b64") else 'EXIMP & CLOVES'
         html = f"""
         <html>
         <head>
@@ -149,7 +151,7 @@ class ReportService:
         </head>
         <body>
             <div class="header">
-                <div class="logo">EXIMP & CLOVES</div>
+                <div class="logo">{logo_html}</div>
                 <div class="title">{title}</div>
                 <div style="font-size: 10px; color: #747d8c;">Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')}</div>
             </div>
