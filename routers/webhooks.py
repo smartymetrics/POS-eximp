@@ -1,8 +1,9 @@
 from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
 from fastapi.encoders import jsonable_encoder
 from models import WebhookFormPayload
-from database import get_db
+from database import get_db, SUPABASE_URL
 import os
+import base64
 from datetime import date, timedelta
 from email_service import send_invoice_email, send_admin_alert_email, send_welcome_email
 from routers.analytics import log_activity
@@ -174,6 +175,38 @@ async def form_submission(
                 
                 print(f"DEBUG: Found property {payload.property_name} (ID: {property_id_to_use}, Location: {property_location_to_use})")
 
+        # 5. Handle Signature Storage
+        signature_url_to_save = payload.signature_url
+        if payload.signature_base64:
+            try:
+                # 1. Parse MIME and data
+                if "," in payload.signature_base64:
+                    header, encoded = payload.signature_base64.split(",", 1)
+                    mime = header.split("data:")[1].split(";")[0] if "data:" in header else "image/png"
+                else:
+                    encoded = payload.signature_base64
+                    mime = "image/png"
+                
+                ext = mime.split("/")[1] if "/" in mime else "png"
+                img_data = base64.b64decode(encoded)
+                
+                # 2. Upload to storage
+                file_path = f"customer_signatures/sig_{invoice_number}.{ext}"
+                # Use the storage client from db
+                db.storage.from_("signatures").upload(
+                    path=file_path, 
+                    file=img_data, 
+                    file_options={"content-type": mime}
+                )
+                
+                # 3. Build public URL
+                signature_url_to_save = f"{SUPABASE_URL}/storage/v1/object/public/signatures/{file_path}"
+                print(f"DEBUG: Signature uploaded to {signature_url_to_save}")
+            except Exception as e:
+                print(f"ERROR: Signature upload to storage failed: {e}")
+                # Fallback to saving base64 if upload fails
+                signature_url_to_save = payload.signature_base64
+
         invoice_insert = {
             "invoice_number": invoice_number,
             "client_id": client_id,
@@ -189,7 +222,7 @@ async def form_submission(
             "sales_rep_name": rep_name_to_use,
             "co_owner_name": payload.co_owner_name,
             "co_owner_email": payload.co_owner_email,
-            "signature_url": payload.signature_base64 if payload.signature_base64 else payload.signature_url,
+            "signature_url": signature_url_to_save,
             "payment_proof_url": payload.payment_proof_url,
             "passport_photo_url": payload.passport_photo_url,
             "source": "google_form"
