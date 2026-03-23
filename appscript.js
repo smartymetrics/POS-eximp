@@ -81,7 +81,7 @@ function onFormSubmit(e) {
             sales_rep_phone: responses["Sales Rep Phone Number"] || "",
             consent: responses["By checking this box, I confirm that I have read, understand, and consent to all of the following Land Republic documents: Terms and Conditions, Payment Protection Promise, and Resale and Refund Policies. I accept full responsibility for all legal implications and interpretations of this agreement. I understand that this subscription form becomes binding on all parties immediately upon the company's receipt of my payment.  "] || responses["Consent Checkbox"] || responses["Do you agree to the terms?"] || "I Confirm and Agree",
             submitter_email: submitterEmail,
-            timestamp: e.range ? new Date().toISOString() : (e.response ? e.response.getTimestamp().toISOString() : new Date().toISOString())
+            timestamp: new Date().toISOString()
         };
 
         // Helper to strip currency symbols and commas
@@ -107,7 +107,16 @@ function onFormSubmit(e) {
 
                 const file = DriveApp.getFileById(fileId);
                 const blob = file.getBlob();
-                return Utilities.base64Encode(blob.getBytes());
+                const mimeType = blob.getContentType() || "";
+                
+                // Only encode if it's an image
+                if (mimeType.indexOf("image/") === -1) {
+                    Logger.log("Skipping non-image file: " + mimeType);
+                    return "";
+                }
+                
+                const base64 = Utilities.base64Encode(blob.getBytes());
+                return "data:" + mimeType + ";base64," + base64;
             } catch (err) {
                 Logger.log("Base64 conversion failed: " + err.toString());
                 return "";

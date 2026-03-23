@@ -278,13 +278,17 @@ async def log_activity(
 ):
     try:
         db = get_db()
-        db.table("activity_log").insert({
+        insert_data = {
             "event_type": event_type,
             "description": description,
-            "performed_by": performed_by,
             "client_id": client_id,
             "invoice_id": invoice_id,
             "metadata": metadata
-        }).execute()
+        }
+        # Only include performed_by if it's a valid UUID (not 'system')
+        if performed_by and performed_by != "system":
+            insert_data["performed_by"] = performed_by
+            
+        db.table("activity_log").insert(insert_data).execute()
     except Exception as e:
         print(f"Error logging activity: {e}")

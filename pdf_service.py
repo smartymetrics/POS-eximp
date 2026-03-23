@@ -100,9 +100,11 @@ def generate_invoice_pdf(invoice: dict) -> bytes:
     signature_base64 = None
     if invoice.get("signature_url"):
         url = invoice["signature_url"]
-        if url.startswith("data:") or (len(url) > 1000 and "http" not in url):
+        # Basic check: if it lacks 'http' and is long, it's likely base64
+        if url.startswith("data:") or ("http" not in url and len(url) > 50):
             signature_base64 = url.split("base64,")[-1] if "base64," in url else url
         else:
+            # It's a link (like Google Drive)
             signature_base64 = _get_image_as_base64(url)
         
     html_content = template.render(
@@ -124,7 +126,7 @@ def generate_receipt_pdf(invoice: dict) -> bytes:
     signature_base64 = None
     if invoice.get("signature_url"):
         url = invoice["signature_url"]
-        if url.startswith("data:") or (len(url) > 1000 and "http" not in url):
+        if url.startswith("data:") or ("http" not in url and len(url) > 50):
             signature_base64 = url.split("base64,")[-1] if "base64," in url else url
         else:
             signature_base64 = _get_image_as_base64(url)
