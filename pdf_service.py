@@ -69,8 +69,8 @@ def _get_google_drive_direct_link(url):
             file_id = parse_qs(parsed.query).get("id", [None])[0]
         
         if file_id:
-            # Add &confirm=t to bypass large file warnings if needed, but for small images it's fine
-            return f"https://drive.google.com/uc?export=download&id={file_id}"
+            # Bypass HTML interceptors on large/unscanned files using the thumbnail API
+            return f"https://drive.google.com/thumbnail?sz=w800&id={file_id}"
     except Exception:
         pass
     return url
@@ -81,8 +81,13 @@ def _get_image_as_base64(url):
     try:
         direct_url = _get_google_drive_direct_link(url)
         res = requests.get(direct_url, timeout=10)
-        if res.ok:
+        
+        content_type = res.headers.get("Content-Type", "")
+        # If it's a Google Drive link that is private, it redirects to a login page (text/html)
+        if res.ok and content_type.startswith("image/"):
             return base64.b64encode(res.content).decode("utf-8")
+        else:
+            print(f"Skipping signature fetch: Expected image but got {content_type}")
     except Exception as e:
         print(f"Failed to fetch image: {e}")
     return None
