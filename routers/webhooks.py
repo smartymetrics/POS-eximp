@@ -4,6 +4,13 @@ from models import WebhookFormPayload
 from database import get_db, SUPABASE_URL
 import os
 import base64
+import io
+from PIL import Image
+try:
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+except ImportError:
+    pass
 from datetime import date, timedelta
 from email_service import send_invoice_email, send_admin_alert_email, send_welcome_email
 from routers.analytics import log_activity
@@ -190,13 +197,28 @@ async def form_submission(
                 ext = mime.split("/")[1] if "/" in mime else "png"
                 img_data = base64.b64decode(encoded)
                 
+                # --- CONVERSION STEP: Force to PNG for PDF compatibility ---
+                try:
+                    with Image.open(io.BytesIO(img_data)) as img:
+                        # Convert to RGBA (keeps transparency) or RGB if needed
+                        if img.mode != 'RGBA':
+                            img = img.convert('RGBA')
+                        
+                        out_buf = io.BytesIO()
+                        img.save(out_buf, format="PNG")
+                        img_data = out_buf.getvalue()
+                        mime = "image/png"
+                        ext = "png"
+                except Exception as img_err:
+                    print(f"WARNING: Image conversion failed, uploading as-is: {img_err}")
+                
                 # 2. Upload to storage
                 file_path = f"customer_signatures/sig_{invoice_number}.{ext}"
                 # Use the storage client from db
                 db.storage.from_("signatures").upload(
                     path=file_path, 
                     file=img_data, 
-                    file_options={"content-type": mime}
+                    file_options={"content-type": mime, "upsert": "true"}
                 )
                 
                 # 3. Build public URL

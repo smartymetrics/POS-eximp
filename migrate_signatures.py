@@ -1,5 +1,13 @@
 import base64
 import os
+import io
+import requests
+from PIL import Image
+try:
+    import pillow_heif
+    pillow_heif.register_heif_opener()
+except ImportError:
+    pass
 from database import supabase, SUPABASE_URL
 
 def migrate_signatures():
@@ -15,41 +23,67 @@ def migrate_signatures():
         if not url:
             continue
             
-        # Basic check: is it a base64 Data URI or a raw base64 string?
+        # Detection logic
         is_base64 = url.startswith("data:image") or (len(url) > 500 and "http" not in url)
+        is_incompatible_url = (".heic" in url.lower() or ".heif" in url.lower()) and "supabase" in url
         
-        if is_base64:
+        if is_base64 or is_incompatible_url:
             try:
-                # Parse MIME and data
-                if "," in url:
-                    header, encoded = url.split(",", 1)
-                    mime = header.split("data:")[1].split(";")[0] if "data:" in header else "image/png"
+                img_data = None
+                mime = "image/png"
+                
+                if is_base64:
+                    # Parse MIME and data from base64
+                    if "," in url:
+                        header, encoded = url.split(",", 1)
+                        mime = header.split("data:")[1].split(";")[0] if "data:" in header else "image/png"
+                    else:
+                        encoded = url
+                        mime = "image/png"
+                    img_data = base64.b64decode(encoded)
                 else:
-                    encoded = url
-                    mime = "image/png"
+                    # Download from URL
+                    print(f"Downloading incompatible image: {url}")
+                    resp = requests.get(url)
+                    if resp.ok:
+                        img_data = resp.content
+                        mime = resp.headers.get("Content-Type", "image/heic")
                 
-                ext = mime.split("/")[1] if "/" in mime else "png"
-                img_data = base64.b64decode(encoded)
-                
+                if not img_data:
+                    continue
+
+                # --- CONVERSION STEP: Force to PNG ---
+                try:
+                    with Image.open(io.BytesIO(img_data)) as img:
+                        if img.mode != 'RGBA':
+                            img = img.convert('RGBA')
+                        out_buf = io.BytesIO()
+                        img.save(out_buf, format="PNG")
+                        img_data = out_buf.getvalue()
+                        mime = "image/png"
+                except Exception as img_err:
+                    print(f"⚠️  Conversion failed for {inv['invoice_number']}: {img_err}")
+                    if is_incompatible_url: continue # Don't update DB if we can't fix the URL
+
                 # 2. Upload to storage
-                file_path = f"customer_signatures/sig_{inv['invoice_number']}.{ext}"
+                file_path = f"customer_signatures/sig_{inv['invoice_number']}.png"
                 print(f"Uploading {file_path}...")
                 
                 supabase.storage.from_("signatures").upload(
                     path=file_path,
                     file=img_data,
-                    file_options={"content-type": mime, "upsert": "true"}
+                    file_options={"content-type": "image/png", "upsert": "true"}
                 )
                 
-                # 3. Update DB with public URL
+                # 3. Update DB with NEW public URL
                 public_url = f"{SUPABASE_URL}/storage/v1/object/public/signatures/{file_path}"
                 supabase.table("invoices").update({"signature_url": public_url}).eq("id", inv["id"]).execute()
                 
-                print(f"✅ Migrated invoice {inv['invoice_number']}")
+                print(f"✅ Migrated/Fixed invoice {inv['invoice_number']}")
                 count += 1
                 
             except Exception as e:
-                print(f"❌ Failed to migrate {inv['invoice_number']}: {e}")
+                print(f"❌ Failed to process {inv['invoice_number']}: {e}")
                 
     print(f"\n🎉 Migration complete! {count} signatures moved to storage.")
 

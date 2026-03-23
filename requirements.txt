@@ -20,3 +20,5 @@ numpy
 aiofiles
 pytz
 python-dateutil==2.9.0
+Pillow>=10.0.0
+pillow-heif>=0.15.0
