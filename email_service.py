@@ -42,6 +42,7 @@ async def send_welcome_email(client: dict, property_name: str):
     resend.Emails.send({
         "from": f"Eximp & Cloves <{FROM_EMAIL}>",
         "to": [client["email"]],
+        "reply_to": "sales@eximps-cloves.com",
         "subject": "Welcome to Eximp & Cloves!",
         "html": _welcome_html(client, property_name)
     })
@@ -147,6 +148,7 @@ async def send_invoice_email(invoice: dict, client: dict, sent_by: str):
     resend.Emails.send({
         "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
         "to": [client["email"]],
+        "reply_to": "admin@eximps-cloves.com",
         "subject": f"Invoice {invoice['invoice_number']} — Eximp & Cloves",
         "html": _invoice_html(invoice, client),
         "attachments": [{"filename": f"Invoice_{invoice['invoice_number']}.pdf", "content": list(pdf)}],
@@ -159,6 +161,7 @@ async def send_receipt_email(invoice: dict, client: dict, sent_by: str):
     resend.Emails.send({
         "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
         "to": [client["email"]],
+        "reply_to": "admin@eximps-cloves.com",
         "subject": f"Payment Receipt — {invoice['invoice_number']}",
         "html": _receipt_html(invoice, client),
         "attachments": [{"filename": f"Receipt_{invoice['invoice_number']}.pdf", "content": list(pdf)}],
@@ -175,6 +178,7 @@ async def send_statement_email(invoices: list, client: dict, sent_by: str):
     resend.Emails.send({
         "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
         "to": [client["email"]],
+        "reply_to": "admin@eximps-cloves.com",
         "subject": f"Statement of Account — {client['full_name']}",
         "html": _statement_html(client, total_invoiced, total_paid, balance),
         "attachments": [{"filename": f"Statement_{client['full_name'].replace(' ', '_')}.pdf", "content": list(pdf)}],
@@ -244,6 +248,7 @@ async def send_rejection_email(invoice: dict, client: dict, reason: str):
     resend.Emails.send({
         "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
         "to": [client["email"]],
+        "reply_to": "sales@eximps-cloves.com",
         "subject": f"Action Required — Payment Verification Issue | Eximp & Cloves",
         "html": _rejection_html(invoice, client, reason)
     })
@@ -267,6 +272,7 @@ async def send_receipt_and_statement_email(invoice: dict, client: dict, invoices
     resend.Emails.send({
         "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
         "to": [client["email"]],
+        "reply_to": "admin@eximps-cloves.com",
         "subject": f"Payment Confirmed & Documents attached — {invoice['invoice_number']}",
         "html": html,
         "attachments": [
@@ -303,6 +309,7 @@ async def send_void_notification_email(invoice: dict, client: dict, reason: str)
     resend.Emails.send({
         "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
         "to": [client["email"]],
+        "reply_to": "admin@eximps-cloves.com",
         "subject": f"Important Notice — Receipt Correction | Eximp & Cloves",
         "html": _void_html(invoice, client, reason)
     })
@@ -443,6 +450,7 @@ async def send_refund_receipt_email(invoice: dict, payment: dict, client: dict):
     resend.Emails.send({
         "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
         "to": [client["email"]],
+        "reply_to": "admin@eximps-cloves.com",
         "subject": f"Refund Receipt — {invoice['invoice_number']}",
         "html": _refund_receipt_html(invoice, payment, client),
         "attachments": [{"filename": f"Refund_Receipt_{invoice['invoice_number']}.pdf", "content": list(pdf)}],
