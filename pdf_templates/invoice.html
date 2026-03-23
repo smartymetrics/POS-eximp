@@ -166,7 +166,7 @@
       <td width="50%" style="vertical-align: bottom;">
         {% if signature_img_base64 %}
         <div class="signature-box" style="margin-top: 0;">
-          <img src="data:image/png;base64,{{ signature_img_base64 }}" class="sig-img">
+          <img src="data:{{ signature_mime }};base64,{{ signature_img_base64 }}" class="sig-img">
           <div class="sig-label" style="width: 250px; border-top: 1px solid #eee;">Customer Digital Signature</div>
         </div>
         {% else %}

@@ -98,24 +98,34 @@ def generate_invoice_pdf(invoice: dict) -> bytes:
     client = sanitize_client_address(invoice.get("clients", {}).copy())
     
     signature_base64 = None
+    signature_mime = "image/jpeg"  # safe default
     if invoice.get("signature_url"):
         url = invoice["signature_url"]
-        # Basic check: if it lacks 'http' and is long, it's likely base64
-        if url.startswith("data:") or ("http" not in url and len(url) > 50):
-            signature_base64 = url.split("base64,")[-1] if "base64," in url else url
+        # Case 1: Full data URI — parse MIME and raw base64
+        if url.startswith("data:") and ";base64," in url:
+            header, raw = url.split(";base64,", 1)
+            signature_mime = header.split("data:")[-1]  # e.g. "image/jpeg"
+            signature_base64 = raw
+        # Case 2: Raw base64 string without header (long, no http)
+        elif "http" not in url and len(url) > 50:
+            signature_base64 = url
+        # Case 3: URL (Google Drive or other)
         else:
-            # It's a link (like Google Drive)
-            signature_base64 = _get_image_as_base64(url)
+            b64 = _get_image_as_base64(url)
+            if b64:
+                signature_base64 = b64
         
     html_content = template.render(
         company=COMPANY,
         invoice=invoice,
         client=client,
         signature_img_base64=signature_base64,
+        signature_mime=signature_mime,
         format_currency=format_currency,
         generated_at=datetime.now().strftime("%d %b %Y")
     )
     return _html_to_pdf(html_content)
+
 
 
 def generate_receipt_pdf(invoice: dict) -> bytes:
@@ -124,12 +134,22 @@ def generate_receipt_pdf(invoice: dict) -> bytes:
     payments = invoice.get("payments", [])
     
     signature_base64 = None
+    signature_mime = "image/jpeg"  # safe default
     if invoice.get("signature_url"):
         url = invoice["signature_url"]
-        if url.startswith("data:") or ("http" not in url and len(url) > 50):
-            signature_base64 = url.split("base64,")[-1] if "base64," in url else url
+        # Case 1: Full data URI — parse MIME and raw base64
+        if url.startswith("data:") and ";base64," in url:
+            header, raw = url.split(";base64,", 1)
+            signature_mime = header.split("data:")[-1]
+            signature_base64 = raw
+        # Case 2: Raw base64 string without header
+        elif "http" not in url and len(url) > 50:
+            signature_base64 = url
+        # Case 3: URL
         else:
-            signature_base64 = _get_image_as_base64(url)
+            b64 = _get_image_as_base64(url)
+            if b64:
+                signature_base64 = b64
         
     html_content = template.render(
         company=COMPANY,
@@ -137,10 +157,12 @@ def generate_receipt_pdf(invoice: dict) -> bytes:
         client=client,
         payments=payments,
         signature_img_base64=signature_base64,
+        signature_mime=signature_mime,
         format_currency=format_currency,
         generated_at=datetime.now().strftime("%d %b %Y")
     )
     return _html_to_pdf(html_content)
+
 
 
 def generate_statement_pdf(invoices: list, client: dict) -> bytes:
