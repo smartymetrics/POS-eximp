@@ -8,6 +8,7 @@ from routers.analytics import log_activity
 from datetime import datetime, date
 
 def get_commission_rate(sales_rep_id: str, estate_name: str, verification_date: date, db) -> float:
+    # 1. Check for specific rate for this rep + estate + date
     result = db.table("commission_rates")\
         .select("rate")\
         .eq("sales_rep_id", sales_rep_id)\
@@ -20,6 +21,12 @@ def get_commission_rate(sales_rep_id: str, estate_name: str, verification_date: 
     if result.data:
         return float(result.data[0]["rate"])
 
+    # 2. Fallback to the rep's profile default rate from the sales_reps table
+    rep_res = db.table("sales_reps").select("commission_rate").eq("id", sales_rep_id).execute()
+    if rep_res.data and rep_res.data[0].get("commission_rate") is not None:
+        return float(rep_res.data[0]["commission_rate"])
+
+    # 3. Final fallback to system-wide default
     default = db.table("system_settings")\
         .select("value")\
         .eq("key", "default_commission_rate")\
@@ -85,10 +92,19 @@ async def confirm_verification(
         .execute()
 
     if invoice.get("sales_rep_name"):
-        rep_res = db.table("sales_reps").select("*").eq("name", invoice["sales_rep_name"]).execute()
+        rep_name = invoice["sales_rep_name"].strip()
+        # Look for the rep with fuzzy matching (case insensitive)
+        rep_res = db.table("sales_reps")\
+            .select("*")\
+            .ilike("name", f"%{rep_name}%")\
+            .eq("is_active", True)\
+            .execute()
+        
         if rep_res.data:
             rep = rep_res.data[0]
             rep_id = rep["id"]
+            
+            # Use the rate logic with fallbacks
             rate = get_commission_rate(
                 sales_rep_id=rep_id,
                 estate_name=invoice["property_name"],
@@ -98,11 +114,21 @@ async def confirm_verification(
             deposit = float(verify_rec["deposit_amount"])
             commission_amount = round(deposit * rate / 100, 2)
             
+            # Robust payment lookup: try reference first, then any payment on this invoice with 'deposit'
             ref = f"{verify_rec['payment_date']}_form_deposit"
             pay_res = db.table("payments").select("id").eq("invoice_id", invoice["id"]).eq("reference", ref).execute()
+            if not pay_res.data:
+                # Fallback: find any payment on this invoice with webhook-style reference
+                pay_res = db.table("payments")\
+                    .select("id")\
+                    .eq("invoice_id", invoice["id"])\
+                    .ilike("reference", "%form_deposit")\
+                    .execute()
+                    
             payment_id = pay_res.data[0]["id"] if pay_res.data else None
             
             if payment_id:
+                # Insert earnings record
                 earning = db.table("commission_earnings").insert({
                     "sales_rep_id": rep_id,
                     "invoice_id": invoice["id"],
