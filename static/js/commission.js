@@ -120,17 +120,22 @@ document.addEventListener("DOMContentLoaded", () => {
                     </div>
                     <div class="form-grid">
                         <div class="form-group">
+                            <label class="form-label">Amount to Pay (NGN)</label>
+                            <input type="number" id="payout-amount" class="form-control" placeholder="Auto-filled from selection" min="1" step="0.01">
+                            <div id="payout-total-hint" style="font-size:11px; color:var(--gray); margin-top:4px;"></div>
+                        </div>
+                        <div class="form-group">
                             <label class="form-label">Reference ID (Optional)</label>
                             <input type="text" id="payout-ref" class="form-control" placeholder="TXN-12345">
                         </div>
-                        <div class="form-group">
+                        <div class="form-group span2">
                             <label class="form-label">Notes</label>
                             <input type="text" id="payout-notes" class="form-control" placeholder="March payouts">
                         </div>
                     </div>
                     <div class="form-actions">
                         <button class="btn btn-ghost" onclick="closeModal('payoutModal')">Cancel</button>
-                        <button class="btn btn-primary" onclick="submitPayout()">Process Payout</button>
+                        <button class="btn btn-primary" id="payout-submit-btn" onclick="submitPayout()">Process Payout</button>
                     </div>
                 </div>
             </div>
@@ -261,18 +266,22 @@ async function loadCommissionDashboard() {
         const payouts = await payoutsRes.json();
         
         // Render Owed
-        let owedHtml = '<table class="data-table"><thead><tr><th>Rep Name</th><th>Unpaid Deals</th><th>Total Owed</th></tr></thead><tbody>';
+        let owedHtml = '<table class="data-table"><thead><tr><th>Rep Name</th><th>Unpaid Deals</th><th>Balance Owed</th></tr></thead><tbody>';
         if (owed.length === 0) owedHtml += '<tr><td colspan="3" class="search-empty">No pending commissions.</td></tr>';
         owed.forEach(o => {
             owedHtml += `<tr>
                 <td class="client-name">${o.name}</td>
                 <td>${o.count}</td>
-                <td style="font-weight:700; color:var(--gold-dark);">NGN ${o.total.toLocaleString()}</td>
+                <td style="font-weight:700; color:var(--gold-dark);">
+                    NGN ${o.total.toLocaleString()}
+                    ${o.partially_paid ? `<div style="font-size:10px; color:var(--gray); font-weight:400; margin-top:2px;">Partial payment applied</div>` : ''}
+                </td>
             </tr>`;
         });
         owedHtml += '</tbody></table>';
         document.getElementById('commissionOwedTable').innerHTML = owedHtml;
         
+
         // Render Payouts
         let ptsHtml = '<table class="data-table"><thead><tr><th>Date</th><th>Rep</th><th>Amount</th><th>Ref</th></tr></thead><tbody>';
         if (payouts.length === 0) ptsHtml += '<tr><td colspan="4" class="search-empty">No layouts processed yet.</td></tr>';
@@ -335,7 +344,9 @@ async function openPayoutModal() {
 
 async function fetchUnpaidForPayout(repId) {
     const listDiv = document.getElementById('payout-earnings-list');
-    if(!repId) { listDiv.style.display = 'none'; return; }
+    const amountInput = document.getElementById('payout-amount');
+    const totalHint = document.getElementById('payout-total-hint');
+    if(!repId) { listDiv.style.display = 'none'; amountInput.value = ''; totalHint.textContent = ''; return; }
     
     listDiv.style.display = 'block';
     listDiv.innerHTML = '<div class="loading"><span class="spinner"></span>Fetching unpaid deals...</div>';
@@ -346,27 +357,50 @@ async function fetchUnpaidForPayout(repId) {
         
         if (data.length === 0) {
             listDiv.innerHTML = '<div style="font-size:12px; color:var(--gray); text-align:center;">No unpaid commissions for this rep.</div>';
+            amountInput.value = ''; totalHint.textContent = '';
             return;
         }
         
         let html = '<div style="font-size:11px; font-weight:600; margin-bottom:8px; color:var(--dark);">Select earnings to pay out:</div>';
         data.forEach(e => {
+            const amtPaid = parseFloat(e.amount_paid || 0);
+            const finalAmt = parseFloat(e.final_amount);
+            const balance = finalAmt - amtPaid;
+            const progressPct = amtPaid > 0 ? Math.round((amtPaid / finalAmt) * 100) : 0;
+            const isPartial = amtPaid > 0;
+            
             html += `
             <div style="display:flex; align-items:center; gap:10px; padding:8px; background:#f9f9f9; border-radius:4px; margin-bottom:4px;">
-                <input type="checkbox" class="cb-earning" value="${e.id}" data-amt="${e.final_amount}" checked style="accent-color:var(--gold);">
+                <input type="checkbox" class="cb-earning" value="${e.id}" data-balance="${balance}" checked style="accent-color:var(--gold);" onchange="updatePayoutTotal()">
                 <div style="flex:1;">
                     <span style="font-size:12px; font-weight:600;">${e.clients.full_name}</span> 
                     <span style="font-size:10px; color:var(--gray);">(${e.invoices.invoice_number})</span>
+                    ${isPartial ? `<div style="margin-top:3px;"><div style="height:4px; background:#eee; border-radius:2px; overflow:hidden;"><div style="width:${progressPct}%; height:100%; background:var(--gold);"></div></div><span style="font-size:10px; color:var(--gray);">NGN ${amtPaid.toLocaleString()} paid of NGN ${finalAmt.toLocaleString()}</span></div>` : ''}
                 </div>
-                <div style="font-size:12px; font-weight:700; color:var(--green);">NGN ${e.final_amount.toLocaleString()}</div>
+                <div style="text-align:right;">
+                    <div style="font-size:12px; font-weight:700; color:var(--green);">NGN ${balance.toLocaleString()} owed</div>
+                    ${isPartial ? `<div style="font-size:10px; color:var(--gray);">of NGN ${finalAmt.toLocaleString()} total</div>` : ''}
+                </div>
             </div>`;
         });
         listDiv.innerHTML = html;
+        updatePayoutTotal();
         
     } catch(err) {
         listDiv.innerHTML = '<div style="color:red; font-size:12px;">Failed to load.</div>';
     }
 }
+
+function updatePayoutTotal() {
+    const checkboxes = document.querySelectorAll('.cb-earning:checked');
+    const total = Array.from(checkboxes).reduce((sum, c) => sum + parseFloat(c.dataset.balance || 0), 0);
+    const amountInput = document.getElementById('payout-amount');
+    const totalHint = document.getElementById('payout-total-hint');
+    amountInput.value = total.toFixed(2);
+    amountInput.max = total;
+    totalHint.textContent = `Total owed for selected: NGN ${total.toLocaleString('en-NG', {minimumFractionDigits:2})}`;
+}
+
 
 async function submitPayout() {
     const repId = document.getElementById('payout-rep-select').value;
@@ -377,14 +411,27 @@ async function submitPayout() {
     
     if(earningIds.length === 0) { alert("Please select at least one earning to pay."); return; }
     
+    const amountInput = document.getElementById('payout-amount');
+    const totalAmount = parseFloat(amountInput.value);
+    if(!totalAmount || totalAmount <= 0) { alert("Please enter a valid payment amount"); return; }
+    
+    const totalSelected = Array.from(checkboxes).reduce((sum, c) => sum + parseFloat(c.dataset.balance || 0), 0);
+    if(totalAmount > totalSelected + 0.01) { alert(`Amount cannot exceed total owed (NGN ${totalSelected.toLocaleString()})`); return; }
+    
     const ref = document.getElementById('payout-ref').value;
     const notes = document.getElementById('payout-notes').value;
+    
+    const btn = document.getElementById('payout-submit-btn');
+    const origText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = '<span class="spinner" style="border-top-color:currentColor; width:14px; height:14px; margin-right:6px;"></span> Processing...';
+    btn.style.opacity = '0.7';
     
     try {
         const res = await fetch('/api/commission/payout', {
             method: 'POST',
             headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer '+localStorage.getItem('ec_token') },
-            body: JSON.stringify({ sales_rep_id: repId, earning_ids: earningIds, reference: ref, notes: notes })
+            body: JSON.stringify({ sales_rep_id: repId, earning_ids: earningIds, reference: ref, notes: notes, total_amount: totalAmount })
         });
         if(res.ok) {
             closeModal('payoutModal');
@@ -394,8 +441,14 @@ async function submitPayout() {
             const data = await res.json();
             alert("Error: " + (data.detail || "Failed to process payout"));
         }
-    } catch(err) { console.error(err); }
+    } catch(err) { console.error(err); alert("Network error. Please try again."); }
+    finally {
+        btn.disabled = false;
+        btn.innerHTML = origText;
+        btn.style.opacity = '1';
+    }
 }
+
 
 function openSetRateModal(repId) {
     window._tempRepIdRate = repId;

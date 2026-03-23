@@ -331,6 +331,7 @@ class CommissionPayout(BaseModel):
     earning_ids: list[str]
     reference: Optional[str] = None
     notes: Optional[str] = None
+    total_amount: Optional[Decimal] = None  # If set, distribute as partial payment; else pay all in full
 
 class DefaultRateUpdate(BaseModel):
     rate: Decimal

@@ -130,21 +130,32 @@ async def summary_owed(current_admin=Depends(verify_token)):
     db = get_db()
     res = db.table("commission_earnings").select("*, sales_reps(name)").eq("is_paid", False).execute()
     
-    owed = defaultdict(lambda: {"total": 0.0, "count": 0, "name": ""})
+    owed = defaultdict(lambda: {"total": 0.0, "count": 0, "name": "", "partially_paid": False})
     for e in res.data:
         rep_id = e["sales_rep_id"]
         owed[rep_id]["name"] = e["sales_reps"]["name"] if e.get("sales_reps") else "Unknown"
-        owed[rep_id]["total"] += float(e["final_amount"])
+        # Subtract any partial payments already applied
+        amount_paid = float(e.get("amount_paid") or 0)
+        balance = float(e["final_amount"]) - amount_paid
+        owed[rep_id]["total"] += balance
         owed[rep_id]["count"] += 1
+        if amount_paid > 0:
+            owed[rep_id]["partially_paid"] = True
         
     result = [{"rep_id": k, **v} for k, v in owed.items()]
     return sorted(result, key=lambda x: x["total"], reverse=True)
 
+
 @router.get("/owed/{rep_id}")
 async def detailed_owed(rep_id: str, current_admin=Depends(verify_token)):
     db = get_db()
+    # Include amount_paid so frontend can show balance accurately
     res = db.table("commission_earnings").select("*, clients(full_name), invoices(invoice_number)").eq("sales_rep_id", rep_id).eq("is_paid", False).order("created_at", desc=True).execute()
+    # Annotate each record with the true balance remaining
+    for e in res.data:
+        e["balance_owed"] = round(float(e["final_amount"]) - float(e.get("amount_paid") or 0), 2)
     return res.data
+
 
 @router.post("/payout")
 async def mark_payout(payload: CommissionPayout, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
@@ -154,30 +165,64 @@ async def mark_payout(payload: CommissionPayout, background_tasks: BackgroundTas
     db = get_db()
     if not payload.earning_ids:
         raise HTTPException(status_code=400, detail="No earnings selected")
-        
-    earnings_query = db.table("commission_earnings").select("final_amount, is_paid").in_("id", payload.earning_ids).eq("sales_rep_id", payload.sales_rep_id).execute()
-    amount = sum(float(e["final_amount"]) for e in earnings_query.data if not e["is_paid"])
     
-    if amount == 0:
-        raise HTTPException(status_code=400, detail="Selected earnings are already paid or totally amount to 0")
+    # Fetch selected unpaid earnings ordered oldest-first for waterfall
+    earnings_query = db.table("commission_earnings")\
+        .select("id, final_amount, amount_paid, is_paid")\
+        .in_("id", payload.earning_ids)\
+        .eq("sales_rep_id", payload.sales_rep_id)\
+        .order("created_at", desc=False)\
+        .execute()
+    
+    earnings = [e for e in earnings_query.data if not e["is_paid"]]
+    
+    if not earnings:
+        raise HTTPException(status_code=400, detail="Selected earnings are already paid or total 0")
+    
+    total_owed = sum(float(e["final_amount"]) - float(e.get("amount_paid") or 0) for e in earnings)
+    
+    # If no specific amount given, pay everything in full
+    payment_amount = float(payload.total_amount) if payload.total_amount else total_owed
+    
+    if payment_amount <= 0:
+        raise HTTPException(status_code=400, detail="Payment amount must be greater than 0")
+    if payment_amount > total_owed:
+        raise HTTPException(status_code=400, detail=f"Payment amount exceeds total owed (NGN {total_owed:,.2f})")
 
+    # Create payout batch record
     batch = db.table("payout_batches").insert({
         "sales_rep_id": payload.sales_rep_id,
-        "total_amount": amount,
+        "total_amount": payment_amount,
         "reference": payload.reference,
         "notes": payload.notes,
         "paid_by": current_admin["sub"]
     }).execute()
-    
     batch_id = batch.data[0]["id"]
     
-    db.table("commission_earnings").update({
-        "is_paid": True,
-        "paid_at": datetime.now().isoformat(),
-        "paid_by": current_admin["sub"],
-        "payout_reference": payload.reference,
-        "payout_batch_id": batch_id
-    }).in_("id", payload.earning_ids).execute()
+    # --- Waterfall Distribution ---
+    remaining = payment_amount
+    for earning in earnings:
+        if remaining <= 0:
+            break
+        
+        already_paid = float(earning.get("amount_paid") or 0)
+        balance = float(earning["final_amount"]) - already_paid
+        to_apply = min(remaining, balance)
+        new_amount_paid = already_paid + to_apply
+        is_now_fully_paid = round(new_amount_paid, 2) >= round(float(earning["final_amount"]), 2)
+        
+        update_data = {
+            "amount_paid": round(new_amount_paid, 2),
+            "payout_batch_id": batch_id,
+            "payout_reference": payload.reference,
+        }
+        if is_now_fully_paid:
+            update_data["is_paid"] = True
+            update_data["paid_at"] = datetime.now().isoformat()
+            update_data["paid_by"] = current_admin["sub"]
+        
+        db.table("commission_earnings").update(update_data).eq("id", earning["id"]).execute()
+        remaining = round(remaining - to_apply, 2)
     
     rep_res = db.table("sales_reps").select("name").eq("id", payload.sales_rep_id).execute()
     rep_name = rep_res.data[0]["name"] if rep_res.data else "Rep"
@@ -185,11 +230,12 @@ async def mark_payout(payload: CommissionPayout, background_tasks: BackgroundTas
     background_tasks.add_task(
         log_activity,
         "commission_payout",
-        f"Processed commission payout of NGN {amount:,.2f} to {rep_name}",
+        f"Processed commission payout of NGN {payment_amount:,.2f} to {rep_name}",
         performed_by=current_admin["sub"]
     )
     
-    return {"message": "Payout successful", "batch": batch.data[0]}
+    return {"message": "Payout successful", "batch": batch.data[0], "amount_paid": payment_amount}
+
 
 @router.get("/payouts")
 async def list_payouts(rep_id: Optional[str] = None, current_admin=Depends(verify_token)):
