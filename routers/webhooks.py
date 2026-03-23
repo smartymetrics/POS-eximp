@@ -82,6 +82,7 @@ async def form_submission(
 
         # 4. Sales Rep Detection
         rep_name_to_use = payload.sales_rep_name
+        sales_rep_id_to_use = None
         matched_rep = None
 
         if payload.sales_rep_phone or payload.sales_rep_name:
@@ -115,6 +116,7 @@ async def form_submission(
             
             if matched_rep:
                 rep_name_to_use = matched_rep["name"]
+                sales_rep_id_to_use = matched_rep["id"]
             else:
                 # Log as unmatched if we have a name/phone but no clear DB match
                 name_to_log = payload.sales_rep_name or f"Phone: {payload.sales_rep_phone}"
@@ -242,6 +244,7 @@ async def form_submission(
             "invoice_date": str(invoice_date),
             "due_date": due_date_str,
             "sales_rep_name": rep_name_to_use,
+            "sales_rep_id": sales_rep_id_to_use,
             "co_owner_name": payload.co_owner_name,
             "co_owner_email": payload.co_owner_email,
             "signature_url": signature_url_to_save,

@@ -26,16 +26,21 @@ async def get_kpis(
     db = get_db()
     is_admin = admin.get("role") == "admin"
     
-    # 1. Total Invoiced (Revenue)
+    # 1. Total Invoiced (Gross)
     invoiced_query = db.table("invoices").select("amount").filter("invoice_date", "gte", start.isoformat()).filter("invoice_date", "lte", end.isoformat()).neq("status", "voided")
     invoiced_data = invoiced_query.execute().data
-    total_revenue = sum(float(i["amount"]) for i in invoiced_data) if is_admin else None
+    gross_revenue = sum(float(i["amount"]) for i in invoiced_data) if is_admin else 0
     plots_sold = len(invoiced_data)
     
-    # 2. Amount Collected
-    collected_query = db.table("payments").select("amount").filter("payment_date", "gte", start.isoformat()).filter("payment_date", "lte", end.isoformat()).eq("is_voided", False)
+    # 2. Amount Collected & Refunds
+    collected_query = db.table("payments").select("amount, payment_type").filter("payment_date", "gte", start.isoformat()).filter("payment_date", "lte", end.isoformat()).eq("is_voided", False)
     collected_data = collected_query.execute().data
-    amount_collected = sum(float(p["amount"]) for p in collected_data) if is_admin else None
+    
+    total_refunds = sum(float(p["amount"]) for p in collected_data if p.get("payment_type") == "refund")
+    amount_collected = sum(float(p["amount"]) for p in collected_data if p.get("payment_type") != "refund") - total_refunds
+    
+    # Net Revenue = Gross Invoiced - Total Refunded
+    total_revenue = (gross_revenue - total_refunds) if is_admin else None
     
     # 3. New Clients
     clients_query = db.table("clients").select("id", count="exact").filter("created_at", "gte", start.isoformat()).filter("created_at", "lte", end.isoformat() + "T23:59:59")
@@ -72,26 +77,35 @@ async def get_kpis(
     delta = None
     if is_admin:
         prev_start, prev_end = get_previous_period(start, end)
-        # Prev Revenue
+        # Prev Revenue (Net)
         prev_rev_data = db.table("invoices").select("amount").filter("invoice_date", "gte", prev_start.isoformat()).filter("invoice_date", "lte", prev_end.isoformat()).neq("status", "voided").execute().data
-        prev_revenue = sum(float(i["amount"]) for i in prev_rev_data)
+        prev_refund_data = db.table("payments").select("amount").filter("payment_date", "gte", prev_start.isoformat()).filter("payment_date", "lte", prev_end.isoformat()).eq("payment_type", "refund").eq("is_voided", False).execute().data
+        prev_revenue = sum(float(i["amount"]) for i in prev_rev_data) - sum(float(r["amount"]) for r in prev_refund_data)
         
         # Prev Collected
-        prev_col_data = db.table("payments").select("amount").filter("payment_date", "gte", prev_start.isoformat()).filter("payment_date", "lte", prev_end.isoformat()).eq("is_voided", False).execute().data
-        prev_collected = sum(float(p["amount"]) for p in prev_col_data)
+        prev_col_data = db.table("payments").select("amount, payment_type").filter("payment_date", "gte", prev_start.isoformat()).filter("payment_date", "lte", prev_end.isoformat()).eq("is_voided", False).execute().data
+        prev_collected = sum(
+            float(p["amount"]) if p.get("payment_type") != "refund" else -float(p["amount"])
+            for p in prev_col_data
+        )
         
         # Prev Clients
         prev_clients = db.table("clients").select("id", count="exact").filter("created_at", "gte", prev_start.isoformat()).filter("created_at", "lte", prev_end.isoformat() + "T23:59:59").execute().count
         
+        # Prev Refunds
+        prev_refunds = sum(float(r["amount"]) for r in prev_refund_data)
+        
         delta = KPIDelta(
             total_revenue=((total_revenue - prev_revenue) / prev_revenue * 100) if prev_revenue > 0 else None,
             amount_collected=((amount_collected - prev_collected) / prev_collected * 100) if prev_collected > 0 else None,
-            new_clients=((new_clients - prev_clients) / prev_clients * 100) if prev_clients > 0 else None
+            new_clients=((new_clients - prev_clients) / prev_clients * 100) if prev_clients > 0 else None,
+            total_refunds=((total_refunds - prev_refunds) / prev_refunds * 100) if prev_refunds > 0 else None
         )
 
     return KPISummary(
         total_revenue=total_revenue,
         amount_collected=amount_collected,
+        total_refunds=total_refunds,
         outstanding_balance=outstanding,
         new_clients=new_clients,
         plots_sold=plots_sold,
@@ -116,12 +130,13 @@ async def get_revenue_trend(
     db = get_db()
     # Fetch all invoices and payments in period
     invoices = db.table("invoices").select("amount", "invoice_date").filter("invoice_date", "gte", start.isoformat()).filter("invoice_date", "lte", end.isoformat()).neq("status", "voided").execute().data
-    payments = db.table("payments").select("amount", "payment_date").filter("payment_date", "gte", start.isoformat()).filter("payment_date", "lte", end.isoformat()).eq("is_voided", False).execute().data
+    payments = db.table("payments").select("amount", "payment_date", "payment_type").filter("payment_date", "gte", start.isoformat()).filter("payment_date", "lte", end.isoformat()).eq("is_voided", False).execute().data
     
     # Aggregate by date
     labels = []
     invoiced_vals = []
     collected_vals = []
+    refund_vals = []
     
     curr = start
     while curr <= end:
@@ -129,13 +144,15 @@ async def get_revenue_trend(
         labels.append(curr.strftime("%b %d"))
         
         inv_sum = sum(float(i["amount"]) for i in invoices if i["invoice_date"] == date_str)
-        col_sum = sum(float(p["amount"]) for p in payments if p["payment_date"] == date_str)
+        col_sum = sum(float(p["amount"]) for p in payments if p["payment_date"] == date_str and p.get("payment_type") != "refund")
+        ref_sum = sum(float(p["amount"]) for p in payments if p["payment_date"] == date_str and p.get("payment_type") == "refund")
         
         invoiced_vals.append(inv_sum)
         collected_vals.append(col_sum)
+        refund_vals.append(ref_sum)
         curr += timedelta(days=1)
         
-    return RevenueTrend(labels=labels, invoiced=invoiced_vals, collected=collected_vals)
+    return RevenueTrend(labels=labels, invoiced=invoiced_vals, collected=collected_vals, refunds=refund_vals)
 
 @router.get("/estates", response_model=List[EstateStat])
 async def get_estates(

@@ -132,7 +132,9 @@ def generate_invoice_pdf(invoice: dict) -> bytes:
 def generate_receipt_pdf(invoice: dict) -> bytes:
     template = env.get_template("receipt.html")
     client = sanitize_client_address(invoice.get("clients", {}).copy())
-    payments = invoice.get("payments", [])
+    # Only include standard payments (not refunds) in the payment receipt
+    raw_payments = invoice.get("payments", [])
+    payments = [p for p in raw_payments if p.get("payment_type") != "refund"]
     
     signature_base64 = None
     signature_mime = "image/jpeg"  # safe default
@@ -188,19 +190,34 @@ def generate_statement_pdf(invoices: list, client: dict) -> bytes:
         for pay in (inv.get("payments") or []):
             if pay.get("is_voided"):
                 continue
-            running_balance -= float(pay["amount"])
-            transactions.append({
-                "date": pay["payment_date"],
-                "type": "Payment",
-                "ref": pay["reference"],
-                "amount": None,
-                "payment": float(pay["amount"]),
-                "balance": running_balance,
-            })
+            
+            p_type = pay.get("payment_type", "payment")
+            p_amount = float(pay["amount"])
+            
+            if p_type == "refund":
+                running_balance += p_amount
+                transactions.append({
+                    "date": pay["payment_date"],
+                    "type": "Refund",
+                    "ref": pay["reference"],
+                    "amount": p_amount,
+                    "payment": None,
+                    "balance": running_balance,
+                })
+            else:
+                running_balance -= p_amount
+                transactions.append({
+                    "date": pay["payment_date"],
+                    "type": "Payment",
+                    "ref": pay["reference"],
+                    "amount": None,
+                    "payment": p_amount,
+                    "balance": running_balance,
+                })
 
     total_invoiced = sum(float(i["amount"]) for i in invoices)
     total_paid = sum(
-        float(p["amount"])
+        float(p["amount"]) if p.get("payment_type", "payment") == "payment" else -float(p["amount"])
         for i in invoices
         for p in (i.get("payments") or []) if not p.get("is_voided")
     )
@@ -216,5 +233,24 @@ def generate_statement_pdf(invoices: list, client: dict) -> bytes:
         generated_at=datetime.now().strftime("%d %b %Y"),
         period_start=invoices[0]["invoice_date"] if invoices else "",
         period_end=invoices[-1]["invoice_date"] if invoices else "",
+    )
+    return _html_to_pdf(html_content)
+
+
+def generate_refund_receipt_pdf(payment: dict, invoice: dict, client: dict = None) -> bytes:
+    template = env.get_template("refund_receipt.html")
+    # Use provided client or fetch from nested invoice data
+    if not client:
+        client = sanitize_client_address(invoice.get("clients", {}).copy())
+    else:
+        client = sanitize_client_address(client.copy())
+    
+    html_content = template.render(
+        company=COMPANY,
+        payment=payment,
+        invoice=invoice,
+        client=client,
+        format_currency=format_currency,
+        generated_at=datetime.now().strftime("%d %b %Y")
     )
     return _html_to_pdf(html_content)

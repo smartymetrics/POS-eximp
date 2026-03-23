@@ -1,0 +1,135 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @page {
+    size: a4 portrait;
+    margin: 2cm;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: Arial, Helvetica, sans-serif; color: #1A1A1A; font-size: 11pt; line-height: 1.4; }
+  
+  .header-table { width: 100%; border-bottom: 3px solid #E74C3C; padding-bottom: 20px; margin-bottom: 30px; }
+  .logo-cell { vertical-align: middle; text-align: left; }
+  .company-cell { vertical-align: middle; text-align: right; font-size: 9pt; color: #555; line-height: 1.5; }
+  .company-name { font-size: 18pt; font-weight: 800; color: #1A1A1A; }
+
+  .receipt-banner { background: #1A1A1A; color: #E74C3C; padding: 20px; border-radius: 6px; margin-bottom: 30px; text-align: center; }
+  .receipt-banner h1 { font-size: 22pt; letter-spacing: 5px; font-weight: 800; margin: 0; }
+
+  .amount-block { background: #1A1A1A; border-radius: 8px; padding: 30px; text-align: center; margin-bottom: 30px; border: 2px solid #E74C3C; }
+  .amount-label { font-size: 9pt; letter-spacing: 2px; text-transform: uppercase; color: #aaa; margin-bottom: 10px; }
+  .amount-value { font-size: 36pt; font-weight: 800; color: #E74C3C; }
+  
+  .details-table { width: 100%; margin-bottom: 30px; }
+  .card-cell { vertical-align: top; background: #f9f9f9; border: 1px solid #eee; padding: 15px; }
+  .info-title { font-size: 8pt; letter-spacing: 2px; text-transform: uppercase; color: #E74C3C; border-bottom: 1px solid #E74C3C; padding-bottom: 4px; margin-bottom: 10px; font-weight: bold; }
+  .detail-row { font-size: 9pt; line-height: 1.6; border-bottom: 1px solid #f0f0f0; padding-bottom: 4px; margin-bottom: 4px; }
+
+  .refund-note { background: #fff5f5; border-left: 5px solid #E74C3C; padding: 20px; font-size: 10pt; color: #555; margin-bottom: 30px; }
+  .footer { border-top: 2px solid #E74C3C; padding-top: 15px; margin-top: 40px; font-size: 8pt; color: #888; width: 100%; }
+  
+  .signature-box img { max-height: 60px; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <table class="header-table" border="0" cellspacing="0" cellpadding="0">
+    <tr>
+      <td class="logo-cell">
+        {% if company.logo_b64 %}
+        <img src="{{ company.logo_b64 }}" alt="Logo" style="max-height: 50px;">
+        {% else %}
+        <div class="company-name">Eximp &amp; Cloves</div>
+        {% endif %}
+      </td>
+      <td class="company-cell">
+        <div class="company-name" style="font-size: 14pt;">{{ company.name }}</div>
+        {{ company.rc }}<br>
+        {{ company.address }}<br>
+        {{ company.phone }} | {{ company.website }}
+      </td>
+    </tr>
+  </table>
+
+  <!-- Receipt Banner -->
+  <div class="receipt-banner">
+    <h1>REFUND RECEIPT</h1>
+  </div>
+
+  <!-- Amount Block -->
+  <div class="amount-block">
+    <div class="amount-label">Total Amount Refunded</div>
+    <div class="amount-value">{{ format_currency(payment.amount) }}</div>
+    <table width="100%" style="margin-top: 20px; border-top: 1px solid #333; padding-top: 15px; color: #ccc; font-size: 9pt;">
+      <tr>
+        <td align="left">Transaction Ref: <strong>{{ payment.reference }}</strong></td>
+        <td align="right">Date: <strong>{{ payment.payment_date }}</strong></td>
+      </tr>
+    </table>
+  </div>
+
+  <!-- Details -->
+  <table class="details-table" border="0" cellspacing="0" cellpadding="10">
+    <tr>
+      <td width="50%" class="card-cell">
+        <div class="info-title">CLIENT DETAILS</div>
+        <div class="detail-row"><strong>Name:</strong> {{ client.full_name }}</div>
+        <div class="detail-row"><strong>Email:</strong> {{ client.email }}</div>
+        <div class="detail-row"><strong>Phone:</strong> {{ client.phone }}</div>
+      </td>
+      <td width="50%" class="card-cell">
+        <div class="info-title">INVOICE REFERENCE</div>
+        <div class="detail-row"><strong>Invoice NO:</strong> {{ invoice.invoice_number }}</div>
+        <div class="detail-row"><strong>Project:</strong> {{ invoice.property_name or 'N/A' }}</div>
+        <div class="detail-row"><strong>Refund Method:</strong> {{ payment.payment_method }}</div>
+        <div class="detail-row"><strong>Sales Rep:</strong> {{ invoice.sales_rep_name or 'N/A' }}{% if invoice.sales_rep_phone %} | {{ invoice.sales_rep_phone }}{% endif %}</div>
+      </td>
+    </tr>
+  </table>
+
+  <div class="refund-note">
+    <strong>Refund Confirmation</strong><br>
+    This document confirms that the amount of {{ format_currency(payment.amount) }} has been successfully processed as a refund for the transaction reference {{ payment.reference }}. 
+    {% if payment.notes %}
+    <br><br><strong>Note:</strong> {{ payment.notes }}
+    {% endif %}
+  </div>
+
+  <!-- Signature Section -->
+  <table width="100%" style="margin-top: 50px; border-bottom: 2px solid #E74C3C; padding-bottom: 10px; margin-bottom: 10px;">
+    <tr>
+      <td width="30%" style="vertical-align: bottom;">
+        <!-- Left side empty -->
+      </td>
+      <td width="70%" align="right" style="vertical-align: bottom;">
+        <div class="signature-box" style="margin-bottom: 5px; min-height: 60px;">
+          {% if signature_img_base64 %}
+          <img src="data:{{ signature_mime }};base64,{{ signature_img_base64 }}" alt="Signature">
+          {% endif %}
+        </div>
+        <div style="border-top: 1px solid #eee; width: 200px; margin-left: auto; padding-top: 3px; font-size: 8pt; color: #888; text-transform: uppercase;">
+          Authorized Signature
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- Footer -->
+  <div class="footer" style="border-top: none; margin-top: 0;">
+    <table width="100%">
+      <tr>
+        <td width="100%">
+          {{ company.name }} | RC {{ company.rc }}<br>
+          {{ company.address }} | Authorized Electronic Refund Receipt | Generated on {{ generated_at }}
+        </td>
+      </tr>
+    </table>
+  </div>
+
+</div>
+</body>
+</html>

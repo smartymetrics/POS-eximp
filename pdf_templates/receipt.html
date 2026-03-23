@@ -94,6 +94,7 @@
         <div class="detail-row"><strong>Project:</strong> {{ invoice.property_name or 'N/A' }}</div>
         <div class="detail-row"><strong>Location:</strong> {{ invoice.property_location or 'N/A' }}</div>
         <div class="detail-row"><strong>Payment Plan:</strong> {{ invoice.payment_terms }}</div>
+        <div class="detail-row"><strong>Sales Rep:</strong> {{ invoice.sales_rep_name or 'N/A' }}{% if invoice.sales_rep_phone %} | {{ invoice.sales_rep_phone }}{% endif %}</div>
       </td>
     </tr>
   </table>

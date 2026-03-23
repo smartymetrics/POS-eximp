@@ -3,10 +3,11 @@ from typing import List, Optional
 from datetime import date, datetime, timedelta
 from collections import defaultdict
 
-from models import CommissionRateCreate, CommissionAdjustment, CommissionPayout, DefaultRateUpdate
+from models import CommissionRateCreate, CommissionAdjustment, CommissionPayout, DefaultRateUpdate, CommissionVoidRequest
 from database import get_db
 from routers.auth import verify_token
 from routers.analytics import log_activity
+from email_service import send_commission_void_email
 
 router = APIRouter()
 
@@ -79,7 +80,7 @@ async def set_rep_rate(payload: CommissionRateCreate, background_tasks: Backgrou
 @router.get("/earnings")
 async def list_earnings(rep_id: Optional[str] = None, is_paid: Optional[bool] = None, current_admin=Depends(verify_token)):
     db = get_db()
-    query = db.table("commission_earnings").select("*, sales_reps(name), clients(full_name), invoices(invoice_number)").order("created_at", desc=True)
+    query = db.table("commission_earnings").select("*, sales_reps(name), clients(full_name), invoices(invoice_number)").eq("is_voided", False).order("created_at", desc=True)
     if rep_id:
         query = query.eq("sales_rep_id", rep_id)
     if is_paid is not None:
@@ -90,7 +91,7 @@ async def list_earnings(rep_id: Optional[str] = None, is_paid: Optional[bool] = 
 @router.get("/earnings/rep/{rep_id}")
 async def rep_earnings(rep_id: str, current_admin=Depends(verify_token)):
     db = get_db()
-    res = db.table("commission_earnings").select("*, clients(full_name), invoices(invoice_number)").eq("sales_rep_id", rep_id).order("created_at", desc=True).execute()
+    res = db.table("commission_earnings").select("*, clients(full_name), invoices(invoice_number)").eq("sales_rep_id", rep_id).eq("is_voided", False).order("created_at", desc=True).execute()
     return res.data
 
 @router.patch("/earnings/{id}/adjust")
@@ -128,7 +129,7 @@ async def adjust_earnings(id: str, payload: CommissionAdjustment, background_tas
 @router.get("/owed")
 async def summary_owed(current_admin=Depends(verify_token)):
     db = get_db()
-    res = db.table("commission_earnings").select("*, sales_reps(name)").eq("is_paid", False).execute()
+    res = db.table("commission_earnings").select("*, sales_reps(name)").eq("is_paid", False).eq("is_voided", False).execute()
     
     owed = defaultdict(lambda: {"total": 0.0, "count": 0, "name": "", "partially_paid": False})
     for e in res.data:
@@ -150,7 +151,7 @@ async def summary_owed(current_admin=Depends(verify_token)):
 async def detailed_owed(rep_id: str, current_admin=Depends(verify_token)):
     db = get_db()
     # Include amount_paid so frontend can show balance accurately
-    res = db.table("commission_earnings").select("*, clients(full_name), invoices(invoice_number)").eq("sales_rep_id", rep_id).eq("is_paid", False).order("created_at", desc=True).execute()
+    res = db.table("commission_earnings").select("*, clients(full_name), invoices(invoice_number)").eq("sales_rep_id", rep_id).eq("is_paid", False).eq("is_voided", False).order("created_at", desc=True).execute()
     # Annotate each record with the true balance remaining
     for e in res.data:
         e["balance_owed"] = round(float(e["final_amount"]) - float(e.get("amount_paid") or 0), 2)
@@ -251,3 +252,52 @@ async def rep_payouts(rep_id: str, current_admin=Depends(verify_token)):
     db = get_db()
     res = db.table("payout_batches").select("*, admins:paid_by(full_name)").eq("sales_rep_id", rep_id).order("paid_at", desc=True).execute()
     return res.data
+
+
+@router.post("/earnings/{id}/void")
+async def void_earning(id: str, payload: CommissionVoidRequest, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+    if current_admin.get("role") != "admin":
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    db = get_db()
+    
+    # 1. Fetch record
+    earning_res = db.table("commission_earnings").select("*, sales_reps(*)").eq("id", id).execute()
+    if not earning_res.data:
+        raise HTTPException(status_code=404, detail="Earning record not found")
+        
+    earning = earning_res.data[0]
+    if earning["is_paid"]:
+        raise HTTPException(status_code=400, detail="Cannot void a paid commission record")
+        
+    # 2. Void it
+    db.table("commission_earnings").update({
+        "is_voided": True,
+        "voided_at": datetime.now().isoformat(),
+        "voided_by": current_admin["sub"],
+        "void_reason": payload.reason
+    }).eq("id", id).execute()
+    
+    # 3. Log and email
+    background_tasks.add_task(
+        log_activity,
+        "commission_voided",
+        f"Commission of NGN {earning['final_amount']:,.2f} voided. Reason: {payload.reason}",
+        performed_by=current_admin["sub"]
+    )
+    
+    # Fetch client and invoice for email context
+    inv_res = db.table("invoices").select("*").eq("id", earning["invoice_id"]).execute()
+    client_res = db.table("clients").select("*").eq("id", earning["client_id"]).execute()
+    
+    if inv_res.data and client_res.data:
+        background_tasks.add_task(
+            send_commission_void_email,
+            earning["sales_reps"],
+            client_res.data[0],
+            inv_res.data[0],
+            earning,
+            payload.reason
+        )
+    
+    return {"message": "Commission record voided successfully"}

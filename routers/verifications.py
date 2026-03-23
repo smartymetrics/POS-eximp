@@ -91,19 +91,20 @@ async def confirm_verification(
         .order("invoice_date")\
         .execute()
 
-    if invoice.get("sales_rep_name"):
+    rep_id = invoice.get("sales_rep_id")
+    if not rep_id and invoice.get("sales_rep_name"):
+        # Fallback for old invoices without sales_rep_id
         rep_name = invoice["sales_rep_name"].strip()
-        # Look for the rep with fuzzy matching (case insensitive)
         rep_res = db.table("sales_reps")\
-            .select("*")\
+            .select("id")\
             .ilike("name", f"%{rep_name}%")\
             .eq("is_active", True)\
             .execute()
         
         if rep_res.data:
-            rep = rep_res.data[0]
-            rep_id = rep["id"]
+            rep_id = rep_res.data[0]["id"]
             
+    if rep_id:
             # Use the rate logic with fallbacks
             rate = get_commission_rate(
                 sales_rep_id=rep_id,

@@ -91,6 +91,7 @@
           <tr><td><strong>Due Date:</strong></td><td align="right">{{ invoice.due_date }}</td></tr>
           <tr><td><strong>Payment Plan:</strong></td><td align="right">{{ invoice.payment_terms }}</td></tr>
           <tr><td><strong>Property:</strong></td><td align="right">{{ invoice.property_name }}</td></tr>
+          <tr><td><strong>Sales Rep:</strong></td><td align="right">{{ invoice.sales_rep_name or 'N/A' }}{% if invoice.sales_rep_phone %} &nbsp;|&nbsp; {{ invoice.sales_rep_phone }}{% endif %}</td></tr>
         </table>
       </td>
     </tr>

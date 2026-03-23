@@ -95,6 +95,7 @@
   .stat-card.green::before { background: var(--green); }
   .stat-card.blue::before { background: #3498db; }
   .stat-card.red::before { background: var(--red); }
+  .stat-card.refund::before { background: #e74c3c; }
   .stat-label { font-size: 11px; color: var(--gray); text-transform: uppercase; letter-spacing: 1px; margin-bottom: 8px; }
   .stat-value { font-size: 24px; font-weight: 700; color: var(--dark); line-height: 1; }
   .stat-value.small { font-size: 18px; }
@@ -366,6 +367,11 @@
         <div class="stat-label">Amount Collected</div>
         <div class="stat-value small" id="stat-collected">—</div>
         <div class="stat-sub" id="stat-col-delta"><span style="color:var(--green)">+0%</span> vs prev period</div>
+      </div>
+      <div class="stat-card refund">
+        <div class="stat-label">Total Refunds</div>
+        <div class="stat-value small" id="stat-refunds">—</div>
+        <div class="stat-sub" id="stat-ref-delta">vs prev period</div>
       </div>
       <div class="stat-card blue">
         <div class="stat-label">New Clients</div>
@@ -903,7 +909,14 @@
           <input type="hidden" id="pay-client-id">
         </div>
         <div class="form-group">
-          <label class="form-label">Amount Paid (NGN) <span class="req">*</span></label>
+          <label class="form-label">Transaction Type</label>
+          <select class="form-control" id="pay-type" onchange="togglePayType()">
+            <option value="payment">Standard Payment</option>
+            <option value="refund">Refund (Deduction)</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label" id="pay-amount-label">Amount Paid (NGN) <span class="req">*</span></label>
           <input type="number" class="form-control" id="pay-amount" placeholder="e.g. 500000">
         </div>
         <div class="form-group">
@@ -1012,7 +1025,7 @@
         </div>
         <div class="form-group">
           <label class="form-label">Sales Rep Name</label>
-          <input type="text" class="form-control" id="edit-inv-rep">
+          <select class="form-control" id="edit-inv-rep"></select>
           <div class="form-hint edit-inv-admin-lock" style="display:none; color:var(--red);">Only Admins can edit Sales Rep.</div>
         </div>
         <div class="form-group">
@@ -2007,6 +2020,7 @@ async function submitAddRep() {
 }
 
 async function openEditRepModal(id) {
+    window.currentRepId = id;
     try {
         const res = await apiFetch(`/api/sales-reps/`).then(r => r.json());
         const rep = res.find(r => r.id === id);
@@ -2433,13 +2447,14 @@ function renderAnaRepLeaderboard(data) {
 
 // ── KPI UPDATES ───────────────────────────
 function updateKPIs(data) {
-  document.getElementById('stat-invoiced').textContent = fmtNGN(data.total_revenue);
-  document.getElementById('stat-collected').textContent = fmtNGN(data.amount_collected);
+  document.getElementById('stat-invoiced').textContent = fmtNGN(data.total_revenue || 0);
+  document.getElementById('stat-collected').textContent = fmtNGN(data.amount_collected || 0);
+  document.getElementById('stat-refunds').textContent = fmtNGN(data.total_refunds || 0);
   document.getElementById('stat-clients').textContent = data.new_clients;
   document.getElementById('stat-pending').textContent = data.pending_verifications;
 
   const fmtDelta = (val) => {
-    if (val === null) return '--';
+    if (val === null || val === undefined) return '--';
     const color = val >= 0 ? 'var(--green)' : 'var(--red)';
     const sign = val >= 0 ? '+' : '';
     return `<span style="color:${color}">${sign}${val.toFixed(1)}%</span> vs prev`;
@@ -2449,6 +2464,9 @@ function updateKPIs(data) {
     document.getElementById('stat-rev-delta').innerHTML = fmtDelta(data.delta.total_revenue);
     document.getElementById('stat-col-delta').innerHTML = fmtDelta(data.delta.amount_collected);
     document.getElementById('stat-cli-delta').innerHTML = fmtDelta(data.delta.new_clients);
+    if (document.getElementById('stat-ref-delta')) {
+      document.getElementById('stat-ref-delta').innerHTML = fmtDelta(data.delta.total_refunds);
+    }
   }
 }
 
@@ -2468,7 +2486,8 @@ function renderRevenueChart(data) {
       labels: data.labels,
       datasets: [
         { label: 'Invoiced', data: data.invoiced, borderColor: '#F5A623', backgroundColor: 'rgba(245,170,35,0.1)', fill: true, tension: 0.4 },
-        { label: 'Collected', data: data.collected, borderColor: '#2ecc71', backgroundColor: 'transparent', borderDash: [5, 5], tension: 0.4 }
+        { label: 'Collected', data: data.collected, borderColor: '#2ecc71', backgroundColor: 'transparent', borderDash: [5, 5], tension: 0.4 },
+        { label: 'Refunds', data: data.refunds || [], borderColor: '#e74c3c', backgroundColor: 'rgba(231, 76, 60, 0.05)', fill: true, tension: 0.4 }
       ]
     },
     options: { responsive: true, maintainAspectRatio: false, plugins: { legend: { position: 'top' } } }
@@ -2651,7 +2670,27 @@ async function openEditInvoiceModal(id) {
     document.getElementById('edit-inv-id').value = inv.id;
     document.getElementById('edit-inv-terms').value = inv.payment_terms || '';
     document.getElementById('edit-inv-due').value = inv.due_date || '';
-    document.getElementById('edit-inv-rep').value = inv.sales_rep_name || '';
+    
+    // Load Sales Rep options
+    const repSelect = document.getElementById('edit-inv-rep');
+    repSelect.innerHTML = '<option value="">-- No Sales Rep --</option>';
+    try {
+      const allReps = await apiFetch('/api/sales-reps/').then(r => r.json());
+      allReps.forEach(rep => {
+        const opt = document.createElement('option');
+        opt.value = rep.id;
+        opt.textContent = `${rep.name} (${rep.phone || 'No phone'})`;
+        repSelect.appendChild(opt);
+      });
+      if (inv.sales_rep_id) {
+        repSelect.value = inv.sales_rep_id;
+      } else if (inv.sales_rep_name) {
+        // Fallback for pre-migration records
+        const matchingRep = allReps.find(r => r.name === inv.sales_rep_name);
+        if (matchingRep) repSelect.value = matchingRep.id;
+      }
+    } catch(e) { console.error("Failed to load reps for edit modal", e); }
+
     document.getElementById('edit-inv-prop').value = inv.property_name || '';
     document.getElementById('edit-inv-location').value = inv.property_location || '';
     document.getElementById('edit-inv-amount').value = inv.amount || '';
@@ -2717,7 +2756,15 @@ async function submitEditInvoice() {
   
   if (currentUserRole === 'admin') {
     body.payment_terms = document.getElementById('edit-inv-terms').value;
-    body.sales_rep_name = document.getElementById('edit-inv-rep').value || null;
+    const repSelect = document.getElementById('edit-inv-rep');
+    if (repSelect.value) {
+      body.sales_rep_id = repSelect.value;
+      const selectedOpt = repSelect.options[repSelect.selectedIndex];
+      body.sales_rep_name = selectedOpt.textContent.split(' (')[0];
+    } else {
+      body.sales_rep_id = null;
+      body.sales_rep_name = null;
+    }
     body.property_name = document.getElementById('edit-inv-prop').value || null;
     body.property_location = document.getElementById('edit-inv-location').value || null;
     body.amount = parseFloat(document.getElementById('edit-inv-amount').value) || 0;
@@ -2764,6 +2811,7 @@ async function openViewPaymentsModal(invoiceId) {
           <thead>
             <tr style="background: #f8fafc;">
               <th style="padding-left: 24px;">Date</th>
+              <th>Type</th>
               <th>Reference</th>
               <th>Method</th>
               <th>Amount</th>
@@ -2774,10 +2822,22 @@ async function openViewPaymentsModal(invoiceId) {
             ${inv.payments.map(p => `
               <tr>
                 <td style="padding-left: 24px;">${p.payment_date}</td>
+                <td>
+                  <span class="badge badge-${p.payment_type === 'refund' ? 'voided' : 'payment'}" 
+                        style="background: ${p.payment_type === 'refund' ? '#e74c3c' : '#2ecc71'}; 
+                               color: white; padding: 2px 6px; border-radius: 3px; font-size: 10px; font-weight: 700;">
+                    ${(p.payment_type || 'payment').toUpperCase()}
+                  </span>
+                </td>
                 <td style="font-weight: 600;">${p.reference}</td>
                 <td>${p.payment_method}</td>
-                <td style="color: var(--green); font-weight: 600;">${fmtNGN(p.amount)}</td>
+                <td style="color: ${p.payment_type === 'refund' ? '#e74c3c' : 'var(--green)'}; font-weight: 600;">
+                  ${p.payment_type === 'refund' ? '-' : ''}${fmtNGN(p.amount)}
+                </td>
                 <td style="padding-right: 24px;">
+                  ${p.payment_type === 'refund' ? `
+                    <button class="action-btn" onclick="downloadRefundReceipt('${p.id}', '${inv.invoice_number}', '${p.reference}')">Receipt</button>
+                  ` : ''}
                   ${currentUserRole === 'admin' ? `<button class="action-btn" onclick='openEditPaymentModal(${JSON.stringify(p).replace(/'/g, "&#39;")})'>Edit</button>` : '<span style="color:var(--gray);font-size:11px;">Admin Only</span>'}
                 </td>
               </tr>
@@ -2795,6 +2855,7 @@ function openEditPaymentModal(payment) {
   document.getElementById('edit-pay-amount').value = payment.amount;
   document.getElementById('edit-pay-date').value = payment.payment_date;
   document.getElementById('edit-pay-method').value = payment.payment_method;
+  document.getElementById('edit-pay-type').value = payment.payment_type || 'payment';
   document.getElementById('edit-pay-notes').value = payment.notes || '';
   
   // Close view payments to not overlay weirdly, or just keep it open underneath?
@@ -2810,6 +2871,7 @@ async function submitEditPayment() {
     amount: parseFloat(document.getElementById('edit-pay-amount').value),
     payment_date: document.getElementById('edit-pay-date').value,
     payment_method: document.getElementById('edit-pay-method').value,
+    payment_type: document.getElementById('edit-pay-type').value,
     notes: document.getElementById('edit-pay-notes').value
   };
   
@@ -3074,6 +3136,7 @@ async function submitPayment() {
     payment_method: document.getElementById('pay-method').value,
     payment_date: document.getElementById('pay-date').value,
     notes: document.getElementById('pay-notes').value,
+    payment_type: document.getElementById('pay-type').value
   };
   if (!body.invoice_id || !body.reference || !body.amount) return toast('Fill all required fields', 'error');
 
@@ -3085,7 +3148,22 @@ async function submitPayment() {
     const data = await res.json();
     if (!res.ok) throw new Error(data.detail || 'Failed');
 
-    if (document.getElementById('pay-send-receipt').checked) {
+    if (body.payment_type === 'refund') {
+      if (document.getElementById('pay-send-receipt').checked) {
+        await apiFetch('/api/invoices/send', {
+          method: 'POST',
+          body: JSON.stringify({ invoice_id: body.invoice_id, document_types: ['refund_receipt'] })
+        });
+        toast('Refund recorded and receipt sent!', 'success');
+      } else {
+        toast('Refund recorded successfully!', 'success');
+      }
+      
+      const confirmDownload = confirm("Refund recorded! Would you like to download the refund receipt now?");
+      if (confirmDownload) {
+        downloadRefundReceipt(data.payment.id, data.invoice_number, data.payment.reference);
+      }
+    } else if (document.getElementById('pay-send-receipt').checked) {
       await apiFetch('/api/invoices/send', {
         method: 'POST',
         body: JSON.stringify({ invoice_id: body.invoice_id, document_types: ['receipt'] })
@@ -3098,6 +3176,45 @@ async function submitPayment() {
     allInvoices = [];
     loadDashboard();
   } catch(e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
+}
+
+async function downloadRefundReceipt(paymentId, invoiceNum, ref) {
+  try {
+    const res = await apiFetch(`/api/payments/${paymentId}/pdf/refund`);
+    if (!res.ok) {
+      const data = await res.json();
+      throw new Error(data.detail || 'Download failed');
+    }
+    const blob = await res.blob();
+    const url = window.URL.createObjectURL(blob);
+    const a = document.createElement('a');
+    a.style.display = 'none';
+    a.href = url;
+    a.download = `Refund_Receipt_${invoiceNum}_${ref}.pdf`;
+    document.body.appendChild(a);
+    a.click();
+    window.URL.revokeObjectURL(url);
+    document.body.removeChild(a);
+  } catch(e) {
+    toast(e.message, 'error');
+  }
+}
+
+function togglePayType() {
+  const type = document.getElementById('pay-type').value;
+  const label = document.getElementById('pay-amount-label');
+  const receiptLabel = document.querySelector('label[for="pay-send-receipt"]');
+  const submitBtn = document.querySelector('#recordPaymentModal button.btn-primary');
+
+  if (type === 'refund') {
+    label.innerHTML = 'Refund Amount (NGN) <span class="req">*</span>';
+    submitBtn.innerText = 'Record Refund';
+    receiptLabel.innerText = 'Email refund receipt to client';
+  } else {
+    label.innerHTML = 'Amount Paid (NGN) <span class="req">*</span>';
+    submitBtn.innerText = 'Record Payment';
+    receiptLabel.innerText = 'Email payment receipt to client';
+  }
 }
 
 function openAddClientModal() { openModal('addClientModal'); }

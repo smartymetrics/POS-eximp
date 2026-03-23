@@ -395,3 +395,84 @@ async def send_commission_earned_email(rep: dict, client: dict, invoice: dict, e
         "subject": f"Commission Earned — {client.get('full_name', 'Client')} | Eximp & Cloves",
         "html": _commission_html(rep, client, invoice, earning)
     })
+
+def _commission_void_html(rep: dict, client: dict, invoice: dict, earning: dict, reason: str) -> str:
+    amount = float(earning["commission_amount"])
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: #1A1A1A; padding: 24px; text-align: center;">
+        <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">
+      </div>
+      <div style="padding: 32px 24px; background: #fff; border: 1px solid #eee;">
+        <p style="color: #333;">Dear <strong>{rep.get('name', 'Rep')}</strong>,</p>
+        <p style="color: #555;">This is to inform you that a previously recorded commission for <strong>{client.get('full_name')}</strong> (Invoice {invoice.get('invoice_number')}) has been <strong>voided</strong>.</p>
+        
+        <div style="background: #fff5f5; border-left: 4px solid #e74c3c; padding: 16px; margin: 20px 0; font-size: 14px; color: #c0392b;">
+          <strong>Void Reason:</strong> {reason}
+        </div>
+        
+        <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
+          <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #777;">Amount Reversed:</td><td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; color: #e74c3c;"><strong>-NGN {amount:,.2f}</strong></td></tr>
+          <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #777;">Property:</td><td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; color: #333;">{invoice.get('property_name')}</td></tr>
+        </table>
+        
+        <p style="color: #555; font-size: 13px; margin-top: 24px;">If you have any questions regarding this adjustment, please contact the Finance Department at finance@eximps-cloves.com.</p>
+        
+        <hr style="border-color: #eee; margin: 24px 0;">
+        <p style="color: #999; font-size: 12px; margin: 0; text-align: center;">
+          Eximp & Cloves Infrastructure Limited | RC 8311800<br>
+          57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383
+        </p>
+      </div>
+    </div>"""
+
+async def send_commission_void_email(rep: dict, client: dict, invoice: dict, earning: dict, reason: str):
+    if not rep.get("email"):
+        return
+    resend.Emails.send({
+        "from": f"Eximp & Cloves <{FROM_EMAIL}>",
+        "to": [rep["email"]],
+        "subject": f"Notice: Commission Record Adjusted (Voided) | Eximp & Cloves",
+        "html": _commission_void_html(rep, client, invoice, earning, reason)
+    })
+
+async def send_refund_receipt_email(invoice: dict, payment: dict, client: dict):
+    from pdf_service import generate_refund_receipt_pdf
+    client = sanitize_client_address(client.copy())
+    pdf = generate_refund_receipt_pdf(payment, invoice, client)
+    resend.Emails.send({
+        "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
+        "to": [client["email"]],
+        "subject": f"Refund Receipt — {invoice['invoice_number']}",
+        "html": _refund_receipt_html(invoice, payment, client),
+        "attachments": [{"filename": f"Refund_Receipt_{invoice['invoice_number']}.pdf", "content": list(pdf)}],
+    })
+
+def _refund_receipt_html(invoice: dict, payment: dict, client: dict) -> str:
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee;">
+      <div style="background: #1A1A1A; padding: 30px; text-align: center;">
+        <h1 style="color: #E74C3C; margin: 0; font-size: 24px;">Refund Receipt</h1>
+        <p style="color: #aaa; margin: 10px 0 0;">Transaction: {payment['reference']}</p>
+      </div>
+      <div style="padding: 30px; background: #fff;">
+        <p style="color: #333; font-size: 16px;">Dear {client['full_name']},</p>
+        <p style="color: #555; line-height: 1.6;">This is to confirm that a refund of <strong>NGN {float(payment['amount']):,.2f}</strong> has been processed for your account regarding Invoice <strong>{invoice['invoice_number']}</strong>.</p>
+        
+        <div style="background: #f9f9f9; border-radius: 8px; padding: 20px; margin: 25px 0; border: 1px solid #eee;">
+          <table style="width: 100%; font-size: 14px; border-collapse: collapse;">
+            <tr><td style="padding: 8px 0; color: #888;">Refund Amount</td><td style="padding: 8px 0; text-align: right; font-weight: bold; color: #E74C3C;">NGN {float(payment['amount']):,.2f}</td></tr>
+            <tr><td style="padding: 8px 0; color: #888;">Refund Date</td><td style="padding: 8px 0; text-align: right;">{payment['payment_date']}</td></tr>
+            <tr><td style="padding: 8px 0; color: #888;">Reference</td><td style="padding: 8px 0; text-align: right; font-weight: bold;">{payment['reference']}</td></tr>
+            <tr><td style="padding: 8px 0; color: #888;">Method</td><td style="padding: 8px 0; text-align: right;">{payment['payment_method']}</td></tr>
+          </table>
+        </div>
+        
+        <p style="color: #555; line-height: 1.6;">If you have any questions, please contact our finance department.</p>
+        <p style="color: #333; margin-top: 30px;">Best regards,<br><strong>The Eximp & Cloves Team</strong></p>
+      </div>
+      <div style="background: #f4f4f4; padding: 20px; text-align: center; color: #888; font-size: 12px; border-top: 1px solid #eee;">
+        Eximp & Cloves Infrastructure Limited | RC 8311800
+      </div>
+    </div>
+    """

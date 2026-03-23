@@ -28,13 +28,19 @@ document.addEventListener("DOMContentLoaded", () => {
         commissionNav.id = "nav-commission";
         commissionNav.href = "#";
         commissionNav.innerHTML = `
-            <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                <path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
-            </svg>
-            Commission
+            <div style="display:flex; align-items:center; gap:12px; width:100%;">
+                <div style="width:24px; height:24px; background:rgba(245,166,35,0.1); border-radius:6px; display:flex; align-items:center; justify-content:center; color:var(--gold);">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M12 1v22"/><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+                    </svg>
+                </div>
+                <span style="font-weight:600;">Commissions</span>
+            </div>
         `;
         commissionNav.onclick = (e) => {
             e.preventDefault();
+            document.querySelectorAll(".nav-item").forEach(i => i.classList.remove("active"));
+            commissionNav.classList.add("active");
             if (typeof window.showSection === 'function') {
                 window.showSection('commission');
             }
@@ -53,8 +59,14 @@ document.addEventListener("DOMContentLoaded", () => {
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                 <h2 style="font-size:18px; font-weight:700;">Commission Management</h2>
                 <div style="display:flex; gap:10px;">
-                    <button class="btn btn-ghost" onclick="openDefaultRateModal()">Global Default Rate</button>
-                    <button class="btn btn-primary" onclick="openPayoutModal()">+ New Payout</button>
+                    <button class="btn btn-ghost" onclick="openDefaultRateModal()" style="display:flex; align-items:center; gap:6px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 15a3 3 0 1 0 0-6 3 3 0 0 0 0 6Z"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1 0 2.83 2 2 0 0 1-2.83 0l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-2 2 2 2 0 0 1-2-2v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83 0 2 2 0 0 1 0-2.83l.06-.06a1.65 1.65 0 0 0 .33-1.82 1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1-2-2 2 2 0 0 1 2-2h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 0-2.83 2 2 0 0 1 2.83 0l.06.06a1.65 1.65 0 0 0 1.82.33H9a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 2-2 2 2 0 0 1 2 2v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 0 2 2 0 0 1 0 2.83l-.06.06a1.65 1.65 0 0 0-.33 1.82V9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 2 2 2 2 0 0 1-2 2h-.09a1.65 1.65 0 0 0-1.51 1Z"/></svg>
+                        Global Rates
+                    </button>
+                    <button class="btn btn-primary" onclick="openPayoutModal()" style="display:flex; align-items:center; gap:6px;">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+                        New Payout
+                    </button>
                 </div>
             </div>
             
@@ -168,16 +180,38 @@ document.addEventListener("DOMContentLoaded", () => {
                 </div>
             </div>
         </div>
+        
+        <!-- Void Commission Modal -->
+        <div class="modal-overlay" id="voidCommissionModal">
+            <div class="modal">
+                <div class="modal-header">
+                    <span class="modal-title">Void Commission Earning</span>
+                    <button class="modal-close" onclick="closeModal('voidCommissionModal')">&times;</button>
+                </div>
+                <div class="modal-body">
+                    <p style="font-size:12px; color:var(--red); margin-bottom:16px;"><strong>Warning:</strong> Voiding a commission record will remove it from the rep's owed balance and send them an automated email notification.</p>
+                    <div class="form-group" style="margin-bottom:16px;">
+                        <label class="form-label">Void Reason <span class="req">*</span></label>
+                        <textarea id="void-comm-reason" class="form-control" rows="3" placeholder="e.g. Transaction cancelled by client / Error in calculation"></textarea>
+                        <input type="hidden" id="void-comm-id">
+                    </div>
+                    <div class="form-actions">
+                        <button class="btn btn-ghost" onclick="closeModal('voidCommissionModal')">Cancel</button>
+                        <button class="btn btn-primary" id="void-comm-btn" style="background:var(--red); color:white;" onclick="submitVoidCommission()">Confirm Void</button>
+                    </div>
+                </div>
+            </div>
+        </div>
     `;
     document.body.appendChild(modalsContainer);
 
     // 4. Hook into Rep Profile Modal to add Commission Tabs
     // The user's repo opens "viewRepInfo" modal probably. I'll rely on an interval or observer to inject the tab if it doesn't exist.
     setInterval(() => {
-        const repModalHeader = document.querySelector('#repModal .modal-header');
+        const repModalHeader = document.querySelector('#editRepModal .modal-header');
         if (repModalHeader && !document.getElementById('rep-tab-commission')) {
             // Found the existing modal, inject our custom Commission Tab
-            const tabsContainer = document.querySelector('#repModal .modal-body .tabs') || createTabsHoc();
+            const tabsContainer = document.querySelector('#editRepModal .modal-body .tabs') || createTabsHoc();
             if (tabsContainer) {
                 const commTab = document.createElement("button");
                 commTab.className = "tab-btn";
@@ -185,8 +219,8 @@ document.addEventListener("DOMContentLoaded", () => {
                 commTab.innerText = "Commissions";
                 commTab.onclick = () => {
                     // Custom logic to show commission view inside rep modal
-                    document.querySelectorAll('#repModal .tab-content').forEach(el => el.style.display = 'none');
-                    document.querySelectorAll('#repModal .tab-btn').forEach(el => el.classList.remove('active'));
+                    document.querySelectorAll('#editRepModal .tab-content').forEach(el => el.style.display = 'none');
+                    document.querySelectorAll('#editRepModal .tab-btn').forEach(el => el.classList.remove('active'));
                     commTab.classList.add('active');
                     
                     let commContent = document.getElementById('rep-content-commission');
@@ -197,11 +231,11 @@ document.addEventListener("DOMContentLoaded", () => {
                         commContent.style.display = "block";
                         commContent.innerHTML = `
                             <div style="display:flex; justify-content:flex-end; margin-bottom:10px;">
-                                <button class="btn btn-ghost" onclick="openSetRateModal(currentRepId)" style="font-size:12px; padding:6px 10px;">Set Custom Rate</button>
+                                <button class="btn btn-ghost" onclick="openSetRateModal(window.currentRepId)" style="font-size:12px; padding:6px 10px;">Set Custom Rate</button>
                             </div>
                             <div id="rep-commission-history" style="font-size:13px;"><div class="loading"><span class="spinner"></span>Loading...</div></div>
                         `;
-                        const body = document.querySelector('#repModal .modal-body');
+                        const body = document.querySelector('#editRepModal .modal-body');
                         body.appendChild(commContent);
                     } else {
                         commContent.style.display = "block";
@@ -266,35 +300,68 @@ async function loadCommissionDashboard() {
         const payouts = await payoutsRes.json();
         
         // Render Owed
-        let owedHtml = '<table class="data-table"><thead><tr><th>Rep Name</th><th>Unpaid Deals</th><th>Balance Owed</th></tr></thead><tbody>';
-        if (owed.length === 0) owedHtml += '<tr><td colspan="3" class="search-empty">No pending commissions.</td></tr>';
-        owed.forEach(o => {
-            owedHtml += `<tr>
-                <td class="client-name">${o.name}</td>
-                <td>${o.count}</td>
-                <td style="font-weight:700; color:var(--gold-dark);">
-                    NGN ${o.total.toLocaleString()}
-                    ${o.partially_paid ? `<div style="font-size:10px; color:var(--gray); font-weight:400; margin-top:2px;">Partial payment applied</div>` : ''}
-                </td>
-            </tr>`;
-        });
-        owedHtml += '</tbody></table>';
+        let owedHtml = '<div style="padding:16px; display:flex; flex-direction:column; gap:12px;">';
+        if (owed.length === 0) {
+            owedHtml = '<div class="search-empty" style="padding:40px;">No pending commissions owed.</div>';
+        } else {
+            owed.forEach(o => {
+                const initials = o.name.split(' ').map(n=>n[0]).join('').slice(0,2).toUpperCase();
+                owedHtml += `
+                <div style="background:#fff; border:1px solid #f0f0f0; border-radius:8px; padding:12px; cursor:pointer; transition:all 0.2s;" 
+                     onmouseover="this.style.borderColor='var(--gold)'; this.style.transform='translateY(-2px)';" 
+                     onmouseout="this.style.borderColor='#f0f0f0'; this.style.transform='none';"
+                     onclick="if(window.openEditRepModal) openEditRepModal('${o.rep_id}')">
+                    <div style="display:flex; align-items:center; gap:12px; margin-bottom:10px;">
+                        <div style="width:32px; height:32px; background:rgba(245,166,35,0.1); color:var(--gold-dark); border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:11px; font-weight:800; flex-shrink:0;">${initials}</div>
+                        <div style="flex:1;">
+                            <div style="font-size:13px; font-weight:700; color:var(--dark);">${o.name}</div>
+                            <div style="font-size:10px; color:var(--gray);">${o.count} active deal${o.count > 1 ? 's' : ''}</div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="font-size:13px; font-weight:800; color:var(--gold-dark);">NGN ${o.total.toLocaleString()}</div>
+                            <div style="font-size:9px; color:var(--gray); text-transform:uppercase; letter-spacing:0.5px;">Pending Balance</div>
+                        </div>
+                    </div>
+                    ${o.partially_paid ? `
+                    <div style="background:#fffbf0; border-radius:4px; padding:4px 8px; display:flex; align-items:center; gap:6px;">
+                        <span style="width:6px; height:6px; background:var(--gold); border-radius:50%;"></span>
+                        <span style="font-size:10px; color:#b07d10;">Partial collections received</span>
+                    </div>` : ''}
+                </div>`;
+            });
+        }
+        owedHtml += '</div>';
         document.getElementById('commissionOwedTable').innerHTML = owedHtml;
         
 
         // Render Payouts
-        let ptsHtml = '<table class="data-table"><thead><tr><th>Date</th><th>Rep</th><th>Amount</th><th>Ref</th></tr></thead><tbody>';
-        if (payouts.length === 0) ptsHtml += '<tr><td colspan="4" class="search-empty">No layouts processed yet.</td></tr>';
-        payouts.forEach(p => {
-            const date = new Date(p.paid_at).toLocaleDateString();
-            ptsHtml += `<tr>
-                <td>${date}</td>
-                <td class="client-name">${p.sales_reps?.name || 'Unknown'}</td>
-                <td style="font-weight:700; color:var(--green);">NGN ${p.total_amount.toLocaleString()}</td>
-                <td style="font-size:11px;">${p.reference || '-'}</td>
-            </tr>`;
-        });
-        ptsHtml += '</tbody></table>';
+        let ptsHtml = '<div style="padding:16px; display:flex; flex-direction:column; gap:10px;">';
+        if (payouts.length === 0) {
+            ptsHtml = '<div class="search-empty" style="padding:40px;">No payout batches processed yet.</div>';
+        } else {
+            payouts.forEach(p => {
+                const date = new Date(p.paid_at).toLocaleDateString('en-GB', { day:'2-digit', month:'short' });
+                ptsHtml += `
+                <div style="background:#fcfcfc; border:1px solid #eee; border-radius:6px; padding:10px; display:flex; align-items:center; gap:12px;">
+                    <div style="width:36px; height:36px; background:#fff; border:1px solid #eee; border-radius:4px; display:flex; flex-direction:column; align-items:center; justify-content:center; flex-shrink:0;">
+                        <span style="font-size:9px; font-weight:700; color:var(--gray); text-transform:uppercase; line-height:1;">${date.split(' ')[1]}</span>
+                        <span style="font-size:14px; font-weight:800; color:var(--dark); line-height:1;">${date.split(' ')[0]}</span>
+                    </div>
+                    <div style="flex:1;">
+                        <div style="font-size:12px; font-weight:700; color:var(--dark);">${p.sales_reps?.name || 'Unknown'}</div>
+                        <div style="font-size:10px; color:var(--gray); display:flex; align-items:center; gap:4px;">
+                            <svg width="10" height="10" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 6L9 17l-5-5"/></svg>
+                            Ref: ${p.reference || '-'}
+                        </div>
+                    </div>
+                    <div style="text-align:right;">
+                        <div style="font-size:13px; font-weight:800; color:var(--green);">NGN ${p.total_amount.toLocaleString()}</div>
+                        <div style="font-size:9px; color:var(--gray); text-transform:uppercase;">Disbursed</div>
+                    </div>
+                </div>`;
+            });
+        }
+        ptsHtml += '</div>';
         document.getElementById('commissionPayoutsTable').innerHTML = ptsHtml;
         
     } catch(err) {
@@ -483,7 +550,7 @@ async function submitSetRate() {
 
 function createTabsHoc() {
     // If the modal didn't have a tabs div, we create one inside modal-body.
-    const body = document.querySelector('#repModal .modal-body');
+    const body = document.querySelector('#editRepModal .modal-body');
     if(!body) return null;
     const tabsRow = document.createElement("div");
     tabsRow.className = "tabs";
@@ -499,8 +566,8 @@ function createTabsHoc() {
     overTab.className = "tab-btn active";
     overTab.innerText = "Overview";
     overTab.onclick = () => {
-        document.querySelectorAll('#repModal .tab-content').forEach(el => el.style.display = 'none');
-        document.querySelectorAll('#repModal .tab-btn').forEach(el => el.classList.remove('active'));
+        document.querySelectorAll('#editRepModal .tab-content').forEach(el => el.style.display = 'none');
+        document.querySelectorAll('#editRepModal .tab-btn').forEach(el => el.classList.remove('active'));
         overTab.classList.add('active');
         existingContent.style.display = 'block';
     };
@@ -527,25 +594,157 @@ async function loadRepCommissionHistory(repId) {
         const rates = await ratesRes.json();
         const earnings = await earningsRes.json();
         
-        let html = '<div style="margin-bottom:20px;"><strong>Active Custom Rates</strong><table class="data-table" style="margin-top:10px;"><thead><tr><th>Estate</th><th>Rate</th><th>Date</th></tr></thead><tbody>';
-        if(rates.length === 0) html += '<tr><td colspan="3" class="search-empty">No custom rates. Using system default.</td></tr>';
-        rates.forEach(r => {
-            if(!r.effective_to) {
-                html += `<tr><td>${r.estate_name}</td><td style="font-weight:700;">${r.rate}%</td><td>${r.effective_from}</td></tr>`;
-            }
-        });
-        html += '</tbody></table></div>';
-        
-        html += '<div><strong>Recent Earning History</strong><table class="data-table" style="margin-top:10px;"><thead><tr><th>Date</th><th>Client</th><th>Amount</th><th>Status</th></tr></thead><tbody>';
-        if(earnings.length === 0) html += '<tr><td colspan="4" class="search-empty">No earnings yet.</td></tr>';
-        earnings.forEach(e => {
-            const status = e.is_paid ? '<span class="status paid">Paid</span>' : '<span class="status unpaid">Unpaid</span>';
-            const dt = new Date(e.created_at).toLocaleDateString();
-            html += `<tr><td>${dt}</td><td>${e.clients?.full_name||'C'}</td><td style="font-weight:700; color:var(--dark);">NGN ${e.final_amount.toLocaleString()}</td><td>${status}</td></tr>`;
-        });
-        html += '</tbody></table></div>';
+        // 1. Calculate Summary Totals
+        const unpaidSub = earnings.filter(e => !e.is_paid);
+        const paidSub = earnings.filter(e => e.is_paid);
+        const totalOwed = unpaidSub.reduce((s, e) => s + (float(e.final_amount) - float(e.amount_paid || 0)), 0);
+        const totalPaid = paidSub.reduce((s, e) => s + float(e.final_amount), 0) + unpaidSub.reduce((s, e) => s + float(e.amount_paid || 0), 0);
+        const totalEarned = totalOwed + totalPaid;
+
+        function float(v) { return parseFloat(v || 0); }
+
+        let html = `
+            <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:12px; margin-bottom:24px;">
+                <div style="background:#fff; border:1px solid #eee; border-left:4px solid var(--gold); padding:12px; border-radius:6px; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+                    <div style="font-size:10px; color:var(--gray); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Pending Owed</div>
+                    <div style="font-size:16px; font-weight:800; color:var(--gold-dark);">NGN ${totalOwed.toLocaleString()}</div>
+                </div>
+                <div style="background:#fff; border:1px solid #eee; border-left:4px solid #27ae60; padding:12px; border-radius:6px; box-shadow:0 2px 4px rgba(0,0,0,0.02);">
+                    <div style="font-size:10px; color:var(--gray); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Total Paid</div>
+                    <div style="font-size:16px; font-weight:800; color:#27ae60;">NGN ${totalPaid.toLocaleString()}</div>
+                </div>
+                <div style="background:var(--dark); padding:12px; border-radius:6px; box-shadow:0 2px 4px rgba(0,0,0,0.08);">
+                    <div style="font-size:10px; color:#aaa; text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Cumulative Earnings</div>
+                    <div style="font-size:16px; font-weight:800; color:#fff;">NGN ${totalEarned.toLocaleString()}</div>
+                </div>
+            </div>
+
+            <div style="padding-bottom:12px; border-bottom:2px solid #f8f9fa; margin-bottom:16px; display:flex; align-items:center; justify-content:space-between;">
+                <h4 style="margin:0; font-size:13px; font-weight:700; color:var(--dark); display:flex; align-items:center; gap:8px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/></svg>
+                    Earning History
+                </h4>
+                <div style="font-size:11px; color:var(--gray);">${earnings.length} Records</div>
+            </div>
+
+            <table class="data-table" style="font-size:12px;">
+                <thead>
+                    <tr>
+                        <th style="padding:10px; background:#f8f9fa;">Date</th>
+                        <th style="padding:10px; background:#f8f9fa;">Client / Property</th>
+                        <th style="padding:10px; background:#f8f9fa;">Amount</th>
+                        <th style="padding:10px; background:#f8f9fa;">Status</th>
+                        <th style="padding:10px; background:#f8f9fa; text-align:right;">Actions</th>
+                    </tr>
+                </thead>
+                <tbody>`;
+
+        if(earnings.length === 0) {
+            html += '<tr><td colspan="5" class="search-empty" style="padding:40px;">No commission earnings recorded yet.</td></tr>';
+        } else {
+            earnings.forEach(e => {
+                const isPaid = e.is_paid;
+                const amtPaid = float(e.amount_paid);
+                const finalAmt = float(e.final_amount);
+                const balance = finalAmt - amtPaid;
+                
+                const statusHtml = isPaid 
+                    ? '<span class="status paid" style="font-size:10px; padding:2px 8px;">Full Payout</span>' 
+                    : (amtPaid > 0 
+                        ? `<span class="status partial" style="font-size:10px; padding:2px 8px;">Part Paid (${Math.round(amtPaid/finalAmt*100)}%)</span>` 
+                        : '<span class="status unpaid" style="font-size:10px; padding:2px 8px;">Pending</span>');
+                
+                const dt = new Date(e.created_at).toLocaleDateString('en-GB', { day:'2-digit', month:'short', year:'numeric' });
+                
+                let action = '';
+                if (!isPaid && !isPaid) {
+                    action = `<button class="action-btn" style="color:var(--red); border-color:#feb2b2; font-size:10px; padding:3px 8px;" onclick="openVoidCommissionModal('${e.id}')">Void</button>`;
+                }
+                
+                html += `
+                    <tr style="border-bottom:1px solid #f1f5f9; transition:background 0.2s;" onmouseover="this.style.background='#fcfcfc'" onmouseout="this.style.background='transparent'">
+                        <td style="color:var(--gray); font-size:11px;">${dt}</td>
+                        <td>
+                            <div style="font-weight:700; color:var(--dark);">${e.clients?.full_name || 'N/A'}</div>
+                            <div style="font-size:10px; color:var(--gray);">${e.invoices?.property_name || e.invoices?.invoice_number || '-'}</div>
+                        </td>
+                        <td>
+                            <div style="font-weight:800; color:var(--dark);">${finalAmt.toLocaleString()}</div>
+                            ${amtPaid > 0 ? `<div style="font-size:9px; color:var(--green);">Refined NGN ${amtPaid.toLocaleString()} paid</div>` : ''}
+                        </td>
+                        <td>${statusHtml}</td>
+                        <td style="text-align:right;">${action}</td>
+                    </tr>`;
+            });
+        }
+        html += '</tbody></table>';
+
+        if (rates.length > 0) {
+            html += `
+            <div style="margin-top:32px; padding-top:20px; border-top:1px dashed #eee;">
+                <div style="display:flex; align-items:center; gap:8px; margin-bottom:12px;">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="var(--gold)" stroke-width="2"><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+                    <span style="font-size:12px; font-weight:700; color:var(--dark); text-transform:uppercase; letter-spacing:0.5px;">Custom Agent Rates</span>
+                </div>
+                <table class="data-table" style="font-size:11px; background:#fafafa; border-radius:6px; overflow:hidden;">
+                    <thead style="background:#f1f5f9;">
+                        <tr><th style="padding:6px 12px;">Estate / Region</th><th style="padding:6px 12px;">Comm. Rate</th><th style="padding:6px 12px;">Effective From</th></tr>
+                    </thead>
+                    <tbody>`;
+            rates.forEach(r => {
+                if(!r.effective_to) {
+                    html += `<tr><td style="padding:8px 12px;">${r.estate_name}</td><td style="padding:8px 12px; font-weight:700; color:var(--gold-dark);">${r.rate}%</td><td style="padding:8px 12px; color:var(--gray);">${r.effective_from}</td></tr>`;
+                }
+            });
+            html += '</tbody></table></div>';
+        }
         
         target.innerHTML = html;
         
     } catch(err) { target.innerHTML = "Error loading commissions."; }
+}
+
+function openVoidCommissionModal(id) {
+    document.getElementById('void-comm-id').value = id;
+    document.getElementById('void-comm-reason').value = '';
+    openModalCustom('voidCommissionModal');
+}
+
+async function submitVoidCommission() {
+    const id = document.getElementById('void-comm-id').value;
+    const reason = document.getElementById('void-comm-reason').value.trim();
+    if (!reason || reason.length < 5) return alert("Please provide a descriptive reason for voiding this commission.");
+    
+    if (!confirm("Are you SURE you want to void this commission? This action cannot be undone and will notify the sales rep.")) return;
+
+    const btn = document.getElementById('void-comm-btn');
+    const origText = btn.innerHTML;
+    btn.disabled = true;
+    btn.innerHTML = 'Voiding...';
+    
+    try {
+        const res = await fetch(`/api/commission/earnings/${id}/void`, {
+            method: 'POST',
+            headers: { 
+                'Content-Type': 'application/json',
+                'Authorization': 'Bearer ' + localStorage.getItem('ec_token')
+            },
+            body: JSON.stringify({ reason })
+        });
+        
+        if (res.ok) {
+            closeModal('voidCommissionModal');
+            alert("Commission record voided successfully.");
+            if (window.currentRepId) loadRepCommissionHistory(window.currentRepId);
+            if (document.getElementById("section-commission").style.display === 'block') loadCommissionDashboard();
+        } else {
+            const data = await res.json();
+            alert("Error: " + (data.detail || "Failed to void record"));
+        }
+    } catch(err) {
+        alert("Network error. Please try again.");
+    } finally {
+        btn.disabled = false;
+        btn.innerHTML = origText;
+    }
 }

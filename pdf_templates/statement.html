@@ -24,7 +24,7 @@
   .client-name { font-size: 14pt; font-weight: 800; color: #1A1A1A; }
   .client-details { font-size: 10pt; color: #555; margin-top: 5px; }
 
-  .summary-table { width: 100%; margin-bottom: 30px; border-spacing: 10px 0; margin-left: -10px; }
+  .summary-table { width: 100%; margin-bottom: 30px; border-spacing: 15px 0; margin-left: -15px; }
   .summary-card { padding: 12px; text-align: center; border-radius: 4px; border: 1px solid #eee; }
   .card-label { font-size: 8pt; color: #888; text-transform: uppercase; margin-bottom: 5px; letter-spacing: 1px; }
   .card-value { font-size: 12pt; font-weight: 800; }
@@ -126,12 +126,12 @@
   <table class="tx-table">
     <thead>
       <tr>
-        <th width="15%">Date</th>
-        <th width="10%">Type</th>
-        <th width="35%">Reference / Details</th>
-        <th width="15%" class="text-right">Debit</th>
-        <th width="15%" class="text-right">Credit</th>
-        <th width="10%" class="text-right">Balance</th>
+        <th width="12%">Date</th>
+        <th width="8%">Type</th>
+        <th width="26%">Reference / Details</th>
+        <th width="18%" class="text-right">Debit</th>
+        <th width="18%" class="text-right">Credit</th>
+        <th width="18%" class="text-right">Balance</th>
       </tr>
     </thead>
     <tbody>
@@ -142,9 +142,9 @@
           <span class="badge badge-{{ tx.type | lower }}">{{ tx.type }}</span>
         </td>
         <td>{{ tx.ref }}</td>
-        <td class="text-right">{% if tx.amount %}{{ format_currency(tx.amount) }}{% else %}—{% endif %}</td>
-        <td class="text-right">{% if tx.payment %}{{ format_currency(tx.payment) }}{% else %}—{% endif %}</td>
-        <td class="text-right"><strong>{{ format_currency(tx.balance) }}</strong></td>
+        <td class="text-right" style="padding: 10px 15px;">{% if tx.amount %}{{ format_currency(tx.amount) }}{% else %}—{% endif %}</td>
+        <td class="text-right" style="padding: 10px 15px;">{% if tx.payment %}{{ format_currency(tx.payment) }}{% else %}—{% endif %}</td>
+        <td class="text-right" style="padding: 10px 15px;"><strong>{{ format_currency(tx.balance) }}</strong></td>
       </tr>
       {% endfor %}
     </tbody>

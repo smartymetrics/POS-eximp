@@ -120,6 +120,7 @@ class InvoiceUpdate(BaseModel):
     due_date: Optional[date] = None
     payment_terms: Optional[str] = None
     sales_rep_name: Optional[str] = None
+    sales_rep_id: Optional[str] = None
     property_name: Optional[str] = None
     notes: Optional[str] = None
     reason: Optional[str] = None # For due date changes
@@ -137,6 +138,7 @@ class PaymentCreate(BaseModel):
     reference: str
     amount: Decimal
     payment_method: str = "Bank Transfer"
+    payment_type: str = "payment" # payment or refund
     payment_date: date
     notes: Optional[str] = None
 
@@ -144,6 +146,7 @@ class PaymentUpdate(BaseModel):
     payment_date: Optional[date] = None
     reference: Optional[str] = None
     payment_method: Optional[str] = None
+    payment_type: Optional[str] = None
     amount: Optional[Decimal] = None
     notes: Optional[str] = None
 
@@ -226,10 +229,12 @@ class KPIDelta(BaseModel):
     total_revenue: Optional[float] = None
     amount_collected: Optional[float] = None
     new_clients: Optional[float] = None
+    total_refunds: Optional[float] = None
 
 class KPISummary(BaseModel):
     total_revenue: Optional[float] = None
     amount_collected: Optional[float] = None
+    total_refunds: float = 0.0
     outstanding_balance: Optional[float] = None
     new_clients: int
     plots_sold: int
@@ -244,6 +249,7 @@ class RevenueTrend(BaseModel):
     labels: list[str]
     invoiced: list[float]
     collected: list[float]
+    refunds: list[float] = []
 
 class EstateStat(BaseModel):
     name: str
@@ -336,3 +342,7 @@ class CommissionPayout(BaseModel):
 class DefaultRateUpdate(BaseModel):
     rate: Decimal
     reason: Optional[str] = None
+
+
+class CommissionVoidRequest(BaseModel):
+    reason: str

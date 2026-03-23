@@ -127,7 +127,10 @@ async def send_documents(
         raise HTTPException(status_code=404, detail="Invoice not found")
 
     invoice = inv.data[0]
-    client = invoice["clients"]
+    client_raw = invoice.get("clients", {})
+    # Handle both list and dict returns from Supabase-js style mapping
+    client = client_raw[0] if isinstance(client_raw, list) and client_raw else client_raw
+    if not client: client = {}
 
     sent = []
 
@@ -147,6 +150,14 @@ async def send_documents(
             elif doc_type == "receipt" and invoice["amount_paid"] > 0:
                 await send_receipt_email(invoice, client, current_admin["sub"])
                 sent.append("receipt")
+            elif doc_type == "refund_receipt":
+                # Find the most recent refund to send
+                refunds = [p for p in invoice.get("payments", []) if p.get("payment_type") == "refund"]
+                if refunds:
+                    latest_refund = sorted(refunds, key=lambda x: x["created_at"], reverse=True)[0]
+                    from email_service import send_refund_receipt_email
+                    await send_refund_receipt_email(invoice, latest_refund, client)
+                    sent.append("refund_receipt")
             elif doc_type == "statement":
                 # Fetch all invoices for this client
                 all_inv = db.table("invoices")\
@@ -209,6 +220,14 @@ async def void_invoice_receipts(
         "voided_by": current_admin["sub"]
     }).eq("invoice_id", invoice_id).eq("is_voided", False).execute()
 
+    # 2.2 Void any associated unpaid commission earnings
+    db.table("commission_earnings").update({
+        "is_voided": True,
+        "voided_at": datetime.utcnow().isoformat(),
+        "voided_by": current_admin["sub"],
+        "void_reason": f"Invoice {invoice_data.get('invoice_number', 'N/A')} voided"
+    }).eq("invoice_id", invoice_id).eq("is_paid", False).execute()
+
     # 2.5 Mark invoice itself as voided
     db.table("invoices").update({"status": "voided"}).eq("id", invoice_id).execute()
     
@@ -268,7 +287,7 @@ async def edit_invoice(
     # Field-level role checks
     admin_only_fields = [
         "amount", "plot_size_sqm", "property_name", "property_location", 
-        "property_id", "payment_terms", "sales_rep_name", "invoice_date"
+        "property_id", "payment_terms", "sales_rep_name", "sales_rep_id", "invoice_date"
     ]
     staff_allowed_fields = ["due_date", "notes"]
     
@@ -284,7 +303,7 @@ async def edit_invoice(
         return {"message": "No changes applied"}
 
     # Special handling for due_date change logging
-    if "due_date" in update_data:
+    if "due_date" in update_data and update_data["due_date"] != invoice.get("due_date"):
         reason = payload.get("reason")
         if not reason or len(reason) < 10:
              raise HTTPException(status_code=400, detail="A detailed reason (min 10 chars) is required for due date changes")
@@ -327,6 +346,17 @@ async def download_pdf(invoice_id: str, doc_type: str, current_admin=Depends(ver
         prop_res = db.table("properties").select("location").ilike("name", f"%{invoice['property_name']}%").execute()
         if prop_res.data:
             invoice["property_location"] = prop_res.data[0]["location"]
+
+    # Look up sales rep phone from sales_reps table
+    if not invoice.get("sales_rep_phone"):
+        if invoice.get("sales_rep_id"):
+            rep_res = db.table("sales_reps").select("phone").eq("id", invoice["sales_rep_id"]).limit(1).execute()
+            if rep_res.data:
+                invoice["sales_rep_phone"] = rep_res.data[0].get("phone")
+        elif invoice.get("sales_rep_name"):
+            rep_res = db.table("sales_reps").select("phone").eq("name", invoice["sales_rep_name"]).limit(1).execute()
+            if rep_res.data:
+                invoice["sales_rep_phone"] = rep_res.data[0].get("phone")
 
     if doc_type == "invoice":
         pdf_bytes = generate_invoice_pdf(invoice)
