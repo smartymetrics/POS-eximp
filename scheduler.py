@@ -65,7 +65,7 @@ async def run_scheduled_report(schedule_id: str):
         import resend
         import os
         resend.api_key = os.getenv("RESEND_API_KEY")
-        from_email = os.getenv("FROM_EMAIL", "finance@eximps-cloves.com")
+        from_email = os.getenv("FROM_EMAIL", "sales@mail.eximps-cloves.com")
 
         file_bytes = file_obj.getvalue()
 

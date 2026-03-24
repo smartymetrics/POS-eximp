@@ -6,8 +6,7 @@ from database import get_db
 from utils import sanitize_client_address
 
 resend.api_key = os.getenv("RESEND_API_KEY")
-# Force onboarding test domain because eximps-cloves.com is unverified
-FROM_EMAIL = "onboarding@resend.dev"
+FROM_EMAIL = os.getenv("FROM_EMAIL", "sales@eximps-cloves.com")
 
 def _b64(pdf_bytes: bytes) -> str:
     return base64.b64encode(pdf_bytes).decode()
@@ -399,6 +398,7 @@ async def send_commission_earned_email(rep: dict, client: dict, invoice: dict, e
     resend.Emails.send({
         "from": f"Eximp & Cloves <{FROM_EMAIL}>",
         "to": [rep["email"]],
+        "reply_to": "finance@eximps-cloves.com",
         "subject": f"Commission Earned — {client.get('full_name', 'Client')} | Eximp & Cloves",
         "html": _commission_html(rep, client, invoice, earning)
     })
@@ -439,6 +439,7 @@ async def send_commission_void_email(rep: dict, client: dict, invoice: dict, ear
     resend.Emails.send({
         "from": f"Eximp & Cloves <{FROM_EMAIL}>",
         "to": [rep["email"]],
+        "reply_to": "finance@eximps-cloves.com",
         "subject": f"Notice: Commission Record Adjusted (Voided) | Eximp & Cloves",
         "html": _commission_void_html(rep, client, invoice, earning, reason)
     })
