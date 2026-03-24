@@ -8,8 +8,11 @@ from pdf_service import generate_refund_receipt_pdf
 from fastapi.responses import StreamingResponse
 import io
 
-router = APIRouter()
+from routers.verifications import get_commission_rate
+from email_service import send_commission_earned_email
+from datetime import date
 
+router = APIRouter()
 
 @router.post("/")
 async def record_payment(
@@ -39,6 +42,63 @@ async def record_payment(
     # Use jsonable_encoder to handle Decimal/date types for Supabase
     encoded_data = jsonable_encoder(payment_data)
     result = db.table("payments").insert(encoded_data).execute()
+
+    payment_id = result.data[0]["id"]
+
+    # --- Commission Logic (Only for Standard Payments) ---
+    if data.payment_type == "payment":
+        invoice = inv.data[0]
+        rep_id = invoice.get("sales_rep_id")
+        
+        # Fallback for old invoices without sales_rep_id but have a name
+        if not rep_id and invoice.get("sales_rep_name"):
+            rep_name = invoice["sales_rep_name"].strip()
+            rep_res = db.table("sales_reps")\
+                .select("id")\
+                .ilike("name", f"%{rep_name}%")\
+                .eq("is_active", True)\
+                .execute()
+            if rep_res.data:
+                rep_id = rep_res.data[0]["id"]
+                
+        if rep_id:
+            # Calculate commission rate
+            rate = get_commission_rate(
+                sales_rep_id=rep_id,
+                estate_name=invoice.get("property_name", ""),
+                verification_date=date.today(),
+                db=db
+            )
+            deposit = float(data.amount)
+            commission_amount = round(deposit * rate / 100, 2)
+            
+            # Fetch client for email payload
+            client_res = db.table("clients").select("*").eq("id", data.client_id).execute()
+            client_data = client_res.data[0] if client_res.data else {}
+            
+            # Insert standard commission earning
+            earning = db.table("commission_earnings").insert({
+                "sales_rep_id": rep_id,
+                "invoice_id": invoice["id"],
+                "payment_id": payment_id,
+                "client_id": data.client_id,
+                "estate_name": invoice.get("property_name", ""),
+                "payment_amount": deposit,
+                "commission_rate": rate,
+                "commission_amount": commission_amount,
+            }).execute().data[0]
+            
+            # Send email
+            rep_res = db.table("sales_reps").select("*").eq("id", rep_id).execute()
+            if rep_res.data:
+                background_tasks.add_task(
+                    send_commission_earned_email,
+                    rep=rep_res.data[0],
+                    client=client_data,
+                    invoice=invoice,
+                    earning=earning
+                )
+    # -----------------------------------------------------
 
     background_tasks.add_task(
         log_activity,
