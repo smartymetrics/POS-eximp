@@ -111,6 +111,7 @@ class InvoiceCreate(BaseModel):
     property_location: Optional[str] = None
     plot_size_sqm: Optional[Decimal] = None
     amount: Decimal
+    quantity: int = 1
     payment_terms: str = "Outright"
     invoice_date: date
     due_date: date
@@ -122,6 +123,7 @@ class InvoiceUpdate(BaseModel):
     sales_rep_name: Optional[str] = None
     sales_rep_id: Optional[str] = None
     property_name: Optional[str] = None
+    quantity: Optional[int] = None
     notes: Optional[str] = None
     reason: Optional[str] = None # For due date changes
 

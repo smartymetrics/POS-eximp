@@ -132,7 +132,7 @@
             {% if invoice.plot_size_sqm %} — Plot Size: {{ invoice.plot_size_sqm }} sqm{% endif %}
           </div>
         </td>
-        <td class="text-right">1</td>
+        <td class="text-right">{{ invoice.quantity | default(1) }}</td>
         <td class="text-right"><strong>{{ format_currency(invoice.amount) }}</strong></td>
       </tr>
     </tbody>
