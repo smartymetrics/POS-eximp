@@ -106,9 +106,27 @@
         <!-- Left side empty -->
       </td>
       <td width="70%" align="right" style="vertical-align: bottom;">
-        <div class="signature-box" style="margin-bottom: 5px; min-height: 60px;">
-          {% if signature_img_base64 %}
-          <img src="data:{{ signature_mime }};base64,{{ signature_img_base64 }}" alt="Signature">
+        <div class="signature-box" style="margin-bottom: 5px; min-height: 80px;">
+          {% if company.seal_b64 or company.stamp_b64 or signature_img_base64 %}
+          <table align="right" border="0" cellspacing="0" cellpadding="0">
+            <tr>
+              {% if company.seal_b64 or company.stamp_b64 %}
+              <td style="padding-right: 15px; vertical-align: bottom;">
+                {% if company.seal_b64 %}
+                <img src="{{ company.seal_b64 }}" style="max-height: 80px; width: auto;">
+                {% endif %}
+                {% if company.stamp_b64 %}
+                <img src="{{ company.stamp_b64 }}" style="max-height: 80px; width: auto;">
+                {% endif %}
+              </td>
+              {% endif %}
+              {% if signature_img_base64 %}
+              <td style="padding-left: 15px; vertical-align: bottom;">
+                <img src="data:{{ signature_mime }};base64,{{ signature_img_base64 }}" alt="Signature" style="max-height: 60px;">
+              </td>
+              {% endif %}
+            </tr>
+          </table>
           {% endif %}
         </div>
         <div style="border-top: 1px solid #eee; width: 200px; margin-left: auto; padding-top: 3px; font-size: 8pt; color: #888; text-transform: uppercase;">

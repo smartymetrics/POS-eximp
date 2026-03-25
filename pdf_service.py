@@ -10,49 +10,6 @@ from utils import sanitize_client_address
 
 env = Environment(loader=FileSystemLoader("pdf_templates"))
 
-def get_company_logo_base64():
-    import base64
-    try:
-        with open("logo.png", "rb") as f:
-            return "data:image/png;base64," + base64.b64encode(f.read()).decode('utf-8')
-    except Exception:
-        pass
-    return ""
-
-COMPANY = {
-    "name": "Eximp & Cloves Infrastructure Limited",
-    "rc": "8311800",
-    "address": "57B, Isaac John Street, Yaba, Lagos, Nigeria",
-    "phone": "+234 912 686 4383",
-    "email": "admin@eximps-cloves.com",
-    "website": "www.eximps-cloves.com",
-    "primary_color": "#F5A623",
-    "dark_color": "#1A1A1A",
-    "logo_b64": get_company_logo_base64(),
-    "logo_url": "https://eximpcloves.vercel.app/light%20theme%20logo.png",
-}
-
-
-def format_currency(amount):
-    """Format as NGN currency"""
-    if amount is None:
-        return "NGN 0.00"
-    return f"NGN {float(amount):,.2f}"
-
-
-def _html_to_pdf(html_content: str) -> bytes:
-    """Convert HTML string to PDF bytes using xhtml2pdf."""
-    buffer = io.BytesIO()
-    result = pisa.CreatePDF(
-        src=html_content,
-        dest=buffer,
-        encoding="utf-8"
-    )
-    if result.err:
-        raise RuntimeError(f"PDF generation failed with {result.err} errors")
-    return buffer.getvalue()
-
-
 def _get_google_drive_direct_link(url):
     """Converts a Google Drive viewer/sharing link to a direct download link."""
     if not url or "drive.google.com" not in url:
@@ -87,29 +44,110 @@ def _get_image_as_base64(url):
             b64_str = base64.b64encode(res.content).decode("utf-8")
             return b64_str, content_type
         else:
-            print(f"Skipping signature fetch: Expected image but got {content_type}")
+            print(f"Skipping signature fetch: Expected image from {url} but got {content_type}")
     except Exception as e:
-        print(f"Failed to fetch image: {e}")
+        print(f"Failed to fetch image from {url}: {e}")
     return None, None
+
+def get_company_logo_base64():
+    import base64
+    try:
+        with open("logo.png", "rb") as f:
+            return "data:image/png;base64," + base64.b64encode(f.read()).decode('utf-8')
+    except Exception:
+        pass
+    return ""
+
+def get_authorized_stamp_base64():
+    """Fetches the official authority stamp from Supabase storage."""
+    supabase_url = os.getenv("SUPABASE_URL")
+    if not supabase_url:
+        return ""
+    # Constructed public URL for the stamp
+    stamp_url = f"{supabase_url}/storage/v1/object/public/signatures/authority/stamp.png"
+    b64, _ = _get_image_as_base64(stamp_url)
+    if b64:
+        return f"data:image/png;base64,{b64}"
+    return ""
+
+def get_authorized_seal_base64():
+    """Fetches the official company seal from Supabase."""
+    supabase_url = os.getenv("SUPABASE_URL")
+    if not supabase_url:
+        return ""
+    url = f"{supabase_url}/storage/v1/object/public/signatures/authority/seal.png"
+    b64, _ = _get_image_as_base64(url)
+    if b64:
+        return f"data:image/png;base64,{b64}"
+    return ""
+
+COMPANY = {
+    "name": "Eximp & Cloves Infrastructure Limited",
+    "rc": "8311800",
+    "address": "57B, Isaac John Street, Yaba, Lagos, Nigeria",
+    "phone": "+234 912 686 4383",
+    "email": "admin@eximps-cloves.com",
+    "website": "www.eximps-cloves.com",
+    "primary_color": "#F5A623",
+    "dark_color": "#1A1A1A",
+    "logo_b64": get_company_logo_base64(),
+    "stamp_b64": get_authorized_stamp_base64(),
+    "seal_b64": get_authorized_seal_base64(),
+    "logo_url": "https://eximpcloves.vercel.app/light%20theme%20logo.png",
+}
+
+
+def format_currency(amount):
+    """Format as NGN currency"""
+    if amount is None:
+        return "NGN 0.00"
+    return f"NGN {float(amount):,.2f}"
+
+
+def _html_to_pdf(html_content: str) -> bytes:
+    """Convert HTML string to PDF bytes using xhtml2pdf."""
+    buffer = io.BytesIO()
+    result = pisa.CreatePDF(
+        src=html_content,
+        dest=buffer,
+        encoding="utf-8"
+    )
+    if result.err:
+        raise RuntimeError(f"PDF generation failed with {result.err} errors")
+    return buffer.getvalue()
+
+
 
 
 def generate_invoice_pdf(invoice: dict) -> bytes:
     template = env.get_template("invoice.html")
     client = sanitize_client_address(invoice.get("clients", {}).copy())
     
+    # Handle Client Digital Signature
     signature_base64 = None
-    signature_mime = "image/jpeg"  # safe default
-    if invoice.get("signature_url"):
+    signature_mime = "image/png"
+    
+    # 1. Try to fetch from Supabase first (as our system prioritize this now)
+    invoice_no = invoice.get("invoice_number", "unknown")
+    supabase_url = os.getenv("SUPABASE_URL")
+    if supabase_url and invoice_no != "unknown":
+        stored_path = f"customer_signatures/sig_{invoice_no}.png"
+        url = f"{supabase_url}/storage/v1/object/public/signatures/{stored_path}"
+        b64, mime = _get_image_as_base64(url)
+        if b64:
+            signature_base64 = b64
+            signature_mime = mime
+
+    # 2. Fallback to signature_url in DB if Supabase fetch failed
+    if not signature_base64 and invoice.get("signature_url"):
         url = invoice["signature_url"]
-        # Case 1: Full data URI — parse MIME and raw base64
         if url.startswith("data:") and ";base64," in url:
             header, raw = url.split(";base64,", 1)
-            signature_mime = header.split("data:")[-1]  # e.g. "image/jpeg"
+            signature_mime = header.split("data:")[-1]
             signature_base64 = raw
-        # Case 2: Raw base64 string without header (long, no http)
-        elif "http" not in url and len(url) > 50:
-            signature_base64 = url
-        # Case 3: URL (Storage, Drive, etc)
+        elif url.startswith("data:image/"):
+            signature_base64 = url.split(",")[-1]
+            signature_mime = url.split(";")[0].split(":")[-1]
         else:
             b64, mime = _get_image_as_base64(url)
             if b64:
@@ -136,19 +174,31 @@ def generate_receipt_pdf(invoice: dict) -> bytes:
     raw_payments = invoice.get("payments", [])
     payments = [p for p in raw_payments if p.get("payment_type") != "refund"]
     
+    # Handle Client Digital Signature
     signature_base64 = None
-    signature_mime = "image/jpeg"  # safe default
-    if invoice.get("signature_url"):
+    signature_mime = "image/png"
+    
+    # 1. Try to fetch from Supabase first
+    invoice_no = invoice.get("invoice_number", "unknown")
+    supabase_url = os.getenv("SUPABASE_URL")
+    if supabase_url and invoice_no != "unknown":
+        stored_path = f"customer_signatures/sig_{invoice_no}.png"
+        url = f"{supabase_url}/storage/v1/object/public/signatures/{stored_path}"
+        b64, mime = _get_image_as_base64(url)
+        if b64:
+            signature_base64 = b64
+            signature_mime = mime
+
+    # 2. Fallback to signature_url in DB
+    if not signature_base64 and invoice.get("signature_url"):
         url = invoice["signature_url"]
-        # Case 1: Full data URI
         if url.startswith("data:") and ";base64," in url:
             header, raw = url.split(";base64,", 1)
             signature_mime = header.split("data:")[-1]
             signature_base64 = raw
-        # Case 2: Raw base64 string without header
-        elif "http" not in url and len(url) > 50:
-            signature_base64 = url
-        # Case 3: URL
+        elif url.startswith("data:image/"):
+            signature_base64 = url.split(",")[-1]
+            signature_mime = url.split(";")[0].split(":")[-1]
         else:
             b64, mime = _get_image_as_base64(url)
             if b64:
@@ -245,11 +295,44 @@ def generate_refund_receipt_pdf(payment: dict, invoice: dict, client: dict = Non
     else:
         client = sanitize_client_address(client.copy())
     
+    # Handle Client Digital Signature
+    signature_base64 = None
+    signature_mime = "image/png"
+    
+    # 1. Try to fetch from Supabase first
+    invoice_no = invoice.get("invoice_number", "unknown")
+    supabase_url = os.getenv("SUPABASE_URL")
+    if supabase_url and invoice_no != "unknown":
+        stored_path = f"customer_signatures/sig_{invoice_no}.png"
+        url = f"{supabase_url}/storage/v1/object/public/signatures/{stored_path}"
+        b64, mime = _get_image_as_base64(url)
+        if b64:
+            signature_base64 = b64
+            signature_mime = mime
+
+    # 2. Fallback to signature_url in DB
+    if not signature_base64 and invoice.get("signature_url"):
+        url = invoice["signature_url"]
+        if url.startswith("data:") and ";base64," in url:
+            header, raw = url.split(";base64,", 1)
+            signature_mime = header.split("data:")[-1]
+            signature_base64 = raw
+        elif url.startswith("data:image/"):
+            signature_base64 = url.split(",")[-1]
+            signature_mime = url.split(";")[0].split(":")[-1]
+        else:
+            b64, mime = _get_image_as_base64(url)
+            if b64:
+                signature_base64 = b64
+                signature_mime = mime
+
     html_content = template.render(
         company=COMPANY,
         payment=payment,
         invoice=invoice,
         client=client,
+        signature_img_base64=signature_base64,
+        signature_mime=signature_mime,
         format_currency=format_currency,
         generated_at=datetime.now().strftime("%d %b %Y")
     )

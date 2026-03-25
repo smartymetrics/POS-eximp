@@ -169,17 +169,47 @@
     </tfoot>
   </table>
 
+  <!-- Signature/Stamp Section -->
+  <table width="100%" style="margin-top: 40px; border-bottom: 2px solid #F5A623; padding-bottom: 10px; margin-bottom: 15px;">
+    <tr>
+      <td width="60%">
+        <div style="font-size: 9pt; color: #555; background: #fffbf0; border-left: 3px solid #F5A623; padding: 10px; margin-right: 20px;">
+          This statement represents a professional record of all transactions for your account. Please notify us of any discrepancies within 7 days.
+        </div>
+      </td>
+      <td width="40%" align="right" style="vertical-align: bottom;">
+        <div style="margin-bottom: 5px; min-height: 80px;">
+          {% if company.seal_b64 or company.stamp_b64 %}
+          <table align="right" border="0" cellspacing="0" cellpadding="0">
+            <tr>
+              {% if company.seal_b64 %}
+              <td style="padding-right: 15px; vertical-align: bottom;">
+                <img src="{{ company.seal_b64 }}" style="max-height: 80px; width: auto;">
+              </td>
+              {% endif %}
+              {% if company.stamp_b64 %}
+              <td style="vertical-align: bottom;">
+                <img src="{{ company.stamp_b64 }}" style="max-height: 80px; width: auto;">
+              </td>
+              {% endif %}
+            </tr>
+          </table>
+          {% endif %}
+        </div>
+        <div style="border-top: 1px solid #1A1A1A; width: 180px; margin-left: auto; padding-top: 3px; font-size: 8pt; color: #888; text-transform: uppercase;">
+          Authorized Signature
+        </div>
+      </td>
+    </tr>
+  </table>
+
   <!-- Footer -->
-  <div class="footer">
+  <div class="footer" style="border-top: none; margin-top: 0;">
     <table width="100%">
       <tr>
-        <td width="70%">
-          {{ company.name }}<br>
-          57B, Isaac John Street, Yaba, Lagos, Nigeria<br>
-          info@eximp-cloves.com | www.eximp-cloves.com
-        </td>
-        <td width="30%" align="right">
-          Authorized Electronic Statement
+        <td width="100%">
+          {{ company.name }} | RC {{ company.rc }}<br>
+          {{ company.address }} | Generated on {{ generated_at }}
         </td>
       </tr>
     </table>

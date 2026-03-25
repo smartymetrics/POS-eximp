@@ -126,6 +126,7 @@ class InvoiceUpdate(BaseModel):
     sales_rep_id: Optional[str] = None
     property_name: Optional[str] = None
     quantity: Optional[int] = None
+    amount_paid: Optional[Decimal] = None
     notes: Optional[str] = None
     reason: Optional[str] = None # For due date changes
     co_owner_name: Optional[str] = None

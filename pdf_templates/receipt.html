@@ -167,7 +167,24 @@
         {% endif %}
       </td>
       <td width="50%" align="right" style="vertical-align: bottom;">
-        <div style="height: 60px;"></div>
+        <div class="signature-box" style="margin-bottom: 5px; min-height: 80px;">
+          {% if company.seal_b64 or company.stamp_b64 %}
+          <table align="right" border="0" cellspacing="0" cellpadding="0">
+            <tr>
+              {% if company.seal_b64 %}
+              <td style="padding-right: 15px; vertical-align: bottom;">
+                <img src="{{ company.seal_b64 }}" style="max-height: 80px; width: auto;">
+              </td>
+              {% endif %}
+              {% if company.stamp_b64 %}
+              <td style="vertical-align: bottom;">
+                <img src="{{ company.stamp_b64 }}" style="max-height: 80px; width: auto;">
+              </td>
+              {% endif %}
+            </tr>
+          </table>
+          {% endif %}
+        </div>
         <div style="border-top: 1px solid #eee; width: 200px; margin-left: auto; padding-top: 3px; font-size: 8pt; color: #888; text-transform: uppercase;">
           Authorized Signature
         </div>
