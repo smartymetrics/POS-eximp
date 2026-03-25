@@ -858,12 +858,25 @@
         </div>
         <div class="form-group">
           <label class="form-label">Payment Terms</label>
-          <select class="form-control" id="inv-terms">
+          <select class="form-control" id="inv-terms" onchange="toggleCustomTerms('inv')">
             <option value="Outright">Outright</option>
-            <option value="Installment 2 Months">Installment — 2 Months</option>
-            <option value="Installment 4 Months">Installment — 4 Months</option>
-            <option value="Installment 6 Months">Installment — 6 Months</option>
+            <option value="1 Month">1 Month</option>
+            <option value="2 Months">2 Months</option>
+            <option value="3 Months">3 Months</option>
+            <option value="4 Months">4 Months</option>
+            <option value="5 Months">5 Months</option>
+            <option value="6 Months">6 Months</option>
+            <option value="Custom">Custom...</option>
           </select>
+          <input type="text" class="form-control" id="inv-terms-custom" placeholder="Type custom plan..." style="display:none; margin-top:8px;">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Co-Owner Name</label>
+          <input type="text" class="form-control" id="inv-co-owner-name" placeholder="e.g. Jane Doe">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Co-Owner Email</label>
+          <input type="email" class="form-control" id="inv-co-owner-email" placeholder="jane@example.com">
         </div>
         <div class="form-group">
           <label class="form-label">Invoice Date <span class="req">*</span></label>
@@ -1011,13 +1024,28 @@
       <div class="form-grid">
         <div class="form-group">
           <label class="form-label">Payment Terms</label>
-          <select class="form-control" id="edit-inv-terms">
+          <select class="form-control" id="edit-inv-terms" onchange="toggleCustomTerms('edit-inv')">
             <option value="Outright">Outright</option>
-            <option value="Installment 2 Months">Installment — 2 Months</option>
-            <option value="Installment 4 Months">Installment — 4 Months</option>
-            <option value="Installment 6 Months">Installment — 6 Months</option>
+            <option value="1 Month">1 Month</option>
+            <option value="2 Months">2 Months</option>
+            <option value="3 Months">3 Months</option>
+            <option value="4 Months">4 Months</option>
+            <option value="5 Months">5 Months</option>
+            <option value="6 Months">6 Months</option>
+            <option value="Custom">Custom...</option>
           </select>
+          <input type="text" class="form-control" id="edit-inv-terms-custom" placeholder="Type custom plan..." style="display:none; margin-top:8px;">
           <div class="form-hint edit-inv-admin-lock" style="display:none; color:var(--red);">Only Admins can edit payment terms.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Co-Owner Name</label>
+          <input type="text" class="form-control" id="edit-inv-co-owner-name">
+          <div class="form-hint edit-inv-admin-lock" style="display:none; color:var(--red);">Only Admins can edit Co-Owner Name.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Co-Owner Email</label>
+          <input type="email" class="form-control" id="edit-inv-co-owner-email">
+          <div class="form-hint edit-inv-admin-lock" style="display:none; color:var(--red);">Only Admins can edit Co-Owner Email.</div>
         </div>
         <div class="form-group">
           <label class="form-label">Due Date <span class="req">*</span></label>
@@ -1033,9 +1061,10 @@
           <div class="form-hint edit-inv-admin-lock" style="display:none; color:var(--red);">Only Admins can edit Sales Rep.</div>
         </div>
         <div class="form-group">
-          <label class="form-label">Property Name</label>
-          <input type="text" class="form-control" id="edit-inv-prop">
-          <div class="form-hint edit-inv-admin-lock" style="display:none; color:var(--red);">Only Admins can edit Property Name.</div>
+          <label class="form-label">Property</label>
+          <select class="form-control" id="edit-inv-prop-select" onchange="toggleCustomProperty()"></select>
+          <input type="text" class="form-control" id="edit-inv-prop-custom" placeholder="Type custom property name..." style="margin-top:8px;">
+          <div class="form-hint edit-inv-admin-lock" style="display:none; color:var(--red);">Only Admins can edit Property.</div>
         </div>
         <div class="form-group">
           <label class="form-label">Property Location</label>
@@ -2677,7 +2706,25 @@ async function openEditInvoiceModal(id) {
     }
     
     document.getElementById('edit-inv-id').value = inv.id;
-    document.getElementById('edit-inv-terms').value = inv.payment_terms || '';
+    
+    // Payment Terms Handling
+    const termsDropdown = document.getElementById('edit-inv-terms');
+    const termsCustom = document.getElementById('edit-inv-terms-custom');
+    const standardOptions = Array.from(termsDropdown.options).map(o => o.value);
+    
+    if (inv.payment_terms && !standardOptions.includes(inv.payment_terms)) {
+        termsDropdown.value = 'Custom';
+        termsCustom.value = inv.payment_terms;
+        termsCustom.style.display = 'block';
+    } else {
+        termsDropdown.value = inv.payment_terms || '';
+        termsCustom.value = '';
+        termsCustom.style.display = 'none';
+    }
+    
+    document.getElementById('edit-inv-co-owner-name').value = inv.co_owner_name || '';
+    document.getElementById('edit-inv-co-owner-email').value = inv.co_owner_email || '';
+    
     document.getElementById('edit-inv-due').value = inv.due_date || '';
     
     // Load Sales Rep options
@@ -2700,7 +2747,48 @@ async function openEditInvoiceModal(id) {
       }
     } catch(e) { console.error("Failed to load reps for edit modal", e); }
 
-    document.getElementById('edit-inv-prop').value = inv.property_name || '';
+    // Load Property options
+    const propSelect = document.getElementById('edit-inv-prop-select');
+    propSelect.innerHTML = '<option value="">-- Custom / Unmatched Property --</option>';
+    try {
+      if (!allProperties.length) allProperties = await apiFetch('/api/properties/').then(r => r.json());
+      allProperties.forEach(prop => {
+        const opt = document.createElement('option');
+        opt.value = prop.id;
+        opt.textContent = `${prop.name}`;
+        
+        opt.dataset.name = prop.name;
+        opt.dataset.location = prop.location || '';
+        opt.dataset.size = prop.plot_size_sqm || '';
+        
+        propSelect.appendChild(opt);
+      });
+      
+      const propCustom = document.getElementById('edit-inv-prop-custom');
+      
+      if (inv.property_id) {
+        propSelect.value = inv.property_id;
+        propCustom.value = '';
+        propCustom.style.display = 'none';
+      } else if (inv.property_name) {
+        // Try to match string if NULL id
+        const matchedProp = allProperties.find(p => p.name.toLowerCase() === inv.property_name.toLowerCase());
+        if (matchedProp) {
+            propSelect.value = matchedProp.id;
+            propCustom.value = '';
+            propCustom.style.display = 'none';
+        } else {
+            propSelect.value = '';
+            propCustom.value = inv.property_name;
+            propCustom.style.display = 'block';
+        }
+      } else {
+        propSelect.value = '';
+        propCustom.value = '';
+        propCustom.style.display = 'block';
+      }
+    } catch(e) { console.error("Failed to load properties for edit modal", e); }
+
     document.getElementById('edit-inv-location').value = inv.property_location || '';
     document.getElementById('edit-inv-size').value = inv.plot_size_sqm || '';
     document.getElementById('edit-inv-qty').value = inv.quantity || 1;
@@ -2724,8 +2812,12 @@ async function openEditInvoiceModal(id) {
     
     const isStaff = currentUserRole === 'staff';
     const termsInput = document.getElementById('edit-inv-terms');
+    const termsCustomInput = document.getElementById('edit-inv-terms-custom');
+    const coNameInput = document.getElementById('edit-inv-co-owner-name');
+    const coEmailInput = document.getElementById('edit-inv-co-owner-email');
     const repInput = document.getElementById('edit-inv-rep');
-    const propInput = document.getElementById('edit-inv-prop');
+    const propSelectInput = document.getElementById('edit-inv-prop-select');
+    const propCustomInput = document.getElementById('edit-inv-prop-custom');
     const locInput = document.getElementById('edit-inv-location');
     const amountInput = document.getElementById('edit-inv-amount');
     const sizeInput = document.getElementById('edit-inv-size');
@@ -2734,8 +2826,12 @@ async function openEditInvoiceModal(id) {
     
     if (isStaff) {
       termsInput.classList.add('locked-field'); termsInput.disabled = true;
+      termsCustomInput.classList.add('locked-field'); termsCustomInput.readOnly = true;
+      coNameInput.classList.add('locked-field'); coNameInput.readOnly = true;
+      coEmailInput.classList.add('locked-field'); coEmailInput.readOnly = true;
       repInput.classList.add('locked-field'); repInput.readOnly = true;
-      propInput.classList.add('locked-field'); propInput.readOnly = true;
+      propSelectInput.classList.add('locked-field'); propSelectInput.disabled = true;
+      propCustomInput.classList.add('locked-field'); propCustomInput.readOnly = true;
       locInput.classList.add('locked-field'); locInput.readOnly = true;
       amountInput.classList.add('locked-field'); amountInput.readOnly = true;
       sizeInput.classList.add('locked-field'); sizeInput.readOnly = true;
@@ -2744,8 +2840,12 @@ async function openEditInvoiceModal(id) {
       document.querySelectorAll('.edit-inv-admin-lock').forEach(el => el.style.display = 'block');
     } else {
       termsInput.classList.remove('locked-field'); termsInput.disabled = false;
+      termsCustomInput.classList.remove('locked-field'); termsCustomInput.readOnly = false;
+      coNameInput.classList.remove('locked-field'); coNameInput.readOnly = false;
+      coEmailInput.classList.remove('locked-field'); coEmailInput.readOnly = false;
       repInput.classList.remove('locked-field'); repInput.readOnly = false;
-      propInput.classList.remove('locked-field'); propInput.readOnly = false;
+      propSelectInput.classList.remove('locked-field'); propSelectInput.disabled = false;
+      propCustomInput.classList.remove('locked-field'); propCustomInput.readOnly = false;
       locInput.classList.remove('locked-field'); locInput.readOnly = false;
       amountInput.classList.remove('locked-field'); amountInput.readOnly = false;
       sizeInput.classList.remove('locked-field'); sizeInput.readOnly = false;
@@ -2768,7 +2868,12 @@ async function submitEditInvoice() {
   };
   
   if (currentUserRole === 'admin') {
-    body.payment_terms = document.getElementById('edit-inv-terms').value;
+    const termsDropdown = document.getElementById('edit-inv-terms').value;
+    body.payment_terms = termsDropdown === 'Custom' ? document.getElementById('edit-inv-terms-custom').value : termsDropdown;
+    
+    body.co_owner_name = document.getElementById('edit-inv-co-owner-name').value || null;
+    body.co_owner_email = document.getElementById('edit-inv-co-owner-email').value || null;
+    
     const repSelect = document.getElementById('edit-inv-rep');
     if (repSelect.value) {
       body.sales_rep_id = repSelect.value;
@@ -2778,7 +2883,16 @@ async function submitEditInvoice() {
       body.sales_rep_id = null;
       body.sales_rep_name = null;
     }
-    body.property_name = document.getElementById('edit-inv-prop').value || null;
+    
+    const propSel = document.getElementById('edit-inv-prop-select');
+    if (propSel.value) {
+        body.property_id = propSel.value;
+        body.property_name = propSel.options[propSel.selectedIndex].dataset.name;
+    } else {
+        body.property_id = null;
+        body.property_name = document.getElementById('edit-inv-prop-custom').value || null;
+    }
+    
     body.property_location = document.getElementById('edit-inv-location').value || null;
     body.plot_size_sqm = document.getElementById('edit-inv-size').value ? parseFloat(document.getElementById('edit-inv-size').value) : null;
     body.quantity = parseInt(document.getElementById('edit-inv-qty').value) || 1;
@@ -3080,7 +3194,38 @@ async function openNewInvoiceModal(event) {
   const today = new Date().toISOString().split('T')[0];
   document.getElementById('inv-date').value = today;
   document.getElementById('inv-due').value = today;
+  
+  document.getElementById('inv-co-owner-name').value = '';
+  document.getElementById('inv-co-owner-email').value = '';
+  document.getElementById('inv-terms').value = 'Outright';
+  toggleCustomTerms('inv');
+  
   openModal('newInvoiceModal');
+}
+
+function toggleCustomTerms(prefix) {
+  const select = document.getElementById(`${prefix}-terms`);
+  const customInput = document.getElementById(`${prefix}-terms-custom`);
+  if (select.value === 'Custom') {
+    customInput.style.display = 'block';
+  } else {
+    customInput.style.display = 'none';
+  }
+}
+
+function toggleCustomProperty() {
+    const sel = document.getElementById('edit-inv-prop-select');
+    const cust = document.getElementById('edit-inv-prop-custom');
+    
+    if (sel.value) {
+        cust.style.display = 'none';
+        // Auto-fill form fields
+        const opt = sel.options[sel.selectedIndex];
+        document.getElementById('edit-inv-location').value = opt.dataset.location || '';
+        document.getElementById('edit-inv-size').value = opt.dataset.size || '';
+    } else {
+        cust.style.display = 'block';
+    }
 }
 
 function calculateInvoiceAmountOrQty() {
@@ -3113,7 +3258,9 @@ async function submitInvoice() {
     plot_size_sqm: document.getElementById('inv-size').value ? parseFloat(document.getElementById('inv-size').value) : null,
     quantity: parseInt(document.getElementById('inv-qty').value) || 1,
     amount: parseFloat(document.getElementById('inv-amount').value),
-    payment_terms: document.getElementById('inv-terms').value,
+    payment_terms: document.getElementById('inv-terms').value === 'Custom' ? document.getElementById('inv-terms-custom').value : document.getElementById('inv-terms').value,
+    co_owner_name: document.getElementById('inv-co-owner-name').value || null,
+    co_owner_email: document.getElementById('inv-co-owner-email').value || null,
     invoice_date: document.getElementById('inv-date').value,
     due_date: document.getElementById('inv-due').value,
     notes: document.getElementById('inv-notes').value,

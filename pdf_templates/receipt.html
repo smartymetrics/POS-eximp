@@ -86,6 +86,9 @@
       <td width="50%" class="card-cell">
         <div class="info-title">CLIENT DETAILS</div>
         <div class="detail-row"><strong>Name:</strong> {{ client.full_name }}</div>
+        {% if invoice.co_owner_name %}
+        <div class="detail-row"><strong>Co-Owner:</strong> {{ invoice.co_owner_name }} ({{ invoice.co_owner_email }})</div>
+        {% endif %}
         <div class="detail-row"><strong>Email:</strong> {{ client.email }}</div>
         <div class="detail-row"><strong>Phone:</strong> {{ client.phone }}</div>
       </td>

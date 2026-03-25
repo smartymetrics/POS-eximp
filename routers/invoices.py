@@ -288,7 +288,8 @@ async def edit_invoice(
     # Field-level role checks
     admin_only_fields = [
         "amount", "quantity", "plot_size_sqm", "property_name", "property_location", 
-        "property_id", "payment_terms", "sales_rep_name", "sales_rep_id", "invoice_date"
+        "property_id", "payment_terms", "sales_rep_name", "sales_rep_id", "invoice_date",
+        "co_owner_name", "co_owner_email"
     ]
     staff_allowed_fields = ["due_date", "notes"]
     

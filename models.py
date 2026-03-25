@@ -116,6 +116,8 @@ class InvoiceCreate(BaseModel):
     invoice_date: date
     due_date: date
     notes: Optional[str] = None
+    co_owner_name: Optional[str] = None
+    co_owner_email: Optional[str] = None
 
 class InvoiceUpdate(BaseModel):
     due_date: Optional[date] = None
@@ -126,7 +128,8 @@ class InvoiceUpdate(BaseModel):
     quantity: Optional[int] = None
     notes: Optional[str] = None
     reason: Optional[str] = None # For due date changes
-
+    co_owner_name: Optional[str] = None
+    co_owner_email: Optional[str] = None
 
 class SendDocumentRequest(BaseModel):
     invoice_id: str

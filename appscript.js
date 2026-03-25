@@ -57,7 +57,7 @@ function onFormSubmit(e) {
 
             // Ownership & Signature
             ownership_type: responses["Ownership Type"] || "",
-            co_owner_name: responses['"Full name of the Second Owner\n(Surname, First name, Other Name)"'] || responses["Full name of the Second Owner"] || "",
+            co_owner_name: responses["Full name of the Second Owner\n(Surname, First name, Other Name)"] || responses["Full name of the Second Owner"] || "",
             co_owner_email: responses["Email address (Co-owner)"] || "",
             signature_url: responses["Upload Signature"] || "",
             signature_base64: getFileBase64(responses["Upload Signature"] || ""),

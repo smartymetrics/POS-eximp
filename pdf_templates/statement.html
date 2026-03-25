@@ -86,6 +86,19 @@
   <div class="client-block">
     <div class="info-tag">ACCOUNT HOLDER</div>
     <div class="client-name">{{ client.full_name }}</div>
+    
+    {% set statement_co_owner = none %}
+    {% set statement_co_email = none %}
+    {% for inv in invoices %}
+      {% if inv.co_owner_name %}
+        {% set statement_co_owner = inv.co_owner_name %}
+        {% set statement_co_email = inv.co_owner_email %}
+      {% endif %}
+    {% endfor %}
+    {% if statement_co_owner %}
+    <div class="client-details" style="color: #1A1A1A;"><strong>Co-Owner:</strong> {{ statement_co_owner }} ({{ statement_co_email }})</div>
+    {% endif %}
+
     <div class="client-details">
       {{ client.email }} {% if client.phone %} · {{ client.phone }}{% endif %}<br>
       {% if client.address %}{{ client.address }}{% endif %}

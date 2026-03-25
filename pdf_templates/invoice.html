@@ -78,6 +78,9 @@
         <div class="info-title">BILL TO</div>
         <div class="info-body">
           <strong>{{ client.full_name }}</strong><br>
+          {% if invoice.co_owner_name %}
+          Co-Owner: {{ invoice.co_owner_name }} ({{ invoice.co_owner_email }})<br>
+          {% endif %}
           {% if client.address %}{{ client.address }}<br>{% endif %}
           {% if client.city %}{{ client.city }}{% if client.state %}, {{ client.state }}{% endif %}<br>{% endif %}
           {{ client.email }}<br>
