@@ -2755,7 +2755,8 @@ async function openEditInvoiceModal(id) {
       allProperties.forEach(prop => {
         const opt = document.createElement('option');
         opt.value = prop.id;
-        opt.textContent = `${prop.name}`;
+        const sizeText = prop.plot_size_sqm ? ` (${prop.plot_size_sqm} SQM)` : '';
+        opt.textContent = `${prop.name}${sizeText}`;
         
         opt.dataset.name = prop.name;
         opt.dataset.location = prop.location || '';
@@ -3824,7 +3825,8 @@ async function filterSearch(cid, type) {
         title = item.full_name;
         meta = `<span>${item.email || 'No email'}</span> <span>${item.phone || ''}</span>`;
       } else if (type === 'properties') {
-        title = item.name;
+        const sizeText = item.plot_size_sqm ? ` (${item.plot_size_sqm} SQM)` : '';
+        title = `${item.name}${sizeText}`;
         meta = `<span>${item.estate_name || ''}</span> <span>${item.location}</span>`;
       } else if (type === 'invoices') {
         title = item.invoice_number || 'INV-???';
