@@ -95,7 +95,16 @@
       <td width="50%" class="card-cell">
         <div class="info-title">PROPERTY PURCHASED</div>
         <div class="detail-row"><strong>Project:</strong> {{ invoice.property_name or 'N/A' }}</div>
-        <div class="detail-row"><strong>Location:</strong> {{ invoice.property_location or 'N/A' }}</div>
+        <div class="detail-row"><strong>Quantity:</strong> {{ invoice.quantity | default(1) }} units</div>
+        <div class="detail-row">
+          <strong>Unit Price:</strong> 
+          {% if invoice.unit_price %}
+            {{ format_currency(invoice.unit_price) }}
+          {% else %}
+            {{ format_currency(invoice.amount / (invoice.quantity or 1)) }}
+          {% endif %}
+        </div>
+        <div class="detail-row"><strong>Total Price:</strong> {{ format_currency(invoice.amount) }}</div>
         <div class="detail-row"><strong>Payment Plan:</strong> {{ invoice.payment_terms }}</div>
         <div class="detail-row"><strong>Sales Rep:</strong> {{ invoice.sales_rep_name or 'N/A' }}{% if invoice.sales_rep_phone %} | {{ invoice.sales_rep_phone }}{% endif %}</div>
       </td>

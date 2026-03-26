@@ -8,7 +8,7 @@ from pdf_service import generate_refund_receipt_pdf
 from fastapi.responses import StreamingResponse
 import io
 
-from routers.verifications import get_commission_rate
+from commission_service import get_commission_rate
 from email_service import send_commission_earned_email
 from datetime import date
 

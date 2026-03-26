@@ -1092,6 +1092,11 @@
           <div class="form-hint edit-inv-admin-lock" style="display:none; color:var(--red);">Only Admins can edit Quantity.</div>
         </div>
         <div class="form-group">
+          <label class="form-label">Unit Price (NGN)</label>
+          <input type="number" class="form-control" id="edit-inv-price">
+          <div class="form-hint edit-inv-admin-lock" style="display:none; color:var(--red);">Only Admins can edit Unit Price.</div>
+        </div>
+        <div class="form-group">
           <label class="form-label">Invoice Date</label>
           <input type="date" class="form-control" id="edit-inv-date">
           <div class="form-hint edit-inv-admin-lock" style="display:none; color:var(--red);">Only Admins can edit Invoice Date.</div>
@@ -2798,6 +2803,7 @@ async function openEditInvoiceModal(id) {
     document.getElementById('edit-inv-location').value = inv.property_location || '';
     document.getElementById('edit-inv-size').value = inv.plot_size_sqm || '';
     document.getElementById('edit-inv-qty').value = inv.quantity || 1;
+    document.getElementById('edit-inv-price').value = inv.unit_price || '';
     document.getElementById('edit-inv-amount').value = inv.amount || '';
     document.getElementById('edit-inv-paid').value = inv.amount_paid || '';
     document.getElementById('edit-inv-date').value = inv.invoice_date || '';
@@ -2829,6 +2835,7 @@ async function openEditInvoiceModal(id) {
     const amountInput = document.getElementById('edit-inv-amount');
     const sizeInput = document.getElementById('edit-inv-size');
     const qtyInput = document.getElementById('edit-inv-qty');
+    const priceInput = document.getElementById('edit-inv-price');
     const dateInput = document.getElementById('edit-inv-date');
     const paidInput = document.getElementById('edit-inv-paid');
     
@@ -2844,6 +2851,7 @@ async function openEditInvoiceModal(id) {
       amountInput.classList.add('locked-field'); amountInput.readOnly = true;
       sizeInput.classList.add('locked-field'); sizeInput.readOnly = true;
       qtyInput.classList.add('locked-field'); qtyInput.readOnly = true;
+      priceInput.classList.add('locked-field'); priceInput.readOnly = true;
       dateInput.classList.add('locked-field'); dateInput.readOnly = true;
       paidInput.classList.add('locked-field'); paidInput.readOnly = true;
       document.querySelectorAll('.edit-inv-admin-lock').forEach(el => el.style.display = 'block');
@@ -2906,6 +2914,7 @@ async function submitEditInvoice() {
     body.property_location = document.getElementById('edit-inv-location').value || null;
     body.plot_size_sqm = document.getElementById('edit-inv-size').value ? parseFloat(document.getElementById('edit-inv-size').value) : null;
     body.quantity = parseInt(document.getElementById('edit-inv-qty').value) || 1;
+    body.unit_price = parseFloat(document.getElementById('edit-inv-price').value) || 0;
     body.amount = parseFloat(document.getElementById('edit-inv-amount').value) || 0;
     body.amount_paid = document.getElementById('edit-inv-paid').value ? parseFloat(document.getElementById('edit-inv-paid').value) : 0;
     body.invoice_date = document.getElementById('edit-inv-date').value || null;
@@ -3199,6 +3208,7 @@ async function openNewInvoiceModal(event) {
   document.getElementById('inv-location').value = '';
   document.getElementById('inv-size').value = '';
   document.getElementById('inv-qty').value = '1';
+  document.getElementById('inv-price').value = '';
   document.getElementById('inv-amount').value = '';
   document.getElementById('inv-notes').value = '';
 
@@ -3244,19 +3254,25 @@ function calculateInvoiceAmountOrQty() {
   if (!propertyId || !propertiesData) return;
   const rawProp = propertiesData.find(p => p.id === propertyId);
   const qtyInput = document.getElementById('inv-qty');
+  const priceInput = document.getElementById('inv-price');
   const amtInput = document.getElementById('inv-amount');
   
   if (!rawProp || !rawProp.starting_price) return;
   
   const unitPrice = parseFloat(rawProp.starting_price);
+  if (document.activeElement !== priceInput) {
+    priceInput.value = unitPrice;
+  }
   
   if (document.activeElement === amtInput && amtInput.value) {
     const totalAmt = parseFloat(amtInput.value);
-    const suggestedQty = Math.round(totalAmt / unitPrice);
+    const currentPrice = parseFloat(priceInput.value) || unitPrice;
+    const suggestedQty = Math.round(totalAmt / currentPrice);
     if (suggestedQty >= 1) qtyInput.value = suggestedQty;
-  } else if (document.activeElement === qtyInput && qtyInput.value) {
+  } else if ((document.activeElement === qtyInput || document.activeElement === priceInput) && (qtyInput.value || priceInput.value)) {
     const qty = parseInt(qtyInput.value) || 1;
-    amtInput.value = unitPrice * qty;
+    const currentPrice = parseFloat(priceInput.value) || unitPrice;
+    amtInput.value = currentPrice * qty;
   }
 }
 
@@ -3268,6 +3284,7 @@ async function submitInvoice() {
     property_location: document.getElementById('inv-location').value,
     plot_size_sqm: document.getElementById('inv-size').value ? parseFloat(document.getElementById('inv-size').value) : null,
     quantity: parseInt(document.getElementById('inv-qty').value) || 1,
+    unit_price: parseFloat(document.getElementById('inv-price').value) || 0,
     amount: parseFloat(document.getElementById('inv-amount').value),
     payment_terms: document.getElementById('inv-terms').value === 'Custom' ? document.getElementById('inv-terms-custom').value : document.getElementById('inv-terms').value,
     co_owner_name: document.getElementById('inv-co-owner-name').value || null,

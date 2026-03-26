@@ -10,6 +10,8 @@ from utils import sanitize_client_address
 
 env = Environment(loader=FileSystemLoader("pdf_templates"))
 
+from concurrent.futures import ThreadPoolExecutor, as_completed
+
 def _get_google_drive_direct_link(url):
     """Converts a Google Drive viewer/sharing link to a direct download link."""
     if not url or "drive.google.com" not in url:
@@ -26,23 +28,44 @@ def _get_google_drive_direct_link(url):
             file_id = parse_qs(parsed.query).get("id", [None])[0]
         
         if file_id:
-            # Bypass HTML interceptors on large/unscanned files using the thumbnail API
             return f"https://drive.google.com/thumbnail?sz=w800&id={file_id}"
     except Exception:
         pass
     return url
 
 
+def _compress_image_bytes(img_bytes, max_width=400, quality=75):
+    """Compress and resize an image to reduce its size for PDF embedding."""
+    try:
+        from PIL import Image as PILImage
+        with PILImage.open(io.BytesIO(img_bytes)) as img:
+            # Convert to RGBA to support transparency
+            if img.mode not in ('RGB', 'RGBA', 'L'):
+                img = img.convert('RGBA')
+            # Downscale if wider than max_width
+            if img.width > max_width:
+                ratio = max_width / img.width
+                img = img.resize((max_width, int(img.height * ratio)), PILImage.LANCZOS)
+            # Save as PNG (lossless, good for signatures)
+            buf = io.BytesIO()
+            img.save(buf, format="PNG", optimize=True)
+            return buf.getvalue(), "image/png"
+    except Exception:
+        return img_bytes, None  # Return original if compression fails
+
+
 def _get_image_as_base64(url):
-    """Fetches an image and returns (base64_string, content_type)."""
+    """Fetches an image, compresses it, and returns (base64_string, content_type)."""
     try:
         direct_url = _get_google_drive_direct_link(url)
-        res = requests.get(direct_url, timeout=10)
+        res = requests.get(direct_url, timeout=10)  # Reduced from 10s to 5s
         
         content_type = res.headers.get("Content-Type", "image/jpeg")
         if res.ok and content_type.startswith("image/"):
-            b64_str = base64.b64encode(res.content).decode("utf-8")
-            return b64_str, content_type
+            img_bytes, compressed_mime = _compress_image_bytes(res.content)
+            mime = compressed_mime or content_type
+            b64_str = base64.b64encode(img_bytes).decode("utf-8")
+            return b64_str, mime
         else:
             print(f"Skipping signature fetch: Expected image from {url} but got {content_type}")
     except Exception as e:
@@ -81,9 +104,54 @@ def get_authorized_seal_base64():
         return f"data:image/png;base64,{b64}"
     return ""
 
+def _get_parallel_images(urls_map):
+    """
+    Fetches multiple images in parallel.
+    urls_map: dict of {name: url}
+    returns: dict of {name: (base64, mime)}
+    """
+    results = {}
+    with ThreadPoolExecutor(max_workers=len(urls_map)) as executor:
+        future_to_name = {executor.submit(_get_image_as_base64, url): name for name, url in urls_map.items()}
+        for future in as_completed(future_to_name):
+            name = future_to_name[future]
+            try:
+                results[name] = future.result()
+            except Exception:
+                results[name] = (None, None)
+    return results
+
+def get_company_context():
+    """Returns the company context with fresh stamp and seal fetched in each call."""
+    supabase_url = os.getenv("SUPABASE_URL")
+    urls = {}
+    if supabase_url:
+        urls["stamp"] = f"{supabase_url}/storage/v1/object/public/signatures/authority/stamp.png"
+        urls["seal"] = f"{supabase_url}/storage/v1/object/public/signatures/authority/seal.png"
+    
+    fetched = _get_parallel_images(urls)
+    
+    stamp_b64, _ = fetched.get("stamp", (None, None))
+    seal_b64, _ = fetched.get("seal", (None, None))
+    
+    return {
+        "name": "Eximp & Cloves Infrastructure Limited",
+        "rc": "RC 8311800",
+        "address": "57B, Isaac John Street, Yaba, Lagos, Nigeria",
+        "phone": "+234 912 686 4383",
+        "email": "admin@eximps-cloves.com",
+        "website": "www.eximps-cloves.com",
+        "primary_color": "#F5A623",
+        "dark_color": "#1A1A1A",
+        "logo_b64": get_company_logo_base64(),
+        "stamp_b64": f"data:image/png;base64,{stamp_b64}" if stamp_b64 else "",
+        "seal_b64": f"data:image/png;base64,{seal_b64}" if seal_b64 else "",
+        "logo_url": "https://eximpcloves.vercel.app/light%20theme%20logo.png",
+    }
+
 COMPANY = {
     "name": "Eximp & Cloves Infrastructure Limited",
-    "rc": "8311800",
+    "rc": "RC 8311800",
     "address": "57B, Isaac John Street, Yaba, Lagos, Nigeria",
     "phone": "+234 912 686 4383",
     "email": "admin@eximps-cloves.com",
@@ -91,18 +159,16 @@ COMPANY = {
     "primary_color": "#F5A623",
     "dark_color": "#1A1A1A",
     "logo_b64": get_company_logo_base64(),
-    "stamp_b64": get_authorized_stamp_base64(),
-    "seal_b64": get_authorized_seal_base64(),
+    "stamp_b64": "", # Placeholder, will be updated in functions
+    "seal_b64": "", # Placeholder, will be updated in functions
     "logo_url": "https://eximpcloves.vercel.app/light%20theme%20logo.png",
 }
-
 
 def format_currency(amount):
     """Format as NGN currency"""
     if amount is None:
         return "NGN 0.00"
     return f"NGN {float(amount):,.2f}"
-
 
 def _html_to_pdf(html_content: str) -> bytes:
     """Convert HTML string to PDF bytes using xhtml2pdf."""
@@ -123,39 +189,58 @@ def generate_invoice_pdf(invoice: dict) -> bytes:
     template = env.get_template("invoice.html")
     client = sanitize_client_address(invoice.get("clients", {}).copy())
     
-    # Handle Client Digital Signature
+    # 1. Prepare all URLs for parallel fetching
+    supabase_url = os.getenv("SUPABASE_URL")
+    urls_to_fetch = {}
+    
+    if supabase_url:
+        urls_to_fetch["stamp"] = f"{supabase_url}/storage/v1/object/public/signatures/authority/stamp.png"
+        urls_to_fetch["seal"] = f"{supabase_url}/storage/v1/object/public/signatures/authority/seal.png"
+        
+        invoice_no = invoice.get("invoice_number", "unknown")
+        if invoice_no != "unknown":
+            urls_to_fetch["signature"] = f"{supabase_url}/storage/v1/object/public/signatures/customer_signatures/sig_{invoice_no}.png"
+            
+    # Also include the signature_url from DB if it's a remote URL and not a data URI
+    db_sig_url = invoice.get("signature_url")
+    if db_sig_url and db_sig_url.startswith("http") and "supabase" not in db_sig_url:
+        urls_to_fetch["db_signature"] = db_sig_url
+
+    # 2. Fetch all images in parallel
+    fetched = _get_parallel_images(urls_to_fetch)
+    
+    # 3. Process results
+    stamp_b64, _ = fetched.get("stamp", (None, None))
+    seal_b64, _ = fetched.get("seal", (None, None))
+    
     signature_base64 = None
     signature_mime = "image/png"
     
-    # 1. Try to fetch from Supabase first (as our system prioritize this now)
-    invoice_no = invoice.get("invoice_number", "unknown")
-    supabase_url = os.getenv("SUPABASE_URL")
-    if supabase_url and invoice_no != "unknown":
-        stored_path = f"customer_signatures/sig_{invoice_no}.png"
-        url = f"{supabase_url}/storage/v1/object/public/signatures/{stored_path}"
-        b64, mime = _get_image_as_base64(url)
-        if b64:
-            signature_base64 = b64
-            signature_mime = mime
-
-    # 2. Fallback to signature_url in DB if Supabase fetch failed
-    if not signature_base64 and invoice.get("signature_url"):
-        url = invoice["signature_url"]
-        if url.startswith("data:") and ";base64," in url:
-            header, raw = url.split(";base64,", 1)
+    # Try Supabase signature first
+    sig_b64, sig_mime = fetched.get("signature", (None, None))
+    if sig_b64:
+        signature_base64 = sig_b64
+        signature_mime = sig_mime
+    # Fallback to DB signature if Supabase failed
+    elif "db_signature" in fetched and fetched["db_signature"][0]:
+        signature_base64, signature_mime = fetched["db_signature"]
+    # Handle data URIs
+    elif db_sig_url and db_sig_url.startswith("data:"):
+        if ";base64," in db_sig_url:
+            header, raw = db_sig_url.split(";base64,", 1)
             signature_mime = header.split("data:")[-1]
             signature_base64 = raw
-        elif url.startswith("data:image/"):
-            signature_base64 = url.split(",")[-1]
-            signature_mime = url.split(";")[0].split(":")[-1]
         else:
-            b64, mime = _get_image_as_base64(url)
-            if b64:
-                signature_base64 = b64
-                signature_mime = mime
-        
+            signature_base64 = db_sig_url.split(",")[-1]
+            signature_mime = db_sig_url.split(";")[0].split(":")[-1]
+
+    # 4. Build dynamic company context
+    comp_ctx = COMPANY.copy()
+    comp_ctx["stamp_b64"] = f"data:image/png;base64,{stamp_b64}" if stamp_b64 else ""
+    comp_ctx["seal_b64"] = f"data:image/png;base64,{seal_b64}" if seal_b64 else ""
+
     html_content = template.render(
-        company=COMPANY,
+        company=comp_ctx,
         invoice=invoice,
         client=client,
         signature_img_base64=signature_base64,
@@ -174,39 +259,54 @@ def generate_receipt_pdf(invoice: dict) -> bytes:
     raw_payments = invoice.get("payments", [])
     payments = [p for p in raw_payments if p.get("payment_type") != "refund"]
     
-    # Handle Client Digital Signature
+    # 1. Prepare all URLs for parallel fetching
+    supabase_url = os.getenv("SUPABASE_URL")
+    urls_to_fetch = {}
+    
+    if supabase_url:
+        urls_to_fetch["stamp"] = f"{supabase_url}/storage/v1/object/public/signatures/authority/stamp.png"
+        urls_to_fetch["seal"] = f"{supabase_url}/storage/v1/object/public/signatures/authority/seal.png"
+        
+        invoice_no = invoice.get("invoice_number", "unknown")
+        if invoice_no != "unknown":
+            urls_to_fetch["signature"] = f"{supabase_url}/storage/v1/object/public/signatures/customer_signatures/sig_{invoice_no}.png"
+            
+    db_sig_url = invoice.get("signature_url")
+    if db_sig_url and db_sig_url.startswith("http") and "supabase" not in db_sig_url:
+        urls_to_fetch["db_signature"] = db_sig_url
+
+    # 2. Fetch all images in parallel
+    fetched = _get_parallel_images(urls_to_fetch)
+    
+    # 3. Process results
+    stamp_b64, _ = fetched.get("stamp", (None, None))
+    seal_b64, _ = fetched.get("seal", (None, None))
+    
     signature_base64 = None
     signature_mime = "image/png"
     
-    # 1. Try to fetch from Supabase first
-    invoice_no = invoice.get("invoice_number", "unknown")
-    supabase_url = os.getenv("SUPABASE_URL")
-    if supabase_url and invoice_no != "unknown":
-        stored_path = f"customer_signatures/sig_{invoice_no}.png"
-        url = f"{supabase_url}/storage/v1/object/public/signatures/{stored_path}"
-        b64, mime = _get_image_as_base64(url)
-        if b64:
-            signature_base64 = b64
-            signature_mime = mime
-
-    # 2. Fallback to signature_url in DB
-    if not signature_base64 and invoice.get("signature_url"):
-        url = invoice["signature_url"]
-        if url.startswith("data:") and ";base64," in url:
-            header, raw = url.split(";base64,", 1)
+    sig_b64, sig_mime = fetched.get("signature", (None, None))
+    if sig_b64:
+        signature_base64 = sig_b64
+        signature_mime = sig_mime
+    elif "db_signature" in fetched and fetched["db_signature"][0]:
+        signature_base64, signature_mime = fetched["db_signature"]
+    elif db_sig_url and db_sig_url.startswith("data:"):
+        if ";base64," in db_sig_url:
+            header, raw = db_sig_url.split(";base64,", 1)
             signature_mime = header.split("data:")[-1]
             signature_base64 = raw
-        elif url.startswith("data:image/"):
-            signature_base64 = url.split(",")[-1]
-            signature_mime = url.split(";")[0].split(":")[-1]
         else:
-            b64, mime = _get_image_as_base64(url)
-            if b64:
-                signature_base64 = b64
-                signature_mime = mime
-        
+            signature_base64 = db_sig_url.split(",")[-1]
+            signature_mime = db_sig_url.split(";")[0].split(":")[-1]
+
+    # 4. Build dynamic company context
+    comp_ctx = COMPANY.copy()
+    comp_ctx["stamp_b64"] = f"data:image/png;base64,{stamp_b64}" if stamp_b64 else ""
+    comp_ctx["seal_b64"] = f"data:image/png;base64,{seal_b64}" if seal_b64 else ""
+
     html_content = template.render(
-        company=COMPANY,
+        company=comp_ctx,
         invoice=invoice,
         client=client,
         payments=payments,
@@ -272,8 +372,24 @@ def generate_statement_pdf(invoices: list, client: dict) -> bytes:
         for p in (i.get("payments") or []) if not p.get("is_voided")
     )
 
+    # 1. Prepare URLs (only stamp and seal for statement)
+    supabase_url = os.getenv("SUPABASE_URL")
+    urls_to_fetch = {}
+    if supabase_url:
+        urls_to_fetch["stamp"] = f"{supabase_url}/storage/v1/object/public/signatures/authority/stamp.png"
+        urls_to_fetch["seal"] = f"{supabase_url}/storage/v1/object/public/signatures/authority/seal.png"
+    
+    fetched = _get_parallel_images(urls_to_fetch)
+    stamp_b64, _ = fetched.get("stamp", (None, None))
+    seal_b64, _ = fetched.get("seal", (None, None))
+
+    # 2. Build dynamic company context
+    comp_ctx = COMPANY.copy()
+    comp_ctx["stamp_b64"] = f"data:image/png;base64,{stamp_b64}" if stamp_b64 else ""
+    comp_ctx["seal_b64"] = f"data:image/png;base64,{seal_b64}" if seal_b64 else ""
+
     html_content = template.render(
-        company=COMPANY,
+        company=comp_ctx,
         client=client,
         transactions=transactions,
         total_invoiced=total_invoiced,
@@ -289,45 +405,59 @@ def generate_statement_pdf(invoices: list, client: dict) -> bytes:
 
 def generate_refund_receipt_pdf(payment: dict, invoice: dict, client: dict = None) -> bytes:
     template = env.get_template("refund_receipt.html")
-    # Use provided client or fetch from nested invoice data
     if not client:
         client = sanitize_client_address(invoice.get("clients", {}).copy())
     else:
         client = sanitize_client_address(client.copy())
     
-    # Handle Client Digital Signature
+    # 1. Prepare all URLs for parallel fetching
+    supabase_url = os.getenv("SUPABASE_URL")
+    urls_to_fetch = {}
+    
+    if supabase_url:
+        urls_to_fetch["stamp"] = f"{supabase_url}/storage/v1/object/public/signatures/authority/stamp.png"
+        urls_to_fetch["seal"] = f"{supabase_url}/storage/v1/object/public/signatures/authority/seal.png"
+        
+        invoice_no = invoice.get("invoice_number", "unknown")
+        if invoice_no != "unknown":
+            urls_to_fetch["signature"] = f"{supabase_url}/storage/v1/object/public/signatures/customer_signatures/sig_{invoice_no}.png"
+            
+    db_sig_url = invoice.get("signature_url")
+    if db_sig_url and db_sig_url.startswith("http") and "supabase" not in db_sig_url:
+        urls_to_fetch["db_signature"] = db_sig_url
+
+    # 2. Fetch all images in parallel
+    fetched = _get_parallel_images(urls_to_fetch)
+    
+    # 3. Process results
+    stamp_b64, _ = fetched.get("stamp", (None, None))
+    seal_b64, _ = fetched.get("seal", (None, None))
+    
     signature_base64 = None
     signature_mime = "image/png"
     
-    # 1. Try to fetch from Supabase first
-    invoice_no = invoice.get("invoice_number", "unknown")
-    supabase_url = os.getenv("SUPABASE_URL")
-    if supabase_url and invoice_no != "unknown":
-        stored_path = f"customer_signatures/sig_{invoice_no}.png"
-        url = f"{supabase_url}/storage/v1/object/public/signatures/{stored_path}"
-        b64, mime = _get_image_as_base64(url)
-        if b64:
-            signature_base64 = b64
-            signature_mime = mime
-
-    # 2. Fallback to signature_url in DB
-    if not signature_base64 and invoice.get("signature_url"):
-        url = invoice["signature_url"]
-        if url.startswith("data:") and ";base64," in url:
-            header, raw = url.split(";base64,", 1)
+    sig_b64, sig_mime = fetched.get("signature", (None, None))
+    if sig_b64:
+        signature_base64 = sig_b64
+        signature_mime = sig_mime
+    elif "db_signature" in fetched and fetched["db_signature"][0]:
+        signature_base64, signature_mime = fetched["db_signature"]
+    elif db_sig_url and db_sig_url.startswith("data:"):
+        if ";base64," in db_sig_url:
+            header, raw = db_sig_url.split(";base64,", 1)
             signature_mime = header.split("data:")[-1]
             signature_base64 = raw
-        elif url.startswith("data:image/"):
-            signature_base64 = url.split(",")[-1]
-            signature_mime = url.split(";")[0].split(":")[-1]
         else:
-            b64, mime = _get_image_as_base64(url)
-            if b64:
-                signature_base64 = b64
-                signature_mime = mime
+            signature_base64 = db_sig_url.split(",")[-1]
+            signature_mime = db_sig_url.split(";")[0].split(":")[-1]
+
+    # 4. Build dynamic company context
+    comp_ctx = COMPANY.copy()
+    comp_ctx["stamp_b64"] = f"data:image/png;base64,{stamp_b64}" if stamp_b64 else ""
+    comp_ctx["seal_b64"] = f"data:image/png;base64,{seal_b64}" if seal_b64 else ""
 
     html_content = template.render(
-        company=COMPANY,
+        company=comp_ctx,
         payment=payment,
         invoice=invoice,
         client=client,

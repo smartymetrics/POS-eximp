@@ -65,6 +65,7 @@ function onFormSubmit(e) {
             // Property Info
             property_name: responses["Property name"] || "",
             plot_size: responses["Plot size"] || "",
+            quantity: parseInt(responses["Quantity"] || 1),
 
             // Payment Info
             payment_duration: responses["Payment Duration"] || "",

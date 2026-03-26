@@ -110,6 +110,7 @@ class InvoiceCreate(BaseModel):
     property_name: Optional[str] = None
     property_location: Optional[str] = None
     plot_size_sqm: Optional[Decimal] = None
+    unit_price: Optional[Decimal] = None
     amount: Decimal
     quantity: int = 1
     payment_terms: str = "Outright"
@@ -126,6 +127,7 @@ class InvoiceUpdate(BaseModel):
     sales_rep_id: Optional[str] = None
     property_name: Optional[str] = None
     quantity: Optional[int] = None
+    unit_price: Optional[Decimal] = None
     amount_paid: Optional[Decimal] = None
     notes: Optional[str] = None
     reason: Optional[str] = None # For due date changes
@@ -201,6 +203,7 @@ class WebhookFormPayload(BaseModel):
     payment_proof_url: Optional[str] = None
     outstanding_amount: float = 0
     total_amount: float = 0
+    quantity: int = 1
     payment_terms: str = "Outright"
     # Other
     source_of_income: Optional[str] = None

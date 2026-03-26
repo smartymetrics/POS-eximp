@@ -4,12 +4,22 @@ from fastapi.templating import Jinja2Templates
 from fastapi.responses import HTMLResponse, RedirectResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
+from contextlib import asynccontextmanager
 
 from routers import auth, clients, properties, invoices, payments, webhooks, verifications, analytics, sales_reps, reports, commission
 from database import init_db
 from scheduler import start_scheduler, stop_scheduler
 
-app = FastAPI(title="Eximp & Cloves - Finance System", version="1.0.0")
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_db()
+    # Start the background scheduler
+    await start_scheduler()
+    yield
+    # Stop the background scheduler
+    await stop_scheduler()
+
+app = FastAPI(title="Eximp & Cloves - Finance System", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(
     CORSMiddleware,
@@ -35,16 +45,6 @@ app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 app.include_router(commission.router, prefix="/api/commission", tags=["commission"])
 
 
-@app.on_event("startup")
-async def startup():
-    await init_db()
-    # Start the background scheduler
-    await start_scheduler()
-
-@app.on_event("shutdown")
-async def shutdown():
-    # Stop the background scheduler
-    await stop_scheduler()
 
 
 @app.get("/", response_class=HTMLResponse)

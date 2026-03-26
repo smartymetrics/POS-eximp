@@ -120,7 +120,8 @@
     <thead>
       <tr>
         <th width="5%">#</th>
-        <th width="60%">Item Description</th>
+        <th width="45%">Item Description</th>
+        <th width="15%" class="text-right">Unit Price</th>
         <th width="10%" class="text-right">Qty</th>
         <th width="25%" class="text-right">Total Price</th>
       </tr>
@@ -134,6 +135,13 @@
             {% if invoice.property_location %}{{ invoice.property_location }}{% endif %}
             {% if invoice.plot_size_sqm %} — Plot Size: {{ invoice.plot_size_sqm }} sqm{% endif %}
           </div>
+        </td>
+        <td class="text-right">
+          {% if invoice.unit_price %}
+            {{ format_currency(invoice.unit_price) }}
+          {% else %}
+            {{ format_currency(invoice.amount / (invoice.quantity or 1)) }}
+          {% endif %}
         </td>
         <td class="text-right">{{ invoice.quantity | default(1) }}</td>
         <td class="text-right"><strong>{{ format_currency(invoice.amount) }}</strong></td>

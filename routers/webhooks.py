@@ -143,6 +143,9 @@ async def form_submission(
                 try: plot_size_numeric = float(cleaned_size)
                 except: pass
 
+        # Quantity (default to 1)
+        quantity_to_use = payload.quantity if payload.quantity > 0 else 1
+
         # Dates
         invoice_date = date.today()
         # Calculate due date based on payment duration (installment)
@@ -173,16 +176,18 @@ async def form_submission(
                 property_id_to_use = prop.get("id")
                 property_location_to_use = prop.get("location")
                 
-                if total_amount_to_use <= 0:
-                    total_price = prop.get("total_price")
-                    price_per_sqm = prop.get("price_per_sqm")
-                    
-                    if total_price and float(total_price) > 0:
-                        total_amount_to_use = float(total_price)
-                    elif price_per_sqm and plot_size_numeric:
-                        total_amount_to_use = float(price_per_sqm) * plot_size_numeric
+                # Determine Unit Price
+                unit_price = 0
+                if prop.get("starting_price") and float(prop.get("starting_price")) > 0:
+                    unit_price = float(prop.get("starting_price"))
+                elif prop.get("price_per_sqm") and plot_size_numeric:
+                    unit_price = float(prop.get("price_per_sqm")) * plot_size_numeric
                 
-                print(f"DEBUG: Found property {payload.property_name} (ID: {property_id_to_use}, Location: {property_location_to_use})")
+                # Auto-calculate total amount if not provided or set to 0
+                if total_amount_to_use <= 0 and unit_price > 0:
+                    total_amount_to_use = unit_price * quantity_to_use
+                
+                print(f"DEBUG: Found property {payload.property_name} (ID: {property_id_to_use}, Unit Price: {unit_price})")
 
         # 5. Handle Signature Storage
         signature_url_to_save = payload.signature_url
@@ -238,8 +243,10 @@ async def form_submission(
             "property_name": payload.property_name,
             "property_location": property_location_to_use,
             "plot_size_sqm": plot_size_numeric,
+            "unit_price": unit_price if 'unit_price' in locals() else None,
             "amount": total_amount_to_use,
             "amount_paid": payload.deposit_amount,
+            "quantity": quantity_to_use,
             "payment_terms": payload.payment_terms,
             "invoice_date": str(invoice_date),
             "due_date": due_date_str,

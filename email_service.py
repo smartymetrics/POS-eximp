@@ -4,9 +4,19 @@ import base64
 from pdf_service import generate_invoice_pdf, generate_receipt_pdf, generate_statement_pdf, COMPANY
 from database import get_db
 from utils import sanitize_client_address
+import logging
+
+# Set up logging
+logger = logging.getLogger(__name__)
 
 resend.api_key = os.getenv("RESEND_API_KEY")
 FROM_EMAIL = os.getenv("FROM_EMAIL", "sales@eximps-cloves.com")
+
+# CLIENT CC RECIPIENTS
+CC_LEGAL = os.getenv("CC_LEGAL")
+CC_CEO = os.getenv("CC_CEO")
+CC_OPERATIONS = os.getenv("CC_OPERATIONS")
+CLIENT_CC_RECIPIENTS = [email for email in [CC_LEGAL, CC_CEO, CC_OPERATIONS] if email]
 
 def _b64(pdf_bytes: bytes) -> str:
     return base64.b64encode(pdf_bytes).decode()
@@ -37,14 +47,39 @@ def _welcome_html(client: dict, property_name: str) -> str:
     </div>"""
 
 async def send_welcome_email(client: dict, property_name: str):
-    client = sanitize_client_address(client.copy())
-    resend.Emails.send({
-        "from": f"Eximp & Cloves <{FROM_EMAIL}>",
-        "to": [client["email"]],
-        "reply_to": "sales@eximps-cloves.com",
-        "subject": "Welcome to Eximp & Cloves!",
-        "html": _welcome_html(client, property_name)
-    })
+    from routers.analytics import log_activity
+    client_id = client.get("id")
+    email_addr = client.get("email")
+    client_name = client.get("full_name", "Client")
+    
+    try:
+        client_sanitized = sanitize_client_address(client.copy())
+        res = resend.Emails.send({
+            "from": f"Eximp & Cloves <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "cc": CLIENT_CC_RECIPIENTS,
+            "reply_to": "sales@eximps-cloves.com",
+            "subject": "Welcome to Eximp & Cloves!",
+            "html": _welcome_html(client_sanitized, property_name)
+        })
+        
+        await log_activity(
+            "email_sent",
+            f"Welcome email successfully sent to {client_name} ({email_addr})",
+            "system",
+            client_id=client_id
+        )
+        return res
+    except Exception as e:
+        logger.error(f"Error sending welcome email to {email_addr}: {e}")
+        await log_activity(
+            "email_failed",
+            f"FAILED to send welcome email to {client_name} ({email_addr}): {str(e)}",
+            "system",
+            client_id=client_id,
+            metadata={"error": str(e), "email_type": "welcome"}
+        )
+        return None
 
 def _invoice_html(invoice: dict, client: dict) -> str:
     amount = float(invoice["amount"])
@@ -142,46 +177,124 @@ def _statement_html(client: dict, total_invoiced: float, total_paid: float, bala
 
 
 async def send_invoice_email(invoice: dict, client: dict, sent_by: str):
-    client = sanitize_client_address(client.copy())
-    pdf = generate_invoice_pdf(invoice)
-    resend.Emails.send({
-        "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
-        "to": [client["email"]],
-        "reply_to": "admin@eximps-cloves.com",
-        "subject": f"Invoice {invoice['invoice_number']} — Eximp & Cloves",
-        "html": _invoice_html(invoice, client),
-        "attachments": [{"filename": f"Invoice_{invoice['invoice_number']}.pdf", "content": list(pdf)}],
-    })
+    from routers.analytics import log_activity
+    email_addr = client.get("email")
+    client_name = client.get("full_name", "Client")
+    invoice_no = invoice.get("invoice_number", "unknown")
+    
+    try:
+        client_sanitized = sanitize_client_address(client.copy())
+        pdf = generate_invoice_pdf(invoice)
+        res = resend.Emails.send({
+            "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "cc": CLIENT_CC_RECIPIENTS,
+            "reply_to": "admin@eximps-cloves.com",
+            "subject": f"Invoice {invoice_no} — Eximp & Cloves",
+            "html": _invoice_html(invoice, client_sanitized),
+            "attachments": [{"filename": f"Invoice_{invoice_no}.pdf", "content": list(pdf)}],
+        })
+        
+        await log_activity(
+            "email_sent",
+            f"Invoice {invoice_no} successfully sent to {client_name} ({email_addr})",
+            sent_by,
+            client_id=client.get("id"),
+            invoice_id=invoice.get("id")
+        )
+        return res
+    except Exception as e:
+        logger.error(f"Error sending invoice {invoice_no} to {email_addr}: {e}")
+        await log_activity(
+            "email_failed",
+            f"FAILED to send invoice {invoice_no} to {client_name} ({email_addr}): {str(e)}",
+            sent_by,
+            client_id=client.get("id"),
+            invoice_id=invoice.get("id"),
+            metadata={"error": str(e), "email_type": "invoice"}
+        )
+        return None
 
 
 async def send_receipt_email(invoice: dict, client: dict, sent_by: str):
-    client = sanitize_client_address(client.copy())
-    pdf = generate_receipt_pdf(invoice)
-    resend.Emails.send({
-        "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
-        "to": [client["email"]],
-        "reply_to": "admin@eximps-cloves.com",
-        "subject": f"Payment Receipt — {invoice['invoice_number']}",
-        "html": _receipt_html(invoice, client),
-        "attachments": [{"filename": f"Receipt_{invoice['invoice_number']}.pdf", "content": list(pdf)}],
-    })
+    from routers.analytics import log_activity
+    email_addr = client.get("email")
+    client_name = client.get("full_name", "Client")
+    invoice_no = invoice.get("invoice_number", "unknown")
+    
+    try:
+        client_sanitized = sanitize_client_address(client.copy())
+        pdf = generate_receipt_pdf(invoice)
+        res = resend.Emails.send({
+            "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "cc": CLIENT_CC_RECIPIENTS,
+            "reply_to": "admin@eximps-cloves.com",
+            "subject": f"Payment Receipt — {invoice_no}",
+            "html": _receipt_html(invoice, client_sanitized),
+            "attachments": [{"filename": f"Receipt_{invoice_no}.pdf", "content": list(pdf)}],
+        })
+        
+        await log_activity(
+            "email_sent",
+            f"Receipt for {invoice_no} successfully sent to {client_name} ({email_addr})",
+            sent_by,
+            client_id=client.get("id"),
+            invoice_id=invoice.get("id")
+        )
+        return res
+    except Exception as e:
+        logger.error(f"Error sending receipt for {invoice_no} to {email_addr}: {e}")
+        await log_activity(
+            "email_failed",
+            f"FAILED to send receipt for {invoice_no} to {client_name} ({email_addr}): {str(e)}",
+            sent_by,
+            client_id=client.get("id"),
+            invoice_id=invoice.get("id"),
+            metadata={"error": str(e), "email_type": "receipt"}
+        )
+        return None
 
 
 async def send_statement_email(invoices: list, client: dict, sent_by: str):
-    client = sanitize_client_address(client.copy())
-    pdf = generate_statement_pdf(invoices, client)
-    total_invoiced = sum(float(i["amount"]) for i in invoices)
-    total_paid = sum(float(p["amount"]) for inv in invoices for p in (inv.get("payments") or []))
-    balance = total_invoiced - total_paid
-
-    resend.Emails.send({
-        "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
-        "to": [client["email"]],
-        "reply_to": "admin@eximps-cloves.com",
-        "subject": f"Statement of Account — {client['full_name']}",
-        "html": _statement_html(client, total_invoiced, total_paid, balance),
-        "attachments": [{"filename": f"Statement_{client['full_name'].replace(' ', '_')}.pdf", "content": list(pdf)}],
-    })
+    from routers.analytics import log_activity
+    email_addr = client.get("email")
+    client_name = client.get("full_name", "Client")
+    
+    try:
+        client_sanitized = sanitize_client_address(client.copy())
+        pdf = generate_statement_pdf(invoices, client_sanitized)
+        total_invoiced = sum(float(i["amount"]) for i in invoices)
+        total_paid = sum(float(p["amount"]) for inv in invoices for p in (inv.get("payments") or []) if not p.get("is_voided"))
+        balance = total_invoiced - total_paid
+    
+        res = resend.Emails.send({
+            "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "cc": CLIENT_CC_RECIPIENTS,
+            "reply_to": "admin@eximps-cloves.com",
+            "subject": f"Statement of Account — {client_name}",
+            "html": _statement_html(client_sanitized, total_invoiced, total_paid, balance),
+            "attachments": [{"filename": f"Statement_{client_name.replace(' ', '_')}.pdf", "content": list(pdf)}],
+        })
+        
+        await log_activity(
+            "email_sent",
+            f"Statement of Account successfully sent to {client_name} ({email_addr})",
+            sent_by,
+            client_id=client.get("id")
+        )
+        return res
+    except Exception as e:
+        logger.error(f"Error sending statement to {email_addr}: {e}")
+        await log_activity(
+            "email_failed",
+            f"FAILED to send statement to {client_name} ({email_addr}): {str(e)}",
+            sent_by,
+            client_id=client.get("id"),
+            metadata={"error": str(e), "email_type": "statement"}
+        )
+        return None
 
 
 def _admin_alert_html(invoice: dict, client: dict) -> str:
@@ -208,14 +321,39 @@ def _admin_alert_html(invoice: dict, client: dict) -> str:
 
 
 async def send_admin_alert_email(invoice: dict, client: dict):
-    client = sanitize_client_address(client.copy())
+    from routers.analytics import log_activity
     admin_email = os.getenv("ADMIN_ALERT_EMAIL", FROM_EMAIL)
-    resend.Emails.send({
-        "from": f"EC Systems <{FROM_EMAIL}>",
-        "to": [admin_email],
-        "subject": f"New Subscription — {client['full_name']} — {invoice['invoice_number']}",
-        "html": _admin_alert_html(invoice, client)
-    })
+    client_name = client.get("full_name", "New Client")
+    invoice_no = invoice.get("invoice_number", "Unknown")
+    
+    try:
+        client_sanitized = sanitize_client_address(client.copy())
+        res = resend.Emails.send({
+            "from": f"EC Systems <{FROM_EMAIL}>",
+            "to": [admin_email],
+            "subject": f"New Subscription — {client_name} — {invoice_no}",
+            "html": _admin_alert_html(invoice, client_sanitized)
+        })
+        
+        await log_activity(
+            "admin_alert_sent",
+            f"Admin alert for {client_name} sent to {admin_email}",
+            "system",
+            client_id=client.get("id"),
+            invoice_id=invoice.get("id")
+        )
+        return res
+    except Exception as e:
+        logger.error(f"Error sending admin alert for {invoice_no}: {e}")
+        await log_activity(
+            "admin_alert_failed",
+            f"FAILED to send admin alert to {admin_email} for {client_name}: {str(e)}",
+            "system",
+            client_id=client.get("id"),
+            invoice_id=invoice.get("id"),
+            metadata={"error": str(e)}
+        )
+        return None
 
 
 def _rejection_html(invoice: dict, client: dict, reason: str) -> str:
@@ -243,42 +381,92 @@ def _rejection_html(invoice: dict, client: dict, reason: str) -> str:
 
 
 async def send_rejection_email(invoice: dict, client: dict, reason: str):
-    client = sanitize_client_address(client.copy())
-    resend.Emails.send({
-        "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
-        "to": [client["email"]],
-        "reply_to": "sales@eximps-cloves.com",
-        "subject": f"Action Required — Payment Verification Issue | Eximp & Cloves",
-        "html": _rejection_html(invoice, client, reason)
-    })
+    from routers.analytics import log_activity
+    email_addr = client.get("email")
+    client_name = client.get("full_name", "Client")
+    invoice_no = invoice.get("invoice_number", "Unknown")
+    
+    try:
+        client_sanitized = sanitize_client_address(client.copy())
+        res = resend.Emails.send({
+            "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "cc": CLIENT_CC_RECIPIENTS,
+            "reply_to": "sales@eximps-cloves.com",
+            "subject": f"Action Required — Payment Verification Issue | Eximp & Cloves",
+            "html": _rejection_html(invoice, client_sanitized, reason)
+        })
+        
+        await log_activity(
+            "email_sent",
+            f"Rejection email for {invoice_no} sent to {client_name} ({email_addr})",
+            "system",
+            client_id=client.get("id"),
+            invoice_id=invoice.get("id")
+        )
+        return res
+    except Exception as e:
+        logger.error(f"Error sending rejection email for {invoice_no} to {email_addr}: {e}")
+        await log_activity(
+            "email_failed",
+            f"FAILED to send rejection email for {invoice_no} to {client_name} ({email_addr}): {str(e)}",
+            "system",
+            client_id=client.get("id"),
+            invoice_id=invoice.get("id"),
+            metadata={"error": str(e), "email_type": "rejection"}
+        )
+        return None
 
 
 async def send_receipt_and_statement_email(invoice: dict, client: dict, invoices: list):
-    client = sanitize_client_address(client.copy())
-    receipt_pdf = generate_receipt_pdf(invoice)
-    statement_pdf = generate_statement_pdf(invoices, client)
+    from routers.analytics import log_activity
+    email_addr = client.get("email")
+    client_name = client.get("full_name", "Client")
+    invoice_no = invoice.get("invoice_number", "Unknown")
     
-    total_invoiced = sum(float(i["amount"]) for i in invoices)
-    total_paid = sum(float(p["amount"]) for inv in invoices for p in (inv.get("payments") or []))
-    balance = total_invoiced - total_paid
-
-    # Combine receipt and statement content into a nice hybrid HTML or just use receipt HTML with a mention
-    html = _receipt_html(invoice, client).replace(
-        "The full receipt PDF is attached to this email.",
-        "Your payment receipt and latest statement of account are attached to this email."
-    )
-
-    resend.Emails.send({
-        "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
-        "to": [client["email"]],
-        "reply_to": "admin@eximps-cloves.com",
-        "subject": f"Payment Confirmed & Documents attached — {invoice['invoice_number']}",
-        "html": html,
-        "attachments": [
-            {"filename": f"Receipt_{invoice['invoice_number']}.pdf", "content": list(receipt_pdf)},
-            {"filename": f"Statement_{client['full_name'].replace(' ', '_')}.pdf", "content": list(statement_pdf)}
-        ],
-    })
+    try:
+        client_sanitized = sanitize_client_address(client.copy())
+        receipt_pdf = generate_receipt_pdf(invoice)
+        statement_pdf = generate_statement_pdf(invoices, client_sanitized)
+    
+        # Combine receipt and statement content into a nice hybrid HTML or just use receipt HTML with a mention
+        html = _receipt_html(invoice, client_sanitized).replace(
+            "The full receipt PDF is attached to this email.",
+            "Your payment receipt and latest statement of account are attached to this email."
+        )
+    
+        res = resend.Emails.send({
+            "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "cc": CLIENT_CC_RECIPIENTS,
+            "reply_to": "admin@eximps-cloves.com",
+            "subject": f"Payment Confirmed & Documents attached — {invoice_no}",
+            "html": html,
+            "attachments": [
+                {"filename": f"Receipt_{invoice_no}.pdf", "content": list(receipt_pdf)},
+                {"filename": f"Statement_{client_name.replace(' ', '_')}.pdf", "content": list(statement_pdf)}
+            ],
+        })
+        
+        await log_activity(
+            "email_sent",
+            f"Receipt & Statement for {invoice_no} successfully sent to {client_name} ({email_addr})",
+            "system",
+            client_id=client.get("id"),
+            invoice_id=invoice.get("id")
+        )
+        return res
+    except Exception as e:
+        logger.error(f"Error sending receipt/statement for {invoice_no} to {email_addr}: {e}")
+        await log_activity(
+            "email_failed",
+            f"FAILED to send receipt/statement for {invoice_no} to {client_name} ({email_addr}): {str(e)}",
+            "system",
+            client_id=client.get("id"),
+            invoice_id=invoice.get("id"),
+            metadata={"error": str(e), "email_type": "receipt_statement"}
+        )
+        return None
 
 
 def _void_html(invoice: dict, client: dict, reason: str) -> str:
@@ -304,14 +492,41 @@ def _void_html(invoice: dict, client: dict, reason: str) -> str:
 
 
 async def send_void_notification_email(invoice: dict, client: dict, reason: str):
-    client = sanitize_client_address(client.copy())
-    resend.Emails.send({
-        "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
-        "to": [client["email"]],
-        "reply_to": "admin@eximps-cloves.com",
-        "subject": f"Important Notice — Receipt Correction | Eximp & Cloves",
-        "html": _void_html(invoice, client, reason)
-    })
+    from routers.analytics import log_activity
+    email_addr = client.get("email")
+    client_name = client.get("full_name", "Client")
+    invoice_no = invoice.get("invoice_number", "Unknown")
+    
+    try:
+        client_sanitized = sanitize_client_address(client.copy())
+        res = resend.Emails.send({
+            "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "cc": CLIENT_CC_RECIPIENTS,
+            "reply_to": "admin@eximps-cloves.com",
+            "subject": f"Important Notice — Receipt Correction | Eximp & Cloves",
+            "html": _void_html(invoice, client_sanitized, reason)
+        })
+        
+        await log_activity(
+            "email_sent",
+            f"Void notification for {invoice_no} successfully sent to {client_name} ({email_addr})",
+            "system",
+            client_id=client.get("id"),
+            invoice_id=invoice.get("id")
+        )
+        return res
+    except Exception as e:
+        logger.error(f"Error sending void notification for {invoice_no} to {email_addr}: {e}")
+        await log_activity(
+            "email_failed",
+            f"FAILED to send void notification for {invoice_no} to {client_name} ({email_addr}): {str(e)}",
+            "system",
+            client_id=client.get("id"),
+            invoice_id=invoice.get("id"),
+            metadata={"error": str(e), "email_type": "void"}
+        )
+        return None
 
 def _report_html(message: str) -> str:
     msg_html = f'<p style="color: #333; margin: 20px 0;">{message}</p>' if message else ''
@@ -335,13 +550,32 @@ def _report_html(message: str) -> str:
     </div>"""
 
 async def send_report_email(emails: list, subject: str, message: str, attachment: dict, sent_by: str):
-    resend.Emails.send({
-        "from": f"Eximp & Cloves <{FROM_EMAIL}>",
-        "to": emails,
-        "subject": subject,
-        "html": _report_html(message),
-        "attachments": [attachment]
-    })
+    from routers.analytics import log_activity
+    try:
+        res = resend.Emails.send({
+            "from": f"Eximp & Cloves <{FROM_EMAIL}>",
+            "to": emails,
+            "subject": subject,
+            "html": _report_html(message),
+            "attachments": [attachment]
+        })
+        
+        await log_activity(
+            "email_sent",
+            f"Financial report '{subject}' successfully sent to {len(emails)} recipients",
+            sent_by,
+            metadata={"recipients": emails}
+        )
+        return res
+    except Exception as e:
+        logger.error(f"Error sending report email '{subject}': {e}")
+        await log_activity(
+            "email_failed",
+            f"FAILED to send financial report '{subject}': {str(e)}",
+            sent_by,
+            metadata={"error": str(e), "email_type": "report", "recipients": emails}
+        )
+        return None
 
 
 def _commission_html(rep: dict, client: dict, invoice: dict, earning: dict) -> str:
@@ -393,15 +627,42 @@ def _commission_html(rep: dict, client: dict, invoice: dict, earning: dict) -> s
     </div>"""
 
 async def send_commission_earned_email(rep: dict, client: dict, invoice: dict, earning: dict):
+    from routers.analytics import log_activity
     if not rep.get("email"):
         return
-    resend.Emails.send({
-        "from": f"Eximp & Cloves <{FROM_EMAIL}>",
-        "to": [rep["email"]],
-        "reply_to": "finance@eximps-cloves.com",
-        "subject": f"Commission Earned — {client.get('full_name', 'Client')} | Eximp & Cloves",
-        "html": _commission_html(rep, client, invoice, earning)
-    })
+        
+    email_addr = rep["email"]
+    rep_name = rep.get("name", "Rep")
+    client_name = client.get("full_name", "Client")
+    
+    try:
+        res = resend.Emails.send({
+            "from": f"Eximp & Cloves <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "reply_to": "finance@eximps-cloves.com",
+            "subject": f"Commission Earned — {client_name} | Eximp & Cloves",
+            "html": _commission_html(rep, client, invoice, earning)
+        })
+        
+        await log_activity(
+            "email_sent",
+            f"Commission earned email for {client_name} sent to {rep_name} ({email_addr})",
+            "system",
+            client_id=client.get("id"),
+            invoice_id=invoice.get("id")
+        )
+        return res
+    except Exception as e:
+        logger.error(f"Error sending commission email to {email_addr}: {e}")
+        await log_activity(
+            "email_failed",
+            f"FAILED to send commission email to {rep_name} ({email_addr}): {str(e)}",
+            "system",
+            client_id=client.get("id"),
+            invoice_id=invoice.get("id"),
+            metadata={"error": str(e), "email_type": "commission"}
+        )
+        return None
 
 def _commission_void_html(rep: dict, client: dict, invoice: dict, earning: dict, reason: str) -> str:
     amount = float(earning["commission_amount"])
@@ -434,28 +695,82 @@ def _commission_void_html(rep: dict, client: dict, invoice: dict, earning: dict,
     </div>"""
 
 async def send_commission_void_email(rep: dict, client: dict, invoice: dict, earning: dict, reason: str):
+    from routers.analytics import log_activity
     if not rep.get("email"):
         return
-    resend.Emails.send({
-        "from": f"Eximp & Cloves <{FROM_EMAIL}>",
-        "to": [rep["email"]],
-        "reply_to": "finance@eximps-cloves.com",
-        "subject": f"Notice: Commission Record Adjusted (Voided) | Eximp & Cloves",
-        "html": _commission_void_html(rep, client, invoice, earning, reason)
-    })
+        
+    email_addr = rep["email"]
+    rep_name = rep.get("name", "Rep")
+    client_name = client.get("full_name", "Client")
+    
+    try:
+        res = resend.Emails.send({
+            "from": f"Eximp & Cloves <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "reply_to": "finance@eximps-cloves.com",
+            "subject": f"Notice: Commission Record Adjusted (Voided) | Eximp & Cloves",
+            "html": _commission_void_html(rep, client, invoice, earning, reason)
+        })
+        
+        await log_activity(
+            "email_sent",
+            f"Commission void notice for {client_name} sent to {rep_name} ({email_addr})",
+            "system",
+            client_id=client.get("id"),
+            invoice_id=invoice.get("id")
+        )
+        return res
+    except Exception as e:
+        logger.error(f"Error sending commission void email to {email_addr}: {e}")
+        await log_activity(
+            "email_failed",
+            f"FAILED to send commission void email to {rep_name} ({email_addr}): {str(e)}",
+            "system",
+            client_id=client.get("id"),
+            invoice_id=invoice.get("id"),
+            metadata={"error": str(e), "email_type": "commission_void"}
+        )
+        return None
 
 async def send_refund_receipt_email(invoice: dict, payment: dict, client: dict):
+    from routers.analytics import log_activity
     from pdf_service import generate_refund_receipt_pdf
-    client = sanitize_client_address(client.copy())
-    pdf = generate_refund_receipt_pdf(payment, invoice, client)
-    resend.Emails.send({
-        "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
-        "to": [client["email"]],
-        "reply_to": "admin@eximps-cloves.com",
-        "subject": f"Refund Receipt — {invoice['invoice_number']}",
-        "html": _refund_receipt_html(invoice, payment, client),
-        "attachments": [{"filename": f"Refund_Receipt_{invoice['invoice_number']}.pdf", "content": list(pdf)}],
-    })
+    email_addr = client.get("email")
+    client_name = client.get("full_name", "Client")
+    invoice_no = invoice.get("invoice_number", "Unknown")
+    
+    try:
+        client_sanitized = sanitize_client_address(client.copy())
+        pdf = generate_refund_receipt_pdf(payment, invoice, client_sanitized)
+        res = resend.Emails.send({
+            "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "cc": CLIENT_CC_RECIPIENTS,
+            "reply_to": "admin@eximps-cloves.com",
+            "subject": f"Refund Receipt — {invoice_no}",
+            "html": _refund_receipt_html(invoice, payment, client_sanitized),
+            "attachments": [{"filename": f"Refund_Receipt_{invoice_no}.pdf", "content": list(pdf)}],
+        })
+        
+        await log_activity(
+            "email_sent",
+            f"Refund receipt for {invoice_no} sent to {client_name} ({email_addr})",
+            "system",
+            client_id=client.get("id"),
+            invoice_id=invoice.get("id")
+        )
+        return res
+    except Exception as e:
+        logger.error(f"Error sending refund receipt for {invoice_no} to {email_addr}: {e}")
+        await log_activity(
+            "email_failed",
+            f"FAILED to send refund receipt for {invoice_no} to {client_name} ({email_addr}): {str(e)}",
+            "system",
+            client_id=client.get("id"),
+            invoice_id=invoice.get("id"),
+            metadata={"error": str(e), "email_type": "refund_receipt"}
+        )
+        return None
 
 def _refund_receipt_html(invoice: dict, payment: dict, client: dict) -> str:
     return f"""

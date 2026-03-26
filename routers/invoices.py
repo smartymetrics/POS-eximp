@@ -8,6 +8,7 @@ from routers.analytics import log_activity
 from email_service import send_invoice_email, send_receipt_email, send_statement_email, send_void_notification_email
 from pdf_service import generate_invoice_pdf, generate_receipt_pdf, generate_statement_pdf
 from utils import resolve_invoice_status
+from commission_service import sync_invoice_commissions
 from datetime import datetime
 import io
 
@@ -86,6 +87,7 @@ async def create_invoice(
         "property_location": property_location,
         "plot_size_sqm": plot_size,
         "quantity": data.quantity,
+        "unit_price": data.unit_price,
         "amount": data.amount,
         "payment_terms": data.payment_terms,
         "invoice_date": data.invoice_date,
@@ -265,6 +267,7 @@ async def void_invoice_receipts(
 async def edit_invoice(
     invoice_id: str,
     payload: dict, # Using dict to handle field-level role checks easily
+    background_tasks: BackgroundTasks,
     current_admin=Depends(verify_token)
 ):
     db = get_db()
@@ -285,9 +288,8 @@ async def edit_invoice(
 
     update_data = {}
     
-    # Field-level role checks
     admin_only_fields = [
-        "amount", "amount_paid", "quantity", "plot_size_sqm", "property_name", 
+        "amount", "amount_paid", "quantity", "unit_price", "plot_size_sqm", "property_name", 
         "property_location", "property_id", "payment_terms", "sales_rep_name", 
         "sales_rep_id", "invoice_date", "co_owner_name", "co_owner_email"
     ]
@@ -320,13 +322,21 @@ async def edit_invoice(
 
     # Update database
     db.table("invoices").update(jsonable_encoder(update_data)).eq("id", invoice_id).execute()
-    
     log_activity(
         "invoice_edited",
         f"Invoice {invoice['invoice_number']} updated by {role}",
         current_admin["sub"],
         invoice_id=invoice_id
     )
+
+    # Sync commissions if Sales Rep changed
+    if "sales_rep_id" in update_data:
+        background_tasks.add_task(
+            sync_invoice_commissions,
+            invoice_id=invoice_id,
+            db=db,
+            performed_by=current_admin["sub"]
+        )
     
     return {"message": "Invoice updated successfully"}
 

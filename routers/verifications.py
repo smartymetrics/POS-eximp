@@ -7,31 +7,8 @@ from email_service import send_receipt_and_statement_email, send_rejection_email
 from routers.analytics import log_activity
 from datetime import datetime, date
 
-def get_commission_rate(sales_rep_id: str, estate_name: str, verification_date: date, db) -> float:
-    # 1. Check for specific rate for this rep + estate + date
-    result = db.table("commission_rates")\
-        .select("rate")\
-        .eq("sales_rep_id", sales_rep_id)\
-        .eq("estate_name", estate_name)\
-        .lte("effective_from", str(verification_date))\
-        .or_(f"effective_to.is.null,effective_to.gte.{verification_date}")\
-        .order("effective_from", desc=True)\
-        .limit(1)\
-        .execute()
-    if result.data:
-        return float(result.data[0]["rate"])
-
-    # 2. Fallback to the rep's profile default rate from the sales_reps table
-    rep_res = db.table("sales_reps").select("commission_rate").eq("id", sales_rep_id).execute()
-    if rep_res.data and rep_res.data[0].get("commission_rate") is not None:
-        return float(rep_res.data[0]["commission_rate"])
-
-    # 3. Final fallback to system-wide default
-    default = db.table("system_settings")\
-        .select("value")\
-        .eq("key", "default_commission_rate")\
-        .execute()
-    return float(default.data[0]["value"]) if default.data else 5.0
+from commission_service import get_commission_rate
+# Re-exported for other modules that depend on it
 
 router = APIRouter()
 
