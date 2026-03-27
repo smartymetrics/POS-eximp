@@ -90,11 +90,13 @@ CREATE TABLE IF NOT EXISTS invoices (
     property_id UUID REFERENCES properties(id),
     
     -- Property snapshot (in case property is later edited)
-    property_name VARCHAR(255),
-    property_location VARCHAR(255),
-    plot_size_sqm DECIMAL(10,2),
+    property_name: VARCHAR(255),
+    property_location: VARCHAR(255),
+    plot_size_sqm: DECIMAL(10,2),
+    quantity: INTEGER DEFAULT 1,
+    unit_price: DECIMAL(15,2) DEFAULT 0,
     
-    amount DECIMAL(15,2) NOT NULL,
+    amount: DECIMAL(15,2) NOT NULL,
     amount_paid DECIMAL(15,2) DEFAULT 0,
     balance_due DECIMAL(15,2) GENERATED ALWAYS AS (amount - amount_paid) STORED,
     

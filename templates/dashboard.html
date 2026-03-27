@@ -1445,6 +1445,65 @@
   </div>
 </div>
 
+<!-- Edit Payment Modal -->
+<div class="modal-overlay" id="editPaymentModal">
+  <div class="modal" style="max-width: 500px;">
+    <div class="modal-header">
+      <div class="modal-title">Edit Payment Details</div>
+      <button class="modal-close" onclick="closeModal('editPaymentModal')">×</button>
+    </div>
+    <div class="modal-body">
+      <input type="hidden" id="edit-pay-id">
+      
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Payment Date</label>
+          <input type="date" id="edit-pay-date" class="form-control" required>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Amount (NGN)</label>
+          <input type="number" id="edit-pay-amount" class="form-control" step="0.01" required>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Reference / Receipt Number</label>
+        <input type="text" id="edit-pay-ref" class="form-control" required>
+      </div>
+
+      <div class="form-row">
+        <div class="form-group">
+          <label class="form-label">Payment Method</label>
+          <select id="edit-pay-method" class="form-control">
+            <option value="Bank Transfer">Bank Transfer</option>
+            <option value="Cash">Cash</option>
+            <option value="POS">POS</option>
+            <option value="Cheque">Cheque</option>
+            <option value="Online">Online Payment</option>
+          </select>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Payment Type</label>
+          <select id="edit-pay-type" class="form-control">
+            <option value="payment">Standard Payment</option>
+            <option value="refund">Refund</option>
+          </select>
+        </div>
+      </div>
+      
+      <div class="form-group">
+        <label class="form-label">Notes (Optional)</label>
+        <textarea id="edit-pay-notes" class="form-control" rows="2" placeholder="Any modifications reason..."></textarea>
+      </div>
+      
+      <div class="form-actions">
+        <button class="btn btn-ghost" onclick="closeModal('editPaymentModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="submitEditPayment()">Save Changes</button>
+      </div>
+    </div>
+  </div>
+</div>
+
 <!-- VOID RECEIPT MODAL -->
 <div class="modal-overlay" id="voidReceiptModal">
   <div class="modal" style="max-width:480px;">
@@ -3651,7 +3710,7 @@ function renderMemberRow(a, archived = false) {
   } else {
     actions = `
       <button class="action-btn" style="color:#2980b9;border-color:#aed6f1;" onclick="openResetPasswordModal('${a.id}','${a.full_name}')">Reset PW</button>
-      <button class="action-btn" onclick="openDeactivateModal('${a.id}','${a.full_name}')">${a.is_active ? 'Deactivate' : 'Reactivate'}</button>
+      <button class="action-btn" onclick="${a.is_active ? `openDeactivateModal('${a.id}','${a.full_name.replace(/'/g, "\\'")}')` : `reactivateAdmin('${a.id}','${a.full_name.replace(/'/g, "\\'")}')`}">${a.is_active ? 'Deactivate' : 'Reactivate'}</button>
       <button class="action-btn" style="color:#636e72;border-color:#dfe6e9;" onclick="openArchiveModal('${a.id}','${a.full_name}')">Archive</button>`;
   }
 

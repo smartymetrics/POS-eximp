@@ -136,7 +136,7 @@ def get_company_context():
     
     return {
         "name": "Eximp & Cloves Infrastructure Limited",
-        "rc": "RC 8311800",
+        "rc": "8311800",
         "address": "57B, Isaac John Street, Yaba, Lagos, Nigeria",
         "phone": "+234 912 686 4383",
         "email": "admin@eximps-cloves.com",
@@ -151,7 +151,7 @@ def get_company_context():
 
 COMPANY = {
     "name": "Eximp & Cloves Infrastructure Limited",
-    "rc": "RC 8311800",
+    "rc": "8311800",
     "address": "57B, Isaac John Street, Yaba, Lagos, Nigeria",
     "phone": "+234 912 686 4383",
     "email": "admin@eximps-cloves.com",

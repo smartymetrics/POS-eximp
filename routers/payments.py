@@ -126,6 +126,7 @@ async def get_payments_for_invoice(invoice_id: str, current_admin=Depends(verify
 async def update_payment(
     payment_id: str,
     data: PaymentUpdate,
+    background_tasks: BackgroundTasks,
     current_admin=Depends(verify_token)
 ):
     db = get_db()
@@ -158,6 +159,10 @@ async def update_payment(
         current_admin["sub"],
         invoice_id=invoice_id
     )
+    
+    # 4. Sync commissions in case the payment amount changed
+    from commission_service import sync_invoice_commissions
+    background_tasks.add_task(sync_invoice_commissions, invoice_id, db)
     
     return {"message": "Payment updated successfully"}
 
