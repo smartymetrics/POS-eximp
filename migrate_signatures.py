@@ -69,10 +69,14 @@ def migrate_signatures():
                 file_path = f"customer_signatures/sig_{inv['invoice_number']}.png"
                 print(f"Uploading {file_path}...")
                 
+                try:
+                    supabase.storage.from_("signatures").remove([file_path])
+                except Exception:
+                    pass
                 supabase.storage.from_("signatures").upload(
                     path=file_path,
                     file=img_data,
-                    file_options={"content-type": "image/png", "upsert": "true"}
+                    file_options={"content-type": "image/png"}
                 )
                 
                 # 3. Update DB with NEW public URL

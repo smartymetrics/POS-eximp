@@ -1,0 +1,63 @@
+
+
+def generate_contract_pdf(invoice: dict, client: dict, witnesses: list = None, is_draft: bool = True) -> bytes:
+    """
+    Generates the Contract of Sale PDF.
+    - witnesses: List of dicts with full_name, address, occupation, signature_base64
+    - is_draft: If True, adds a 'DRAFT' watermark.
+    """
+    from database import get_db
+    db = get_db()
+    
+    template = env.get_template("contract.html")
+    # Sanitize client address for legal document consistency
+    client_sanitized = sanitize_client_address(client.copy())
+    
+    # 1. Fetch Company Signatures (Director & Secretary)
+    sig_res = db.table("company_signatures").select("*").eq("is_active", True).execute()
+    company_sigs = {s["role"]: s["signature_base64"] for s in sig_res.data}
+    
+    # 2. Get Purchaser Signature (Data URI from invoices table)
+    purchaser_sig = invoice.get("signature_url") or invoice.get("signature_base64")
+    
+    # Ensure signatures are prefixed with data:image/ if they are raw base64
+    def _ensure_prefix(b64):
+        if not b64: return None
+        b64_str = str(b64)
+        if not b64_str.startswith("data:"):
+            return "data:image/png;base64," + b64_str
+        return b64_str
+
+    # 3. Assemble all signatures for the template
+    signatures = {
+        "director": _ensure_prefix(company_sigs.get("director")),
+        "secretary": _ensure_prefix(company_sigs.get("secretary")),
+        "purchaser": _ensure_prefix(purchaser_sig),
+        "witness1": None,
+        "witness2": None
+    }
+    
+    # 4. Map witness signatures if provided
+    witness_list = []
+    if witnesses:
+        for i, w in enumerate(witnesses):
+            w_num = i + 1
+            if f"witness{w_num}" in signatures:
+                signatures[f"witness{w_num}"] = _ensure_prefix(w.get("signature_base64"))
+            witness_list.append(w)
+    
+    # Pad witness list to 2
+    while len(witness_list) < 2:
+        witness_list.append({"full_name": "PENDING", "address": "PENDING", "occupation": "PENDING"})
+
+    # 5. Render
+    html_content = template.render(
+        invoice=invoice,
+        client=client_sanitized,
+        witnesses=witness_list,
+        signatures=signatures,
+        is_draft=is_draft,
+        format_currency=format_currency
+    )
+    
+    return _html_to_pdf(html_content)

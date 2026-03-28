@@ -155,39 +155,47 @@ async def form_submission(
         )
 
         # 5. Get Property Price from DB
-        # If not provided in form, lookup by name and exact size
+        # Use the properties table as source of truth for unit price and total amount
         total_amount_to_use = payload.total_amount
+        if total_amount_to_use <= 0 and payload.deposit_amount > 0 and payload.outstanding_amount > 0:
+            total_amount_to_use = payload.deposit_amount + payload.outstanding_amount
         property_location_to_use = None
         property_id_to_use = None
+        unit_price_to_use = None
 
         if payload.property_name:
-            query = db.table("properties").select("id, total_price, price_per_sqm, location")\
+            query = db.table("properties").select("id, starting_price, price_per_sqm, location")\
                 .ilike("name", f"%{payload.property_name}%")\
                 .eq("is_active", True)
-            
-            # Filter by exact plot size if we parsed one
             if plot_size_numeric:
                 query = query.eq("plot_size_sqm", plot_size_numeric)
-            
             prop_res = query.execute()
-            
+            if not prop_res.data:
+                query = db.table("properties").select("id, starting_price, price_per_sqm, location")\
+                    .ilike("estate_name", f"%{payload.property_name}%")\
+                    .eq("is_active", True)
+                if plot_size_numeric:
+                    query = query.eq("plot_size_sqm", plot_size_numeric)
+                prop_res = query.execute()
+
             if prop_res.data:
                 prop = prop_res.data[0]
                 property_id_to_use = prop.get("id")
                 property_location_to_use = prop.get("location")
-                
-                # Determine Unit Price
-                unit_price = 0
-                if prop.get("starting_price") and float(prop.get("starting_price")) > 0:
-                    unit_price = float(prop.get("starting_price"))
-                elif prop.get("price_per_sqm") and plot_size_numeric:
-                    unit_price = float(prop.get("price_per_sqm")) * plot_size_numeric
-                
-                # Auto-calculate total amount if not provided or set to 0
-                if total_amount_to_use <= 0 and unit_price > 0:
-                    total_amount_to_use = unit_price * quantity_to_use
-                
-                print(f"DEBUG: Found property {payload.property_name} (ID: {property_id_to_use}, Unit Price: {unit_price})")
+
+                if prop.get("price_per_sqm") is not None:
+                    unit_price_to_use = float(prop.get("price_per_sqm"))
+                elif prop.get("starting_price") is not None and float(prop.get("starting_price")) > 0:
+                    unit_price_to_use = float(prop.get("starting_price"))
+
+                if unit_price_to_use is not None:
+                    total_amount_to_use = unit_price_to_use * quantity_to_use
+                    print(f"DEBUG: Found property {payload.property_name} (ID: {property_id_to_use}, Unit Price: {unit_price_to_use}, Quantity: {quantity_to_use}, Amount: {total_amount_to_use})")
+                else:
+                    print(f"DEBUG: Found property {payload.property_name} (ID: {property_id_to_use}) but could not determine unit price")
+
+        if unit_price_to_use is None and total_amount_to_use > 0 and quantity_to_use > 0:
+            unit_price_to_use = total_amount_to_use / quantity_to_use
 
         # 5. Handle Signature Storage
         signature_url_to_save = payload.signature_url
@@ -222,10 +230,14 @@ async def form_submission(
                 # 2. Upload to storage
                 file_path = f"customer_signatures/sig_{invoice_number}.{ext}"
                 # Use the storage client from db
+                try:
+                    db.storage.from_("signatures").remove([file_path])
+                except Exception:
+                    pass
                 db.storage.from_("signatures").upload(
                     path=file_path, 
                     file=img_data, 
-                    file_options={"content-type": mime, "upsert": "true"}
+                    file_options={"content-type": mime}
                 )
                 
                 # 3. Build public URL
@@ -243,7 +255,7 @@ async def form_submission(
             "property_name": payload.property_name,
             "property_location": property_location_to_use,
             "plot_size_sqm": plot_size_numeric,
-            "unit_price": unit_price if 'unit_price' in locals() else None,
+            "unit_price": unit_price_to_use,
             "amount": total_amount_to_use,
             "amount_paid": payload.deposit_amount,
             "quantity": quantity_to_use,

@@ -23,12 +23,20 @@ async def update_default_rate(payload: DefaultRateUpdate, background_tasks: Back
         raise HTTPException(status_code=403, detail="Not authorized")
         
     db = get_db()
-    db.table("system_settings").upsert({
-        "key": "default_commission_rate",
-        "value": str(payload.rate),
-        "updated_by": current_admin["sub"],
-        "updated_at": datetime.now().isoformat()
-    }).execute()
+    existing = db.table("system_settings").select("id").eq("key", "default_commission_rate").execute()
+    if existing.data:
+        db.table("system_settings").update({
+            "value": str(payload.rate),
+            "updated_by": current_admin["sub"],
+            "updated_at": datetime.now().isoformat()
+        }).eq("id", existing.data[0]["id"]).execute()
+    else:
+        db.table("system_settings").insert({
+            "key": "default_commission_rate",
+            "value": str(payload.rate),
+            "updated_by": current_admin["sub"],
+            "updated_at": datetime.now().isoformat()
+        }).execute()
     
     background_tasks.add_task(
         log_activity,

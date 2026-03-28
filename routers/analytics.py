@@ -248,7 +248,7 @@ async def get_rep_leaderboard(
         
     db = get_db()
     data = db.table("invoices")\
-        .select("sales_rep_name, amount, amount_paid, property_name")\
+        .select("sales_rep_name, amount, property_name, payments(amount, is_voided, payment_type)")\
         .filter("invoice_date", "gte", start.isoformat())\
         .filter("invoice_date", "lte", end.isoformat())\
         .neq("status", "voided")\
@@ -259,9 +259,18 @@ async def get_rep_leaderboard(
         name = item["sales_rep_name"] or "Unknown"
         if name not in reps:
             reps[name] = {"deals": 0, "total_value": 0, "collected": 0, "estates": {}}
+        
         reps[name]["deals"] += 1
         reps[name]["total_value"] += float(item["amount"])
-        reps[name]["collected"] += float(item["amount_paid"])
+        
+        # Calculate collected from related payments (filtering out voided and refunds)
+        p_list = item.get("payments") or []
+        inv_collected = sum(
+            float(p["amount"]) 
+            for p in p_list 
+            if not p.get("is_voided") and p.get("payment_type") != "refund"
+        )
+        reps[name]["collected"] += inv_collected
         
         estate = item["property_name"] or "N/A"
         reps[name]["estates"][estate] = reps[name]["estates"].get(estate, 0) + 1

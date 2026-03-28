@@ -2,7 +2,7 @@ from pydantic import BaseModel, EmailStr
 from typing import Optional
 from datetime import date, datetime
 from decimal import Decimal
-import uuid
+from uuid import UUID
 
 
 # ─── AUTH ────────────────────────────────────────────────────
@@ -356,3 +356,39 @@ class DefaultRateUpdate(BaseModel):
 
 class CommissionVoidRequest(BaseModel):
     reason: str
+
+class CommissionEarning(BaseModel):
+    id: UUID
+    sales_rep_id: UUID
+    invoice_id: UUID
+    payment_id: UUID
+    client_id: UUID
+    estate_name: str
+    payment_amount: Decimal
+    commission_rate: Decimal
+    commission_amount: Decimal
+    final_amount: Decimal
+    is_paid: bool
+    paid_at: Optional[datetime] = None
+    is_voided: bool = False
+    voided_at: Optional[datetime] = None
+    void_reason: Optional[str] = None
+    created_at: datetime
+
+# --- PRD 5: CONTRACT SIGNING PORTAL ---
+
+class WitnessSignatureSubmit(BaseModel):
+    witness_number: Optional[int] = None  # 1 or 2, optional for auto-assignment
+    full_name: str
+    address: str
+    occupation: str
+    signature_base64: str  # data:image/...;base64,...
+    signature_method: str = "drawn"  # "drawn" or "uploaded"
+
+class CompanySignatureUpload(BaseModel):
+    role: str  # "director" or "secretary"
+    full_name: Optional[str] = None
+    signature_base64: str
+
+class ExtendSigningLink(BaseModel):
+    days: int = 7

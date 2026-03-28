@@ -61,10 +61,14 @@ def fix_gdrive_signatures():
             # Following the pattern: customer_signatures/sig_{invoice_number}.png
             file_path = f"customer_signatures/sig_{inv['invoice_number']}.png"
             
+            try:
+                supabase.storage.from_("signatures").remove([file_path])
+            except Exception:
+                pass
             supabase.storage.from_("signatures").upload(
                 path=file_path,
                 file=img_data,
-                file_options={"content-type": "image/png", "upsert": "true"}
+                file_options={"content-type": "image/png"}
             )
             
             # 4. Update DB with NEW public URL

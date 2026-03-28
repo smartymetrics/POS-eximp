@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from contextlib import asynccontextmanager
 
-from routers import auth, clients, properties, invoices, payments, webhooks, verifications, analytics, sales_reps, reports, commission
+from routers import auth, clients, properties, invoices, payments, webhooks, verifications, analytics, sales_reps, reports, commission, contracts, signing
 from database import init_db
 from scheduler import start_scheduler, stop_scheduler
 
@@ -43,6 +43,8 @@ app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"]
 app.include_router(sales_reps.router, prefix="/api/sales-reps", tags=["sales-reps"])
 app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 app.include_router(commission.router, prefix="/api/commission", tags=["commission"])
+app.include_router(contracts.router, prefix="/api/contracts", tags=["contracts"])
+app.include_router(signing.router, tags=["signing"])
 
 
 

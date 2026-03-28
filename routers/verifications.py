@@ -69,17 +69,24 @@ async def confirm_verification(
         .execute()
 
     rep_id = invoice.get("sales_rep_id")
+    rep = None
     if not rep_id and invoice.get("sales_rep_name"):
         # Fallback for old invoices without sales_rep_id
         rep_name = invoice["sales_rep_name"].strip()
         rep_res = db.table("sales_reps")\
-            .select("id")\
+            .select("*")\
             .ilike("name", f"%{rep_name}%")\
             .eq("is_active", True)\
             .execute()
         
         if rep_res.data:
-            rep_id = rep_res.data[0]["id"]
+            rep = rep_res.data[0]
+            rep_id = rep["id"]
+
+    if rep_id and not rep:
+        rep_res = db.table("sales_reps").select("*").eq("id", rep_id).execute()
+        if rep_res.data:
+            rep = rep_res.data[0]
             
     if rep_id:
             # Use the rate logic with fallbacks
@@ -118,13 +125,14 @@ async def confirm_verification(
                     "commission_amount": commission_amount,
                 }).execute().data[0]
                 
-                background_tasks.add_task(
-                    send_commission_earned_email,
-                    rep=rep,
-                    client=client,
-                    invoice=invoice,
-                    earning=earning
-                )
+                if rep:
+                    background_tasks.add_task(
+                        send_commission_earned_email,
+                        rep=rep,
+                        client=client,
+                        invoice=invoice,
+                        earning=earning
+                    )
 
     # 4. Send Documents
     background_tasks.add_task(send_receipt_and_statement_email, invoice, client, all_inv.data)
@@ -177,24 +185,42 @@ async def reject_verification(
         "reviewed_at": datetime.now().isoformat()
     }).eq("id", id).execute()
 
-    # 3. Mark invoice as unpaid (reverse local amount_paid tracking if any? 
-    # Actually the trigger handles it via payments. 
-    # But if there was a payment record created during webhook, it stays there. 
-    # The PRD says "Marks the invoice status back to unpaid".
-    
-    # Let's find the payment record tied to this form deposit and mark it as voided?
-    # PRD Section 4.5 doesn't explicitly say to delete the payment record, 
-    # but 5.3 mentions is_voided for manual voiding.
-    # I'll mark the payment as voided to be consistent.
-    
-    ref = f"{verify_rec['payment_date']}_form_deposit"
-    db.table("payments").update({
-        "is_voided": True,
-        "voided_by": current_admin["sub"],
-        "voided_at": datetime.now().isoformat(),
-        "notes": f"Rejected during verification: {data.reason}"
-    }).eq("invoice_id", verify_rec["invoice_id"]).eq("reference", ref).execute()
+    # 3. Mark invoice form deposit payments as voided so they are excluded from
+    # revenue analytics, statements, and commission calculations.
+    payment_query = db.table("payments")
+    payment_query = payment_query.select("*")
+    payment_query = payment_query.eq("invoice_id", verify_rec["invoice_id"])
+    payment_query = payment_query.eq("is_voided", False)
+    payment_query = payment_query.ilike("reference", "%form_deposit")
+    payments_to_void = payment_query.execute().data or []
 
+    if not payments_to_void and verify_rec.get("deposit_amount") is not None:
+        # Fallback: match deposit amount and form deposit note if the reference
+        # changed or was missing.
+        payments_to_void = db.table("payments")\
+            .select("*")\
+            .eq("invoice_id", verify_rec["invoice_id"])\
+            .eq("is_voided", False)\
+            .eq("amount", verify_rec["deposit_amount"])\
+            .ilike("notes", "%subscription form%")\
+            .execute().data or []
+
+    if payments_to_void:
+        payment_ids = [p["id"] for p in payments_to_void]
+        db.table("payments").update({
+            "is_voided": True,
+            "voided_by": current_admin["sub"],
+            "voided_at": datetime.now().isoformat(),
+            "notes": f"Rejected during verification: {data.reason}"
+        }).in_("id", payment_ids).execute()
+
+        db.table("commission_earnings").update({
+            "is_voided": True,
+            "voided_by": current_admin["sub"],
+            "voided_at": datetime.now().isoformat(),
+            "void_reason": f"Rejected during verification: {data.reason}"
+        }).in_("payment_id", payment_ids).execute()
+    
     # 4. Fetch invoice and client for email
     inv_res = db.table("invoices").select("*, clients(*)").eq("id", verify_rec["invoice_id"]).execute()
     invoice = inv_res.data[0]

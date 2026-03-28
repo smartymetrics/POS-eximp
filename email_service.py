@@ -862,3 +862,148 @@ async def send_commission_paid_email(rep: dict, batch: dict):
     except Exception as e:
         logger.error("Error sending payout email to " + str(email_addr) + ": " + str(e))
         return None
+
+# --- PRD 5: LEGAL & CONTRACT EMAILS ---
+
+def send_signing_link_email(invoice, client, token, expires_at):
+    """Sent to the client with the witness signing link."""
+    # Use LEGAL_EMAIL if set, else FROM_EMAIL
+    sender = os.getenv("LEGAL_EMAIL", os.getenv("FROM_EMAIL"))
+    email_addr = client.get("email")
+    if not email_addr: return
+
+    signing_url = "https://app.eximps-cloves.com/sign/" + str(token)
+    expiry_str = expires_at.strftime("%B %d, %Y")
+
+    html = """
+    <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+        <h2 style="color: #F5A623;">Action Required: Contract of Sale Execution</h2>
+        <p>Dear {CLIENT_NAME},</p>
+        <p>Your Contract of Sale for <strong>{ESTATE_NAME}</strong> is ready for execution.</p>
+        <p>To complete this process, please forward the unique signing link below to <strong>TWO witnesses</strong> of your choice. Each witness must open the link and provide their details and digital signature.</p>
+        
+        <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; text-align: center; margin: 20px 0;">
+            <p style="font-size: 12px; color: #888; margin-bottom: 8px;">WITNESS SIGNING LINK</p>
+            <a href="{SIGNING_URL}" style="color: #F5A623; font-weight: bold; text-decoration: none; font-size: 16px;">{SIGNING_URL}</a>
+            <p style="font-size: 11px; color: #e74c3c; margin-top: 10px;">Security Notice: This link expires on {EXPIRY_DATE}.</p>
+        </div>
+
+        <p><strong>Instructions for Witnesses:</strong></p>
+        <ol>
+            <li>Open the link on a phone or computer.</li>
+            <li>Enter your full name, residential address, and occupation.</li>
+            <li>Draw or upload your signature.</li>
+            <li>Click "Submit Witness Signature".</li>
+        </ol>
+
+        <p>Once both witnesses have signed, the system will notify our legal department to generate your final executed contract.</p>
+        <p>Best regards,<br>Legal Department<br>Eximp & Cloves Infrastructure Limited</p>
+    </div>
+    """
+    html = html.replace("{CLIENT_NAME}", client.get("full_name", "Valued Client"))
+    html = html.replace("{ESTATE_NAME}", invoice.get("property_name", "the property"))
+    html = html.replace("{SIGNING_URL}", signing_url)
+    html = html.replace("{EXPIRY_DATE}", expiry_str)
+
+    try:
+        from main import app # dummy to avoid circular import if needed, but resend is global
+        import resend 
+        res = resend.Emails.send({
+            "from": "Eximp & Cloves Legal <" + str(sender) + ">",
+            "to": email_addr,
+            "subject": "Your Contract of Sale is Ready — Eximp & Cloves",
+            "html": html
+        })
+        return res
+    except Exception as e:
+        logger.error("Error sending signing link email: " + str(e))
+        return None
+
+def send_admin_signing_alert(invoice, client, witnesses):
+    """Notifies admin when both witnesses have signed."""
+    sender = os.getenv("FROM_EMAIL")
+    admin_email = os.getenv("ADMIN_ALERT_EMAIL", os.getenv("FROM_EMAIL"))
+    
+    html = """
+    <div style="font-family: sans-serif; padding: 20px;">
+        <h3 style="color: #2e7d32;">✓ Contract Ready for Execution</h3>
+        <p>Both witnesses have completed their signatures for the following contract:</p>
+        <ul>
+            <li><strong>Client:</strong> {CLIENT_NAME}</li>
+            <li><strong>Invoice:</strong> {INV_NO}</li>
+            <li><strong>Property:</strong> {ESTATE_NAME}</li>
+        </ul>
+        <p><strong>Witnesses:</strong><br>
+        1. {W1_NAME} ({W1_OCC})<br>
+        2. {W2_NAME} ({W2_OCC})</p>
+        <p>You can now generate the final executed Contract of Sale from the dashboard.</p>
+    </div>
+    """
+    html = html.replace("{CLIENT_NAME}", client.get("full_name"))
+    html = html.replace("{INV_NO}", invoice.get("invoice_number"))
+    html = html.replace("{ESTATE_NAME}", invoice.get("property_name"))
+    html = html.replace("{W1_NAME}", witnesses[0].get("full_name"))
+    html = html.replace("{W1_OCC}", witnesses[0].get("occupation"))
+    html = html.replace("{W2_NAME}", witnesses[1].get("full_name"))
+    html = html.replace("{W2_OCC}", witnesses[1].get("occupation"))
+
+    try:
+        import resend
+        resend.Emails.send({
+            "from": "System Alert <" + str(sender) + ">",
+            "to": admin_email,
+            "subject": "Contract Ready: " + str(client.get("full_name")) + " (" + str(invoice.get("invoice_number")) + ")",
+            "html": html
+        })
+    except Exception as e:
+        logger.error("Error sending admin signing alert: " + str(e))
+
+def send_executed_contract_email(invoice, client, pdf_content):
+    """Sends the final executed PDF to the client."""
+    sender = os.getenv("LEGAL_EMAIL", os.getenv("FROM_EMAIL"))
+    email_addr = client.get("email")
+    if not email_addr: return
+
+    import base64
+    attachment = base64.b64encode(pdf_content).decode()
+
+    html = """
+    <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+        <h2 style="color: #2e7d32;">Execution Complete: Your Contract of Sale</h2>
+        <p>Dear {CLIENT_NAME},</p>
+        <p>Congratulations! Your Contract of Sale for <strong>{ESTATE_NAME}</strong> has been fully executed by all parties.</p>
+        <p>Please find the final signed document attached to this email. This is a legally binding document; please keep it in a safe place.</p>
+        
+        <p><strong>Property Details:</strong><br>
+        Estate: {ESTATE_NAME}<br>
+        Plot Size: {PLOT_SIZE} SQM<br>
+        Execution Date: {DATE}</p>
+
+        <p>Our documentation team will contact you shortly regarding the next steps (Survey and Allocation).</p>
+        <p>Thank you for choosing Eximp & Cloves Infrastructure Limited.</p>
+        <p>Best regards,<br>Legal Department</p>
+    </div>
+    """
+    html = html.replace("{CLIENT_NAME}", client.get("full_name", "Valued Client"))
+    html = html.replace("{ESTATE_NAME}", invoice.get("property_name"))
+    html = html.replace("{PLOT_SIZE}", str(invoice.get("plot_size_sqm")))
+    html = html.replace("{DATE}", datetime.now().strftime("%B %d, %Y"))
+
+    try:
+        import resend
+        res = resend.Emails.send({
+            "from": "Eximp & Cloves Legal <" + str(sender) + ">",
+            "to": email_addr,
+            "subject": "Your Fully Executed Contract of Sale — Eximp & Cloves",
+            "html": html,
+            "attachments": [
+                {
+                    "content": attachment,
+                    "filename": "Executed_Contract_" + str(invoice.get("invoice_number")) + ".pdf"
+                }
+            ]
+        })
+        return res
+    except Exception as e:
+        logger.error("Error sending executed contract email: " + str(e))
+        return None

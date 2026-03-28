@@ -1,0 +1,227 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Contract of Sale - {{ invoice.invoice_number }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+            @bottom-right {
+                content: "Page " counter(page);
+                font-size: 9px;
+                color: #888;
+            }
+        }
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            font-size: 11pt;
+            line-height: 1.5;
+            color: #333;
+            text-align: justify;
+        }
+        .cover-page {
+            text-align: center;
+            padding-top: 5cm;
+            page-break-after: always;
+        }
+        .logo { width: 150px; margin-bottom: 2cm; }
+        .contract-title {
+            font-size: 24pt;
+            font-weight: bold;
+            margin-bottom: 3cm;
+            text-transform: uppercase;
+        }
+        .parties { font-size: 14pt; margin-bottom: 2cm; }
+        .property-brief { font-weight: bold; font-size: 12pt; }
+
+        .section-header {
+            font-size: 13pt;
+            font-weight: bold;
+            text-decoration: underline;
+            margin-top: 1.5cm;
+            margin-bottom: 0.5cm;
+            page-break-after: avoid;
+        }
+        .clause { margin-bottom: 12pt; }
+        .clause-num { font-weight: bold; display: inline-block; width: 30px; }
+
+        .execution-table {
+            width: 100%;
+            margin-top: 2cm;
+            border-collapse: collapse;
+        }
+        .execution-cell {
+            vertical-align: top;
+            padding: 10px;
+            width: 50%;
+        }
+        .signature-line {
+            border-bottom: 1px solid #000;
+            width: 80%;
+            height: 60px;
+            margin-bottom: 5px;
+            position: relative;
+        }
+        .signature-img {
+            max-width: 180px;
+            max-height: 70px;
+            display: block;
+        }
+        .seal-box {
+            border: 1px solid #ddd;
+            width: 120px;
+            height: 120px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            margin: auto;
+            border-radius: 50%;
+            font-size: 8px;
+            color: #888;
+            text-align: center;
+        }
+        .identity-text { font-size: 9pt; color: #555; }
+        
+        .watermark {
+            position: fixed;
+            top: 40%;
+            left: 10%;
+            transform: rotate(-45deg);
+            font-size: 60pt;
+            color: rgba(200, 200, 200, 0.2);
+            z-index: -1000;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body>
+
+{% if is_draft %}
+<div class="watermark">DRAFT</div>
+{% endif %}
+
+<!-- COVER PAGE -->
+<div class="cover-page">
+    <div class="contract-title">CONTRACT OF SALE</div>
+    <div class="parties">
+        BETWEEN<br><br>
+        <strong>EXIMP & CLOVES INFRASTRUCTURE LIMITED</strong><br>
+        (VENDOR)<br><br>
+        AND<br><br>
+        <strong>{{ client.full_name | upper }}</strong><br>
+        (PURCHASER)
+    </div>
+    <div class="property-brief">
+        In Respect of:<br>
+        {{ invoice.property_name | upper }} — {{ invoice.plot_size_sqm }} SQM<br>
+        Located at: {{ invoice.property_location or 'N/A' }}
+    </div>
+</div>
+
+<!-- PAGE 2: RECITALS -->
+<div class="section-header">BETWEEN:</div>
+<p>
+    <strong>EXIMP & CLOVES INFRASTRUCTURE LIMITED</strong>, a Private Limited Liability Company incorporated under the laws of the Federal Republic of Nigeria, with its registered office at 2nd Floor, Grand Square, Mohammadu Buhari Way, Central Business District, Abuja (hereinafter referred to as the <strong>"VENDOR"</strong>).
+</p>
+<p>AND</p>
+<p>
+    <strong>{{ client.full_name | upper }}</strong> of {{ client.address or 'N/A' }} (hereinafter referred to as the <strong>"PURCHASER"</strong>).
+</p>
+
+<div class="section-header">WHEREAS:</div>
+<div class="clause">
+    <span class="clause-num">1.</span>
+    The Vendor is the beneficial owner of the large expanse of land known as <strong>{{ invoice.property_name }}</strong>.
+</div>
+<div class="clause">
+    <span class="clause-num">2.</span>
+    The Vendor has carved out portions of the said land for sale to members of the public for residential and commercial purposes.
+</div>
+<div class="clause">
+    <span class="clause-num">3.</span>
+    The Purchaser is desirous of purchasing <strong>{{ invoice.plot_size_sqm }} SQUARE METERS</strong> (hereinafter referred to as the "Property") at the total consideration of <strong>NGN {{ "{:,.2f}".format(invoice.amount) }}</strong>.
+</div>
+
+<!-- PAGE 3: COVENANTS (Simplified) -->
+<div class="section-header">IT IS HEREBY AGREED AS FOLLOWS:</div>
+<div class="clause">
+    <strong>1. CONSIDERATION:</strong> In consideration of the sum of NGN {{ "{:,.2f}".format(invoice.amount) }} paid by the Purchaser to the Vendor, the Vendor hereby agrees to sell and the Purchaser agrees to buy the Property.
+</div>
+<div class="clause">
+    <strong>2. POSSESSION:</strong> Physical possession of the Property shall be handed over to the Purchaser upon full payment of the consideration and all other statutory fees (Survey, Legal, and Documentation).
+</div>
+<div class="clause">
+    <strong>3. VENDOR'S COVENANTS:</strong> The Vendor covenants that it has full power and right to sell the property and that the property is free from all encumbrances.
+</div>
+<div class="clause">
+    <strong>4. PURCHASER'S COVENANTS:</strong> The Purchaser agrees to abide by all estate rules and regulations, including building guidelines and security protocols.
+</div>
+
+<!-- PAGE 5: EXECUTION -->
+<div style="page-break-before: always;"></div>
+<div class="section-header">IN WITNESS WHEREOF the parties have set their hands and seals the day and year first above written.</div>
+
+<table class="execution-table">
+    <tr>
+        <td class="execution-cell">
+            <p><strong>THE COMMON SEAL OF THE VENDOR:</strong></p>
+            <p>EXIMP & CLOVES INFRASTRUCTURE LIMITED</p>
+            <br>
+            <div class="signature-line">
+                {% if signatures.director %}
+                <img src="{{ signatures.director }}" class="signature-img">
+                {% endif %}
+            </div>
+            <p class="identity-text">DIRECTOR</p>
+            <br>
+            <div class="signature-line">
+                {% if signatures.secretary %}
+                <img src="{{ signatures.secretary }}" class="signature-img">
+                {% endif %}
+            </div>
+            <p class="identity-text">SECRETARY</p>
+        </td>
+        <td class="execution-cell">
+            <p><strong>SIGNED BY THE PURCHASER:</strong></p>
+            <br>
+            <div class="signature-line">
+                {% if signatures.purchaser %}
+                <img src="{{ signatures.purchaser }}" class="signature-img">
+                {% endif %}
+            </div>
+            <p class="identity-text">{{ client.full_name | upper }}</p>
+        </td>
+    </tr>
+</table>
+
+<div class="section-header">IN THE PRESENCE OF (WITNESSES):</div>
+<table class="execution-table">
+    <tr>
+        <td class="execution-cell">
+            <p><strong>WITNESS 1 (Purchaser's Witness):</strong></p>
+            <div class="signature-line">
+                {% if signatures.witness1 %}
+                <img src="{{ signatures.witness1 }}" class="signature-img">
+                {% endif %}
+            </div>
+            <p class="identity-text">NAME: {{ witnesses[0].full_name or 'PENDING' }}</p>
+            <p class="identity-text">ADDRESS: {{ witnesses[0].address or 'PENDING' }}</p>
+            <p class="identity-text">OCCUPATION: {{ witnesses[0].occupation or 'PENDING' }}</p>
+        </td>
+        <td class="execution-cell">
+            <p><strong>WITNESS 2:</strong></p>
+            <div class="signature-line">
+                {% if signatures.witness2 %}
+                <img src="{{ signatures.witness2 }}" class="signature-img">
+                {% endif %}
+            </div>
+            <p class="identity-text">NAME: {{ witnesses[1].full_name or 'PENDING' }}</p>
+            <p class="identity-text">ADDRESS: {{ witnesses[1].address or 'PENDING' }}</p>
+            <p class="identity-text">OCCUPATION: {{ witnesses[1].occupation or 'PENDING' }}</p>
+        </td>
+    </tr>
+</table>
+
+</body>
+</html>
