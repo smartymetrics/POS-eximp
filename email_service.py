@@ -791,17 +791,20 @@ def _refund_receipt_html(invoice: dict, payment: dict, client: dict) -> str:
             <tr><td style="padding: 8px 0; color: #888;">Method</td><td style="padding: 8px 0; text-align: right;">{payment['payment_method']}</td></tr>
           </table>
         </div>
-        
-        <p style="color: #555; line-height: 1.6;">If you have any questions, please contact our finance department.</p>
-        <p style="color: #333; margin-top: 30px;">Best regards,<br><strong>The Eximp & Cloves Team</strong></p>
-      </div>
       <div style="background: #f4f4f4; padding: 20px; text-align: center; color: #888; font-size: 12px; border-top: 1px solid #eee;">
         Eximp & Cloves Infrastructure Limited | RC 8311800
       </div>
+    </div>"""
 
 def _commission_paid_html(rep: dict, batch: dict) -> str:
-    amount = float(batch["total_amount"])
-    return f"""
+    amount_val = float(batch.get("total_amount", 0))
+    amount_str = "{:,.2f}".format(amount_val)
+    rep_name = str(rep.get("name", "Rep"))
+    ref_val = str(batch.get("reference", "N/A"))
+    date_val = str(batch.get("paid_at", "")[:10])
+    
+    # Use replacement to avoid ANY f-string/format parsing issues with braces in HTML or quotes
+    html = """
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #1A1A1A; padding: 24px; text-align: center;">
         <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">
@@ -810,15 +813,15 @@ def _commission_paid_html(rep: dict, batch: dict) -> str:
         <h2 style="color: #fff; margin: 0; font-size: 16px;">Commission Payout Successful</h2>
       </div>
       <div style="padding: 32px 24px; background: #fff; border: 1px solid #eee;">
-        <p style="color: #333;">Dear <strong>{rep.get('name', 'Rep')}</strong>,</p>
+        <p style="color: #333;">Dear <strong>{{rep_name}}</strong>,</p>
         <p style="color: #555;">We are pleased to inform you that a commission payout has been processed for you.</p>
         
         <div style="background: #f9f9f9; border-radius: 8px; padding: 24px; text-align: center; margin: 24px 0;">
           <p style="color: #888; margin: 0 0 8px; font-size: 13px; text-transform: uppercase;">Amount Paid</p>
-          <p style="color: #27ae60; font-size: 32px; font-weight: bold; margin: 0;">NGN {amount:,.2f}</p>
+          <p style="color: #27ae60; font-size: 32px; font-weight: bold; margin: 0;">NGN {{amount_str}}</p>
           <hr style="border-color: #ddd; margin: 16px 0;">
-          <p style="color: #555; font-size: 13px;">Reference: <strong>{batch.get('reference', 'N/A')}</strong></p>
-          <p style="color: #555; font-size: 12px;">Date: {batch.get('paid_at', '')[:10]}</p>
+          <p style="color: #555; font-size: 13px;">Reference: <strong>{{reference}}</strong></p>
+          <p style="color: #555; font-size: 12px;">Date: {{date_str}}</p>
         </div>
         
         <p style="color: #555; font-size: 13px;">Please check your bank account or contact the Finance Department if you have any questions.</p>
@@ -827,10 +830,11 @@ def _commission_paid_html(rep: dict, batch: dict) -> str:
         <hr style="border-color: #eee; margin: 24px 0;">
         <p style="color: #999; font-size: 12px; margin: 0; text-align: center;">
           Eximp & Cloves Infrastructure Limited | RC 8311800<br>
-          57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383
+          Block 57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383
         </p>
       </div>
     </div>"""
+    return html.replace("{{rep_name}}", rep_name).replace("{{amount_str}}", amount_str).replace("{{reference}}", ref_val).replace("{{date_str}}", date_val)
 
 async def send_commission_paid_email(rep: dict, batch: dict):
     from routers.analytics import log_activity
@@ -842,19 +846,19 @@ async def send_commission_paid_email(rep: dict, batch: dict):
     
     try:
         res = resend.Emails.send({
-            "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
+            "from": "Eximp & Cloves Finance <" + FROM_EMAIL + ">",
             "to": [email_addr],
             "reply_to": "finance@eximps-cloves.com",
-            "subject": f"Commission Payout Processed | Eximp & Cloves",
+            "subject": "Commission Payout Processed | Eximp & Cloves",
             "html": _commission_paid_html(rep, batch)
         })
         
-        await log_activity(
-            "email_sent",
-            f"Commission payout email for NGN {batch['total_amount']:,.2f} sent to {rep_name} ({email_addr})",
-            "system"
-        )
+        # Avoid f-string formatting here too just in case
+        amount_fmt = "{:,.2f}".format(float(batch.get("total_amount", 0)))
+        log_msg = "Commission payout email for NGN " + amount_fmt + " sent to " + rep_name + " (" + email_addr + ")"
+        
+        await log_activity("email_sent", log_msg, "system")
         return res
     except Exception as e:
-        logger.error(f"Error sending payout email to {email_addr}: {e}")
+        logger.error("Error sending payout email to " + str(email_addr) + ": " + str(e))
         return None

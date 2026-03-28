@@ -3,6 +3,7 @@ from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from database import supabase
 from report_service import ReportService
+from email_service import send_report_email
 from datetime import datetime, timedelta
 import asyncio
 import io

@@ -125,7 +125,6 @@ async def sync_invoice_commissions(invoice_id: str, db, performed_by: str = "sys
         
         # Notify the new rep
         try:
-            from email_service import send_commission_earned_email
             await send_commission_earned_email(
                 rep=rep,
                 client=client,
