@@ -3232,13 +3232,20 @@
         document.getElementById('adminRole').textContent = roleLabels[admin.role] || 'Staff';
         document.getElementById('adminInitials').textContent = admin.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
 
-        // Show admin-only nav items
+        // Apply role styling and hide all role-specific UI until allowed
+        document.body.classList.remove('role-admin', 'role-lawyer', 'role-staff');
+        document.body.classList.add('role-' + admin.role);
+
+        document.querySelectorAll('.admin-only, .staff-only, .lawyer-only, .legal-only').forEach(el => {
+          el.style.display = 'none';
+        });
+
         if (admin.role === 'admin') {
-          document.querySelectorAll('.admin-only').forEach(el => el.style.display = 'flex');
-        }
-        // Show legal-only nav items
-        if (['admin', 'lawyer'].includes(admin.role)) {
-          document.querySelectorAll('.legal-only').forEach(el => el.style.display = 'flex');
+          document.querySelectorAll('.admin-only, .lawyer-only, .legal-only').forEach(el => el.style.display = '');
+        } else if (admin.role === 'lawyer') {
+          document.querySelectorAll('.lawyer-only, .legal-only').forEach(el => el.style.display = '');
+        } else if (admin.role === 'staff') {
+          document.querySelectorAll('.staff-only').forEach(el => el.style.display = '');
         }
       } catch (e) {
         console.error('Auth check error:', e);
