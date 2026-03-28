@@ -208,6 +208,7 @@ class WebhookFormPayload(BaseModel):
     # Other
     source_of_income: Optional[str] = None
     referral_source: Optional[str] = None
+    purchase_purpose: Optional[str] = None
     sales_rep_name: Optional[str] = None
     sales_rep_phone: Optional[str] = None
     consent: Optional[str] = None

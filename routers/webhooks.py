@@ -257,6 +257,7 @@ async def form_submission(
             "signature_url": signature_url_to_save,
             "payment_proof_url": payload.payment_proof_url,
             "passport_photo_url": payload.passport_photo_url,
+            "purchase_purpose": payload.purchase_purpose,
             "source": "google_form"
         }
 

@@ -114,12 +114,14 @@ class ReportService:
             return {"items": summary.to_dict("records"), "stats": {}, "type": "Sales Rep Performance"}
 
         elif report_type == "client_register":
-            res = supabase.table("clients").select("full_name, email, phone, address, title, middle_name, gender, dob, marital_status, occupation, nin, id_number, nationality, nok_name, nok_phone, nok_relationship, source_of_income, referral_source, created_at, invoices(property_name)").order("created_at", desc=True).execute()
+            res = supabase.table("clients").select("full_name, email, phone, address, title, middle_name, gender, dob, marital_status, occupation, nin, id_number, nationality, nok_name, nok_phone, nok_relationship, source_of_income, referral_source, created_at, invoices(property_name, purchase_purpose)").order("created_at", desc=True).execute()
             data = res.data or []
             rows = []
             for c in data:
                 invoices = c.get("invoices") or []
                 props = "; ".join(set(i.get("property_name", "") for i in invoices if i.get("property_name")))
+                # Get the most recent purchase purpose if multiple invoices exist
+                purpose = next((i.get("purchase_purpose") for i in invoices if i.get("purchase_purpose")), "N/A")
                 
                 name_parts = [p for p in [c.get("title"), c.get("full_name"), c.get("middle_name")] if p]
                 full_name_str = " ".join(name_parts) or "Unknown Client"
@@ -133,12 +135,13 @@ class ReportService:
                 
                 contact_info = "\n".join([v for v in [c.get("phone"), c.get("email"), c.get("address")] if v])
                 
-                identification = f"Nat: {c.get('nationality', 'N/A')}\nOcc: {c.get('occupation', 'N/A')}\nNIN: {c.get('nin', 'N/A')}"
+                identification = f"Nat: {c.get('nationality', 'N/A')}\nID: {c.get('id_number', 'N/A')}\nOcc: {c.get('occupation', 'N/A')}\nNIN: {c.get('nin', 'N/A')}"
                 
                 nok_details = "\n".join([v for v in [c.get("nok_name"), c.get("nok_phone")] if v]) or "N/A"
                 if c.get("nok_relationship"): nok_details += f" ({c.get('nok_relationship')})"
+                if c.get("nok_occupation"): nok_details += f"\nOcc: {c.get('nok_occupation')}"
                 
-                sales_info = f"Props: {props or 'None'}\nReferral: {c.get('referral_source', 'N/A')}\nReg: {c.get('created_at', '')[:10]}"
+                sales_info = f"Props: {props or 'None'}\nReferral: {c.get('referral_source', 'N/A')}\nIncome: {c.get('source_of_income', 'N/A')}\nPurpose: {purpose}\nReg: {c.get('created_at', '')[:10]}"
 
                 rows.append({
                     "Client Details": client_details,

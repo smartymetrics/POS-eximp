@@ -114,6 +114,7 @@ CREATE TABLE IF NOT EXISTS invoices (
     signature_url TEXT,
     payment_proof_url TEXT,
     passport_photo_url TEXT,
+    purchase_purpose VARCHAR(100),
     source VARCHAR(50) DEFAULT 'manual', -- manual / google_form
 
     created_by UUID REFERENCES admins(id),

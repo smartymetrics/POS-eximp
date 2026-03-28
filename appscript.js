@@ -78,6 +78,7 @@ function onFormSubmit(e) {
             // Other
             source_of_income: responses["Source of Income"] || "",
             referral_source: responses["How did you get to know about our property"] || responses["How did you hear about us?"] || "",
+            purchase_purpose: responses["Is this property being purchased:"] || responses["Purchase Purpose"] || "",
             sales_rep_name: responses["Sales Rep / Marketer Name  "] || responses["Name of Sales Rep"] || "",
             sales_rep_phone: responses["Sales Rep Phone Number"] || "",
             consent: responses["By checking this box, I confirm that I have read, understand, and consent to all of the following Land Republic documents: Terms and Conditions, Payment Protection Promise, and Resale and Refund Policies. I accept full responsibility for all legal implications and interpretations of this agreement. I understand that this subscription form becomes binding on all parties immediately upon the company's receipt of my payment.  "] || responses["Consent Checkbox"] || responses["Do you agree to the terms?"] || "I Confirm and Agree",
