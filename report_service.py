@@ -119,9 +119,19 @@ class ReportService:
             rows = []
             for c in data:
                 invoices = c.get("invoices") or []
-                props = "; ".join(set(i.get("property_name", "") for i in invoices if i.get("property_name")))
-                # Get the most recent purchase purpose if multiple invoices exist
-                purpose = next((i.get("purchase_purpose") for i in invoices if i.get("purchase_purpose")), "N/A")
+                # Create a list of "Property Name (Purpose)" strings
+                prop_list = []
+                for i in invoices:
+                    p_name = i.get("property_name")
+                    p_purpose = i.get("purchase_purpose")
+                    if p_name:
+                        entry = p_name
+                        if p_purpose:
+                            entry += f" ({p_purpose})"
+                        prop_list.append(entry)
+                
+                # Deduplicate and join
+                props_display = "; ".join(sorted(set(prop_list))) if prop_list else "None"
                 
                 name_parts = [p for p in [c.get("title"), c.get("full_name"), c.get("middle_name")] if p]
                 full_name_str = " ".join(name_parts) or "Unknown Client"
@@ -141,7 +151,7 @@ class ReportService:
                 if c.get("nok_relationship"): nok_details += f" ({c.get('nok_relationship')})"
                 if c.get("nok_occupation"): nok_details += f"\nOcc: {c.get('nok_occupation')}"
                 
-                sales_info = f"Props: {props or 'None'}\nReferral: {c.get('referral_source', 'N/A')}\nIncome: {c.get('source_of_income', 'N/A')}\nPurpose: {purpose}\nReg: {c.get('created_at', '')[:10]}"
+                sales_info = f"Props: {props_display}\nReferral: {c.get('referral_source', 'N/A')}\nIncome: {c.get('source_of_income', 'N/A')}\nReg: {c.get('created_at', '')[:10]}"
 
                 rows.append({
                     "Client Details": client_details,

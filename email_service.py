@@ -798,5 +798,63 @@ def _refund_receipt_html(invoice: dict, payment: dict, client: dict) -> str:
       <div style="background: #f4f4f4; padding: 20px; text-align: center; color: #888; font-size: 12px; border-top: 1px solid #eee;">
         Eximp & Cloves Infrastructure Limited | RC 8311800
       </div>
-    </div>
-    """
+
+def _commission_paid_html(rep: dict, batch: dict) -> str:
+    amount = float(batch["total_amount"])
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: #1A1A1A; padding: 24px; text-align: center;">
+        <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">
+      </div>
+      <div style="background: #27ae60; padding: 12px 24px;">
+        <h2 style="color: #fff; margin: 0; font-size: 16px;">Commission Payout Successful</h2>
+      </div>
+      <div style="padding: 32px 24px; background: #fff; border: 1px solid #eee;">
+        <p style="color: #333;">Dear <strong>{rep.get('name', 'Rep')}</strong>,</p>
+        <p style="color: #555;">We are pleased to inform you that a commission payout has been processed for you.</p>
+        
+        <div style="background: #f9f9f9; border-radius: 8px; padding: 24px; text-align: center; margin: 24px 0;">
+          <p style="color: #888; margin: 0 0 8px; font-size: 13px; text-transform: uppercase;">Amount Paid</p>
+          <p style="color: #27ae60; font-size: 32px; font-weight: bold; margin: 0;">NGN {amount:,.2f}</p>
+          <hr style="border-color: #ddd; margin: 16px 0;">
+          <p style="color: #555; font-size: 13px;">Reference: <strong>{batch.get('reference', 'N/A')}</strong></p>
+          <p style="color: #555; font-size: 12px;">Date: {batch.get('paid_at', '')[:10]}</p>
+        </div>
+        
+        <p style="color: #555; font-size: 13px;">Please check your bank account or contact the Finance Department if you have any questions.</p>
+        <p style="color: #555; font-size: 13px;">Keep up the great work!</p>
+        
+        <hr style="border-color: #eee; margin: 24px 0;">
+        <p style="color: #999; font-size: 12px; margin: 0; text-align: center;">
+          Eximp & Cloves Infrastructure Limited | RC 8311800<br>
+          57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383
+        </p>
+      </div>
+    </div>"""
+
+async def send_commission_paid_email(rep: dict, batch: dict):
+    from routers.analytics import log_activity
+    if not rep.get("email"):
+        return
+        
+    email_addr = rep["email"]
+    rep_name = rep.get("name", "Rep")
+    
+    try:
+        res = resend.Emails.send({
+            "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "reply_to": "finance@eximps-cloves.com",
+            "subject": f"Commission Payout Processed | Eximp & Cloves",
+            "html": _commission_paid_html(rep, batch)
+        })
+        
+        await log_activity(
+            "email_sent",
+            f"Commission payout email for NGN {batch['total_amount']:,.2f} sent to {rep_name} ({email_addr})",
+            "system"
+        )
+        return res
+    except Exception as e:
+        logger.error(f"Error sending payout email to {email_addr}: {e}")
+        return None

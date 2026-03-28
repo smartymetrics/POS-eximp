@@ -7,7 +7,7 @@ from models import CommissionRateCreate, CommissionAdjustment, CommissionPayout,
 from database import get_db
 from routers.auth import verify_token
 from routers.analytics import log_activity
-from email_service import send_commission_void_email
+from email_service import send_commission_void_email, send_commission_paid_email
 
 router = APIRouter()
 
@@ -234,6 +234,11 @@ async def mark_payout(payload: CommissionPayout, background_tasks: BackgroundTas
         f"Processed commission payout of NGN {payment_amount:,.2f} to {rep_name}",
         performed_by=current_admin["sub"]
     )
+    
+    # Send Payout Email
+    rep_obj = db.table("sales_reps").select("*").eq("id", payload.sales_rep_id).single().execute().data
+    if rep_obj:
+        background_tasks.add_task(send_commission_paid_email, rep_obj, batch.data[0])
     
     return {"message": "Payout successful", "batch": batch.data[0], "amount_paid": payment_amount}
 

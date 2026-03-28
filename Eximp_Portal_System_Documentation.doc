@@ -1,0 +1,83 @@
+
+    <html>
+    <head>
+    <style>
+        body { font-family: 'Calibri', 'Arial', sans-serif; line-height: 1.6; color: #333; max-width: 800px; margin: 40px auto; padding: 20px; }
+        h1 { color: #2c3e50; border-bottom: 2px solid #3498db; padding-bottom: 10px; }
+        h2 { color: #2980b9; margin-top: 30px; border-left: 5px solid #3498db; padding-left: 10px; }
+        h3 { color: #34495e; margin-top: 20px; }
+        p { margin-bottom: 10px; }
+        ul { margin-bottom: 15px; }
+        li { margin-bottom: 5px; }
+        hr { border: 0; border-top: 1px solid #eee; margin: 40px 0; }
+        strong { color: #2c3e50; }
+        .header { text-align: center; margin-bottom: 50px; }
+        .header h1 { border: none; font-size: 2.5em; margin-bottom: 0; }
+        .header p { color: #7f8c8d; font-style: italic; }
+    </style>
+    </head>
+    <body>
+    <h1>📂 Exhaustive Functional Documentation: Eximp Operations & Finance Portal</h1>
+<p>This document provides a detailed, step-by-step breakdown of the integrated operations and finance system for <strong>Eximp & Cloves Infrastructure Limited<strong>.</p>
+<hr>
+<h2>🏗️ System Architecture & Workflow</h2>
+<p>The portal is a high-performance orchestration layer that bridges Google-based data entry with a robust FastAPI backend and Supabase cloud storage.</p>
+<li> **Ingestion Layer:** Google Forms + Google Apps Script (`appscript.js`).</li>
+<li> **API Layer:** FastAPI (Python) handles all business logic, PDF generation, and email dispatch.</li>
+<li> **Data Layer:** Supabase (PostgreSQL) provides real-time data persistence and Row-Level Security (RLS).</li>
+<li> **Reporting Layer:** APScheduler + Resend SDK for automated, periodic audits.</li>
+<hr>
+<h2>Phase 1: Client Acquisition & Automated Entry</h2>
+<p>The system starts the moment a client interacts with the company.</p>
+<li>**Step 1: Google Form Submission**</li>
+<li>Clients fill out the digital Subscription Form (KYC data, property details, and payment proof).</li>
+<li>**Apps Script** instantly captures the data and funnels it to the central database including the `purchase_purpose` for each property.</li>
+<li>**Step 2: Instant Welcome Email**</li>
+<li>The system immediately sends a branded **"Welcome to the Family"** email to the client, confirming their submission is being reviewed.</li>
+<li>**Step 3: Administrative Alert**</li>
+<li>An automated **"New Subscription"** email is sent to the Admin team, providing a direct link to the payment proof and the verification dashboard.</li>
+<hr>
+<h2>Phase 2: Verification & Financial Activation</h2>
+<p>This is the critical "gatekeeper" phase where payments are confirmed.</p>
+<li>**Step 4: Admin Verification Hub**</li>
+<li>Admins review the proof of payment on the dashboard.</li>
+<li>**Identity Resolution:** If a Sales Rep's name on the form doesn't match the database, the "Unmatched Name" tool allows admins to map it to the correct record instantly.</li>
+<li>**Step 5: Automated Document Dispatch**</li>
+<li>Upon clicking "Confirm," the system generates and emails the client their official **Branded Receipt** and **Statement of Account** (PDFs).</li>
+<li>**Step 6: Sales Rep Commission Alert**</li>
+<li>The assigned **Sales Representative** receives an automated email notifying them that a client's payment was verified and their commission has been successfully recorded.</li>
+<li>**Step 7: Rejection Logic**</li>
+<li>If a submission is rejected, the client receives a **Rejection Email** explaining the reason, ensuring no lead is lost in communication.</li>
+<hr>
+<h2>Phase 3: Manual Office Operations</h2>
+<p>The system allows for total administrative control for walk-in clients or complex custom deals.</p>
+<li>**Manual Invoice Creation:** Create professional EC-XXXX invoices for office walk-ins.</li>
+<li>**Manual Payment Entry:** Record payments (Bank Transfers, Cash, USSD) directly against any active invoice.</li>
+<li>**Invoice Management:** Edit due dates, add co-owners, or adjust unit prices with mandatory audit notes.</li>
+<li>**Document Dispatch:** Re-send Invoices, Receipts, or Statements to clients with a single click.</li>
+<hr>
+<h2>Phase 4: Staff Commissions & Payouts</h2>
+<p>The most granular part of the financial engine, ensuring staff are paid accurately and on time:</p>
+<li>**Commission Accrual:** Commissions are calculated the moment a deposit is confirmed.</li>
+<li>**Payout Ledger:** A dedicated dashboard showing **Pending Commissions Owed** vs. **Recent Payout Batches**.</li>
+<li>**Partial Payout Support:** Admins can pay agents a fraction of their commission if the client has only made a partial payment on the property.</li>
+<li>**Audit-Trailed Voids:** Commissions can be voided with a mandatory reason, which sends an automated notification to the rep.</li>
+<hr>
+<h2>Phase 5: Advanced Analytics & Live KPIs</h2>
+<p>Real-time visibility into the pulse of the company:</p>
+<li>**Revenue Charts:** Interactive line charts showing Gross Invoiced vs. Physically Collected revenue.</li>
+<li>**Leaderboards:** Sales rep performance tracking including deal counts and collection rates.</li>
+<li>**Growth Deltas:** Live percentage tracking (e.g., "+20% revenue vs last 30 days") for management oversight.</li>
+<li>**Activity Feed:** A real-time stream of all staff actions, creating a transparent operational culture.</li>
+<hr>
+<h2>Phase 6: Automated Reporting & Business Intelligence</h2>
+<p>Professional audits delivered without lifting a finger:</p>
+<li>**The Reports Center:** One-click generation of Sales Summaries, Rep Performance, and Property Inventory Status.</li>
+<li>**Automated Scheduling:** Reports are emailed to management in **PDF and Excel** on a Daily, Weekly, or Monthly basis via `scheduler.py`.</li>
+<li>**KYC Master Register:** A permanent, comprehensive audit of all client identities, contact information, and purchase histories.</li>
+<hr>
+<h2>Phase 7: Data Integrity & Integrity Policies</h2>
+<li>**"Void, Don't Delete"**: Financial history is never erased. Every mistake or cancelled deal is "Voided" to maintain a perfect audit trail for auditors.</li>
+<li>**Email History Logs**: Every automated email is logged, allowing admins to verify communication delivery.</li>
+<li>**Secure Access**: Role-based permissions (Admin vs. Staff) ensure financial settings like global commission rates are restricted to authorized personnel.</li>
+</body></html>
