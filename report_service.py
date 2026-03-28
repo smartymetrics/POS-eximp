@@ -23,7 +23,7 @@ class ReportService:
         if not end_date: end_date = datetime.now().strftime("%Y-%m-%d")
 
         if report_type == "sales_summary":
-            res = supabase.table("invoices").select("invoice_number, invoice_date, property_name, amount, amount_paid, status, sales_rep_name, clients(full_name, email)").gte("invoice_date", start_date).lte("invoice_date", end_date).order("invoice_date", desc=True).execute()
+            res = supabase.table("invoices").select("invoice_number, invoice_date, property_name, amount, amount_paid, status, sales_rep_name, clients(full_name, email)").gte("invoice_date", start_date).lte("invoice_date", end_date).neq("status", "voided").order("invoice_date", desc=True).execute()
             data = res.data or []
             rows = []
             for i in data:
@@ -34,9 +34,9 @@ class ReportService:
                     "Date": i.get("invoice_date", ""),
                     "Client": i.get("clients", {}).get("full_name", "") if i.get("clients") else "",
                     "Property": i.get("property_name", ""),
-                    "Amount (NGN)": f"₦{amt:,.2f}",
-                    "Paid (NGN)": f"₦{paid:,.2f}",
-                    "Balance (NGN)": f"₦{(amt - paid):,.2f}",
+                    "Amount (NGN)": f"NGN {amt:,.2f}",
+                    "Paid (NGN)": f"NGN {paid:,.2f}",
+                    "Balance (NGN)": f"NGN {(amt - paid):,.2f}",
                     "Sales Rep": i.get("sales_rep_name", "—"),
                     "Status": i.get("status", "").capitalize()
                 })
@@ -48,8 +48,8 @@ class ReportService:
             return {"items": rows, "stats": stats, "type": "Sales Summary"}
 
         elif report_type == "collection_report":
-            # Optimization: Only fetch non-paid invoices to save bandwidth/latency
-            res = supabase.table("invoices").select("invoice_number, invoice_date, due_date, property_name, amount, amount_paid, status, clients(full_name, email, phone)").neq("status", "paid").execute()
+            # Optimization: Only fetch non-paid and non-voided invoices
+            res = supabase.table("invoices").select("invoice_number, invoice_date, due_date, property_name, amount, amount_paid, balance_due, status, clients(full_name, email, phone)").neq("status", "paid").neq("status", "voided").execute()
             data = res.data or []
 
             today = datetime.now().date()
@@ -73,9 +73,9 @@ class ReportService:
                     "Client": inv.get("clients", {}).get("full_name", "") if inv.get("clients") else "",
                     "Phone": inv.get("clients", {}).get("phone", "") if inv.get("clients") else "",
                     "Property": inv.get("property_name", ""),
-                    "Total (NGN)": f"₦{amount:,.2f}",
-                    "Paid (NGN)": f"₦{paid:,.2f}",
-                    "Balance (NGN)": f"₦{balance:,.2f}",
+                    "Total (NGN)": f"NGN {amount:,.2f}",
+                    "Paid (NGN)": f"NGN {paid:,.2f}",
+                    "Balance (NGN)": f"NGN {balance:,.2f}",
                     "Due Date": inv.get("due_date", ""),
                     "Status": resolved_status.capitalize(),
                     "Days Overdue": days_overdue
@@ -90,7 +90,13 @@ class ReportService:
             return {"items": rows, "stats": {"count": len(rows)}, "type": "Outstanding Payments"}
 
         elif report_type == "rep_performance":
-            res = supabase.table("invoices").select("sales_rep_name, amount, amount_paid").gte("invoice_date", start_date).lte("invoice_date", end_date).execute()
+            active_reps_res = supabase.table("sales_reps").select("name").eq("is_active", True).execute()
+            active_names = [r["name"] for r in (active_reps_res.data or [])]
+            
+            if not active_names:
+                return {"items": [], "stats": {}, "type": "Sales Rep Performance"}
+                
+            res = supabase.table("invoices").select("sales_rep_name, amount, amount_paid").gte("invoice_date", start_date).lte("invoice_date", end_date).neq("status", "voided").in_("sales_rep_name", active_names).execute()
             df = pd.DataFrame(res.data or [])
             if df.empty: return {"items": [], "stats": {}, "type": "Sales Rep Performance"}
 
@@ -102,45 +108,64 @@ class ReportService:
                 Collected=("amount_paid", "sum")
             ).reset_index()
             summary["Collection Rate"] = (summary["Collected"] / summary["Revenue"] * 100).round(1).astype(str) + "%"
-            summary["Revenue"] = summary["Revenue"].apply(lambda x: f"₦{x:,.2f}")
-            summary["Collected"] = summary["Collected"].apply(lambda x: f"₦{x:,.2f}")
+            summary["Revenue"] = summary["Revenue"].apply(lambda x: f"NGN {x:,.2f}")
+            summary["Collected"] = summary["Collected"].apply(lambda x: f"NGN {x:,.2f}")
             summary = summary.rename(columns={"sales_rep_name": "Sales Rep"}).sort_values("Deals", ascending=False)
             return {"items": summary.to_dict("records"), "stats": {}, "type": "Sales Rep Performance"}
 
         elif report_type == "client_register":
-            res = supabase.table("clients").select("full_name, email, phone, nationality, occupation, referral_source, created_at, invoices(property_name)").order("created_at", desc=True).execute()
+            res = supabase.table("clients").select("full_name, email, phone, address, title, middle_name, gender, dob, marital_status, occupation, nin, id_number, nationality, nok_name, nok_phone, nok_relationship, source_of_income, referral_source, created_at, invoices(property_name)").order("created_at", desc=True).execute()
             data = res.data or []
             rows = []
             for c in data:
                 invoices = c.get("invoices") or []
                 props = "; ".join(set(i.get("property_name", "") for i in invoices if i.get("property_name")))
+                
+                name_parts = [p for p in [c.get("title"), c.get("full_name"), c.get("middle_name")] if p]
+                full_name_str = " ".join(name_parts) or "Unknown Client"
+                
+                demographics = [d for d in [c.get("gender"), c.get("marital_status")] if d]
+                demo_str = ", ".join(demographics)
+                
+                client_details = full_name_str.upper()
+                if demo_str: client_details += f"\n{demo_str}"
+                if c.get("dob"): client_details += f"\nDOB: {c.get('dob')}"
+                
+                contact_info = "\n".join([v for v in [c.get("phone"), c.get("email"), c.get("address")] if v])
+                
+                identification = f"Nat: {c.get('nationality', 'N/A')}\nOcc: {c.get('occupation', 'N/A')}\nNIN: {c.get('nin', 'N/A')}"
+                
+                nok_details = "\n".join([v for v in [c.get("nok_name"), c.get("nok_phone")] if v]) or "N/A"
+                if c.get("nok_relationship"): nok_details += f" ({c.get('nok_relationship')})"
+                
+                sales_info = f"Props: {props or 'None'}\nReferral: {c.get('referral_source', 'N/A')}\nReg: {c.get('created_at', '')[:10]}"
+
                 rows.append({
-                    "Full Name": c.get("full_name", ""),
-                    "Email": c.get("email", ""),
-                    "Phone": c.get("phone", ""),
-                    "Nationality": c.get("nationality", ""),
-                    "Occupation": c.get("occupation", ""),
-                    "Referral Source": c.get("referral_source", ""),
-                    "Properties": props or "None",
-                    "Date Registered": c.get("created_at", "")[:10] if c.get("created_at") else "",
+                    "Client Details": client_details,
+                    "Contact Info": contact_info,
+                    "Identification": identification,
+                    "Next of Kin": nok_details,
+                    "Sales Info": sales_info
                 })
-            return {"items": rows, "stats": {"count": len(rows)}, "type": "Client Register"}
+            return {"items": rows, "stats": {"count": len(rows)}, "type": "Client Register & KYC Report"}
 
         elif report_type == "commission_report":
             end_timestamp = end_date + "T23:59:59"
-            res = supabase.table("commission_earnings").select("*, sales_reps(name), clients(full_name), invoices(invoice_number)").gte("created_at", start_date).lte("created_at", end_timestamp).order("created_at", desc=True).execute()
+            res = supabase.table("commission_earnings").select("*, sales_reps(name), clients(full_name), invoices(invoice_number, status)").gte("created_at", start_date).lte("created_at", end_timestamp).order("created_at", desc=True).execute()
             data = res.data or []
             rows = []
             for c in data:
+                if c.get("invoices", {}).get("status") == "voided":
+                    continue
                 rows.append({
                     "Date": str(c.get("created_at"))[:10] if c.get("created_at") else "",
                     "Sales Rep": c.get("sales_reps", {}).get("name", "Unknown") if c.get("sales_reps") else "Unknown",
                     "Client": c.get("clients", {}).get("full_name", "") if c.get("clients") else "",
                     "Invoice": c.get("invoices", {}).get("invoice_number", "") if c.get("invoices") else "",
                     "Estate": c.get("estate_name", ""),
-                    "Deposit": f"₦{float(c.get('payment_amount', 0)):,.2f}",
+                    "Deposit": f"NGN {float(c.get('payment_amount', 0)):,.2f}",
                     "Rate": f"{float(c.get('commission_rate', 0))}%",
-                    "Earning": f"₦{float(c.get('final_amount', 0)):,.2f}",
+                    "Earning": f"NGN {float(c.get('final_amount', 0)):,.2f}",
                     "Status": "Paid" if c.get("is_paid") else "Unpaid"
                 })
             return {"items": rows, "stats": {"count": len(rows)}, "type": "Commission Earned Report"}
@@ -158,14 +183,15 @@ class ReportService:
             <meta charset="UTF-8">
             <style>
                 @page {{ size: a4 landscape; margin: 1cm; }}
-                body {{ font-family: Helvetica, Arial, sans-serif; color: #2d3436; }}
-                .header {{ border-bottom: 2px solid #F5A623; padding-bottom: 10px; margin-bottom: 20px; }}
+                body {{ font-family: Helvetica, Arial, sans-serif; color: #1a1a1a; }}
+                .header {{ border-bottom: 3px solid #F5A623; padding-bottom: 15px; margin-bottom: 25px; }}
                 .logo {{ font-size: 24px; font-weight: bold; color: #1A1A1A; }}
-                .title {{ font-size: 18px; color: #636e72; margin-top: 5px; }}
-                table {{ width: 100%; border-collapse: collapse; }}
-                th {{ background: #f1f2f6; color: #2f3542; text-align: left; padding: 8px; font-size: 10px; border-bottom: 1px solid #dfe4ea; }}
-                td {{ padding: 8px; border-bottom: 1px solid #f1f2f6; font-size: 10px; }}
-                .footer {{ position: fixed; bottom: 0; width: 100%; text-align: center; font-size: 8px; color: #a4b0be; }}
+                .title {{ font-size: 20px; font-weight: bold; color: #555555; margin-top: 8px; }}
+                table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
+                th {{ background: #1a1a1a; color: #F5A623; text-align: left; padding: 10px; font-size: 11px; text-transform: uppercase; }}
+                td {{ padding: 10px; border-bottom: 1px solid #eeeeee; font-size: 10.5px; vertical-align: middle; }}
+                tr:nth-child(even) td {{ background-color: #fafafa; }}
+                .footer {{ position: fixed; bottom: 0; width: 100%; text-align: center; font-size: 9px; color: #888888; border-top: 1px solid #eeeeee; padding-top: 5px; }}
             </style>
         </head>
         <body>
@@ -182,7 +208,8 @@ class ReportService:
                 </thead>
                 <tbody>
                     {"".join([
-                        "<tr>" + "".join([f"<td>{str(v)}</td>" for v in row.values()]) + "</tr>"
+                        (f'<tr style="background-color: #fff5f5; color: #c53030; font-weight: bold;">' if str(row.get("Status", "")).lower() == "overdue" else "<tr>") + 
+                        "".join([f"<td>{str(v).replace(chr(10), '<br>')}</td>" for v in row.values()]) + "</tr>"
                         for row in items
                     ]) if items else "<tr><td>No records found.</td></tr>"}
                 </tbody>
