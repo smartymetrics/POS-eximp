@@ -181,6 +181,38 @@ def format_naira(amount):
         return f"N {value:,.0f}"
     return f"N {value:,.2f}"
 
+def naira_in_words(amount):
+    """Convert numerical amount to Naira words (e.g., Five Million Naira Only)."""
+    if amount is None: return "Zero Naira Only"
+    
+    units = ["", "One", "Two", "Three", "Four", "Five", "Six", "Seven", "Eight", "Nine"]
+    teens = ["Ten", "Eleven", "Twelve", "Thirteen", "Fourteen", "Fifteen", "Sixteen", "Seventeen", "Eighteen", "Nineteen"]
+    tens = ["", "", "Twenty", "Thirty", "Forty", "Fifty", "Sixty", "Seventy", "Eighty", "Ninety"]
+    thousands = ["", "Thousand", "Million", "Billion"]
+
+    def _convert_less_than_thousand(n):
+        if n == 0: return ""
+        if n < 10: return units[n]
+        if n < 20: return teens[n-10]
+        if n < 100: return tens[n//10] + (" " + units[n%10] if n%10 != 0 else "")
+        return units[n//100] + " Hundred" + (" and " + _convert_less_than_thousand(n%100) if n%100 != 0 else "")
+
+    num = int(amount)
+    if num == 0: return "Zero Naira Only"
+    
+    res = ""
+    group_idx = 0
+    temp_num = num
+    while temp_num > 0:
+        if temp_num % 1000 != 0:
+            part = _convert_less_than_thousand(temp_num % 1000)
+            res = part + " " + thousands[group_idx] + " " + res
+        temp_num //= 1000
+        group_idx += 1
+    
+    return res.strip() + " Naira Only"
+
+
 
 def _html_to_pdf(html_content: str) -> bytes:
     """Convert HTML string to PDF bytes using WeasyPrint."""
@@ -571,17 +603,23 @@ def generate_contract_pdf(invoice: dict, client: dict, witnesses: list = None, i
     company = COMPANY.copy()
 
     # 6. Render HTML
+    invoice_data = invoice.copy()
+    if "amount_in_words" not in invoice_data:
+        invoice_data["amount_in_words"] = naira_in_words(invoice_data.get("amount"))
+
     html_content = template.render(
         company=company,
-        invoice=invoice,
+        invoice=invoice_data,
         client=client_sanitized,
         witnesses=witness_list,
         signatures=signatures,
-        lawyer_name=company_names.get("lawyer") or "Legal Department",
+        lawyer_name=company_names.get("lawyer") or "GODSLOVE S. NNAJI, ESQ.",
         generated_at=datetime.now().strftime("%d %B %Y"),
         is_draft=is_draft,
         format_currency=format_currency,
         format_naira=format_naira,
+        naira_in_words=naira_in_words
     )
+
 
     return _html_to_pdf(html_content)
