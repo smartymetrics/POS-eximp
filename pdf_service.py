@@ -1,4 +1,4 @@
-from xhtml2pdf import pisa
+from weasyprint import HTML as WeasyprintHTML
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
 import io
@@ -171,28 +171,20 @@ def format_currency(amount):
         return "NGN 0.00"
     return f"NGN {float(amount):,.2f}"
 
-def _sanitize_html_for_pdf(html_content: str) -> str:
-    """Remove or rewrite unsupported CSS for xhtml2pdf."""
-    # xhtml2pdf struggles with @page blocks and some modern CSS properties
-    html_content = re.sub(r'@page\s*\{[^}]*\}', '', html_content, flags=re.S)
-    html_content = re.sub(r'transform\s*:\s*[^;]+;', '', html_content, flags=re.I)
-    html_content = re.sub(r'position\s*:\s*fixed\s*;?', 'position:absolute;', html_content, flags=re.I)
-    html_content = re.sub(r'page-break-after\s*:\s*avoid\s*;?', '', html_content, flags=re.I)
-    return html_content
+
+def format_naira(amount):
+    """Format as N currency without decimals when possible."""
+    if amount is None:
+        return "N 0"
+    value = float(amount)
+    if value.is_integer():
+        return f"N {value:,.0f}"
+    return f"N {value:,.2f}"
 
 
 def _html_to_pdf(html_content: str) -> bytes:
-    """Convert HTML string to PDF bytes using xhtml2pdf."""
-    html_content = _sanitize_html_for_pdf(html_content)
-    buffer = io.BytesIO()
-    result = pisa.CreatePDF(
-        src=html_content,
-        dest=buffer,
-        encoding="utf-8"
-    )
-    if result.err:
-        raise RuntimeError(f"PDF generation failed with {result.err} errors")
-    return buffer.getvalue()
+    """Convert HTML string to PDF bytes using WeasyPrint."""
+    return WeasyprintHTML(string=html_content).write_pdf()
 
 
 
@@ -480,71 +472,116 @@ def generate_refund_receipt_pdf(payment: dict, invoice: dict, client: dict = Non
     )
     return _html_to_pdf(html_content)
 
+def _resolve_sig_to_data_uri(value: str, max_width: int = 200) -> str | None:
+    """
+    Accepts a raw base64 string, a data: URI, or an https:// URL.
+    Always returns a 'data:image/png;base64,...' URI suitable for xhtml2pdf,
+    with the image resized so signatures aren't oversized on the page.
+    Returns None if the value is empty or fetch fails.
+    """
+    if not value:
+        return None
+    value = str(value).strip()
+
+    # Already a data URI
+    if value.startswith("data:"):
+        # Re-compress to ensure consistent size
+        try:
+            header, encoded = value.split(";base64,", 1)
+            img_bytes = base64.b64decode(encoded)
+            img_bytes, _ = _compress_image_bytes(img_bytes, max_width=max_width)
+            return "data:image/png;base64," + base64.b64encode(img_bytes).decode("utf-8")
+        except Exception:
+            return value  # return original if recompression fails
+
+    # A remote URL
+    if value.startswith("http://") or value.startswith("https://"):
+        b64, _ = _get_image_as_base64(value)  # already compresses to max_width=400
+        if not b64:
+            return None
+        # Further resize to target width
+        try:
+            img_bytes = base64.b64decode(b64)
+            img_bytes, _ = _compress_image_bytes(img_bytes, max_width=max_width)
+            return "data:image/png;base64," + base64.b64encode(img_bytes).decode("utf-8")
+        except Exception:
+            return "data:image/png;base64," + b64
+
+    # Raw base64 without prefix
+    try:
+        img_bytes = base64.b64decode(value)
+        img_bytes, _ = _compress_image_bytes(img_bytes, max_width=max_width)
+        return "data:image/png;base64," + base64.b64encode(img_bytes).decode("utf-8")
+    except Exception:
+        return None
+
+
 def generate_contract_pdf(invoice: dict, client: dict, witnesses: list = None, is_draft: bool = True) -> bytes:
     """
     Generates the Contract of Sale PDF.
     - witnesses: List of dicts with full_name, address, occupation, signature_base64
-    - is_draft: If True, adds a 'DRAFT' watermark.
+    - is_draft: If True, adds a DRAFT notice.
     """
     from database import get_db
     db = get_db()
-    
+
     template = env.get_template("contract.html")
-    # Sanitize client address for legal document consistency
     client_sanitized = sanitize_client_address(client.copy())
-    
-    # 1. Fetch Company Signatures (Director & Secretary)
+
+    # 1. Fetch Company Signatures (Director, Secretary, Lawyer)
     sig_res = db.table("company_signatures").select("*").eq("is_active", True).execute()
     company_sigs = {s["role"]: s["signature_base64"] for s in sig_res.data}
-    
-    # 2. Get Purchaser Signature (Data URI from invoices table)
-    purchaser_sig = invoice.get("signature_url") or invoice.get("signature_base64")
-    
-    # Ensure signatures are prefixed with data:image/ if they are raw base64
-    def _ensure_prefix(b64):
-        if not b64:
-            return None
-        b64_str = str(b64).strip()
-        if b64_str.startswith("http://") or b64_str.startswith("https://"):
-            return b64_str
-        if b64_str.startswith("data:"):
-            return b64_str
-        return "data:image/png;base64," + b64_str
+    company_names = {s["role"]: s.get("full_name") for s in sig_res.data}
 
-    # 3. Assemble all signatures for the template
+    # 2. Get Purchaser Signature
+    purchaser_sig = (
+        invoice.get("contract_signature_url")
+        or invoice.get("contract_signature_base64")
+        or invoice.get("signature_url")
+        or invoice.get("signature_base64")
+    )
+
+    # 3. Resolve ALL signatures to base64 data URIs before rendering.
+    #    xhtml2pdf cannot fetch remote URLs reliably, so we must embed them.
+    #    Authority signatures (director/secretary/lawyer) use max_width=180px —
+    #    small enough to look clean in the signature line without distortion.
+    #    Purchaser and witness signatures use 160px.
     signatures = {
-        "director": _ensure_prefix(company_sigs.get("director")),
-        "secretary": _ensure_prefix(company_sigs.get("secretary")),
-        "purchaser": _ensure_prefix(purchaser_sig),
-        "witness1": None,
-        "witness2": None
+        "director":  _resolve_sig_to_data_uri(company_sigs.get("director"), max_width=180),
+        "secretary": _resolve_sig_to_data_uri(company_sigs.get("secretary"), max_width=180),
+        "lawyer":    _resolve_sig_to_data_uri(company_sigs.get("lawyer"),    max_width=180),
+        "purchaser": _resolve_sig_to_data_uri(purchaser_sig,                 max_width=160),
+        "witness1":  None,
+        "witness2":  None,
     }
-    
-    # 4. Map witness signatures if provided
+
+    # 4. Map witness signatures
     witness_list = []
     if witnesses:
-        for i, w in enumerate(witnesses):
-            w_num = i + 1
-            if f"witness{w_num}" in signatures:
-                signatures[f"witness{w_num}"] = _ensure_prefix(w.get("signature_base64"))
+        for i, w in enumerate(witnesses[:2]):
+            key = f"witness{i + 1}"
+            signatures[key] = _resolve_sig_to_data_uri(w.get("signature_base64"), max_width=160)
             witness_list.append(w)
-    
-    # Pad witness list to 2
+
+    # Pad witness list to exactly 2
     while len(witness_list) < 2:
         witness_list.append({"full_name": "PENDING", "address": "PENDING", "occupation": "PENDING"})
 
-    # 5. Build company context for the contract page
+    # 5. Build company context
     company = COMPANY.copy()
 
-    # 6. Render
+    # 6. Render HTML
     html_content = template.render(
         company=company,
         invoice=invoice,
         client=client_sanitized,
         witnesses=witness_list,
         signatures=signatures,
+        lawyer_name=company_names.get("lawyer") or "Legal Department",
+        generated_at=datetime.now().strftime("%d %B %Y"),
         is_draft=is_draft,
-        format_currency=format_currency
+        format_currency=format_currency,
+        format_naira=format_naira,
     )
-    
+
     return _html_to_pdf(html_content)

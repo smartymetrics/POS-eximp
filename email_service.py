@@ -872,7 +872,8 @@ def send_signing_link_email(invoice, client, token, expires_at):
     email_addr = client.get("email")
     if not email_addr: return
 
-    signing_url = "https://app.eximps-cloves.com/sign/" + str(token)
+    witness_signing_url = "https://app.eximps-cloves.com/sign/" + str(token)
+    client_signing_url = "https://app.eximps-cloves.com/sign/client/" + str(token)
     expiry_str = expires_at.strftime("%B %d, %Y")
 
     html = """
@@ -880,19 +881,35 @@ def send_signing_link_email(invoice, client, token, expires_at):
         <h2 style="color: #F5A623;">Action Required: Contract of Sale Execution</h2>
         <p>Dear {CLIENT_NAME},</p>
         <p>Your Contract of Sale for <strong>{ESTATE_NAME}</strong> is ready for execution.</p>
-        <p>To complete this process, please forward the unique signing link below to <strong>TWO witnesses</strong> of your choice. Each witness must open the link and provide their details and digital signature.</p>
-        
+        <p>There are two separate steps:</p>
+        <ol>
+            <li>Review and sign the contract yourself using the Client Signing Link below.</li>
+            <li>Forward the Witness Signing Link to <strong>TWO witnesses</strong>. Each witness must open the link and sign as a witness.</li>
+        </ol>
+
+        <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin: 20px 0;">
+            <p style="font-size: 12px; color: #888; margin-bottom: 8px;">CLIENT SIGNING LINK</p>
+            <a href="{CLIENT_SIGNING_URL}" style="color: #F5A623; font-weight: bold; text-decoration: none; font-size: 16px;">{CLIENT_SIGNING_URL}</a>
+        </div>
+
         <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; text-align: center; margin: 20px 0;">
             <p style="font-size: 12px; color: #888; margin-bottom: 8px;">WITNESS SIGNING LINK</p>
-            <a href="{SIGNING_URL}" style="color: #F5A623; font-weight: bold; text-decoration: none; font-size: 16px;">{SIGNING_URL}</a>
-            <p style="font-size: 11px; color: #e74c3c; margin-top: 10px;">Security Notice: This link expires on {EXPIRY_DATE}.</p>
+            <a href="{WITNESS_SIGNING_URL}" style="color: #F5A623; font-weight: bold; text-decoration: none; font-size: 16px;">{WITNESS_SIGNING_URL}</a>
+            <p style="font-size: 11px; color: #e74c3c; margin-top: 10px;">Security Notice: Both links expire on {EXPIRY_DATE}.</p>
         </div>
+
+        <p><strong>Instructions for Client:</strong></p>
+        <ul>
+            <li>Open the Client Signing Link.</li>
+            <li>Read the complete contract document.</li>
+            <li>Sign and submit your contract signature.</li>
+        </ul>
 
         <p><strong>Instructions for Witnesses:</strong></p>
         <ol>
-            <li>Open the link on a phone or computer.</li>
-            <li>Enter your full name, residential address, and occupation.</li>
-            <li>Draw or upload your signature.</li>
+            <li>Open the witness link on a phone or computer.</li>
+            <li>Review the contract document.</li>
+            <li>Enter name, address, occupation, and sign.</li>
             <li>Click "Submit Witness Signature".</li>
         </ol>
 
@@ -902,7 +919,8 @@ def send_signing_link_email(invoice, client, token, expires_at):
     """
     html = html.replace("{CLIENT_NAME}", client.get("full_name", "Valued Client"))
     html = html.replace("{ESTATE_NAME}", invoice.get("property_name", "the property"))
-    html = html.replace("{SIGNING_URL}", signing_url)
+    html = html.replace("{CLIENT_SIGNING_URL}", client_signing_url)
+    html = html.replace("{WITNESS_SIGNING_URL}", witness_signing_url)
     html = html.replace("{EXPIRY_DATE}", expiry_str)
 
     try:

@@ -383,11 +383,19 @@ class WitnessSignatureSubmit(BaseModel):
     email: EmailStr
     address: str
     occupation: str
+    phone_number: Optional[str] = None
+    relationship_to_parties: Optional[str] = None  # e.g., 'independent witness', 'family member'
     signature_base64: str  # data:image/...;base64,...
     signature_method: str = "drawn"  # "drawn" or "uploaded"
+    acknowledgement: bool = False  # Must be True to confirm reading and understanding
+
+class ClientContractSignatureSubmit(BaseModel):
+    signature_base64: str  # data:image/...;base64,...
+    signature_method: str = "drawn"
+    acknowledgement: bool = False
 
 class CompanySignatureUpload(BaseModel):
-    role: str  # "director" or "secretary"
+    role: str  # "director", "secretary", or "lawyer"
     full_name: Optional[str] = None
     signature_base64: str
 

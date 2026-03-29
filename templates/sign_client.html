@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Contract Witness Signing | Eximp & Cloves</title>
+<title>Contract Signing | Eximp & Cloves</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
 <style>
@@ -18,65 +18,40 @@
   }
   * { margin: 0; padding: 0; box-sizing: border-box; }
   body { font-family: 'DM Sans', sans-serif; background: #fafafa; color: var(--dark); line-height: 1.6; }
-  
-  .container { max-width: 500px; margin: 40px auto; padding: 0 20px; }
-  
+  .container { max-width: 520px; margin: 40px auto; padding: 0 20px; }
   .header { text-align: center; margin-bottom: 32px; }
   .logo { max-height: 50px; margin-bottom: 20px; }
-  .title { font-family: 'Playfair Display', serif; font-size: 24px; margin-bottom: 8px; }
+  .title { font-family: 'Playfair Display', serif; font-size: 26px; margin-bottom: 8px; }
   .subtitle { color: var(--gray); font-size: 14px; }
-  
   .card { background: var(--white); border-radius: 12px; padding: 32px; box-shadow: 0 4px 20px rgba(0,0,0,0.05); border: 1px solid #efefef; }
-  
-  .summary { background: #fffcf5; border: 1px solid #fdecce; padding: 16px; border-radius: 8px; margin-bottom: 24px; }
-  .summary h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--gold-dark); margin-bottom: 8px; }
-  .summary p { font-size: 14px; font-weight: 500; }
-  
-  .form-group { margin-bottom: 20px; }
+  .summary { background: #fffcf5; border: 1px solid #fdecce; padding: 18px; border-radius: 10px; margin-bottom: 24px; }
+  .summary h3 { font-size: 13px; text-transform: uppercase; letter-spacing: 1px; color: var(--gold-dark); margin-bottom: 10px; }
+  .summary p { font-size: 14px; font-weight: 500; margin-bottom: 6px; }
+  .row { display: grid; grid-template-columns: 1fr; gap: 12px; }
   .label { display: block; font-size: 13px; font-weight: 600; margin-bottom: 6px; color: var(--dark2); }
-  .input { width: 100%; padding: 12px; border: 1px solid #ddd; border-radius: 6px; font-size: 14px; font-family: inherit; transition: border-color 0.2s; }
-  .input:focus { outline: none; border-color: var(--gold); }
-  
+  .note { color: var(--gray); font-size: 13px; margin-top: 4px; }
   .sig-tabs { display: flex; border-bottom: 1px solid #eee; margin-bottom: 16px; }
   .sig-tab { padding: 10px 16px; cursor: pointer; font-size: 13px; font-weight: 600; color: var(--gray); border-bottom: 2px solid transparent; transition: all 0.2s; }
   .sig-tab.active { color: var(--gold); border-bottom-color: var(--gold); }
-  
   .sig-container { position: relative; display: none; margin-bottom: 20px; }
   .sig-container.active { display: block; }
-  
   #sig-pad { border: 1px solid #ddd; border-radius: 6px; background: #fff; width: 100%; height: 180px; touch-action: none; cursor: crosshair; }
   .sig-clear { position: absolute; bottom: 8px; right: 8px; font-size: 11px; color: var(--gray); cursor: pointer; background: rgba(255,255,255,0.8); padding: 4px 8px; border-radius: 4px; border: 1px solid #ddd; }
-  
   .file-input-container { padding: 40px 20px; border: 2px dashed #ddd; border-radius: 8px; text-align: center; background: #f9f9f9; cursor: pointer; transition: all 0.2s; }
   .file-input-container:hover { border-color: var(--gold); background: #fefcf5; }
   .file-input-container p { font-size: 13px; color: var(--gray); margin-top: 8px; }
   #sig-file { display: none; }
   .preview-container { margin-top: 12px; display: none; text-align: center; }
   .preview-img { max-height: 100px; border: 1px solid #eee; border-radius: 4px; }
-  
-  .btn-submit { display: block; width: 100%; padding: 14px; background: var(--gold); color: var(--dark); border: none; border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; margin-top: 24px; }
+  .btn-submit, .btn-view-contract { display: block; width: 100%; padding: 14px; border: none; border-radius: 8px; font-size: 15px; font-weight: 700; cursor: pointer; transition: all 0.2s; }
+  .btn-submit { background: var(--gold); color: var(--dark); margin-top: 24px; }
   .btn-submit:hover { background: var(--gold-dark); transform: translateY(-1px); }
   .btn-submit:disabled { background: #ddd; color: #888; cursor: not-allowed; transform: none; }
-  
-  .btn-view-contract {
-    background: #f0f0f0;
-    color: var(--dark);
-    border: 1px solid #ddd;
-    border-radius: 6px;
-    padding: 10px 16px;
-    font-size: 14px;
-    font-weight: 500;
-    cursor: pointer;
-    transition: all 0.2s;
-    margin-top: 8px;
-  }
+  .btn-view-contract { background: #f0f0f0; color: var(--dark); border: 1px solid #ddd; margin-top: 16px; }
   .btn-view-contract:hover { background: #e8e8e8; border-color: var(--gold); }
-  
   .notice { font-size: 12px; color: var(--gray); text-align: center; margin-top: 24px; }
-  
   .success-overlay { display: none; text-align: center; padding: 40px 0; }
   .success-icon { width: 64px; height: 64px; background: #e8f5e9; color: #2e7d32; border-radius: 50%; display: flex; align-items: center; justify-content: center; margin: 0 auto 20px; font-size: 32px; }
-  
   @media (max-width: 480px) {
     .container { margin: 20px auto; }
     .card { padding: 24px 16px; }
@@ -88,74 +63,30 @@
 <div class="container">
   <div class="header">
     <img src="/static/logo.png" alt="Eximp & Cloves" class="logo" onerror="this.src='https://www.eximps-cloves.com/logo.svg'">
-    <h1 class="title">Witness Execution</h1>
-    <p class="subtitle">Contract of Sale — <span id="estate-name">Loading...</span></p>
+    <h1 class="title">Client Contract Signing</h1>
+    <p class="subtitle">Please review and sign the Contract of Sale for your purchase.</p>
   </div>
-  
+
   <div class="card" id="form-card">
     <div class="summary">
-      <h3>Transaction Summary</h3>
-      <p>Purchaser: <span id="purchaser-name">...</span></p>
-      <p>Property: <span id="property-desc">...</span></p>
-      <p>Date: <span id="contract-date">...</span></p>
-      <div style="margin-top: 16px; text-align: center;">
-        <button id="view-contract-btn" class="btn-view-contract" onclick="viewContract()">
-          📄 View Full Contract Document
-        </button>
-        <p style="font-size: 12px; color: var(--gray); margin-top: 8px;">
-          Please review the complete contract before signing as a witness
-        </p>
-      </div>
-    </div>
-    
-    <div class="form-group">
-      <label class="label">Full Name</label>
-      <input type="text" id="full_name" class="input" placeholder="Enter your full legal name" required>
+      <h3>Contract Summary</h3>
+      <p>Purchaser: <strong id="client-name">Loading...</strong></p>
+      <p>Property: <strong id="property-desc">Loading...</strong></p>
+      <p>Date: <strong id="contract-date">Loading...</strong></p>
+      <button id="view-contract-btn" class="btn-view-contract" onclick="viewContract()">📄 View Full Contract Document</button>
+      <p class="note">Open the contract, review the terms, then sign below.</p>
     </div>
 
-    <div class="form-group">
-      <label class="label">Email Address</label>
-      <input type="email" id="email" class="input" placeholder="Enter your email address" required>
-    </div>
-    
-    <div class="form-group">
-      <label class="label">Phone Number</label>
-      <input type="tel" id="phone_number" class="input" placeholder="Enter your phone number" required>
-    </div>
-    
-    <div class="form-group">
-      <label class="label">Physical Address</label>
-      <input type="text" id="address" class="input" placeholder="Street, City, State" required>
-    </div>
-    
-    <div class="form-group">
-      <label class="label">Occupation</label>
-      <input type="text" id="occupation" class="input" placeholder="e.g. Entrepreneur, Civil Servant" required>
-    </div>
-    
-    <div class="form-group">
-      <label class="label">Relationship to Parties</label>
-      <select id="relationship_to_parties" class="input" required>
-        <option value="">Select relationship</option>
-        <option value="independent_witness">Independent Witness (recommended)</option>
-        <option value="family_member">Family Member</option>
-        <option value="friend">Friend</option>
-        <option value="colleague">Colleague</option>
-        <option value="other">Other</option>
-      </select>
-    </div>
-    
-    <label class="label">Signature</label>
     <div class="sig-tabs">
       <div class="sig-tab active" data-tab="draw">Draw Signature</div>
       <div class="sig-tab" data-tab="upload">Upload Photo</div>
     </div>
-    
+
     <div id="draw-container" class="sig-container active">
       <canvas id="sig-pad"></canvas>
       <div class="sig-clear" id="clear-pad">Clear</div>
     </div>
-    
+
     <div id="upload-container" class="sig-container">
       <label class="file-input-container" for="sig-file">
         <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="color:var(--gold);"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/><polyline points="17 8 12 3 7 8"/><line x1="12" y1="3" x2="12" y2="15"/></svg>
@@ -168,124 +99,98 @@
         <img src="" id="sig-preview" class="preview-img">
       </div>
     </div>
-    
-    <div class="form-group">
+
+    <div class="form-group" style="margin-top:16px;">
       <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
         <input type="checkbox" id="acknowledgement" style="margin-top: 2px; flex-shrink: 0;">
         <span style="font-size: 14px; line-height: 1.4; color: var(--dark2);">
-          I have reviewed the Contract of Sale document above and acknowledge that I have read, understood, and agree to act as a witness to this transaction.
+          I have reviewed the Contract of Sale and acknowledge that I understand the terms before signing.
         </span>
       </label>
     </div>
-    
-    <button class="btn-submit" id="submit-btn" disabled>Submit Witness Signature</button>
-    
-    <p class="notice">
-      By signing, you confirm that you have reviewed the Contract of Sale document and personally witnessed the execution of this transaction.
-    </p>
+
+    <button class="btn-submit" id="submit-btn" disabled>Submit Contract Signature</button>
+    <p class="notice">By signing, you confirm that this is your authorized signature for the Contract of Sale.</p>
   </div>
-  
+
   <div class="card success-overlay" id="success-card">
     <div class="success-icon">✓</div>
-    <h2 class="title">Successfully Signed</h2>
-    <p class="subtitle">Thank you. Your witness signature has been securely recorded and linked to the contract.</p>
+    <h2 class="title">Contract Signed</h2>
+    <p class="subtitle">Thank you. Your signature has been securely recorded.</p>
     <p style="margin-top:24px; font-size:13px; color:var(--gray);">You may now close this window.</p>
   </div>
 </div>
 
 <script>
-  // --- Initialization ---
   const token = window.location.pathname.split('/').pop();
   let signatureMethod = 'drawn';
   let signatureBase64 = null;
   let savedSignatureDataUrl = null;
-  
-  // Signature Pad
-  const canvas = document.getElementById("sig-pad");
+
+  const canvas = document.getElementById('sig-pad');
   const signaturePad = new SignaturePad(canvas, {
     backgroundColor: 'rgba(255, 255, 255, 0)',
     penColor: 'rgb(0, 0, 0)'
   });
-  
-  // Polyfill for canvas sizing
+
   function resizeCanvas() {
     const ratio = Math.max(window.devicePixelRatio || 1, 1);
     if (!signaturePad.isEmpty()) {
-      savedSignatureDataUrl = signaturePad.toDataURL("image/png");
+      savedSignatureDataUrl = signaturePad.toDataURL('image/png');
     }
-
     canvas.width = canvas.offsetWidth * ratio;
     canvas.height = canvas.offsetHeight * ratio;
-    const ctx = canvas.getContext("2d");
+    const ctx = canvas.getContext('2d');
     ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     signaturePad.clear();
-
     if (savedSignatureDataUrl) {
       signaturePad.fromDataURL(savedSignatureDataUrl);
     }
   }
-  window.addEventListener("resize", resizeCanvas);
+  window.addEventListener('resize', resizeCanvas);
   resizeCanvas();
 
-  // --- Data Loading ---
   async function loadContext() {
     try {
-      const res = await fetch(`/api/signing/context/${token}`);
+      const res = await fetch(`/api/signing/client-context/${token}`);
       const data = await res.json();
-      if (!res.ok) throw new Error(data.detail || "Invalid link");
-      
-      document.getElementById('estate-name').textContent = data.estate_name;
-      document.getElementById('purchaser-name').textContent = data.client_name;
+      if (!res.ok) throw new Error(data.detail || 'Invalid link');
+      document.getElementById('client-name').textContent = data.client_name;
       document.getElementById('property-desc').textContent = `${data.estate_name} (${data.plot_size_sqm} SQM)`;
       document.getElementById('contract-date').textContent = data.contract_date;
     } catch (err) {
-      document.getElementById('form-card').innerHTML = `<div style="text-align:center; padding:40px 0;">
-        <p style="color:var(--red); font-weight:600;">Error: ${err.message}</p>
-        <p style="font-size:13px; color:var(--gray); margin-top:12px;">This link may have expired or is invalid.</p>
-      </div>`;
+      document.getElementById('form-card').innerHTML = `<div style="text-align:center; padding:40px 0;"><p style="color:var(--red); font-weight:600;">Error: ${err.message}</p><p style="font-size:13px; color:var(--gray); margin-top:12px;">This link may have expired or is invalid.</p></div>`;
     }
   }
   loadContext();
 
-  // --- View Contract Function ---
   function viewContract() {
     const contractUrl = `/api/signing/contract/${token}`;
     window.open(contractUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
   }
 
-  // --- Event Listeners ---
-  
-  // Tabs
   document.querySelectorAll('.sig-tab').forEach(tab => {
     tab.addEventListener('click', () => {
       document.querySelectorAll('.sig-tab').forEach(t => t.classList.remove('active'));
       document.querySelectorAll('.sig-container').forEach(c => c.classList.remove('active'));
-      
       tab.classList.add('active');
       const target = tab.getAttribute('data-tab');
       document.getElementById(`${target}-container`).classList.add('active');
       signatureMethod = target;
-      
-      if (target === 'draw') {
-        resizeCanvas();
-      }
+      if (target === 'draw') resizeCanvas();
       validateForm();
     });
   });
-  
-  // Clear Pad
+
   document.getElementById('clear-pad').addEventListener('click', () => {
     signaturePad.clear();
     validateForm();
   });
-  
-  // File Upload
+
   document.getElementById('sig-file').addEventListener('change', (e) => {
     const file = e.target.files[0];
     if (!file) return;
-    
     document.getElementById('file-name').textContent = file.name;
-    
     const reader = new FileReader();
     reader.onload = (ev) => {
       signatureBase64 = ev.target.result;
@@ -295,70 +200,44 @@
     };
     reader.readAsDataURL(file);
   });
-  
-  // Form Validation
-  const inputs = ['full_name', 'email', 'phone_number', 'address', 'occupation', 'relationship_to_parties'];
-  inputs.forEach(id => {
-    document.getElementById(id).addEventListener('input', validateForm);
-  });
-  document.getElementById('relationship_to_parties').addEventListener('change', validateForm);
+
   document.getElementById('acknowledgement').addEventListener('change', validateForm);
-  
   canvas.addEventListener('mouseup', validateForm);
   canvas.addEventListener('touchend', validateForm);
-  
+
   function validateForm() {
-    const isFilled = inputs.every(id => document.getElementById(id).value.trim().length > 0);
-    const isAcknowledged = document.getElementById('acknowledgement').checked;
-    let hasSignature = false;
-    
-    if (signatureMethod === 'drawn') {
-      hasSignature = !signaturePad.isEmpty();
-      if (hasSignature) {
-        signatureBase64 = signaturePad.toDataURL("image/png");
-      }
-    } else {
-      hasSignature = !!signatureBase64;
+    const hasSignature = signatureMethod === 'drawn' ? !signaturePad.isEmpty() : !!signatureBase64;
+    if (hasSignature && signatureMethod === 'drawn') {
+      signatureBase64 = signaturePad.toDataURL('image/png');
     }
-    
-    document.getElementById('submit-btn').disabled = !(isFilled && hasSignature && isAcknowledged);
+    const isAcknowledged = document.getElementById('acknowledgement').checked;
+    document.getElementById('submit-btn').disabled = !(hasSignature && isAcknowledged);
   }
-  
-  // Submit
+
   document.getElementById('submit-btn').addEventListener('click', async () => {
     const btn = document.getElementById('submit-btn');
     btn.disabled = true;
-    btn.textContent = "Submitting...";
-    
+    btn.textContent = 'Submitting...';
     const payload = {
-      witness_number: 1, // Will be handled by the backend logic or shared via link params
-      full_name: document.getElementById('full_name').value.trim(),
-        email: document.getElementById('email').value.trim(),
-      phone_number: document.getElementById('phone_number').value.trim(),
-      address: document.getElementById('address').value.trim(),
-      occupation: document.getElementById('occupation').value.trim(),
-      relationship_to_parties: document.getElementById('relationship_to_parties').value,
+      signature_base64: signatureBase64,
       signature_method: signatureMethod,
       acknowledgement: document.getElementById('acknowledgement').checked
     };
-    
     try {
-      const res = await fetch(`/api/signing/sign/${token}`, {
+      const res = await fetch(`/api/signing/client/${token}`, {
         method: 'POST',
         headers: { 'Content-Type': 'application/json' },
         body: JSON.stringify(payload)
       });
-      
       const result = await res.json();
-      if (!res.ok) throw new Error(result.detail || "Submission failed");
-      
+      if (!res.ok) throw new Error(result.detail || 'Submission failed');
       document.getElementById('form-card').style.display = 'none';
       document.getElementById('success-card').style.display = 'block';
       window.scrollTo(0, 0);
     } catch (err) {
       alert(err.message);
       btn.disabled = false;
-      btn.textContent = "Submit Witness Signature";
+      btn.textContent = 'Submit Contract Signature';
     }
   });
 </script>

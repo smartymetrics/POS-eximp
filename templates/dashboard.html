@@ -1597,7 +1597,7 @@
             </p>
           </div>
           <div class="card-body">
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px;">
+            <div style="display:grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap:24px;">
               <!-- Director Signature -->
               <div style="border:1px solid #eee; padding:16px; border-radius:10px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
@@ -1632,6 +1632,26 @@
                   <button class="btn btn-ghost btn-sm" style="flex:1;"
                     onclick="promptSignatureUpload('secretary')">Change Signature</button>
                   <button class="btn btn-ghost btn-sm" onclick="deleteSignature('secretary')"
+                    style="color:var(--red); padding:0 10px;" title="Delete Signature">🗑️</button>
+                </div>
+              </div>
+
+              <!-- Lawyer Signature -->
+              <div style="border:1px solid #eee; padding:16px; border-radius:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                  <span style="font-weight:600; font-size:13px;">LAWYER SIGNATURE</span>
+                  <span id="sig-status-lawyer" class="status paid">ACTIVE</span>
+                </div>
+                <div
+                  style="height:100px; background:#f9f9f9; border-radius:6px; display:flex; align-items:center; justify-content:center; margin-bottom:12px; overflow:hidden;">
+                  <img id="img-sig-lawyer" src="" style="max-height:80px; display:none;">
+                  <div id="empty-sig-lawyer" style="color:#bbb; font-size:11px;">No signature uploaded</div>
+                </div>
+                <p id="sig-name-lawyer" style="margin:0 0 8px; font-size:12px; color:#555;">No lawyer name set</p>
+                <div style="display:flex; gap:8px;">
+                  <button class="btn btn-ghost btn-sm" style="flex:1;"
+                    onclick="promptSignatureUpload('lawyer')">Change Signature</button>
+                  <button class="btn btn-ghost btn-sm" onclick="deleteSignature('lawyer')"
                     style="color:var(--red); padding:0 10px;" title="Delete Signature">🗑️</button>
                 </div>
               </div>
@@ -2520,6 +2540,7 @@
               invoice. You need to start the witness signature orchestration workflow.</p>
             <button class="btn btn-primary w-full" onclick="initiateContractSession()">Start Signing Session</button>
             <button class="btn btn-ghost w-full" style="margin-top:12px;" onclick="openManualWitnessModal()">Record Walk-in Witness</button>
+            <button class="btn btn-ghost w-full" style="margin-top:12px;" onclick="openManualClientModal()">Record Walk-in Client</button>
           </div>
 
           <!-- Case 2: Active Session -->
@@ -2540,6 +2561,8 @@
                   style="font-size:10px; padding:4px 8px; border-color:#ffeeba;">Resend Email</button>
                 <button class="btn btn-ghost btn-sm" onclick="openManualWitnessModal()"
                   style="font-size:10px; padding:4px 8px; border-color:#ffeeba;">Record Walk-in Witness</button>
+                <button class="btn btn-ghost btn-sm" onclick="openManualClientModal()"
+                  style="font-size:10px; padding:4px 8px; border-color:#ffeeba;">Record Walk-in Client</button>
               </div>
             </div>
 
@@ -2608,6 +2631,34 @@
       <div class="form-actions" style="padding:0 24px 24px;">
         <button class="btn btn-ghost" onclick="closeModal('manualWitnessModal')">Cancel</button>
         <button class="btn btn-primary" id="manualWitnessSubmit" onclick="submitManualWitness()" disabled>Save Witness</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- MANUAL CLIENT ENTRY MODAL -->
+  <div class="modal-overlay" id="manualClientModal">
+    <div class="modal" style="max-width:520px;">
+      <div class="modal-header">
+        <div class="modal-title">Record Walk-in Client</div>
+        <button class="modal-close" onclick="closeModal('manualClientModal')">×</button>
+      </div>
+      <div class="modal-body">
+        <p style="color:var(--gray); font-size:14px; margin-bottom:16px;">Capture the client’s signature for a contract executed in person at the office.</p>
+        <div class="form-group">
+          <label class="label">Signature Upload</label>
+          <div style="display:flex; align-items:center; gap:12px;">
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('manualClientFile').click()" type="button">Choose Image</button>
+            <span id="manualClientFileLabel" style="font-size:12px; color:var(--gray);">No file selected</span>
+          </div>
+          <input type="file" id="manualClientFile" accept="image/*" style="display:none;" onchange="handleManualClientFile(this)">
+          <div id="manualClientPreviewContainer" style="display:none; margin-top:12px;">
+            <img id="manualClientPreview" src="" style="max-width:100%; border:1px solid #eee; border-radius:8px;" alt="Signature preview">
+          </div>
+        </div>
+      </div>
+      <div class="form-actions" style="padding:0 24px 24px;">
+        <button class="btn btn-ghost" onclick="closeModal('manualClientModal')">Cancel</button>
+        <button class="btn btn-primary" id="manualClientSubmit" onclick="submitManualClient()" disabled>Save Client Signature</button>
       </div>
     </div>
   </div>
@@ -3230,7 +3281,7 @@
           throw new Error('Auth fetch failed');
         }
         const admin = await res.json();
-        currentUserRole = admin.role;
+        currentUserRole = (admin.role || '').toLowerCase();
         document.getElementById('adminName').textContent = admin.full_name;
         const roleLabels = { admin: '⭐ Admin', lawyer: '⚖️ Lawyer', staff: '👤 Staff' };
         document.getElementById('adminRole').textContent = roleLabels[admin.role] || 'Staff';
@@ -3238,7 +3289,7 @@
 
         // Apply role styling and hide all role-specific UI until allowed
         document.body.classList.remove('role-admin', 'role-lawyer', 'role-staff');
-        document.body.classList.add('role-' + admin.role);
+        document.body.classList.add('role-' + currentUserRole);
 
         document.querySelectorAll('.admin-only, .staff-only, .lawyer-only, .legal-only').forEach(el => {
           el.style.display = 'none';
@@ -5535,7 +5586,7 @@
         if (!res.ok) return;
         const sigs = await res.json();
 
-        const roles = ['director', 'secretary'];
+        const roles = ['director', 'secretary', 'lawyer'];
         roles.forEach(role => {
           const data = sigs.find(s => s.role === role && s.is_active);
           const img = document.getElementById(`img-sig-${role}`);
@@ -5552,6 +5603,8 @@
             empty.style.display = 'none';
             status.innerText = 'ACTIVE';
             status.className = 'status paid';
+            const nameEl = document.getElementById(`sig-name-${role}`);
+            if (nameEl) nameEl.innerText = data.full_name || role.toUpperCase();
           } else {
             img.src = '';
             img.style.display = 'none';
@@ -5588,10 +5641,20 @@
         const reader = new FileReader();
         reader.onload = async () => {
           const base64 = reader.result;
+          let full_name = undefined;
+          if (role === 'lawyer') {
+            full_name = prompt('Enter the lawyer full name:');
+            if (!full_name || !full_name.trim()) {
+              toast('Lawyer full name is required to upload this signature.', 'error');
+              return;
+            }
+          }
           try {
+            const body = { role, signature_base64: base64 };
+            if (full_name) body.full_name = full_name.trim();
             const res = await apiFetch('/api/contracts/signatures', {
               method: 'POST',
-              body: JSON.stringify({ role, signature_base64: base64 })
+              body: JSON.stringify(body)
             });
             if (res.ok) {
               toast(`${role.toUpperCase()} signature updated`, 'success');
@@ -5818,6 +5881,73 @@
         toast(e.message, 'error');
         submitBtn.disabled = false;
         submitBtn.innerText = 'Save Witness';
+      }
+    }
+
+    let manualClientSignature = null;
+
+    function openManualClientModal() {
+      document.getElementById('manualClientFile').value = '';
+      document.getElementById('manualClientFileLabel').innerText = 'No file selected';
+      document.getElementById('manualClientPreviewContainer').style.display = 'none';
+      manualClientSignature = null;
+      document.getElementById('manualClientSubmit').disabled = true;
+      openModal('manualClientModal');
+    }
+
+    function handleManualClientFile(input) {
+      const file = input.files[0];
+      if (!file) {
+        manualClientSignature = null;
+        document.getElementById('manualClientFileLabel').innerText = 'No file selected';
+        document.getElementById('manualClientPreviewContainer').style.display = 'none';
+        validateManualClientForm();
+        return;
+      }
+      document.getElementById('manualClientFileLabel').innerText = file.name;
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        manualClientSignature = event.target.result;
+        const preview = document.getElementById('manualClientPreview');
+        preview.src = manualClientSignature;
+        document.getElementById('manualClientPreviewContainer').style.display = 'block';
+        validateManualClientForm();
+      };
+      reader.readAsDataURL(file);
+    }
+
+    function validateManualClientForm() {
+      const submitBtn = document.getElementById('manualClientSubmit');
+      submitBtn.disabled = !manualClientSignature;
+    }
+
+    async function submitManualClient() {
+      const submitBtn = document.getElementById('manualClientSubmit');
+      submitBtn.disabled = true;
+      submitBtn.innerText = 'Saving...';
+
+      const payload = {
+        signature_base64: manualClientSignature,
+        signature_method: 'uploaded',
+        acknowledgement: true
+      };
+
+      try {
+        const res = await apiFetch(`/api/contracts/${currentInvoiceId}/manual-client`, {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Failed to save client signature');
+        }
+        toast('Walk-in client signature recorded', 'success');
+        closeModal('manualClientModal');
+        openContractStatus(currentInvoiceId);
+      } catch (e) {
+        toast(e.message, 'error');
+        submitBtn.disabled = false;
+        submitBtn.innerText = 'Save Client Signature';
       }
     }
 

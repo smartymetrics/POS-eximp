@@ -4,290 +4,436 @@
     <meta charset="utf-8">
     <title>Contract of Sale - {{ invoice.invoice_number }}</title>
     <style>
+        /* ── Page Setup ──────────────────────────────────────────────────── */
         @page {
             size: A4;
-            margin: 2cm;
+            margin: 1.8cm 2cm 2cm 2cm;
+            border: 2px solid #1A1A1A;
         }
+
+        /* ── Reset & Base ────────────────────────────────────────────────── */
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
-            font-family: 'Helvetica', 'Arial', sans-serif;
-            font-size: 11pt;
-            line-height: 1.5;
-            color: #333;
+            font-family: 'Helvetica Neue', Helvetica, Arial, sans-serif;
+            font-size: 10.5pt;
+            line-height: 1.55;
+            color: #1A1A1A;
             text-align: justify;
         }
-        .cover-page {
+
+        p { margin-bottom: 9pt; }
+        strong { font-weight: bold; }
+
+        /* ── Cover Page ──────────────────────────────────────────────────── */
+        .cover {
             text-align: center;
-            padding-top: 4cm;
-            page-break-after: always;
-        }
-        .logo { width: 140px; margin-bottom: 1.2cm; }
-        .company-name {
-            font-size: 18pt;
-            font-weight: bold;
-            color: #1A1A1A;
-            margin-bottom: 1rem;
-        }
-        .contract-title {
-            font-size: 24pt;
-            font-weight: bold;
-            margin-bottom: 1.5cm;
-            text-transform: uppercase;
-            color: #F5A623;
-        }
-        .parties { font-size: 14pt; margin-bottom: 1.4cm; }
-        .property-brief { font-weight: bold; font-size: 12pt; }
-        .summary-box {
-            width: 100%;
-            border: 1px solid #ddd;
-            padding: 12px;
-            margin: 0 auto 1.5cm;
-            background: #fafafa;
-            text-align: left;
-            font-size: 11pt;
-        }
-        .summary-box td {
-            padding: 3px 6px;
-            vertical-align: top;
-        }
-        .summary-label {
-            font-weight: bold;
-            color: #1A1A1A;
-            width: 30%;
-            white-space: nowrap;
-        }
-        .summary-value {
-            color: #333;
+            padding: 1.2cm 0.5cm 0.8cm;
+            min-height: 24cm;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
         }
 
-        .section-header {
+        .cover-top {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+        }
+
+        .logo-img {
+            width: 140px;
+            margin-bottom: 1.2cm;
+        }
+
+        .company-name-fallback {
             font-size: 13pt;
             font-weight: bold;
-            color: #1A1A1A;
-            text-decoration: underline;
-            margin-top: 1.5cm;
-            margin-bottom: 0.5cm;
-            page-break-after: avoid;
+            margin-bottom: 1.2cm;
+            letter-spacing: 0.5pt;
         }
-        .clause { margin-bottom: 12pt; }
-        .clause-num { font-weight: bold; display: inline-block; width: 30px; }
 
-        .execution-table {
+        .cover-title {
+            font-size: 28pt;
+            font-weight: bold;
+            margin-bottom: 1.4cm;
+            letter-spacing: 1pt;
+        }
+
+        .cover-between {
+            font-size: 12pt;
+            font-weight: bold;
+            margin-bottom: 0.6cm;
+        }
+
+        .cover-party-name {
+            font-size: 16pt;
+            font-weight: bold;
+            margin-bottom: 0.1cm;
+        }
+
+        .cover-party-role {
+            font-size: 11pt;
+            margin-bottom: 0.7cm;
+        }
+
+        .cover-and {
+            font-size: 12pt;
+            font-weight: bold;
+            margin-bottom: 0.7cm;
+        }
+
+        .cover-property {
+            font-size: 10.5pt;
+            font-weight: bold;
+            line-height: 1.7;
+            margin-bottom: 1cm;
+            max-width: 90%;
+        }
+
+        .cover-prepared {
+            text-align: right;
             width: 100%;
+            margin-top: auto;
+            padding-top: 1cm;
+        }
+
+        .cover-prepared-label {
+            font-size: 9.5pt;
+            font-weight: bold;
+            margin-bottom: 4pt;
+        }
+
+        .cover-prepared-sig {
+            width: 90px;
+            height: 42px;
+            object-fit: contain;
+            display: block;
+            margin-left: auto;
+            margin-bottom: 3pt;
+        }
+
+        .cover-prepared-name {
+            font-size: 9.5pt;
+            font-weight: bold;
+        }
+
+        .cover-prepared-firm {
+            font-size: 9pt;
+        }
+
+        /* ── Section Headings ────────────────────────────────────────────── */
+        .section-heading {
+            font-size: 11pt;
+            font-weight: bold;
+            text-decoration: underline;
+            margin-top: 16pt;
+            margin-bottom: 7pt;
+        }
+
+        /* ── Clause List ─────────────────────────────────────────────────── */
+        .clause {
+            display: flex;
+            gap: 10pt;
+            margin-bottom: 8pt;
+        }
+
+        .clause-label {
+            font-weight: bold;
+            min-width: 22pt;
+            flex-shrink: 0;
+        }
+
+        .clause-body { flex: 1; }
+
+        /* ── Intentionally Left Blank ────────────────────────────────────── */
+        .blank-note {
+            text-align: center;
+            font-style: italic;
             margin-top: 2cm;
-            border-collapse: collapse;
         }
-        .execution-cell {
-            vertical-align: top;
-            padding: 10px;
-            width: 50%;
+
+        /* ── Execution Page ──────────────────────────────────────────────── */
+        .exec-intro {
+            font-weight: bold;
+            margin-bottom: 1cm;
         }
-        .signature-line {
-            border-bottom: 1px solid #000;
-            width: 80%;
-            height: 60px;
-            margin-bottom: 5px;
-            position: relative;
+
+        .exec-vendor-label {
+            font-weight: bold;
+            margin-bottom: 0.5cm;
         }
-        .signature-img {
-            max-width: 180px;
-            max-height: 70px;
+
+        .sig-row {
+            display: flex;
+            gap: 1cm;
+            margin-bottom: 0.5cm;
+        }
+
+        .sig-col { flex: 1; }
+
+        .sig-role {
+            font-size: 9pt;
+            font-weight: bold;
+            margin-bottom: 0.3cm;
+        }
+
+        .sig-box {
+            border-bottom: 1px solid #1A1A1A;
+            height: 52pt;
+            width: 70%;
+            display: flex;
+            align-items: flex-end;
+            margin-bottom: 3pt;
+        }
+
+        .sig-img {
+            width: 110px;
+            height: 46px;
+            object-fit: contain;
             display: block;
         }
-        .seal-box {
-            border: 1px solid #ddd;
-            width: 120px;
-            height: 120px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            margin: auto;
-            border-radius: 50%;
-            font-size: 8px;
-            color: #888;
-            text-align: center;
+
+        .sig-label {
+            font-size: 8.5pt;
+            color: #555;
+            margin-bottom: 14pt;
         }
-        .identity-text { font-size: 9pt; color: #555; }
-        
-        .watermark {
-            position: fixed;
-            top: 40%;
-            left: 10%;
-            transform: rotate(-45deg);
-            font-size: 60pt;
-            color: rgba(200, 200, 200, 0.2);
-            z-index: -1000;
-            pointer-events: none;
+
+        .sig-purchaser-box {
+            border-bottom: 1px solid #1A1A1A;
+            height: 52pt;
+            width: 42%;
+            display: flex;
+            align-items: flex-end;
+            margin-bottom: 3pt;
+        }
+
+        .witness-name   { font-size: 9.5pt; font-weight: bold; margin-bottom: 3pt; }
+        .witness-detail { font-size: 8.5pt; color: #444; margin-bottom: 2pt; }
+
+        /* ── Draft Notice ────────────────────────────────────────────────── */
+        .draft-notice {
+            text-align: center;
+            font-size: 7.5pt;
+            color: #AAAAAA;
+            margin-bottom: 6pt;
+            letter-spacing: 2pt;
         }
     </style>
 </head>
 <body>
 
 {% if is_draft %}
-<div class="watermark">DRAFT</div>
+<p class="draft-notice">⚠ DRAFT — NOT FOR EXECUTION</p>
 {% endif %}
 
-<!-- COVER PAGE -->
-<div class="cover-page">
-    {% if company.logo_b64 %}
-    <img src="{{ company.logo_b64 }}" class="logo">
-    {% else %}
-    <div class="company-name">{{ company.name }}</div>
-    {% endif %}
-    <div class="contract-title">CONTRACT OF SALE</div>
-    <div class="parties">
-        BETWEEN<br><br>
-        <strong>{{ company.name }}</strong><br>
-        (VENDOR)<br><br>
-        AND<br><br>
-        <strong>{{ client.full_name | upper }}</strong><br>
-        (PURCHASER)
-    </div>
-    <div class="summary-box">
-        <table>
-            <tr>
-                <td class="summary-label">Property</td>
-                <td class="summary-value">{{ invoice.property_name | upper or 'N/A' }}</td>
-            </tr>
-            <tr>
-                <td class="summary-label">Location</td>
-                <td class="summary-value">{{ invoice.property_location or 'N/A' }}</td>
-            </tr>
-            <tr>
-                <td class="summary-label">Plot size</td>
-                <td class="summary-value">
-                    {{ invoice.plot_size_sqm or 'N/A' }} SQM each
-                    {% if invoice.quantity and invoice.quantity > 1 and invoice.plot_size_sqm %}
-                    • {{ invoice.quantity }} plots • Total {{ invoice.plot_size_sqm * invoice.quantity }} SQM
-                    {% endif %}
-                </td>
-            </tr>
-            {% if invoice.unit_price %}
-            <tr>
-                <td class="summary-label">Unit price</td>
-                <td class="summary-value">{{ format_currency(invoice.unit_price) }}</td>
-            </tr>
-            {% endif %}
-            <tr>
-                <td class="summary-label">Total consideration</td>
-                <td class="summary-value">{{ format_currency(invoice.amount) }}</td>
-            </tr>
-            <tr>
-                <td class="summary-label">Payment terms</td>
-                <td class="summary-value">{{ invoice.payment_terms or 'N/A' }}</td>
-            </tr>
-        </table>
-    </div>
-</div>
+<!-- ══════════════════════════════════════════════════════════════
+     COVER PAGE
+══════════════════════════════════════════════════════════════ -->
+<div class="cover">
+    <div class="cover-top">
 
-<!-- PAGE 2: RECITALS -->
-<div class="section-header">BETWEEN:</div>
-<p>
-    <strong>{{ company.name }}</strong>, a Private Limited Liability Company incorporated under the laws of the Federal Republic of Nigeria, with its registered office at 2nd Floor, Grand Square, Mohammadu Buhari Way, Central Business District, Abuja (hereinafter referred to as the <strong>"VENDOR"</strong>).
-</p>
-<p>AND</p>
-<p>
-    <strong>{{ client.full_name | upper }}</strong> of {{ client.address or 'N/A' }} (hereinafter referred to as the <strong>"PURCHASER"</strong>).
-</p>
-
-<div class="section-header">WHEREAS:</div>
-<div class="clause">
-    <span class="clause-num">1.</span>
-    The Vendor is the beneficial owner of the large expanse of land known as <strong>{{ invoice.property_name }}</strong>.
-</div>
-<div class="clause">
-    <span class="clause-num">2.</span>
-    The Vendor has carved out portions of the said land for sale to members of the public for residential and commercial purposes.
-</div>
-<div class="clause">
-    <span class="clause-num">3.</span>
-    The Purchaser is desirous of purchasing <strong>
-        {% if invoice.quantity and invoice.quantity > 1 and invoice.plot_size_sqm %}
-            {{ invoice.quantity }} plots totalling {{ invoice.plot_size_sqm * invoice.quantity }} SQUARE METERS
+        {% if company.logo_b64 %}
+        <img src="{{ company.logo_b64 }}" class="logo-img" alt="logo">
         {% else %}
-            {{ invoice.plot_size_sqm }} SQUARE METERS
+        <div class="company-name-fallback">{{ company.name | upper }}</div>
         {% endif %}
-    </strong> (hereinafter referred to as the "Property") at the total consideration of <strong>NGN {{ "{:,.2f}".format(invoice.amount) }}</strong>.
+
+        <div class="cover-title">CONTRACT OF SALE</div>
+
+        <div class="cover-between">BETWEEN</div>
+
+        <div class="cover-party-name">{{ company.name | upper }}</div>
+        <div class="cover-party-role">(VENDOR)</div>
+
+        <div class="cover-and">AND</div>
+
+        <div class="cover-party-name">{{ client.full_name | upper }}</div>
+        <div class="cover-party-role">(PURCHASER)</div>
+
+        <div class="cover-property">
+            IN RESPECT OF ALL THAT PARCEL OF LAND MEASURING APPROXIMATELY
+            <strong>{{ invoice.plot_size_sqm or 500 }} SQUARE METERS</strong>
+            LYING, SITUATE AND BEING AT
+            <strong>{{ (invoice.property_location or 'COINFIELD ESTATE, IGBOYE EPE, LAGOS STATE') | upper }}</strong>.
+        </div>
+
+    </div>
+
+    <div class="cover-prepared">
+        <div class="cover-prepared-label">PREPARED BY:</div>
+        {% if signatures.lawyer %}
+        <img src="{{ signatures.lawyer }}" class="cover-prepared-sig" alt="lawyer signature">
+        {% endif %}
+        <div class="cover-prepared-name">{{ lawyer_name or 'Legal Department' }}</div>
+        <div class="cover-prepared-firm">{{ company.name }}</div>
+    </div>
 </div>
 
-<!-- PAGE 3: COVENANTS (Simplified) -->
-<div class="section-header">IT IS HEREBY AGREED AS FOLLOWS:</div>
-<div class="clause">
-    <strong>1. CONSIDERATION:</strong> In consideration of the sum of NGN {{ "{:,.2f}".format(invoice.amount) }} paid by the Purchaser to the Vendor, the Vendor hereby agrees to sell and the Purchaser agrees to buy the Property.
-</div>
-<div class="clause">
-    <strong>2. POSSESSION:</strong> Physical possession of the Property shall be handed over to the Purchaser upon full payment of the consideration and all other statutory fees (Survey, Legal, and Documentation).
-</div>
-<div class="clause">
-    <strong>3. VENDOR'S COVENANTS:</strong> The Vendor covenants that it has full power and right to sell the property and that the property is free from all encumbrances.
-</div>
-<div class="clause">
-    <strong>4. PURCHASER'S COVENANTS:</strong> The Purchaser agrees to abide by all estate rules and regulations, including building guidelines and security protocols.
+<!-- ══════════════════════════════════════════════════════════════
+     PAGE 2 — CONTRACT BODY
+══════════════════════════════════════════════════════════════ -->
+<div style="page-break-before: always;">
+
+    <div class="section-heading">THIS CONTRACT OF SALE</div>
+    <p>This Contract of Sale is made on the <strong>{{ invoice.invoice_date if invoice.invoice_date else generated_at }}</strong>.</p>
+
+    <div class="section-heading">BETWEEN</div>
+    <p>
+        <strong>{{ company.name | upper }}</strong>, a company incorporated in Nigeria with its
+        corporate office at {{ company.address or '16 Adeola Hopewell St, Victoria Island, Lagos 106104, Lagos, Nigeria' }}
+        and RC Number {{ company.rc or '8311800' }}
+        (hereinafter referred to as <strong>"THE VENDOR"</strong> which expression shall where the context so
+        admit includes its Administrators, Legal Representatives, Agents, Heirs, Privies, Executors,
+        Administrators, and assigns) of the one part.
+    </p>
+    <p>AND</p>
+    <p>
+        <strong>{{ client.full_name | upper }}</strong> of {{ client.address or 'N/A' }}
+        (hereinafter referred to as <strong>"THE PURCHASER"</strong> which expression shall where the context
+        so admits include his Agents, Privies, Legal Representatives, Successors-In-Title and Assigns)
+        of the other part.
+    </p>
+
+    <div class="section-heading">1. WHEREAS:</div>
+    <div class="clause"><span class="clause-label">a)</span><span class="clause-body">The hereditaments hereinafter described and which is intended to be hereby assigned to the Purchaser forms an integral part of a large parcel of land which belongs to {{ company.name | upper }}.</span></div>
+    <div class="clause"><span class="clause-label">b)</span><span class="clause-body">The "Property" subject matter of this Agreement is a parcel of land measuring approximately <strong>{{ invoice.plot_size_sqm or 500 }} square meters</strong> lying, situate and being at {{ invoice.property_location or 'Coinfield Estate, Igboye Epe, Lagos State' }}, and belonging to {{ company.name | upper }} of {{ company.address or '16 Adeola Hopewell Street, Victoria Island, Lagos State, Nigeria' }}.</span></div>
+    <div class="clause"><span class="clause-label">c)</span><span class="clause-body">{{ company.name | upper }} have been in peaceful and undisturbed possession of the vast parcel of land and have exercised acts of ownership over the said land without let or hindrances.</span></div>
+    <div class="clause"><span class="clause-label">d)</span><span class="clause-body">The Vendor is now desirous of alienating all its rights, interests and titles in the "Property" to the Purchaser for a valuable consideration, free from all encumbrances, subject to the terms and conditions hereinafter stated.</span></div>
+    <div class="clause"><span class="clause-label">e)</span><span class="clause-body">The Vendor herein have agreed to transfer and grant to the Purchaser the absolute assignment of the property and to the transfer of title in the hereinafter described property, subject to the hereinafter stated terms and conditions.</span></div>
+
+    <div class="section-heading">2. NOW THIS AGREEMENT WITNESSETH as follows;</div>
+    <p>
+        In consideration of the sum of
+        <strong>{{ format_naira(invoice.amount) if invoice.amount else 'N 5,000,000' }} (Five Million Naira Only)</strong>,
+        paid to the Vendor by the Purchaser prior to the execution of this Contract of Sale
+        (the receipt whereof the VENDOR hereby acknowledges), the VENDOR hereby agrees to sell
+        unto the PURCHASER all that <strong>{{ invoice.plot_size_sqm or 500 }} square meters</strong>
+        property known and situate at {{ invoice.property_location or 'Coinfield Estate, Igboye Epe, Lagos State' }},
+        subject to the covenants, conditions and stipulations herein.
+    </p>
+
+    <div class="section-heading">3. THE PARTIES HEREBY COVENANTS AS FOLLOWS:</div>
+    <div class="clause"><span class="clause-label">(A)</span><span class="clause-body">The Parties agree that upon the preparation and execution of the final Deed of Conveyance, the Purchaser shall be led into immediate, actual, and undisturbed possession of the entire Property. The Vendor shall ensure that the Property is properly surveyed and shall, at the Vendor's cost, procure and deliver to the Purchaser a registered survey plan of the Property. The Vendor further undertakes to provide all reasonable assistance, documentation, and cooperation required by the Purchaser in the procurement of the Governor's Consent, while the costs and statutory fees for obtaining the said Consent shall be borne by the Purchaser.</span></div>
+    <div class="clause"><span class="clause-label">(B)</span><span class="clause-body">Any right or remedy to which any party is or may become entitled under this Agreement or in consequence of the other's conduct may be enforced from time to time separately or concurrently with any right or remedy given by this Agreement now or afterwards provided for and arising by operation of law so that such rights and remedies are not exclusive of the other but are cumulative.</span></div>
+    <div class="clause"><span class="clause-label">(C)</span><span class="clause-body">No amendment to or modification of this Agreement shall be effective unless it is in writing and signed by all parties to this Agreement.</span></div>
+    <div class="clause"><span class="clause-label">(D)</span><span class="clause-body">Without prejudice to any other obligations of the Vendor or Purchaser under this Agreement, the Vendor or Purchaser and their respective Attorneys (either jointly or independently) shall upon request by either party, take all necessary steps and execute any further documents as may be necessary or desirable to realize the arrangements contemplated by this Agreement and to enable the Purchaser enjoy all rights, interest, powers and title in the "Property".</span></div>
+    <div class="clause"><span class="clause-label">(E)</span><span class="clause-body">This Agreement supersedes any prior agreement or agreements between the parties whether oral or written in respect of the "Property" and any such prior agreements are canceled upon the execution of this Agreement.</span></div>
+    <div class="clause"><span class="clause-label">(F)</span><span class="clause-body">If any provision of this Agreement is declared by any judicial or other competent authority to be, defective, inchoate, illegal, void or otherwise unenforceable, the Vendors and their Attorney shall take all necessary steps to rectify that provision in order to give effect to the general objective of the Agreement. Provided always that the provision in question shall be severed from the rest of this Agreement, and the rest of the Agreement shall continue to have force and effect in law.</span></div>
+    <div class="clause"><span class="clause-label">(G)</span><span class="clause-body">In the event of any failure to perfect the title of the Vendors and/or to realize the objective of this Agreement, the Vendors undertake and guarantee to indemnify the Purchaser of the full Purchase Price.</span></div>
+    <div class="clause"><span class="clause-label">(H)</span><span class="clause-body">Any claim, dispute, failure or controversy arising from or out of this Agreement or any breach thereof shall first be resolved by parties through amicable negotiation failing which such dispute may be referred to the mediation section of the Lagos Multidoor Court House, Lagos, Nigeria. PROVIDED that where settlement is not reached after three (3) sittings of the aforesaid Lagos Multidoor Court House, Lagos, Nigeria, an aggrieved party can approach the court for resolution and claims.</span></div>
+
+    <div class="blank-note">[THE REMAINDER OF THIS PAGE HAS BEEN INTENTIONALLY LEFT BLANK]</div>
+
 </div>
 
-<!-- PAGE 5: EXECUTION -->
-<div style="page-break-before: always;"></div>
-<div class="section-header">IN WITNESS WHEREOF the parties have set their hands and seals the day and year first above written.</div>
+<!-- ══════════════════════════════════════════════════════════════
+     PAGE 3 — PREPARED BY
+══════════════════════════════════════════════════════════════ -->
+<div style="page-break-before: always;">
 
-<table class="execution-table">
-    <tr>
-        <td class="execution-cell">
-            <p><strong>THE COMMON SEAL OF THE VENDOR:</strong></p>
-            <p>EXIMP & CLOVES INFRASTRUCTURE LIMITED</p>
-            <br>
-            <div class="signature-line">
+    <div class="section-heading">PREPARED BY:</div>
+    <p>
+        <strong>{{ lawyer_name or 'Legal Department' }}</strong><br>
+        {{ company.name }} Legal Department
+    </p>
+
+    <div class="section-heading">IN RESPECT OF:</div>
+    <p>
+        All that parcel of land measuring approximately
+        <strong>{{ invoice.plot_size_sqm or 500 }} square meters</strong>
+        lying, situate and being at
+        <strong>{{ invoice.property_location or 'Coinfield Estate, Igboye Epe, Lagos State' }}</strong>.
+    </p>
+
+</div>
+
+<!-- ══════════════════════════════════════════════════════════════
+     PAGE 4 — EXECUTION / SIGNATURES
+══════════════════════════════════════════════════════════════ -->
+<div style="page-break-before: always;">
+
+    <p class="exec-intro">
+        IN WITNESS OF WHICH the parties have executed this Deed in the manner below the day and year first above written.
+    </p>
+
+    <p class="exec-vendor-label">
+        THE COMMON SEAL OF "{{ company.name | upper }}" HEREIN NAMED THE VENDOR IS HEREBY AFFIXED IN THE PRESENCE OF:
+    </p>
+
+    <div class="sig-row">
+        <div class="sig-col">
+            <div class="sig-box">
                 {% if signatures.director %}
-                <img src="{{ signatures.director }}" class="signature-img">
+                <img src="{{ signatures.director }}" class="sig-img" alt="director">
                 {% endif %}
             </div>
-            <p class="identity-text">DIRECTOR</p>
-            <br>
-            <div class="signature-line">
+            <div class="sig-label">DIRECTOR</div>
+        </div>
+        <div class="sig-col">
+            <div class="sig-box">
                 {% if signatures.secretary %}
-                <img src="{{ signatures.secretary }}" class="signature-img">
+                <img src="{{ signatures.secretary }}" class="sig-img" alt="secretary">
                 {% endif %}
             </div>
-            <p class="identity-text">SECRETARY</p>
-        </td>
-        <td class="execution-cell">
-            <p><strong>SIGNED BY THE PURCHASER:</strong></p>
-            <br>
-            <div class="signature-line">
-                {% if signatures.purchaser %}
-                <img src="{{ signatures.purchaser }}" class="signature-img">
-                {% endif %}
-            </div>
-            <p class="identity-text">{{ client.full_name | upper }}</p>
-        </td>
-    </tr>
-</table>
+            <div class="sig-label">SECRETARY</div>
+        </div>
+    </div>
 
-<div class="section-header">IN THE PRESENCE OF (WITNESSES):</div>
-<table class="execution-table">
-    <tr>
-        <td class="execution-cell">
-            <p><strong>WITNESS 1 (Purchaser's Witness):</strong></p>
-            <div class="signature-line">
+    <p style="font-weight:bold; margin-top:16pt; margin-bottom:10pt;">
+        SIGNED, SEALED AND DELIVERED by the within named PURCHASER:
+    </p>
+    <div class="sig-purchaser-box">
+        {% if signatures.purchaser %}
+        <img src="{{ signatures.purchaser }}" class="sig-img" alt="purchaser">
+        {% endif %}
+    </div>
+    <div class="sig-label">{{ client.full_name | upper }}</div>
+
+    <p style="font-weight:bold; margin-top:16pt; margin-bottom:10pt;">IN THE PRESENCE OF:</p>
+
+    <div class="sig-row">
+        <div class="sig-col">
+            <div class="witness-name">Name: {{ witnesses[0].full_name or 'PENDING' }}</div>
+            <div class="witness-detail">Address: {{ witnesses[0].address or 'PENDING' }}</div>
+            <div class="witness-detail">Occupation: {{ witnesses[0].occupation or 'PENDING' }}</div>
+            <div class="sig-box" style="margin-top:8pt;">
                 {% if signatures.witness1 %}
-                <img src="{{ signatures.witness1 }}" class="signature-img">
+                <img src="{{ signatures.witness1 }}" class="sig-img" alt="witness 1">
                 {% endif %}
             </div>
-            <p class="identity-text">NAME: {{ witnesses[0].full_name or 'PENDING' }}</p>
-            <p class="identity-text">ADDRESS: {{ witnesses[0].address or 'PENDING' }}</p>
-            <p class="identity-text">OCCUPATION: {{ witnesses[0].occupation or 'PENDING' }}</p>
-        </td>
-        <td class="execution-cell">
-            <p><strong>WITNESS 2:</strong></p>
-            <div class="signature-line">
+            <div class="sig-label">Signature</div>
+        </div>
+        <div class="sig-col">
+            <div class="witness-name">Name: {{ witnesses[1].full_name or 'PENDING' }}</div>
+            <div class="witness-detail">Address: {{ witnesses[1].address or 'PENDING' }}</div>
+            <div class="witness-detail">Occupation: {{ witnesses[1].occupation or 'PENDING' }}</div>
+            <div class="sig-box" style="margin-top:8pt;">
                 {% if signatures.witness2 %}
-                <img src="{{ signatures.witness2 }}" class="signature-img">
+                <img src="{{ signatures.witness2 }}" class="sig-img" alt="witness 2">
                 {% endif %}
             </div>
-            <p class="identity-text">NAME: {{ witnesses[1].full_name or 'PENDING' }}</p>
-            <p class="identity-text">ADDRESS: {{ witnesses[1].address or 'PENDING' }}</p>
-            <p class="identity-text">OCCUPATION: {{ witnesses[1].occupation or 'PENDING' }}</p>
-        </td>
-    </tr>
-</table>
+            <div class="sig-label">Signature</div>
+        </div>
+    </div>
+
+    <div class="section-heading" style="margin-top:20pt;">PREPARED BY:</div>
+    <div class="sig-row">
+        <div class="sig-col">
+            <div class="sig-role">LAWYER</div>
+            <div class="sig-box">
+                {% if signatures.lawyer %}
+                <img src="{{ signatures.lawyer }}" class="sig-img" alt="lawyer">
+                {% endif %}
+            </div>
+            <div class="sig-label">{{ lawyer_name or 'Legal Department' }}</div>
+        </div>
+        <div class="sig-col"></div>
+    </div>
+
+</div>
 
 </body>
 </html>

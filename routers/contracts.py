@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Header
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from database import get_db, SUPABASE_URL
-from models import CompanySignatureUpload, ExtendSigningLink, WitnessSignatureSubmit, WitnessRemovalRequest
+from models import CompanySignatureUpload, ExtendSigningLink, WitnessSignatureSubmit, ClientContractSignatureSubmit, WitnessRemovalRequest
 from routers.auth import verify_token
 from routers.analytics import log_activity
 from datetime import datetime, timedelta
@@ -49,6 +49,43 @@ def _upload_signature_to_storage(db, invoice_id: str, witness_number: int, signa
         return f"{SUPABASE_URL}/storage/v1/object/public/signatures/{file_path}"
     except Exception as e:
         print(f"WARNING: Witness signature upload failed: {e}")
+        return signature_base64
+
+
+def _upload_client_signature(db, invoice_id: str, signature_base64: str) -> str:
+    if not signature_base64:
+        return signature_base64
+    signature_value = signature_base64.strip()
+    if signature_value.startswith("http://") or signature_value.startswith("https://"):
+        return signature_value
+
+    try:
+        if "," in signature_value:
+            _, encoded = signature_value.split(",", 1)
+        else:
+            encoded = signature_value
+
+        img_data = base64.b64decode(encoded)
+        with Image.open(io.BytesIO(img_data)) as img:
+            if img.mode != "RGBA":
+                img = img.convert("RGBA")
+            out_buf = io.BytesIO()
+            img.save(out_buf, format="PNG")
+            img_data = out_buf.getvalue()
+
+        file_path = f"contracts/{invoice_id}/client.png"
+        try:
+            db.storage.from_("signatures").remove([file_path])
+        except Exception:
+            pass
+        db.storage.from_("signatures").upload(
+            path=file_path,
+            file=img_data,
+            file_options={"content-type": "image/png"}
+        )
+        return f"{SUPABASE_URL}/storage/v1/object/public/signatures/{file_path}"
+    except Exception as e:
+        print(f"WARNING: Client signature upload failed: {e}")
         return signature_base64
 
 
@@ -431,6 +468,37 @@ async def add_manual_witness(invoice_id: str, data: WitnessSignatureSubmit, back
 
     return {"message": "Witness recorded successfully", "witness_number": witness_num}
 
+@router.post("/{invoice_id}/manual-client")
+async def add_manual_client_signature(invoice_id: str, data: ClientContractSignatureSubmit, current_admin=Depends(verify_token)):
+    if current_admin["role"] not in ["admin", "lawyer"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    db = get_db()
+    inv_res = db.table("invoices").select("id, invoice_number, client_id").eq("id", invoice_id).execute()
+    if not inv_res.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    invoice = inv_res.data[0]
+
+    try:
+        stored_signature = _upload_client_signature(db, invoice_id, data.signature_base64)
+        db.table("invoices").update({
+            "contract_signature_url": stored_signature,
+            "contract_signature_method": data.signature_method,
+            "contract_signed_at": datetime.now().isoformat()
+        }).eq("id", invoice_id).execute()
+
+        await log_activity(
+            "manual_client_contract_signed",
+            f"Walk-in client contract signature recorded for {invoice['invoice_number']}",
+            current_admin["sub"],
+            client_id=invoice.get("client_id"),
+            invoice_id=invoice_id
+        )
+
+        return {"message": "Walk-in client contract signature recorded successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to record client signature: {str(e)}")
+
 @router.post("/{invoice_id}/witness/{witness_id}/remove")
 async def remove_witness_signature(invoice_id: str, witness_id: str, data: WitnessRemovalRequest, current_admin=Depends(verify_token)):
     if current_admin["role"] not in ["admin", "lawyer"]:
@@ -538,13 +606,15 @@ async def upload_company_signature(data: CompanySignatureUpload, current_admin=D
 
     # 2. Handle full_name (fetch existing if not provided)
     name_to_use = data.full_name
+    old_sigs = db.table("company_signatures")\
+       .select("full_name")\
+       .eq("role", data.role)\
+       .order("created_at", desc=True)\
+       .limit(1)\
+       .execute()
+    if data.role == 'lawyer' and not name_to_use and not old_sigs.data:
+        raise HTTPException(status_code=400, detail="Lawyer full name is required when uploading a lawyer signature.")
     if not name_to_use:
-        old_sigs = db.table("company_signatures")\
-           .select("full_name")\
-           .eq("role", data.role)\
-           .order("created_at", desc=True)\
-           .limit(1)\
-           .execute()
         if old_sigs.data:
             name_to_use = old_sigs.data[0]["full_name"]
         else:
@@ -573,7 +643,7 @@ async def upload_company_signature(data: CompanySignatureUpload, current_admin=D
 async def delete_company_signature(role: str, current_admin=Depends(verify_token)):
     if current_admin["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admins only")
-    if role not in ["director", "secretary"]:
+    if role not in ["director", "secretary", "lawyer"]:
         raise HTTPException(status_code=400, detail="Invalid role")
         
     db = get_db()
