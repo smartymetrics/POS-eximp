@@ -2,7 +2,7 @@ services:
   - type: web
     name: pos-eximp-finance
     env: python
-    buildCommand: apt-get update && apt-get install -y libcairo2 libpango-1.0-0 libgdk-pixbuf-2.0-0 libffi-dev shared-mime-info && pip install -r requirements.txt
+    buildCommand: apt-get update && apt-get install -y libcairo2 libpango-1.0-0 libgdk-pixbuf-2.0-0 libffi-dev shared-mime-info fontconfig libfreetype6 libharfbuzz0b libjpeg-turbo-progs libpng16-16 && pip install -r requirements.txt
     startCommand: gunicorn main:app -k uvicorn.workers.UvicornWorker --bind 0.0.0.0:$PORT --timeout 180
     envVars:
       - key: SUPABASE_URL
