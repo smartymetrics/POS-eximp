@@ -5786,11 +5786,21 @@
           wList.appendChild(row2);
 
           if (data.is_executed) {
-            document.getElementById('execution-ready').innerHTML = `<p style="color:var(--green); font-weight:600; margin-bottom:12px;">✓ CONTRACT FULLY EXECUTED</p>
-          <button class="btn btn-ghost btn-sm w-full" onclick="downloadFinalContract()">Download Official PDF</button>`;
+            document.getElementById('execution-ready').innerHTML = `
+              <p style="color:var(--green); font-weight:600; margin-bottom:12px;">✓ CONTRACT FULLY EXECUTED</p>
+              <div style="display:flex; gap:8px;">
+                <button class="btn btn-ghost btn-sm w-full" onclick="downloadFinalContract()">Download PDF</button>
+                <button class="btn btn-ghost btn-sm w-full" onclick="resendExecutedContract()" title="Resend email with PDF to client">Resend Email</button>
+              </div>`;
             document.getElementById('execution-ready').style.display = 'block';
             document.getElementById('download-draft').style.display = 'none';
           } else if (w1) {
+            // Check if all requirements met (One witness + Client signature)
+            // Note: clientSigned logic was handled in components but here we focus on the external witness w1
+            document.getElementById('execution-ready').innerHTML = `
+              <p style="font-size:12px; color:var(--green); font-weight:600; margin-bottom:16px;">✓ All signing requirements met.</p>
+              <button class="btn btn-primary w-full" onclick="executeFinalContract()">Execute & Save Final Contract</button>
+            `;
             document.getElementById('execution-ready').style.display = 'block';
             document.getElementById('download-draft').style.display = 'block';
           } else {
@@ -5815,7 +5825,7 @@
     }
 
     async function executeFinalContract() {
-      if (!confirm("Are you sure you want to execute the final contract? This will apply the digital seal and notify the client.")) return;
+      if (!confirm("Are you sure you want to execute the final contract? This will apply the digital seal and notify the client by email.")) return;
 
       try {
         const res = await apiFetch(`/api/contracts/execute/${currentInvoiceId}`, { method: 'POST' });
@@ -5825,6 +5835,18 @@
         } else {
           const err = await res.json();
           toast(err.detail || 'Execution failed', 'error');
+        }
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    async function resendExecutedContract() {
+      if (!confirm("Resend the final executed contract email to the client?")) return;
+      try {
+        const res = await apiFetch(`/api/contracts/resend-final/${currentInvoiceId}`, { method: 'POST' });
+        if (res.ok) toast('Final contract resent successfully!', 'success');
+        else {
+          const err = await res.json();
+          toast(err.detail || 'Failed to resend', 'error');
         }
       } catch (e) { toast(e.message, 'error'); }
     }

@@ -349,7 +349,38 @@ async def execute_final_contract(invoice_id: str, background_tasks: BackgroundTa
 
     return {"message": "Final contract executed and emailed"}
 
-def _resolve_admin_token(token: str | None = None, authorization: str | None = Header(None)):
+@router.post("/resend-final/{invoice_id}")
+async def resend_executed_contract(invoice_id: str, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+    if current_admin["role"] not in ["admin", "lawyer"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    db = get_db()
+    inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    if not inv_res.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    invoice = inv_res.data[0]
+    client = invoice["clients"]
+
+    session_res = db.table("contract_signing_sessions")\
+        .select("*, witness_signatures(*)")\
+        .eq("invoice_id", invoice_id)\
+        .order("created_at", desc=True)\
+        .limit(1)\
+        .execute()
+
+    if not session_res.data or session_res.data[0]["status"] != "completed":
+        raise HTTPException(status_code=400, detail="The contract has not been executed yet")
+
+    session = session_res.data[0]
+    witnesses = session.get("witness_signatures", []) or []
+
+    from pdf_service import generate_contract_pdf
+    pdf_content = generate_contract_pdf(invoice, client, witnesses, is_draft=False)
+
+    from email_service import send_executed_contract_email
+    background_tasks.add_task(send_executed_contract_email, invoice, client, pdf_content)
+
+    return {"message": "Final contract resent to client"}
     if authorization:
         try:
             scheme, creds = authorization.split()
@@ -458,13 +489,14 @@ async def add_manual_witness(invoice_id: str, data: WitnessSignatureSubmit, back
         "user_agent": "manual-entry"
     }).execute()
 
-    new_status = "completed"
-    db.table("contract_signing_sessions").update({"status": new_status}).eq("id", session["id"]).execute()
-
-    if new_status == "completed":
-        witnesses = db.table("witness_signatures").select("*").eq("session_id", session["id"]).order("witness_number").execute().data
-        from email_service import send_admin_signing_alert
-        background_tasks.add_task(send_admin_signing_alert, invoice, client, witnesses)
+    # Do not auto-complete the session status; let the admin click the final 'Execute' button
+    # new_status = "completed"
+    # db.table("contract_signing_sessions").update({"status": new_status}).eq("id", session["id"]).execute()
+    
+    # Check if we have at least one witness (the goal is met for execution)
+    witnesses = db.table("witness_signatures").select("*").eq("session_id", session["id"]).order("witness_number").execute().data
+    from email_service import send_admin_signing_alert
+    background_tasks.add_task(send_admin_signing_alert, invoice, client, witnesses)
 
     return {"message": "Witness recorded successfully", "witness_number": witness_num}
 
