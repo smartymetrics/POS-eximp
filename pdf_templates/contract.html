@@ -7,11 +7,6 @@
         @page {
             size: A4;
             margin: 2cm;
-            @bottom-right {
-                content: "Page " counter(page);
-                font-size: 9px;
-                color: #888;
-            }
         }
         body {
             font-family: 'Helvetica', 'Arial', sans-serif;
@@ -22,22 +17,52 @@
         }
         .cover-page {
             text-align: center;
-            padding-top: 5cm;
+            padding-top: 4cm;
             page-break-after: always;
         }
-        .logo { width: 150px; margin-bottom: 2cm; }
+        .logo { width: 140px; margin-bottom: 1.2cm; }
+        .company-name {
+            font-size: 18pt;
+            font-weight: bold;
+            color: #1A1A1A;
+            margin-bottom: 1rem;
+        }
         .contract-title {
             font-size: 24pt;
             font-weight: bold;
-            margin-bottom: 3cm;
+            margin-bottom: 1.5cm;
             text-transform: uppercase;
+            color: #F5A623;
         }
-        .parties { font-size: 14pt; margin-bottom: 2cm; }
+        .parties { font-size: 14pt; margin-bottom: 1.4cm; }
         .property-brief { font-weight: bold; font-size: 12pt; }
+        .summary-box {
+            width: 100%;
+            border: 1px solid #ddd;
+            padding: 12px;
+            margin: 0 auto 1.5cm;
+            background: #fafafa;
+            text-align: left;
+            font-size: 11pt;
+        }
+        .summary-box td {
+            padding: 3px 6px;
+            vertical-align: top;
+        }
+        .summary-label {
+            font-weight: bold;
+            color: #1A1A1A;
+            width: 30%;
+            white-space: nowrap;
+        }
+        .summary-value {
+            color: #333;
+        }
 
         .section-header {
             font-size: 13pt;
             font-weight: bold;
+            color: #1A1A1A;
             text-decoration: underline;
             margin-top: 1.5cm;
             margin-bottom: 0.5cm;
@@ -103,26 +128,61 @@
 
 <!-- COVER PAGE -->
 <div class="cover-page">
+    {% if company.logo_b64 %}
+    <img src="{{ company.logo_b64 }}" class="logo">
+    {% else %}
+    <div class="company-name">{{ company.name }}</div>
+    {% endif %}
     <div class="contract-title">CONTRACT OF SALE</div>
     <div class="parties">
         BETWEEN<br><br>
-        <strong>EXIMP & CLOVES INFRASTRUCTURE LIMITED</strong><br>
+        <strong>{{ company.name }}</strong><br>
         (VENDOR)<br><br>
         AND<br><br>
         <strong>{{ client.full_name | upper }}</strong><br>
         (PURCHASER)
     </div>
-    <div class="property-brief">
-        In Respect of:<br>
-        {{ invoice.property_name | upper }} — {{ invoice.plot_size_sqm }} SQM<br>
-        Located at: {{ invoice.property_location or 'N/A' }}
+    <div class="summary-box">
+        <table>
+            <tr>
+                <td class="summary-label">Property</td>
+                <td class="summary-value">{{ invoice.property_name | upper or 'N/A' }}</td>
+            </tr>
+            <tr>
+                <td class="summary-label">Location</td>
+                <td class="summary-value">{{ invoice.property_location or 'N/A' }}</td>
+            </tr>
+            <tr>
+                <td class="summary-label">Plot size</td>
+                <td class="summary-value">
+                    {{ invoice.plot_size_sqm or 'N/A' }} SQM each
+                    {% if invoice.quantity and invoice.quantity > 1 and invoice.plot_size_sqm %}
+                    • {{ invoice.quantity }} plots • Total {{ invoice.plot_size_sqm * invoice.quantity }} SQM
+                    {% endif %}
+                </td>
+            </tr>
+            {% if invoice.unit_price %}
+            <tr>
+                <td class="summary-label">Unit price</td>
+                <td class="summary-value">{{ format_currency(invoice.unit_price) }}</td>
+            </tr>
+            {% endif %}
+            <tr>
+                <td class="summary-label">Total consideration</td>
+                <td class="summary-value">{{ format_currency(invoice.amount) }}</td>
+            </tr>
+            <tr>
+                <td class="summary-label">Payment terms</td>
+                <td class="summary-value">{{ invoice.payment_terms or 'N/A' }}</td>
+            </tr>
+        </table>
     </div>
 </div>
 
 <!-- PAGE 2: RECITALS -->
 <div class="section-header">BETWEEN:</div>
 <p>
-    <strong>EXIMP & CLOVES INFRASTRUCTURE LIMITED</strong>, a Private Limited Liability Company incorporated under the laws of the Federal Republic of Nigeria, with its registered office at 2nd Floor, Grand Square, Mohammadu Buhari Way, Central Business District, Abuja (hereinafter referred to as the <strong>"VENDOR"</strong>).
+    <strong>{{ company.name }}</strong>, a Private Limited Liability Company incorporated under the laws of the Federal Republic of Nigeria, with its registered office at 2nd Floor, Grand Square, Mohammadu Buhari Way, Central Business District, Abuja (hereinafter referred to as the <strong>"VENDOR"</strong>).
 </p>
 <p>AND</p>
 <p>
@@ -140,7 +200,13 @@
 </div>
 <div class="clause">
     <span class="clause-num">3.</span>
-    The Purchaser is desirous of purchasing <strong>{{ invoice.plot_size_sqm }} SQUARE METERS</strong> (hereinafter referred to as the "Property") at the total consideration of <strong>NGN {{ "{:,.2f}".format(invoice.amount) }}</strong>.
+    The Purchaser is desirous of purchasing <strong>
+        {% if invoice.quantity and invoice.quantity > 1 and invoice.plot_size_sqm %}
+            {{ invoice.quantity }} plots totalling {{ invoice.plot_size_sqm * invoice.quantity }} SQUARE METERS
+        {% else %}
+            {{ invoice.plot_size_sqm }} SQUARE METERS
+        {% endif %}
+    </strong> (hereinafter referred to as the "Property") at the total consideration of <strong>NGN {{ "{:,.2f}".format(invoice.amount) }}</strong>.
 </div>
 
 <!-- PAGE 3: COVENANTS (Simplified) -->

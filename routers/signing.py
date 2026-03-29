@@ -127,6 +127,7 @@ async def submit_witness_signature(token: str, data: WitnessSignatureSubmit, req
             "session_id": session["id"],
             "witness_number": witness_num,
             "full_name": data.full_name,
+            "witness_email": data.email,
             "address": data.address,
             "occupation": data.occupation,
             "signature_base64": stored_signature,

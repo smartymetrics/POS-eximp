@@ -2582,6 +2582,10 @@
           <input type="text" id="manual-witness-full_name" class="input" placeholder="Witness full name" oninput="validateManualWitnessForm()">
         </div>
         <div class="form-group">
+          <label class="label">Email Address</label>
+          <input type="email" id="manual-witness-email" class="input" placeholder="Witness email address" oninput="validateManualWitnessForm()">
+        </div>
+        <div class="form-group">
           <label class="label">Address</label>
           <input type="text" id="manual-witness-address" class="input" placeholder="Residential address" oninput="validateManualWitnessForm()">
         </div>
@@ -5639,7 +5643,10 @@
             <div style="font-size:12px; font-weight:600;">Witness ${i + 1}: ${w ? w.full_name : 'PENDING'}</div>
             <div style="font-size:10px; color:var(--gray);">${w ? w.occupation : 'Waiting for signature...'}</div>
           </div>
-          <span class="status ${w ? 'paid' : 'unpaid'}">${w ? 'SIGNED' : 'PENDING'}</span>
+          <div style="display:flex; align-items:center; gap:10px;">
+            <span class="status ${w ? 'paid' : 'unpaid'}">${w ? 'SIGNED' : 'PENDING'}</span>
+            ${w && ['admin','lawyer'].includes(currentUserRole) ? `<button class="btn btn-danger btn-sm" onclick="confirmRemoveWitness('${w.id}', ${w.witness_number})">Remove</button>` : ''}
+          </div>
         `;
             wList.appendChild(row);
           }
@@ -5696,6 +5703,28 @@
       window.open(`/api/contracts/pdf/final/${currentInvoiceId}?token=${TOKEN}`, '_blank');
     }
 
+    async function confirmRemoveWitness(witnessId, witnessNumber) {
+      const note = prompt(`Enter a removal note for witness ${witnessNumber}. This note is required to remove the witness.`);
+      if (!note || !note.trim()) {
+        toast('Removal note is required to delete a witness.', 'error');
+        return;
+      }
+      try {
+        const res = await apiFetch(`/api/contracts/${currentInvoiceId}/witness/${witnessId}/remove`, {
+          method: 'POST',
+          body: JSON.stringify({ note: note.trim() })
+        });
+        if (!res.ok) {
+          const err = await res.json();
+          throw new Error(err.detail || 'Failed to remove witness');
+        }
+        toast('Witness removed successfully', 'success');
+        openContractStatus(currentInvoiceId);
+      } catch (e) {
+        toast(e.message, 'error');
+      }
+    }
+
     function copySigningLink() {
       if (!currentSigningSession) return;
       const link = `${window.location.origin}/sign/${currentSigningSession.token}`;
@@ -5718,6 +5747,7 @@
 
     function openManualWitnessModal() {
       document.getElementById('manual-witness-full_name').value = '';
+      document.getElementById('manual-witness-email').value = '';
       document.getElementById('manual-witness-address').value = '';
       document.getElementById('manual-witness-occupation').value = '';
       document.getElementById('manualWitnessFile').value = '';
@@ -5751,10 +5781,11 @@
 
     function validateManualWitnessForm() {
       const fullName = document.getElementById('manual-witness-full_name').value.trim();
+      const email = document.getElementById('manual-witness-email').value.trim();
       const address = document.getElementById('manual-witness-address').value.trim();
       const occupation = document.getElementById('manual-witness-occupation').value.trim();
       const submitBtn = document.getElementById('manualWitnessSubmit');
-      submitBtn.disabled = !(fullName && address && occupation && manualWitnessSignature);
+      submitBtn.disabled = !(fullName && email && address && occupation && manualWitnessSignature);
     }
 
     async function submitManualWitness() {
@@ -5764,6 +5795,7 @@
 
       const payload = {
         full_name: document.getElementById('manual-witness-full_name').value.trim(),
+        email: document.getElementById('manual-witness-email').value.trim(),
         address: document.getElementById('manual-witness-address').value.trim(),
         occupation: document.getElementById('manual-witness-occupation').value.trim(),
         signature_base64: manualWitnessSignature,

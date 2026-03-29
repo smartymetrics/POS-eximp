@@ -19,6 +19,7 @@ CREATE TABLE IF NOT EXISTS witness_signatures (
     full_name VARCHAR(255) NOT NULL,
     address TEXT NOT NULL,
     occupation VARCHAR(100) NOT NULL,
+    witness_email VARCHAR(255) NOT NULL,
     signature_base64 TEXT NOT NULL,
     signature_method VARCHAR(20) DEFAULT 'drawn' CHECK (signature_method IN ('drawn', 'uploaded')),
     ip_address VARCHAR(50),

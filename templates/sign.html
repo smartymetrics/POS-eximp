@@ -90,6 +90,11 @@
       <label class="label">Full Name</label>
       <input type="text" id="full_name" class="input" placeholder="Enter your full legal name" required>
     </div>
+
+    <div class="form-group">
+      <label class="label">Email Address</label>
+      <input type="email" id="email" class="input" placeholder="Enter your email address" required>
+    </div>
     
     <div class="form-group">
       <label class="label">Physical Address</label>
@@ -145,6 +150,7 @@
   const token = window.location.pathname.split('/').pop();
   let signatureMethod = 'drawn';
   let signatureBase64 = null;
+  let savedSignatureDataUrl = null;
   
   // Signature Pad
   const canvas = document.getElementById("sig-pad");
@@ -156,10 +162,19 @@
   // Polyfill for canvas sizing
   function resizeCanvas() {
     const ratio = Math.max(window.devicePixelRatio || 1, 1);
+    if (!signaturePad.isEmpty()) {
+      savedSignatureDataUrl = signaturePad.toDataURL("image/png");
+    }
+
     canvas.width = canvas.offsetWidth * ratio;
     canvas.height = canvas.offsetHeight * ratio;
-    canvas.getContext("2d").scale(ratio, ratio);
+    const ctx = canvas.getContext("2d");
+    ctx.setTransform(ratio, 0, 0, ratio, 0, 0);
     signaturePad.clear();
+
+    if (savedSignatureDataUrl) {
+      signaturePad.fromDataURL(savedSignatureDataUrl);
+    }
   }
   window.addEventListener("resize", resizeCanvas);
   resizeCanvas();
@@ -228,7 +243,7 @@
   });
   
   // Form Validation
-  const inputs = ['full_name', 'address', 'occupation'];
+  const inputs = ['full_name', 'email', 'address', 'occupation'];
   inputs.forEach(id => {
     document.getElementById(id).addEventListener('input', validateForm);
   });
@@ -261,9 +276,7 @@
     const payload = {
       witness_number: 1, // Will be handled by the backend logic or shared via link params
       full_name: document.getElementById('full_name').value.trim(),
-      address: document.getElementById('address').value.trim(),
-      occupation: document.getElementById('occupation').value.trim(),
-      signature_base64: signatureBase64,
+        email: document.getElementById('email').value.trim(),
       signature_method: signatureMethod
     };
     

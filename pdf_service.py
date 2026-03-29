@@ -3,6 +3,7 @@ from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
 import io
 import os
+import re
 import requests
 import base64
 from urllib.parse import urlparse, parse_qs
@@ -170,8 +171,19 @@ def format_currency(amount):
         return "NGN 0.00"
     return f"NGN {float(amount):,.2f}"
 
+def _sanitize_html_for_pdf(html_content: str) -> str:
+    """Remove or rewrite unsupported CSS for xhtml2pdf."""
+    # xhtml2pdf struggles with @page blocks and some modern CSS properties
+    html_content = re.sub(r'@page\s*\{[^}]*\}', '', html_content, flags=re.S)
+    html_content = re.sub(r'transform\s*:\s*[^;]+;', '', html_content, flags=re.I)
+    html_content = re.sub(r'position\s*:\s*fixed\s*;?', 'position:absolute;', html_content, flags=re.I)
+    html_content = re.sub(r'page-break-after\s*:\s*avoid\s*;?', '', html_content, flags=re.I)
+    return html_content
+
+
 def _html_to_pdf(html_content: str) -> bytes:
     """Convert HTML string to PDF bytes using xhtml2pdf."""
+    html_content = _sanitize_html_for_pdf(html_content)
     buffer = io.BytesIO()
     result = pisa.CreatePDF(
         src=html_content,
@@ -521,8 +533,12 @@ def generate_contract_pdf(invoice: dict, client: dict, witnesses: list = None, i
     while len(witness_list) < 2:
         witness_list.append({"full_name": "PENDING", "address": "PENDING", "occupation": "PENDING"})
 
-    # 5. Render
+    # 5. Build company context for the contract page
+    company = COMPANY.copy()
+
+    # 6. Render
     html_content = template.render(
+        company=company,
         invoice=invoice,
         client=client_sanitized,
         witnesses=witness_list,

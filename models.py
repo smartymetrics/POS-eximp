@@ -380,6 +380,7 @@ class CommissionEarning(BaseModel):
 class WitnessSignatureSubmit(BaseModel):
     witness_number: Optional[int] = None  # 1 or 2, optional for auto-assignment
     full_name: str
+    email: EmailStr
     address: str
     occupation: str
     signature_base64: str  # data:image/...;base64,...
@@ -389,6 +390,9 @@ class CompanySignatureUpload(BaseModel):
     role: str  # "director" or "secretary"
     full_name: Optional[str] = None
     signature_base64: str
+
+class WitnessRemovalRequest(BaseModel):
+    note: str
 
 class ExtendSigningLink(BaseModel):
     days: int = 7

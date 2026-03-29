@@ -1,7 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Header
 from fastapi.responses import StreamingResponse
+from fastapi.security import HTTPAuthorizationCredentials
 from database import get_db, SUPABASE_URL
-from models import CompanySignatureUpload, ExtendSigningLink, WitnessSignatureSubmit
+from models import CompanySignatureUpload, ExtendSigningLink, WitnessSignatureSubmit, WitnessRemovalRequest
 from routers.auth import verify_token
 from routers.analytics import log_activity
 from datetime import datetime, timedelta
@@ -49,6 +50,16 @@ def _upload_signature_to_storage(db, invoice_id: str, witness_number: int, signa
     except Exception as e:
         print(f"WARNING: Witness signature upload failed: {e}")
         return signature_base64
+
+
+def _delete_witness_signature_from_storage(db, signature_url: str):
+    if not signature_url or not signature_url.startswith(f"{SUPABASE_URL}/storage/v1/object/public/"):
+        return
+    file_path = signature_url.replace(f"{SUPABASE_URL}/storage/v1/object/public/", "")
+    try:
+        db.storage.from_("signatures").remove([file_path])
+    except Exception:
+        pass
 
 
 async def _create_contract_session(invoice_id: str, current_admin: dict, background_tasks: BackgroundTasks):
@@ -179,6 +190,31 @@ async def get_contract_status(invoice_id: str, current_admin=Depends(verify_toke
         "is_executed": session["status"] == "completed"
     }
 
+@router.get("/session/{invoice_id}")
+async def get_contract_session(invoice_id: str, current_admin=Depends(verify_token)):
+    db = get_db()
+    res = db.table("contract_signing_sessions")\
+        .select("*, witness_signatures(*)")\
+        .eq("invoice_id", invoice_id)\
+        .order("created_at", desc=True)\
+        .limit(1)\
+        .execute()
+
+    if not res.data:
+        raise HTTPException(status_code=404, detail="No contract session found")
+
+    session = res.data[0]
+    return {
+        "id": session["id"],
+        "invoice_id": session["invoice_id"],
+        "token": session["token"],
+        "status": session["status"],
+        "expires_at": session["expires_at"],
+        "created_at": session.get("created_at"),
+        "witness_signatures": session.get("witness_signatures", []),
+        "is_executed": session["status"] == "completed"
+    }
+
 @router.post("/session/{invoice_id}")
 async def create_contract_session(invoice_id: str, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
     if current_admin["role"] not in ["admin", "lawyer"]:
@@ -276,8 +312,20 @@ async def execute_final_contract(invoice_id: str, background_tasks: BackgroundTa
 
     return {"message": "Final contract executed and emailed"}
 
+def _resolve_admin_token(token: str | None = None, authorization: str | None = Header(None)):
+    if authorization:
+        try:
+            scheme, creds = authorization.split()
+            if scheme.lower() == "bearer":
+                return verify_token(HTTPAuthorizationCredentials(scheme=scheme, credentials=creds))
+        except Exception:
+            pass
+    if token:
+        return verify_token(HTTPAuthorizationCredentials(scheme="Bearer", credentials=token))
+    raise HTTPException(status_code=401, detail="Not authenticated")
+
 @router.get("/pdf/draft/{invoice_id}")
-async def get_draft_contract_pdf(invoice_id: str, current_admin=Depends(verify_token)):
+async def get_draft_contract_pdf(invoice_id: str, token: str | None = None, current_admin=Depends(_resolve_admin_token)):
     db = get_db()
     inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
     if not inv_res.data:
@@ -298,7 +346,7 @@ async def get_draft_contract_pdf(invoice_id: str, current_admin=Depends(verify_t
     return StreamingResponse(io.BytesIO(pdf_bytes), media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=contract-draft-{invoice_id}.pdf"})
 
 @router.get("/pdf/final/{invoice_id}")
-async def get_final_contract_pdf(invoice_id: str, current_admin=Depends(verify_token)):
+async def get_final_contract_pdf(invoice_id: str, token: str | None = None, current_admin=Depends(_resolve_admin_token)):
     db = get_db()
     inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
     if not inv_res.data:
@@ -364,6 +412,7 @@ async def add_manual_witness(invoice_id: str, data: WitnessSignatureSubmit, back
         "session_id": session["id"],
         "witness_number": witness_num,
         "full_name": data.full_name,
+        "witness_email": data.email,
         "address": data.address,
         "occupation": data.occupation,
         "signature_base64": stored_signature,
@@ -381,6 +430,61 @@ async def add_manual_witness(invoice_id: str, data: WitnessSignatureSubmit, back
         background_tasks.add_task(send_admin_signing_alert, invoice, client, witnesses)
 
     return {"message": "Witness recorded successfully", "witness_number": witness_num}
+
+@router.post("/{invoice_id}/witness/{witness_id}/remove")
+async def remove_witness_signature(invoice_id: str, witness_id: str, data: WitnessRemovalRequest, current_admin=Depends(verify_token)):
+    if current_admin["role"] not in ["admin", "lawyer"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    note = data.note.strip()
+    if not note:
+        raise HTTPException(status_code=400, detail="Removal note is required")
+
+    db = get_db()
+    inv_res = db.table("invoices").select("id").eq("id", invoice_id).execute()
+    if not inv_res.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+
+    session_res = db.table("contract_signing_sessions")\
+        .select("id, status")\
+        .eq("invoice_id", invoice_id)\
+        .order("created_at", desc=True)\
+        .limit(1)\
+        .execute()
+
+    if not session_res.data:
+        raise HTTPException(status_code=404, detail="No signing session found")
+
+    session = session_res.data[0]
+    if session["status"] == "completed":
+        raise HTTPException(status_code=400, detail="Cannot remove witness after contract execution")
+
+    witness_res = db.table("witness_signatures")\
+        .select("*")\
+        .eq("id", witness_id)\
+        .eq("session_id", session["id"])\
+        .execute()
+
+    if not witness_res.data:
+        raise HTTPException(status_code=404, detail="Witness record not found")
+
+    witness = witness_res.data[0]
+    _delete_witness_signature_from_storage(db, witness.get("signature_base64", ""))
+    db.table("witness_signatures").delete().eq("id", witness_id).execute()
+
+    remaining_res = db.table("witness_signatures").select("id").eq("session_id", session["id"]).execute()
+    new_status = "partial" if remaining_res.data else "pending"
+    if session["status"] != new_status:
+        db.table("contract_signing_sessions").update({"status": new_status}).eq("id", session["id"]).execute()
+
+    await log_activity(
+        "witness_removed",
+        f"Witness {witness['witness_number']} removed from contract session {session['id']} - {note}",
+        current_admin["sub"],
+        invoice_id=invoice_id,
+        metadata={"witness_id": witness_id, "note": note}
+    )
+
+    return {"message": "Witness removed", "session_status": new_status}
 
 @router.get("/signatures")
 async def list_company_signatures(current_admin=Depends(verify_token)):
