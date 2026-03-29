@@ -381,6 +381,8 @@ async def resend_executed_contract(invoice_id: str, background_tasks: Background
     background_tasks.add_task(send_executed_contract_email, invoice, client, pdf_content)
 
     return {"message": "Final contract resent to client"}
+
+def _resolve_admin_token(token: str | None = None, authorization: str | None = Header(None)):
     if authorization:
         try:
             scheme, creds = authorization.split()
