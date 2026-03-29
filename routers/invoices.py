@@ -250,6 +250,15 @@ async def void_invoice_receipts(
             invoice_data.get("clients", {}),
             payload.reason
         )
+
+    # 5. Commission Sync (Final Cleanup)
+    from commission_service import sync_invoice_commissions
+    background_tasks.add_task(
+        sync_invoice_commissions,
+        invoice_id=invoice_id,
+        db=db,
+        performed_by=current_admin["sub"]
+    )
         
     background_tasks.add_task(
         log_activity,

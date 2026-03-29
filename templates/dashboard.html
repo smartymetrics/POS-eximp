@@ -1597,7 +1597,7 @@
             </p>
           </div>
           <div class="card-body">
-            <div style="display:grid; grid-template-columns: repeat(3, minmax(220px, 1fr)); gap:24px;">
+            <div style="display:grid; grid-template-columns: repeat(auto-fill, minmax(220px, 1fr)); gap:24px;">
               <!-- Director Signature -->
               <div style="border:1px solid #eee; padding:16px; border-radius:10px;">
                 <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
@@ -1652,6 +1652,47 @@
                   <button class="btn btn-ghost btn-sm" style="flex:1;"
                     onclick="promptSignatureUpload('lawyer')">Change Signature</button>
                   <button class="btn btn-ghost btn-sm" onclick="deleteSignature('lawyer')"
+                    style="color:var(--red); padding:0 10px;" title="Delete Signature">🗑️</button>
+                </div>
+              </div>
+
+              <!-- Lawyer Seal -->
+              <div style="border:1px solid #eee; padding:16px; border-radius:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                  <span style="font-weight:600; font-size:13px;">LAWYER SEAL</span>
+                  <span id="sig-status-lawyer_seal" class="status paid">ACTIVE</span>
+                </div>
+                <div
+                  style="height:100px; background:#f9f9f9; border-radius:6px; display:flex; align-items:center; justify-content:center; margin-bottom:12px; overflow:hidden;">
+                  <img id="img-sig-lawyer_seal" src="" style="max-height:80px; display:none;">
+                  <div id="empty-sig-lawyer_seal" style="color:#bbb; font-size:11px;">No seal uploaded</div>
+                </div>
+                <div style="display:flex; gap:8px;">
+                  <button class="btn btn-ghost btn-sm" style="flex:1;"
+                    onclick="promptSignatureUpload('lawyer_seal')">Upload Seal</button>
+                  <button class="btn btn-ghost btn-sm" onclick="deleteSignature('lawyer_seal')"
+                    style="color:var(--red); padding:0 10px;" title="Delete Seal">🗑️</button>
+                </div>
+              </div>
+
+              <!-- Company Witness -->
+              <div style="border:1px solid #eee; padding:16px; border-radius:10px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:12px;">
+                  <span style="font-weight:600; font-size:13px;">COMPANY WITNESS</span>
+                  <span id="sig-status-company_witness" class="status paid">ACTIVE</span>
+                </div>
+                <div
+                  style="height:100px; background:#f9f9f9; border-radius:6px; display:flex; align-items:center; justify-content:center; margin-bottom:12px; overflow:hidden;">
+                  <img id="img-sig-company_witness" src="" style="max-height:80px; display:none;">
+                  <div id="empty-sig-company_witness" style="color:#bbb; font-size:11px;">No signature uploaded</div>
+                </div>
+                <p id="sig-name-company_witness" style="margin:0 0 4px; font-size:12px; color:#555; font-weight:600;">No witness name set</p>
+                <p id="sig-address-company_witness" style="margin:0 0 2px; font-size:10px; color:var(--gray);">No address set</p>
+                <p id="sig-occ-company_witness" style="margin:0 0 8px; font-size:10px; color:var(--gray); text-transform:uppercase; letter-spacing:0.5px;">No occupation set</p>
+                <div style="display:flex; gap:8px;">
+                  <button class="btn btn-ghost btn-sm" style="flex:1;"
+                    onclick="promptSignatureUpload('company_witness')">Change Signature</button>
+                  <button class="btn btn-ghost btn-sm" onclick="deleteSignature('company_witness')"
                     style="color:var(--red); padding:0 10px;" title="Delete Signature">🗑️</button>
                 </div>
               </div>
@@ -2552,13 +2593,14 @@
                   Active</span>
                 <span id="contract-expiry" style="font-size:10px; color:#856404;">Expires: —</span>
               </div>
-              <p style="font-size:12px; color:#856404; margin-bottom:12px;">Both witnesses must sign via the portal
-                before the final contract can be executed.</p>
+              <p id="contract-instruction-text" style="font-size:12px; color:#856404; margin-bottom:12px;">The external witness must sign via the portal before the final contract can be executed.</p>
               <div style="display:flex; gap:8px; flex-wrap:wrap;">
                 <button class="btn btn-ghost btn-sm" onclick="copySigningLink()"
                   style="font-size:10px; padding:4px 8px; border-color:#ffeeba;">Copy Link</button>
                 <button class="btn btn-ghost btn-sm" onclick="resendSigningEmail()"
                   style="font-size:10px; padding:4px 8px; border-color:#ffeeba;">Resend Email</button>
+                <button class="btn btn-ghost btn-sm" onclick="extendSigningLink()"
+                  style="font-size:10px; padding:4px 8px; border-color:#ffeeba; color:#2e7d32;">Extend (+48h)</button>
                 <button class="btn btn-ghost btn-sm" onclick="openManualWitnessModal()"
                   style="font-size:10px; padding:4px 8px; border-color:#ffeeba;">Record Walk-in Witness</button>
                 <button class="btn btn-ghost btn-sm" onclick="openManualClientModal()"
@@ -5586,7 +5628,7 @@
         if (!res.ok) return;
         const sigs = await res.json();
 
-        const roles = ['director', 'secretary', 'lawyer'];
+        const roles = ['director', 'secretary', 'lawyer', 'lawyer_seal', 'company_witness'];
         roles.forEach(role => {
           const data = sigs.find(s => s.role === role && s.is_active);
           const img = document.getElementById(`img-sig-${role}`);
@@ -5605,6 +5647,10 @@
             status.className = 'status paid';
             const nameEl = document.getElementById(`sig-name-${role}`);
             if (nameEl) nameEl.innerText = data.full_name || role.toUpperCase();
+            const addrEl = document.getElementById(`sig-address-${role}`);
+            if (addrEl) addrEl.innerText = data.address || 'No address set';
+            const occEl = document.getElementById(`sig-occ-${role}`);
+            if (occEl) occEl.innerText = data.occupation || 'No occupation set';
           } else {
             img.src = '';
             img.style.display = 'none';
@@ -5641,17 +5687,28 @@
         const reader = new FileReader();
         reader.onload = async () => {
           const base64 = reader.result;
-          let full_name = undefined;
-          if (role === 'lawyer') {
-            full_name = prompt('Enter the lawyer full name:');
+          let full_name = undefined, address = undefined, occupation = undefined;
+          if (role === 'lawyer' || role === 'company_witness') {
+            const roleLabel = role === 'lawyer' ? 'lawyer' : 'company witness';
+            full_name = prompt(`Enter the ${roleLabel} full name:`);
             if (!full_name || !full_name.trim()) {
-              toast('Lawyer full name is required to upload this signature.', 'error');
+              toast(`${roleLabel.charAt(0).toUpperCase() + roleLabel.slice(1)} name is required.`, 'error');
               return;
+            }
+            if (role === 'company_witness') {
+              address = prompt('Enter witness address:');
+              occupation = prompt('Enter witness occupation:');
+              if (!address || !occupation) {
+                 toast('Address and Occupation are required for Company Witness.', 'error');
+                 return;
+              }
             }
           }
           try {
             const body = { role, signature_base64: base64 };
             if (full_name) body.full_name = full_name.trim();
+            if (address) body.address = address.trim();
+            if (occupation) body.occupation = occupation.trim();
             const res = await apiFetch('/api/contracts/signatures', {
               method: 'POST',
               body: JSON.stringify(body)
@@ -5697,29 +5754,43 @@
           wList.innerHTML = '';
 
           const witnesses = data.witness_signatures || [];
-          for (let i = 0; i < 2; i++) {
-            const w = witnesses[i];
-            const row = document.createElement('div');
-            row.style = 'display:flex; justify-content:space-between; align-items:center; padding:10px; background:#f9f9f9; border-radius:6px;';
-            row.innerHTML = `
-          <div>
-            <div style="font-size:12px; font-weight:600;">Witness ${i + 1}: ${w ? w.full_name : 'PENDING'}</div>
-            <div style="font-size:10px; color:var(--gray);">${w ? w.occupation : 'Waiting for signature...'}</div>
-          </div>
-          <div style="display:flex; align-items:center; gap:10px;">
-            <span class="status ${w ? 'paid' : 'unpaid'}">${w ? 'SIGNED' : 'PENDING'}</span>
-            ${w && ['admin','lawyer'].includes(currentUserRole) ? `<button class="btn btn-danger btn-sm" onclick="confirmRemoveWitness('${w.id}', ${w.witness_number})">Remove</button>` : ''}
-          </div>
-        `;
-            wList.appendChild(row);
-          }
+          
+          // Row 1: The External Witness
+          const w1 = witnesses.find(w => w.witness_number === 1);
+          const row1 = document.createElement('div');
+          row1.style = 'display:flex; justify-content:space-between; align-items:center; padding:10px; background:#f9f9f9; border-radius:6px;';
+          row1.innerHTML = `
+            <div>
+              <div style="font-size:12px; font-weight:600;">External Witness: ${w1 ? w1.full_name : 'PENDING'}</div>
+              <div style="font-size:10px; color:var(--gray);">${w1 ? w1.occupation : 'Waiting for signature...'}</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="status ${w1 ? 'paid' : 'unpaid'}">${w1 ? 'SIGNED' : 'PENDING'}</span>
+              ${w1 && ['admin','lawyer'].includes(currentUserRole) ? `<button class="btn btn-danger btn-sm" onclick="confirmRemoveWitness('${w1.id}', 1)">Remove</button>` : ''}
+            </div>
+          `;
+          wList.appendChild(row1);
+
+          // Row 2: The Company Witness (Auto)
+          const row2 = document.createElement('div');
+          row2.style = 'display:flex; justify-content:space-between; align-items:center; padding:10px; background:#f0f7ff; border-radius:6px; margin-top:8px;';
+          row2.innerHTML = `
+            <div>
+              <div style="font-size:12px; font-weight:600; color:#1a5fb4;">Company Representative</div>
+              <div style="font-size:10px; color:#1a5fb4; opacity:0.8;">Automatically assigned upon execution</div>
+            </div>
+            <div style="display:flex; align-items:center; gap:10px;">
+              <span class="status paid" style="background:#d0e1fd; color:#1a5fb4;">AUTO-RECORDED</span>
+            </div>
+          `;
+          wList.appendChild(row2);
 
           if (data.is_executed) {
             document.getElementById('execution-ready').innerHTML = `<p style="color:var(--green); font-weight:600; margin-bottom:12px;">✓ CONTRACT FULLY EXECUTED</p>
           <button class="btn btn-ghost btn-sm w-full" onclick="downloadFinalContract()">Download Official PDF</button>`;
             document.getElementById('execution-ready').style.display = 'block';
             document.getElementById('download-draft').style.display = 'none';
-          } else if (witnesses.length >= 2) {
+          } else if (w1) {
             document.getElementById('execution-ready').style.display = 'block';
             document.getElementById('download-draft').style.display = 'block';
           } else {
@@ -5802,6 +5873,21 @@
         else {
           const err = await res.json();
           toast(err.detail || 'Failed to resend', 'error');
+        }
+      } catch (e) { toast(e.message, 'error'); }
+    }
+
+    async function extendSigningLink() {
+      if (!currentSigningSession) return;
+      if (!confirm("Extend the current signing link by another 48 hours?")) return;
+      try {
+        const res = await apiFetch(`/api/contracts/extend/${currentInvoiceId}`, { method: 'POST' });
+        if (res.ok) {
+          toast('Link extended successfully!', 'success');
+          openContractStatus(currentInvoiceId);
+        } else {
+          const err = await res.json();
+          toast(err.detail || 'Failed to extend link', 'error');
         }
       } catch (e) { toast(e.message, 'error'); }
     }

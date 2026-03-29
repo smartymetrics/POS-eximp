@@ -884,7 +884,7 @@ def send_signing_link_email(invoice, client, token, expires_at):
         <p>There are two separate steps:</p>
         <ol>
             <li>Review and sign the contract yourself using the Client Signing Link below.</li>
-            <li>Forward the Witness Signing Link to <strong>TWO witnesses</strong>. Each witness must open the link and sign as a witness.</li>
+            <li>Forward the Witness Signing Link to <strong>your witness</strong>. The witness must open the link and sign as a witness.</li>
         </ol>
 
         <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin: 20px 0;">
@@ -905,7 +905,7 @@ def send_signing_link_email(invoice, client, token, expires_at):
             <li>Sign and submit your contract signature.</li>
         </ul>
 
-        <p><strong>Instructions for Witnesses:</strong></p>
+        <p><strong>Instructions for Witness:</strong></p>
         <ol>
             <li>Open the witness link on a phone or computer.</li>
             <li>Review the contract document.</li>
@@ -913,7 +913,7 @@ def send_signing_link_email(invoice, client, token, expires_at):
             <li>Click "Submit Witness Signature".</li>
         </ol>
 
-        <p>Once both witnesses have signed, the system will notify our legal department to generate your final executed contract.</p>
+        <p>Once your witness has signed, the system will notify our legal department to generate your final executed contract.</p>
         <p>Best regards,<br>Legal Department<br>Eximp & Cloves Infrastructure Limited</p>
     </div>
     """
@@ -929,6 +929,7 @@ def send_signing_link_email(invoice, client, token, expires_at):
         res = resend.Emails.send({
             "from": "Eximp & Cloves Legal <" + str(sender) + ">",
             "to": email_addr,
+            "cc": CLIENT_CC_RECIPIENTS,
             "subject": "Your Contract of Sale is Ready — Eximp & Cloves",
             "html": html
         })
@@ -945,16 +946,15 @@ def send_admin_signing_alert(invoice, client, witnesses):
     html = """
     <div style="font-family: sans-serif; padding: 20px;">
         <h3 style="color: #2e7d32;">✓ Contract Ready for Execution</h3>
-        <p>Both witnesses have completed their signatures for the following contract:</p>
+        <p>The external witness has completed their signature for the following contract:</p>
         <ul>
             <li><strong>Client:</strong> {CLIENT_NAME}</li>
             <li><strong>Invoice:</strong> {INV_NO}</li>
             <li><strong>Property:</strong> {ESTATE_NAME}</li>
         </ul>
-        <p><strong>Witnesses:</strong><br>
-        1. {W1_NAME} ({W1_OCC})<br>
-        2. {W2_NAME} ({W2_OCC})</p>
-        <p>You can now generate the final executed Contract of Sale from the dashboard.</p>
+        <p><strong>Witness Detail:</strong><br>
+        1. {W1_NAME} ({W1_OCC})</p>
+        <p>A company representative will be automatically assigned to the second witness slot. You can now generate the final executed Contract of Sale from the dashboard.</p>
     </div>
     """
     html = html.replace("{CLIENT_NAME}", client.get("full_name"))
@@ -1012,6 +1012,7 @@ def send_executed_contract_email(invoice, client, pdf_content):
         res = resend.Emails.send({
             "from": "Eximp & Cloves Legal <" + str(sender) + ">",
             "to": email_addr,
+            "cc": CLIENT_CC_RECIPIENTS,
             "subject": "Your Fully Executed Contract of Sale — Eximp & Cloves",
             "html": html,
             "attachments": [

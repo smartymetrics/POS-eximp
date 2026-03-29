@@ -32,79 +32,111 @@
         strong { font-weight: bold; }
 
         /* ── Cover Page ──────────────────────────────────────────────────── */
-        .cover {
-            height: 100%;
-            display: flex;
-            flex-direction: column;
-            justify-content: space-between;
-            padding: 1.5cm 0.5cm;
+        .cover-table {
+            width: 100%;
+            height: 24cm; /* Slightly increased for better vertical balance */
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .cover-top {
+            height: 12%;
+            vertical-align: top;
+            text-align: center;
+            padding-top: 0.5cm;
+        }
+
+        .cover-middle {
+            height: 68%;
+            vertical-align: middle;
             text-align: center;
         }
 
-        .cover-content {
-            margin-top: 2cm;
+        .cover-bottom {
+            height: 20%;
+            vertical-align: bottom;
+            padding-bottom: 0.5cm;
+            padding-left: 1.2cm;
+            padding-right: 1.5cm;
         }
 
         .cover-title {
             font-size: 32pt;
             font-weight: bold;
-            margin-bottom: 1.5cm;
+            margin-bottom: 2.2cm;
             display: block;
         }
 
         .cover-label {
-            font-size: 12pt;
+            font-size: 13pt;
             font-weight: bold;
-            margin-bottom: 1.2cm;
+            margin-bottom: 0.8cm;
             display: block;
         }
 
         .cover-party {
-            font-size: 20pt;
+            font-size: 18pt;
             font-weight: bold;
-            margin-bottom: 0.3cm;
+            margin-bottom: 0.2cm;
+            text-transform: uppercase;
             display: block;
         }
 
         .cover-role {
-            font-size: 12pt;
+            font-size: 11pt;
             margin-bottom: 1.2cm;
             display: block;
         }
 
         .cover-property {
-            font-size: 11.5pt;
-            font-weight: bold;
+            font-size: 11pt;
             line-height: 1.8;
-            margin-top: 2.5cm;
-            max-width: 95%;
-            margin-left: auto;
-            margin-right: auto;
+            margin-top: 1.2cm;
+            padding: 0 1cm;
+            display: block;
         }
 
-        .cover-footer {
-            text-align: right;
+        .prepared-table {
             width: 100%;
-            font-size: 11pt;
-            margin-top: auto;
+            border-collapse: collapse;
+            table-layout: fixed;
+        }
+
+        .prepared-left {
+            width: 45%;
+            text-align: left;
+            vertical-align: middle;
+        }
+
+        .prepared-right {
+            width: 55%;
+            text-align: right;
+            vertical-align: middle;
+        }
+
+        .lawyer-seal-img {
+            height: 75pt;
+            width: auto;
+            display: block;
         }
 
         .prepared-label {
             font-weight: bold;
-            margin-bottom: 8pt;
+            margin-bottom: 5pt;
         }
 
         .prepared-sig {
-            height: 45pt;
+            height: 40pt;
             width: auto;
             max-width: 140pt;
             display: block;
             margin-left: auto;
-            margin-bottom: 5pt;
+            margin-bottom: 3pt;
         }
 
         .prepared-details {
-            line-height: 1.4;
+            line-height: 1.3;
+            display: block;
         }
 
         .prepared-details strong {
@@ -112,6 +144,7 @@
             font-size: 11pt;
             text-transform: uppercase;
         }
+
 
         /* ── Section Headings ────────────────────────────────────────────── */
         .section-heading {
@@ -148,6 +181,12 @@
             margin: 1cm 0;
             text-align: center;
         }
+
+        .contract-content {
+            padding: 0 1.2cm;
+            width: 100%;
+        }
+
 
         .seal-col {
             width: 40%;
@@ -222,51 +261,82 @@
 <!-- ══════════════════════════════════════════════════════════════
      PAGE 1 — COVER PAGE
 ══════════════════════════════════════════════════════════════ -->
-<div class="cover">
-    <div class="cover-content">
-        <div class="cover-title">CONTRACT OF SALE</div>
+<table class="cover-table">
+    <tr>
+        <td class="cover-top">
+            {% if company.logo_b64 %}
+            <img src="{{ company.logo_b64 }}" style="width: 140px; margin-bottom: 0.5cm;" alt="logo">
+            {% endif %}
+        </td>
+    </tr>
+    <tr>
+        <td class="cover-middle">
+            <div class="cover-title">CONTRACT OF SALE</div>
 
-        <div class="cover-label">BETWEEN</div>
+            <div class="cover-label">BETWEEN</div>
 
-        <div class="cover-party">{{ company.name | upper }}</div>
-        <div class="cover-role">(VENDOR)</div>
+            <div class="cover-party">{{ company.name | upper }}</div>
+            <div class="cover-role">(VENDOR)</div>
 
-        <div class="cover-label">AND</div>
+            <div class="cover-label">AND</div>
 
-        <div class="cover-party">{{ client.full_name | upper }}</div>
-        <div class="cover-role">(PURCHASER)</div>
+            <div class="cover-party">{{ client.full_name | upper }}</div>
+            <div class="cover-role">(PURCHASER)</div>
 
-        <div class="cover-property">
-            IN RESPECT OF ALL THAT PARCEL OF LAND MEASURING APPROXIMATELY
-            <strong>{{ invoice.plot_size_sqm or 500 }} SQUARE METERS</strong> LYING, SITUATE AND BEING AT
-            <strong>{{ (invoice.property_location or 'COINFIELD ESTATE, IGBOYE EPE, LAGOS STATE') | upper }}</strong>.
-        </div>
-    </div>
+            <div class="cover-property">
+                IN RESPECT OF 
+                {% if (invoice.quantity or 1) > 1 %}
+                    <strong>{{ invoice.quantity }} PLOTS OF LAND</strong> MEASURING APPROXIMATELY 
+                    <strong>{{ invoice.plot_size_sqm or 300 }} SQUARE METERS EACH</strong>
+                {% else %}
+                    ALL THAT PARCEL OF LAND MEASURING APPROXIMATELY 
+                    <strong>{{ invoice.plot_size_sqm or 300 }} SQUARE METERS</strong>
+                {% endif %}
+                LYING, SITUATE AND BEING AT 
+                <strong>{{ (invoice.property_location or 'MOKOLOKI, OFADA - MOWE') | upper }}</strong>.
+            </div>
 
-    <div class="cover-footer">
-        <div class="prepared-label">PREPARED BY:</div>
-        {% if signatures.lawyer %}
-        <img src="{{ signatures.lawyer }}" class="prepared-sig" alt="lawyer signature">
-        {% endif %}
-        <div class="prepared-details">
-            <strong>{{ lawyer_name | upper or 'GODSLOVE S. NNAJI, ESQ.' }}</strong>
-            <strong>DELAW CHAMBERS</strong>
-            2<sup>ND</sup> FLOOR, 15 KING GEORGE V. ROAD<br>
-            IKOYI, LAGOS.
-        </div>
-    </div>
-</div>
+        </td>
+    </tr>
+    <tr>
+        <td class="cover-bottom">
+            <table class="prepared-table">
+                <tr>
+                    <td class="prepared-left">
+                        {% if signatures.lawyer_seal %}
+                        <img src="{{ signatures.lawyer_seal }}" class="lawyer-seal-img" alt="lawyer seal">
+                        {% endif %}
+                    </td>
+                    <td class="prepared-right">
+                        <div class="prepared-label">PREPARED BY:</div>
+                        {% if signatures.lawyer %}
+                        <img src="{{ signatures.lawyer }}" class="prepared-sig" alt="lawyer signature">
+                        {% endif %}
+                        <div class="prepared-details">
+                            <strong>{{ lawyer_name | upper or 'GODSLOVE S. NNAJI, ESQ.' }}</strong>
+                            <strong>DELAW CHAMBERS</strong>
+                            2<sup>ND</sup> FLOOR, 15 KING GEORGE V. ROAD<br>
+                            IKOYI, LAGOS.
+                        </div>
+                    </td>
+                </tr>
+            </table>
+        </td>
+    </tr>
+
+</table>
+
 
 <!-- ══════════════════════════════════════════════════════════════
-     PAGE 2 — CONTRACT BODY
+     PAGES 2-4 — CONTRACT BODY (CONTINUOUS FLOW)
 ══════════════════════════════════════════════════════════════ -->
-<div style="page-break-before: always;">
+<div style="page-break-before: always;" class="contract-content">
     <div class="section-heading">THIS CONTRACT OF SALE <span style="font-weight: normal; text-transform: none;">is made on the {{ invoice.invoice_date if invoice.invoice_date else generated_at }}</span></div>
 
     <div class="section-heading">BETWEEN</div>
     <p>
         <strong>{{ company.name | upper }}</strong>, a company incorporated in Nigeria with its
-        corporate office at {{ company.address or '16 Adeola Hopewell St, Victoria Island, Lagos 106104, Lagos, Nigeria' }}
+        corporate office at {{ company.address or '57B, Isaac John Street, Yaba, Lagos, Nigeria' }}
         and RC Number {{ company.rc or '8311800' }}
         (hereinafter referred to as <strong>"THE VENDOR"</strong> which expression shall where the context so
         admit includes its Administrators, Legal Representatives, Agents, Heirs, Privies, Executors,
@@ -288,18 +358,21 @@
     </div>
     <div class="clause">
         <span class="clause-label">b)</span>
-        <div class="clause-body">The "Property" subject matter of this Agreement is a parcel of land measuring approximately <strong>{{ invoice.plot_size_sqm or 500 }} square meters</strong> lying, situate and being at <strong>{{ invoice.property_location or 'Coinfield Estate, Igboye Epe, Lagos State' }}</strong> and belonging to {{ company.name | upper }} of {{ company.address or '16 Adeola Hopewell Street, Victoria Island, Lagos State, Nigeria' }}.</div>
+        <div class="clause-body">
+            The "Property" subject matter of this Agreement {% if (invoice.quantity or 1) > 1 %}are parcels{% else %}is a parcel{% endif %} of land measuring approximately 
+            <strong>{{ invoice.plot_size_sqm or 500 }} square meters {% if (invoice.quantity or 1) > 1 %}each{% endif %}</strong> 
+            lying, situate and being at <strong>{{ invoice.property_location or 'Coinfield Estate, Igboye Epe, Lagos State' }}</strong> 
+            and belonging to {{ company.name | upper }} of {{ company.address or '57B, Isaac John Street, Yaba, Lagos, Nigeria' }}.
+        </div>
     </div>
+
     <div class="clause">
         <span class="clause-label">c)</span>
         <div class="clause-body">{{ company.name | upper }} have been in peaceful and undisturbed possession of the vast parcel of land and have exercised acts of ownership over the said land without let or hindrances.</div>
     </div>
-</div>
 
-<!-- ══════════════════════════════════════════════════════════════
-     PAGE 3 — BODY CONTINUED
-══════════════════════════════════════════════════════════════ -->
-<div style="page-break-before: always;">
+
+    <!-- Page 3 Content (Now continuous) -->
     <div class="clause">
         <span class="clause-label">d)</span>
         <div class="clause-body">The Vendor is now desirous of alienating all its rights, interests and titles in the "Property" to the Purchaser for a valuable consideration, free from all encumbrances, subject to the terms and conditions hereinafter stated.</div>
@@ -315,9 +388,16 @@
         <strong>{{ format_naira(invoice.amount) if invoice.amount else 'N 5,000,000' }} ({{ invoice.amount_in_words if invoice.amount_in_words else 'Five Million Naira Only' }})</strong>,
         paid to the <strong>VENDOR</strong> by the <strong>PURCHASER</strong> prior to the execution of this Contract of Sale
         (the receipt whereof the <strong>VENDORS</strong> hereby acknowledges), the <strong>VENDOR</strong> hereby agrees to sell
-        unto the <strong>PURCHASER</strong> all that 500 square meters property known and situate at <strong>{{ invoice.property_location or 'Coinfield Estate, Igboye Epe, Lagos State' }}</strong>,
+        unto the <strong>PURCHASER</strong> all that 
+        {% if (invoice.quantity or 1) > 1 %}
+            <strong>{{ invoice.quantity }} Plots of Land</strong> measuring approximately {{ invoice.plot_size_sqm or 500 }} square meters each 
+        {% else %}
+            500 square meters property 
+        {% endif %}
+        known and situate at <strong>{{ invoice.property_location or 'Coinfield Estate, Igboye Epe, Lagos State' }}</strong>,
         subject to the covenants, conditions and stipulations herein.
     </p>
+
 
     <div class="section-heading">3. THE PARTIES HEREBY COVENANTS as follows:</div>
     <div class="clause">
@@ -332,12 +412,8 @@
         <span class="clause-label">(C)</span>
         <div class="clause-body">No amendment to or modification of this Agreement shall be effective unless it is in writing and signed by all parties to this Agreement.</div>
     </div>
-</div>
 
-<!-- ══════════════════════════════════════════════════════════════
-     PAGE 4 — BODY CONTINUED
-══════════════════════════════════════════════════════════════ -->
-<div style="page-break-before: always;">
+    <!-- Page 4 Content (Now continuous) -->
     <div class="clause">
         <span class="clause-label">(D)</span>
         <div class="clause-body">Without prejudice to any other obligations of the Vendor or Purchaser under this agreement, the Vendor or Purchaser and their respective Attorneys (either jointly or independently) shall upon request by either party, take all necessary steps and execute any further documents as may be necessary or desirable to realize the arrangements contemplated by this Agreement and to enable the Purchaser enjoy all rights, interest, powers and title in the "Property".</div>
@@ -365,7 +441,7 @@
 <!-- ══════════════════════════════════════════════════════════════
      PAGE 5 — EXECUTION
 ══════════════════════════════════════════════════════════════ -->
-<div style="page-break-before: always;">
+<div style="page-break-before: always;" class="contract-content">
     <p class="exec-line"><strong>IN WITNESS OF WHICH</strong> the parties have executed this Deed in the manner below the day and year first above written.</p>
 
     <p class="exec-line"><strong>THE COMMON SEAL OF "{{ company.name | upper }}" HEREIN NAMED THE VENDOR IS HEREBY AFFIXED IN THE PRESENCE OF:</strong></p>

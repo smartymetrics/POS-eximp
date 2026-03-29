@@ -548,11 +548,11 @@ def _resolve_sig_to_data_uri(value: str, max_width: int = 200) -> str | None:
         return None
 
 
-def generate_contract_pdf(invoice: dict, client: dict, witnesses: list = None, is_draft: bool = True) -> bytes:
+def render_contract_html(invoice: dict, client: dict, witnesses: list = None, is_draft: bool = True, embed_images: bool = True) -> str:
     """
-    Generates the Contract of Sale PDF.
-    - witnesses: List of dicts with full_name, address, occupation, signature_base64
-    - is_draft: If True, adds a DRAFT notice.
+    Renders the Contract of Sale as an HTML string.
+    - embed_images: If True, fetches images and converts them to base64 (required for PDF).
+                   If False, uses original URLs (faster for web preview).
     """
     from database import get_db
     db = get_db()
@@ -560,10 +560,12 @@ def generate_contract_pdf(invoice: dict, client: dict, witnesses: list = None, i
     template = env.get_template("contract.html")
     client_sanitized = sanitize_client_address(client.copy())
 
-    # 1. Fetch Company Signatures (Director, Secretary, Lawyer)
+    # 1. Fetch Company Signatures (Director, Secretary, Lawyer, etc.)
     sig_res = db.table("company_signatures").select("*").eq("is_active", True).execute()
     company_sigs = {s["role"]: s["signature_base64"] for s in sig_res.data}
     company_names = {s["role"]: s.get("full_name") for s in sig_res.data}
+    company_addresses = {s["role"]: s.get("address") for s in sig_res.data}
+    company_occupations = {s["role"]: s.get("occupation") for s in sig_res.data}
 
     # 2. Get Purchaser Signature
     purchaser_sig = (
@@ -573,41 +575,83 @@ def generate_contract_pdf(invoice: dict, client: dict, witnesses: list = None, i
         or invoice.get("signature_base64")
     )
 
-    # 3. Resolve ALL signatures to base64 data URIs before rendering.
-    #    xhtml2pdf cannot fetch remote URLs reliably, so we must embed them.
-    #    Authority signatures (director/secretary/lawyer) use max_width=180px —
-    #    small enough to look clean in the signature line without distortion.
-    #    Purchaser and witness signatures use 160px.
+    # 3. Resolve signatures
     signatures = {
-        "director":  _resolve_sig_to_data_uri(company_sigs.get("director"), max_width=180),
-        "secretary": _resolve_sig_to_data_uri(company_sigs.get("secretary"), max_width=180),
-        "lawyer":    _resolve_sig_to_data_uri(company_sigs.get("lawyer"),    max_width=180),
-        "purchaser": _resolve_sig_to_data_uri(purchaser_sig,                 max_width=160),
-        "witness1":  None,
-        "witness2":  None,
+        "director":     None,
+        "secretary":    None,
+        "lawyer":       None,
+        "lawyer_seal":  None,
+        "purchaser":    None,
+        "witness1":     None,
+        "witness2":     None,
     }
 
-    # 4. Map witness signatures
-    witness_list = []
-    if witnesses:
-        for i, w in enumerate(witnesses[:2]):
-            key = f"witness{i + 1}"
-            signatures[key] = _resolve_sig_to_data_uri(w.get("signature_base64"), max_width=160)
-            witness_list.append(w)
+    if embed_images:
+        signatures["director"]     = _resolve_sig_to_data_uri(company_sigs.get("director"),    max_width=180)
+        signatures["secretary"]    = _resolve_sig_to_data_uri(company_sigs.get("secretary"),   max_width=180)
+        signatures["lawyer"]       = _resolve_sig_to_data_uri(company_sigs.get("lawyer"),      max_width=180)
+        signatures["lawyer_seal"]  = _resolve_sig_to_data_uri(company_sigs.get("lawyer_seal"), max_width=160)
+        signatures["purchaser"]    = _resolve_sig_to_data_uri(purchaser_sig,                    max_width=160)
+    else:
+        # Use direct URLs for faster browser loading
+        signatures["director"]     = company_sigs.get("director")
+        signatures["secretary"]    = company_sigs.get("secretary")
+        signatures["lawyer"]       = company_sigs.get("lawyer")
+        signatures["lawyer_seal"]  = company_sigs.get("lawyer_seal")
+        signatures["purchaser"]    = purchaser_sig
 
-    # Pad witness list to exactly 2
-    while len(witness_list) < 2:
+
+    # 4. Map witness signatures with Company Hierarchy for Witness 2
+    witness_list = []
+    witness_data = witnesses or []
+    
+    # Witness 1: The one provided via the link (Client's)
+    if len(witness_data) > 0:
+        w1 = witness_data[0]
+        witness_list.append(w1)
+        if embed_images:
+            signatures["witness1"] = _resolve_sig_to_data_uri(w1.get("signature_base64"), max_width=160)
+        else:
+            signatures["witness1"] = w1.get("signature_base64")
+    else:
         witness_list.append({"full_name": "PENDING", "address": "PENDING", "occupation": "PENDING"})
 
-    # 5. Build company context
-    company = COMPANY.copy()
+    # Witness 2: Priority (Manual Override -> Company Witness -> Lawyer)
+    if len(witness_data) > 1:
+        # User manually added a second witness or link was signed by two
+        w2 = witness_data[1]
+        witness_list.append(w2)
+        if embed_images:
+            signatures["witness2"] = _resolve_sig_to_data_uri(w2.get("signature_base64"), max_width=160)
+        else:
+            signatures["witness2"] = w2.get("signature_base64")
+    else:
+        # Automatic Company Witness from roles
+        comp_wit_sig = company_sigs.get("company_witness") or company_sigs.get("lawyer")
+        comp_wit_name = company_names.get("company_witness") or company_names.get("lawyer") or "COMPANY REPRESENTATIVE"
+        comp_wit_addr = company_addresses.get("company_witness") or COMPANY["address"].upper()
+        comp_wit_occ = company_occupations.get("company_witness") or ("Company Witness" if company_sigs.get("company_witness") else "Legal Officer")
+        
+        witness_list.append({
+            "full_name": comp_wit_name.upper(),
+            "address": comp_wit_addr.upper(),
+            "occupation": comp_wit_occ.upper()
+        })
+        
+        if comp_wit_sig:
+            if embed_images:
+                signatures["witness2"] = _resolve_sig_to_data_uri(comp_wit_sig, max_width=160)
+            else:
+                signatures["witness2"] = comp_wit_sig
 
-    # 6. Render HTML
+    # 5. Build context
+
+    company = COMPANY.copy()
     invoice_data = invoice.copy()
     if "amount_in_words" not in invoice_data:
         invoice_data["amount_in_words"] = naira_in_words(invoice_data.get("amount"))
 
-    html_content = template.render(
+    return template.render(
         company=company,
         invoice=invoice_data,
         client=client_sanitized,
@@ -621,5 +665,7 @@ def generate_contract_pdf(invoice: dict, client: dict, witnesses: list = None, i
         naira_in_words=naira_in_words
     )
 
-
-    return _html_to_pdf(html_content)
+def generate_contract_pdf(invoice: dict, client: dict, witnesses: list = None, is_draft: bool = True) -> bytes:
+    """Generates the Contract of Sale PDF by first rendering the HTML."""
+    html_content = render_contract_html(invoice, client, witnesses, is_draft=is_draft, embed_images=True)
+    return _html_to_pdf(html_content)

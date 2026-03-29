@@ -229,6 +229,15 @@ async def reject_verification(
     # 5. Send Rejection Email
     background_tasks.add_task(send_rejection_email, invoice, client, data.reason)
 
+    # 6. Final Sync of Commissions (Catch-all)
+    from commission_service import sync_invoice_commissions
+    background_tasks.add_task(
+        sync_invoice_commissions,
+        invoice_id=verify_rec["invoice_id"],
+        db=db,
+        performed_by=current_admin["sub"]
+    )
+
     background_tasks.add_task(
         log_activity,
         "submission_rejected",

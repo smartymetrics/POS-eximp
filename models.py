@@ -395,8 +395,10 @@ class ClientContractSignatureSubmit(BaseModel):
     acknowledgement: bool = False
 
 class CompanySignatureUpload(BaseModel):
-    role: str  # "director", "secretary", or "lawyer"
+    role: str  # "director", "secretary", "lawyer", "company_witness", "lawyer_seal"
     full_name: Optional[str] = None
+    address: Optional[str] = None
+    occupation: Optional[str] = None
     signature_base64: str
 
 class WitnessRemovalRequest(BaseModel):

@@ -249,9 +249,10 @@
 
   // --- View Contract Function ---
   function viewContract() {
-    const contractUrl = `/api/signing/contract/${token}`;
-    window.open(contractUrl, '_blank', 'width=800,height=600,scrollbars=yes,resizable=yes');
+    const previewUrl = `/api/signing/preview/${token}`;
+    window.open(previewUrl, '_blank', 'width=900,height=800,scrollbars=yes,resizable=yes');
   }
+
 
   // --- Event Listeners ---
   

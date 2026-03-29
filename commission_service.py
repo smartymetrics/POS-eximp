@@ -39,8 +39,11 @@ def get_commission_rate(sales_rep_id: str, estate_name: str, verification_date: 
 
 async def sync_invoice_commissions(invoice_id: str, db, performed_by: str = "system"):
     """
-    Scans all verified payments for an invoice and ensures a commission_earnings record
-    exists for the current sales rep assigned to the invoice.
+    Ensures that every active (non-voided) payment for an invoice has exactly 
+    one active commission earning record for the current assigned sales rep.
+    1. Voids existing active commissions that are now 'orphaned' (payment voided/deleted).
+    2. Voids commissions assigned to the wrong rep.
+    3. Greated missing commissions for active payments.
     """
     from routers.analytics import log_activity
     from email_service import send_commission_earned_email
@@ -56,7 +59,13 @@ async def sync_invoice_commissions(invoice_id: str, db, performed_by: str = "sys
     rep_id = invoice.get("sales_rep_id")
     
     if not rep_id:
-        logger.info(f"Sync skipped: Invoice {invoice['invoice_number']} has no sales rep assigned.")
+        # If no rep assigned, void all unpaid commissions for this invoice
+        db.table("commission_earnings").update({
+            "is_voided": True,
+            "void_reason": "No sales rep assigned to invoice",
+            "voided_by": performed_by,
+            "voided_at": datetime.now().isoformat()
+        }).eq("invoice_id", invoice_id).eq("is_voided", False).eq("is_paid", False).execute()
         return
 
     # 2. Fetch Sales Rep details for notification
@@ -66,37 +75,51 @@ async def sync_invoice_commissions(invoice_id: str, db, performed_by: str = "sys
         return
     rep = rep_res.data[0]
 
-    # 3. Fetch all non-voided payments for this invoice
-    payments = db.table("payments")\
+    # 3. Fetch all active earnings for this invoice
+    earnings = db.table("commission_earnings")\
+        .select("*")\
+        .eq("invoice_id", invoice_id)\
+        .eq("is_voided", False)\
+        .execute().data or []
+        
+    # 4. Fetch all active payments for this invoice
+    active_payments = db.table("payments")\
         .select("*")\
         .eq("invoice_id", invoice_id)\
         .eq("is_voided", False)\
         .eq("payment_type", "payment")\
         .execute().data or []
-        
-    synced_count = 0
     
-    for pay in payments:
-        # Check if a non-voided commission record already exists for this payment
-        existing = db.table("commission_earnings")\
-            .select("id, sales_rep_id")\
-            .eq("payment_id", pay["id"])\
-            .eq("is_voided", False)\
-            .execute().data
-            
-        if existing:
-            # If it already belongs to the current rep, skip
-            if existing[0]["sales_rep_id"] == rep_id:
-                continue
-            
-            # If it belongs to a different rep, we void the old one and create a new one?
-            # Or just update? Let's void for clear audit trail if it was a mistake.
-            db.table("commission_earnings").update({
-                "is_voided": True,
-                "void_reason": f"Commission re-assigned during invoice update to {rep['name']}",
-                "voided_by": performed_by,
-                "voided_at": datetime.now().isoformat()
-            }).eq("id", existing[0]["id"]).execute()
+    active_pay_ids = {p["id"] for p in active_payments}
+    
+    # 5. VOID orphaned or misassigned commissions
+    voided_count = 0
+    remaining_earnings_map = {} # payment_id -> earning_record
+    
+    for e in earnings:
+        is_orphaned = e["payment_id"] not in active_pay_ids
+        is_misassigned = e["sales_rep_id"] != rep_id
+        
+        if is_orphaned or is_misassigned:
+            if not e["is_paid"]:
+                db.table("commission_earnings").update({
+                    "is_voided": True,
+                    "void_reason": "Associated payment voided/rejected" if is_orphaned else f"Re-assigned to {rep['name']}",
+                    "voided_by": performed_by,
+                    "voided_at": datetime.now().isoformat()
+                }).eq("id", e["id"]).execute()
+                voided_count += 1
+                logger.info(f"Sync: Voided earning {e['id']} (orphaned={is_orphaned}, misassigned={is_misassigned})")
+            else:
+                logger.info(f"Sync: Cannot void already PAID commission {e['id']} for payment {e['payment_id']}")
+        else:
+            remaining_earnings_map[e["payment_id"]] = e
+
+    # 6. SYNC missing commissions for active payments
+    synced_count = 0
+    for pay in active_payments:
+        if pay["id"] in remaining_earnings_map:
+            continue
             
         # Create new commission record
         rate = get_commission_rate(
@@ -123,7 +146,7 @@ async def sync_invoice_commissions(invoice_id: str, db, performed_by: str = "sys
         
         synced_count += 1
         
-        # Notify the new rep
+        # Notify the rep
         try:
             await send_commission_earned_email(
                 rep=rep,
@@ -134,11 +157,13 @@ async def sync_invoice_commissions(invoice_id: str, db, performed_by: str = "sys
         except Exception as e:
             logger.error(f"Failed to send commission notification during sync: {e}")
 
-    if synced_count > 0:
+    if synced_count > 0 or voided_count > 0:
+        msg = f"Synced commissions for Invoice {invoice['invoice_number']}: {synced_count} added, {voided_count} voided."
         await log_activity(
             "commission_synced",
-            f"Successfully synced {synced_count} commission records for Invoice {invoice['invoice_number']} to {rep['name']}",
+            msg,
             performed_by,
             invoice_id=invoice_id,
             client_id=invoice["client_id"]
         )
+        logger.info(msg)

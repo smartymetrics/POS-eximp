@@ -229,6 +229,37 @@ async def get_contract_pdf_for_witness(token: str):
         headers={"Content-Disposition": f"inline; filename=contract-{invoice['invoice_number']}.pdf"}
     )
 
+@router.get("/api/signing/preview/{token}", response_class=HTMLResponse)
+async def get_contract_preview(token: str):
+    db = get_db()
+    
+    # 1. Validate session
+    session_res = db.table("contract_signing_sessions")\
+        .select("*, invoices(*, clients(*))")\
+        .eq("token", token)\
+        .execute()
+    if not session_res.data:
+        raise HTTPException(status_code=404, detail="Invalid signing link")
+    
+    session = session_res.data[0]
+    invoice = session["invoices"]
+    client = invoice["clients"]
+    
+    # 2. Get current witnesses
+    witnesses_res = db.table("witness_signatures")\
+        .select("*")\
+        .eq("session_id", session["id"])\
+        .order("witness_number")\
+        .execute()
+    
+    # 3. Render HTML (Embed Images = False for speed!)
+    html_content = pdf_service.render_contract_html(
+        invoice, client, witnesses_res.data, is_draft=True, embed_images=False
+    )
+    
+    return html_content
+
+
 @router.post("/api/signing/sign/{token}")
 async def submit_witness_signature(token: str, data: WitnessSignatureSubmit, request: Request):
     db = get_db()
@@ -289,7 +320,7 @@ async def submit_witness_signature(token: str, data: WitnessSignatureSubmit, req
         }).execute()
         
         # 5. Update session status
-        new_status = "partial" if witness_num == 1 and 2 not in signed_numbers else "completed"
+        new_status = "completed"
         db.table("contract_signing_sessions").update({"status": new_status}).eq("id", session["id"]).execute()
         
         # 6. LOG ACTIVITY (Crucial requirement)

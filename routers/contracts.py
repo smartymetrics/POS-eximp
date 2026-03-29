@@ -120,7 +120,7 @@ async def _create_contract_session(invoice_id: str, current_admin: dict, backgro
         return existing.data[0]
 
     token = secrets.token_urlsafe(32)
-    expires_at = datetime.now() + timedelta(days=7)
+    expires_at = datetime.now() + timedelta(hours=48)
 
     session = db.table("contract_signing_sessions").insert({
         "invoice_id": invoice_id,
@@ -319,8 +319,8 @@ async def execute_final_contract(invoice_id: str, background_tasks: BackgroundTa
 
     session = session_res.data[0]
     witnesses = session.get("witness_signatures", []) or []
-    if len(witnesses) < 2:
-        raise HTTPException(status_code=400, detail="At least two witnesses must sign before executing the contract")
+    if len(witnesses) < 1:
+        raise HTTPException(status_code=400, detail="The external witness must sign before executing the contract")
 
     if session["status"] != "completed":
         db.table("contract_signing_sessions").update({"status": "completed"}).eq("id", session["id"]).execute()
@@ -437,8 +437,8 @@ async def add_manual_witness(invoice_id: str, data: WitnessSignatureSubmit, back
 
     existing_res = db.table("witness_signatures").select("witness_number").eq("session_id", session["id"]).execute()
     signed_numbers = [r["witness_number"] for r in existing_res.data]
-    if len(signed_numbers) >= 2:
-        raise HTTPException(status_code=400, detail="Both witnesses have already been recorded for this session")
+    if len(signed_numbers) >= 1:
+        raise HTTPException(status_code=400, detail="The external witness has already been recorded for this session")
     if data.witness_number and data.witness_number in signed_numbers:
         raise HTTPException(status_code=400, detail="That witness number has already been recorded")
 
@@ -458,7 +458,7 @@ async def add_manual_witness(invoice_id: str, data: WitnessSignatureSubmit, back
         "user_agent": "manual-entry"
     }).execute()
 
-    new_status = "partial" if len(signed_numbers) == 0 else "completed"
+    new_status = "completed"
     db.table("contract_signing_sessions").update({"status": new_status}).eq("id", session["id"]).execute()
 
     if new_status == "completed":
@@ -624,12 +624,18 @@ async def upload_company_signature(data: CompanySignatureUpload, current_admin=D
     db.table("company_signatures").update({"is_active": False}).eq("role", data.role).execute()
     
     # 4. Insert new with URL
-    res = db.table("company_signatures").insert({
+    insert_data = {
         "role": data.role,
         "full_name": name_to_use,
         "signature_base64": public_url,  # Storing URL in base64 column for UI compatibility
+        "is_active": True,               # Corrected: Newest signature must be active
         "uploaded_by": current_admin["sub"]
-    }).execute()
+    }
+    if data.address: insert_data["address"] = data.address
+    if data.occupation: insert_data["occupation"] = data.occupation
+
+    res = db.table("company_signatures").insert(insert_data).execute()
+
     
     await log_activity(
         "signature_updated",
@@ -643,7 +649,7 @@ async def upload_company_signature(data: CompanySignatureUpload, current_admin=D
 async def delete_company_signature(role: str, current_admin=Depends(verify_token)):
     if current_admin["role"] != "admin":
         raise HTTPException(status_code=403, detail="Admins only")
-    if role not in ["director", "secretary", "lawyer"]:
+    if role not in ["director", "secretary", "lawyer", "lawyer_seal", "witness"]:
         raise HTTPException(status_code=400, detail="Invalid role")
         
     db = get_db()
@@ -676,3 +682,49 @@ async def generate_final_contract(invoice_id: str, background_tasks: BackgroundT
     )
     
     return {"message": "Final contract execution triggered"}
+
+@router.post("/extend/{invoice_id}")
+async def extend_contract_signing(invoice_id: str, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+    db = get_db()
+
+    # 1. Fetch invoice and client for the email
+    inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    if not inv_res.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    invoice = inv_res.data[0]
+    
+    # 2. Find active or recently expired session
+    session_res = db.table("contract_signing_sessions")\
+        .select("*")\
+        .eq("invoice_id", invoice_id)\
+        .order("created_at", desc=True)\
+        .limit(1)\
+        .execute()
+        
+    if not session_res.data:
+        raise HTTPException(status_code=404, detail="No signing session found")
+        
+    session = session_res.data[0]
+    if session["status"] == "completed":
+        raise HTTPException(status_code=400, detail="Contract is already fully signed")
+
+    # 3. Extend by 48 hours
+    new_expiry = datetime.now() + timedelta(hours=48)
+    db.table("contract_signing_sessions").update({
+        "expires_at": new_expiry.isoformat(),
+        "status": "pending" 
+    }).eq("id", session["id"]).execute()
+    
+    # 4. Notify Client via Email
+    from email_service import send_signing_link_email
+    background_tasks.add_task(send_signing_link_email, invoice, invoice["clients"], session["token"], new_expiry)
+    
+    await log_activity(
+        "contract_extended",
+        f"Contract signing link extended by 48 hours for {invoice['invoice_number']}. Notification email sent.",
+        current_admin["sub"],
+        client_id=invoice["client_id"],
+        invoice_id=invoice_id
+    )
+    
+    return {"message": "Link extended and client notified", "new_expiry": new_expiry}
