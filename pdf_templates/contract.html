@@ -1,5 +1,6 @@
 <!DOCTYPE html>
 <html>
+
 <head>
     <meta charset="utf-8">
     <title>Contract of Sale - {{ invoice.invoice_number }}</title>
@@ -9,6 +10,7 @@
             size: A4;
             margin: 1.5cm 1.8cm;
             border: 4pt double #1A1A1A;
+
             @bottom-center {
                 content: counter(page);
                 font-family: 'Times New Roman', serif;
@@ -18,7 +20,11 @@
         }
 
         /* ── Reset & Base ────────────────────────────────────────────────── */
-        * { box-sizing: border-box; margin: 0; padding: 0; }
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
 
         body {
             font-family: 'Times New Roman', serif;
@@ -28,13 +34,19 @@
             text-align: justify;
         }
 
-        p { margin-bottom: 12pt; }
-        strong { font-weight: bold; }
+        p {
+            margin-bottom: 12pt;
+        }
+
+        strong {
+            font-weight: bold;
+        }
 
         /* ── Cover Page ──────────────────────────────────────────────────── */
         .cover-table {
             width: 100%;
-            height: 24cm; /* Slightly increased for better vertical balance */
+            height: 24cm;
+            /* Slightly increased for better vertical balance */
             border-collapse: collapse;
             table-layout: fixed;
         }
@@ -44,7 +56,8 @@
             vertical-align: top;
             text-align: center;
             padding-top: 0.5cm;
-            position: relative; /* Added for absolute positioning of stamp */
+            position: relative;
+            /* Added for absolute positioning of stamp */
         }
 
         .cover-stamp {
@@ -177,7 +190,9 @@
             min-width: 20pt;
         }
 
-        .clause-body { flex: 1; }
+        .clause-body {
+            flex: 1;
+        }
 
         /* ── Execution Page ──────────────────────────────────────────────── */
         .exec-line {
@@ -262,252 +277,304 @@
         }
     </style>
 </head>
+
 <body>
 
-{% if is_draft %}
-<div class="draft-watermark">Draft</div>
-{% endif %}
+    {% if is_draft %}
+    <div class="draft-watermark">Draft</div>
+    {% endif %}
 
-<!-- ══════════════════════════════════════════════════════════════
+    <!-- ══════════════════════════════════════════════════════════════
      PAGE 1 — COVER PAGE
 ══════════════════════════════════════════════════════════════ -->
-<table class="cover-table">
-    <tr>
-        <td class="cover-top">
-            {% if company.stamp_b64 %}
-            <img src="{{ company.stamp_b64 }}" class="cover-stamp" alt="company stamp">
-            {% endif %}
-            
-            {% if company.logo_b64 %}
-            <img src="{{ company.logo_b64 }}" style="width: 140px; margin-bottom: 0.5cm;" alt="logo">
-            {% endif %}
-        </td>
-    </tr>
-    <tr>
-        <td class="cover-middle">
-            <div class="cover-title">CONTRACT OF SALE</div>
-
-            <div class="cover-label">BETWEEN</div>
-
-            <div class="cover-party">{{ company.name | upper }}</div>
-            <div class="cover-role">(VENDOR)</div>
-
-            <div class="cover-label">AND</div>
-
-            <div class="cover-party">{{ client.full_name | upper }}</div>
-            <div class="cover-role">(PURCHASER)</div>
-
-            <div class="cover-property">
-                IN RESPECT OF 
-                {% if (invoice.quantity or 1) > 1 %}
-                    <strong>{{ invoice.quantity }} PLOTS OF LAND</strong> MEASURING APPROXIMATELY 
-                    <strong>{{ invoice.plot_size_sqm or 300 }} SQUARE METERS EACH</strong>
-                {% else %}
-                    ALL THAT PARCEL OF LAND MEASURING APPROXIMATELY 
-                    <strong>{{ invoice.plot_size_sqm or 300 }} SQUARE METERS</strong>
+    <table class="cover-table">
+        <tr>
+            <td class="cover-top">
+                {% if company.stamp_b64 %}
+                <img src="{{ company.stamp_b64 }}" class="cover-stamp" alt="company stamp">
                 {% endif %}
-                LYING, SITUATE AND BEING AT 
-                <strong>{{ (invoice.property_location or 'MOKOLOKI, OFADA - MOWE') | upper }}</strong>.
-            </div>
 
-        </td>
-    </tr>
-    <tr>
-        <td class="cover-bottom">
-            <table class="prepared-table">
-                <tr>
-                    <td class="prepared-left">
-                        {% if signatures.lawyer_seal %}
-                        <img src="{{ signatures.lawyer_seal }}" class="lawyer-seal-img" alt="lawyer seal">
-                        {% endif %}
-                    </td>
-                    <td class="prepared-right">
-                        <div class="prepared-label">PREPARED BY:</div>
-                        {% if signatures.lawyer %}
-                        <img src="{{ signatures.lawyer }}" class="prepared-sig" alt="lawyer signature">
-                        {% endif %}
-                        <div class="prepared-details">
-                            <strong>{{ lawyer_name | upper or 'GODSLOVE S. NNAJI, ESQ.' }}</strong>
-                            <strong>DELAW CHAMBERS</strong>
-                            2<sup>ND</sup> FLOOR, 15 KING GEORGE V. ROAD<br>
-                            IKOYI, LAGOS.
-                        </div>
-                    </td>
-                </tr>
-            </table>
-        </td>
-    </tr>
+                {% if company.logo_b64 %}
+                <img src="{{ company.logo_b64 }}" style="width: 140px; margin-bottom: 0.5cm;" alt="logo">
+                {% endif %}
+            </td>
+        </tr>
+        <tr>
+            <td class="cover-middle">
+                <div class="cover-title">CONTRACT OF SALE</div>
 
-</table>
+                <div class="cover-label">BETWEEN</div>
+
+                <div class="cover-party">{{ company.name | upper }}</div>
+                <div class="cover-role">(VENDOR)</div>
+
+                <div class="cover-label">AND</div>
+
+                <div class="cover-party">{{ client.full_name | upper }}</div>
+                <div class="cover-role">(PURCHASER)</div>
+
+                <div class="cover-property">
+                    IN RESPECT OF
+                    {% if (invoice.quantity or 1) > 1 %}
+                    <strong>{{ invoice.quantity }} PLOTS OF LAND</strong> MEASURING APPROXIMATELY
+                    <strong>{{ invoice.plot_size_sqm or 300 }} SQUARE METERS EACH</strong>
+                    {% else %}
+                    ALL THAT PARCEL OF LAND MEASURING APPROXIMATELY
+                    <strong>{{ invoice.plot_size_sqm or 300 }} SQUARE METERS</strong>
+                    {% endif %}
+                    LYING, SITUATE AND BEING AT
+                    <strong>{{ (invoice.property_location or 'MOKOLOKI, OFADA - MOWE') | upper }}</strong>.
+                </div>
+
+            </td>
+        </tr>
+        <tr>
+            <td class="cover-bottom">
+                <table class="prepared-table">
+                    <tr>
+                        <td class="prepared-left">
+                            {% if signatures.lawyer_seal %}
+                            <img src="{{ signatures.lawyer_seal }}" class="lawyer-seal-img" alt="lawyer seal">
+                            {% endif %}
+                        </td>
+                        <td class="prepared-right">
+                            <div class="prepared-label">PREPARED BY:</div>
+                            {% if signatures.lawyer %}
+                            <img src="{{ signatures.lawyer }}" class="prepared-sig" alt="lawyer signature">
+                            {% endif %}
+                            <div class="prepared-details">
+                                <strong>{{ lawyer_name | upper or 'GODSLOVE S. NNAJI, ESQ.' }}</strong>
+                                <strong>DELAW CHAMBERS</strong>
+                                2<sup>ND</sup> FLOOR, 15 KING GEORGE V. ROAD<br>
+                                IKOYI, LAGOS.
+                            </div>
+                        </td>
+                    </tr>
+                </table>
+            </td>
+        </tr>
+
+    </table>
 
 
-<!-- ══════════════════════════════════════════════════════════════
+    <!-- ══════════════════════════════════════════════════════════════
      PAGES 2-4 — CONTRACT BODY (CONTINUOUS FLOW)
 ══════════════════════════════════════════════════════════════ -->
-<div style="page-break-before: always;" class="contract-content">
-    <div class="section-heading">THIS CONTRACT OF SALE <span style="font-weight: normal; text-transform: none;">is made on the {{ invoice.invoice_date if invoice.invoice_date else generated_at }}</span></div>
+    <div style="page-break-before: always;" class="contract-content">
+        <div class="section-heading">THIS CONTRACT OF SALE <span style="font-weight: normal; text-transform: none;">is
+                made on the {{ invoice.invoice_date if invoice.invoice_date else generated_at }}</span></div>
 
-    <div class="section-heading">BETWEEN</div>
-    <p>
-        <strong>{{ company.name | upper }}</strong>, a company incorporated in Nigeria with its
-        corporate office at {{ company.address or '57B, Isaac John Street, Yaba, Lagos, Nigeria' }}
-        and RC Number {{ company.rc or '8311800' }}
-        (hereinafter referred to as <strong>"THE VENDOR"</strong> which expression shall where the context so
-        admit includes its Administrators, Legal Representatives, Agents, Heirs, Privies, Executors,
-        Administrators, and assigns) of the one part.
-    </p>
+        <div class="section-heading">BETWEEN</div>
+        <p>
+            <strong>{{ company.name | upper }}</strong>, a company incorporated in Nigeria with its
+            corporate office at {{ company.address or '57B, Isaac John Street, Yaba, Lagos, Nigeria' }}
+            and RC Number {{ company.rc or '8311800' }}
+            (hereinafter referred to as <strong>"THE VENDOR"</strong> which expression shall where the context so
+            admit includes its Administrators, Legal Representatives, Agents, Heirs, Privies, Executors,
+            Administrators, and assigns) of the one part.
+        </p>
 
-    <div class="section-heading">AND</div>
-    <p>
-        <strong>{{ client.full_name | upper }}</strong> of {{ client.address or 'N/A' }}
-        (hereinafter referred to as <strong>"THE PURCHASER"</strong> which expression shall where the context
-        so admits, include his Agents, Privies, Legal Representatives, Successors-In-Title and Assigns)
-        of the other part.
-    </p>
+        <div class="section-heading">AND</div>
+        <p>
+            <strong>{{ client.full_name | upper }}</strong> of {{ client.address or 'N/A' }}
+            (hereinafter referred to as <strong>"THE PURCHASER"</strong> which expression shall where the context
+            so admits, include his Agents, Privies, Legal Representatives, Successors-In-Title and Assigns)
+            of the other part.
+        </p>
 
-    <div class="section-heading">1. WHEREAS:</div>
-    <div class="clause">
-        <span class="clause-label">a)</span>
-        <div class="clause-body">The hereditaments hereinafter described and which is intended to be hereby assigned to the Purchaser forms an integral part of a large parcel of land which belongs to {{ company.name | upper }}.</div>
-    </div>
-    <div class="clause">
-        <span class="clause-label">b)</span>
-        <div class="clause-body">
-            The "Property" subject matter of this Agreement {% if (invoice.quantity or 1) > 1 %}are parcels{% else %}is a parcel{% endif %} of land measuring approximately 
-            <strong>{{ invoice.plot_size_sqm or 500 }} square meters {% if (invoice.quantity or 1) > 1 %}each{% endif %}</strong> 
-            lying, situate and being at <strong>{{ invoice.property_location or 'Coinfield Estate, Igboye Epe, Lagos State' }}</strong> 
-            and belonging to {{ company.name | upper }} of {{ company.address or '57B, Isaac John Street, Yaba, Lagos, Nigeria' }}.
+        <div class="section-heading">1. WHEREAS:</div>
+        <div class="clause">
+            <span class="clause-label">a)</span>
+            <div class="clause-body">The hereditaments hereinafter described and which is intended to be hereby assigned
+                to the Purchaser forms an integral part of a large parcel of land which belongs to {{ company.name |
+                upper }}.</div>
         </div>
-    </div>
+        <div class="clause">
+            <span class="clause-label">b)</span>
+            <div class="clause-body">
+                The "Property" subject matter of this Agreement {% if (invoice.quantity or 1) > 1 %}are parcels{% else
+                %}is a parcel{% endif %} of land measuring approximately
+                <strong>{{ invoice.plot_size_sqm or 500 }} square meters {% if (invoice.quantity or 1) > 1 %}each{%
+                    endif %}</strong>
+                lying, situate and being at <strong>{{ invoice.property_location or 'Coinfield Estate, Igboye Epe, Lagos
+                    State' }}</strong>
+                and belonging to {{ company.name | upper }} of {{ company.address or '57B, Isaac John Street, Yaba,
+                Lagos, Nigeria' }}.
+            </div>
+        </div>
 
-    <div class="clause">
-        <span class="clause-label">c)</span>
-        <div class="clause-body">{{ company.name | upper }} have been in peaceful and undisturbed possession of the vast parcel of land and have exercised acts of ownership over the said land without let or hindrances.</div>
-    </div>
-
-
-    <!-- Page 3 Content (Now continuous) -->
-    <div class="clause">
-        <span class="clause-label">d)</span>
-        <div class="clause-body">The Vendor is now desirous of alienating all its rights, interests and titles in the "Property" to the Purchaser for a valuable consideration, free from all encumbrances, subject to the terms and conditions hereinafter stated.</div>
-    </div>
-    <div class="clause">
-        <span class="clause-label">e)</span>
-        <div class="clause-body">The Vendor herein have agreed to transfer and grant to the Purchaser the absolute assignment of the property and to the transfer of title in the hereinafter described property, subject to the hereinafter stated terms and conditions.</div>
-    </div>
-
-    <div class="section-heading">2. NOW THIS AGREEMENT WITNESSETH as follows;</div>
-    <p>
-        In consideration of the sum of
-        <strong>{{ format_naira(invoice.amount) if invoice.amount else 'N 5,000,000' }} ({{ invoice.amount_in_words if invoice.amount_in_words else 'Five Million Naira Only' }})</strong>,
-        paid to the <strong>VENDOR</strong> by the <strong>PURCHASER</strong> prior to the execution of this Contract of Sale
-        (the receipt whereof the <strong>VENDORS</strong> hereby acknowledges), the <strong>VENDOR</strong> hereby agrees to sell
-        unto the <strong>PURCHASER</strong> all that 
-        {% if (invoice.quantity or 1) > 1 %}
-            <strong>{{ invoice.quantity }} Plots of Land</strong> measuring approximately {{ invoice.plot_size_sqm or 500 }} square meters each 
-        {% else %}
-            <strong>{{ invoice.plot_size_sqm or 500 }}</strong> square meters property 
-        {% endif %}
-        known and situate at <strong>{{ invoice.property_location or 'Coinfield Estate, Igboye Epe, Lagos State' }}</strong>,
-        subject to the covenants, conditions and stipulations herein.
-    </p>
+        <div class="clause">
+            <span class="clause-label">c)</span>
+            <div class="clause-body">{{ company.name | upper }} have been in peaceful and undisturbed possession of the
+                vast parcel of land and have exercised acts of ownership over the said land without let or hindrances.
+            </div>
+        </div>
 
 
-    <div class="section-heading">3. THE PARTIES HEREBY COVENANTS as follows:</div>
-    <div class="clause">
-        <span class="clause-label">(A)</span>
-        <div class="clause-body">The Parties agree that upon the preparation and execution of the final Deed of Assignment, the Purchaser shall be led into immediate, actual, and undisturbed possession of the entire Property. The Vendor shall ensure that the Property is properly surveyed and shall, at the Vendor's cost, procure and deliver to the Purchaser a registered survey plan of the Property. The Vendor further undertakes to provide all reasonable assistance, documentation, and cooperation required by the Purchaser in the procurement of the Governor's Consent, while the costs and statutory fees for obtaining the said Consent shall be borne by the Purchaser.</div>
-    </div>
-    <div class="clause">
-        <span class="clause-label">(B)</span>
-        <div class="clause-body">Any right or remedy to which any party is or may become entitled under this Agreement or in consequence of the other's conduct may be enforced from time to time separately or concurrently with any right or remedy given by this Agreement now or afterwards provided for and arising by operation of law so that such rights and remedies are not exclusive of the other but are cumulative.</div>
-    </div>
-    <div class="clause">
-        <span class="clause-label">(C)</span>
-        <div class="clause-body">No amendment to or modification of this Agreement shall be effective unless it is in writing and signed by all parties to this Agreement.</div>
+        <!-- Page 3 Content (Now continuous) -->
+        <div class="clause">
+            <span class="clause-label">d)</span>
+            <div class="clause-body">The Vendor is now desirous of alienating all its rights, interests and titles in
+                the "Property" to the Purchaser for a valuable consideration, free from all encumbrances, subject to the
+                terms and conditions hereinafter stated.</div>
+        </div>
+        <div class="clause">
+            <span class="clause-label">e)</span>
+            <div class="clause-body">The Vendor herein have agreed to transfer and grant to the Purchaser the absolute
+                assignment of the property and to the transfer of title in the hereinafter described property, subject
+                to the hereinafter stated terms and conditions.</div>
+        </div>
+
+        <div class="section-heading">2. NOW THIS AGREEMENT WITNESSETH as follows;</div>
+        <p>
+            In consideration of the sum of
+            <strong>{{ format_naira(invoice.amount) if invoice.amount else 'N 5,000,000' }} ({{ invoice.amount_in_words
+                if invoice.amount_in_words else 'Five Million Naira Only' }})</strong>,
+            paid to the <strong>VENDOR</strong> by the <strong>PURCHASER</strong> prior to the execution of this
+            Contract of Sale
+            (the receipt whereof the <strong>VENDORS</strong> hereby acknowledges), the <strong>VENDOR</strong> hereby
+            agrees to sell
+            unto the <strong>PURCHASER</strong> all that
+            {% if (invoice.quantity or 1) > 1 %}
+            <strong>{{ invoice.quantity }} Plots of Land</strong> measuring approximately {{ invoice.plot_size_sqm or
+            500 }} square meters each
+            {% else %}
+            <strong>{{ invoice.plot_size_sqm or 500 }}</strong> square meters property
+            {% endif %}
+            known and situate at <strong>{{ invoice.property_location or 'Coinfield Estate, Igboye Epe, Lagos State'
+                }}</strong>,
+            subject to the covenants, conditions and stipulations herein.
+        </p>
+
+
+        <div class="section-heading">3. THE PARTIES HEREBY COVENANTS as follows:</div>
+        <div class="clause">
+            <span class="clause-label">(A)</span>
+            <div class="clause-body">The Parties agree that upon the preparation and execution of the final Deed of
+                Assignment, the Purchaser shall be led into immediate, actual, and undisturbed possession of the entire
+                Property. The Vendor shall ensure that the Property is properly surveyed and shall, at the Vendor's
+                cost, procure and deliver to the Purchaser a registered survey plan of the Property. The Vendor further
+                undertakes to provide all reasonable assistance, documentation, and cooperation required by the
+                Purchaser in the procurement of the Governor's Consent, while the costs and statutory fees for obtaining
+                the said Consent shall be borne by the Purchaser.</div>
+        </div>
+        <div class="clause">
+            <span class="clause-label">(B)</span>
+            <div class="clause-body">Any right or remedy to which any party is or may become entitled under this
+                Agreement or in consequence of the other's conduct may be enforced from time to time separately or
+                concurrently with any right or remedy given by this Agreement now or afterwards provided for and arising
+                by operation of law so that such rights and remedies are not exclusive of the other but are cumulative.
+            </div>
+        </div>
+        <div class="clause">
+            <span class="clause-label">(C)</span>
+            <div class="clause-body">No amendment to or modification of this Agreement shall be effective unless it is
+                in writing and signed by all parties to this Agreement.</div>
+        </div>
+
+        <!-- Page 4 Content (Now continuous) -->
+        <div class="clause">
+            <span class="clause-label">(D)</span>
+            <div class="clause-body">Without prejudice to any other obligations of the Vendor or Purchaser under this
+                agreement, the Vendor or Purchaser and their respective Attorneys (either jointly or independently)
+                shall upon request by either party, take all necessary steps and execute any further documents as may be
+                necessary or desirable to realize the arrangements contemplated by this Agreement and to enable the
+                Purchaser enjoy all rights, interest, powers and title in the "Property".</div>
+        </div>
+        <div class="clause">
+            <span class="clause-label">(E)</span>
+            <div class="clause-body">This Agreement supersedes any prior agreement or agreements between the parties
+                whether oral or written in respect of the "Property" and any such prior agreements are canceled upon the
+                execution of this agreement.</div>
+        </div>
+        <div class="clause">
+            <span class="clause-label">(F)</span>
+            <div class="clause-body">If any provision of this Agreement is declared by any judicial or other competent
+                authority to be, defective, inchoate, illegal, void or otherwise unenforceable, the Vendors and their
+                Attorney shall take all necessary steps to rectify that provision in order to give effect to the general
+                objective of the agreement. Provided always that the provision in question shall be severed from the
+                rest of this Agreement, and the rest of the Agreement shall continue to have force and effect in law.
+            </div>
+        </div>
+        <div class="clause">
+            <span class="clause-label">(G)</span>
+            <div class="clause-body">In the event of any failure to perfect the title of the Vendors and/or to realize
+                the objective of this agreement, the Vendors undertake and guarantee to indemnify the Purchaser of the
+                full Purchase Price.</div>
+        </div>
+        <div class="clause">
+            <span class="clause-label">(H)</span>
+            <div class="clause-body">Any claim, dispute, failure or controversy arising from or out of this Agreement or
+                any breach thereof shall first be resolved by parties through amicable negotiation failing which such
+                dispute may be referred to the mediation section of the Lagos Multidoor Court House, Lagos, Nigeria.
+                PROVIDED that where settlement is not reached after three (3) sittings of the aforesaid Lagos Multidoor
+                Court House, Lagos, Nigeria, an aggrieved party can approach the court for resolution and claims.</div>
+        </div>
+
+        <!-- <div class="blank-page-note">[THE REMAINDER OF THIS PAGE HAS BEEN INTENTIONALLY LEFT BLANK]</div> -->
     </div>
 
-    <!-- Page 4 Content (Now continuous) -->
-    <div class="clause">
-        <span class="clause-label">(D)</span>
-        <div class="clause-body">Without prejudice to any other obligations of the Vendor or Purchaser under this agreement, the Vendor or Purchaser and their respective Attorneys (either jointly or independently) shall upon request by either party, take all necessary steps and execute any further documents as may be necessary or desirable to realize the arrangements contemplated by this Agreement and to enable the Purchaser enjoy all rights, interest, powers and title in the "Property".</div>
-    </div>
-    <div class="clause">
-        <span class="clause-label">(E)</span>
-        <div class="clause-body">This Agreement supersedes any prior agreement or agreements between the parties whether oral or written in respect of the "Property" and any such prior agreements are canceled upon the execution of this agreement.</div>
-    </div>
-    <div class="clause">
-        <span class="clause-label">(F)</span>
-        <div class="clause-body">If any provision of this Agreement is declared by any judicial or other competent authority to be, defective, inchoate, illegal, void or otherwise unenforceable, the Vendors and their Attorney shall take all necessary steps to rectify that provision in order to give effect to the general objective of the agreement. Provided always that the provision in question shall be severed from the rest of this Agreement, and the rest of the Agreement shall continue to have force and effect in law.</div>
-    </div>
-    <div class="clause">
-        <span class="clause-label">(G)</span>
-        <div class="clause-body">In the event of any failure to perfect the title of the Vendors and/or to realize the objective of this agreement, the Vendors undertake and guarantee to indemnify the Purchaser of the full Purchase Price.</div>
-    </div>
-    <div class="clause">
-        <span class="clause-label">(H)</span>
-        <div class="clause-body">Any claim, dispute, failure or controversy arising from or out of this Agreement or any breach thereof shall first be resolved by parties through amicable negotiation failing which such dispute may be referred to the mediation section of the Lagos Multidoor Court House, Lagos, Nigeria. PROVIDED that where settlement is not reached after three (3) sittings of the aforesaid Lagos Multidoor Court House, Lagos, Nigeria, an aggrieved party can approach the court for resolution and claims.</div>
-    </div>
-
-    <div class="blank-page-note">[THE REMAINDER OF THIS PAGE HAS BEEN INTENTIONALLY LEFT BLANK]</div>
-</div>
-
-<!-- ══════════════════════════════════════════════════════════════
+    <!-- ══════════════════════════════════════════════════════════════
      PAGE 5 — EXECUTION
 ══════════════════════════════════════════════════════════════ -->
-<div style="page-break-before: always;" class="contract-content">
-    <p class="exec-line"><strong>IN WITNESS OF WHICH</strong> the parties have executed this Deed in the manner below the day and year first above written.</p>
+    <div style="page-break-before: always;" class="contract-content">
+        <p class="exec-line"><strong>IN WITNESS OF WHICH</strong> the parties have executed this Deed in the manner
+            below the day and year first above written.</p>
 
-    <p class="exec-line"><strong>THE COMMON SEAL OF "{{ company.name | upper }}" HEREIN NAMED THE VENDOR IS HEREBY AFFIXED IN THE PRESENCE OF:</strong></p>
+        <p class="exec-line"><strong>THE COMMON SEAL OF "{{ company.name | upper }}" HEREIN NAMED THE VENDOR IS HEREBY
+                AFFIXED IN THE PRESENCE OF:</strong></p>
 
-    <div class="seal-row">
-        <div class="seal-col">
-            {% if signatures.director %}
-            <img src="{{ signatures.director }}" class="sig-image" alt="director">
-            {% endif %}
-            <div class="sig-label">DIRECTOR</div>
+        <div class="seal-row">
+            <div class="seal-col">
+                {% if signatures.director %}
+                <img src="{{ signatures.director }}" class="sig-image" alt="director">
+                {% endif %}
+                <div class="sig-label">DIRECTOR</div>
+            </div>
+            <div class="seal-col">
+                {% if signatures.secretary %}
+                <img src="{{ signatures.secretary }}" class="sig-image" alt="secretary">
+                {% endif %}
+                <div class="sig-label">SECRETARY</div>
+            </div>
         </div>
-        <div class="seal-col">
-            {% if signatures.secretary %}
-            <img src="{{ signatures.secretary }}" class="sig-image" alt="secretary">
+
+        <p class="exec-line"><strong>SIGNED, SEALED AND DELIVERED by the within named PURCHASER:</strong></p>
+
+        <div class="sig-purchaser-block">
+            {% if signatures.purchaser %}
+            <img src="{{ signatures.purchaser }}" class="sig-purchaser-img" alt="purchaser">
             {% endif %}
-            <div class="sig-label">SECRETARY</div>
+            <p><strong>{{ client.full_name | upper }}</strong></p>
+        </div>
+
+        <p><strong>IN THE PRESENCE OF:</strong></p>
+
+        <div class="witness-block">
+            <div class="witness-row"><strong>Name:</strong> {{ witnesses[0].full_name or 'PENDING' }}</div>
+            <div class="witness-row"><strong>Address:</strong> {{ witnesses[0].address or 'PENDING' }}</div>
+            <div class="witness-row"><strong>Occupation:</strong> {{ witnesses[0].occupation or 'PENDING' }}</div>
+            <div class="witness-row"><strong>Signature:</strong>
+                {% if signatures.witness1 %}
+                <img src="{{ signatures.witness1 }}" style="height:40pt; vertical-align:middle; margin-left:10pt;"
+                    alt="witness 1">
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="witness-block">
+            <div class="witness-row"><strong>Name:</strong> {{ witnesses[1].full_name or 'PENDING' }}</div>
+            <div class="witness-row"><strong>Address:</strong> {{ witnesses[1].address or 'PENDING' }}</div>
+            <div class="witness-row"><strong>Occupation:</strong> {{ witnesses[1].occupation or 'PENDING' }}</div>
+            <div class="witness-row"><strong>Signature:</strong>
+                {% if signatures.witness2 %}
+                <img src="{{ signatures.witness2 }}" style="height:40pt; vertical-align:middle; margin-left:10pt;"
+                    alt="witness 2">
+                {% endif %}
+            </div>
         </div>
     </div>
-
-    <p class="exec-line"><strong>SIGNED, SEALED AND DELIVERED by the within named PURCHASER:</strong></p>
-    
-    <div class="sig-purchaser-block">
-        {% if signatures.purchaser %}
-        <img src="{{ signatures.purchaser }}" class="sig-purchaser-img" alt="purchaser">
-        {% endif %}
-        <p><strong>{{ client.full_name | upper }}</strong></p>
-    </div>
-
-    <p><strong>IN THE PRESENCE OF:</strong></p>
-
-    <div class="witness-block">
-        <div class="witness-row"><strong>Name:</strong> {{ witnesses[0].full_name or 'PENDING' }}</div>
-        <div class="witness-row"><strong>Address:</strong> {{ witnesses[0].address or 'PENDING' }}</div>
-        <div class="witness-row"><strong>Occupation:</strong> {{ witnesses[0].occupation or 'PENDING' }}</div>
-        <div class="witness-row"><strong>Signature:</strong> 
-            {% if signatures.witness1 %}
-            <img src="{{ signatures.witness1 }}" style="height:40pt; vertical-align:middle; margin-left:10pt;" alt="witness 1">
-            {% endif %}
-        </div>
-    </div>
-
-    <div class="witness-block">
-        <div class="witness-row"><strong>Name:</strong> {{ witnesses[1].full_name or 'PENDING' }}</div>
-        <div class="witness-row"><strong>Address:</strong> {{ witnesses[1].address or 'PENDING' }}</div>
-        <div class="witness-row"><strong>Occupation:</strong> {{ witnesses[1].occupation or 'PENDING' }}</div>
-        <div class="witness-row"><strong>Signature:</strong> 
-            {% if signatures.witness2 %}
-            <img src="{{ signatures.witness2 }}" style="height:40pt; vertical-align:middle; margin-left:10pt;" alt="witness 2">
-            {% endif %}
-        </div>
-    </div>
-</div>
 
 </body>
+
 </html>
