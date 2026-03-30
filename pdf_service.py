@@ -1,4 +1,5 @@
 from weasyprint import HTML as WeasyprintHTML
+from xhtml2pdf import pisa
 from datetime import datetime
 from jinja2 import Environment, FileSystemLoader
 import io
@@ -214,9 +215,18 @@ def naira_in_words(amount):
 
 
 
-def _html_to_pdf(html_content: str) -> bytes:
+def _render_with_weasyprint(html_content: str) -> bytes:
     """Convert HTML string to PDF bytes using WeasyPrint."""
     return WeasyprintHTML(string=html_content).write_pdf()
+
+
+def _render_with_xhtml2pdf(html_content: str) -> bytes:
+    """Convert HTML string to PDF bytes using xhtml2pdf."""
+    result = io.BytesIO()
+    pisa_status = pisa.CreatePDF(html_content, dest=result)
+    if pisa_status.err:
+        raise RuntimeError(f"xhtml2pdf generation failed with {pisa_status.err} errors")
+    return result.getvalue()
 
 
 
@@ -284,7 +294,7 @@ def generate_invoice_pdf(invoice: dict) -> bytes:
         format_currency=format_currency,
         generated_at=datetime.now().strftime("%d %b %Y")
     )
-    return _html_to_pdf(html_content)
+    return _render_with_xhtml2pdf(html_content)
 
 
 
@@ -351,7 +361,7 @@ def generate_receipt_pdf(invoice: dict) -> bytes:
         format_currency=format_currency,
         generated_at=datetime.now().strftime("%d %b %Y")
     )
-    return _html_to_pdf(html_content)
+    return _render_with_xhtml2pdf(html_content)
 
 
 
@@ -436,7 +446,7 @@ def generate_statement_pdf(invoices: list, client: dict) -> bytes:
         period_start=invoices[0]["invoice_date"] if invoices else "",
         period_end=invoices[-1]["invoice_date"] if invoices else "",
     )
-    return _html_to_pdf(html_content)
+    return _render_with_xhtml2pdf(html_content)
 
 
 def generate_refund_receipt_pdf(payment: dict, invoice: dict, client: dict = None) -> bytes:
@@ -502,7 +512,7 @@ def generate_refund_receipt_pdf(payment: dict, invoice: dict, client: dict = Non
         format_currency=format_currency,
         generated_at=datetime.now().strftime("%d %b %Y")
     )
-    return _html_to_pdf(html_content)
+    return _render_with_xhtml2pdf(html_content)
 
 def _resolve_sig_to_data_uri(value: str, max_width: int = 200) -> str | None:
     """
@@ -647,6 +657,14 @@ def render_contract_html(invoice: dict, client: dict, witnesses: list = None, is
     # 5. Build context
 
     company = COMPANY.copy()
+    if embed_images:
+        company["stamp_b64"] = get_authorized_stamp_base64()
+    else:
+        # Use URL for faster preview
+        supabase_url = os.getenv("SUPABASE_URL")
+        if supabase_url:
+            company["stamp_b64"] = f"{supabase_url}/storage/v1/object/public/signatures/authority/stamp.png"
+
     invoice_data = invoice.copy()
     if "amount_in_words" not in invoice_data:
         invoice_data["amount_in_words"] = naira_in_words(invoice_data.get("amount"))
@@ -668,4 +686,4 @@ def render_contract_html(invoice: dict, client: dict, witnesses: list = None, is
 def generate_contract_pdf(invoice: dict, client: dict, witnesses: list = None, is_draft: bool = True) -> bytes:
     """Generates the Contract of Sale PDF by first rendering the HTML."""
     html_content = render_contract_html(invoice, client, witnesses, is_draft=is_draft, embed_images=True)
-    return _html_to_pdf(html_content)
+    return _render_with_weasyprint(html_content)

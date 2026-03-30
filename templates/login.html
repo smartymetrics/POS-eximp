@@ -1,137 +1,275 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-<meta charset="UTF-8">
-<meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Eximp & Cloves — Sign In</title>
-<link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
-<style>
-  * { margin: 0; padding: 0; box-sizing: border-box; }
-  body { font-family: 'DM Sans', sans-serif; background: #0F0F0F; min-height: 100vh; display: flex; align-items: center; justify-content: center; }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Eximp & Cloves — Sign In</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap"
+    rel="stylesheet">
+  <style>
+    * {
+      margin: 0;
+      padding: 0;
+      box-sizing: border-box;
+    }
 
-  .bg-pattern {
-    position: fixed; inset: 0; overflow: hidden; pointer-events: none;
-    background: radial-gradient(ellipse at 20% 50%, rgba(245,166,35,0.08) 0%, transparent 60%),
-                radial-gradient(ellipse at 80% 20%, rgba(245,166,35,0.05) 0%, transparent 50%);
-  }
-  .grid-lines {
-    position: absolute; inset: 0;
-    background-image: linear-gradient(rgba(245,166,35,0.04) 1px, transparent 1px),
-                      linear-gradient(90deg, rgba(245,166,35,0.04) 1px, transparent 1px);
-    background-size: 60px 60px;
-  }
+    body {
+      font-family: 'DM Sans', sans-serif;
+      background: #0F0F0F;
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+    }
 
-  .login-card {
-    background: #1A1A1A; border: 1px solid #2a2a2a; border-radius: 16px;
-    width: 90%; max-width: 420px; padding: 48px 32px; position: relative; z-index: 1;
-    box-shadow: 0 40px 80px rgba(0,0,0,0.6);
-  }
+    .bg-pattern {
+      position: fixed;
+      inset: 0;
+      overflow: hidden;
+      pointer-events: none;
+      background: radial-gradient(ellipse at 20% 50%, rgba(245, 166, 35, 0.08) 0%, transparent 60%),
+        radial-gradient(ellipse at 80% 20%, rgba(245, 166, 35, 0.05) 0%, transparent 50%);
+    }
 
-  @media (max-width: 480px) {
-    .login-card { padding: 32px 24px; }
-    .brand-name { font-size: 20px; }
-  }
+    .grid-lines {
+      position: absolute;
+      inset: 0;
+      background-image: linear-gradient(rgba(245, 166, 35, 0.04) 1px, transparent 1px),
+        linear-gradient(90deg, rgba(245, 166, 35, 0.04) 1px, transparent 1px);
+      background-size: 60px 60px;
+    }
 
-  .logo-section { text-align: center; margin-bottom: 40px; }
-  .logo-img { max-width: 180px; height: auto; margin-bottom: 16px; filter: brightness(1.2); }
-  .brand-name { font-family: 'Playfair Display', serif; font-size: 24px; color: #fff; line-height: 1.2; display: none; } /* Hidden if logo has text */
-  .brand-sub { font-size: 11px; letter-spacing: 3px; color: #F5A623; text-transform: uppercase; margin-top: 4px; display: none; }
-  .divider { width: 40px; height: 2px; background: #F5A623; margin: 20px auto 0; }
+    .login-card {
+      background: #1A1A1A;
+      border: 1px solid #2a2a2a;
+      border-radius: 16px;
+      width: 90%;
+      max-width: 420px;
+      padding: 48px 32px;
+      position: relative;
+      z-index: 1;
+      box-shadow: 0 40px 80px rgba(0, 0, 0, 0.6);
+    }
 
-  .form-title { font-size: 14px; color: #888; text-align: center; margin-bottom: 28px; }
+    @media (max-width: 480px) {
+      .login-card {
+        padding: 32px 24px;
+      }
 
-  .form-group { margin-bottom: 16px; }
-  .form-label { display: block; font-size: 11px; font-weight: 600; letter-spacing: 1px; text-transform: uppercase; color: #888; margin-bottom: 6px; }
-  .form-control {
-    width: 100%; padding: 11px 14px; background: #111; border: 1px solid #333;
-    border-radius: 8px; font-size: 14px; color: #fff; font-family: 'DM Sans', sans-serif;
-    transition: all 0.2s;
-  }
-  .form-control:focus { outline: none; border-color: #F5A623; box-shadow: 0 0 0 3px rgba(245,166,35,0.1); }
-  .form-control::placeholder { color: #555; }
+      .brand-name {
+        font-size: 20px;
+      }
+    }
 
-  .submit-btn {
-    width: 100%; padding: 13px; background: #F5A623; border: none; border-radius: 8px;
-    font-size: 14px; font-weight: 700; color: #0F0F0F; cursor: pointer; margin-top: 8px;
-    font-family: 'DM Sans', sans-serif; transition: all 0.2s; letter-spacing: 0.5px;
-  }
-  .submit-btn:hover { background: #C47D0A; }
-  .submit-btn:active { transform: scale(0.98); }
-  .submit-btn:disabled { background: #555; color: #999; cursor: not-allowed; }
+    .logo-section {
+      text-align: center;
+      margin-bottom: 40px;
+    }
 
-  .error-msg { background: rgba(231,76,60,0.15); border: 1px solid rgba(231,76,60,0.3); border-radius: 6px; padding: 10px 14px; font-size: 13px; color: #e74c3c; margin-top: 12px; display: none; }
+    .logo-img {
+      max-width: 180px;
+      height: auto;
+      margin-bottom: 16px;
+      filter: brightness(1.2);
+    }
 
-  .footer-text { text-align: center; margin-top: 32px; font-size: 11px; color: #555; line-height: 1.6; }
-  .footer-text a { color: #F5A623; text-decoration: none; }
-</style>
+    .brand-name {
+      font-family: 'Playfair Display', serif;
+      font-size: 24px;
+      color: #fff;
+      line-height: 1.2;
+      display: none;
+    }
+
+    /* Hidden if logo has text */
+    .brand-sub {
+      font-size: 11px;
+      letter-spacing: 3px;
+      color: #F5A623;
+      text-transform: uppercase;
+      margin-top: 4px;
+      display: none;
+    }
+
+    .divider {
+      width: 40px;
+      height: 2px;
+      background: #F5A623;
+      margin: 20px auto 0;
+    }
+
+    .form-title {
+      font-size: 14px;
+      color: #888;
+      text-align: center;
+      margin-bottom: 28px;
+    }
+
+    .form-group {
+      margin-bottom: 16px;
+    }
+
+    .form-label {
+      display: block;
+      font-size: 11px;
+      font-weight: 600;
+      letter-spacing: 1px;
+      text-transform: uppercase;
+      color: #888;
+      margin-bottom: 6px;
+    }
+
+    .form-control {
+      width: 100%;
+      padding: 11px 14px;
+      background: #111;
+      border: 1px solid #333;
+      border-radius: 8px;
+      font-size: 14px;
+      color: #fff;
+      font-family: 'DM Sans', sans-serif;
+      transition: all 0.2s;
+    }
+
+    .form-control:focus {
+      outline: none;
+      border-color: #F5A623;
+      box-shadow: 0 0 0 3px rgba(245, 166, 35, 0.1);
+    }
+
+    .form-control::placeholder {
+      color: #555;
+    }
+
+    .submit-btn {
+      width: 100%;
+      padding: 13px;
+      background: #F5A623;
+      border: none;
+      border-radius: 8px;
+      font-size: 14px;
+      font-weight: 700;
+      color: #0F0F0F;
+      cursor: pointer;
+      margin-top: 8px;
+      font-family: 'DM Sans', sans-serif;
+      transition: all 0.2s;
+      letter-spacing: 0.5px;
+    }
+
+    .submit-btn:hover {
+      background: #C47D0A;
+    }
+
+    .submit-btn:active {
+      transform: scale(0.98);
+    }
+
+    .submit-btn:disabled {
+      background: #555;
+      color: #999;
+      cursor: not-allowed;
+    }
+
+    .error-msg {
+      background: rgba(231, 76, 60, 0.15);
+      border: 1px solid rgba(231, 76, 60, 0.3);
+      border-radius: 6px;
+      padding: 10px 14px;
+      font-size: 13px;
+      color: #e74c3c;
+      margin-top: 12px;
+      display: none;
+    }
+
+    .footer-text {
+      text-align: center;
+      margin-top: 32px;
+      font-size: 11px;
+      color: #555;
+      line-height: 1.6;
+    }
+
+    .footer-text a {
+      color: #F5A623;
+      text-decoration: none;
+    }
+  </style>
 </head>
+
 <body>
-<div class="bg-pattern"><div class="grid-lines"></div></div>
-
-<div class="login-card">
-  <div class="logo-section">
-    <img src="/static/img/logo.svg" alt="Eximp & Cloves" class="logo-img">
-    <div class="brand-name">Eximp & Cloves</div>
-    <div class="brand-sub">Infrastructure Limited</div>
-    <div class="divider"></div>
+  <div class="bg-pattern">
+    <div class="grid-lines"></div>
   </div>
 
-  <p class="form-title">Finance Admin Portal — Sign In</p>
+  <div class="login-card">
+    <div class="logo-section">
+      <img src="/static/img/logo.svg" alt="Eximp & Cloves" class="logo-img">
+      <div class="brand-name">Eximp & Cloves</div>
+      <div class="brand-sub">Infrastructure Limited</div>
+      <div class="divider"></div>
+    </div>
 
-  <div class="form-group">
-    <label class="form-label">Email Address</label>
-    <input type="email" class="form-control" id="email" placeholder="admin@eximps-cloves.com" autofocus>
+    <p class="form-title">Finance Admin Portal — Sign In</p>
+
+    <div class="form-group">
+      <label class="form-label">Email Address</label>
+      <input type="email" class="form-control" id="email" placeholder="admin@eximps-cloves.com" autofocus>
+    </div>
+    <div class="form-group">
+      <label class="form-label">Password</label>
+      <input type="password" class="form-control" id="password" placeholder="••••••••"
+        onkeydown="if(event.key==='Enter') submitLogin()">
+    </div>
+
+    <div class="error-msg" id="errorMsg"></div>
+
+    <button class="submit-btn" id="submitBtn" onclick="submitLogin()">Sign In</button>
+
+    <div class="footer-text">
+      Eximp & Cloves Infrastructure Limited<br>
+      RC 8311800 · <a href="https://www.eximps-cloves.com" target="_blank">www.eximps-cloves.com</a>
+    </div>
   </div>
-  <div class="form-group">
-    <label class="form-label">Password</label>
-    <input type="password" class="form-control" id="password" placeholder="••••••••" onkeydown="if(event.key==='Enter') submitLogin()">
-  </div>
 
-  <div class="error-msg" id="errorMsg"></div>
+  <script>
+    async function submitLogin() {
+      const email = document.getElementById('email').value.trim();
+      const password = document.getElementById('password').value;
+      const btn = document.getElementById('submitBtn');
+      const err = document.getElementById('errorMsg');
 
-  <button class="submit-btn" id="submitBtn" onclick="submitLogin()">Sign In</button>
+      if (!email || !password) {
+        err.textContent = 'Please enter your email and password.';
+        err.style.display = 'block'; return;
+      }
 
-  <div class="footer-text">
-    Eximp & Cloves Infrastructure Limited<br>
-    RC 8311800 · <a href="https://www.eximps-cloves.com" target="_blank">www.eximps-cloves.com</a>
-  </div>
-</div>
+      btn.disabled = true; btn.textContent = 'Signing in...';
+      err.style.display = 'none';
 
-<script>
-async function submitLogin() {
-  const email = document.getElementById('email').value.trim();
-  const password = document.getElementById('password').value;
-  const btn = document.getElementById('submitBtn');
-  const err = document.getElementById('errorMsg');
+      try {
+        const res = await fetch('/auth/login', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({ email, password })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Invalid credentials');
+        localStorage.setItem('ec_token', data.access_token);
+        window.location.href = '/dashboard';
+      } catch (e) {
+        err.textContent = e.message;
+        err.style.display = 'block';
+        btn.disabled = false;
+        btn.textContent = 'Sign In';
+      }
+    }
 
-  if (!email || !password) {
-    err.textContent = 'Please enter your email and password.';
-    err.style.display = 'block'; return;
-  }
-
-  btn.disabled = true; btn.textContent = 'Signing in...';
-  err.style.display = 'none';
-
-  try {
-    const res = await fetch('/auth/login', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ email, password })
-    });
-    const data = await res.json();
-    if (!res.ok) throw new Error(data.detail || 'Invalid credentials');
-    localStorage.setItem('ec_token', data.access_token);
-    window.location.href = '/dashboard';
-  } catch(e) {
-    err.textContent = e.message;
-    err.style.display = 'block';
-    btn.disabled = false;
-    btn.textContent = 'Sign In';
-  }
-}
-
-// Redirect if already logged in
-// No auto-redirect; let the user sign in or be redirected by dashboard if 401
-</script>
+    // Redirect if already logged in
+    // No auto-redirect; let the user sign in or be redirected by dashboard if 401
+  </script>
 </body>
+
 </html>

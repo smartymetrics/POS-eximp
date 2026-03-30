@@ -164,26 +164,37 @@ async def form_submission(
         unit_price_to_use = None
 
         if payload.property_name:
-            query = db.table("properties").select("id, starting_price, price_per_sqm, location")\
+            query = db.table("properties").select("*")\
                 .ilike("name", f"%{payload.property_name}%")\
                 .eq("is_active", True)
             if plot_size_numeric:
                 query = query.eq("plot_size_sqm", plot_size_numeric)
-            prop_res = query.execute()
-            if not prop_res.data:
-                query = db.table("properties").select("id, starting_price, price_per_sqm, location")\
+            
+            try:
+                prop_res = query.execute()
+            except Exception as e:
+                print(f"DEBUG: Error querying properties by name: {e}")
+                prop_res = None
+                
+            if not prop_res or not prop_res.data:
+                query = db.table("properties").select("*")\
                     .ilike("estate_name", f"%{payload.property_name}%")\
                     .eq("is_active", True)
                 if plot_size_numeric:
                     query = query.eq("plot_size_sqm", plot_size_numeric)
-                prop_res = query.execute()
-
+                try:
+                    prop_res = query.execute()
+                except Exception as e:
+                    print(f"DEBUG: Error querying properties by estate_name: {e}")
+                    prop_res = None
             if prop_res.data:
                 prop = prop_res.data[0]
                 property_id_to_use = prop.get("id")
                 property_location_to_use = prop.get("location")
 
-                if prop.get("price_per_sqm") is not None:
+                if prop.get("total_price") is not None and float(prop.get("total_price")) > 0:
+                    unit_price_to_use = float(prop.get("total_price"))
+                elif prop.get("price_per_sqm") is not None and float(prop.get("price_per_sqm")) > 0:
                     unit_price_to_use = float(prop.get("price_per_sqm"))
                 elif prop.get("starting_price") is not None and float(prop.get("starting_price")) > 0:
                     unit_price_to_use = float(prop.get("starting_price"))

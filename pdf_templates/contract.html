@@ -44,6 +44,16 @@
             vertical-align: top;
             text-align: center;
             padding-top: 0.5cm;
+            position: relative; /* Added for absolute positioning of stamp */
+        }
+
+        .cover-stamp {
+            position: absolute;
+            top: 0;
+            right: 0;
+            height: 100px;
+            width: auto;
+            z-index: 10;
         }
 
         .cover-middle {
@@ -264,6 +274,10 @@
 <table class="cover-table">
     <tr>
         <td class="cover-top">
+            {% if company.stamp_b64 %}
+            <img src="{{ company.stamp_b64 }}" class="cover-stamp" alt="company stamp">
+            {% endif %}
+            
             {% if company.logo_b64 %}
             <img src="{{ company.logo_b64 }}" style="width: 140px; margin-bottom: 0.5cm;" alt="logo">
             {% endif %}
@@ -402,7 +416,7 @@
     <div class="section-heading">3. THE PARTIES HEREBY COVENANTS as follows:</div>
     <div class="clause">
         <span class="clause-label">(A)</span>
-        <div class="clause-body">The Parties agree that upon the preparation and execution of the final Deed of Conveyance, the Purchaser shall be led into immediate, actual, and undisturbed possession of the entire Property. The Vendor shall ensure that the Property is properly surveyed and shall, at the Vendor's cost, procure and deliver to the Purchaser a registered survey plan of the Property. The Vendor further undertakes to provide all reasonable assistance, documentation, and cooperation required by the Purchaser in the procurement of the Governor's Consent, while the costs and statutory fees for obtaining the said Consent shall be borne by the Purchaser.</div>
+        <div class="clause-body">The Parties agree that upon the preparation and execution of the final Deed of Assignment, the Purchaser shall be led into immediate, actual, and undisturbed possession of the entire Property. The Vendor shall ensure that the Property is properly surveyed and shall, at the Vendor's cost, procure and deliver to the Purchaser a registered survey plan of the Property. The Vendor further undertakes to provide all reasonable assistance, documentation, and cooperation required by the Purchaser in the procurement of the Governor's Consent, while the costs and statutory fees for obtaining the said Consent shall be borne by the Purchaser.</div>
     </div>
     <div class="clause">
         <span class="clause-label">(B)</span>
