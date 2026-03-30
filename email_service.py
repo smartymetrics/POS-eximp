@@ -896,7 +896,7 @@ def send_signing_link_email(invoice, client, token, expires_at):
         <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; text-align: center; margin: 20px 0;">
             <p style="font-size: 12px; color: #888; margin-bottom: 8px;">WITNESS SIGNING LINK</p>
             <a href="{WITNESS_SIGNING_URL}" style="color: #F5A623; font-weight: bold; text-decoration: none; font-size: 16px;">{WITNESS_SIGNING_URL}</a>
-            <p style="font-size: 11px; color: #e74c3c; margin-top: 10px;">Security Notice: Both links expire on {EXPIRY_DATE}.</p>
+            <p style="font-size: 11px; color: #e74c3c; margin-top: 10px;">Security Notice: Both links expire in 48 hours (on {EXPIRY_DATE}).</p>
         </div>
 
         <p><strong>Instructions for Client:</strong></p>

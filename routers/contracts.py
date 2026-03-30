@@ -135,7 +135,7 @@ async def _create_contract_session(invoice_id: str, current_admin: dict, backgro
 
     await log_activity(
         "contract_initiated",
-        f"Contract signing initiated for {invoice['invoice_number']}. Signing link sent to client.",
+        f"Contract signing initiated for {invoice['invoice_number']}. Signing link sent to client. Note: This link expires in 48 hours.",
         current_admin["sub"],
         client_id=invoice["client_id"],
         invoice_id=invoice_id
@@ -174,7 +174,7 @@ async def initiate_contract_signing(invoice_id: str, background_tasks: Backgroun
 
     # 3. Create Session
     token = secrets.token_urlsafe(32)
-    expires_at = datetime.now() + timedelta(days=7)
+    expires_at = datetime.now() + timedelta(hours=48)
     
     session = db.table("contract_signing_sessions").insert({
         "invoice_id": invoice_id,
@@ -195,7 +195,7 @@ async def initiate_contract_signing(invoice_id: str, background_tasks: Backgroun
     # 6. LOG ACTIVITY
     await log_activity(
         "contract_initiated",
-        f"Contract signing initiated for {invoice['invoice_number']}. Signing link sent to client.",
+        f"Contract signing initiated for {invoice['invoice_number']}. Signing link sent to client. Note: This link expires in 48 hours.",
         current_admin["sub"],
         client_id=invoice["client_id"],
         invoice_id=invoice_id
@@ -459,7 +459,7 @@ async def add_manual_witness(invoice_id: str, data: WitnessSignatureSubmit, back
         session = session_res.data[0]
     else:
         token = secrets.token_urlsafe(32)
-        expires_at = datetime.now() + timedelta(days=7)
+        expires_at = datetime.now() + timedelta(hours=48)
         session = db.table("contract_signing_sessions").insert({
             "invoice_id": invoice_id,
             "token": token,
@@ -523,7 +523,7 @@ async def add_manual_client_signature(invoice_id: str, data: ClientContractSigna
 
         await log_activity(
             "manual_client_contract_signed",
-            f"Walk-in client contract signature recorded for {invoice['invoice_number']}",
+            f"Walk-in client contract signature recorded for {invoice['invoice_number']}. Security Notice: Both links expire in 48 hours.",
             current_admin["sub"],
             client_id=invoice.get("client_id"),
             invoice_id=invoice_id
