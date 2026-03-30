@@ -392,7 +392,7 @@
         {% if (invoice.quantity or 1) > 1 %}
             <strong>{{ invoice.quantity }} Plots of Land</strong> measuring approximately {{ invoice.plot_size_sqm or 500 }} square meters each 
         {% else %}
-            500 square meters property 
+            <strong>{{ invoice.plot_size_sqm or 500 }}</strong> square meters property 
         {% endif %}
         known and situate at <strong>{{ invoice.property_location or 'Coinfield Estate, Igboye Epe, Lagos State' }}</strong>,
         subject to the covenants, conditions and stipulations herein.
