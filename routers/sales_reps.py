@@ -14,8 +14,8 @@ async def get_sales_reps(admin: dict = Depends(get_current_admin)):
     res = supabase.table("sales_reps").select("*").order("name").execute()
     reps = res.data
     
-    # Get deal counts from invoices
-    inv_res = supabase.table("invoices").select("sales_rep_name").execute()
+    # Get deal counts from invoices (excluding voided)
+    inv_res = supabase.table("invoices").select("sales_rep_name").neq("status", "voided").execute()
     counts = {}
     for inv in inv_res.data:
         name = inv.get("sales_rep_name")
@@ -131,7 +131,7 @@ async def get_rep_stats(rep_id: str, admin: dict = Depends(get_current_admin)):
     rep_name = rep.data[0]["name"]
     
     # Simple aggregates
-    inv_res = supabase.table("invoices").select("amount, amount_paid, status").eq("sales_rep_name", rep_name).execute()
+    inv_res = supabase.table("invoices").select("amount, amount_paid, status").eq("sales_rep_name", rep_name).neq("status", "voided").execute()
     
     stats = {
         "total_deals": len(inv_res.data),
