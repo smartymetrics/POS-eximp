@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Header
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from database import get_db, SUPABASE_URL
-from models import CompanySignatureUpload, ExtendSigningLink, WitnessSignatureSubmit, ClientContractSignatureSubmit, WitnessRemovalRequest
+from models import CompanySignatureUpload, ExtendSigningLink, WitnessSignatureSubmit, ClientContractSignatureSubmit, WitnessRemovalRequest, CustomContractHTMLUpdate
 from routers.auth import verify_token
 from routers.analytics import log_activity
 from datetime import datetime, timedelta
@@ -762,3 +762,55 @@ async def extend_contract_signing(invoice_id: str, background_tasks: BackgroundT
     )
     
     return {"message": "Link extended and client notified", "new_expiry": new_expiry}
+
+@router.get("/{invoice_id}/custom-html")
+async def get_contract_html(invoice_id: str, current_admin=Depends(verify_token)):
+    if current_admin["role"] not in ["admin", "lawyer"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+        
+    db = get_db()
+    inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    if not inv_res.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+        
+    invoice = inv_res.data[0]
+    
+    if invoice.get("custom_contract_html"):
+        return {"html_content": invoice["custom_contract_html"], "is_custom": True}
+        
+    from pdf_service import get_default_contract_html_fragment
+    default_html = get_default_contract_html_fragment(invoice, invoice["clients"])
+    
+    return {"html_content": default_html, "is_custom": False}
+
+@router.put("/{invoice_id}/custom-html")
+async def update_contract_html(invoice_id: str, payload: CustomContractHTMLUpdate, current_admin=Depends(verify_token)):
+    if current_admin["role"] not in ["admin", "lawyer"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+        
+    db = get_db()
+    
+    # 1. Check if invoice exists
+    inv_res = db.table("invoices").select("id").eq("id", invoice_id).execute()
+    if not inv_res.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+        
+    # 2. Prevent editing if contract is already signed
+    session_res = db.table("contract_signing_sessions").select("status").eq("invoice_id", invoice_id).neq("status", "expired").execute()
+    if session_res.data and session_res.data[0]["status"] == "completed":
+        raise HTTPException(status_code=400, detail="Cannot edit contract wording after it has been fully executed")
+        
+    # 3. Save the custom HTML to Supabase
+    db.table("invoices").update({
+        "custom_contract_html": payload.html_content,
+        "updated_at": datetime.now().isoformat()
+    }).eq("id", invoice_id).execute()
+    
+    await log_activity(
+        "contract_wording_updated",
+        f"Contract wordings updated manually for invoice {invoice_id}",
+        current_admin["sub"],
+        invoice_id=invoice_id
+    )
+    
+    return {"message": "Custom contract wordings saved successfully"}

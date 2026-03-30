@@ -687,3 +687,23 @@ def generate_contract_pdf(invoice: dict, client: dict, witnesses: list = None, i
     """Generates the Contract of Sale PDF by first rendering the HTML."""
     html_content = render_contract_html(invoice, client, witnesses, is_draft=is_draft, embed_images=True)
     return _render_with_weasyprint(html_content)
+
+def get_default_contract_html_fragment(invoice: dict, client: dict) -> str:
+    """
+    Renders just the body (clauses) of the contract so it can be passed to the frontend for editing.
+    """
+    template = env.get_template("contract_body.html")
+    client_sanitized = sanitize_client_address(client.copy())
+
+    invoice_data = invoice.copy()
+    if "amount_in_words" not in invoice_data:
+        invoice_data["amount_in_words"] = naira_in_words(invoice_data.get("amount"))
+
+    return template.render(
+        company=COMPANY,
+        invoice=invoice_data,
+        client=client_sanitized,
+        format_currency=format_currency,
+        format_naira=format_naira,
+        generated_at=datetime.now().strftime("%d %B %Y")
+    )

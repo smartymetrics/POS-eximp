@@ -119,6 +119,7 @@ CREATE TABLE IF NOT EXISTS invoices (
     passport_photo_url TEXT,
     purchase_purpose VARCHAR(100),
     source VARCHAR(50) DEFAULT 'manual', -- manual / google_form
+    custom_contract_html TEXT, -- Lawyer-edited contract body HTML (overrides template if set)
 
     created_by UUID REFERENCES admins(id),
     created_at TIMESTAMPTZ DEFAULT NOW(),

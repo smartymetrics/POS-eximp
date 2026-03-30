@@ -406,3 +406,6 @@ class WitnessRemovalRequest(BaseModel):
 
 class ExtendSigningLink(BaseModel):
     days: int = 7
+
+class CustomContractHTMLUpdate(BaseModel):
+    html_content: str
