@@ -4,6 +4,7 @@ import base64
 from pdf_service import generate_invoice_pdf, generate_receipt_pdf, generate_statement_pdf, COMPANY
 from database import get_db
 from utils import sanitize_client_address
+from datetime import datetime
 import logging
 
 # Set up logging
