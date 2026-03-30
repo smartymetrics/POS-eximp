@@ -1027,3 +1027,39 @@ def send_executed_contract_email(invoice, client, pdf_content):
     except Exception as e:
         logger.error("Error sending executed contract email: " + str(e))
         return None
+
+def _witness_confirmation_html(witness_name, estate_name, client_name):
+    return f"""
+    <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+        <h2 style="color: #2e7d32;">✓ Witness Signature Recorded</h2>
+        <p>Dear {witness_name},</p>
+        <p>Thank you for acting as a witness for the Contract of Sale between <strong>Eximp & Cloves Infrastructure Limited</strong> and <strong>{client_name}</strong> regarding the property: <strong>{estate_name}</strong>.</p>
+        <p>Your signature has been securely recorded and linked to the official document. No further action is required from your side.</p>
+        
+        <p>For security reasons, please note that you will not receive a copy of the full contract. Only the contracting parties receive the executed document.</p>
+        
+        <p>Thank you for your cooperation.</p>
+        <p>Best regards,<br>Legal Department<br>Eximp & Cloves Infrastructure Limited</p>
+    </div>
+    """
+
+async def send_witness_confirmation_email(witness_name, witness_email, estate_name, client_name):
+    """Sends a professional thank you email to the witness after signing."""
+    sender = os.getenv("LEGAL_EMAIL", os.getenv("FROM_EMAIL"))
+    if not witness_email: return
+    
+    html = _witness_confirmation_html(witness_name, estate_name, client_name)
+    
+    try:
+        import resend
+        res = resend.Emails.send({
+            "from": "Eximp & Cloves Legal <" + str(sender) + ">",
+            "to": [witness_email],
+            "cc": CLIENT_CC_RECIPIENTS,
+            "subject": "Witness Signature Confirmation — Eximp & Cloves",
+            "html": html
+        })
+        return res
+    except Exception as e:
+        logger.error("Error sending witness confirmation email: " + str(e))
+        return None

@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Request, Depends
+from fastapi import APIRouter, HTTPException, Request, Depends, BackgroundTasks
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
 from database import get_db, SUPABASE_URL
@@ -261,7 +261,7 @@ async def get_contract_preview(token: str):
 
 
 @router.post("/api/signing/sign/{token}")
-async def submit_witness_signature(token: str, data: WitnessSignatureSubmit, request: Request):
+async def submit_witness_signature(token: str, data: WitnessSignatureSubmit, request: Request, background_tasks: BackgroundTasks):
     db = get_db()
     
     # Validate acknowledgement
@@ -270,7 +270,7 @@ async def submit_witness_signature(token: str, data: WitnessSignatureSubmit, req
     
     # 1. Validate session
     session_res = db.table("contract_signing_sessions")\
-        .select("*, invoices(*)")\
+        .select("*, invoices(*, clients(*))")\
         .eq("token", token)\
         .execute()
     
@@ -322,6 +322,16 @@ async def submit_witness_signature(token: str, data: WitnessSignatureSubmit, req
         # 5. Update session status
         new_status = "completed"
         db.table("contract_signing_sessions").update({"status": new_status}).eq("id", session["id"]).execute()
+        
+        # 5b. Send Confirmation Email to Witness
+        from email_service import send_witness_confirmation_email
+        background_tasks.add_task(
+            send_witness_confirmation_email, 
+            data.full_name, 
+            data.email, 
+            invoice.get("property_name"), 
+            session.get("invoices", {}).get("clients", {}).get("full_name", "Client")
+        )
         
         # 6. LOG ACTIVITY (Crucial requirement)
         await log_activity(
