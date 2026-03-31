@@ -320,6 +320,10 @@ class ReportScheduleCreate(BaseModel):
     frequency: str  # "daily", "weekly", "monthly"
     recipients: list[EmailStr]
     format: str = "pdf"
+    day_of_week: Optional[int] = 1 # 1 (Mon) to 7 (Sun)
+    day_of_month: Optional[int] = 1 # 1 to 31
+    hour: Optional[int] = 8 # 0 to 23
+    minute: Optional[int] = 0 # 0 to 59
 
 class ReportEmailRequest(BaseModel):
     report_type: str

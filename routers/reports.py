@@ -93,7 +93,7 @@ async def get_report_schedules(admin: dict = Depends(get_current_admin)):
 async def create_schedule(schedule: ReportScheduleCreate, admin: dict = Depends(get_current_admin)):
     try:
         data = schedule.dict()
-        data["created_by"] = admin["id"]
+        data["created_by"] = admin.get("sub")
         res = supabase.table("report_schedules").insert(data).execute()
         return res.data[0]
     except Exception as e:

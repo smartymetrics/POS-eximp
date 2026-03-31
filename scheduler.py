@@ -46,7 +46,11 @@ async def run_scheduled_report(schedule_id: str):
         elif freq == "weekly":
             start_date = end_date - timedelta(days=7)
         else:  # monthly
-            start_date = end_date - timedelta(days=30)
+            # Calculate the first day and last day of the previous month
+            first_day_current_month = end_date.replace(day=1)
+            last_day_prev_month = first_day_current_month - timedelta(days=1)
+            start_date = last_day_prev_month.replace(day=1)
+            end_date = last_day_prev_month
 
         start_str = start_date.strftime("%Y-%m-%d")
         end_str = end_date.strftime("%Y-%m-%d")
@@ -152,19 +156,23 @@ def _register_schedule_job(schedule: dict):
     schedule_id = schedule["id"]
     freq = schedule.get("frequency", "weekly")
     job_id = f"report_{schedule_id}"
-
-    # Default time: 08:00
-    hour = 8
-    minute = 0
+    # Use custom scheduling if provided, else use defaults
+    hour = schedule.get("hour", 8)
+    minute = schedule.get("minute", 0)
+    
+    # Map UI day_of_week (1=Mon, 7=Sun) to APScheduler labels
+    dow_map = {1: "mon", 2: "tue", 3: "wed", 4: "thu", 5: "fri", 6: "sat", 7: "sun"}
+    dow_label = dow_map.get(schedule.get("day_of_week", 1), "mon")
+    dom = schedule.get("day_of_month", 1)
 
     if freq == "daily":
         trigger = CronTrigger(hour=hour, minute=minute)
     elif freq == "weekly":
-        trigger = CronTrigger(day_of_week="mon", hour=hour, minute=minute)
+        trigger = CronTrigger(day_of_week=dow_label, hour=hour, minute=minute)
     elif freq == "monthly":
-        trigger = CronTrigger(day=1, hour=hour, minute=minute)
+        trigger = CronTrigger(day=dom, hour=hour, minute=minute)
     else:
-        trigger = CronTrigger(day_of_week="mon", hour=hour, minute=minute)
+        trigger = CronTrigger(day_of_week=dow_label, hour=hour, minute=minute)
 
     try:
         scheduler.add_job(

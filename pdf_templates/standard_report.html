@@ -1,0 +1,119 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @page {
+    size: a4 landscape;
+    margin: 1.5cm;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Helvetica', Arial, sans-serif; color: #1A1A1A; font-size: 9pt; line-height: 1.4; }
+  
+  .header-table { width: 100%; border-bottom: 3px solid #F5A623; padding-bottom: 15px; margin-bottom: 25px; }
+  .logo-cell { vertical-align: middle; text-align: left; }
+  .company-cell { vertical-align: middle; text-align: right; font-size: 8pt; color: #555; line-height: 1.5; }
+  .company-name { font-size: 14pt; font-weight: 800; color: #1A1A1A; }
+
+  .title-table { width: 100%; margin-bottom: 20px; }
+  .title-table h1 { font-size: 18pt; font-weight: 800; color: #1A1A1A; margin: 0; }
+  .period-cell { text-align: right; font-size: 8pt; color: #888; vertical-align: bottom; }
+
+  .report-table { width: 100%; border-collapse: collapse; margin-top: 10px; table-layout: auto; }
+  .report-table th { background: #1A1A1A; color: #F5A623; padding: 10px 8px; text-align: left; font-size: 8pt; text-transform: uppercase; border-bottom: 2px solid #F5A623; }
+  .report-table td { padding: 8px; border-bottom: 1px solid #eee; font-size: 8pt; vertical-align: middle; word-wrap: break-word; }
+  .report-table tr:nth-child(even) td { background-color: #fafafa; }
+  
+  .text-right { text-align: right; }
+  .badge { font-size: 7pt; padding: 2px 6px; border-radius: 3px; font-weight: 700; text-transform: uppercase; color: #fff; }
+  .badge-overdue { background: #E74C3C; }
+  .badge-paid { background: #27AE60; }
+  .badge-partial { background: #F5A623; }
+
+  .footer { border-top: 1px solid #eee; padding-top: 10px; margin-top: 30px; font-size: 8pt; color: #888; width: 100%; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <table class="header-table" border="0" cellspacing="0" cellpadding="0">
+    <tr>
+      <td class="logo-cell">
+        {% if company.logo_b64 %}
+        <img src="{{ company.logo_b64 }}" alt="Logo" style="max-height: 45px;">
+        {% else %}
+        <div class="company-name">Eximp &amp; Cloves</div>
+        {% endif %}
+      </td>
+      <td class="company-cell">
+        <div class="company-name">{{ company.name }}</div>
+        RC {{ company.rc }} | {{ company.website }}<br>
+        {{ company.address }}<br>
+        {{ company.phone }}
+      </td>
+    </tr>
+  </table>
+
+  <!-- Title -->
+  <table class="title-table" border="0" cellspacing="0" cellpadding="0">
+    <tr>
+      <td><h1>{{ title }}</h1></td>
+      <td class="period-cell">
+        Generated: {{ generated_at }}
+      </td>
+    </tr>
+  </table>
+
+  <!-- Data Table -->
+  <table class="report-table">
+    <thead>
+      <tr>
+        {% if items %}
+          {% for key in items[0].keys() %}
+            <th>{{ key }}</th>
+          {% endfor %}
+        {% else %}
+          <th>No Data</th>
+        {% endif %}
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in items %}
+      <tr>
+        {% for value in row.values() %}
+          <td>
+            {% if value is string and value|lower == 'overdue' %}
+              <span class="badge badge-overdue">OVERDUE</span>
+            {% elif value is string and value|lower == 'paid' %}
+              <span class="badge badge-paid">PAID</span>
+            {% elif value is string and value|lower == 'partial' %}
+              <span class="badge badge-partial">PARTIAL</span>
+            {% else %}
+              {{ value | string | replace('\n', '<br>') | safe }}
+            {% endif %}
+          </td>
+        {% endfor %}
+      </tr>
+      {% endfor %}
+      {% if not items %}
+      <tr>
+        <td colspan="100" style="text-align: center; padding: 20px;">No records found matching the criteria.</td>
+      </tr>
+      {% endif %}
+    </tbody>
+  </table>
+
+  <!-- Footer -->
+  <div class="footer">
+    <table width="100%">
+      <tr>
+        <td>{{ company.name }} - Confidential System Report</td>
+        <td align="right">Generated on {{ generated_at }}</td>
+      </tr>
+    </table>
+  </div>
+
+</div>
+</body>
+</html>

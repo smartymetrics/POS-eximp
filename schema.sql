@@ -350,6 +350,7 @@ CREATE TABLE IF NOT EXISTS report_schedules (
     last_run TIMESTAMPTZ,
     next_run TIMESTAMPTZ,
     is_active BOOLEAN DEFAULT true,
+    created_by UUID REFERENCES admins(id),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
 

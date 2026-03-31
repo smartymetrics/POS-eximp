@@ -27,8 +27,8 @@ class ReportService:
             data = res.data or []
             rows = []
             for i in data:
-                amt = float(i.get("amount", 0))
-                paid = float(i.get("amount_paid", 0))
+                amt = float(i.get("amount") or 0)
+                paid = float(i.get("amount_paid") or 0)
                 rows.append({
                     "Invoice #": i.get("invoice_number", ""),
                     "Date": i.get("invoice_date", ""),
@@ -41,8 +41,8 @@ class ReportService:
                     "Status": i.get("status", "").capitalize()
                 })
             stats = {
-                "total_invoiced": sum(float(i.get("amount", 0)) for i in data),
-                "total_collected": sum(float(i.get("amount_paid", 0)) for i in data),
+                "total_invoiced": sum(float(i.get("amount") or 0) for i in data),
+                "total_collected": sum(float(i.get("amount_paid") or 0) for i in data),
                 "count": len(data)
             }
             return {"items": rows, "stats": stats, "type": "Sales Summary"}
@@ -55,8 +55,8 @@ class ReportService:
             today = datetime.now().date()
             rows = []
             for inv in data:
-                amount = float(inv.get("amount", 0))
-                paid = float(inv.get("amount_paid", 0))
+                amount = float(inv.get("amount") or 0)
+                paid = float(inv.get("amount_paid") or 0)
                 balance = amount - paid
                 if balance <= 0: continue
                 
@@ -176,63 +176,77 @@ class ReportService:
                     "Client": c.get("clients", {}).get("full_name", "") if c.get("clients") else "",
                     "Invoice": c.get("invoices", {}).get("invoice_number", "") if c.get("invoices") else "",
                     "Estate": c.get("estate_name", ""),
-                    "Deposit": f"NGN {float(c.get('payment_amount', 0)):,.2f}",
-                    "Rate": f"{float(c.get('commission_rate', 0))}%",
-                    "Earning": f"NGN {float(c.get('final_amount', 0)):,.2f}",
+                    "Deposit": f"NGN {float(c.get('payment_amount') or 0):,.2f}",
+                    "Rate": f"{float(c.get('commission_rate') or 0)}%",
+                    "Earning": f"NGN {float(c.get('final_amount') or 0):,.2f}",
                     "Status": "Paid" if c.get("is_paid") else "Unpaid"
                 })
             return {"items": rows, "stats": {"count": len(rows)}, "type": "Commission Earned Report"}
+
+        elif report_type == "inventory_report":
+            res = supabase.table("properties").select("name, location, description, plot_size_sqm, total_price, is_active").eq("is_archived", False).order("name").execute()
+            data = res.data or []
+            rows = []
+            for p in data:
+                rows.append({
+                    "Estate Name": p.get("name", "—"),
+                    "Location": p.get("location", "—"),
+                    "Description": p.get("description", "—"),
+                    "Size": f"{p.get('plot_size_sqm', 0)} SQM",
+                    "Price": f"NGN {float(p.get('total_price') or 0):,.2f}",
+                    "Status": "Active" if p.get("is_active") else "Inactive"
+                })
+            stats = {
+                "total_estates": len(set(p.get("name") for p in data if p.get("name"))),
+                "active": sum(1 for p in data if p.get("is_active")),
+                "inactive": sum(1 for p in data if not p.get("is_active"))
+            }
+            return {"items": rows, "stats": stats, "type": "Property Inventory Status"}
 
         return {"items": [], "stats": {}, "type": "Report"}
 
     @staticmethod
     def generate_pdf(data: Dict[str, Any], title: str) -> io.BytesIO:
-        """Constructs a professional PDF document."""
-        items = data.get("items", [])
-        logo_html = f'<img src="{COMPANY.get("logo_b64", "")}" style="max-height: 48px; display: block; margin-bottom: 8px;">' if COMPANY.get("logo_b64") else 'EXIMP & CLOVES'
-        html = f"""
-        <html>
-        <head>
-            <meta charset="UTF-8">
-            <style>
-                @page {{ size: a4 landscape; margin: 1cm; }}
-                body {{ font-family: Helvetica, Arial, sans-serif; color: #1a1a1a; }}
-                .header {{ border-bottom: 3px solid #F5A623; padding-bottom: 15px; margin-bottom: 25px; }}
-                .logo {{ font-size: 24px; font-weight: bold; color: #1A1A1A; }}
-                .title {{ font-size: 20px; font-weight: bold; color: #555555; margin-top: 8px; }}
-                table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
-                th {{ background: #1a1a1a; color: #F5A623; text-align: left; padding: 10px; font-size: 11px; text-transform: uppercase; }}
-                td {{ padding: 10px; border-bottom: 1px solid #eeeeee; font-size: 10.5px; vertical-align: middle; }}
-                tr:nth-child(even) td {{ background-color: #fafafa; }}
-                .footer {{ position: fixed; bottom: 0; width: 100%; text-align: center; font-size: 9px; color: #888888; border-top: 1px solid #eeeeee; padding-top: 5px; }}
-            </style>
-        </head>
-        <body>
-            <div class="header">
-                <div class="logo">{logo_html}</div>
-                <div class="title">{title}</div>
-                <div style="font-size: 10px; color: #747d8c;">Generated on {datetime.now().strftime('%Y-%m-%d %H:%M')}</div>
-            </div>
-            <table>
-                <thead>
-                    <tr>
-                        {"".join([f"<th>{str(k).upper()}</th>" for k in items[0].keys()]) if items else "<th>NO DATA</th>"}
-                    </tr>
-                </thead>
-                <tbody>
-                    {"".join([
-                        (f'<tr style="background-color: #fff5f5; color: #c53030; font-weight: bold;">' if str(row.get("Status", "")).lower() == "overdue" else "<tr>") + 
-                        "".join([f"<td>{str(v).replace(chr(10), '<br>')}</td>" for v in row.values()]) + "</tr>"
-                        for row in items
-                    ]) if items else "<tr><td>No records found.</td></tr>"}
-                </tbody>
-            </table>
-            <div class="footer">Eximp & Cloves Infrastructure Limited - Confidential Report</div>
-        </body>
-        </html>
-        """
-        result = io.BytesIO()
-        pisa.CreatePDF(html, dest=result)
+        """Constructs a professional PDF document using WeasyPrint for high-quality rendering."""
+        from pdf_service import get_company_context, env, format_currency
+        from weasyprint import HTML
+        
+        # Mapping report types to templates
+        report_type = data.get("type", "")
+        template_map = {
+            "Property Inventory Status": "inventory_report.html",
+            "Sales Summary": "standard_report.html",
+            "Outstanding Payments": "standard_report.html",
+            "Sales Rep Performance": "standard_report.html",
+            "Client Register & KYC Report": "standard_report.html",
+            "Commission Earned Report": "standard_report.html"
+        }
+        
+        template_name = template_map.get(report_type, "standard_report.html")
+
+        try:
+            template = env.get_template(template_name)
+        except Exception:
+            # Absolute fallback
+            template = env.get_template("standard_report.html")
+
+        # Get the professional company branding (logo, stamp, seal)
+        comp_ctx = get_company_context()
+        
+        # Render the professional HTML
+        html_content = template.render(
+            company=comp_ctx,
+            title=title,
+            items=data.get("items", []),
+            stats=data.get("stats", {}),
+            format_currency=format_currency,
+            generated_at=datetime.now().strftime("%d %b %Y %H:%M")
+        )
+        
+        # Generate the PDF using the modern WeasyPrint engine
+        pdf_bytes = HTML(string=html_content).write_pdf()
+        
+        result = io.BytesIO(pdf_bytes)
         result.seek(0)
         return result
 

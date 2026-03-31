@@ -1,0 +1,163 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<style>
+  @page {
+    size: a4 landscape;
+    margin: 1.5cm;
+  }
+  * { margin: 0; padding: 0; box-sizing: border-box; }
+  body { font-family: 'Helvetica', Arial, sans-serif; color: #1A1A1A; font-size: 10pt; line-height: 1.4; }
+  
+  .header-table { width: 100%; border-bottom: 3px solid #F5A623; padding-bottom: 15px; margin-bottom: 25px; }
+  .logo-cell { vertical-align: middle; text-align: left; }
+  .company-cell { vertical-align: middle; text-align: right; font-size: 8pt; color: #555; line-height: 1.5; }
+  .company-name { font-size: 14pt; font-weight: 800; color: #1A1A1A; }
+
+  .title-table { width: 100%; margin-bottom: 20px; }
+  .title-table h1 { font-size: 20pt; font-weight: 800; color: #1A1A1A; margin: 0; }
+  .period-cell { text-align: right; font-size: 8pt; color: #888; vertical-align: bottom; }
+
+  .summary-table { width: 100%; margin-bottom: 25px; border-spacing: 12px 0; margin-left: -12px; }
+  .summary-card { padding: 10px; text-align: center; border-radius: 4px; border: 1px solid #eee; }
+  .card-label { font-size: 7pt; color: #888; text-transform: uppercase; margin-bottom: 4px; letter-spacing: 1px; }
+  .card-value { font-size: 11pt; font-weight: 800; }
+  
+  .card-total { background: #f9f9f9; }
+  .card-active { background: #f0faf5; border-color: #27ae60; color: #27ae60; }
+  .card-inactive { background: #fff5f5; border-color: #e74c3c; color: #e74c3c; }
+  .card-sqm { background: #1A1A1A; color: #F5A623; border: none; }
+
+  .report-table { width: 100%; border-collapse: collapse; margin-bottom: 30px; table-layout: auto; }
+  .report-table th { background: #1A1A1A; color: #F5A623; padding: 10px 8px; text-align: left; font-size: 8.5pt; text-transform: uppercase; border-bottom: 2px solid #F5A623; }
+  .report-table td { padding: 9px 8px; border-bottom: 1px solid #eee; font-size: 8.5pt; vertical-align: middle; word-wrap: break-word; }
+  .report-table tr:nth-child(even) td { background-color: #fafafa; }
+  
+  .text-right { text-align: right; }
+  .badge { font-size: 7pt; padding: 2px 6px; border-radius: 3px; font-weight: 700; text-transform: uppercase; color: #fff; }
+  .badge-active { background: #27AE60; }
+  .badge-inactive { background: #E74C3C; }
+
+  .footer { border-top: 1px solid #eee; padding-top: 10px; margin-top: 30px; font-size: 8pt; color: #888; width: 100%; }
+  .footer .seal-stamp { text-align: right; vertical-align: bottom; }
+</style>
+</head>
+<body>
+<div class="page">
+
+  <!-- Header -->
+  <table class="header-table" border="0" cellspacing="0" cellpadding="0">
+    <tr>
+      <td class="logo-cell">
+        {% if company.logo_b64 %}
+        <img src="{{ company.logo_b64 }}" alt="Logo" style="max-height: 45px;">
+        {% else %}
+        <div class="company-name">Eximp &amp; Cloves</div>
+        {% endif %}
+      </td>
+      <td class="company-cell">
+        <div class="company-name">{{ company.name }}</div>
+        RC {{ company.rc }} | {{ company.website }}<br>
+        {{ company.address }}<br>
+        {{ company.phone }}
+      </td>
+    </tr>
+  </table>
+
+  <!-- Title -->
+  <table class="title-table" border="0" cellspacing="0" cellpadding="0">
+    <tr>
+      <td><h1>{{ title }}</h1></td>
+      <td class="period-cell">
+        Generated: {{ generated_at }}<br>
+        Report Type: Property Inventory
+      </td>
+    </tr>
+  </table>
+
+  <!-- Summary Cards -->
+  <table class="summary-table" border="0" cellspacing="0" cellpadding="0">
+    <tr>
+      <td width="33.33%">
+        <div class="summary-card card-total">
+          <div class="card-label">Total Unique Estates</div>
+          <div class="card-value">{{ stats.total_estates }}</div>
+        </div>
+      </td>
+      <td width="33.33%">
+        <div class="summary-card card-active">
+          <div class="card-label">Active Listings</div>
+          <div class="card-value">{{ stats.active }}</div>
+        </div>
+      </td>
+      <td width="33.33%">
+        <div class="summary-card card-inactive">
+          <div class="card-label">Inactive / Sold</div>
+          <div class="card-value">{{ stats.inactive }}</div>
+        </div>
+      </td>
+    </tr>
+  </table>
+
+  <!-- Data Table -->
+  <table class="report-table">
+    <thead>
+      <tr>
+        <th width="15%">Estate Name</th>
+        <th width="20%">Location</th>
+        <th width="35%">Description</th>
+        <th width="10%">Size</th>
+        <th width="12%">Price</th>
+        <th width="8%">Status</th>
+      </tr>
+    </thead>
+    <tbody>
+      {% for row in items %}
+      <tr>
+        <td><strong>{{ row['Estate Name'] }}</strong></td>
+        <td>{{ row['Location'] }}</td>
+        <td>{{ row['Description'] }}</td>
+        <td>{{ row['Size'] }}</td>
+        <td>{{ row.Price }}</td>
+        <td>
+          <span class="badge badge-{{ row.Status | lower }}">{{ row.Status }}</span>
+        </td>
+      </tr>
+      {% endfor %}
+    </tbody>
+  </table>
+
+  <!-- Signature/Stamp Section -->
+  <table width="100%" style="margin-top: 20px;">
+    <tr>
+      <td width="60%" style="vertical-align: top;">
+        <div style="font-size: 8pt; color: #888; border-left: 3px solid #F5A623; padding-left: 10px;">
+          This report is a professional inventory record of Eximp &amp; Cloves Infrastructure Limited.<br>
+          Verification of all details should be done through the official property portal.
+        </div>
+      </td>
+      <td width="40%" class="seal-stamp">
+        {% if company.seal_b64 %}
+        <img src="{{ company.seal_b64 }}" style="max-height: 60px; margin-right: 15px;">
+        {% endif %}
+        {% if company.stamp_b64 %}
+        <img src="{{ company.stamp_b64 }}" style="max-height: 60px;">
+        {% endif %}
+      </td>
+    </tr>
+  </table>
+
+  <!-- Footer -->
+  <div class="footer">
+    <table width="100%">
+      <tr>
+        <td>Eximp &amp; Cloves Infrastructure Limited - Confidential Inventory Report</td>
+        <td align="right">Digital Page 1 of 1</td>
+      </tr>
+    </table>
+  </div>
+
+</div>
+</body>
+</html>
