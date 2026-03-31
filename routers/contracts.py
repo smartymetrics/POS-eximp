@@ -775,13 +775,42 @@ async def get_contract_html(invoice_id: str, current_admin=Depends(verify_token)
         
     invoice = inv_res.data[0]
     
-    if invoice.get("custom_contract_html"):
-        return {"html_content": invoice["custom_contract_html"], "is_custom": True}
-        
-    from pdf_service import get_default_contract_html_fragment
-    default_html = get_default_contract_html_fragment(invoice, invoice["clients"])
+    from pdf_service import get_default_contract_html_fragment, get_default_cover_html_fragment, get_default_execution_html_fragment
     
-    return {"html_content": default_html, "is_custom": False}
+    # Body
+    if invoice.get("custom_contract_html"):
+        html_content = invoice["custom_contract_html"]
+        is_custom = True
+    else:
+        html_content = get_default_contract_html_fragment(invoice, invoice["clients"])
+        is_custom = False
+
+    # Cover
+    if invoice.get("custom_cover_html"):
+        cover_html = invoice["custom_cover_html"]
+        is_custom_cover = True
+    else:
+        cover_html = get_default_cover_html_fragment(invoice, invoice["clients"])
+        is_custom_cover = False
+
+    # Execution
+    if invoice.get("custom_execution_html"):
+        execution_html = invoice["custom_execution_html"]
+        is_custom_execution = True
+    else:
+        execution_html = get_default_execution_html_fragment(invoice, invoice["clients"])
+        is_custom_execution = False
+        
+    return {
+        "html_content": html_content, 
+        "is_custom": is_custom,
+        "cover_html": cover_html,
+        "is_custom_cover": is_custom_cover,
+        "execution_html": execution_html,
+        "is_custom_execution": is_custom_execution,
+        "lawfirm_name": invoice.get("custom_lawfirm_name"),
+        "lawfirm_address": invoice.get("custom_lawfirm_address")
+    }
 
 @router.put("/{invoice_id}/custom-html")
 async def update_contract_html(invoice_id: str, payload: CustomContractHTMLUpdate, current_admin=Depends(verify_token)):
@@ -801,10 +830,20 @@ async def update_contract_html(invoice_id: str, payload: CustomContractHTMLUpdat
         raise HTTPException(status_code=400, detail="Cannot edit contract wording after it has been fully executed")
         
     # 3. Save the custom HTML to Supabase
-    db.table("invoices").update({
+    update_data = {
         "custom_contract_html": payload.html_content,
         "updated_at": datetime.now().isoformat()
-    }).eq("id", invoice_id).execute()
+    }
+    if payload.cover_html is not None:
+        update_data["custom_cover_html"] = payload.cover_html
+    if payload.execution_html is not None:
+        update_data["custom_execution_html"] = payload.execution_html
+    if payload.lawfirm_name is not None:
+        update_data["custom_lawfirm_name"] = payload.lawfirm_name
+    if payload.lawfirm_address is not None:
+        update_data["custom_lawfirm_address"] = payload.lawfirm_address
+
+    db.table("invoices").update(update_data).eq("id", invoice_id).execute()
     
     await log_activity(
         "contract_wording_updated",

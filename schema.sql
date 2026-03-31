@@ -120,6 +120,10 @@ CREATE TABLE IF NOT EXISTS invoices (
     purchase_purpose VARCHAR(100),
     source VARCHAR(50) DEFAULT 'manual', -- manual / google_form
     custom_contract_html TEXT, -- Lawyer-edited contract body HTML (overrides template if set)
+    custom_cover_html TEXT, -- Editable cover page wording HTML (overrides default cover if set)
+    custom_lawfirm_name VARCHAR(255), -- Editable lawyer firm name
+    custom_lawfirm_address TEXT, -- Editable lawyer firm address
+    custom_execution_html TEXT, -- Editable execution page HTML
 
     created_by UUID REFERENCES admins(id),
     created_at TIMESTAMPTZ DEFAULT NOW(),

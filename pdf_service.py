@@ -669,6 +669,20 @@ def render_contract_html(invoice: dict, client: dict, witnesses: list = None, is
     if "amount_in_words" not in invoice_data:
         invoice_data["amount_in_words"] = naira_in_words(invoice_data.get("amount"))
 
+    # Evaluate custom execution HTML if it exists, so Jinja logic for signatures is retained
+    if invoice_data.get("custom_execution_html"):
+        try:
+            exec_tmpl = env.from_string(invoice_data["custom_execution_html"])
+            invoice_data["custom_execution_html_rendered"] = exec_tmpl.render(
+                company=company,
+                invoice=invoice_data,
+                client=client_sanitized,
+                witnesses=witness_list,
+                signatures=signatures
+            )
+        except Exception as e:
+            print("Error rendering custom execution HTML:", e)
+
     return template.render(
         company=company,
         invoice=invoice_data,
@@ -706,4 +720,30 @@ def get_default_contract_html_fragment(invoice: dict, client: dict) -> str:
         format_currency=format_currency,
         format_naira=format_naira,
         generated_at=datetime.now().strftime("%d %B %Y")
-    )
+    )
+
+def get_default_cover_html_fragment(invoice: dict, client: dict) -> str:
+    """
+    Renders just the default cover page fragment for the frontend WYSIWYG editor.
+    """
+    template = env.get_template("cover_middle.html")
+    client_sanitized = sanitize_client_address(client.copy())
+    
+    return template.render(
+        company=COMPANY,
+        invoice=invoice,
+        client=client_sanitized
+    )
+
+def get_default_execution_html_fragment(invoice: dict, client: dict) -> str:
+    """
+    Renders just the default execution page fragment for the frontend WYSIWYG editor.
+    We return the raw file content so Jinja tags aren't wiped out before signatures are added.
+    """
+    import os
+    path = os.path.join("pdf_templates", "execution_body.html")
+    try:
+        with open(path, "r", encoding="utf-8") as f:
+            return f.read()
+    except Exception:
+        return "<p>Execution placeholder</p>"

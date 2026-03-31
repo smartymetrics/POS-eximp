@@ -1,0 +1,24 @@
+                <div class="cover-title">CONTRACT OF SALE</div>
+
+                <div class="cover-label">BETWEEN</div>
+
+                <div class="cover-party">{{ company.name | upper }}</div>
+                <div class="cover-role">(VENDOR)</div>
+
+                <div class="cover-label">AND</div>
+
+                <div class="cover-party">{{ client.full_name | upper }}</div>
+                <div class="cover-role">(PURCHASER)</div>
+
+                <div class="cover-property">
+                    IN RESPECT OF
+                    {% if (invoice.quantity or 1) > 1 %}
+                    <strong>{{ invoice.quantity }} PLOTS OF LAND</strong> MEASURING APPROXIMATELY
+                    <strong>{{ invoice.plot_size_sqm or 300 }} SQUARE METERS EACH</strong>
+                    {% else %}
+                    ALL THAT PARCEL OF LAND MEASURING APPROXIMATELY
+                    <strong>{{ invoice.plot_size_sqm or 300 }} SQUARE METERS</strong>
+                    {% endif %}
+                    LYING, SITUATE AND BEING AT
+                    <strong>{{ (invoice.property_location or 'MOKOLOKI, OFADA - MOWE') | upper }}</strong>.
+                </div>

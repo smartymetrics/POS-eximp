@@ -413,3 +413,7 @@ class ExtendSigningLink(BaseModel):
 
 class CustomContractHTMLUpdate(BaseModel):
     html_content: str
+    cover_html: Optional[str] = None
+    execution_html: Optional[str] = None
+    lawfirm_name: Optional[str] = None
+    lawfirm_address: Optional[str] = None

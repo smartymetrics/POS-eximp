@@ -301,30 +301,11 @@
         </tr>
         <tr>
             <td class="cover-middle">
-                <div class="cover-title">CONTRACT OF SALE</div>
-
-                <div class="cover-label">BETWEEN</div>
-
-                <div class="cover-party">{{ company.name | upper }}</div>
-                <div class="cover-role">(VENDOR)</div>
-
-                <div class="cover-label">AND</div>
-
-                <div class="cover-party">{{ client.full_name | upper }}</div>
-                <div class="cover-role">(PURCHASER)</div>
-
-                <div class="cover-property">
-                    IN RESPECT OF
-                    {% if (invoice.quantity or 1) > 1 %}
-                    <strong>{{ invoice.quantity }} PLOTS OF LAND</strong> MEASURING APPROXIMATELY
-                    <strong>{{ invoice.plot_size_sqm or 300 }} SQUARE METERS EACH</strong>
-                    {% else %}
-                    ALL THAT PARCEL OF LAND MEASURING APPROXIMATELY
-                    <strong>{{ invoice.plot_size_sqm or 300 }} SQUARE METERS</strong>
-                    {% endif %}
-                    LYING, SITUATE AND BEING AT
-                    <strong>{{ (invoice.property_location or 'MOKOLOKI, OFADA - MOWE') | upper }}</strong>.
-                </div>
+                 {% if invoice.custom_cover_html %}
+                     {{ invoice.custom_cover_html | safe }}
+                 {% else %}
+                     {% include "cover_middle.html" %}
+                 {% endif %}
 
             </td>
         </tr>
@@ -344,9 +325,13 @@
                             {% endif %}
                             <div class="prepared-details">
                                 <strong>{{ lawyer_name | upper or 'GODSLOVE S. NNAJI, ESQ.' }}</strong>
-                                <strong>DELAW CHAMBERS</strong>
+                                <strong>{{ (invoice.custom_lawfirm_name if invoice.custom_lawfirm_name else 'DELAW CHAMBERS') | upper }}</strong>
+                                {% if invoice.custom_lawfirm_address %}
+                                {{ invoice.custom_lawfirm_address | replace('\n', '<br>') | safe }}
+                                {% else %}
                                 2<sup>ND</sup> FLOOR, 15 KING GEORGE V. ROAD<br>
                                 IKOYI, LAGOS.
+                                {% endif %}
                             </div>
                         </td>
                     </tr>
@@ -372,61 +357,13 @@
      PAGE 5 — EXECUTION
 ══════════════════════════════════════════════════════════════ -->
     <div style="page-break-before: always;" class="contract-content">
-        <p class="exec-line"><strong>IN WITNESS OF WHICH</strong> the parties have executed this Deed in the manner
-            below the day and year first above written.</p>
-
-        <p class="exec-line"><strong>THE COMMON SEAL OF "{{ company.name | upper }}" HEREIN NAMED THE VENDOR IS HEREBY
-                AFFIXED IN THE PRESENCE OF:</strong></p>
-
-        <div class="seal-row">
-            <div class="seal-col">
-                {% if signatures.director %}
-                <img src="{{ signatures.director }}" class="sig-image" alt="director">
-                {% endif %}
-                <div class="sig-label">DIRECTOR</div>
-            </div>
-            <div class="seal-col">
-                {% if signatures.secretary %}
-                <img src="{{ signatures.secretary }}" class="sig-image" alt="secretary">
-                {% endif %}
-                <div class="sig-label">SECRETARY</div>
-            </div>
-        </div>
-
-        <p class="exec-line"><strong>SIGNED, SEALED AND DELIVERED by the within named PURCHASER:</strong></p>
-
-        <div class="sig-purchaser-block">
-            {% if signatures.purchaser %}
-            <img src="{{ signatures.purchaser }}" class="sig-purchaser-img" alt="purchaser">
-            {% endif %}
-            <p><strong>{{ client.full_name | upper }}</strong></p>
-        </div>
-
-        <p><strong>IN THE PRESENCE OF:</strong></p>
-
-        <div class="witness-block">
-            <div class="witness-row"><strong>Name:</strong> {{ witnesses[0].full_name or 'PENDING' }}</div>
-            <div class="witness-row"><strong>Address:</strong> {{ witnesses[0].address or 'PENDING' }}</div>
-            <div class="witness-row"><strong>Occupation:</strong> {{ witnesses[0].occupation or 'PENDING' }}</div>
-            <div class="witness-row"><strong>Signature:</strong>
-                {% if signatures.witness1 %}
-                <img src="{{ signatures.witness1 }}" style="height:40pt; vertical-align:middle; margin-left:10pt;"
-                    alt="witness 1">
-                {% endif %}
-            </div>
-        </div>
-
-        <div class="witness-block">
-            <div class="witness-row"><strong>Name:</strong> {{ witnesses[1].full_name or 'PENDING' }}</div>
-            <div class="witness-row"><strong>Address:</strong> {{ witnesses[1].address or 'PENDING' }}</div>
-            <div class="witness-row"><strong>Occupation:</strong> {{ witnesses[1].occupation or 'PENDING' }}</div>
-            <div class="witness-row"><strong>Signature:</strong>
-                {% if signatures.witness2 %}
-                <img src="{{ signatures.witness2 }}" style="height:40pt; vertical-align:middle; margin-left:10pt;"
-                    alt="witness 2">
-                {% endif %}
-            </div>
-        </div>
+        {% if invoice.custom_execution_html_rendered %}
+            {{ invoice.custom_execution_html_rendered | safe }}
+        {% elif invoice.custom_execution_html %}
+            {{ invoice.custom_execution_html | safe }}
+        {% else %}
+            {% include "execution_body.html" %}
+        {% endif %}
     </div>
 
 </body>

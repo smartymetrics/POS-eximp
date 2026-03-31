@@ -1,0 +1,55 @@
+        <p class="exec-line"><strong>IN WITNESS OF WHICH</strong> the parties have executed this Deed in the manner
+            below the day and year first above written.</p>
+
+        <p class="exec-line"><strong>THE COMMON SEAL OF "{{ company.name | upper }}" HEREIN NAMED THE VENDOR IS HEREBY
+                AFFIXED IN THE PRESENCE OF:</strong></p>
+
+        <div class="seal-row">
+            <div class="seal-col">
+                {% if signatures.director %}
+                <img src="{{ signatures.director }}" class="sig-image" alt="director">
+                {% endif %}
+                <div class="sig-label">DIRECTOR</div>
+            </div>
+            <div class="seal-col">
+                {% if signatures.secretary %}
+                <img src="{{ signatures.secretary }}" class="sig-image" alt="secretary">
+                {% endif %}
+                <div class="sig-label">SECRETARY</div>
+            </div>
+        </div>
+
+        <p class="exec-line"><strong>SIGNED, SEALED AND DELIVERED by the within named PURCHASER:</strong></p>
+
+        <div class="sig-purchaser-block">
+            {% if signatures.purchaser %}
+            <img src="{{ signatures.purchaser }}" class="sig-purchaser-img" alt="purchaser">
+            {% endif %}
+            <p><strong>{{ client.full_name | upper }}</strong></p>
+        </div>
+
+        <p><strong>IN THE PRESENCE OF:</strong></p>
+
+        <div class="witness-block">
+            <div class="witness-row"><strong>Name:</strong> {{ witnesses[0].full_name or 'PENDING' }}</div>
+            <div class="witness-row"><strong>Address:</strong> {{ witnesses[0].address or 'PENDING' }}</div>
+            <div class="witness-row"><strong>Occupation:</strong> {{ witnesses[0].occupation or 'PENDING' }}</div>
+            <div class="witness-row"><strong>Signature:</strong>
+                {% if signatures.witness1 %}
+                <img src="{{ signatures.witness1 }}" style="height:40pt; vertical-align:middle; margin-left:10pt;"
+                    alt="witness 1">
+                {% endif %}
+            </div>
+        </div>
+
+        <div class="witness-block">
+            <div class="witness-row"><strong>Name:</strong> {{ witnesses[1].full_name or 'PENDING' }}</div>
+            <div class="witness-row"><strong>Address:</strong> {{ witnesses[1].address or 'PENDING' }}</div>
+            <div class="witness-row"><strong>Occupation:</strong> {{ witnesses[1].occupation or 'PENDING' }}</div>
+            <div class="witness-row"><strong>Signature:</strong>
+                {% if signatures.witness2 %}
+                <img src="{{ signatures.witness2 }}" style="height:40pt; vertical-align:middle; margin-left:10pt;"
+                    alt="witness 2">
+                {% endif %}
+            </div>
+        </div>
