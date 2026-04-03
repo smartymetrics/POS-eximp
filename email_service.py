@@ -1,6 +1,7 @@
 import resend
 import os
 import base64
+import time
 from pdf_service import generate_invoice_pdf, generate_receipt_pdf, generate_statement_pdf, COMPANY
 from database import get_db
 from utils import sanitize_client_address
@@ -1063,3 +1064,133 @@ async def send_witness_confirmation_email(witness_name, witness_email, estate_na
     except Exception as e:
         logger.error("Error sending witness confirmation email: " + str(e))
         return None
+
+def _marketing_wrapper(content_html: str, client_name: str) -> str:
+    """Wraps campaign content in a professional, luxury Real Estate editorial layout."""
+    # Placeholder for personalized greeting
+    body_content = content_html.replace("{CLIENT_NAME}", client_name)
+    
+    # Social Media Links
+    social_links = {
+        "facebook": "https://facebook.com/eximp.cloves",
+        "instagram": "https://instagram.com/eximp.cloves",
+        "tiktok": "https://tiktok.com/@eximp.cloves",
+        "x": "https://x.com/eximp_cloves",
+        "linkedin": "https://www.linkedin.com/company/eximp-cloves"
+    }
+
+    # Social Icons (using reliable CDN images for email compatibility)
+    icons = {
+        "facebook": "https://img.icons8.com/ios-filled/50/ffffff/facebook-new.png",
+        "instagram": "https://img.icons8.com/ios-filled/50/ffffff/instagram-new.png",
+        "tiktok": "https://img.icons8.com/ios-filled/50/ffffff/tiktok.png",
+        "x": "https://img.icons8.com/ios-filled/50/ffffff/twitterx--v2.png",
+        "linkedin": "https://img.icons8.com/ios-filled/50/ffffff/linkedin.png"
+    }
+
+    social_html = "".join([
+        f'<a href="{url}" style="margin: 0 10px; display: inline-block;"><img src="{icons[name]}" width="24" height="24" alt="{name}" style="display: block; border: 0;"></a>'
+        for name, url in social_links.items()
+    ])
+
+    return f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <link href="https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500&display=swap" rel="stylesheet">
+        <style>
+            body {{ margin: 0; padding: 0; background-color: #f4f4f4; font-family: 'DM Sans', Arial, sans-serif; -webkit-font-smoothing: antialiased; }}
+            .container {{ max-width: 600px; margin: 40px auto; background-color: #ffffff; border: 1px solid #e0e0e0; border-radius: 4px; overflow: hidden; }}
+            .header {{ background-color: #1A1A1A; padding: 40px 20px; text-align: center; border-bottom: 4px solid #C47D0A; }}
+            .logo {{ height: 50px; width: auto; }}
+            .hero-strip {{ background-color: #C47D0A; height: 10px; }}
+            .content {{ padding: 60px 50px; color: #333333; line-height: 1.8; font-size: 16px; background-image: linear-gradient(to bottom, #ffffff, #fafafa); }}
+            .footer {{ background-color: #1A1A1A; padding: 60px 40px; text-align: center; color: #bbbbbb; font-size: 13px; border-top: 4px solid #C47D0A; }}
+            h1, h2, h3 {{ font-family: 'Playfair Display', serif; color: #1A1A1A; line-height: 1.2; font-weight: 700; margin-bottom: 24px; }}
+            .cta-button {{ display: inline-block; padding: 20px 40px; background-color: #C47D0A; color: #ffffff !important; text-decoration: none; border-radius: 2px; font-weight: 700; margin-top: 20px; text-transform: uppercase; letter-spacing: 2px; font-size: 14px; box-shadow: 0 4px 15px rgba(196, 125, 10, 0.3); }}
+            .divider {{ height: 1px; background-color: #dddddd; margin: 40px 0; }}
+            .social-bar {{ margin-top: 30px; padding: 20px 0; border-top: 1px solid #333333; }}
+            .address {{ color: #888888; margin-top: 20px; font-style: normal; }}
+            a {{ color: #C47D0A; text-decoration: none; }}
+        </style>
+    </head>
+    <body>
+        <div class="container">
+            <div class="header">
+                <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" class="logo">
+            </div>
+            <div class="hero-strip"></div>
+            <div class="content">
+                {body_content}
+            </div>
+            <div class="footer">
+                <p style="color: #C47D0A; font-weight: 700; text-transform: uppercase; letter-spacing: 3px; font-size: 14px; margin-bottom: 15px;">Experience Luxury</p>
+                <p style="font-size: 18px; color: #ffffff; margin-bottom: 20px; font-family: 'Playfair Display', serif;">Eximp & Cloves Infrastructure Limited</p>
+                <div class="address">
+                    57B, Isaac John Street, Yaba, Lagos<br>
+                    <a href="tel:+2349126864383" style="color: #ffffff;">+234 912 686 4383</a> | <a href="https://www.eximps-cloves.com" style="color: #C47D0A;">www.eximps-cloves.com</a>
+                </div>
+                <div class="social-bar">
+                    {social_html}
+                </div>
+                <div class="divider" style="background: #333; margin: 30px 0;"></div>
+                <p style="font-size: 11px; color: #777; line-height: 1.6;">
+                    RC 8311800. All rights reserved.<br>
+                    You are receiving this email because you expressed interest in our luxury properties.<br>
+                    <a href="#" style="color: #555;">Unsubscribe from our marketing list</a>
+                </p>
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+
+async def broadcast_campaign_email(campaign: dict, recipients: list, admin_id: str):
+    """Background task to send campaign emails to multiple recipients."""
+    from database import get_db
+    db = get_db()
+    campaign_id = campaign["id"]
+    
+    delivered = 0
+    total = len(recipients)
+    
+    for client in recipients:
+        email_addr = client.get("email")
+        if not email_addr: continue
+        
+        try:
+            # We wrap the content for each recipient (enables future per-recipient personalization)
+            html = _marketing_wrapper(campaign["content_html"], client.get("full_name", "Valued Client"))
+            
+            resend.Emails.send({
+                "from": f"Eximp & Cloves <{FROM_EMAIL}>",
+                "to": [email_addr],
+                "subject": campaign["subject"],
+                "html": html,
+                "reply_to": "sales@eximps-cloves.com"
+            })
+            delivered += 1
+            
+            # Update campaign progress every 5 emails (to prevent too many DB writes)
+            if delivered % 5 == 0:
+                db.table("marketing_campaigns").update({
+                    "delivered_count": delivered,
+                    "updated_at": datetime.now().isoformat()
+                }).eq("id", campaign_id).execute()
+                
+            # Optional: Add a small delay to respect rate limits if needed
+            # time.sleep(0.1) 
+            
+        except Exception as e:
+            logger.error(f"Error sending campaign {campaign_id} to {email_addr}: {e}")
+
+    # Final Update
+    db.table("marketing_campaigns").update({
+        "status": "sent",
+        "delivered_count": delivered,
+        "sent_at": datetime.now().isoformat()
+    }).eq("id", campaign_id).execute()
+
+    logger.info(f"Campaign {campaign_id} broadcast finished. Delivered: {delivered}/{total}")

@@ -1,0 +1,586 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marketing Dashboard | Eximp & Cloves</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #f9fafb; }
+        .brand-gold { color: #C47D0A; }
+        .bg-brand-gold { background-color: #C47D0A; }
+        .bg-brand-dark { background-color: #1A1A1A; }
+        .sidebar { width: 260px; height: 100vh; position: fixed; left: 0; top: 0; z-index: 50; }
+        .main-content { margin-left: 260px; padding: 40px; }
+        .card { background: white; border-radius: 12px; box-shadow: 0 4px 6px -1px rgba(0, 0, 0, 0.1); padding: 24px; }
+        .nav-link { display: flex; align-items: center; padding: 12px 16px; border-radius: 8px; color: #9ca3af; transition: 0.2s; cursor: pointer; }
+        .nav-link.active { background: #C47D0A; color: white; }
+        .nav-link:not(.active):hover { background: #374151; color: white; }
+    </style>
+</head>
+<body>
+
+    <!-- Sidebar -->
+    <div class="sidebar bg-brand-dark text-white p-6">
+        <div class="mb-10 flex items-center gap-3">
+            <div class="w-8 h-8 bg-brand-gold rounded-full flex items-center justify-center font-bold">E</div>
+            <span class="text-xl font-bold tracking-tight">ECOMS <span class="text-xs text-gray-500 font-normal">Marketing</span></span>
+        </div>
+        
+        <nav class="space-y-2">
+            <div onclick="showTab('overview')" id="nav-overview" class="nav-link active">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2V6zM14 6a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2V6zM4 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2H6a2 2 0 01-2-2v-2zM14 16a2 2 0 012-2h2a2 2 0 012 2v2a2 2 0 01-2 2h-2a2 2 0 01-2-2v-2z"></path></svg>
+                Overview
+            </div>
+            <div onclick="showTab('campaigns')" id="nav-campaigns" class="nav-link">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 8l7.89 5.26a2 2 0 002.22 0L21 8M5 19h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v10a2 2 0 002 2z"></path></svg>
+                Campaigns
+            </div>
+            <div onclick="showTab('contacts')" id="nav-contacts" class="nav-link">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 01-12 0v1z"></path></svg>
+                Contacts
+            </div>
+            <div onclick="showTab('segments')" id="nav-segments" class="nav-link">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 11H5m14 0a2 2 0 012 2v6a2 2 0 01-2 2H5a2 2 0 01-2-2v-6a2 2 0 012-2m14 0V9a2 2 0 00-2-2M5 11V9a2 2 0 012-2m0 0V5a2 2 0 012-2h6a2 2 0 012 2v2M7 7h10"></path></svg>
+                Segments
+            </div>
+            <div onclick="showTab('calendar')" id="nav-calendar" class="nav-link">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M8 7V3m8 4V3m-9 8h10M5 21h14a2 2 0 002-2V7a2 2 0 00-2-2H5a2 2 0 00-2 2v12a2 2 0 002 2z"></path></svg>
+                Calendar
+            </div>
+        </nav>
+
+        <div class="absolute bottom-10 left-6 right-6">
+            <a href="/dashboard" class="flex items-center text-gray-500 hover:text-white transition">
+                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path></svg>
+                Back to Finance
+            </a>
+        </div>
+    </div>
+
+    <div class="main-content">
+        <!-- Header -->
+        <header class="flex justify-between items-center mb-10">
+            <div>
+                <h1 id="tab-title" class="text-3xl font-bold text-gray-900">Marketing Overview</h1>
+                <p id="tab-desc" class="text-gray-500 mt-1">Track your campaign performance and lead engagement.</p>
+            </div>
+            <div id="tab-actions">
+                <button onclick="openCampaignModal()" class="bg-brand-gold text-white px-5 py-2.5 rounded-lg font-semibold hover:opacity-90 transition">Create Campaign</button>
+            </div>
+        </header>
+
+        <!-- Overview Tab -->
+        <div id="tab-content-overview" class="tab-pane">
+            <div class="grid grid-cols-1 md:grid-cols-4 gap-6 mb-10">
+                <div class="card">
+                    <p class="text-sm text-gray-500 mb-1">Total Contacts</p>
+                    <h2 id="stat-contacts" class="text-3xl font-bold">0</h2>
+                    <p class="text-xs text-green-600 mt-2">↑ 12% this month</p>
+                </div>
+                <div class="card">
+                    <p class="text-sm text-gray-500 mb-1">Active Subscribers</p>
+                    <h2 id="stat-subscribed" class="text-3xl font-bold">0</h2>
+                    <p class="text-xs text-gray-400 mt-2">Opted-in audience</p>
+                </div>
+                <div class="card">
+                    <p class="text-sm text-gray-500 mb-1">Open Rate (Avg)</p>
+                    <h2 id="stat-open-rate" class="text-3xl font-bold">0%</h2>
+                    <p class="text-xs text-green-600 mt-2">↑ 4.2% vs last month</p>
+                </div>
+                <div class="card">
+                    <p class="text-sm text-gray-500 mb-1">Legendary Leads</p>
+                    <h2 id="stat-hot-leads" class="text-3xl font-bold">0</h2>
+                    <p class="text-xs text-brand-gold font-semibold mt-2">Highly engaged</p>
+                </div>
+            </div>
+
+            <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                <div class="card">
+                    <h3 class="text-lg font-bold mb-6">Recent Campaign Growth</h3>
+                    <canvas id="growthChart" height="200"></canvas>
+                </div>
+                <div class="card">
+                    <h3 class="text-lg font-bold mb-6">Engagement Tiers</h3>
+                    <canvas id="tierChart" height="200"></canvas>
+                </div>
+            </div>
+        </div>
+
+        <!-- Campaigns Tab -->
+        <div id="tab-content-campaigns" class="tab-pane hidden">
+            <div class="card overflow-hidden">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="text-sm text-gray-500 border-b">
+                            <th class="py-4">Campaign Name</th>
+                            <th>Status</th>
+                            <th>Recipients</th>
+                            <th>Stats</th>
+                            <th>Created</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="campaign-list">
+                        <!-- Loaded dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Contacts Tab -->
+        <div id="tab-content-contacts" class="tab-pane hidden">
+            <div class="flex justify-between items-center mb-6">
+                <div class="relative w-96">
+                    <input type="text" placeholder="Search contacts by email or tag..." class="w-full pl-10 pr-4 py-2 border rounded-lg focus:ring-2 focus:ring-brand-gold focus:border-brand-gold outline-none">
+                    <svg class="w-5 h-5 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                </div>
+                <div class="flex gap-2">
+                    <button onclick="document.getElementById('csv-file').click()" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition">Import CSV</button>
+                    <input type="file" id="csv-file" class="hidden" onchange="importCSV(this)">
+                    <button onclick="syncClients()" class="bg-gray-100 text-gray-700 px-4 py-2 rounded-lg hover:bg-gray-200 transition">Sync Clients</button>
+                </div>
+            </div>
+            <div class="card overflow-hidden">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="text-sm text-gray-500 border-b">
+                            <th class="py-4">Contact</th>
+                            <th>Type</th>
+                            <th>Score</th>
+                            <th>Status</th>
+                            <th>Last Activity</th>
+                            <th>Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="contact-list">
+                        <!-- Loaded dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- Segments Tab -->
+        <div id="tab-content-segments" class="tab-pane hidden">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6" id="segment-list">
+                <!-- Static Card Template -->
+                <div class="card border-l-4 border-brand-gold">
+                    <h3 class="font-bold text-lg">All Subscribed</h3>
+                    <p class="text-gray-500 text-sm mt-1">Every active contact in your list.</p>
+                    <div class="mt-4 flex justify-between items-center">
+                        <span class="text-sm font-semibold" id="seg-all-count">0 contacts</span>
+                        <button class="text-brand-gold text-sm font-bold">View List</button>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Calendar Tab -->
+        <div id="tab-content-calendar" class="tab-pane hidden">
+            <div class="grid grid-cols-1 md:grid-cols-3 gap-6 mb-8">
+                <div class="card bg-red-50 border-l-4 border-red-500">
+                    <p class="text-xs text-red-600 font-bold uppercase mb-1">Critical Priority</p>
+                    <h2 id="urgent-count" class="text-2xl font-bold text-red-700">0 Events</h2>
+                    <p class="text-sm text-red-600 mt-2">Occasions within 7 days. Plan now!</p>
+                </div>
+                <div class="card bg-yellow-50 border-l-4 border-yellow-500">
+                    <p class="text-xs text-yellow-600 font-bold uppercase mb-1">Upcoming Focus</p>
+                    <h2 id="warning-count" class="text-2xl font-bold text-yellow-700">0 Events</h2>
+                    <p class="text-sm text-yellow-600 mt-2">Occasions within 30 days.</p>
+                </div>
+                <div class="card bg-blue-50 border-l-4 border-blue-500">
+                    <p class="text-xs text-blue-600 font-bold uppercase mb-1">On the Horizon</p>
+                    <h2 id="planned-count" class="text-2xl font-bold text-blue-700">0 Events</h2>
+                    <p class="text-sm text-blue-600 mt-2">Strategic planning for later months.</p>
+                </div>
+            </div>
+
+            <div class="card overflow-hidden">
+                <h3 class="text-lg font-bold mb-6">Marketing Occasions & Alerts</h3>
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="text-sm text-gray-500 border-b">
+                            <th class="py-4">Event / Occasion</th>
+                            <th>Date</th>
+                            <th>Urgency</th>
+                            <th>Recommended Action</th>
+                            <th>Template</th>
+                        </tr>
+                    </thead>
+                    <tbody id="calendar-list">
+                        <!-- Loaded dynamically -->
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- Campaign Modal -->
+    <div id="campaign-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-[100]">
+        <div class="bg-white rounded-xl w-[500px] p-8 shadow-2xl">
+            <h2 class="text-2xl font-bold mb-6">New Campaign</h2>
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Campaign Name (Internal)</label>
+                    <input type="text" id="camp-name" placeholder="E.g. Coinfield Launch Email" class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand-gold">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Subject Line</label>
+                    <input type="text" id="camp-subject" placeholder="E.g. Exclusive Site Inspection at Coinfield" class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand-gold">
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1">Preview Text</label>
+                    <input type="text" id="camp-preview" placeholder="E.g. Join our gated community..." class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand-gold">
+                </div>
+            </div>
+            <div class="flex justify-end gap-3 mt-8">
+                <button onclick="closeCampaignModal()" class="px-6 py-2 bg-gray-100 rounded-lg font-semibold">Cancel</button>
+                <button onclick="createCampaign()" class="px-6 py-2 bg-brand-gold text-white rounded-lg font-semibold">Create Draft</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- Advanced Send Modal -->
+    <div id="send-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden flex items-center justify-center z-[100]">
+        <div class="bg-white rounded-xl w-[550px] p-8 shadow-2xl">
+            <div class="flex justify-between items-center mb-6">
+                <h2 class="text-2xl font-bold">Targeted Broadcast</h2>
+                <span id="target-camp-name" class="text-xs px-2 py-1 bg-gray-100 rounded text-gray-500 font-mono"></span>
+            </div>
+            
+            <input type="hidden" id="target-camp-id">
+
+            <div class="space-y-6">
+                <div class="p-4 bg-blue-50 rounded-lg border border-blue-100 flex gap-4">
+                    <div class="text-2xl">🎯</div>
+                    <div class="text-sm text-blue-800">Choose who should receive this campaign. You can target based on engagement or paste a specific list.</div>
+                </div>
+
+                <div class="space-y-3">
+                    <label class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
+                        <input type="radio" name="target-type" value="all" checked class="w-4 h-4 accent-brand-gold">
+                        <div>
+                            <div class="font-bold">All Subscribed Contacts</div>
+                            <div class="text-xs text-gray-400">Total reach to everyone in your subscriber list.</div>
+                        </div>
+                    </label>
+
+                    <label class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
+                        <input type="radio" name="target-type" value="segment" class="w-4 h-4 accent-brand-gold">
+                        <div class="flex-1">
+                            <div class="font-bold text-sm">Target Specific Segments</div>
+                            <select id="target-segment" class="mt-2 w-full px-3 py-2 border rounded outline-none focus:ring-1 focus:ring-brand-gold text-sm">
+                                <option value="engaged">Engaged (Users who opened your mails)</option>
+                                <option value="hot">Hot Leads (Engagement Score > 50)</option>
+                                <option value="recent">Recent Signups (Last 30 days)</option>
+                            </select>
+                        </div>
+                    </label>
+
+                    <label class="flex items-center gap-3 p-3 border rounded-lg cursor-pointer hover:bg-gray-50 transition">
+                        <input type="radio" name="target-type" value="manual" class="w-4 h-4 accent-brand-gold">
+                        <div class="flex-1">
+                            <div class="font-bold text-sm">Direct Manual Outreach</div>
+                            <textarea id="target-emails" placeholder="Enter emails separated by commas..." class="mt-2 w-full px-3 py-2 border rounded outline-none focus:ring-1 focus:ring-brand-gold text-sm h-20"></textarea>
+                        </div>
+                    </label>
+                </div>
+            </div>
+
+            <div class="flex justify-end gap-3 mt-8">
+                <button onclick="closeSendModal()" class="px-6 py-2 bg-gray-100 rounded-lg font-semibold">Cancel</button>
+                <button onclick="confirmSend()" class="px-6 py-2 bg-brand-gold text-white rounded-lg font-semibold flex items-center gap-2">
+                    Start Broadcast
+                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 5l7 7-7 7M5 5l7 7-7 7"></path></svg>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const token = localStorage.getItem('ec_token');
+        if (!token) window.location.href = '/login';
+
+        function showTab(tab) {
+            document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
+            document.getElementById('tab-content-' + tab).classList.remove('hidden');
+            
+            document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
+            document.getElementById('nav-' + tab).classList.add('active');
+            
+            const titles = {
+                overview: ['Marketing Overview', 'Track your campaign performance and lead engagement.'],
+                campaigns: ['All Campaigns', 'Manage and send your email broadcasts.'],
+                contacts: ['Marketing Contacts', 'Leads and clients from all sources.'],
+                segments: ['Audience Segments', 'Target specific groups of people with precision.'],
+                calendar: ['Marketing Calendar', 'Annual occasions and holiday campaigns.']
+            };
+            
+            document.getElementById('tab-title').innerText = titles[tab][0];
+            document.getElementById('tab-desc').innerText = titles[tab][1];
+            
+            if (tab === 'overview') loadOverview();
+            if (tab === 'campaigns') loadCampaigns();
+            if (tab === 'contacts') loadContacts();
+            if (tab === 'segments') loadSegments();
+            if (tab === 'calendar') loadCalendar();
+        }
+
+        async function loadOverview() {
+            const res = await fetch('/api/marketing/analytics/overview', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            const data = await res.json();
+            
+            document.getElementById('stat-contacts').innerText = data.contacts.total;
+            document.getElementById('stat-subscribed').innerText = data.contacts.subscribed;
+            document.getElementById('stat-open-rate').innerText = data.campaigns.avg_open_rate;
+            document.getElementById('stat-hot-leads').innerText = data.engagement.hot_leads;
+            
+            renderCharts(data);
+        }
+
+        async function loadCampaigns() {
+            const res = await fetch('/api/marketing/campaigns', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            const data = await res.json();
+            const list = document.getElementById('campaign-list');
+            list.innerHTML = data.map(c => `
+                <tr class="border-b hover:bg-gray-50 transition">
+                    <td class="py-4 font-semibold">${c.name}</td>
+                    <td><span class="px-3 py-1 rounded-full text-xs font-bold uppercase ${getStatusBadge(c.status)}">${c.status}</span></td>
+                    <td class="text-gray-500">${c.total_recipients || 0}</td>
+                    <td>
+                        <div class="flex gap-4 text-xs font-semibold">
+                            <span class="text-brand-gold">Opens: 0</span>
+                            <span class="text-blue-500">Clicks: 0</span>
+                        </div>
+                    </td>
+                    <td class="text-xs text-gray-400">${new Date(c.created_at).toLocaleDateString()}</td>
+                    <td>
+                        ${c.status === 'draft' ? `<button onclick="window.open('/marketing/editor?id=${c.id}')" class="text-brand-gold font-bold mr-3 hover:underline">Edit</button>` : ''}
+                        ${c.status === 'draft' ? `<button onclick="openSendModal('${c.id}', '${c.name}')" class="text-green-600 font-bold hover:underline">Send</button>` : `<button onclick="viewReport('${c.id}')" class="text-gray-400 font-bold hover:underline">Report</button>`}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function loadContacts() {
+            const res = await fetch('/api/marketing/contacts', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            const data = await res.json();
+            const list = document.getElementById('contact-list');
+            list.innerHTML = data.map(c => `
+                <tr class="border-b hover:bg-gray-50 transition">
+                    <td class="py-4">
+                        <div class="font-bold">${c.first_name} ${c.last_name}</div>
+                        <div class="text-xs text-gray-400">${c.email}</div>
+                    </td>
+                    <td class="capitalize text-sm">${c.contact_type}</td>
+                    <td><span class="px-2 py-1 bg-gray-100 rounded font-bold text-xs">${c.engagement_score || 0}</span></td>
+                    <td><span class="w-3 h-3 rounded-full inline-block ${c.is_subscribed ? 'bg-green-500' : 'bg-red-500'}"></span></td>
+                    <td class="text-xs text-gray-400">${c.last_opened_at ? new Date(c.last_opened_at).toLocaleDateString() : 'Never'}</td>
+                    <td><button class="text-gray-400 hover:text-brand-gold"><svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg></button></td>
+                </tr>
+            `).join('');
+        }
+
+        function getStatusBadge(s) {
+            if (s === 'draft') return 'bg-gray-100 text-gray-500';
+            if (s === 'sent') return 'bg-green-100 text-green-600';
+            if (s === 'sending') return 'bg-blue-100 text-blue-600';
+            return 'bg-red-100 text-red-600';
+        }
+
+        // Modal Logic
+        function openCampaignModal() { document.getElementById('campaign-modal').classList.remove('hidden'); }
+        function closeCampaignModal() { document.getElementById('campaign-modal').classList.add('hidden'); }
+
+        async function createCampaign() {
+            const data = {
+                name: document.getElementById('camp-name').value,
+                subject_a: document.getElementById('camp-subject').value,
+                preview_text: document.getElementById('camp-preview').value,
+                html_body_a: '<h1>Start Designing!</h1>'
+            };
+            
+            const res = await fetch('/api/marketing/campaigns', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify(data)
+            });
+            
+            const camp = await res.json();
+            window.location.href = `/marketing/editor?id=${camp.id}`;
+        }
+
+        async function openSendModal(id, name) {
+            document.getElementById('target-camp-id').value = id;
+            document.getElementById('target-camp-name').innerText = name;
+            document.getElementById('send-modal').classList.remove('hidden');
+        }
+
+        function closeSendModal() { document.getElementById('send-modal').classList.add('hidden'); }
+
+        async function confirmSend() {
+            const id = document.getElementById('target-camp-id').value;
+            const targetType = document.querySelector('input[name="target-type"]:checked').value;
+            
+            let payload = {};
+            if (targetType === 'segment') {
+                payload.segment_ids = [document.getElementById('target-segment').value];
+            } else if (targetType === 'manual') {
+                const raw = document.getElementById('target-emails').value;
+                payload.manual_emails = raw.split(',').map(e => e.trim()).filter(e => e.includes('@'));
+                if (payload.manual_emails.length === 0) { alert("Please enter at least one valid email."); return; }
+            }
+
+            if (!confirm(`Are you sure you want to broadcast this campaign to its ${targetType} targets?`)) return;
+            
+            await fetch(`/api/marketing/campaigns/${id}/send`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                body: JSON.stringify(payload)
+            });
+            
+            alert("Broadcast initiated!");
+            closeSendModal();
+            loadCampaigns();
+        }
+
+        async function loadSegments() {
+            const res = await fetch('/api/marketing/analytics/overview', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            const data = await res.json();
+            
+            const segList = document.getElementById('segment-list');
+            segList.innerHTML = `
+                <div class="card border-l-4 border-green-500">
+                    <h3 class="font-bold text-lg">✨ Engaged Audience</h3>
+                    <p class="text-gray-500 text-sm mt-1">Users who have opened at least one email.</p>
+                    <div class="mt-4 flex justify-between items-center">
+                        <span class="text-sm font-semibold">${data.engagement.total_opens || 0} Openers</span>
+                        <button onclick="showTab('contacts')" class="text-brand-gold text-sm font-bold hover:underline">Target Now</button>
+                    </div>
+                </div>
+                <div class="card border-l-4 border-red-500">
+                    <h3 class="font-bold text-lg">🔥 Hot Leads</h3>
+                    <p class="text-gray-500 text-sm mt-1">Engagement score higher than 50.</p>
+                    <div class="mt-4 flex justify-between items-center">
+                        <span class="text-sm font-semibold">${data.engagement.hot_leads || 0} Leads</span>
+                        <button onclick="showTab('contacts')" class="text-brand-gold text-sm font-bold hover:underline">Target Now</button>
+                    </div>
+                </div>
+                <div class="card border-l-4 border-blue-500">
+                    <h3 class="font-bold text-lg">🆕 Recent Signups</h3>
+                    <p class="text-gray-500 text-sm mt-1">Joined in the last 30 days.</p>
+                    <div class="mt-4 flex justify-between items-center">
+                        <span class="text-sm font-semibold">${data.contacts.recent || 0} New Contacts</span>
+                        <button onclick="showTab('contacts')" class="text-brand-gold text-sm font-bold hover:underline">Target Now</button>
+                    </div>
+                </div>
+            `;
+        }
+
+        async function syncClients() {
+            const res = await fetch('/api/marketing/contacts/sync-clients', {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            const data = await res.json();
+            alert(`Synced ${data.synced_count} clients to marketing list!`);
+            loadContacts();
+        }
+
+        // --- CALENDAR LOGIC ---
+        async function loadCalendar() {
+            const list = document.getElementById('calendar-list');
+            const res = await fetch('/api/marketing/calendar/events', {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            const events = await res.json();
+            const now = new Date();
+            
+            let urgent = 0, warning = 0, planned = 0;
+
+            const rows = events.map(event => {
+                const eventDate = new Date(event.date);
+                const diffDays = Math.ceil((eventDate - now) / (1000 * 60 * 60 * 24));
+                
+                let statusClass = "bg-blue-100 text-blue-600";
+                let statusText = "On Track";
+
+                if (diffDays <= 7) {
+                    statusClass = "bg-red-100 text-red-600 animate-pulse";
+                    statusText = "URGENT";
+                    urgent++;
+                } else if (diffDays <= 30) {
+                    statusClass = "bg-yellow-100 text-yellow-600";
+                    statusText = "UPCOMING";
+                    warning++;
+                } else {
+                    planned++;
+                }
+
+                return `
+                    <tr class="border-b">
+                        <td class="py-4 font-bold text-gray-800">${event.name}</td>
+                        <td class="text-sm text-gray-500">${eventDate.toLocaleDateString('en-GB', { day: '2-digit', month: 'short' })}</td>
+                        <td><span class="px-3 py-1 rounded-full text-[10px] font-black uppercase ${statusClass}">${statusText}</span></td>
+                        <td class="text-xs text-gray-400 italic">${event.action}</td>
+                        <td><button onclick="window.open('/marketing/editor?template=festive-seasonal')" class="text-brand-gold text-xs font-bold hover:underline">Use Template</button></td>
+                    </tr>
+                `;
+            });
+
+            list.innerHTML = rows.join('');
+            document.getElementById('urgent-count').innerText = `${urgent} Events`;
+            document.getElementById('warning-count').innerText = `${warning} Events`;
+            document.getElementById('planned-count').innerText = `${planned} Events`;
+        }
+
+        // Charts
+        let growthChart, tierChart;
+        function renderCharts(data) {
+            if (growthChart) growthChart.destroy();
+            const ctx = document.getElementById('growthChart').getContext('2d');
+            growthChart = new Chart(ctx, {
+                type: 'line',
+                data: {
+                    labels: ['Week 1', 'Week 2', 'Week 3', 'Week 4'],
+                    datasets: [{
+                        label: 'Contacts',
+                        data: [12, 19, 3, 5],
+                        borderColor: '#C47D0A',
+                        tension: 0.4,
+                        fill: true,
+                        backgroundColor: 'rgba(196, 125, 10, 0.1)'
+                    }]
+                },
+                options: { plugins: { legend: { display: false } }, scales: { y: { beginAtZero: true } } }
+            });
+
+            if (tierChart) tierChart.destroy();
+            const ctx2 = document.getElementById('tierChart').getContext('2d');
+            tierChart = new Chart(ctx2, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Hot', 'Warm', 'Cold'],
+                    datasets: [{
+                        data: [data.engagement.hot_leads, data.engagement.warm_leads, 10],
+                        backgroundColor: ['#C47D0A', '#1A1A1A', '#eee']
+                    }]
+                }
+            });
+        }
+
+        // Init
+        loadOverview();
+    </script>
+</body>
+</html>

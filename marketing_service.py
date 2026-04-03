@@ -1,0 +1,217 @@
+import resend
+import os
+import re
+import uuid
+import logging
+import asyncio
+from datetime import datetime, timedelta
+from typing import List, Dict, Any
+from database import get_db
+
+logger = logging.getLogger(__name__)
+
+# Config
+RESEND_API_KEY = os.getenv("RESEND_MARKETING_API_KEY") or os.getenv("RESEND_API_KEY")
+resend.api_key = RESEND_API_KEY
+
+APP_BASE_URL = os.getenv("APP_BASE_URL", "https://app.eximps-cloves.com")
+MARKETING_FROM_EMAIL = os.getenv("MARKETING_FROM_EMAIL", "hello@mail.eximps-cloves.com")
+MARKETING_FROM_NAME = os.getenv("MARKETING_FROM_NAME", "Eximp & Cloves")
+MARKETING_REPLY_TO = os.getenv("MARKETING_REPLY_TO", "marketing@mail.eximps-cloves.com")
+MARKETING_BCC_EMAIL = os.getenv("MARKETING_BCC_EMAIL", "marketing@mail.eximps-cloves.com")
+
+def personalize_content(html: str, contact: Dict[str, Any]) -> str:
+    """Replaces {{variable}} with contact data."""
+    vars = {
+        "first_name": contact.get("first_name") or "there",
+        "last_name": contact.get("last_name") or "",
+        "full_name": f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip() or "Valued Client",
+        "email": contact.get("email", ""),
+        "phone": contact.get("phone", ""),
+        # Add more logic filters for invoices/estates if needed later
+    }
+    
+    for key, val in vars.items():
+        html = html.replace(f"{{{{{key}}}}}", str(val))
+    
+    # Clean up any unreplaced variables
+    html = re.sub(r"\{\{.*?\}\}", "", html)
+    return html
+
+def wrap_links(html: str, campaign_id: str, contact_id: str) -> str:
+    """Wraps all <a> tags with click tracking redirects."""
+    def replace_link(match):
+        url = match.group(2)
+        # Skip mailto, tel, and anchors
+        if url.startswith(("mailto:", "tel:", "#")):
+            return match.group(0)
+        
+        # Avoid double wrapping or tracking the tracking links themselves
+        if "/c/" in url:
+            return match.group(0)
+
+        tracking_url = f"{APP_BASE_URL}/c/{campaign_id}/{contact_id}?url={url}"
+        return f'{match.group(1)}="{tracking_url}"'
+
+    # Matches href="url" or href='url'
+    return re.sub(r'(href)\s*=\s*["\'](.*?)["\']', replace_link, html)
+
+def inject_tracking_pixel(html: str, campaign_id: str, contact_id: str) -> str:
+    """Injects a 1x1 transparent tracking pixel before </body>."""
+    pixel_id = str(uuid.uuid4())
+    pixel_url = f"{APP_BASE_URL}/o/{campaign_id}/{contact_id}/{pixel_id}.png"
+    pixel_tag = f'<img src="{pixel_url}" width="1" height="1" style="display:none !important;" />'
+    
+    if "</body>" in html:
+        return html.replace("</body>", f"{pixel_tag}</body>")
+    return html + pixel_tag
+
+async def send_marketing_email(campaign: Dict[str, Any], contact: Dict[str, Any]):
+    """Sends a single personalized marketing email with tracking."""
+    campaign_id = campaign["id"]
+    contact_id = contact["id"]
+    
+    # 1. Personalize
+    html = personalize_content(campaign["html_body_a"], contact)
+    
+    # 2. Tracking (only for real campaigns, not tests)
+    if campaign.get("status") != "test":
+        html = wrap_links(html, campaign_id, contact_id)
+        html = inject_tracking_pixel(html, campaign_id, contact_id)
+        
+        # Add Unsubscribe Link (Regulatory)
+        unsub_token = contact.get("id") # Simplification for now, should be a hashed token
+        unsub_url = f"{APP_BASE_URL}/unsubscribe/{unsub_token}"
+        unsub_footer = f'<div style="margin-top:40px; padding-top:20px; border-top:1px solid #eee; font-size:11px; color:#999; text-align:center;">' \
+                       f'You are receiving this because you subscribed to Eximp & Cloves marketing. ' \
+                       f'<a href="{unsub_url}" style="color:#C47D0A;">Unsubscribe here</a>.</div>'
+        
+        if "</body>" in html:
+            html = html.replace("</body>", f"{unsub_footer}</body>")
+        else:
+            html += unsub_footer
+
+    try:
+        res = resend.Emails.send({
+            "from": f"{MARKETING_FROM_NAME} <{MARKETING_FROM_EMAIL}>",
+            "to": [contact["email"]],
+            "subject": personalize_content(campaign["subject_a"], contact),
+            "html": html,
+            "reply_to": MARKETING_REPLY_TO,
+            "bcc": [MARKETING_BCC_EMAIL] if MARKETING_BCC_EMAIL else []
+        })
+        
+        # Log success in campaign_recipients if not test
+        if campaign.get("status") != "test":
+            db = get_db()
+            db.table("campaign_recipients").upsert({
+                "campaign_id": campaign_id,
+                "contact_id": contact_id,
+                "resend_message_id": res.get("id"),
+                "status": "sent",
+                "sent_at": datetime.utcnow().isoformat()
+            }).execute()
+            
+        return res
+    except Exception as e:
+        logger.error(f"Error sending marketing email to {contact['email']}: {e}")
+        if campaign.get("status") != "test":
+            db = get_db()
+            db.table("campaign_recipients").upsert({
+                "campaign_id": campaign_id,
+                "contact_id": contact_id,
+                "status": "failed",
+                "sent_at": datetime.utcnow().isoformat()
+            }).execute()
+        return None
+
+async def resolve_target_recipients(segment_ids: List[str] = None, manual_emails: List[str] = None) -> List[Dict[str, Any]]:
+    """Resolves a list of contacts based on segments or specific emails."""
+    db = get_db()
+    
+    # Priority 1: Manual Emails (specific manual reach-out)
+    if manual_emails:
+        res = db.table("marketing_contacts").select("*").in_("email", manual_emails).execute()
+        return res.data
+
+    # Priority 2: Segments
+    if segment_ids:
+        # For now, we support 'special' common segment IDs or actual UUIDs
+        all_contacts = []
+        for sid in segment_ids:
+            if sid == 'engaged':
+                # Contacts who have opened at least one email
+                res = db.table("marketing_contacts").select("*").gt("total_emails_opened", 0).eq("is_subscribed", True).execute()
+                all_contacts.extend(res.data)
+            elif sid == 'recent':
+                # Contacts joined in last 30 days
+                res = db.table("marketing_contacts").select("*").gt("created_at", (datetime.utcnow() - timedelta(days=30)).isoformat()).eq("is_subscribed", True).execute()
+                all_contacts.extend(res.data)
+            elif sid == 'hot':
+                # High engagement score
+                res = db.table("marketing_contacts").select("*").gt("engagement_score", 50).eq("is_subscribed", True).execute()
+                all_contacts.extend(res.data)
+            else:
+                # Custom segment from DB (future implementation would parse segment filters)
+                pass
+        
+        # De-duplicate by ID
+        unique_contacts = {c['id']: c for c in all_contacts}.values()
+        return list(unique_contacts)
+
+    # Default: All subscribed
+    res = db.table("marketing_contacts").select("*").eq("is_subscribed", True).execute()
+    return res.data
+
+async def broadcast_campaign(campaign_id: str, segment_ids: List[str] = None, manual_emails: List[str] = None):
+    """Broadcasts a campaign to targeted recipients with throttling."""
+    db = get_db()
+    
+    # 1. Fetch Campaign
+    camp_res = db.table("email_campaigns").select("*").eq("id", campaign_id).execute()
+    if not camp_res.data:
+        return logger.error(f"Campaign {campaign_id} not found")
+    campaign = camp_res.data[0]
+    
+    if campaign["status"] not in ["scheduled", "sending"]:
+        return logger.info(f"Campaign {campaign_id} is in {campaign['status']} status, skipping broadcast.")
+
+    # 2. Fetch Recipients
+    recipients = await resolve_target_recipients(segment_ids, manual_emails)
+    
+    if not recipients:
+        db.table("email_campaigns").update({"status": "failed"}).eq("id", campaign_id).execute()
+        return logger.error(f"No recipients for campaign {campaign_id} with targets {segment_ids} / {manual_emails}")
+
+    # 3. Update status to sending
+    db.table("email_campaigns").update({
+        "status": "sending",
+        "total_recipients": len(recipients)
+    }).eq("id", campaign_id).execute()
+
+    # 4. Batch Send (Throttled)
+    batch_size = 50
+    sent_count = 0
+    
+    for i in range(0, len(recipients), batch_size):
+        batch = recipients[i:i+batch_size]
+        tasks = [send_marketing_email(campaign, r) for r in batch]
+        results = await asyncio.gather(*tasks)
+        
+        # Only count successful sends if we want to be precise, 
+        # but usually we log 'sent' even if delivery fails later via webhooks
+        sent_count += len([r for r in results if r is not None])
+        
+        db.table("email_campaigns").update({"total_sent": sent_count}).eq("id", campaign_id).execute()
+        
+        if i + batch_size < len(recipients):
+            await asyncio.sleep(1) # Rate limit safety
+
+    # 5. Finalize
+    db.table("email_campaigns").update({
+        "status": "sent",
+        "total_sent": sent_count,
+        "sent_at": datetime.utcnow().isoformat()
+    }).eq("id", campaign_id).execute()
+    
+    logger.info(f"Campaign {campaign_id} broadcast complete. Targeted {len(recipients)}, Sent {sent_count}.")

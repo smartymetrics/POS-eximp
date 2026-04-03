@@ -1,0 +1,808 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Email Designer | Eximp &amp; Cloves</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    <link href="https://unpkg.com/grapesjs/dist/css/grapes.min.css" rel="stylesheet">
+    <script src="https://unpkg.com/grapesjs"></script>
+    <script src="https://unpkg.com/grapesjs-preset-newsletter"></script>
+    <style>
+        *, *::before, *::after { box-sizing: border-box; }
+        body, html { height: 100%; margin: 0; overflow: hidden; background: #111; font-family: 'Inter', sans-serif; }
+        #gjs { border: none; height: calc(100vh - 60px) !important; }
+
+        .editor-top-bar {
+            height: 60px;
+            background: #1A1A1A;
+            color: white;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 0 20px;
+            border-bottom: 2px solid #C47D0A;
+            position: relative;
+            z-index: 9999;
+        }
+        .brand-logo { color: #C47D0A; font-weight: 700; font-size: 1.1rem; letter-spacing: 0.05em; display: flex; align-items: center; gap: 10px; }
+        .brand-logo img { height: 32px; }
+        .top-actions { display: flex; align-items: center; gap: 8px; }
+        .save-status { font-size: 0.8rem; color: #888; margin-right: 12px; }
+
+        .btn {
+            background: #C47D0A; color: white; border: none;
+            padding: 8px 16px; border-radius: 5px; cursor: pointer;
+            font-weight: 600; font-size: 0.85rem; transition: 0.2s; white-space: nowrap;
+        }
+        .btn:hover { background: #A66908; }
+        .btn-outline { background: transparent; border: 1.5px solid #C47D0A; color: #C47D0A; }
+        .btn-outline:hover { background: #C47D0A; color: white; }
+        .btn-gray { background: #333; border: 1px solid #444; color: #ccc; }
+        .btn-gray:hover { background: #444; color: white; }
+
+        /* ── TEMPLATE PICKER MODAL ── */
+        .modal-overlay {
+            position: fixed; inset: 0; background: rgba(0,0,0,0.85);
+            display: flex; align-items: center; justify-content: center;
+            z-index: 99999;
+        }
+        .modal-overlay.hidden { display: none; }
+        .modal-box {
+            background: #1a1a1a; border-radius: 14px; width: 90vw; max-width: 980px;
+            max-height: 88vh; overflow: hidden; display: flex; flex-direction: column;
+            border: 1px solid #333;
+        }
+        .modal-header {
+            padding: 24px 28px 16px;
+            border-bottom: 1px solid #2a2a2a;
+            display: flex; justify-content: space-between; align-items: center;
+        }
+        .modal-header h2 { color: white; font-family: 'Playfair Display', serif; font-size: 1.5rem; margin: 0; }
+        .modal-header p { color: #888; font-size: 0.85rem; margin: 4px 0 0 0; }
+        .modal-close { background: none; border: none; color: #666; font-size: 1.5rem; cursor: pointer; padding: 4px 8px; border-radius: 4px; }
+        .modal-close:hover { color: white; background: #333; }
+        .modal-body { overflow-y: auto; padding: 24px 28px; flex: 1; }
+
+        .template-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+            gap: 16px;
+        }
+        .template-card {
+            background: #252525; border-radius: 10px; overflow: hidden;
+            cursor: pointer; border: 2px solid transparent;
+            transition: border-color 0.2s, transform 0.15s;
+        }
+        .template-card:hover { border-color: #C47D0A; transform: translateY(-2px); }
+        .template-card.selected { border-color: #C47D0A; }
+        .template-preview {
+            height: 140px; display: flex; flex-direction: column;
+            align-items: center; justify-content: center;
+            font-size: 2rem; border-bottom: 1px solid #333;
+            position: relative; overflow: hidden;
+        }
+        .template-preview-bar { position: absolute; top: 0; left: 0; right: 0; height: 4px; background: #C47D0A; }
+        .template-info { padding: 12px; }
+        .template-name { color: white; font-weight: 600; font-size: 0.9rem; }
+        .template-desc { color: #888; font-size: 0.75rem; margin-top: 4px; }
+
+        .modal-footer {
+            padding: 16px 28px; border-top: 1px solid #2a2a2a;
+            display: flex; justify-content: flex-end; gap: 10px;
+        }
+
+        /* GrapesJS overrides */
+        .gjs-pn-panel { background: #1a1a1a !important; }
+        .gjs-block-category .gjs-title { color: #C47D0A !important; background: #1e1e1e !important; }
+        .gjs-block { border-color: #2a2a2a !important; color: #ccc !important; background: #222 !important; }
+        .gjs-block:hover { border-color: #C47D0A !important; }
+
+        /* ── TAGS HELPER ── */
+        .tag-item {
+            background: #222; border: 1px solid #333; padding: 12px; border-radius: 8px;
+            display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
+        }
+        .tag-code { color: #C47D0A; font-family: monospace; font-weight: 700; font-size: 1rem; }
+        .tag-label { color: #888; font-size: 0.8rem; }
+        .copy-btn { 
+            background: #333; color: #C47D0A; border: 1px solid #C47D0A; 
+            padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;
+            transition: 0.2s;
+        }
+        .copy-btn:hover { background: #C47D0A; color: white; }
+    </style>
+</head>
+<body>
+
+    <!-- TOP BAR -->
+    <div class="editor-top-bar">
+        <div class="brand-logo">
+            <img src="/static/img/logo_dark.svg" alt="Eximp & Cloves" onerror="this.style.display='none'">
+            <span>Marketing Editor</span>
+        </div>
+        <div class="top-actions">
+            <span class="save-status" id="save-status"></span>
+            <div class="mr-6 flex items-center gap-2">
+                <span class="text-xs text-gray-500 uppercase font-bold">Subject:</span>
+                <input type="text" id="subject-field" class="bg-[#222] border border-[#333] text-sm px-3 py-1.5 rounded w-[300px] outline-none focus:border-brand-gold text-white" placeholder="Email Subject...">
+            </div>
+            <button class="btn btn-gray" onclick="openTags()">🏷️ Tags</button>
+            <button class="btn btn-gray" onclick="openTemplates()">📋 Templates</button>
+            <button class="btn btn-outline" id="send-test">✉️ Test Send</button>
+            <button class="btn" id="save-campaign">💾 Save</button>
+            <button class="btn btn-gray" onclick="window.location.href='/marketing'">← Back</button>
+        </div>
+    </div>
+
+    <!-- CANVAS -->
+    <div id="gjs"></div>
+
+    <!-- TAGS HELPER MODAL -->
+    <div id="tags-modal" class="modal-overlay hidden">
+        <div class="modal-box" style="max-width: 500px; height: auto; max-height: 80vh;">
+            <div class="modal-header">
+                <div>
+                    <h2 style="font-family: 'Playfair Display', serif; color: white;">Personalisation Tags</h2>
+                    <p style="color: #888; font-size: 0.85rem;">Copy and paste these into your text blocks or <b>Subject Line</b> to greet recipients.</p>
+                </div>
+                <button class="modal-close" onclick="closeTags()">✕</button>
+            </div>
+            <div class="modal-body" style="padding: 20px;">
+                <div class="tag-item">
+                    <div>
+                        <div class="tag-code">{{first_name}}</div>
+                        <div class="tag-label">Recipient's first name (e.g. Chidi)</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyTag('{{first_name}}')">Copy</button>
+                </div>
+                <div class="tag-item" style="margin-top: 10px;">
+                    <div>
+                        <div class="tag-code">{{last_name}}</div>
+                        <div class="tag-label">Recipient's last name (e.g. Okeke)</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyTag('{{last_name}}')">Copy</button>
+                </div>
+                <div class="tag-item" style="margin-top: 10px;">
+                    <div>
+                        <div class="tag-code">{{full_name}}</div>
+                        <div class="tag-label">The full name found in the database.</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyTag('{{full_name}}')">Copy</button>
+                </div>
+                <div class="tag-item" style="margin-top: 10px;">
+                    <div>
+                        <div class="tag-code">{{email}}</div>
+                        <div class="tag-label">Recipient's email address</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyTag('{{email}}')">Copy</button>
+                </div>
+                <div class="tag-item" style="margin-top: 10px;">
+                    <div>
+                        <div class="tag-code">{{phone}}</div>
+                        <div class="tag-label">Recipient's phone number</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyTag('{{phone}}')">Copy</button>
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-gray" onclick="closeTags()">Done</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- TEMPLATE PICKER MODAL -->
+    <div id="template-modal" class="modal-overlay">
+        <div class="modal-box">
+            <div class="modal-header">
+                <div>
+                    <h2>Choose a Template</h2>
+                    <p>Pick a starting point. You can customise everything after selecting.</p>
+                </div>
+                <button class="modal-close" onclick="closeTemplates()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div class="template-grid" id="template-grid"></div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-gray" onclick="closeTemplates()">Cancel</button>
+                <button class="btn" onclick="applyTemplate()">Use Selected Template →</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const campaignId = new URLSearchParams(window.location.search).get('id');
+        const LOGO_URL = window.location.origin + '/static/img/logo_dark.svg';
+
+        // ═══════════════════════════════════════
+        // LOCKED HEADER & FOOTER HTML
+        // ═══════════════════════════════════════
+        const LOCKED_HEADER = `
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#1A1A1A; border-bottom: 3px solid #C47D0A;">
+            <tr><td style="padding: 20px 30px; text-align: center;">
+              <img src="${LOGO_URL}" alt="Eximp &amp; Cloves" style="height:50px; max-width:200px;" />
+              <div style="color:#C47D0A; font-family:'Inter',sans-serif; font-size:11px; letter-spacing:3px; text-transform:uppercase; margin-top:6px;">Infrastructure Limited</div>
+            </td></tr>
+          </table>`;
+
+        const LOCKED_FOOTER = `
+          <table width="100%" cellpadding="0" cellspacing="0" style="background:#1A1A1A; margin-top:20px;">
+            <tr><td style="padding: 30px; text-align: center; border-top: 1px solid #333;">
+              <img src="${LOGO_URL}" alt="Eximp &amp; Cloves" style="height:36px; margin-bottom:16px;" />
+              <div style="margin-bottom:16px;">
+                <a href="https://www.linkedin.com/company/eximp-cloves" style="color:#C47D0A;text-decoration:none;margin:0 10px;font-family:'Inter',sans-serif;font-size:13px;">LinkedIn</a>
+                <a href="https://x.com/eximp_cloves" style="color:#C47D0A;text-decoration:none;margin:0 10px;font-family:'Inter',sans-serif;font-size:13px;">X</a>
+                <a href="https://instagram.com/eximp.cloves" style="color:#C47D0A;text-decoration:none;margin:0 10px;font-family:'Inter',sans-serif;font-size:13px;">Instagram</a>
+                <a href="https://facebook.com/eximp.cloves" style="color:#C47D0A;text-decoration:none;margin:0 10px;font-family:'Inter',sans-serif;font-size:13px;">Facebook</a>
+                <a href="https://tiktok.com/@eximp.cloves" style="color:#C47D0A;text-decoration:none;margin:0 10px;font-family:'Inter',sans-serif;font-size:13px;">TikTok</a>
+              </div>
+              <div style="color:#666; font-family:'Inter',sans-serif; font-size:12px; line-height:1.7;">
+                Eximp &amp; Cloves Infrastructure Limited<br>
+                57B, Isaac John Street, Yaba, Lagos, Nigeria<br>
+                📞 +234 912 686 4383 &nbsp;|&nbsp; 📧 <a href="mailto:admin@eximps-cloves.com" style="color:#C47D0A;">admin@eximps-cloves.com</a><br>
+                🌐 <a href="https://eximps-cloves.com" style="color:#C47D0A;">eximps-cloves.com</a>
+              </div>
+              <div style="margin-top:16px; padding-top:16px; border-top:1px solid #2a2a2a;">
+                <a href="{{unsubscribe_url}}" style="color:#555; font-family:'Inter',sans-serif; font-size:11px; text-decoration:underline;">Unsubscribe from marketing emails</a>
+              </div>
+            </td></tr>
+          </table>`;
+
+        // ═══════════════════════════════════════
+        // EMAIL TEMPLATES
+        // ═══════════════════════════════════════
+        const TEMPLATES = [
+          {
+            id: 'coinfield-launch',
+            name: 'Coinfield Estate Launch',
+            desc: 'Promote our flagship Epe estate',
+            icon: '🏝️',
+            bg: 'linear-gradient(135deg, #1A1A1A 0%, #2a1a00 100%)',
+            html: `${LOCKED_HEADER}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="background:#1A1A1A; padding:60px 30px; text-align:center;">
+                  <div style="color:#C47D0A;font-family:'Inter',sans-serif;font-size:12px;letter-spacing:3px;text-transform:uppercase;margin-bottom:16px;">FEATURED INVESTMENT</div>
+                  <h1 style="color:#ffffff;font-family:'Playfair Display',serif;font-size:40px;margin:0 0 20px;">Coinfield Estate, Epe</h1>
+                  <p style="color:#cccccc;font-family:'Inter',sans-serif;font-size:17px;max-width:520px;margin:0 auto 30px;line-height:1.7;">A gem in Epe, the fastest-growing investment hub in Sub-Saharan Africa. Secure your 500sqm plot today with seamless documentation.</p>
+                  <a href="https://eximps-cloves.com/properties" style="background:#C47D0A;color:#fff;font-family:'Inter',sans-serif;font-weight:700;font-size:15px;padding:15px 40px;text-decoration:none;border-radius:4px;display:inline-block;">Secure Your Plot →</a>
+                </td></tr>
+                <tr><td style="padding:0;">
+                  <img src="https://images.unsplash.com/photo-1500382017468-9049fee74a62?auto=format&fit=crop&w=1200&q=80" width="100%" style="display:block;border:none;" alt="Coinfield Estate" />
+                </td></tr>
+                <tr><td style="padding:40px 30px; background:#fff;">
+                  <table width="100%" cellpadding="0" cellspacing="16">
+                    <tr>
+                      <td width="33%" style="text-align:center;padding:20px;background:#fafafa;border-radius:8px;">
+                        <div style="color:#C47D0A;font-size:28px;font-weight:700;font-family:'Inter',sans-serif;">C of O</div>
+                        <div style="color:#666;font-size:13px;font-family:'Inter',sans-serif;margin-top:4px;">Verified Title</div>
+                      </td>
+                      <td width="33%" style="text-align:center;padding:20px;background:#fafafa;border-radius:8px;">
+                        <div style="color:#C47D0A;font-size:24px;font-weight:700;font-family:'Inter',sans-serif;">₦5.5M</div>
+                        <div style="color:#666;font-size:13px;font-family:'Inter',sans-serif;margin-top:4px;">Pre-launch Price</div>
+                      </td>
+                      <td width="33%" style="text-align:center;padding:20px;background:#fafafa;border-radius:8px;">
+                        <div style="color:#C47D0A;font-size:20px;font-weight:700;font-family:'Inter',sans-serif;">Epe, Lagos</div>
+                        <div style="color:#666;font-size:13px;font-family:'Inter',sans-serif;margin-top:4px;">Location</div>
+                      </td>
+                    </tr>
+                  </table>
+                  <div style="margin-top:30px; padding:24px; border:1.5px solid #eee; border-radius:12px; font-family:'Inter',sans-serif;">
+                    <div style="color:#C47D0A; font-weight:700; font-size:13px; margin-bottom:8px;">TRUSTED BY BUYERS</div>
+                    <p style="color:#333; font-style:italic; font-size:15px; line-height:1.6; margin:0;">"Coinfield Estate is a gem in Epe. Secured my 500sqm easily and the documentation process was surprisingly seamless. Highly reliable!"</p>
+                    <div style="color:#888; font-size:13px; margin-top:8px;">— Chidi O., Lagos Buyer</div>
+                  </div>
+                  <div style="text-align:center;margin-top:30px;">
+                    <a href="https://eximps-cloves.com/contact" style="background:#1A1A1A;color:#C47D0A;font-family:'Inter',sans-serif;font-weight:700;font-size:14px;padding:14px 35px;text-decoration:none;border-radius:4px;display:inline-block;">Book a Site Inspection</a>
+                  </div>
+                </td></tr>
+              </table>
+              ${LOCKED_FOOTER}`
+          },
+          {
+            id: 'northstar-promo',
+            name: 'Northstar Promo',
+            desc: 'Limited-time offer for Abuja investors',
+            icon: '✨',
+            bg: 'linear-gradient(135deg, #001a33 0%, #1A1A1A 100%)',
+            html: `${LOCKED_HEADER}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="background:#1A1A1A;padding:50px 30px;text-align:center;">
+                  <div style="color:#fff;font-family:'Inter',sans-serif;font-size:12px;letter-spacing:3px;text-transform:uppercase;margin-bottom:10px;">EXCLUSIVE OFFER</div>
+                  <h1 style="color:#ffffff;font-family:'Playfair Display',serif;font-size:44px;margin:0 0 10px;">Northstar Residence</h1>
+                  <div style="color:#C47D0A;font-size:48px;font-weight:900;font-family:'Inter',sans-serif;margin:10px 0;">10% OFF</div>
+                  <p style="color:#cccccc;font-family:'Inter',sans-serif;font-size:16px;margin:0 auto 30px;max-width:480px;">The best urban planning in Gwagwalada, Abuja. Truly impressed with the infrastructure and security vision.</p>
+                  <a href="https://eximps-cloves.com/properties" style="background:#C47D0A;color:#fff;font-family:'Inter',sans-serif;font-weight:700;font-size:16px;padding:16px 42px;text-decoration:none;border-radius:4px;display:inline-block;">Claim This Offer Now</a>
+                </td></tr>
+                <tr><td style="background:#fff;padding:40px 30px;text-align:center;">
+                  <p style="color:#333;font-family:'Inter',sans-serif;font-size:15px;line-height:1.8;max-width:500px;margin:0 auto;">This limited-time offer is for our Abuja investors looking for premium plots with verified titles and integrity.</p>
+                  <div style="margin-top:24px;padding:20px;background:#f9f4e8;border-left:4px solid #C47D0A;text-align:left;border-radius:4px;max-width:480px;margin-left:auto;margin-right:auto;">
+                    <div style="color:#333; font-family:'Inter',sans-serif; font-size:14px; line-height:1.6;">
+                      "Northstar Residence has the best urban planning I've seen in Gwagwalada. Truly impressed with the vision."<br>
+                      <strong style="color:#C47D0A; font-size:12px;">— Amina K., Abuja Investor</strong>
+                    </div>
+                  </div>
+                  <div style="margin-top:30px;">
+                    <a href="https://eximps-cloves.com/contact" style="background:#1A1A1A;color:#C47D0A;font-family:'Inter',sans-serif;font-weight:700;font-size:14px;padding:14px 35px;text-decoration:none;border-radius:4px;display:inline-block;">Chat with a Rep</a>
+                  </div>
+                </td></tr>
+              </table>
+              ${LOCKED_FOOTER}`
+          },
+
+          {
+            id: 'payment-reminder',
+            name: 'Payment Reminder',
+            desc: 'Outstanding balance reminder',
+            icon: '💰',
+            bg: 'linear-gradient(135deg, #003366 0%, #1A1A1A 100%)',
+            html: `${LOCKED_HEADER}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="background:#f9f9f9;padding:40px 30px;">
+                  <h2 style="color:#1A1A1A;font-family:'Playfair Display',serif;font-size:28px;margin:0 0 6px;">Payment Reminder</h2>
+                  <p style="color:#666;font-family:'Inter',sans-serif;font-size:14px;margin:0 0 24px;">Dear {{first_name}},</p>
+                  <p style="color:#333;font-family:'Inter',sans-serif;font-size:15px;line-height:1.7;margin:0 0 24px;">This is a friendly reminder that you have an outstanding balance on your account. Please see your account summary below.</p>
+                  <table width="100%" cellpadding="0" cellspacing="0" style="background:#fff;border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;">
+                    <tr><td colspan="2" style="background:#1A1A1A;padding:14px 20px;">
+                      <span style="color:#C47D0A;font-family:'Inter',sans-serif;font-weight:700;font-size:13px;letter-spacing:1px;text-transform:uppercase;">Account Summary</span>
+                    </td></tr>
+                    <tr><td style="padding:14px 20px;font-family:'Inter',sans-serif;font-size:14px;color:#666;border-bottom:1px solid #f1f5f9;">Property</td><td style="padding:14px 20px;font-family:'Inter',sans-serif;font-size:14px;color:#333;font-weight:600;border-bottom:1px solid #f1f5f9;">[Estate Name]</td></tr>
+                    <tr><td style="padding:14px 20px;font-family:'Inter',sans-serif;font-size:14px;color:#666;border-bottom:1px solid #f1f5f9;">Invoice Total</td><td style="padding:14px 20px;font-family:'Inter',sans-serif;font-size:14px;color:#333;font-weight:600;border-bottom:1px solid #f1f5f9;">₦[AMOUNT]</td></tr>
+                    <tr><td style="padding:14px 20px;font-family:'Inter',sans-serif;font-size:14px;color:#666;border-bottom:1px solid #f1f5f9;">Amount Paid</td><td style="padding:14px 20px;font-family:'Inter',sans-serif;font-size:14px;color:#2ecc71;font-weight:600;border-bottom:1px solid #f1f5f9;">₦[PAID]</td></tr>
+                    <tr><td style="padding:16px 20px;font-family:'Inter',sans-serif;font-size:15px;color:#e74c3c;font-weight:700;">Balance Due</td><td style="padding:16px 20px;font-family:'Inter',sans-serif;font-size:20px;color:#e74c3c;font-weight:700;">₦[BALANCE]</td></tr>
+                  </table>
+                  <div style="text-align:center;margin-top:30px;">
+                    <a href="#" style="background:#C47D0A;color:#fff;font-family:'Inter',sans-serif;font-weight:700;font-size:15px;padding:15px 40px;text-decoration:none;border-radius:4px;display:inline-block;">Pay Now</a>
+                  </div>
+                  <p style="color:#888;font-family:'Inter',sans-serif;font-size:12px;text-align:center;margin-top:20px;">Questions? Call/WhatsApp: <strong>+234 912 686 4383</strong> or email <strong>admin@eximps-cloves.com</strong></p>
+                  <div style="background:#f9f4e8;border:1px solid #C47D0A;border-radius:6px;padding:14px 20px;margin-top:16px;font-family:'Inter',sans-serif;font-size:13px;color:#555;">
+                    <strong style="color:#C47D0A;">Payment Details:</strong><br>
+                    Bank: Providus Bank &nbsp;|&nbsp; Account: <strong>1308184591</strong><br>
+                    Name: <strong>Eximp &amp; Cloves Infrastructure Limited</strong>
+                  </div>
+                </td></tr>
+              </table>
+              ${LOCKED_FOOTER}`
+          },
+          {
+            id: 'investment-update',
+            name: 'Eximp & Cloves Update',
+            desc: 'Monthly investment & estate news',
+            icon: '📰',
+            bg: 'linear-gradient(135deg, #1a1a2e 0%, #1A1A1A 100%)',
+            html: `${LOCKED_HEADER}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="background:#1A1A1A;padding:40px 30px;text-align:center;border-bottom:1px solid #2a2a2a;">
+                  <div style="color:#C47D0A;font-family:'Inter',sans-serif;font-size:11px;letter-spacing:3px;text-transform:uppercase;">REAL ESTATE INSIGHTS</div>
+                  <h1 style="color:#ffffff;font-family:'Playfair Display',serif;font-size:32px;margin:10px 0 0;">The Eximp Monthly</h1>
+                </td></tr>
+                <tr><td style="background:#fff;padding:40px 30px;">
+                  <p style="color:#333;font-family:'Inter',sans-serif;font-size:15px;line-height:1.8;">Dear {{first_name}}, here's what's happening at Eximp &amp; Cloves Infrastructure Limited this month.</p>
+                  <h3 style="color:#1A1A1A;font-family:'Playfair Display',serif;font-size:22px;margin:30px 0 10px;border-left:4px solid #C47D0A;padding-left:14px;">🏘️ Estate Progress</h3>
+                  <p style="color:#555;font-family:'Inter',sans-serif;font-size:14px;line-height:1.8;">Prime Circle Estate is now 80% sold out! We've completed the preliminary perimeter fencing and the gatehouse is nearing completion. Secure your spot before the price appreciation on the 1st of next month.</p>
+                  <hr style="border:none;border-top:1px solid #eee;margin:30px 0;">
+                  <h3 style="color:#1A1A1A;font-family:'Playfair Display',serif;font-size:22px;margin:0 0 10px;border-left:4px solid #C47D0A;padding-left:14px;">📊 Market Insight</h3>
+                  <p style="color:#555;font-family:'Inter',sans-serif;font-size:14px;line-height:1.8;">Epe continues to outperform other Lagos hubs with a 25% year-on-year appreciation. Land banking remains the safest hedge against inflation in the current Nigerian economy.</p>
+                  <div style="background:#fafafa;border-radius:8px;padding:24px;margin-top:30px;text-align:center;">
+                    <p style="color:#333;font-family:'Inter',sans-serif;font-size:14px;margin:0 0 16px;">Ready to secure your next asset?</p>
+                    <a href="https://eximps-cloves.com/properties" style="background:#C47D0A;color:#fff;font-family:'Inter',sans-serif;font-weight:700;font-size:14px;padding:12px 30px;text-decoration:none;border-radius:4px;display:inline-block;">View Available Estates</a>
+                  </div>
+                </td></tr>
+              </table>
+              ${LOCKED_FOOTER}`
+          },
+          {
+            id: 'brand-welcome',
+            name: 'Welcome to Eximp',
+            desc: 'Onboarding for new leads',
+            icon: '🤝',
+            bg: 'linear-gradient(135deg, #004d1a 0%, #1A1A1A 100%)',
+            html: `${LOCKED_HEADER}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="background:#1A1A1A;padding:50px 30px;text-align:center;">
+                  <div style="font-size:48px;margin-bottom:16px;">🤝</div>
+                  <h1 style="color:#ffffff;font-family:'Playfair Display',serif;font-size:36px;margin:0 0 16px;">Welcome to the Family!</h1>
+                  <p style="color:#cccccc;font-family:'Inter',sans-serif;font-size:16px;max-width:480px;margin:0 auto;line-height:1.7;">At Eximp &amp; Cloves, we don't just sell land; we build legacies. Thank you for trusting us with your investment journey.</p>
+                </td></tr>
+                <tr><td style="background:#fff;padding:40px 30px;">
+                  <table width="100%" cellpadding="0" cellspacing="0">
+                    <tr>
+                      <td width="10%" style="vertical-align:top;padding-top:4px;"><div style="width:32px;height:32px;background:#C47D0A;border-radius:50%;text-align:center;line-height:32px;color:#fff;font-weight:700;font-family:'Inter',sans-serif;">1</div></td>
+                      <td style="padding-left:16px;padding-bottom:24px;"><strong style="font-family:'Inter',sans-serif;color:#1A1A1A;">Pure Integrity</strong><br><span style="font-family:'Inter',sans-serif;font-size:14px;color:#666;">We provide verified titles only. No encumbrances, no stories.</span></td>
+                    </tr>
+                    <tr>
+                      <td width="10%" style="vertical-align:top;padding-top:4px;"><div style="width:32px;height:32px;background:#C47D0A;border-radius:50%;text-align:center;line-height:32px;color:#fff;font-weight:700;font-family:'Inter',sans-serif;">2</div></td>
+                      <td style="padding-left:16px;padding-bottom:24px;"><strong style="font-family:'Inter',sans-serif;color:#1A1A1A;">Fast Documentation</strong><br><span style="font-family:'Inter',sans-serif;font-size:14px;color:#666;">Your paperwork is processed within 48-72 hours of full payment.</span></td>
+                    </tr>
+                    <tr>
+                      <td width="10%" style="vertical-align:top;padding-top:4px;"><div style="width:32px;height:32px;background:#C47D0A;border-radius:50%;text-align:center;line-height:32px;color:#fff;font-weight:700;font-family:'Inter',sans-serif;">3</div></td>
+                      <td style="padding-left:16px;"><strong style="font-family:'Inter',sans-serif;color:#1A1A1A;">Flexible Payments</strong><br><span style="font-family:'Inter',sans-serif;font-size:14px;color:#666;">Instalment plans available for up to 12 months.</span></td>
+                    </tr>
+                  </table>
+                  <div style="text-align:center;margin-top:30px;">
+                    <a href="https://eximps-cloves.com/contact" style="background:#C47D0A;color:#fff;font-family:'Inter',sans-serif;font-weight:700;font-size:15px;padding:15px 40px;text-decoration:none;border-radius:4px;display:inline-block;">Speak to an Advisor</a>
+                  </div>
+                </td></tr>
+              </table>
+              ${LOCKED_FOOTER}`
+          },
+          {
+            id: 're-engagement',
+            name: 'Reconnect',
+            desc: 'Win back dormant contacts',
+            icon: '💌',
+            bg: 'linear-gradient(135deg, #4a0033 0%, #1A1A1A 100%)',
+            html: `${LOCKED_HEADER}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="background:#1A1A1A;padding:50px 30px;text-align:center;">
+                  <div style="font-size:48px;margin-bottom:16px;">💌</div>
+                  <h1 style="color:#ffffff;font-family:'Playfair Display',serif;font-size:34px;margin:0 0 16px;">We Miss You, {{first_name}}</h1>
+                  <p style="color:#cccccc;font-family:'Inter',sans-serif;font-size:16px;max-width:460px;margin:0 auto;line-height:1.7;">It's been a while since your last enquiry. Land prices in Epe and Ibeju-Lekki are moving fast — we don't want you to miss out.</p>
+                </td></tr>
+                <tr><td style="background:#fff;padding:40px 30px;text-align:center;">
+                  <p style="color:#333;font-family:'Inter',sans-serif;font-size:15px;line-height:1.8;max-width:480px;margin:0 auto 24px;">Since you last visited us, we've launched the **Northstar Residence** and helped 200+ new investors secure their future. We'd love to help you do the same.</p>
+                  <div style="background:#f9f4e8;border:2px solid #C47D0A;border-radius:10px;padding:24px;display:inline-block;margin-bottom:30px;">
+                    <div style="color:#C47D0A;font-family:'Inter',sans-serif;font-size:12px;letter-spacing:2px;text-transform:uppercase;">EXCLUSIVE RE-ENTRY OFFER</div>
+                    <div style="color:#1A1A1A;font-family:'Playfair Display',serif;font-size:32px;margin:8px 0;">5% Discount</div>
+                    <div style="color:#666;font-family:'Inter',sans-serif;font-size:13px;">Valid for any plot at Prime Circle or Coinfield. Use code: EXIMP-BACK</div>
+                  </div>
+                  <div>
+                    <a href="https://eximps-cloves.com/properties" style="background:#C47D0A;color:#fff;font-family:'Inter',sans-serif;font-weight:700;font-size:15px;padding:15px 40px;text-decoration:none;border-radius:4px;display:inline-block;">View Current Opportunities</a>
+                  </div>
+                </td></tr>
+              </table>
+              ${LOCKED_FOOTER}`
+          },
+          {
+            id: 'site-inspection',
+            name: 'Inspection Invite',
+            desc: 'Site inspection or open day',
+            icon: '🚌',
+            bg: 'linear-gradient(135deg, #003344 0%, #1A1A1A 100%)',
+            html: `${LOCKED_HEADER}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="background:#1A1A1A;padding:50px 30px;text-align:center;">
+                  <div style="color:#C47D0A;font-family:'Inter',sans-serif;font-size:11px;letter-spacing:3px;text-transform:uppercase;margin-bottom:12px;">JOIN US THIS WEEKEND</div>
+                  <h1 style="color:#ffffff;font-family:'Playfair Display',serif;font-size:36px;margin:0 0 8px;">Site Inspection Day</h1>
+                  <p style="color:#cccccc;font-family:'Inter',sans-serif;font-size:15px;margin:0;">Experience the landscape of your future investment first-hand.</p>
+                </td></tr>
+                <tr><td style="background:#fff;padding:40px 30px;">
+                  <table width="100%" cellpadding="0" cellspacing="0" style="margin-bottom:30px;">
+                    <tr>
+                      <td width="33%" style="text-align:center;padding:20px;border-right:1px solid #eee;">
+                        <div style="color:#C47D0A;font-size:28px;margin-bottom:6px;">📅</div>
+                        <div style="color:#1A1A1A;font-family:'Inter',sans-serif;font-weight:700;font-size:18px;">{{date}}</div>
+                        <div style="color:#888;font-family:'Inter',sans-serif;font-size:13px;">Date</div>
+                      </td>
+                      <td width="33%" style="text-align:center;padding:20px;border-right:1px solid #eee;">
+                        <div style="color:#C47D0A;font-size:28px;margin-bottom:6px;">🕙</div>
+                        <div style="color:#1A1A1A;font-family:'Inter',sans-serif;font-weight:700;font-size:18px;">10:00 AM</div>
+                        <div style="color:#888;font-family:'Inter',sans-serif;font-size:13px;">Time</div>
+                      </td>
+                      <td width="33%" style="text-align:center;padding:20px;">
+                        <div style="color:#C47D0A;font-size:28px;margin-bottom:6px;">📍</div>
+                        <div style="color:#1A1A1A;font-family:'Inter',sans-serif;font-weight:700;font-size:18px;">{{location}}</div>
+                        <div style="color:#888;font-family:'Inter',sans-serif;font-size:13px;">Venue</div>
+                      </td>
+                    </tr>
+                  </table>
+                  <p style="color:#555;font-family:'Inter',sans-serif;font-size:14px;line-height:1.8;margin-bottom:30px; text-align:center;">Refreshments will be served. Our expert advisors will be on-site to answer all technical and documentation questions.</p>
+                  <div style="text-align:center;">
+                    <a href="https://eximps-cloves.com/contact" style="background:#C47D0A;color:#fff;font-family:'Inter',sans-serif;font-weight:700;font-size:15px;padding:15px 40px;text-decoration:none;border-radius:4px;display:inline-block;">RSVP for Inspection</a>
+                  </div>
+                </td></tr>
+              </table>
+              ${LOCKED_FOOTER}`
+          },
+          {
+            id: 'new-month-message',
+            name: 'New Month Greeting',
+            desc: 'Inspirational start-of-month touchpoint',
+            icon: '🗓️',
+            bg: 'linear-gradient(135deg, #1A1A1A 0%, #C47D0A 100%)',
+            html: `${LOCKED_HEADER}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="background:#1A1A1A;padding:50px 30px;text-align:center;">
+                  <h1 style="color:#ffffff;font-family:'Playfair Display',serif;font-size:42px;margin:0 0 16px;">Happy New Month! 🎉</h1>
+                  <p style="color:#cccccc;font-family:'Inter',sans-serif;font-size:16px;max-width:480px;margin:0 auto;line-height:1.7;">A new month is a fresh chance to grow your portfolio and secure your future. Let's make it count.</p>
+                </td></tr>
+                <tr><td style="background:#fff;padding:40px 30px;text-align:center;">
+                  <blockquote style="border-left:4px solid #C47D0A;margin:0 auto 30px;padding:16px 24px;background:#fafafa;text-align:left;border-radius:0 8px 8px 0; max-width:500px;">
+                    <p style="color:#333;font-family:'Playfair Display',serif;font-size:18px;font-style:italic;margin:0;">"Wealth is not about how much money you make, but how much you keep and how hard it works for you."</p>
+                  </blockquote>
+                  <p style="color:#555;font-family:'Inter',sans-serif;font-size:15px;line-height:1.8;max-width:500px;margin:0 auto 30px;">At Eximp &amp; Cloves, we are committed to providing the most reliable vehicles for your wealth accumulation. Wishing you a month of abundance!</p>
+                  <a href="https://eximps-cloves.com/properties" style="background:#C47D0A;color:#fff;font-family:'Inter',sans-serif;font-weight:700;font-size:15px;padding:15px 40px;text-decoration:none;border-radius:4px;display:inline-block;">Start Investing Today</a>
+                </td></tr>
+              </table>
+              ${LOCKED_FOOTER}`
+          },
+          {
+            id: 'monday-motivation-brand',
+            name: 'Monday Motivation',
+            desc: 'Powerful weekly quote & focus',
+            icon: '💪',
+            bg: '#1A1A1A',
+            html: `${LOCKED_HEADER}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="background:#1A1A1A;padding:50px 30px;text-align:center;">
+                  <div style="color:#C47D0A;font-family:'Inter',sans-serif;font-size:12px;letter-spacing:3px;text-transform:uppercase;margin-bottom:10px;">MONDAY MOTIVATION</div>
+                  <h1 style="color:#ffffff;font-family:'Playfair Display',serif;font-size:36px;margin:0;">Command Your Week</h1>
+                </td></tr>
+                <tr><td style="background:#fff;padding:40px 30px;text-align:center;">
+                  <div style="font-size:40px;margin-bottom:20px;">🎖️</div>
+                  <p style="color:#333;font-family:'Playfair Display',serif;font-size:22px;font-weight:700;line-height:1.4;margin:0 0 10px;">"Don't wait for opportunity. Create it."</p>
+                  <p style="color:#555;font-family:'Inter',sans-serif;font-size:15px;line-height:1.8;max-width:480px;margin:0 auto 30px;">Landing an investment is the first step toward the life you want. Start your week by taking ownership of your tomorrow.</p>
+                  <a href="https://eximps-cloves.com/properties" style="background:#1A1A1A;color:#C47D0A;font-family:'Inter',sans-serif;font-weight:700;font-size:14px;padding:13px 35px;text-decoration:none;border-radius:4px;display:inline-block;">Secure Your Legacy</a>
+                </td></tr>
+              </table>
+              ${LOCKED_FOOTER}`
+          },
+          {
+            id: 'festive-seasonal',
+            name: 'Special Occasions',
+            desc: 'Eid, Christmas, Mothers/Fathers Day',
+            icon: '🎊',
+            bg: '#C47D0A',
+            html: `${LOCKED_HEADER}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="background:linear-gradient(180deg,#1A1A1A 0%,#2a1a00 100%);padding:60px 30px;text-align:center;">
+                  <h1 style="color:#ffffff;font-family:'Playfair Display',serif;font-size:40px;margin:0 0 16px;">Happy {{occasion}}! 🎊</h1>
+                  <p style="color:#cccccc;font-family:'Inter',sans-serif;font-size:17px;max-width:460px;margin:0 auto;line-height:1.7;">From all of us at Eximp &amp; Cloves Infrastructure Limited, we wish you a joyful and fulfilling celebration.</p>
+                </td></tr>
+                <tr><td style="background:#fff;padding:40px 30px;text-align:center;">
+                  <p style="color:#555;font-family:'Inter',sans-serif;font-size:15px;line-height:1.8;max-width:500px;margin:0 auto 30px;">As you celebrate with loved ones, remember that the greatest gift you can give is a secure future. We are here to help you build it.</p>
+                  <div style="background:#fafafa;border-radius:10px;padding:24px;margin-bottom:30px;display:inline-block; border:1px solid #C47D0A;">
+                    <div style="color:#C47D0A;font-family:'Playfair Display',serif;font-size:22px;margin-bottom:8px;">A Festive Token</div>
+                    <p style="color:#555;font-family:'Inter',sans-serif;font-size:14px;margin:0;">Get a voucher worth ₦100,000 off your next survey fee when you initiate a purchase this festive season.</p>
+                  </div>
+                  <div>
+                    <a href="https://eximps-cloves.com/contact" style="background:#C47D0A;color:#fff;font-family:'Inter',sans-serif;font-weight:700;font-size:14px;padding:13px 35px;text-decoration:none;border-radius:4px;display:inline-block;">Claim Festive Gift</a>
+                  </div>
+                </td></tr>
+              </table>
+              ${LOCKED_FOOTER}`
+          },
+
+          {
+            id: 'blank',
+            name: 'Blank Canvas',
+            desc: 'Start from scratch',
+            icon: '✏️',
+            bg: '#252525',
+            html: `${LOCKED_HEADER}
+              <table width="100%" cellpadding="0" cellspacing="0">
+                <tr><td style="background:#ffffff;padding:60px 30px;text-align:center;min-height:200px;">
+                  <p style="color:#ccc;font-family:'Inter',sans-serif;font-size:14px;">Your content goes here. Delete this and start designing.</p>
+                </td></tr>
+              </table>
+              ${LOCKED_FOOTER}`
+          }
+        ];
+
+        // ═══════════════════════════════════════
+        // EDITOR INIT
+        // ═══════════════════════════════════════
+        const editor = grapesjs.init({
+            container: '#gjs',
+            fromElement: false,
+            storageManager: false,
+            plugins: ['gjs-preset-newsletter'],
+            pluginsOpts: {
+                'gjs-preset-newsletter': { modalTitleImport: 'Import HTML' }
+            },
+            canvas: {
+                styles: [
+                    'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;500;700&display=swap'
+                ]
+            }
+        });
+
+        // ── CUSTOM BLOCKS ──
+        const bm = editor.BlockManager;
+
+        bm.add('ec-header', {
+            label: '🔒 Brand Header',
+            category: 'Eximp & Cloves',
+            content: LOCKED_HEADER,
+            attributes: { class: 'fa fa-header' }
+        });
+
+        bm.add('ec-hero', {
+            label: 'Hero Section',
+            category: 'Eximp & Cloves',
+            content: `<div style="background:#1A1A1A;padding:60px 20px;text-align:center;color:#fff;">
+              <h1 style="font-family:'Playfair Display',serif;font-size:38px;margin:0 0 16px;color:#C47D0A;">Your Headline Here</h1>
+              <p style="font-family:'Inter',sans-serif;font-size:16px;color:#ccc;max-width:480px;margin:0 auto 28px;line-height:1.7;">Your supporting message goes here. Keep it punchy and focused.</p>
+              <a href="#" style="background:#C47D0A;color:#fff;padding:14px 36px;text-decoration:none;font-weight:700;font-family:'Inter',sans-serif;border-radius:4px;display:inline-block;">Call To Action</a>
+            </div>`
+        });
+
+        bm.add('ec-property-card', {
+            label: 'Property Card',
+            category: 'Eximp & Cloves',
+            content: `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #eee;border-radius:8px;overflow:hidden;font-family:'Inter',sans-serif;">
+              <tr><td><img src="https://placehold.co/600x280/1A1A1A/C47D0A?text=Property+Image" width="100%" style="display:block;" /></td></tr>
+              <tr><td style="padding:24px;">
+                <h3 style="margin:0 0 8px;color:#1A1A1A;font-family:'Playfair Display',serif;font-size:22px;">Estate Name, Location</h3>
+                <p style="color:#666;font-size:14px;margin:0 0 16px;line-height:1.6;">Brief description of the estate and its key investment benefits.</p>
+                <div style="color:#C47D0A;font-weight:700;font-size:22px;margin-bottom:20px;">₦X,000,000</div>
+                <a href="#" style="background:#1A1A1A;color:#C47D0A;padding:12px 24px;text-decoration:none;font-weight:700;font-size:14px;border-radius:4px;display:inline-block;">View Details →</a>
+              </td></tr>
+            </table>`
+        });
+
+        bm.add('ec-cta-button', {
+            label: 'Gold CTA Button',
+            category: 'Eximp & Cloves',
+            content: `<div style="text-align:center;padding:20px;">
+              <a href="#" style="background:#C47D0A;color:#fff;padding:15px 40px;text-decoration:none;font-weight:700;font-size:15px;font-family:'Inter',sans-serif;border-radius:4px;display:inline-block;">Book a Consultation</a>
+            </div>`
+        });
+
+        bm.add('ec-account-summary', {
+            label: 'Account Summary',
+            category: 'Eximp & Cloves',
+            content: `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;font-family:'Inter',sans-serif;">
+              <tr><td colspan="2" style="background:#1A1A1A;padding:14px 20px;"><span style="color:#C47D0A;font-weight:700;font-size:13px;letter-spacing:1px;text-transform:uppercase;">Account Summary</span></td></tr>
+              <tr><td style="padding:14px 20px;color:#666;font-size:14px;border-bottom:1px solid #f1f5f9;">Client Name</td><td style="padding:14px 20px;color:#333;font-weight:600;font-size:14px;border-bottom:1px solid #f1f5f9;">{{first_name}} {{last_name}}</td></tr>
+              <tr><td style="padding:14px 20px;color:#666;font-size:14px;border-bottom:1px solid #f1f5f9;">Property</td><td style="padding:14px 20px;color:#333;font-weight:600;font-size:14px;border-bottom:1px solid #f1f5f9;">[ESTATE NAME]</td></tr>
+              <tr><td style="padding:14px 20px;color:#666;font-size:14px;border-bottom:1px solid #f1f5f9;">Invoice Total</td><td style="padding:14px 20px;color:#333;font-weight:600;font-size:14px;border-bottom:1px solid #f1f5f9;">₦[AMOUNT]</td></tr>
+              <tr><td style="padding:14px 20px;color:#666;font-size:14px;border-bottom:1px solid #f1f5f9;">Amount Paid</td><td style="padding:14px 20px;color:#2ecc71;font-weight:600;font-size:14px;border-bottom:1px solid #f1f5f9;">₦[PAID]</td></tr>
+              <tr><td style="padding:16px 20px;color:#e74c3c;font-weight:700;font-size:15px;">Balance Due</td><td style="padding:16px 20px;color:#e74c3c;font-weight:700;font-size:20px;">₦[BALANCE]</td></tr>
+            </table>`
+        });
+
+        bm.add('ec-social-links', {
+            label: 'Social Links',
+            category: 'Eximp & Cloves',
+            content: `<div style="padding:24px;text-align:center;background:#f9f9f9;font-family:'Inter',sans-serif;">
+              <p style="font-size:12px;color:#888;margin:0 0 14px;">Connect with us</p>
+              <a href="https://www.linkedin.com/company/eximp-cloves" style="color:#C47D0A;text-decoration:none;font-weight:600;font-size:13px;margin:0 10px;">LinkedIn</a>
+              <a href="https://x.com/eximp_cloves" style="color:#C47D0A;text-decoration:none;font-weight:600;font-size:13px;margin:0 10px;">X</a>
+              <a href="https://instagram.com/eximp.cloves" style="color:#C47D0A;text-decoration:none;font-weight:600;font-size:13px;margin:0 10px;">Instagram</a>
+              <a href="https://facebook.com/eximp.cloves" style="color:#C47D0A;text-decoration:none;font-weight:600;font-size:13px;margin:0 10px;">Facebook</a>
+              <a href="https://tiktok.com/@eximp.cloves" style="color:#C47D0A;text-decoration:none;font-weight:600;font-size:13px;margin:0 10px;">TikTok</a>
+            </div>`
+        });
+
+        bm.add('ec-footer', {
+            label: '🔒 Brand Footer',
+            category: 'Eximp & Cloves',
+            content: LOCKED_FOOTER
+        });
+
+        // ═══════════════════════════════════════
+        // TEMPLATE PICKER LOGIC
+        // ═══════════════════════════════════════
+        // --- MODAL CONTROLS ---
+        function openTemplates() { document.getElementById('template-modal').classList.remove('hidden'); }
+        function closeTemplates() { document.getElementById('template-modal').classList.add('hidden'); }
+        
+        function openTags() { document.getElementById('tags-modal').classList.remove('hidden'); }
+        function closeTags() { document.getElementById('tags-modal').classList.add('hidden'); }
+
+        function copyTag(text) {
+            navigator.clipboard.writeText(text);
+            const btn = event.target;
+            const originalText = btn.innerText;
+            btn.innerText = 'Copied!';
+            btn.style.background = '#C47D0A';
+            btn.style.color = 'white';
+            setTimeout(() => {
+                btn.innerText = originalText;
+                btn.style.background = '#333';
+                btn.style.color = '#C47D0A';
+            }, 1500);
+        }
+
+        function renderTemplates() {
+            const grid = document.getElementById('template-grid');
+            grid.innerHTML = TEMPLATES.map(t => `
+                <div class="template-card" id="tc-${t.id}" onclick="selectTemplate('${t.id}')">
+                  <div class="template-preview" style="background:${t.bg};">
+                    <div class="template-preview-bar"></div>
+                    <span style="font-size:2.5rem;">${t.icon}</span>
+                  </div>
+                  <div class="template-info">
+                    <div class="template-name">${t.name}</div>
+                    <div class="template-desc">${t.desc}</div>
+                  </div>
+                </div>
+            `).join('');
+        }
+
+        function selectTemplate(id) {
+            selectedTemplateId = id;
+            document.querySelectorAll('.template-card').forEach(c => c.classList.remove('selected'));
+            document.getElementById('tc-' + id).classList.add('selected');
+        }
+
+        function applyTemplate() {
+            if (!selectedTemplateId) { alert('Please select a template first.'); return; }
+            const tmpl = TEMPLATES.find(t => t.id === selectedTemplateId);
+            if (!tmpl) return;
+            editor.setComponents(tmpl.html);
+            closeTemplates();
+            selectedTemplateId = null;
+        }
+
+        // ═══════════════════════════════════════
+        // LOAD / SAVE / TEST
+        // ═══════════════════════════════════════
+        async function loadCampaign() {
+            const token = localStorage.getItem('ec_token');
+            if (!campaignId) { renderTemplates(); openTemplates(); return; }
+            const res = await fetch(`/api/marketing/campaigns/${campaignId}`, {
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            const data = await res.json();
+            
+            // Set subject
+            document.getElementById('subject-field').value = data.subject_a || '';
+
+            // More lenient check: if it's not the exact initial placeholder, don't force the picker
+            const isPlaceholder = !data.html_body_a || data.html_body_a === '<h1>Start Designing!</h1>';
+            
+            if (!isPlaceholder) {
+                editor.setComponents(data.html_body_a);
+                closeTemplates();
+            } else {
+                renderTemplates();
+                openTemplates();
+            }
+        }
+
+        document.getElementById('save-campaign').onclick = async () => {
+            const statusLabel = document.getElementById('save-status');
+            statusLabel.innerText = '💾 Saving...';
+            
+            // Use core getHtml/getCss for maximum reliability
+            const html = editor.getHtml();
+            const css = editor.getCss();
+            const fullHtml = `<html><head><style>${css}</style></head><body>${html}</body></html>`;
+            
+            const payload = {
+                html_body_a: fullHtml,
+                subject_a: document.getElementById('subject-field').value
+            };
+            
+            const res = await fetch(`/api/marketing/campaigns/${campaignId}`, {
+                method: 'PUT',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('ec_token') },
+                body: JSON.stringify(payload)
+            });
+            
+            if (res.ok) {
+                statusLabel.innerText = '✅ Saved';
+                setTimeout(() => { statusLabel.innerText = ''; }, 3000);
+            } else {
+                statusLabel.innerText = '❌ Error saving';
+                console.error("Save failure:", await res.text());
+            }
+        };
+
+        document.getElementById('send-test').onclick = async () => {
+            const email = prompt('Enter an email address to send the test to:');
+            if (!email) return;
+            
+            const html = editor.getHtml();
+            const css = editor.getCss();
+            const fullHtml = `<html><head><style>${css}</style></head><body>${html}</body></html>`;
+            const subject = document.getElementById('subject-field').value;
+            
+            await fetch(`/api/marketing/campaigns/${campaignId}/send-test`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('ec_token') },
+                body: JSON.stringify({ 
+                    email: email,
+                    html_body_a: fullHtml,
+                    subject_a: subject
+                })
+            });
+            alert(`✅ Test email sent to ${email}`);
+        };
+
+        loadCampaign();
+    </script>
+</body>
+</html>

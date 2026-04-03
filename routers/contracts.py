@@ -106,6 +106,9 @@ async def _create_contract_session(invoice_id: str, current_admin: dict, backgro
     if not inv_res.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
     invoice = inv_res.data[0]
+    client_raw = invoice.get("clients", {})
+    client = client_raw[0] if isinstance(client_raw, list) and client_raw else client_raw
+    if not client: client = {}
 
     existing = db.table("contract_signing_sessions")\
         .select("id, token, status, expires_at")\
@@ -131,7 +134,7 @@ async def _create_contract_session(invoice_id: str, current_admin: dict, backgro
     }).execute().data[0]
 
     from email_service import send_signing_link_email
-    background_tasks.add_task(send_signing_link_email, invoice, invoice["clients"], token, expires_at)
+    background_tasks.add_task(send_signing_link_email, invoice, client, token, expires_at)
 
     await log_activity(
         "contract_initiated",
@@ -162,6 +165,9 @@ async def initiate_contract_signing(invoice_id: str, background_tasks: Backgroun
     if not inv_res.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
     invoice = inv_res.data[0]
+    client_raw = invoice.get("clients", {})
+    client = client_raw[0] if isinstance(client_raw, list) and client_raw else client_raw
+    if not client: client = {}
     
     # 2. Prevent duplicate active sessions
     existing = db.table("contract_signing_sessions").select("id, status").eq("invoice_id", invoice_id).neq("status", "expired").execute()
@@ -192,7 +198,6 @@ async def initiate_contract_signing(invoice_id: str, background_tasks: Backgroun
     from email_service import send_signing_link_email
     background_tasks.add_task(send_signing_link_email, invoice, invoice["clients"], token, expires_at)
     
-    # 6. LOG ACTIVITY
     await log_activity(
         "contract_initiated",
         f"Contract signing initiated for {invoice['invoice_number']}. Signing link sent to client. Note: This link expires in 48 hours.",
@@ -200,6 +205,17 @@ async def initiate_contract_signing(invoice_id: str, background_tasks: Backgroun
         client_id=invoice["client_id"],
         invoice_id=invoice_id
     )
+    
+    # Log to email_logs
+    db.table("email_logs").insert({
+        "client_id": invoice["client_id"],
+        "invoice_id": invoice_id,
+        "email_type": "contract",
+        "recipient_email": client.get("email"),
+        "subject": "Your Contract of Sale is Ready — Eximp & Cloves",
+        "status": "sent",
+        "sent_by": current_admin["sub"]
+    }).execute()
     
     return {"message": "Contract signing initiated", "token": token, "expires_at": expires_at}
 
@@ -293,6 +309,18 @@ async def resend_contract_link(invoice_id: str, background_tasks: BackgroundTask
     client = invoice["clients"]
     from email_service import send_signing_link_email
     background_tasks.add_task(send_signing_link_email, invoice, client, session["token"], expires_at)
+
+    # Log to email_logs
+    db.table("email_logs").insert({
+        "client_id": invoice["client_id"],
+        "invoice_id": invoice_id,
+        "email_type": "contract",
+        "recipient_email": client["email"],
+        "subject": "Your Contract of Sale — Eximp & Cloves",
+        "status": "sent",
+        "sent_by": current_admin["sub"]
+    }).execute()
+
     return {"message": "Signing link resent"}
 
 @router.post("/execute/{invoice_id}")
@@ -347,6 +375,17 @@ async def execute_final_contract(invoice_id: str, background_tasks: BackgroundTa
         client_id=client.get("id")
     )
 
+    # Log to email_logs
+    db.table("email_logs").insert({
+        "client_id": client.get("id"),
+        "invoice_id": invoice_id,
+        "email_type": "contract",
+        "recipient_email": client.get("email"),
+        "subject": f"Execution Complete: Your Contract of Sale {invoice['invoice_number']}",
+        "status": "sent",
+        "sent_by": current_admin["sub"]
+    }).execute()
+
     return {"message": "Final contract executed and emailed"}
 
 @router.post("/resend-final/{invoice_id}")
@@ -379,6 +418,17 @@ async def resend_executed_contract(invoice_id: str, background_tasks: Background
 
     from email_service import send_executed_contract_email
     background_tasks.add_task(send_executed_contract_email, invoice, client, pdf_content)
+
+    # Log to email_logs
+    db.table("email_logs").insert({
+        "client_id": client.get("id"),
+        "invoice_id": invoice_id,
+        "email_type": "contract",
+        "recipient_email": client.get("email"),
+        "subject": f"Resent: Executed Contract of Sale {invoice['invoice_number']}",
+        "status": "sent",
+        "sent_by": current_admin["sub"]
+    }).execute()
 
     return {"message": "Final contract resent to client"}
 
@@ -590,16 +640,16 @@ async def remove_witness_signature(invoice_id: str, witness_id: str, data: Witne
 
 @router.get("/signatures")
 async def list_company_signatures(current_admin=Depends(verify_token)):
-    if current_admin["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admins only")
+    if current_admin["role"] not in ["admin", "lawyer"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
     db = get_db()
     res = db.table("company_signatures").select("*").eq("is_active", True).execute()
     return res.data
 
 @router.post("/signatures")
 async def upload_company_signature(data: CompanySignatureUpload, current_admin=Depends(verify_token)):
-    if current_admin["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admins only")
+    if current_admin["role"] not in ["admin", "lawyer"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
     db = get_db()
     
     # 1. Process Signature (Standardize to PNG)
@@ -681,8 +731,8 @@ async def upload_company_signature(data: CompanySignatureUpload, current_admin=D
 
 @router.delete("/signatures/{role}")
 async def delete_company_signature(role: str, current_admin=Depends(verify_token)):
-    if current_admin["role"] != "admin":
-        raise HTTPException(status_code=403, detail="Admins only")
+    if current_admin["role"] not in ["admin", "lawyer"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
     if role not in ["director", "secretary", "lawyer", "lawyer_seal", "witness"]:
         raise HTTPException(status_code=400, detail="Invalid role")
         

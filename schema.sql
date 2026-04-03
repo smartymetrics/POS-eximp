@@ -448,4 +448,156 @@ CREATE INDEX IF NOT EXISTS idx_commission_earnings_rep ON commission_earnings(sa
 CREATE INDEX IF NOT EXISTS idx_commission_earnings_invoice ON commission_earnings(invoice_id);
 CREATE INDEX IF NOT EXISTS idx_commission_earnings_unpaid ON commission_earnings(sales_rep_id, is_paid) WHERE is_paid = false;
 
-ALTER TABLE commission_earnings ENABLE ROW LEVEL SECURITY;
+-- ============================================================
+-- MARKETING DASHBOARD (LEGENDARY - PRD 6)
+-- ============================================================
+
+-- 1. MARKETING CONTACTS (Leads + Clients)
+CREATE TABLE IF NOT EXISTS marketing_contacts (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  client_id UUID REFERENCES clients(id), -- NULL for non-client leads
+  first_name VARCHAR(255),
+  last_name VARCHAR(255),
+  email VARCHAR(255) NOT NULL,
+  phone VARCHAR(50),
+  tags TEXT[], -- e.g. {'coinfield', 'hot-lead', 'vip'}
+  source VARCHAR(100), -- 'ecoms_client', 'csv_import', 'manual', 'form'
+  contact_type VARCHAR(50) DEFAULT 'lead' CHECK (contact_type IN ('client', 'lead')),
+  is_subscribed BOOLEAN DEFAULT true,
+  unsubscribed_at TIMESTAMPTZ,
+  unsubscribe_reason TEXT,
+  bounce_count INTEGER DEFAULT 0,
+  is_bounced BOOLEAN DEFAULT false,
+  bounced_at TIMESTAMPTZ,
+  engagement_score INTEGER DEFAULT 0, -- 0-100
+  last_opened_at TIMESTAMPTZ,
+  last_clicked_at TIMESTAMPTZ,
+  total_emails_received INTEGER DEFAULT 0,
+  total_emails_opened INTEGER DEFAULT 0,
+  total_emails_clicked INTEGER DEFAULT 0,
+  created_at TIMESTAMPTZ DEFAULT NOW(),
+  updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE UNIQUE INDEX IF NOT EXISTS idx_marketing_contacts_email ON marketing_contacts(email);
+CREATE INDEX IF NOT EXISTS idx_marketing_contacts_subscribed ON marketing_contacts(is_subscribed) WHERE is_subscribed = true;
+CREATE INDEX IF NOT EXISTS idx_marketing_contacts_score ON marketing_contacts(engagement_score DESC);
+ALTER TABLE marketing_contacts ENABLE ROW LEVEL SECURITY;
+
+-- 2. EMAIL CAMPAIGNS
+CREATE TABLE IF NOT EXISTS email_campaigns (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  subject_a VARCHAR(500) NOT NULL,
+  subject_b VARCHAR(500), -- NULL if not A/B test
+  preview_text VARCHAR(500),
+  from_name VARCHAR(255) DEFAULT 'Eximp & Cloves',
+  from_email VARCHAR(255) DEFAULT 'hello@mail.eximps-cloves.com',
+  reply_to VARCHAR(255) DEFAULT 'marketing@mail.eximps-cloves.com',
+  bcc_email VARCHAR(255) DEFAULT 'marketing@mail.eximps-cloves.com', -- internal monitoring copy, never visible to recipients
+  html_body_a TEXT NOT NULL,
+  html_body_b TEXT,
+  status VARCHAR(50) DEFAULT 'draft' CHECK (status IN ('draft','scheduled','sending','sent','paused','failed')),
+  is_ab_test BOOLEAN DEFAULT false,
+  scheduled_at TIMESTAMPTZ,
+  sent_at TIMESTAMPTZ,
+  total_recipients INTEGER DEFAULT 0,
+  total_sent INTEGER DEFAULT 0,
+  created_by UUID REFERENCES admins(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE email_campaigns ENABLE ROW LEVEL SECURITY;
+
+-- 3. MARKETING SEGMENTS
+CREATE TABLE IF NOT EXISTS marketing_segments (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  description TEXT,
+  segment_type VARCHAR(20) DEFAULT 'dynamic' CHECK (segment_type IN ('dynamic', 'static')),
+  filter_rules JSONB,
+  contact_count INTEGER DEFAULT 0,
+  created_by UUID REFERENCES admins(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE marketing_segments ENABLE ROW LEVEL SECURITY;
+
+-- 4. CAMPAIGN SEGMENTS (Join table)
+CREATE TABLE IF NOT EXISTS campaign_segments (
+  campaign_id UUID REFERENCES email_campaigns(id) ON DELETE CASCADE,
+  segment_id UUID REFERENCES marketing_segments(id),
+  PRIMARY KEY (campaign_id, segment_id)
+);
+
+-- 5. CAMPAIGN RECIPIENTS (Tracking per person per campaign)
+CREATE TABLE IF NOT EXISTS campaign_recipients (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  campaign_id UUID NOT NULL REFERENCES email_campaigns(id),
+  contact_id UUID NOT NULL REFERENCES marketing_contacts(id),
+  variant CHAR(1) DEFAULT 'A', -- A or B for A/B tests
+  resend_message_id VARCHAR(255),
+  status VARCHAR(50) DEFAULT 'pending' CHECK (status IN ('pending','sent','delivered','bounced','failed')),
+  sent_at TIMESTAMPTZ,
+  delivered_at TIMESTAMPTZ,
+  opened_at TIMESTAMPTZ,       -- first open
+  last_opened_at TIMESTAMPTZ,  -- most recent open
+  open_count INTEGER DEFAULT 0,
+  clicked_at TIMESTAMPTZ,      -- first click
+  last_clicked_at TIMESTAMPTZ,
+  click_count INTEGER DEFAULT 0,
+  bounced_at TIMESTAMPTZ,
+  unsubscribed_at TIMESTAMPTZ,
+  spam_reported_at TIMESTAMPTZ,
+  UNIQUE(campaign_id, contact_id)
+);
+
+-- 6. EMAIL CLICK EVENTS
+CREATE TABLE IF NOT EXISTS email_click_events (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  campaign_id UUID NOT NULL REFERENCES email_campaigns(id),
+  contact_id UUID NOT NULL REFERENCES marketing_contacts(id),
+  original_url TEXT NOT NULL,
+  clicked_at TIMESTAMPTZ DEFAULT NOW(),
+  ip_address VARCHAR(50),
+  user_agent TEXT
+);
+
+-- 7. MARKETING UNSUBSCRIBES (Suppression list)
+CREATE TABLE IF NOT EXISTS marketing_unsubscribes (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  contact_id UUID NOT NULL REFERENCES marketing_contacts(id),
+  email VARCHAR(255) NOT NULL,
+  campaign_id UUID REFERENCES email_campaigns(id), -- NULL if unsubscribed manually
+  reason TEXT,
+  unsubscribed_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+-- 8. MEDIA LIBRARY
+CREATE TABLE IF NOT EXISTS media_library (
+  id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+  filename VARCHAR(500) NOT NULL,
+  original_filename VARCHAR(500),
+  file_url TEXT NOT NULL,
+  file_size INTEGER,
+  mime_type VARCHAR(100),
+  width INTEGER,
+  height INTEGER,
+  uploaded_by UUID REFERENCES admins(id),
+  created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE media_library ENABLE ROW LEVEL SECURITY;
+-- ============================================================
+-- RLS POLICIES FOR MARKETING
+-- ============================================================
+
+-- Authenticated admins can do everything with marketing data
+CREATE POLICY "Admins have full access to marketing_contacts" ON marketing_contacts FOR ALL TO authenticated USING (true);
+CREATE POLICY "Admins have full access to email_campaigns" ON email_campaigns FOR ALL TO authenticated USING (true);
+CREATE POLICY "Admins have full access to marketing_segments" ON marketing_segments FOR ALL TO authenticated USING (true);
+CREATE POLICY "Admins have full access to campaign_segments" ON campaign_segments FOR ALL TO authenticated USING (true);
+CREATE POLICY "Admins have full access to campaign_recipients" ON campaign_recipients FOR ALL TO authenticated USING (true);
+CREATE POLICY "Admins have full access to email_click_events" ON email_click_events FOR ALL TO authenticated USING (true);
+CREATE POLICY "Admins have full access to marketing_unsubscribes" ON marketing_unsubscribes FOR ALL TO authenticated USING (true);
+CREATE POLICY "Admins have full access to media_library" ON media_library FOR ALL TO authenticated USING (true);

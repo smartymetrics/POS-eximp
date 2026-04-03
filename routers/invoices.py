@@ -36,7 +36,7 @@ async def list_invoices(show_voided: bool = False, current_admin=Depends(verify_
 async def get_invoice(invoice_id: str, current_admin=Depends(verify_token)):
     db = get_db()
     result = db.table("invoices")\
-        .select("*, clients(*), payments(*)")\
+        .select("*, clients(*), payments(*), email_logs(*, admins!sent_by(full_name))")\
         .eq("id", invoice_id)\
         .execute()
     if not result.data:
@@ -171,22 +171,65 @@ async def send_documents(
                     .execute()
                 await send_statement_email(all_inv.data, client, current_admin["sub"])
                 sent.append("statement")
+            elif doc_type == "contract":
+                # To send a contract, we check if there's an active or completed session
+                session_res = db.table("contract_signing_sessions")\
+                    .select("*, witness_signatures(*)")\
+                    .eq("invoice_id", invoice["id"])\
+                    .order("created_at", desc=True)\
+                    .limit(1)\
+                    .execute()
+                
+                if session_res.data:
+                    session = session_res.data[0]
+                    if session["status"] == "completed":
+                        # Send the final executed contract
+                        from pdf_service import generate_contract_pdf
+                        from email_service import send_executed_contract_email
+                        pdf_content = generate_contract_pdf(invoice, client, session.get("witness_signatures", []), is_draft=False)
+                        background_tasks.add_task(send_executed_contract_email, invoice, client, pdf_content)
+                        sent.append("contract")
+                    else:
+                        # Resend the signing link
+                        from email_service import send_signing_link_email
+                        from datetime import datetime
+                        expires_at = datetime.fromisoformat(session["expires_at"].replace('Z', '+00:00'))
+                        background_tasks.add_task(send_signing_link_email, invoice, client, session["token"], expires_at)
+                        sent.append("contract")
+                else:
+                    # No session exists? We should probably initiate one if the user checked this
+                    # But for now, let's keep it safe. If no session, we can't send.
+                    # Or we call initiate_contract_signing? (Requires lawyer/admin role)
+                    pass 
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"Email Provider Error: {str(e)}")
 
     # Log emails
-    for doc_type in sent:
-        db.table("email_logs").insert({
-            "client_id": invoice["client_id"],
-            "invoice_id": data.invoice_id,
-            "email_type": doc_type,
-            "recipient_email": client["email"],
-            "subject": f"Eximp & Cloves - {doc_type.title()} {invoice['invoice_number']}",
-            "status": "sent",
-            "sent_by": current_admin["sub"]
-        }).execute()
+    if sent:
+        background_tasks.add_task(log_email_sends, db, invoice, client, sent, current_admin["sub"])
 
     return {"message": f"Sent: {', '.join(sent)}", "sent": sent}
+
+
+def log_email_sends(db, invoice, client, sent_types, admin_id):
+    """Background task to record sent emails in the audit log."""
+    try:
+        logs = []
+        for doc_type in sent_types:
+            logs.append({
+                "client_id": invoice["client_id"],
+                "invoice_id": invoice["id"],
+                "email_type": doc_type,
+                "recipient_email": client.get("email"),
+                "subject": f"Eximp & Cloves - {doc_type.title()} {invoice['invoice_number']}",
+                "status": "sent",
+                "sent_by": admin_id
+            })
+        if logs:
+            db.table("email_logs").insert(logs).execute()
+    except Exception as e:
+        import logging
+        logging.getLogger(__name__).error(f"Error logging email sends: {e}")
 
 
 @router.post("/{invoice_id}/void")

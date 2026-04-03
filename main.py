@@ -6,7 +6,7 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from contextlib import asynccontextmanager
 
-from routers import auth, clients, properties, invoices, payments, webhooks, verifications, analytics, sales_reps, reports, commission, contracts, signing
+from routers import auth, clients, properties, invoices, payments, webhooks, verifications, analytics, sales_reps, reports, commission, contracts, signing, marketing_contacts, marketing_campaigns, marketing_segments, marketing_analytics, marketing_sequences, marketing_webhooks, marketing_media
 from database import init_db
 from scheduler import start_scheduler, stop_scheduler
 
@@ -45,6 +45,13 @@ app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 app.include_router(commission.router, prefix="/api/commission", tags=["commission"])
 app.include_router(contracts.router, prefix="/api/contracts", tags=["contracts"])
 app.include_router(signing.router, tags=["signing"])
+app.include_router(marketing_contacts.router, prefix="/api/marketing/contacts", tags=["marketing"])
+app.include_router(marketing_campaigns.router, prefix="/api/marketing/campaigns", tags=["marketing"])
+app.include_router(marketing_segments.router, prefix="/api/marketing/segments", tags=["marketing"])
+app.include_router(marketing_analytics.router, prefix="/api/marketing/analytics", tags=["marketing"])
+app.include_router(marketing_sequences.router, prefix="/api/marketing/sequences", tags=["marketing"])
+app.include_router(marketing_webhooks.router, tags=["webhooks"])  # tracking at root level
+app.include_router(marketing_media.router, prefix="/api/marketing/media", tags=["marketing"])
 
 
 
@@ -77,6 +84,16 @@ async def invoices_page(request: Request):
 @app.get("/new-transaction", response_class=HTMLResponse)
 async def new_transaction_page(request: Request):
     return templates.TemplateResponse("new_transaction.html", {"request": request})
+
+
+@app.get("/marketing", response_class=HTMLResponse)
+async def marketing_dashboard_page(request: Request):
+    return templates.TemplateResponse("marketing_dashboard.html", {"request": request})
+
+
+@app.get("/marketing/editor", response_class=HTMLResponse)
+async def marketing_editor_page(request: Request, id: str):
+    return templates.TemplateResponse("marketing_editor.html", {"request": request, "campaign_id": id})
 
 
 @app.head("/health")

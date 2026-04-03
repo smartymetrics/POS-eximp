@@ -9,6 +9,9 @@
     href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap"
     rel="stylesheet">
   <script src="https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.min.js"></script>
+  <!-- Quill.js for Professional Marketing Editor -->
+  <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
+  <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
   <style>
     :root {
       --gold: #F5A623;
@@ -396,6 +399,33 @@
 
     .stat-card.red::before {
       background: var(--red);
+    }
+
+    /* ── DOCUMENT SENT STATUS ─────────────────── */
+    .sent-status-indicator {
+      margin-top: 6px;
+      padding: 4px 8px;
+      background: rgba(46, 204, 113, 0.1);
+      border-radius: 4px;
+      font-size: 11px;
+      color: #2e7d32;
+      display: none;
+      align-items: center;
+      gap: 6px;
+      border: 1px solid rgba(46, 204, 113, 0.2);
+    }
+
+    .sent-status-indicator.visible {
+      display: flex !important;
+    }
+
+    .sent-status-indicator svg {
+      color: #2ecc71;
+    }
+
+    .staff-name {
+      font-weight: 600;
+      color: #1a1a1a;
     }
 
     .stat-card.refund::before {
@@ -947,6 +977,30 @@
       }
     }
 
+
+    .quill-editor-container {
+      height: 400px;
+      background: #fafafa;
+      border-radius: 0 0 8px 8px;
+    }
+
+    .ql-toolbar.ql-snow {
+      border-radius: 8px 8px 0 0;
+      background: #fdfdfd;
+      border-color: #ddd;
+    }
+
+    .ql-container.ql-snow {
+      border-radius: 0 0 8px 8px;
+      border-color: #ddd;
+      font-family: 'DM Sans', sans-serif;
+      font-size: 15px;
+    }
+
+    .ql-editor h1, .ql-editor h2 {
+      font-family: 'Playfair Display', serif !important;
+    }
+
     /* ── MOBILE RESPONSIVENESS ───────────────── */
     .hamburger {
       display: none;
@@ -1172,6 +1226,12 @@
         </svg>
         Sales Reps
       </a>
+      <a class="nav-item" href="/marketing" id="nav-marketing">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 12px; opacity: 0.7;">
+          <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"></path>
+        </svg>
+        Marketing
+      </a>
 
       <div class="nav-label" style="margin-top:8px;" id="nav-label-admin">Admin</div>
       <a class="nav-item admin-only" href="#" id="nav-team" onclick="showSection('team')" style="display:none;">
@@ -1350,7 +1410,15 @@
       <div class="card">
         <div class="card-header">
           <span class="card-title">All Invoices</span>
-          <div style="display:flex;gap:12px;align-items:center;">
+          <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
+            <input
+              type="text"
+              class="form-control"
+              id="invoice-search"
+              placeholder="Search invoice # or client name..."
+              oninput="applyInvoiceSearch()"
+              style="min-width:240px;max-width:360px;"
+            >
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray);cursor:pointer;">
               <input type="checkbox" id="show-voided-inv" onchange="loadInvoices()"
                 style="width:16px;height:16px;accent-color:var(--gold);">
@@ -1949,6 +2017,7 @@
 
     </div>
 
+
     <!-- ANALYTICS SECTION -->
     <div class="content" id="section-analytics-revenue" style="display:none;">
       <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
@@ -2529,6 +2598,7 @@
             <div class="doc-info">
               <div class="doc-name">Invoice</div>
               <div class="doc-desc">The original invoice for the property purchase</div>
+              <div id="status-invoice" class="sent-status-indicator"></div>
             </div>
           </label>
           <label class="doc-option" id="opt-receipt">
@@ -2541,6 +2611,7 @@
             <div class="doc-info">
               <div class="doc-name">Payment Receipt</div>
               <div class="doc-desc">Acknowledgement of payment received</div>
+              <div id="status-receipt" class="sent-status-indicator"></div>
             </div>
           </label>
           <label class="doc-option" id="opt-statement">
@@ -2558,6 +2629,7 @@
             <div class="doc-info">
               <div class="doc-name">Statement of Account</div>
               <div class="doc-desc">Full transaction history for this client</div>
+              <div id="status-statement" class="sent-status-indicator"></div>
             </div>
           </label>
           <label class="doc-option" id="opt-contract">
@@ -2572,6 +2644,7 @@
             <div class="doc-info">
               <div class="doc-name">Contract of Sale</div>
               <div class="doc-desc">Legal document (Executes only if witnesses have signed)</div>
+              <div id="status-contract" class="sent-status-indicator"></div>
             </div>
           </label>
         </div>
@@ -2852,6 +2925,7 @@
       </div>
     </div>
   </div>
+
 
   <!-- Edit Payment Modal -->
   <div class="modal-overlay" id="editPaymentModal" style="z-index: 2010;">
@@ -3473,8 +3547,8 @@
       if (name === 'signatures' && !['admin', 'lawyer'].includes(currentUserRole)) {
         toast('Access restricted to legal staff', 'error'); return;
       }
-      ['dashboard', 'invoices', 'clients', 'properties', 'team', 'profile', 'verifications', 'analytics-revenue', 'reports', 'sales-reps', 'signatures'].forEach(s => {
-        const el = document.getElementById('section-' + s);
+      ['dashboard', 'invoices', 'clients', 'properties', 'team', 'profile', 'verifications', 'analytics-revenue', 'reports', 'sales-reps', 'signatures', 'marketing'].forEach(s => {
+        const el = document.getElementById(s === 'marketing' ? 'marketingSection' : 'section-' + s);
         if (el) el.style.display = s === name ? '' : 'none';
       });
       document.querySelectorAll('.nav-item').forEach(el => el.classList.remove('active'));
@@ -3491,7 +3565,8 @@
         'analytics-revenue': 'Revenue Analytics',
         'reports': 'Reports & Exports',
         'sales-reps': 'Sales Representatives',
-        'signatures': 'Company Signatures & Seal'
+        'signatures': 'Company Signatures & Seal',
+        'marketing': 'Email Marketing'
       };
       document.getElementById('pageTitle').textContent = titles[name] || name;
 
@@ -3509,6 +3584,7 @@
       if (name === 'sales-reps') loadSalesReps();
       if (name === 'signatures') loadSignatures();
       if (name === 'analytics-revenue') loadAnalyticsRevenue();
+      if (name === 'marketing') loadCampaigns();
       if (name === 'reports') { loadSchedules(); setReportDates('this_month'); }
     }
     let currentUserRole = 'staff';
@@ -4246,12 +4322,34 @@
       document.getElementById('invoicesTable').innerHTML = '<div class="loading"><span class="spinner"></span>Loading...</div>';
       const data = await apiFetch(`/api/invoices/?show_voided=${showVoided}`).then(r => r.json());
       allInvoices = data;
-      document.getElementById('invoicesTable').innerHTML = data.length ? `
+      applyInvoiceSearch();
+    }
+
+    function applyInvoiceSearch() {
+      const query = document.getElementById('invoice-search')?.value.trim().toLowerCase() || '';
+      const filtered = query ? allInvoices.filter(inv => {
+        const invoiceNumber = (inv.invoice_number || '').toLowerCase();
+        const clientName = (inv.clients?.full_name || '').toLowerCase();
+        return invoiceNumber.includes(query) || clientName.includes(query);
+      }) : allInvoices;
+      renderInvoicesTable(filtered, query);
+    }
+
+    function renderInvoicesTable(invoices, query = '') {
+      const container = document.getElementById('invoicesTable');
+      if (!invoices || invoices.length === 0) {
+        container.innerHTML = allInvoices.length
+          ? `<div class="empty-state"><p>No invoices match "${query}".</p></div>`
+          : `<div class="empty-state"><p>No invoices yet. Create your first invoice.</p></div>`;
+        return;
+      }
+
+      container.innerHTML = `
     <div class="table-responsive">
       <table class="data-table">
         <thead><tr><th>Invoice No</th><th>Client</th><th>Property</th><th>Amount</th><th>Paid</th><th>Balance</th><th>Status</th><th>Actions</th></tr></thead>
         <tbody>
-          ${data.map(inv => `
+          ${invoices.map(inv => `
             <tr>
               <td style="font-weight:700;color:var(--gold-dark);font-size:12px;">${inv.invoice_number}</td>
               <td><div class="client-name">${inv.clients?.full_name || '—'}</div><div class="client-email">${inv.invoice_date}</div></td>
@@ -4273,7 +4371,7 @@
             </tr>`).join('')}
         </tbody>
       </table>
-    </div>` : `<div class="empty-state"><p>No invoices yet. Create your first invoice.</p></div>`;
+    </div>`;
     }
 
     async function openEditInvoiceModal(id) {
@@ -5078,8 +5176,46 @@
     function openSendModal(invoiceId, invNum, clientName, clientEmail) {
       currentInvoiceId = invoiceId;
       document.getElementById('sendDocsInvoiceInfo').innerHTML = `
-    <strong>${invNum}</strong> → ${clientName} &lt;${clientEmail}&gt;`;
+        <strong>${invNum}</strong> → ${clientName} &lt;${clientEmail}&gt;`;
+      
+      // Reset indicators
+      document.querySelectorAll('.sent-status-indicator').forEach(el => {
+        el.innerHTML = '';
+        el.classList.remove('visible');
+      });
+
       openModal('sendDocsModal');
+
+      // Fetch logs
+      apiFetch(`/api/invoices/${invoiceId}`)
+        .then(res => res.json())
+        .then(inv => {
+          if (inv.email_logs && inv.email_logs.length > 0) {
+            const latestLogs = {};
+            inv.email_logs.forEach(log => {
+              if (!latestLogs[log.email_type] || new Date(log.sent_at) > new Date(latestLogs[log.email_type].sent_at)) {
+                latestLogs[log.email_type] = log;
+              }
+            });
+
+            Object.keys(latestLogs).forEach(type => {
+              const log = latestLogs[type];
+              const statusEl = document.getElementById(`status-${type}`);
+              if (statusEl) {
+                const dateStr = new Date(log.sent_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit' });
+                const staff = log.admins?.full_name || 'Admin';
+                statusEl.innerHTML = `
+                  <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="3">
+                    <polyline points="20 6 9 17 4 12" />
+                  </svg>
+                  <span>Sent: <strong>${dateStr}</strong> by <span class="staff-name">${staff}</span></span>
+                `;
+                statusEl.classList.add('visible');
+              }
+            });
+          }
+        })
+        .catch(err => console.error('Error fetching logs:', err));
     }
 
     async function submitSendDocs() {
@@ -6245,6 +6381,7 @@
         btn.disabled = false;
       }
     }
+
 
     // ── INIT ──────────────────────────────────
     checkAuth().then(() => {
