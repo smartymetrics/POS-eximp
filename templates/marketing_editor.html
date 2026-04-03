@@ -787,12 +787,20 @@
             // Set subject
             document.getElementById('subject-field').value = data.subject_a || '';
 
-            // More lenient check: if it's not the exact initial placeholder, don't force the picker
-            const isPlaceholder = !data.html_body_a || data.html_body_a === '<h1>Start Designing!</h1>';
+            // Check if it's a completely new, untouched campaign
+            const content = (data.html_body_a || '').trim();
+            const isPlaceholder = !content || content === '<h1>Start Designing!</h1>' || content === '<html><head><style></style></head><body><h1>Start Designing!</h1></body></html>';
             
             if (!isPlaceholder) {
-                editor.setComponents(data.html_body_a);
+                // Instantly close the picker so the UI is immediately clean
                 closeTemplates();
+                
+                // Safely load components to prevent JS halting on syntax errors
+                try {
+                    editor.setComponents(data.html_body_a);
+                } catch (e) {
+                    console.error("GrapesJS failed to parse the preexisting campaign HTML:", e);
+                }
             } else {
                 renderTemplates();
                 openTemplates();
