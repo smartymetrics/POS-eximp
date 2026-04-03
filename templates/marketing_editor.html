@@ -14,16 +14,25 @@
         #gjs { border: none; height: calc(100vh - 60px) !important; }
 
         .editor-top-bar {
-            height: 60px;
+            min-height: 60px;
             background: #1A1A1A;
             color: white;
             display: flex;
             align-items: center;
             justify-content: space-between;
-            padding: 0 20px;
+            padding: 10px 20px;
             border-bottom: 2px solid #C47D0A;
             position: relative;
             z-index: 9999;
+            flex-wrap: wrap;
+            gap: 12px;
+        }
+        @media (max-width: 800px) {
+            .editor-top-bar { flex-direction: column; align-items: stretch; padding: 12px; }
+            .brand-logo { justify-content: center; margin-bottom: 4px; }
+            .top-actions { flex-direction: column; width: 100%; gap: 10px; }
+            .save-status { margin-right: 0; width: 100%; text-align: center; margin-bottom: 4px; }
+            #gjs { height: calc(100vh - 160px) !important; }
         }
         .brand-logo { color: #C47D0A; font-weight: 700; font-size: 1.1rem; letter-spacing: 0.05em; display: flex; align-items: center; gap: 10px; }
         .brand-logo img { height: 32px; }
@@ -111,6 +120,39 @@
             transition: 0.2s;
         }
         .copy-btn:hover { background: #C47D0A; color: white; }
+        /* ── ASSET MANAGER MOBILE OPTIMIZATIONS ── */
+        .gjs-am-file-uploader {
+            padding: 15px !important;
+            background: rgba(196, 125, 10, 0.15) !important;
+            border: 2px dashed #C47D0A !important;
+            border-radius: 12px !important;
+            margin-bottom: 20px !important;
+            display: flex !important;
+            flex-direction: column !important;
+            align-items: center !important;
+            justify-content: center !important;
+            position: relative !important;
+        }
+        .gjs-am-file-uploader > form #gjs-am-title {
+            color: #C47D0A !important;
+            font-weight: 700 !important;
+            font-size: 1.1rem !important;
+        }
+        /* Create a subtext for mobile */
+        .gjs-am-file-uploader > form::after {
+            content: "Tap here to select an image from your gallery";
+            display: block;
+            margin-top: 6px;
+            color: #aaa;
+            font-size: 0.85rem;
+            text-align: center;
+            font-weight: 400;
+        }
+        /* Make sure the invisible input takes up the entire padded box */
+        .gjs-am-file-uploader > form input[type=file] {
+            cursor: pointer !important;
+            height: 100% !important;
+        }
     </style>
 </head>
 <body>
@@ -123,15 +165,17 @@
         </div>
         <div class="top-actions">
             <span class="save-status" id="save-status"></span>
-            <div class="mr-6 flex items-center gap-2">
-                <span class="text-xs text-gray-500 uppercase font-bold">Subject:</span>
-                <input type="text" id="subject-field" class="bg-[#222] border border-[#333] text-sm px-3 py-1.5 rounded w-[300px] outline-none focus:border-brand-gold text-white" placeholder="Email Subject...">
+            <div class="flex items-center gap-2 w-full md:w-auto md:mr-4">
+                <span class="text-xs text-gray-500 uppercase font-bold shrink-0">Subject:</span>
+                <input type="text" id="subject-field" class="bg-[#222] border border-[#333] text-sm px-3 py-1.5 rounded w-full md:w-[260px] outline-none focus:border-brand-gold text-white" placeholder="Email Subject...">
             </div>
-            <button class="btn btn-gray" onclick="openTags()">🏷️ Tags</button>
-            <button class="btn btn-gray" onclick="openTemplates()">📋 Templates</button>
-            <button class="btn btn-outline" id="send-test">✉️ Test Send</button>
-            <button class="btn" id="save-campaign">💾 Save</button>
-            <button class="btn btn-gray" onclick="window.location.href='/marketing'">← Back</button>
+            <div class="flex items-center justify-center gap-2 w-full md:w-auto flex-wrap">
+                <button class="btn btn-gray text-xs md:text-sm px-2 md:px-4" onclick="openTags()">🏷️ Tags</button>
+                <button class="btn btn-gray text-xs md:text-sm px-2 md:px-4" onclick="openTemplates()">📋 Templates</button>
+                <button class="btn btn-outline text-xs md:text-sm px-2 md:px-4" id="send-test">✉️ Test</button>
+                <button class="btn text-xs md:text-sm px-2 md:px-4" id="save-campaign">💾 Save</button>
+                <button class="btn btn-gray text-xs md:text-sm px-2 md:px-4" onclick="window.location.href='/marketing'">← Back</button>
+            </div>
         </div>
     </div>
 
@@ -586,6 +630,9 @@
             container: '#gjs',
             fromElement: false,
             storageManager: false,
+            assetManager: {
+                embedAsBase64: true, // Forces uploaded images to be safely bundled in the HTML
+            },
             plugins: ['gjs-preset-newsletter'],
             pluginsOpts: {
                 'gjs-preset-newsletter': { modalTitleImport: 'Import HTML' }
