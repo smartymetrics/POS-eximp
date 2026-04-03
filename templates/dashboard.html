@@ -3100,13 +3100,25 @@
             <label class="form-label">Email Address <span class="req">*</span></label>
             <input type="email" class="form-control" id="am-email" placeholder="staff@eximps-cloves.com">
           </div>
-          <div class="form-group">
-            <label class="form-label">Role <span class="req">*</span></label>
-            <select class="form-control" id="am-role">
-              <option value="staff">Staff — Operations access</option>
-              <option value="lawyer">Lawyer — Legal &amp; Contract access</option>
-              <option value="admin">Admin — Full access</option>
+          <div class="form-group span2">
+            <label class="form-label">Roles <span class="req">*</span></label>
+            <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; padding:10px; background:#f8fafc; border-radius:6px; border:1px solid #e2e8f0;">
+              <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="admin" style="accent-color:var(--gold);"> Admin</label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="staff" checked style="accent-color:var(--gold);"> Staff</label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="lawyer" style="accent-color:var(--gold);"> Lawyer</label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="marketing" style="accent-color:var(--gold);"> Marketing</label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="operations" style="accent-color:var(--gold);"> Operations</label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="super_admin" style="accent-color:var(--gold);"> Super Admin</label>
+            </div>
+          </div>
+          <div class="form-group span2">
+            <label class="form-label">Primary Role (Redirection After Login) <span class="req">*</span></label>
+            <select class="form-control" id="am-primary-role">
+              <option value="staff">Staff Dashboard (/dashboard)</option>
+              <option value="marketing">Marketing Dashboard (/marketing)</option>
+              <option value="admin">Full Admin Dashboard (/dashboard)</option>
             </select>
+            <div class="form-hint">Determines which page the user lands on after logging in.</div>
           </div>
           <div class="form-group">
             <label class="form-label">Password <span class="req">*</span></label>
@@ -3128,6 +3140,44 @@
         <div class="form-actions">
           <button class="btn btn-ghost" onclick="closeModal('addAdminModal')">Cancel</button>
           <button class="btn btn-primary" onclick="submitAddAdmin()">Create Account</button>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <!-- Edit Roles Modal -->
+  <div class="modal-overlay" id="editRolesModal">
+    <div class="modal" style="max-width:480px;">
+      <div class="modal-header">
+        <div class="modal-title">Edit Roles — <span id="er-name"></span></div>
+        <button class="modal-close" onclick="closeModal('editRolesModal')">×</button>
+      </div>
+      <div class="modal-body">
+        <input type="hidden" id="er-admin-id">
+        <div class="form-group">
+          <label class="form-label">Assigned Roles <span class="req">*</span></label>
+          <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:12px; background:#f8fafc; border-radius:6px; border:1px solid #e2e8f0;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="admin" style="accent-color:var(--gold);"> Admin</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="staff" style="accent-color:var(--gold);"> Staff</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="lawyer" style="accent-color:var(--gold);"> Lawyer</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="marketing" style="accent-color:var(--gold);"> Marketing</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="operations" style="accent-color:var(--gold);"> Operations</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="super_admin" style="accent-color:var(--gold);"> Super Admin</label>
+          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Primary Role (Landing Page After Login) <span class="req">*</span></label>
+          <select class="form-control" id="er-primary-role">
+            <option value="staff">Staff Dashboard (/dashboard)</option>
+            <option value="operations">Operations Dashboard (/dashboard)</option>
+            <option value="admin">Full Admin Dashboard (/dashboard)</option>
+            <option value="marketing">Marketing Dashboard (/marketing)</option>
+          </select>
+          <div class="form-hint" style="margin-top:4px;">Determines which page this user lands on after logging in.</div>
+        </div>
+        <div class="form-actions">
+          <button class="btn btn-ghost" onclick="closeModal('editRolesModal')">Cancel</button>
+          <button class="btn btn-primary" onclick="submitEditRoles()">Save Roles</button>
         </div>
       </div>
     </div>
@@ -3509,12 +3559,22 @@
           el.style.display = 'none';
         });
 
-        if (admin.role === 'admin') {
-          document.querySelectorAll('.admin-only, .lawyer-only, .legal-only').forEach(el => el.style.display = '');
-        } else if (admin.role === 'lawyer') {
-          document.querySelectorAll('.lawyer-only, .legal-only').forEach(el => el.style.display = '');
-        } else if (admin.role === 'staff') {
-          document.querySelectorAll('.staff-only').forEach(el => el.style.display = '');
+        const roles = (admin.role || '').toLowerCase().split(',').map(r => r.trim());
+        const hasRole = (r) => roles.includes(r);
+
+        if (hasRole('admin') || hasRole('super_admin')) {
+          document.querySelectorAll('.admin-only, .lawyer-only, .legal-only, .staff-only').forEach(el => el.style.display = '');
+        } else {
+          if (hasRole('lawyer')) {
+            document.querySelectorAll('.lawyer-only, .legal-only').forEach(el => el.style.display = '');
+          }
+          if (hasRole('staff') || hasRole('operations')) {
+            document.querySelectorAll('.staff-only').forEach(el => el.style.display = '');
+          }
+          if (hasRole('marketing')) {
+            const navMkt = document.getElementById('nav-marketing');
+            if (navMkt) navMkt.style.display = '';
+          }
         }
       } catch (e) {
         console.error('Auth check error:', e);
@@ -3541,11 +3601,18 @@
 
     // ── NAVIGATION ────────────────────────────
     function showSection(name) {
-      if (['team', 'analytics-revenue', 'reports', 'sales-reps', 'commissions'].includes(name) && currentUserRole !== 'admin') {
+      const roles = currentUserRole.split(',').map(r => r.trim());
+      const hasRole = (r) => roles.includes(r);
+      const isAdmin = hasRole('admin') || hasRole('super_admin');
+
+      if (['team', 'analytics-revenue', 'reports', 'sales-reps', 'commissions'].includes(name) && !isAdmin) {
         toast('Access restricted to administrators', 'error'); return;
       }
-      if (name === 'signatures' && !['admin', 'lawyer'].includes(currentUserRole)) {
+      if (name === 'signatures' && !isAdmin && !hasRole('lawyer')) {
         toast('Access restricted to legal staff', 'error'); return;
+      }
+      if (name === 'marketing' && !isAdmin && !hasRole('marketing')) {
+        toast('Access restricted to marketing staff', 'error'); return;
       }
       ['dashboard', 'invoices', 'clients', 'properties', 'team', 'profile', 'verifications', 'analytics-revenue', 'reports', 'sales-reps', 'signatures', 'marketing'].forEach(s => {
         const el = document.getElementById(s === 'marketing' ? 'marketingSection' : 'section-' + s);
@@ -5350,11 +5417,17 @@
     function renderMemberRow(a, archived = false) {
       const initials = a.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
       const roleColors = {
-        admin:  { bg: 'var(--gold-light)', color: 'var(--gold-dark)', badgeBg: '#fffbf0', badgeColor: '#7d5a0a' },
-        lawyer: { bg: '#f3e8ff',           color: '#7c3aed',          badgeBg: '#f3e8ff', badgeColor: '#6d28d9' },
-        staff:  { bg: '#ebf5fb',           color: '#2980b9',          badgeBg: '#ebf5fb', badgeColor: '#2471a3' },
+        admin:       { bg: 'var(--gold-light)', color: 'var(--gold-dark)', badgeBg: '#fffbf0', badgeColor: '#7d5a0a' },
+        super_admin: { bg: '#fee2e2',           color: '#991b1b',          badgeBg: '#fee2e2', badgeColor: '#991b1b' },
+        lawyer:      { bg: '#f3e8ff',           color: '#7c3aed',          badgeBg: '#f3e8ff', badgeColor: '#6d28d9' },
+        staff:       { bg: '#ebf5fb',           color: '#2980b9',          badgeBg: '#ebf5fb', badgeColor: '#2471a3' },
+        marketing:   { bg: '#ecfdf5',           color: '#047857',          badgeBg: '#ecfdf5', badgeColor: '#047857' },
+        operations:  { bg: '#fff7ed',           color: '#c2410c',          badgeBg: '#fff7ed', badgeColor: '#c2410c' },
       };
-      const rc = roleColors[a.role] || roleColors.staff;
+      
+      const roles = (a.role || 'staff').split(',');
+      const primary = a.primary_role || roles[0] || 'staff';
+      const rc = roleColors[primary] || roleColors.staff;
       const avatarBg = rc.bg;
       const avatarColor = rc.color;
 
@@ -5362,11 +5435,23 @@
       if (archived) {
         actions = `<button class="action-btn gold" onclick="reactivateAdmin('${a.id}','${a.full_name}')">Restore</button>`;
       } else {
+        const safeRoles = (a.role || 'staff').replace(/'/g, "\\'");
+        const safePrimary = (a.primary_role || '').replace(/'/g, "\\'");
         actions = `
+      <button class="action-btn" style="color:#047857;border-color:#a7f3d0;" onclick="openEditRolesModal('${a.id}','${a.full_name.replace(/'/g, "\\'")}','${safeRoles}','${safePrimary}')">Edit Roles</button>
       <button class="action-btn" style="color:#2980b9;border-color:#aed6f1;" onclick="openResetPasswordModal('${a.id}','${a.full_name}')">Reset PW</button>
       <button class="action-btn" onclick="${a.is_active ? `openDeactivateModal('${a.id}','${a.full_name.replace(/'/g, "\\'")}')` : `reactivateAdmin('${a.id}','${a.full_name.replace(/'/g, "\\'")}')`}">${a.is_active ? 'Deactivate' : 'Reactivate'}</button>
       <button class="action-btn" style="color:#636e72;border-color:#dfe6e9;" onclick="openArchiveModal('${a.id}','${a.full_name}')">Archive</button>`;
       }
+
+
+      const roleBadges = roles.map(r => {
+        const c = roleColors[r.trim()] || roleColors.staff;
+        const isPrimary = r.trim() === primary;
+        return `<span class="status" style="background:${c.badgeBg}; color:${c.badgeColor}; font-size:10px; padding:2px 6px; margin-right:4px; border:${isPrimary ? '1px solid ' + c.badgeColor : 'none'}">
+          ${isPrimary ? '★ ' : ''}${r.trim()}
+        </span>`;
+      }).join('');
 
       return `<tr style="${archived ? 'opacity:0.6;' : ''}">
     <td>
@@ -5376,7 +5461,7 @@
       </div>
     </td>
     <td style="font-size:12px;color:var(--gray);">${a.email}</td>
-    <td><span class="status" style="background:${rc.badgeBg};color:${rc.badgeColor};"><span class="status-dot"></span>${a.role}</span></td>
+    <td><div style="display:flex; flex-wrap:wrap; gap:4px;">${roleBadges}</div></td>
     <td><span class="status ${a.is_active ? 'paid' : 'unpaid'}"><span class="status-dot"></span>${a.is_active ? 'Active' : 'Inactive'}</span></td>
     <td style="font-size:12px;color:var(--gray);">${new Date(a.created_at).toLocaleDateString()}</td>
     <td style="display:flex;gap:4px;flex-wrap:wrap;">${actions}</td>
@@ -5412,18 +5497,30 @@
 
     function openAddAdminModal() {
       ['am-name', 'am-email', 'am-password', 'am-password2'].forEach(id => document.getElementById(id).value = '');
-      document.getElementById('am-role').value = 'staff';
+      // Reset checkboxes
+      document.querySelectorAll('input[name="am-roles-check"]').forEach(cb => {
+        cb.checked = cb.value === 'staff';
+      });
+      document.getElementById('am-primary-role').value = 'staff';
       openModal('addAdminModal');
     }
 
     async function submitAddAdmin() {
       const name = document.getElementById('am-name').value.trim();
       const email = document.getElementById('am-email').value.trim();
-      const role = document.getElementById('am-role').value;
       const pass = document.getElementById('am-password').value;
       const pass2 = document.getElementById('am-password2').value;
+      const primary_role = document.getElementById('am-primary-role').value;
+
+      // Collect roles from checkboxes
+      const rolesArr = [];
+      document.querySelectorAll('input[name="am-roles-check"]:checked').forEach(cb => {
+        rolesArr.push(cb.value);
+      });
+      const role = rolesArr.join(',');
 
       if (!name || !email || !pass) return toast('Please fill in all required fields', 'error');
+      if (rolesArr.length === 0) return toast('Please select at least one role', 'error');
       if (pass !== pass2) return toast('Passwords do not match', 'error');
       if (pass.length < 8) return toast('Password must be at least 8 characters', 'error');
 
@@ -5431,13 +5528,58 @@
       const ogText = setLoading(btn, true, 'Creating...');
       try {
         const res = await apiFetch('/auth/register', {
-          method: 'POST', body: JSON.stringify({ full_name: name, email, password: pass, role })
+          method: 'POST', 
+          body: JSON.stringify({ full_name: name, email, password: pass, role, primary_role })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed to create account');
-        const roleLabel = { admin: 'Admin', lawyer: 'Lawyer', staff: 'Staff' }[role] || 'Staff';
-        toast(`${roleLabel} account created for ${name}`, 'success');
+        toast(`Account created for ${name} with ${rolesArr.length} roles`, 'success');
         closeModal('addAdminModal');
+        loadTeam();
+      } catch (e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
+    }
+
+    function openEditRolesModal(adminId, adminName, currentRoles, primaryRole) {
+      document.getElementById('er-admin-id').value = adminId;
+      document.getElementById('er-name').textContent = adminName;
+
+      // Reset all checkboxes
+      document.querySelectorAll('input[name="er-role"]').forEach(cb => { cb.checked = false; });
+
+      // Check the roles this admin already has
+      const roles = (currentRoles || 'staff').split(',').map(r => r.trim());
+      roles.forEach(r => {
+        const cb = document.querySelector(`input[name="er-role"][value="${r}"]`);
+        if (cb) cb.checked = true;
+      });
+
+      // Set the primary role dropdown
+      const primarySel = document.getElementById('er-primary-role');
+      primarySel.value = primaryRole || roles[0] || 'staff';
+
+      openModal('editRolesModal');
+    }
+
+    async function submitEditRoles() {
+      const adminId = document.getElementById('er-admin-id').value;
+      const rolesArr = [];
+      document.querySelectorAll('input[name="er-role"]:checked').forEach(cb => rolesArr.push(cb.value));
+      if (rolesArr.length === 0) return toast('Please select at least one role', 'error');
+
+      const role = rolesArr.join(',');
+      const primary_role = document.getElementById('er-primary-role').value;
+
+      const btn = document.querySelector('#editRolesModal button.btn-primary');
+      const ogText = setLoading(btn, true, 'Saving...');
+      try {
+        const res = await apiFetch(`/auth/admins/${adminId}/roles`, {
+          method: 'PATCH',
+          body: JSON.stringify({ role, primary_role })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to update roles');
+        toast(data.message, 'success');
+        closeModal('editRolesModal');
         loadTeam();
       } catch (e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
     }
@@ -5488,6 +5630,54 @@
         if (!res.ok) throw new Error(data.detail || 'Failed');
         toast(data.message, 'info');
         closeModal('archiveModal');
+        loadTeam();
+      } catch (e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
+    }
+
+    function openEditRolesModal(adminId, adminName, currentRoles, primaryRole) {
+      document.getElementById('er-admin-id').value = adminId;
+      document.getElementById('er-name').textContent = adminName;
+
+      // Reset all checkboxes first
+      document.querySelectorAll('input[name="er-role"]').forEach(cb => { cb.checked = false; });
+
+      // Check the roles this staff member already has
+      const roles = (currentRoles || 'staff').split(',').map(r => r.trim()).filter(Boolean);
+      roles.forEach(r => {
+        const cb = document.querySelector(`input[name="er-role"][value="${r}"]`);
+        if (cb) cb.checked = true;
+      });
+
+      // Set the primary role dropdown
+      const primarySel = document.getElementById('er-primary-role');
+      const resolvedPrimary = primaryRole || roles[0] || 'staff';
+      // If the value exists in dropdown, set it; otherwise fall back to 'staff'
+      primarySel.value = resolvedPrimary;
+      if (!primarySel.value) primarySel.value = 'staff';
+
+      openModal('editRolesModal');
+    }
+
+    async function submitEditRoles() {
+      const adminId = document.getElementById('er-admin-id').value;
+      const rolesArr = [];
+      document.querySelectorAll('input[name="er-role"]:checked').forEach(cb => rolesArr.push(cb.value));
+      if (rolesArr.length === 0) return toast('Please select at least one role', 'error');
+
+      const role = rolesArr.join(',');
+      const primary_role = document.getElementById('er-primary-role').value;
+
+      const btn = document.querySelector('#editRolesModal button.btn-primary');
+      const ogText = setLoading(btn, true, 'Saving...');
+      try {
+        const res = await apiFetch(`/auth/admins/${adminId}/roles`, {
+          method: 'PATCH',
+          body: JSON.stringify({ role, primary_role })
+        });
+        const data = await res.json();
+        if (!res.ok) throw new Error(data.detail || 'Failed to update roles');
+        toast(data.message, 'success');
+        closeModal('editRolesModal');
         loadTeam();
       } catch (e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
     }

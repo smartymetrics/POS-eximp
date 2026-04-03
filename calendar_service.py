@@ -1,6 +1,6 @@
-import requests
+from database import get_db
 import logging
-from datetime import datetime
+from datetime import datetime, timedelta
 from typing import List, Dict, Any
 
 logger = logging.getLogger(__name__)
@@ -18,11 +18,13 @@ MARKETING_DAYS = [
 ]
 
 def get_marketing_calendar(year: int = None) -> List[Dict[str, Any]]:
-    """Fetches public holidays for Nigeria and merges with marketing days."""
+    """Fetches public holidays, marketing days, and custom business events."""
+    import requests # Keep local to avoid global import overhead if possible, or move to top
     if not year:
         year = datetime.now().year
     
     events = []
+    db = get_db()
     
     # 1. Fetch Nigerian Holidays via Nager.Date API
     try:
@@ -52,14 +54,66 @@ def get_marketing_calendar(year: int = None) -> List[Dict[str, Any]]:
             "action": md["action"]
         })
 
-    # 3. Add Recurring Company Touchpoints
-    # (Monday Motivation, Monthly Update)
+    # 3. Add Recurring Company Touchpoints (System Defaults)
     events.append({
         "name": "First of Month Broadcast",
         "date": f"{year}-{datetime.now().month:02d}-01",
         "type": "recurring",
         "action": "New month inspiration and property updates."
     })
+
+    # 4. Fetch Custom Business Events from DB
+    try:
+        custom_res = db.table("marketing_events").select("*").execute()
+        for ce in custom_res.data:
+            start_dt = datetime.strptime(ce["event_date"], "%Y-%m-%d")
+            end_dt = datetime.strptime(ce["end_date"], "%Y-%m-%d") if ce.get("end_date") else datetime(year, 12, 31)
+            
+            if not ce.get("is_recurring"):
+                # One-off
+                if start_dt.year == year:
+                    events.append({
+                        "id": ce["id"],
+                        "name": ce["name"],
+                        "date": ce["event_date"],
+                        "type": "business_event",
+                        "action": ce["action"]
+                    })
+            else:
+                # Project recurring instances for the current year
+                freq = ce.get("frequency")
+                curr = start_dt
+                
+                # Fast forward to the start of the requested year if needed
+                # (but respect the original start_dt)
+                while curr < datetime(year, 1, 1) and curr <= end_dt:
+                    if freq == 'weekly': curr += timedelta(days=7)
+                    elif freq == 'monthly':
+                        month = curr.month + 1 if curr.month < 12 else 1
+                        y = curr.year if curr.month < 12 else curr.year + 1
+                        curr = curr.replace(year=y, month=month)
+                    elif freq == 'yearly': curr = curr.replace(year=curr.year + 1)
+                    else: break
+
+                # Add instances within the year
+                while curr.year == year and curr <= end_dt:
+                    events.append({
+                        "id": ce["id"],
+                        "name": ce["name"] + (" (Recurring)" if freq else ""),
+                        "date": curr.strftime("%Y-%m-%d"),
+                        "type": "business_event",
+                        "action": ce["action"],
+                        "is_custom": True
+                    })
+                    if freq == 'weekly': curr += timedelta(days=7)
+                    elif freq == 'monthly':
+                        month = curr.month + 1 if curr.month < 12 else 1
+                        y = curr.year if curr.month < 12 else curr.year + 1
+                        curr = curr.replace(year=y, month=month)
+                    elif freq == 'yearly': curr = curr.replace(year=curr.year + 1)
+                    else: break
+    except Exception as e:
+        logger.error(f"Error fetching custom events: {e}")
 
     # Sort by date
     events.sort(key=lambda x: x["date"])

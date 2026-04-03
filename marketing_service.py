@@ -125,14 +125,102 @@ async def send_marketing_email(campaign: Dict[str, Any], contact: Dict[str, Any]
             }).execute()
         return None
 
+def apply_segment_filters(query, rules: List[Dict[str, Any]]):
+    """
+    Applies JSON rules to a Supabase query object.
+    Rule format: {"field": "status", "op": "eq", "val": "active"}
+    """
+    if not rules:
+        return query
+
+    for rule in rules:
+        field = rule.get("field")
+        op = rule.get("op")
+        val = rule.get("val")
+
+        if not field or not op:
+            continue
+
+        # Date-based recency logic
+        if op == "in_last":
+            try:
+                days = int(val)
+                limit = (datetime.utcnow() - timedelta(days=days)).isoformat()
+                query = query.gte(field, limit)
+                continue
+            except: pass
+        elif op == "older_than":
+            try:
+                days = int(val)
+                limit = (datetime.utcnow() - timedelta(days=days)).isoformat()
+                query = query.lt(field, limit)
+                continue
+            except: pass
+
+        if op == "eq":
+            query = query.eq(field, val)
+        elif op == "neq":
+            query = query.neq(field, val)
+        elif op == "gt":
+            query = query.gt(field, val)
+        elif op == "lt":
+            query = query.lt(field, val)
+        elif op == "gte":
+            query = query.gte(field, val)
+        elif op == "lte":
+            query = query.lte(field, val)
+        elif op == "contains":
+            query = query.ilike(field, f"%{val}%")
+        elif op == "in":
+            query = query.in_(field, val if isinstance(val, list) else [val])
+        elif op == "is_null":
+            query = query.is_(field, "null")
+        elif op == "not_null":
+            query = query.not_.is_(field, "null")
+
+    return query
+
 async def resolve_target_recipients(segment_ids: List[str] = None, manual_emails: List[str] = None) -> List[Dict[str, Any]]:
     """Resolves a list of contacts based on segments or specific emails."""
     db = get_db()
     
     # Priority 1: Manual Emails (specific manual reach-out)
     if manual_emails:
-        res = db.table("marketing_contacts").select("*").in_("email", manual_emails).execute()
-        return res.data
+        # 1. Clean and normalize emails
+        clean_emails = list(set([e.strip().lower() for e in manual_emails if e.strip()]))
+        if not clean_emails:
+            return []
+
+        # 2. Find existing contacts
+        existing_res = db.table("marketing_contacts").select("*").in_("email", clean_emails).execute()
+        existing_contacts = existing_res.data or []
+        existing_emails = {c["email"].lower() for c in existing_contacts}
+
+        # 3. Identify and Create missing contacts (as leads)
+        missing_emails = [e for e in clean_emails if e not in existing_emails]
+        if missing_emails:
+            new_contacts_data = [
+                {
+                    "email": e,
+                    "contact_type": "lead",
+                    "source": "manual_broadcast",
+                    "is_subscribed": True,
+                    "engagement_score": 0
+                }
+                for e in missing_emails
+            ]
+            try:
+                new_res = db.table("marketing_contacts").insert(new_contacts_data).execute()
+                if new_res.data:
+                    existing_contacts.extend(new_res.data)
+            except Exception as e:
+                logger.error(f"Error auto-creating marketing contacts for manual broadcast: {e}")
+                # Fallback: re-fetch in case a race condition occurred
+                refetch = db.table("marketing_contacts").select("*").in_("email", missing_emails).execute()
+                if refetch.data:
+                    existing_contacts.extend(refetch.data)
+
+        return existing_contacts
 
     # Priority 2: Segments
     if segment_ids:
@@ -152,8 +240,20 @@ async def resolve_target_recipients(segment_ids: List[str] = None, manual_emails
                 res = db.table("marketing_contacts").select("*").gt("engagement_score", 50).eq("is_subscribed", True).execute()
                 all_contacts.extend(res.data)
             else:
-                # Custom segment from DB (future implementation would parse segment filters)
-                pass
+                # 4. Custom Dynamic Segment from DB
+                seg_res = db.table("marketing_segments").select("*").eq("id", sid).execute()
+                if seg_res.data:
+                    segment = seg_res.data[0]
+                    rules = segment.get("filter_rules") or []
+                    query = db.table("marketing_contacts").select("*").eq("is_subscribed", True)
+                    
+                    if segment["segment_type"] == "dynamic":
+                        query = apply_segment_filters(query, rules)
+                        res = query.execute()
+                        all_contacts.extend(res.data)
+                    else:
+                        # Static segments would use a join table (future PRD)
+                        pass
         
         # De-duplicate by ID
         unique_contacts = {c['id']: c for c in all_contacts}.values()

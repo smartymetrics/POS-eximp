@@ -4,6 +4,7 @@ from database import get_db
 from routers.auth import verify_token
 from routers.analytics import log_activity
 from models import ClientCreate, ClientUpdate
+from marketing_logic import sync_client_to_marketing
 
 router = APIRouter()
 
@@ -55,6 +56,9 @@ async def create_client(
         client_id=result.data[0]["id"]
     )
 
+    # Sync to Marketing
+    await sync_client_to_marketing(result.data[0])
+
     return {"message": "Client created", "client": result.data[0]}
 
 
@@ -86,4 +90,7 @@ async def update_client(client_id: str, data: ClientUpdate, current_admin=Depend
         client_id=client_id
     )
     
+    # Sync to Marketing
+    await sync_client_to_marketing(result.data[0])
+
     return {"message": "Client updated", "client": result.data[0]}

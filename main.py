@@ -6,7 +6,30 @@ from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from contextlib import asynccontextmanager
 
-from routers import auth, clients, properties, invoices, payments, webhooks, verifications, analytics, sales_reps, reports, commission, contracts, signing, marketing_contacts, marketing_campaigns, marketing_segments, marketing_analytics, marketing_sequences, marketing_webhooks, marketing_media
+from routers import (
+    auth,
+    clients,
+    properties,
+    invoices,
+    payments,
+    webhooks,
+    verifications,
+    analytics,
+    sales_reps,
+    reports,
+    commission,
+    contracts,
+    signing,
+    marketing_contacts,
+    marketing_campaigns,
+    marketing_segments,
+    marketing_analytics,
+    marketing_sequences,
+    marketing_webhooks,
+    marketing_media,
+    marketing_events
+)
+from routers.auth import require_roles
 from database import init_db
 from scheduler import start_scheduler, stop_scheduler
 
@@ -45,13 +68,16 @@ app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
 app.include_router(commission.router, prefix="/api/commission", tags=["commission"])
 app.include_router(contracts.router, prefix="/api/contracts", tags=["contracts"])
 app.include_router(signing.router, tags=["signing"])
-app.include_router(marketing_contacts.router, prefix="/api/marketing/contacts", tags=["marketing"])
-app.include_router(marketing_campaigns.router, prefix="/api/marketing/campaigns", tags=["marketing"])
-app.include_router(marketing_segments.router, prefix="/api/marketing/segments", tags=["marketing"])
-app.include_router(marketing_analytics.router, prefix="/api/marketing/analytics", tags=["marketing"])
-app.include_router(marketing_sequences.router, prefix="/api/marketing/sequences", tags=["marketing"])
-app.include_router(marketing_webhooks.router, tags=["webhooks"])  # tracking at root level
-app.include_router(marketing_media.router, prefix="/api/marketing/media", tags=["marketing"])
+marketing_roles = ["admin", "super_admin", "operations", "marketing"]
+
+app.include_router(marketing_contacts.router, prefix="/api/marketing/contacts", tags=["marketing"], dependencies=[Depends(require_roles(marketing_roles))])
+app.include_router(marketing_campaigns.router, prefix="/api/marketing/campaigns", tags=["marketing"], dependencies=[Depends(require_roles(marketing_roles))])
+app.include_router(marketing_segments.router, prefix="/api/marketing/segments", tags=["marketing"], dependencies=[Depends(require_roles(marketing_roles))])
+app.include_router(marketing_analytics.router, prefix="/api/marketing/analytics", tags=["marketing"], dependencies=[Depends(require_roles(marketing_roles))])
+app.include_router(marketing_sequences.router, prefix="/api/marketing/sequences", tags=["marketing"], dependencies=[Depends(require_roles(marketing_roles))])
+app.include_router(marketing_webhooks.router, tags=["webhooks"])  # tracking at root level, public
+app.include_router(marketing_media.router, prefix="/api/marketing/media", tags=["marketing"], dependencies=[Depends(require_roles(marketing_roles))])
+app.include_router(marketing_events.router, prefix="/api/marketing/events", tags=["marketing"], dependencies=[Depends(require_roles(marketing_roles))])
 
 
 

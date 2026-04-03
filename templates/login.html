@@ -258,7 +258,13 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Invalid credentials');
         localStorage.setItem('ec_token', data.access_token);
-        window.location.href = '/dashboard';
+        
+        // Role-based redirection
+        if (data.admin && data.admin.primary_role === 'marketing') {
+          window.location.href = '/marketing';
+        } else {
+          window.location.href = '/dashboard';
+        }
       } catch (e) {
         err.textContent = e.message;
         err.style.display = 'block';

@@ -12,6 +12,7 @@ router = APIRouter()
 class CampaignSendTarget(BaseModel):
     segment_ids: Optional[List[str]] = None
     manual_emails: Optional[List[str]] = None
+    scheduled_at: Optional[str] = None # ISO format datetime
 
 class CampaignCreate(BaseModel):
     name: str # Internal name
@@ -127,24 +128,130 @@ async def send_campaign_broadcast(id: str, target: Optional[CampaignSendTarget],
     if camp_res.data[0]["status"] != "draft":
         raise HTTPException(status_code=400, detail="Campaign must be in draft status to send.")
 
-    # Mark as scheduled (about to send)
+    # Handle Scheduling
+    if target and target.scheduled_at:
+        try:
+            scheduled_dt = datetime.fromisoformat(target.scheduled_at.replace('Z', '+00:00'))
+            if scheduled_dt <= datetime.now(scheduled_dt.tzinfo):
+                 raise HTTPException(status_code=400, detail="Scheduled time must be in the future.")
+            
+            db.table("email_campaigns").update({
+                "status": "scheduled",
+                "scheduled_for": target.scheduled_at,
+                "target_config": target.dict(exclude={'scheduled_at'})
+            }).eq("id", id).execute()
+
+            await log_activity(
+                "marketing_campaign_scheduled",
+                f"Campaign '{id}' scheduled for {target.scheduled_at}.",
+                current_admin["sub"]
+            )
+            return {"message": f"Broadcast scheduled for {target.scheduled_at}"}
+        except Exception as e:
+            raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
+
+    # Mark as scheduled (about to send immediately)
     db.table("email_campaigns").update({
         "status": "scheduled",
         "scheduled_at": datetime.utcnow().isoformat()
     }).eq("id", id).execute()
 
-    segment_ids = target.segment_ids if target else None
-    manual_emails = target.manual_emails if target else None
-
-    background_tasks.add_task(broadcast_campaign, id, segment_ids, manual_emails)
+    background_tasks.add_task(broadcast_campaign, id, target.segment_ids if target else None, target.manual_emails if target else None)
     
     await log_activity(
         "marketing_campaign_broadcast_started",
-        f"Broadcast initiated for campaign ID: {id}. Targets: {segment_ids or 'All'}",
+        f"Broadcast initiated for campaign ID: {id}.",
         current_admin["sub"]
     )
     
     return {"message": "Broadcast started in the background."}
+
+@router.post("/{id}/cancel-schedule")
+async def cancel_scheduled_broadcast(id: str, current_admin=Depends(verify_token)):
+    """Cancels a scheduled broadcast and returns it to draft status."""
+    db = get_db()
+    
+    # Check status
+    camp_res = db.table("email_campaigns").select("status").eq("id", id).execute()
+    if not camp_res.data:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    if camp_res.data[0]["status"] != "scheduled":
+        raise HTTPException(status_code=400, detail="Only scheduled campaigns can be cancelled.")
+
+    db.table("email_campaigns").update({
+        "status": "draft",
+        "scheduled_for": None,
+        "target_config": None
+    }).eq("id", id).execute()
+
+    await log_activity(
+        "marketing_campaign_unscheduled",
+        f"Campaign '{id}' broadcast cancelled and returned to draft.",
+        current_admin["sub"]
+    )
+    
+    return {"message": "Schedule cancelled. Campaign is back in draft."}
+
+@router.post("/{id}/sync")
+async def sync_campaign_stats(id: str, current_admin=Depends(verify_token)):
+    """Manually recalculates stats for a campaign from the recipients table."""
+    db = get_db()
+    
+    # 1. Count Opens (unique contacts who opened)
+    opens_res = db.table("campaign_recipients").select("contact_id", count="exact").eq("campaign_id", id).not_.is_("opened_at", "null").execute()
+    total_opens = opens_res.count or 0
+    
+    # 2. Count Clicks (unique contacts who clicked)
+    clicks_res = db.table("campaign_recipients").select("contact_id", count="exact").eq("campaign_id", id).not_.is_("clicked_at", "null").execute()
+    total_clicks = clicks_res.count or 0
+    
+    # 3. Update Campaign Table
+    db.table("email_campaigns").update({
+        "total_opens": total_opens,
+        "total_clicks": total_clicks,
+        "updated_at": datetime.utcnow().isoformat()
+    }).eq("id", id).execute()
+    
+    return {
+        "id": id,
+        "total_opens": total_opens,
+        "total_clicks": total_clicks
+    }
+    
+@router.post("/{id}/duplicate")
+async def duplicate_campaign(id: str, current_admin=Depends(verify_token)):
+    """Creates a new draft copy of an existing campaign."""
+    db = get_db()
+    
+    # 1. Fetch source
+    res = db.table("email_campaigns").select("*").eq("id", id).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    
+    source = res.data[0]
+    
+    # 2. Create copy data
+    copy_data = {
+        "name": f"{source['name']} (Copy)",
+        "subject_a": source["subject_a"],
+        "preview_text": source["preview_text"],
+        "html_body_a": source["html_body_a"],
+        "from_name": source["from_name"],
+        "reply_to": source["reply_to"],
+        "status": "draft",
+        "created_by": current_admin["sub"]
+    }
+    
+    # 3. Save
+    result = db.table("email_campaigns").insert(copy_data).execute()
+    
+    await log_activity(
+        "marketing_campaign_duplicated",
+        f"Campaign '{source['name']}' duplicated as '{copy_data['name']}'",
+        current_admin["sub"]
+    )
+    
+    return result.data[0]
 
 @router.get("/calendar/events")
 async def list_calendar_events(current_admin=Depends(verify_token)):

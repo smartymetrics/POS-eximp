@@ -13,6 +13,7 @@ except ImportError:
     pass
 from datetime import date, timedelta
 from email_service import send_invoice_email, send_admin_alert_email, send_welcome_email
+from marketing_logic import sync_client_to_marketing
 from routers.analytics import log_activity
 from utils import calculate_due_date
 
@@ -79,6 +80,11 @@ async def form_submission(
         else:
             new_client = db.table("clients").insert(jsonable_encoder(client_data)).execute()
             client_id = new_client.data[0]["id"]
+            client_res = new_client # Use for sync below
+            
+        # 3b. Sync to Marketing (Upgrades Lead -> Client)
+        if client_res.data:
+            sync_client_to_marketing(client_res.data[0])
 
         # 4. Sales Rep Detection
         rep_name_to_use = payload.sales_rep_name
@@ -328,6 +334,13 @@ async def form_submission(
             client_id=client_id,
             invoice_id=invoice["id"]
         )
+
+        # Sync to Marketing
+        try:
+            await sync_client_to_marketing(full_client)
+        except Exception as e:
+            print(f"Marketing Sync Error: {e}")
+            raise HTTPException(status_code=500, detail=f"Internal error processing webhook: {str(e)}")
 
         return {
             "message": "Processed successfully",

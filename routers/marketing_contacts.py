@@ -11,22 +11,23 @@ import io
 router = APIRouter()
 
 class ContactCreate(BaseModel):
-    first_name: Optional[str]
-    last_name: Optional[str]
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
     email: str
-    phone: Optional[str]
-    tags: Optional[List[str]]
+    phone: Optional[str] = None
+    tags: Optional[List[str]] = None
     contact_type: str = "lead" # lead / client
     source: str = "manual"
 
 class ContactUpdate(BaseModel):
-    first_name: Optional[str]
-    last_name: Optional[str]
-    email: Optional[str]
-    phone: Optional[str]
-    tags: Optional[List[str]]
-    is_subscribed: Optional[bool]
-    engagement_score: Optional[int]
+    first_name: Optional[str] = None
+    last_name: Optional[str] = None
+    email: Optional[str] = None
+    phone: Optional[str] = None
+    tags: Optional[List[str]] = None
+    is_subscribed: Optional[bool] = None
+    engagement_score: Optional[int] = None
+    contact_type: Optional[str] = None
 
 @router.get("/")
 async def list_contacts(current_admin=Depends(verify_token), type: Optional[str] = None, q: Optional[str] = None):
@@ -68,9 +69,17 @@ async def update_contact(id: str, data: ContactUpdate, current_admin=Depends(ver
     result = db.table("marketing_contacts").update(update_dict).eq("id", id).execute()
     return result.data[0]
 
+@router.get("/{id}")
+async def get_contact(id: str, current_admin=Depends(verify_token)):
+    db = get_db()
+    res = db.table("marketing_contacts").select("*").eq("id", id).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    return res.data[0]
+
 @router.post("/import")
-async def import_contacts(file: UploadFile = File(...), current_admin=Depends(verify_token)):
-    """Bulk import contacts from CSV."""
+async def import_contacts(source: Optional[str] = "csv_import", file: UploadFile = File(...), current_admin=Depends(verify_token)):
+    """Bulk import contacts from CSV with an optional source label."""
     db = get_db()
     content = await file.read()
     string_io = io.StringIO(content.decode("utf-8"))
@@ -98,7 +107,7 @@ async def import_contacts(file: UploadFile = File(...), current_admin=Depends(ve
             "last_name": last_name,
             "phone": phone,
             "tags": tags,
-            "source": "csv_import",
+            "source": source or "csv_import",
             "contact_type": "lead"
         })
 
@@ -141,3 +150,83 @@ async def sync_clients(current_admin=Depends(verify_token)):
         res = db.table("marketing_contacts").upsert(marketing_entries, on_conflict="email").execute()
         return {"synced_count": len(res.data)}
     return {"synced_count": 0}
+@router.get("/{id}/history")
+async def get_contact_history(id: str, current_admin=Depends(verify_token)):
+    """Fetch the full interaction history for a contact."""
+    db = get_db()
+    
+    # 1. Fetch contact details
+    contact_res = db.table("marketing_contacts").select("*").eq("id", id).execute()
+    if not contact_res.data:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    # 2. Fetch campaign interactions
+    interactions = db.table("campaign_recipients")\
+        .select("status, opened_at, clicked_at, email_campaigns(name)")\
+        .eq("contact_id", id)\
+        .execute()
+        
+    # 3. Build a flat timeline
+    timeline = []
+    for inter in interactions.data:
+        camp_name = inter["email_campaigns"]["name"] if inter.get("email_campaigns") else "Unknown Campaign"
+        if inter.get("opened_at"):
+            timeline.append({"type": "open", "campaign_name": camp_name, "timestamp": inter["opened_at"]})
+        if inter.get("clicked_at"):
+            timeline.append({"type": "click", "campaign_name": camp_name, "timestamp": inter["clicked_at"]})
+            
+    # Sort by recent
+    timeline.sort(key=lambda x: x["timestamp"], reverse=True)
+    return timeline
+
+@router.post("/sync-all-stats")
+async def sync_all_marketing_stats(current_admin=Depends(verify_token)):
+    """Bulk recalculates marketing stats for ALL campaigns and contacts."""
+    db = get_db()
+    
+    # 1. Fetch all recipients with activity
+    rec_res = db.table("campaign_recipients").select("campaign_id, contact_id, opened_at, clicked_at").execute()
+    recs = rec_res.data or []
+    
+    # 2. Aggregate Campaigns
+    camp_stats = {}
+    cont_stats = {}
+    
+    for r in recs:
+        cid = r["campaign_id"]
+        uid = r["contact_id"]
+        
+        if cid not in camp_stats: camp_stats[cid] = {"opens": 0, "clicks": 0}
+        if uid not in cont_stats: cont_stats[uid] = {"opens": 0, "clicks": 0}
+        
+        if r.get("opened_at"):
+            camp_stats[cid]["opens"] += 1
+            cont_stats[uid]["opens"] += 1
+        if r.get("clicked_at"):
+            camp_stats[cid]["clicks"] += 1
+            cont_stats[uid]["clicks"] += 1
+            
+    # 3. Update All Campaigns
+    for cid, stats in camp_stats.items():
+        db.table("email_campaigns").update({
+            "total_opens": stats["opens"],
+            "total_clicks": stats["clicks"]
+        }).eq("id", cid).execute()
+        
+    # 4. Update All Contacts
+    updated_count = 0
+    for uid, stats in cont_stats.items():
+        # Score calculation: 5 per open, 10 per click, max 100
+        score = min(100, (stats["opens"] * 5) + (stats["clicks"] * 10))
+        db.table("marketing_contacts").update({
+            "total_emails_opened": stats["opens"],
+            "total_emails_clicked": stats["clicks"],
+            "engagement_score": score
+        }).eq("id", uid).execute()
+        updated_count += 1
+        
+    return {
+        "message": "Bulk stats sync complete.",
+        "campaigns_updated": len(camp_stats),
+        "contacts_updated": updated_count
+    }

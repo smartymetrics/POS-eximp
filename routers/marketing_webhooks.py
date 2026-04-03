@@ -1,11 +1,12 @@
-from fastapi import APIRouter, Request, HTTPException, Depends
-from fastapi.responses import FileResponse, RedirectResponse
+from fastapi import APIRouter, Request, HTTPException, Depends, Response
+from fastapi.responses import RedirectResponse, HTMLResponse
 from typing import Optional
 from database import get_db
 from datetime import datetime
 import os
 import logging
 import json
+import io
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -47,6 +48,11 @@ async def resend_webhook(request: Request):
             
             # Update contact engagement (PRD 3.4)
             db.rpc("increment_engagement_score", {"cid": rec["contact_id"], "amount": 5}).execute()
+            
+            # Increment total opens for campaign and contact
+            campaign_id = db.table("campaign_recipients").select("campaign_id").eq("id", rec["id"]).execute().data[0]["campaign_id"]
+            db.rpc("increment_campaign_stats", {"camp_id": campaign_id, "event_type": "open"}).execute()
+            db.rpc("increment_contact_stats", {"cont_id": rec["contact_id"], "event_type": "open"}).execute()
 
     elif event_type == "email.clicked":
         # Similar logic for clicks
@@ -59,6 +65,11 @@ async def resend_webhook(request: Request):
                 "last_clicked_at": datetime.utcnow().isoformat()
             }).eq("id", rec["id"]).execute()
             db.rpc("increment_engagement_score", {"cid": rec["contact_id"], "amount": 10}).execute()
+            
+            # Increment total clicks for campaign and contact
+            campaign_id = db.table("campaign_recipients").select("campaign_id").eq("id", rec["id"]).execute().data[0]["campaign_id"]
+            db.rpc("increment_campaign_stats", {"camp_id": campaign_id, "event_type": "click"}).execute()
+            db.rpc("increment_contact_stats", {"cont_id": rec["contact_id"], "event_type": "click"}).execute()
 
     elif event_type == "email.bounced":
         db.table("campaign_recipients").update({"status": "bounced"}).eq("resend_message_id", message_id).execute()
@@ -102,9 +113,13 @@ async def tracking_pixel(campaign_id: str, contact_id: str):
     # Increment contact score
     db.rpc("increment_engagement_score", {"cid": contact_id, "amount": 5}).execute()
     
+    # Increment total opens for campaign and contact
+    db.rpc("increment_campaign_stats", {"camp_id": campaign_id, "event_type": "open"}).execute()
+    db.rpc("increment_contact_stats", {"cont_id": contact_id, "event_type": "open"}).execute()
+    
     # Return a 1x1 transparent PNG
     pixel_data = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\x0bIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82'
-    return FileResponse(io.BytesIO(pixel_data), media_type="image/png", filename="pixel.png")
+    return Response(content=pixel_data, media_type="image/png")
 
 @router.get("/c/{campaign_id}/{contact_id}")
 async def click_tracking(campaign_id: str, contact_id: str, url: str, request: Request):
@@ -129,6 +144,10 @@ async def click_tracking(campaign_id: str, contact_id: str, url: str, request: R
     # Update score
     db.rpc("increment_engagement_score", {"cid": contact_id, "amount": 10}).execute()
     
+    # Increment total clicks for campaign and contact
+    db.rpc("increment_campaign_stats", {"camp_id": campaign_id, "event_type": "click"}).execute()
+    db.rpc("increment_contact_stats", {"cont_id": contact_id, "event_type": "click"}).execute()
+    
     return RedirectResponse(url=url)
 
 @router.get("/unsubscribe/{token}")
@@ -143,7 +162,6 @@ async def confirm_unsubscribe(token: str):
     }).eq("id", token).execute()
     
     # Return unsubscribe confirmation page
-    from fastapi.responses import HTMLResponse
     html = f"""
     <html>
         <body style="font-family: Arial, sans-serif; text-align: center; padding-top: 50px;">

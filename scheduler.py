@@ -8,6 +8,8 @@ from datetime import datetime, timedelta
 import asyncio
 import io
 import base64
+from marketing_scheduler import setup_marketing_scheduler
+from marketing_sequencer_engine import process_active_sequences
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -198,6 +200,17 @@ async def start_scheduler():
         sync_schedules_from_db,
         CronTrigger(minute="*/10"),
         id="sync_schedules",
+        replace_existing=True,
+    )
+    
+    # 2. Setup Marketing specific schedules
+    setup_marketing_scheduler(scheduler)
+    
+    # 3. Automation Engine (Runs Hourly)
+    scheduler.add_job(
+        process_active_sequences,
+        CronTrigger(hour="*"),
+        id="marketing_automation",
         replace_existing=True,
     )
 

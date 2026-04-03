@@ -16,12 +16,13 @@ class AdminCreate(BaseModel):
     email: EmailStr
     password: str
     role: str = "staff"
+    primary_role: str = "staff"
 
 
 class TokenResponse(BaseModel):
     access_token: str
     token_type: str = "bearer"
-    admin: dict
+    admin: dict # {id, name, email, role, primary_role}
 
 
 class ChangePasswordRequest(BaseModel):

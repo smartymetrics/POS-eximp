@@ -24,7 +24,6 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
     sent_count = len(sent_campaigns)
 
     # 3. Aggregated Open/Click Rate
-    # Calculate across all sent campaigns in history
     all_recs_res = db.table("campaign_recipients").select("open_count, click_count").execute()
     all_recs = all_recs_res.data or []
     
@@ -32,24 +31,42 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
     total_opened = len([r for r in all_recs if (r.get("open_count") or 0) > 0])
     total_clicked = len([r for r in all_recs if (r.get("click_count") or 0) > 0])
     
-    avg_open = f"{(total_opened / total_delivered * 100):.1f}%" if total_delivered > 0 else "0%"
+    avg_open_val = (total_opened / total_delivered * 100) if total_delivered > 0 else 0
+    avg_open = f"{avg_open_val:.1f}%"
     avg_click = f"{(total_clicked / total_delivered * 100):.1f}%" if total_delivered > 0 else "0%"
     
+    # 4. Deltas (Month over Month)
+    # Contact Growth this month
+    new_this_month = db.table("marketing_contacts").select("id", count="exact").gte("created_at", last_30_days).execute().count or 0
+    contact_delta = f"↑ {((new_this_month / (total_contacts - new_this_month) * 100) if (total_contacts - new_this_month) > 0 else 0):.1f}%"
+    
+    # 5. Growth Data (Last 14 days)
+    growth_data = []
+    for i in range(13, -1, -1):
+        d = (datetime.utcnow() - timedelta(days=i)).date()
+        date_str = d.isoformat()
+        count = db.table("marketing_contacts").select("id", count="exact").lte("created_at", (d + timedelta(days=1)).isoformat()).execute().count or 0
+        growth_data.append({"date": date_str, "count": count})
+
     return {
         "contacts": {
             "total": total_contacts or 0,
             "subscribed": subscribed or 0,
-            "unsubscribed": (total_contacts or 0) - (subscribed or 0)
+            "delta": contact_delta,
+            "recent": new_this_month
         },
         "campaigns": {
             "sent_this_month": sent_count,
             "avg_open_rate": avg_open,
-            "avg_click_rate": avg_click
+            "open_delta": "↑ 0.0% vs avg" # For future deep historical comparison
         },
         "engagement": {
-            "hot_leads": db.table("marketing_contacts").select("id", count="exact").gte("engagement_score", 70).execute().count or 0,
-            "warm_leads": db.table("marketing_contacts").select("id", count="exact").lt("engagement_score", 70).gte("engagement_score", 30).execute().count or 0
-        }
+            "total_opens": db.table("marketing_contacts").select("id", count="exact").gt("total_emails_opened", 0).execute().count or 0,
+            "hot_leads": db.table("marketing_contacts").select("id", count="exact").gte("engagement_score", 50).execute().count or 0,
+            "warm_leads": db.table("marketing_contacts").select("id", count="exact").lt("engagement_score", 50).gte("engagement_score", 30).execute().count or 0,
+            "cold_leads": db.table("marketing_contacts").select("id", count="exact").lt("engagement_score", 30).execute().count or 0
+        },
+        "growth": growth_data
     }
 
 @router.get("/campaign/{id}/report")
@@ -84,3 +101,17 @@ async def get_campaign_report(id: str, current_admin=Depends(verify_token)):
             "bounced": {"count": bounced, "percent": (bounced/total*100) if total > 0 else 0}
         }
     }
+
+@router.get("/campaign/{id}/recipients")
+async def get_campaign_recipients(id: str, current_admin=Depends(verify_token)):
+    """Fetch the list of individual recipients for a campaign with their engagement."""
+    db = get_db()
+    
+    # Fetch recipients joined with contact details
+    res = db.table("campaign_recipients")\
+        .select("*, marketing_contacts(first_name, last_name, email)")\
+        .eq("campaign_id", id)\
+        .order("open_count", desc=True)\
+        .execute()
+        
+    return res.data or []
