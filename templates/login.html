@@ -260,7 +260,10 @@
         localStorage.setItem('ec_token', data.access_token);
         
         // Role-based redirection
-        if (data.admin && data.admin.primary_role === 'marketing') {
+        const userRoles = (data.admin.role || '').toLowerCase().split(',').map(r => r.trim());
+        const onlyMarketing = userRoles.length === 1 && userRoles[0] === 'marketing';
+        
+        if (onlyMarketing || (data.admin && data.admin.primary_role === 'marketing')) {
           window.location.href = '/marketing';
         } else {
           window.location.href = '/dashboard';

@@ -3562,6 +3562,12 @@
         const roles = (admin.role || '').toLowerCase().split(',').map(r => r.trim());
         const hasRole = (r) => roles.includes(r);
 
+        // Auto-redirect if staff ONLY has the marketing role
+        if (roles.length === 1 && roles[0] === 'marketing') {
+          window.location.href = '/marketing';
+          return;
+        }
+
         if (hasRole('admin') || hasRole('super_admin')) {
           document.querySelectorAll('.admin-only, .lawyer-only, .legal-only, .staff-only').forEach(el => el.style.display = '');
         } else {
