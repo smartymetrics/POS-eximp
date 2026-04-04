@@ -16,8 +16,15 @@ async def sync_client_to_marketing(client_data: dict):
         return None
 
     try:
-        # 1. Search for existing contact by email
-        mc_res = db.table("marketing_contacts").select("*").eq("email", email).execute()
+        client_id = client_data.get("id")
+        
+        # 1. Search by client_id first, then fallback to email (handles email changes safely)
+        mc_res = None
+        if client_id:
+            mc_res = db.table("marketing_contacts").select("*").eq("client_id", client_id).execute()
+            
+        if not mc_res or not mc_res.data:
+            mc_res = db.table("marketing_contacts").select("*").eq("email", email).execute()
         
         contact_id = None
         marketing_data = {

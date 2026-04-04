@@ -115,11 +115,53 @@ def get_marketing_calendar(year: int = None) -> List[Dict[str, Any]]:
     except Exception as e:
         logger.error(f"Error fetching custom events: {e}")
 
+    # 5. Financial Payment Reminders (Dynamic from Invoices)
+    try:
+        today_date = datetime.utcnow().date()
+        # Look for invoices that are due soon, or are already overdue but not fully paid
+        invoices_res = db.table("invoices").select("id, amount, amount_paid, due_date, status, clients(full_name)").neq("status", "voided").execute()
+        invoices = invoices_res.data or []
+        
+        for inv in invoices:
+            due_date_str = inv.get("due_date", "")
+            if not due_date_str: continue
+            
+            due_date = datetime.strptime(due_date_str, "%Y-%m-%d").date()
+            amount = float(inv.get("amount") or 0)
+            paid = float(inv.get("amount_paid") or 0)
+            
+            if paid >= amount: continue # Fully paid
+            
+            client_name = inv.get("clients", {}).get("full_name", "Unknown Client")
+            
+            days_until_due = (due_date - today_date).days
+            
+            # If it's overdue, surface it as an urgent event for TODAY
+            if days_until_due < 0:
+                events.append({
+                    "id": inv["id"],
+                    "name": f"Payment Overdue: {client_name}",
+                    "date": today_date.strftime("%Y-%m-%d"),
+                    "type": "financial_reminder",
+                    "action": f"Client is {-days_until_due} days overdue. Send Payment Reminder."
+                })
+            # If it's coming up in the next 14 days, surface it on its due date
+            elif 0 <= days_until_due <= 14:
+                events.append({
+                    "id": inv["id"],
+                    "name": f"Payment Due: {client_name}",
+                    "date": due_date.strftime("%Y-%m-%d"),
+                    "type": "financial_reminder",
+                    "action": f"Invoice due today. Trigger Due Date sequence."
+                })
+    except Exception as e:
+        logger.error(f"Error fetching financial reminders for calendar: {e}")
+
     # Sort by date
     events.sort(key=lambda x: x["date"])
     
-    # Filter only future events (or recent past for context)
-    now_str = datetime.now().strftime("%Y-%m-%d")
+    # Filter only future events (or recent past for context) - allow today as future
+    now_str = today_date.strftime("%Y-%m-%d")
     final_events = [e for e in events if e["date"] >= now_str]
     
     return final_events

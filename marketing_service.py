@@ -22,13 +22,16 @@ MARKETING_BCC_EMAIL = os.getenv("MARKETING_BCC_EMAIL", "marketing@mail.eximps-cl
 
 def personalize_content(html: str, contact: Dict[str, Any]) -> str:
     """Replaces {{variable}} with contact data."""
+    unsub_token = contact.get("id") or "test-id"
+    unsub_url = f"{APP_BASE_URL}/unsubscribe/{unsub_token}"
+
     vars = {
         "first_name": contact.get("first_name") or "there",
         "last_name": contact.get("last_name") or "",
         "full_name": f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip() or "Valued Client",
         "email": contact.get("email", ""),
         "phone": contact.get("phone", ""),
-        # Add more logic filters for invoices/estates if needed later
+        "unsubscribe_url": unsub_url
     }
     
     for key, val in vars.items():
@@ -63,7 +66,8 @@ def inject_tracking_pixel(html: str, campaign_id: str, contact_id: str) -> str:
     pixel_tag = f'<img src="{pixel_url}" width="1" height="1" style="display:none !important;" />'
     
     if "</body>" in html:
-        return html.replace("</body>", f"{pixel_tag}</body>")
+        idx = html.rfind("</body>")
+        return html[:idx] + pixel_tag + html[idx:]
     return html + pixel_tag
 
 async def send_marketing_email(campaign: Dict[str, Any], contact: Dict[str, Any]):
@@ -79,17 +83,22 @@ async def send_marketing_email(campaign: Dict[str, Any], contact: Dict[str, Any]
         html = wrap_links(html, campaign_id, contact_id)
         html = inject_tracking_pixel(html, campaign_id, contact_id)
         
-        # Add Unsubscribe Link (Regulatory)
-        unsub_token = contact.get("id") # Simplification for now, should be a hashed token
-        unsub_url = f"{APP_BASE_URL}/unsubscribe/{unsub_token}"
-        unsub_footer = f'<div style="margin-top:40px; padding-top:20px; border-top:1px solid #eee; font-size:11px; color:#999; text-align:center;">' \
-                       f'You are receiving this because you subscribed to Eximp & Cloves marketing. ' \
-                       f'<a href="{unsub_url}" style="color:#C47D0A;">Unsubscribe here</a>.</div>'
+        # Check for presence of "unsubscribe" in the HTML.
+        # Use a more assertive check: if they have the {{unsubscribe_url}} tag OR the word unsubscribe in a link.
+        has_unsubscribe = "unsubscribe" in html.lower()
         
-        if "</body>" in html:
-            html = html.replace("</body>", f"{unsub_footer}</body>")
-        else:
-            html += unsub_footer
+        if not has_unsubscribe:
+            unsub_token = contact.get("id") or "test-id"
+            unsub_url = f"{APP_BASE_URL}/unsubscribe/{unsub_token}"
+            unsub_footer = f'<div style="margin-top:40px; padding-top:20px; border-top:1px solid #eee; font-size:11px; color:#999; text-align:center;">' \
+                           f'You are receiving this because you subscribed to Eximp & Cloves marketing. ' \
+                           f'<a href="{unsub_url}" style="color:#C47D0A;">Unsubscribe here</a>.</div>'
+            
+            if "</body>" in html:
+                idx = html.rfind("</body>")
+                html = html[:idx] + unsub_footer + html[idx:]
+            else:
+                html += unsub_footer
 
     try:
         res = resend.Emails.send({
@@ -175,10 +184,66 @@ def apply_segment_filters(query, rules: List[Dict[str, Any]]):
             query = query.in_(field, val if isinstance(val, list) else [val])
         elif op == "is_null":
             query = query.is_(field, "null")
-        elif op == "not_null":
-            query = query.not_.is_(field, "null")
-
     return query
+
+def get_financial_segment_contacts(segment_id: str) -> List[Dict[str, Any]]:
+    """Resolves financial status from invoices and maps them to marketing contacts."""
+    db = get_db()
+    
+    # 1. Fetch active invoices with client details
+    invoices_res = db.table("invoices")\
+        .select("amount, amount_paid, due_date, status, clients(email)")\
+        .neq("status", "voided")\
+        .execute()
+        
+    invoices = invoices_res.data or []
+    
+    client_financials = {}
+    today = datetime.utcnow().date().isoformat()
+    
+    # 2. Aggregate per-client financial state
+    for inv in invoices:
+        client = inv.get("clients")
+        if not client: continue
+        email = client.get("email")
+        if not email: continue
+        
+        email = email.lower().strip()
+        if email not in client_financials:
+            client_financials[email] = {
+                "total_invoiced": 0,
+                "total_paid": 0,
+                "has_overdue": False
+            }
+        
+        amount = float(inv.get("amount") or 0)
+        paid = float(inv.get("amount_paid") or 0)
+        due_date = inv.get("due_date", "")
+        
+        client_financials[email]["total_invoiced"] += amount
+        client_financials[email]["total_paid"] += paid
+        
+        if paid < amount and due_date and due_date < today:
+            client_financials[email]["has_overdue"] = True
+            
+    # 3. Filter matched emails based on requested segment
+    target_emails = []
+    for email, stats in client_financials.items():
+        outstanding = stats["total_invoiced"] - stats["total_paid"]
+        
+        if segment_id == "financial_overdue" and stats["has_overdue"]:
+            target_emails.append(email)
+        elif segment_id == "financial_outstanding" and outstanding > 0:
+            target_emails.append(email)
+        elif segment_id == "financial_paid_fully" and outstanding <= 0 and stats["total_invoiced"] > 0:
+            target_emails.append(email)
+            
+    if not target_emails:
+        return []
+        
+    # 4. Fetch the actual marketing_contacts for these emails
+    contacts_res = db.table("marketing_contacts").select("*").in_("email", target_emails).eq("is_subscribed", True).execute()
+    return contacts_res.data or []
 
 async def resolve_target_recipients(segment_ids: List[str] = None, manual_emails: List[str] = None) -> List[Dict[str, Any]]:
     """Resolves a list of contacts based on segments or specific emails."""
@@ -239,6 +304,10 @@ async def resolve_target_recipients(segment_ids: List[str] = None, manual_emails
                 # High engagement score
                 res = db.table("marketing_contacts").select("*").gt("engagement_score", 50).eq("is_subscribed", True).execute()
                 all_contacts.extend(res.data)
+            elif sid in ['financial_overdue', 'financial_outstanding', 'financial_paid_fully']:
+                # Financial data aggregation
+                fin_contacts = get_financial_segment_contacts(sid)
+                all_contacts.extend(fin_contacts)
             else:
                 # 4. Custom Dynamic Segment from DB
                 seg_res = db.table("marketing_segments").select("*").eq("id", sid).execute()

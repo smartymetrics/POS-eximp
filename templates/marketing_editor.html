@@ -236,7 +236,7 @@
     </div>
 
     <!-- TEMPLATE PICKER MODAL -->
-    <div id="template-modal" class="modal-overlay">
+    <div id="template-modal" class="modal-overlay hidden">
         <div class="modal-box">
             <div class="modal-header">
                 <div>
@@ -771,6 +771,11 @@
             editor.setComponents(tmpl.html);
             closeTemplates();
             selectedTemplateId = null;
+            
+            // Auto-save the applied template so the campaign is immediately registered as "started"
+            // and won't trigger the "New Campaign" picker again if the user accidentally backs out.
+            const saveBtn = document.getElementById('save-campaign');
+            if(saveBtn) saveBtn.click();
         }
 
         // ═══════════════════════════════════════
@@ -778,32 +783,49 @@
         // ═══════════════════════════════════════
         async function loadCampaign() {
             const token = localStorage.getItem('ec_token');
-            if (!campaignId) { renderTemplates(); openTemplates(); return; }
-            const res = await fetch(`/api/marketing/campaigns/${campaignId}`, {
-                headers: { 'Authorization': 'Bearer ' + token }
-            });
-            const data = await res.json();
             
-            // Set subject
-            document.getElementById('subject-field').value = data.subject_a || '';
-
-            // Check if it's a completely new, untouched campaign
-            const content = (data.html_body_a || '').trim();
-            const isPlaceholder = !content || content === '<h1>Start Designing!</h1>' || content === '<html><head><style></style></head><body><h1>Start Designing!</h1></body></html>';
+            if (!campaignId) { 
+                renderTemplates(); openTemplates(); 
+                return; 
+            }
             
-            if (!isPlaceholder) {
-                // Instantly close the picker so the UI is immediately clean
-                closeTemplates();
+            try {
+                const res = await fetch(`/api/marketing/campaigns/${campaignId}`, {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
                 
-                // Safely load components to prevent JS halting on syntax errors
-                try {
-                    editor.setComponents(data.html_body_a);
-                } catch (e) {
-                    console.error("GrapesJS failed to parse the preexisting campaign HTML:", e);
+                const data = await res.json();
+                
+                // Set subject
+                document.getElementById('subject-field').value = data.subject_a || '';
+    
+                // Check if it's a completely new, untouched campaign
+                const content = (data.html_body_a || '').trim();
+                
+                // Very aggressive check for blank/placeholder
+                let isPlaceholder = false;
+                if (!content) isPlaceholder = true;
+                if (content.includes('<h1>Start Designing!</h1>')) isPlaceholder = true;
+                if (content.length < 50) isPlaceholder = true; // No valid campaign is under 50 chars
+                
+                if (!isPlaceholder) {
+                    // Instantly close the picker so the UI is immediately clean
+                    closeTemplates();
+                    
+                    // Safely load components to prevent JS halting on syntax errors
+                    try {
+                        // NOTE: For full HTML strings, grapesjs prefers extracting the body.
+                        // We will let grapesjs parse it cleanly.
+                        editor.setComponents(data.html_body_a);
+                    } catch (e) {
+                        console.error("GrapesJS failed to parse HTML:", e);
+                    }
+                } else {
+                    renderTemplates();
+                    openTemplates();
                 }
-            } else {
-                renderTemplates();
-                openTemplates();
+            } catch (e) {
+                console.error("Campaign API Fetch crash:", e);
             }
         }
 

@@ -5,7 +5,7 @@ from database import get_db
 from routers.auth import verify_token
 from routers.analytics import log_activity
 from datetime import datetime, timedelta
-from marketing_service import apply_segment_filters
+from marketing_service import apply_segment_filters, get_financial_segment_contacts
 
 router = APIRouter()
 
@@ -59,6 +59,8 @@ async def get_segment_contacts(id: str, current_admin=Depends(verify_token)):
         thirty_days_ago = (datetime.utcnow() - timedelta(days=30)).isoformat()
         res = db.table("marketing_contacts").select("*").gt("created_at", thirty_days_ago).eq("is_subscribed", True).execute()
         return res.data
+    elif id.startswith("financial_"):
+        return get_financial_segment_contacts(id)
 
     # Handle Custom Segments
     seg_res = db.table("marketing_segments").select("*").eq("id", id).execute()
@@ -88,6 +90,21 @@ async def preview_segment_rules(rules: List[Dict[str, Any]], current_admin=Depen
 async def get_segment_count(id: str, current_admin=Depends(verify_token)):
     """Get total count for an existing segment."""
     db = get_db()
+    
+    if id == 'engaged':
+        res = db.table("marketing_contacts").select("id", count="exact").gt("total_emails_opened", 0).eq("is_subscribed", True).execute()
+        return {"count": res.count or 0}
+    elif id == 'hot':
+        res = db.table("marketing_contacts").select("id", count="exact").gt("engagement_score", 50).eq("is_subscribed", True).execute()
+        return {"count": res.count or 0}
+    elif id == 'recent':
+        thirty_days_ago = (datetime.utcnow() - timedelta(days=30)).isoformat()
+        res = db.table("marketing_contacts").select("id", count="exact").gt("created_at", thirty_days_ago).eq("is_subscribed", True).execute()
+        return {"count": res.count or 0}
+    elif id.startswith("financial_"):
+        contacts = get_financial_segment_contacts(id)
+        return {"count": len(contacts)}
+        
     seg_res = db.table("marketing_segments").select("*").eq("id", id).execute()
     if not seg_res.data:
         raise HTTPException(status_code=404, detail="Segment not found")
@@ -98,3 +115,77 @@ async def get_segment_count(id: str, current_admin=Depends(verify_token)):
     query = apply_segment_filters(query, rules)
     result = query.execute()
     return {"count": result.count or 0}
+
+@router.get("/diagnostic/financial-segmentation")
+async def test_financial_segmentation(current_admin=Depends(verify_token)):
+    """TEST ENDPOINT to verify we can group clients by payment status across invoices."""
+    db = get_db()
+    
+    invoices_res = db.table("invoices")\
+        .select("amount, amount_paid, due_date, status, client_id, clients(email, full_name)")\
+        .neq("status", "voided")\
+        .execute()
+        
+    invoices = invoices_res.data or []
+    
+    client_financials = {}
+    today = datetime.utcnow().date().isoformat()
+    
+    for inv in invoices:
+        client = inv.get("clients")
+        if not client: continue
+        email = client.get("email")
+        if not email: continue
+        
+        email = email.lower().strip()
+        
+        if email not in client_financials:
+            client_financials[email] = {
+                "name": client.get("full_name"),
+                "total_invoiced": 0,
+                "total_paid": 0,
+                "has_overdue": False,
+                "outstanding": 0
+            }
+        
+        amount = float(inv.get("amount") or 0)
+        paid = float(inv.get("amount_paid") or 0)
+        due_date = inv.get("due_date", "")
+        
+        client_financials[email]["total_invoiced"] += amount
+        client_financials[email]["total_paid"] += paid
+        
+        if paid < amount and due_date and due_date < today:
+            client_financials[email]["has_overdue"] = True
+            
+    results = {"overdue": [], "outstanding": [], "paid_fully": []}
+    
+    for email, stats in client_financials.items():
+        stats["outstanding"] = stats["total_invoiced"] - stats["total_paid"]
+        
+        if stats["has_overdue"]:
+            results["overdue"].append(email)
+        elif stats["outstanding"] > 0:
+            results["outstanding"].append(email)
+        elif stats["total_invoiced"] > 0:
+            results["paid_fully"].append(email)
+            
+    all_contacts_res = db.table("marketing_contacts").select("email").execute()
+    marketing_emails = {c["email"].lower() for c in all_contacts_res.data}
+    
+    financial_emails = set(client_financials.keys())
+    missing_from_marketing = list(financial_emails - marketing_emails)
+    
+    return {
+        "summary": {
+            "total_invoices": len(invoices),
+            "overdue_clients": len(results["overdue"]),
+            "outstanding_clients": len(results["outstanding"]),
+            "paid_fully_clients": len(results["paid_fully"])
+        },
+        "integration": {
+            "total_marketing_contacts": len(marketing_emails),
+            "financial_clients_missing_from_marketing": len(missing_from_marketing),
+            "sample_missing": missing_from_marketing[:5]
+        }
+    }

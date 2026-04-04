@@ -14,12 +14,11 @@
         /* Defensive rule for hidden elements */
         .hidden { display: none !important; }
         
-        /* Defensive rule: Ensure modals without .auto-show are hidden on load */
-        .modal-base:not(.auto-show) { display: none !important; }
-        
-        /* Stop overlays from permanently blocking */
-        .z-\[100\] { pointer-events: none; }
+        /* Stop overlays from permanently blocking only when not active */
+        .z-\[100\] { pointer-events: none; } 
         .z-\[100\].active { pointer-events: auto; }
+        .modal-overlay { pointer-events: none; }
+        .modal-overlay.active { pointer-events: auto; }
         
         body {
             font-family: 'Inter', sans-serif;
@@ -170,6 +169,34 @@
 
         /* FORCE ALL ROGUE OVERLAYS OFF */
         .force-hide-overlay { display: none !important; pointer-events: none !important; }
+
+        /* Button Loading States */
+        .btn-loading {
+            position: relative;
+            color: transparent !important;
+            pointer-events: none;
+            opacity: 0.8;
+        }
+
+        .btn-loading::after {
+            content: "";
+            position: absolute;
+            width: 20px;
+            height: 20px;
+            top: 50%;
+            left: 50%;
+            margin-top: -10px;
+            margin-left: -10px;
+            border: 3px solid rgba(255,255,255,0.3);
+            border-top-color: white;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+
+        .btn-loading-gold::after {
+            border-top-color: #C47D0A;
+            border-color: rgba(196, 125, 10, 0.2);
+        }
     </style>
     <script>
         // Failsafe script to ensure no overlay blocks the screen on load due to caching or tailwind flex conflicts
@@ -258,18 +285,33 @@
             </div>
         </nav>
 
-        <div class="absolute bottom-10 left-6 right-6">
-            <a href="/dashboard" class="flex items-center text-gray-500 hover:text-white transition">
-                <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
-                </svg>
-                Back to Finance
-            </a>
+        <!-- Sidebar Footer -->
+        <div class="p-6 border-t border-slate-800 bg-slate-900 shrink-0">
+            <div id="footer-finance-back" class="mb-4" style="display:none;">
+                <a href="/dashboard" class="flex items-center text-gray-500 hover:text-white transition text-sm font-medium">
+                    <svg class="w-4 h-4 mr-2" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 19l-7-7m0 0l7-7m-7 7h18"></path>
+                    </svg>
+                    Back to Finance
+                </a>
+            </div>
+
+            <div class="flex items-center gap-3">
+                <div id="adminInitials" class="w-8 h-8 rounded-full bg-brand-gold flex items-center justify-center text-slate-900 font-bold text-sm shrink-0">AD</div>
+                <div class="flex-1 min-w-0">
+                    <div id="adminName" class="text-white text-sm font-medium truncate">Admin</div>
+                    <div id="adminRoleTxt" class="text-gray-500 text-xs truncate uppercase tracking-wider">Loading...</div>
+                </div>
+            </div>
+            
+            <button onclick="logout()" class="mt-3 w-full py-2 px-3 border border-slate-700 rounded text-gray-400 text-xs hover:bg-slate-800 hover:text-red-400 hover:border-red-500 transition-colors font-medium">
+                Sign Out
+            </button>
         </div>
     </div>
 
-    <div class="main-content">
+    <!-- Push main content to not strictly collide with the fixed sidebar bottom padding constraint -->
+    <div class="main-content flex-1 max-w-full overflow-y-auto">
         <!-- Header -->
         <header class="flex flex-col md:flex-row justify-between items-start md:items-center mb-10 gap-6">
             <div class="flex items-center gap-4 w-full md:w-auto">
@@ -310,7 +352,7 @@
                 <div class="card p-4 md:p-6">
                     <p class="text-sm text-gray-500 mb-1 font-medium">Total Contacts</p>
                     <h2 id="stat-contacts" class="text-2xl md:text-3xl font-bold">0</h2>
-                    <p id="stat-contacts-delta" class="text-xs text-green-600 mt-2 font-bold">↑ 0% this month</p>
+                    <p id="stat-contacts-delta" class="text-xs transition mt-2 font-bold">→ 0% this month</p>
                 </div>
                 <div class="card p-4 md:p-6">
                     <p class="text-sm text-gray-500 mb-1 font-medium">Active Subscribers</p>
@@ -372,7 +414,7 @@
         <div id="tab-content-contacts" class="tab-pane hidden">
             <div class="flex flex-col lg:flex-row justify-between items-start lg:items-center mb-6 gap-4">
                 <div class="relative w-full lg:w-96 flex items-center gap-2">
-                    <input type="text" id="contact-search" placeholder="Search contacts..."
+                    <input type="text" id="contact-search" placeholder="Search contacts..." oninput="handleContactSearch(this.value)"
                         class="w-full pl-10 pr-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-brand-gold focus:border-brand-gold outline-none">
                     <svg class="w-5 h-5 text-gray-400 absolute left-3 top-3" fill="none" stroke="currentColor"
                         viewBox="0 0 24 24">
@@ -601,7 +643,7 @@
             <div class="flex justify-end gap-3 mt-8">
                 <button onclick="closeCampaignModal()"
                     class="px-6 py-2 bg-gray-100 rounded-lg font-semibold">Cancel</button>
-                <button onclick="createCampaign()"
+                <button onclick="createCampaign()" id="create-camp-btn"
                     class="px-6 py-2 bg-brand-gold text-white rounded-lg font-semibold">Create Draft</button>
             </div>
         </div>
@@ -932,7 +974,7 @@
                 </div>
             </div>
             <div class="flex gap-3 mt-8">
-                <button onclick="updateContact()"
+                <button onclick="updateContact()" id="edit-contact-save-btn"
                     class="flex-1 bg-brand-gold text-white py-3 rounded-lg font-bold shadow-lg shadow-brand-gold/20">Save
                     Changes</button>
                 <button onclick="closeEditContactModal()"
@@ -1056,7 +1098,15 @@
                 const financeRoles = ['admin', 'super_admin', 'staff', 'operations', 'lawyer'];
                 if (userRoles.some(r => financeRoles.includes(r))) {
                     document.getElementById('nav-finance-container').style.display = 'block';
+                    document.getElementById('footer-finance-back').style.display = 'block';
                 }
+
+                // Populate sidebar profile badge
+                const name = user.full_name || 'Admin';
+                const parts = name.split(' ');
+                document.getElementById('adminInitials').innerText = parts.length > 1 ? parts[0][0] + parts[1][0] : name.substring(0, 2).toUpperCase();
+                document.getElementById('adminName').innerText = name;
+                document.getElementById('adminRoleTxt').innerText = userRoles.join(', ');
 
                 // All good — load the dashboard
                 loadOverview();
@@ -1069,9 +1119,25 @@
 
         checkAccessAndInit();
 
+        function logout() {
+            localStorage.removeItem('ec_token');
+            window.location.href = '/login';
+        }
+
+        function toggleSidebar() {
+            document.getElementById('sidebar').classList.toggle('active');
+            document.getElementById('sidebar-overlay').classList.toggle('active');
+        }
+
         function showTab(tab) {
-            document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden'));
+            document.querySelectorAll('.tab-pane').forEach(el => el.classList.add('hidden', 'active')); // active for hidden logic if applicable
             document.getElementById('tab-content-' + tab).classList.remove('hidden');
+            
+            // On mobile, close sidebar when clicking a tab
+            if(window.innerWidth < 1024) {
+               document.getElementById('sidebar').classList.remove('active');
+               document.getElementById('sidebar-overlay').classList.remove('active');
+            }
 
             document.querySelectorAll('.nav-link').forEach(el => el.classList.remove('active'));
             document.getElementById('nav-' + tab).classList.add('active');
@@ -1097,13 +1163,29 @@
         }
 
         async function loadOverview() {
+            try {
+                // One-time self-healing deduplication call to clean up the recent email edit duplicates
+                await fetch('/api/marketing/contacts/diagnostic/deduplicate', {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                }).catch(e => console.error("Dedup fail", e));
+            } catch (e) { console.error(e); }
+
             const res = await fetch('/api/marketing/analytics/overview', {
                 headers: { 'Authorization': 'Bearer ' + token }
             });
             const data = await res.json();
 
             document.getElementById('stat-contacts').innerText = data.contacts.total || 0;
-            document.getElementById('stat-contacts-delta').innerText = data.contacts.delta || '↑ 0% this month';
+            
+            const deltaEl = document.getElementById('stat-contacts-delta');
+            const deltaText = data.contacts.delta || '→ 0.0%';
+            deltaEl.innerText = deltaText;
+            deltaEl.classList.remove('text-green-600', 'text-gray-400', 'text-red-600');
+            if (deltaText.includes('↑')) deltaEl.classList.add('text-green-600');
+            else if (deltaText.includes('↓')) deltaEl.classList.add('text-red-600');
+            else deltaEl.classList.add('text-gray-400');
+            
             document.getElementById('stat-subscribed').innerText = data.contacts.subscribed || 0;
             document.getElementById('stat-open-rate').innerText = data.campaigns.avg_open_rate || '0%';
             document.getElementById('stat-open-delta').innerText = data.campaigns.open_delta || '↑ 0% vs avg';
@@ -1205,11 +1287,21 @@
             }
         }
 
-        async function loadContacts() {
+        let searchTimer;
+        function handleContactSearch(val) {
+            clearTimeout(searchTimer);
+            searchTimer = setTimeout(() => {
+                loadContacts(val);
+            }, 500);
+        }
+
+        async function loadContacts(q = '') {
             let url = '/api/marketing/contacts';
             if (activeSegmentFilter) {
                 // If it's a smart segment (engaged, hot, recent), we use special logic or just pass ID
                 url = `/api/marketing/segments/${activeSegmentFilter}/contacts`;
+            } else if (q) {
+                url += `?q=${encodeURIComponent(q)}`;
             }
 
             const res = await fetch(url, {
@@ -1267,25 +1359,43 @@
         }
 
         // Modal Logic
-        function openCampaignModal() { document.getElementById('campaign-modal').classList.remove('hidden'); }
-        function closeCampaignModal() { document.getElementById('campaign-modal').classList.add('hidden'); }
+        function openCampaignModal() { 
+            const el = document.getElementById('campaign-modal');
+            el.classList.remove('hidden');
+            el.classList.add('active');
+        }
+        function closeCampaignModal() { 
+            const el = document.getElementById('campaign-modal');
+            el.classList.add('hidden');
+            el.classList.remove('active');
+        }
 
         async function createCampaign() {
-            const data = {
-                name: document.getElementById('camp-name').value,
-                subject_a: document.getElementById('camp-subject').value,
-                preview_text: document.getElementById('camp-preview').value,
-                html_body_a: '<h1>Start Designing!</h1>'
-            };
+            const btn = document.getElementById('create-camp-btn');
+            btn.classList.add('btn-loading');
+            try {
+                const data = {
+                    name: document.getElementById('camp-name').value,
+                    subject_a: document.getElementById('camp-subject').value,
+                    preview_text: document.getElementById('camp-preview').value,
+                    html_body_a: '<h1>Start Designing!</h1>'
+                };
 
-            const res = await fetch('/api/marketing/campaigns', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                body: JSON.stringify(data)
-            });
+                const res = await fetch('/api/marketing/campaigns', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify(data)
+                });
 
-            const camp = await res.json();
-            window.location.href = `/marketing/editor?id=${camp.id}`;
+                if (!res.ok) throw new Error("Failed to create campaign");
+
+                const camp = await res.json();
+                window.location.href = `/marketing/editor?id=${camp.id}`;
+            } catch (e) {
+                console.error(e);
+                alert(e.message || "Error creating campaign.");
+                btn.classList.remove('btn-loading');
+            }
         }
 
         async function openSendModal(id, name) {
@@ -1302,6 +1412,11 @@
                     <option value="engaged">Engaged (Users who opened your mails)</option>
                     <option value="hot">Hot Leads (Engagement Score > 50)</option>
                     <option value="recent">Recent Signups (Last 30 days)</option>
+                    <optgroup label="Financial Activity">
+                        <option value="financial_overdue">🔴 Overdue Clients (Missed Deadline)</option>
+                        <option value="financial_outstanding">🟡 Outstanding Balance (Partial Paid)</option>
+                        <option value="financial_paid_fully">🟢 Fully Paid (Completed)</option>
+                    </optgroup>
                 `;
 
                 customSegments.forEach(s => {
@@ -1313,52 +1428,69 @@
                 console.error("Error loading segments for send modal:", e);
             }
 
-            document.getElementById('send-modal').classList.remove('hidden');
+            const el = document.getElementById('send-modal');
+            el.classList.remove('hidden');
+            el.classList.add('active');
         }
 
-        function closeSendModal() { document.getElementById('send-modal').classList.add('hidden'); }
+        function closeSendModal() { 
+            const el = document.getElementById('send-modal');
+            el.classList.add('hidden');
+            el.classList.remove('active');
+        }
 
         function toggleScheduleInput(show) {
             document.getElementById('schedule-input-container').classList.toggle('hidden', !show);
         }
 
         async function confirmSend() {
-            const id = document.getElementById('target-camp-id').value;
-            const targetType = document.querySelector('input[name="target-type"]:checked').value;
-            const deliveryType = document.querySelector('input[name="delivery-timing"]:checked').value;
+            const btn = document.querySelector('#send-modal button.bg-brand-gold');
+            btn.classList.add('btn-loading');
+            try {
+                const id = document.getElementById('target-camp-id').value;
+                const targetType = document.querySelector('input[name="target-type"]:checked').value;
+                const deliveryType = document.querySelector('input[name="delivery-timing"]:checked').value;
 
-            let payload = {};
+                let payload = {};
 
-            if (deliveryType === 'later') {
-                const schedule = document.getElementById('target-schedule').value;
-                if (!schedule) { alert("Please pick a date and time."); return; }
-                payload.scheduled_at = new Date(schedule).toISOString();
-            }
+                if (deliveryType === 'later') {
+                    const schedule = document.getElementById('target-schedule').value;
+                    if (!schedule) { alert("Please pick a date and time."); return; }
+                    payload.scheduled_at = new Date(schedule).toISOString();
+                }
 
-            if (targetType === 'segment') {
-                payload.segment_ids = [document.getElementById('target-segment').value];
-            } else if (targetType === 'manual') {
-                const raw = document.getElementById('target-emails').value;
-                payload.manual_emails = raw.split(',').map(e => e.trim()).filter(e => e.includes('@'));
-                if (payload.manual_emails.length === 0) { alert("Please enter at least one valid email."); return; }
-            }
+                if (targetType === 'segment') {
+                    payload.segment_ids = [document.getElementById('target-segment').value];
+                } else if (targetType === 'manual') {
+                    const raw = document.getElementById('target-emails').value;
+                    payload.manual_emails = raw.split(',').map(e => e.trim()).filter(e => e.includes('@'));
+                    if (payload.manual_emails.length === 0) { alert("Please enter at least one valid email."); return; }
+                }
 
-            const msg = deliveryType === 'later' ? "schedule this campaign?" : `broadcast this campaign to its ${targetType} targets?`;
-            if (!confirm(`Are you sure you want to ${msg}`)) return;
+                const msg = deliveryType === 'later' ? "schedule this campaign?" : `broadcast this campaign to its ${targetType} targets?`;
+                if (!confirm(`Are you sure you want to ${msg}`)) {
+                    btn.classList.remove('btn-loading');
+                    return;
+                }
 
-            const res = await fetch(`/api/marketing/campaigns/${id}/send`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                body: JSON.stringify(payload)
-            });
+                const res = await fetch(`/api/marketing/campaigns/${id}/send`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify(payload)
+                });
 
-            if (res.ok) {
-                alert(deliveryType === 'later' ? "Campaign scheduled!" : "Broadcast initiated!");
-                closeSendModal();
-                loadCampaigns();
-            } else {
-                const err = await res.json();
-                alert(err.detail || "Error initiating send.");
+                if (res.ok) {
+                    alert(deliveryType === 'later' ? "Campaign scheduled!" : "Broadcast initiated!");
+                    closeSendModal();
+                    loadCampaigns();
+                } else {
+                    const err = await res.json();
+                    alert(err.detail || "Error initiating send.");
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                btn.classList.remove('btn-loading');
             }
         }
 
@@ -1388,7 +1520,10 @@
                 const smartSegments = [
                     { id: 'engaged', name: '✨ Engaged Audience', desc: 'Opened at least one email.', count: stats.engagement.total_opens || 0, color: 'green' },
                     { id: 'hot', name: '🔥 Hot Leads', desc: 'Engagement score higher than 50.', count: stats.engagement.hot_leads || 0, color: 'red' },
-                    { id: 'recent', name: '🆕 Recent Signups', desc: 'Joined in the last 30 days.', count: stats.contacts.recent || 0, color: 'blue' }
+                    { id: 'recent', name: '🆕 Recent Signups', desc: 'Joined in the last 30 days.', count: stats.contacts.recent || 0, color: 'blue' },
+                    { id: 'financial_overdue', name: '🔴 Overdue Clients', desc: 'Clients with missed invoice due dates.', count: 'Dynamic', color: 'red' },
+                    { id: 'financial_outstanding', name: '🟡 Outstanding Balance', desc: 'Clients with partial but not overdue payments.', count: 'Dynamic', color: 'yellow' },
+                    { id: 'financial_paid_fully', name: '🟢 Fully Paid', desc: 'Clients who have paid completely.', count: 'Dynamic', color: 'green' }
                 ];
 
                 const allHtml = [...smartSegments].map(s => `
@@ -1424,10 +1559,16 @@
             document.getElementById('seg-desc').value = '';
             document.getElementById('preview-count').innerText = 'Select a rule...';
             addRuleRow();
-            document.getElementById('segment-modal').classList.remove('hidden');
+            const el = document.getElementById('segment-modal');
+            el.classList.remove('hidden');
+            el.classList.add('active');
         }
 
-        function closeSegmentModal() { document.getElementById('segment-modal').classList.add('hidden'); }
+        function closeSegmentModal() { 
+            const el = document.getElementById('segment-modal');
+            el.classList.add('hidden');
+            el.classList.remove('active');
+        }
 
         function addRuleRow() {
             const container = document.getElementById('rules-container');
@@ -1495,28 +1636,36 @@
         }
 
         async function saveSegment() {
-            const name = document.getElementById('seg-name').value;
-            if (!name) { alert("Please provide a name."); return; }
+            const btn = document.getElementById('save-seg-btn');
+            btn.classList.add('btn-loading');
+            try {
+                const name = document.getElementById('seg-name').value;
+                if (!name) { alert("Please provide a name."); btn.classList.remove('btn-loading'); return; }
 
-            const rules = [];
-            document.querySelectorAll('#rules-container > div').forEach(row => {
-                rules.push({
-                    field: row.querySelector('.rule-field').value,
-                    op: row.querySelector('.rule-op').value,
-                    val: row.querySelector('.rule-val').value
+                const rules = [];
+                document.querySelectorAll('#rules-container > div').forEach(row => {
+                    rules.push({
+                        field: row.querySelector('.rule-field').value,
+                        op: row.querySelector('.rule-op').value,
+                        val: row.querySelector('.rule-val').value
+                    });
                 });
-            });
 
-            const res = await fetch('/api/marketing/segments/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                body: JSON.stringify({ name, description: document.getElementById('seg-desc').value, segment_type: 'dynamic', filter_rules: rules })
-            });
+                const res = await fetch('/api/marketing/segments/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ name, description: document.getElementById('seg-desc').value, segment_type: 'dynamic', filter_rules: rules })
+                });
 
-            if (res.ok) {
-                closeSegmentModal();
-                loadSegments();
-            } else { alert("Failed to save segment."); }
+                if (res.ok) {
+                    closeSegmentModal();
+                    loadSegments();
+                } else { alert("Failed to save segment."); }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                btn.classList.remove('btn-loading');
+            }
         }
 
         async function deleteSegment(id) {
@@ -1587,6 +1736,7 @@
                             <td class="py-4 px-4 font-bold text-gray-800">
                                 ${e.name}
                                 ${e.is_custom ? '<span class="ml-2 text-[8px] bg-brand-gold/10 text-brand-gold px-1.5 py-0.5 rounded uppercase font-black tracking-wider border border-brand-gold/20">Business</span>' : ''}
+                                ${e.type === 'financial_reminder' ? '<span class="ml-2 text-[8px] bg-red-100 text-red-700 px-1.5 py-0.5 rounded uppercase font-black tracking-wider border border-red-200">Invoice</span>' : ''}
                             </td>
                             <td>${new Date(e.date).toLocaleDateString('en-GB')}</td>
                             <td><span class="px-3 py-1 rounded-full text-[10px] font-black uppercase ${badgeClass}">${status}</span></td>
@@ -1624,33 +1774,53 @@
             document.getElementById('end-date-container').classList.toggle('hidden', !val);
         }
 
+        function openEventModal() {
+            const el = document.getElementById('event-modal');
+            el.classList.remove('hidden');
+            el.classList.add('active');
+        }
+        function closeEventModal() {
+            const el = document.getElementById('event-modal');
+            el.classList.add('hidden');
+            el.classList.remove('active');
+        }
+
         async function saveEvent() {
-            const freq = document.getElementById('ev-freq').value;
-            const data = {
-                name: document.getElementById('ev-name').value,
-                event_date: document.getElementById('ev-date').value,
-                action: document.getElementById('ev-action').value,
-                is_recurring: !!freq,
-                frequency: freq || null,
-                end_date: document.getElementById('ev-end-date').value || null
-            };
+            const btn = document.querySelector('#event-modal button.bg-brand-gold');
+            btn.classList.add('btn-loading');
+            try {
+                const freq = document.getElementById('ev-freq').value;
+                const data = {
+                    name: document.getElementById('ev-name').value,
+                    event_date: document.getElementById('ev-date').value,
+                    action: document.getElementById('ev-action').value,
+                    is_recurring: !!freq,
+                    frequency: freq || null,
+                    end_date: document.getElementById('ev-end-date').value || null
+                };
 
-            if (!data.name || !data.event_date) {
-                alert("Name and Date are required.");
-                return;
-            }
+                if (!data.name || !data.event_date) {
+                    alert("Name and Date are required.");
+                    btn.classList.remove('btn-loading');
+                    return;
+                }
 
-            const res = await fetch('/api/marketing/events/', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                body: JSON.stringify(data)
-            });
+                const res = await fetch('/api/marketing/events/', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify(data)
+                });
 
-            if (res.ok) {
-                closeEventModal();
-                loadCalendar();
-            } else {
-                alert("Failed to save event.");
+                if (res.ok) {
+                    closeEventModal();
+                    loadCalendar();
+                } else {
+                    alert("Failed to save event.");
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                btn.classList.remove('btn-loading');
             }
         }
 
@@ -1821,6 +1991,17 @@
             container.appendChild(row);
         }
 
+        async function openSequenceModal() {
+             const el = document.getElementById('sequence-modal');
+             el.classList.remove('hidden');
+             el.classList.add('active');
+        }
+        function closeSequenceModal() {
+             const el = document.getElementById('sequence-modal');
+             el.classList.add('hidden');
+             el.classList.remove('active');
+        }
+
         async function saveSequence() {
             const name = document.getElementById('seq-name').value;
             const trigger = document.getElementById('seq-trigger').value;
@@ -1900,7 +2081,9 @@
                     `).join('');
                 }
 
-                document.getElementById('contact-modal').classList.remove('hidden');
+                const el = document.getElementById('contact-modal');
+                el.classList.remove('hidden');
+                el.classList.add('active');
             } catch (e) {
                 console.error(e);
                 alert("Error loading contact profile.");
@@ -1908,7 +2091,9 @@
         }
 
         function closeContactModal() {
-            document.getElementById('contact-modal').classList.add('hidden');
+            const el = document.getElementById('contact-modal');
+            el.classList.add('hidden');
+            el.classList.remove('active');
         }
 
         // --- EDIT CONTACT LOGIC ---
@@ -1926,35 +2111,47 @@
             document.getElementById('edit-source').value = contact.source || '';
             document.getElementById('edit-type').value = contact.contact_type;
 
-            document.getElementById('edit-contact-modal').classList.remove('hidden');
+            const el = document.getElementById('edit-contact-modal');
+            el.classList.remove('hidden');
+            el.classList.add('active');
         }
 
         function closeEditContactModal() {
-            document.getElementById('edit-contact-modal').classList.add('hidden');
+            const el = document.getElementById('edit-contact-modal');
+            el.classList.add('hidden');
+            el.classList.remove('active');
         }
 
         async function updateContact() {
-            const id = document.getElementById('edit-contact-id').value;
-            const data = {
-                first_name: document.getElementById('edit-first-name').value,
-                last_name: document.getElementById('edit-last-name').value,
-                email: document.getElementById('edit-email').value,
-                phone: document.getElementById('edit-phone').value,
-                source: document.getElementById('edit-source').value,
-                contact_type: document.getElementById('edit-type').value
-            };
+            const btn = document.getElementById('edit-contact-save-btn');
+            btn.classList.add('btn-loading');
+            try {
+                const id = document.getElementById('edit-contact-id').value;
+                const data = {
+                    first_name: document.getElementById('edit-first-name').value,
+                    last_name: document.getElementById('edit-last-name').value,
+                    email: document.getElementById('edit-email').value,
+                    phone: document.getElementById('edit-phone').value,
+                    source: document.getElementById('edit-source').value,
+                    contact_type: document.getElementById('edit-type').value
+                };
 
-            const res = await fetch(`/api/marketing/contacts/${id}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                body: JSON.stringify(data)
-            });
+                const res = await fetch(`/api/marketing/contacts/${id}`, {
+                    method: 'PUT',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify(data)
+                });
 
-            if (res.ok) {
-                closeEditContactModal();
-                loadContacts();
-            } else {
-                alert("Failed to update contact.");
+                if (res.ok) {
+                    closeEditContactModal();
+                    loadContacts();
+                } else {
+                    alert("Failed to update contact.");
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                btn.classList.remove('btn-loading');
             }
         }
 
@@ -2050,14 +2247,22 @@
                     `;
                 }).join('');
 
-                document.getElementById('report-modal').classList.remove('hidden');
+                document.getElementById('report-recipients-list').innerHTML = list.innerHTML;
+                
+                const el = document.getElementById('report-modal');
+                el.classList.remove('hidden');
+                el.classList.add('active');
             } catch (e) {
                 console.error(e);
                 alert("Error loading campaign report.");
             }
         }
 
-        function closeReportModal() { document.getElementById('report-modal').classList.add('hidden'); }
+        function closeReportModal() { 
+            const el = document.getElementById('report-modal');
+            el.classList.add('hidden');
+            el.classList.remove('active');
+        }
 
         function filterReportTable(val) {
             const filter = val.toLowerCase();

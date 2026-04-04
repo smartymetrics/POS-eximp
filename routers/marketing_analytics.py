@@ -38,7 +38,17 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
     # 4. Deltas (Month over Month)
     # Contact Growth this month
     new_this_month = db.table("marketing_contacts").select("id", count="exact").gte("created_at", last_30_days).execute().count or 0
-    contact_delta = f"↑ {((new_this_month / (total_contacts - new_this_month) * 100) if (total_contacts - new_this_month) > 0 else 0):.1f}%"
+    previous_total = total_contacts - new_this_month
+    
+    if previous_total == 0 and new_this_month > 0:
+        delta_val = 100.0
+    elif previous_total > 0:
+        delta_val = (new_this_month / previous_total) * 100
+    else:
+        delta_val = 0.0
+        
+    direction = "↑" if delta_val > 0 else "→" if delta_val == 0 else "↓"
+    contact_delta = f"{direction} {delta_val:.1f}%"
     
     # 5. Growth Data (Last 14 days)
     growth_data = []
