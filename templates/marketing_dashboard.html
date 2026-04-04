@@ -1194,11 +1194,13 @@
             renderCharts(data);
         }
 
+        let allCampaigns = [];
         async function loadCampaigns() {
             const res = await fetch('/api/marketing/campaigns', {
                 headers: { 'Authorization': 'Bearer ' + token }
             });
             const data = await res.json();
+            allCampaigns = data;
             const list = document.getElementById('campaign-list');
             list.innerHTML = data.map(c => `
                 <tr class="border-b group hover:bg-gray-50 transition">
@@ -1361,13 +1363,19 @@
         // Modal Logic
         function openCampaignModal() { 
             const el = document.getElementById('campaign-modal');
-            el.classList.remove('hidden');
-            el.classList.add('active');
+            if (el) {
+                el.classList.remove('hidden');
+                el.classList.add('active');
+                el.style.display = 'flex';
+            }
         }
         function closeCampaignModal() { 
             const el = document.getElementById('campaign-modal');
-            el.classList.add('hidden');
-            el.classList.remove('active');
+            if (el) {
+                el.classList.add('hidden');
+                el.classList.remove('active');
+                el.style.display = 'none';
+            }
         }
 
         async function createCampaign() {
@@ -1429,14 +1437,20 @@
             }
 
             const el = document.getElementById('send-modal');
-            el.classList.remove('hidden');
-            el.classList.add('active');
+            if (el) {
+                el.classList.remove('hidden');
+                el.classList.add('active');
+                el.style.display = 'flex';
+            }
         }
 
         function closeSendModal() { 
             const el = document.getElementById('send-modal');
-            el.classList.add('hidden');
-            el.classList.remove('active');
+            if (el) {
+                el.classList.add('hidden');
+                el.classList.remove('active');
+                el.style.display = 'none';
+            }
         }
 
         function toggleScheduleInput(show) {
@@ -1560,50 +1574,112 @@
             document.getElementById('preview-count').innerText = 'Select a rule...';
             addRuleRow();
             const el = document.getElementById('segment-modal');
-            el.classList.remove('hidden');
-            el.classList.add('active');
+            if (el) {
+                el.classList.remove('hidden');
+                el.classList.add('active');
+                el.style.display = 'flex';
+            }
         }
 
         function closeSegmentModal() { 
             const el = document.getElementById('segment-modal');
-            el.classList.add('hidden');
-            el.classList.remove('active');
+            if (el) {
+                el.classList.add('hidden');
+                el.classList.remove('active');
+                el.style.display = 'none';
+            }
         }
 
         function addRuleRow() {
             const container = document.getElementById('rules-container');
             const row = document.createElement('div');
-            row.className = "flex gap-2 items-center bg-gray-50 p-3 rounded border border-gray-100";
+            row.className = "flex gap-2 items-center bg-gray-50 p-3 rounded border border-gray-100 mb-2";
             row.innerHTML = `
-                <select class="rule-field flex-1 px-3 py-1.5 border rounded text-sm bg-white outline-none">
+                <select class="rule-field flex-1 px-3 py-1.5 border rounded text-sm bg-white outline-none" onchange="updateRuleOperators(this)">
+                    <optgroup label="Behavioral (New)">
+                        <option value="has_opened">Has Opened Campaign...</option>
+                        <option value="has_clicked">Has Clicked Link in...</option>
+                    </optgroup>
                     <optgroup label="Engagement">
                         <option value="engagement_score">Engagement Score</option>
                         <option value="total_emails_opened">Total Opens</option>
                         <option value="total_emails_clicked">Total Clicks</option>
                         <option value="last_opened_at">Last Opened (Recency)</option>
                     </optgroup>
-                    <optgroup label="Profile">
+                    <optgroup label="Profile Info">
                         <option value="contact_type">Lead Type (Lead/Client)</option>
                         <option value="is_subscribed">Subscription Status</option>
                         <option value="source">Lead Source</option>
+                        <option value="tags">Interest Tags</option>
                         <option value="created_at">Date Joined (Account Age)</option>
                     </optgroup>
-                    <optgroup label="Metadata">
-                        <option value="tags">Interest Tags</option>
-                    </optgroup>
                 </select>
-                <select class="rule-op w-32 px-3 py-1.5 border rounded text-sm bg-white outline-none">
+                <select class="rule-op w-40 px-3 py-1.5 border rounded text-sm bg-white outline-none" onchange="updateRuleValueType(this)">
                     <option value="eq">is equal to</option>
                     <option value="gt">is greater than</option>
                     <option value="lt">is less than</option>
                     <option value="contains">contains</option>
                     <option value="in_last">is in last (days)</option>
                     <option value="older_than">is older than (days)</option>
+                    <option value="exactly">is exactly (days ago)</option>
                 </select>
-                <input type="text" class="rule-val w-32 px-3 py-1.5 border rounded text-sm outline-none" placeholder="Value...">
-                <button onclick="this.parentElement.remove()" class="text-gray-300 hover:text-red-500 p-1"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+                <div class="rule-val-container w-40">
+                    <input type="text" class="rule-val w-full px-3 py-1.5 border rounded text-sm outline-none" placeholder="Value...">
+                </div>
+                <button onclick="this.parentElement.remove()" class="text-gray-300 hover:text-red-500 p-1 transition"><svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
             `;
             container.appendChild(row);
+        }
+
+        function updateRuleOperators(fieldSelect) {
+            const row = fieldSelect.parentElement;
+            const opSelect = row.querySelector('.rule-op');
+            const valContainer = row.querySelector('.rule-val-container');
+            const field = fieldSelect.value;
+            
+            if (field === 'has_opened' || field === 'has_clicked') {
+                opSelect.innerHTML = `<option value="eq">did this action</option>`;
+                opSelect.disabled = true;
+                
+                // Switch value to campaign dropdown
+                let options = `<option value="any">Any Campaign</option>`;
+                allCampaigns.filter(c => c.status === 'sent').forEach(c => {
+                    options += `<option value="${c.id}">${c.name}</option>`;
+                });
+                valContainer.innerHTML = `<select class="rule-val w-full px-3 py-1.5 border rounded text-sm bg-white outline-none">${options}</select>`;
+            } else {
+                opSelect.disabled = false;
+                opSelect.innerHTML = `
+                    <option value="eq">is equal to</option>
+                    <option value="gt">is greater than</option>
+                    <option value="lt">is less than</option>
+                    <option value="contains">contains</option>
+                    <option value="in_last">is in last (days)</option>
+                    <option value="older_than">is older than (days)</option>
+                    <option value="exactly">is exactly (days ago)</option>
+                `;
+                valContainer.innerHTML = `<input type="text" class="rule-val w-full px-3 py-1.5 border rounded text-sm outline-none" placeholder="Value...">`;
+                
+                // If it's a date field, pre-select 'in_last'
+                if (field.includes('_at')) {
+                    opSelect.value = 'in_last';
+                    updateRuleValueType(opSelect);
+                }
+            }
+        }
+
+        function updateRuleValueType(opSelect) {
+            const row = opSelect.parentElement;
+            const valInput = row.querySelector('.rule-val');
+            const op = opSelect.value;
+            
+            if (['in_last', 'older_than', 'exactly'].includes(op)) {
+                valInput.type = 'number';
+                valInput.placeholder = 'Days...';
+            } else {
+                valInput.type = 'text';
+                valInput.placeholder = 'Value...';
+            }
         }
 
         async function previewSegment() {
@@ -1637,10 +1713,10 @@
 
         async function saveSegment() {
             const btn = document.getElementById('save-seg-btn');
-            btn.classList.add('btn-loading');
+            if (btn) btn.classList.add('btn-loading');
             try {
                 const name = document.getElementById('seg-name').value;
-                if (!name) { alert("Please provide a name."); btn.classList.remove('btn-loading'); return; }
+                if (!name) { alert("Please provide a name."); return; }
 
                 const rules = [];
                 document.querySelectorAll('#rules-container > div').forEach(row => {
@@ -1664,7 +1740,7 @@
             } catch (e) {
                 console.error(e);
             } finally {
-                btn.classList.remove('btn-loading');
+                if (btn) btn.classList.remove('btn-loading');
             }
         }
 
@@ -1763,26 +1839,20 @@
         }
 
         function openEventModal() {
-            document.getElementById('event-modal').classList.remove('hidden');
-        }
-
-        function closeEventModal() {
-            document.getElementById('event-modal').classList.add('hidden');
-        }
-
-        function toggleEndDate(val) {
-            document.getElementById('end-date-container').classList.toggle('hidden', !val);
-        }
-
-        function openEventModal() {
             const el = document.getElementById('event-modal');
-            el.classList.remove('hidden');
-            el.classList.add('active');
+            if (el) {
+                el.classList.remove('hidden');
+                el.classList.add('active');
+                el.style.display = 'flex';
+            }
         }
         function closeEventModal() {
             const el = document.getElementById('event-modal');
-            el.classList.add('hidden');
-            el.classList.remove('active');
+            if (el) {
+                el.classList.add('hidden');
+                el.classList.remove('active');
+                el.style.display = 'none';
+            }
         }
 
         async function saveEvent() {
@@ -1837,7 +1907,9 @@
         let growthChart, tierChart;
         function renderCharts(data) {
             if (growthChart) growthChart.destroy();
-            const ctx = document.getElementById('growthChart').getContext('2d');
+            const canvas1 = document.getElementById('growthChart');
+            if (!canvas1) return;
+            const ctx = canvas1.getContext('2d');
 
             // Extract growth data
             const growthLabels = (data.growth || []).map(g => {
@@ -1883,7 +1955,9 @@
             });
 
             if (tierChart) tierChart.destroy();
-            const ctx2 = document.getElementById('tierChart').getContext('2d');
+            const canvas2 = document.getElementById('tierChart');
+            if (!canvas2) return;
+            const ctx2 = canvas2.getContext('2d');
             tierChart = new Chart(ctx2, {
                 type: 'doughnut',
                 data: {
@@ -1961,8 +2035,6 @@
             document.getElementById('sequence-modal').classList.remove('hidden');
         }
 
-        function closeSequenceModal() { document.getElementById('sequence-modal').classList.add('hidden'); }
-
         function addStepRow() {
             const container = document.getElementById('steps-container');
             const stepNum = container.children.length + 1;
@@ -1993,45 +2065,59 @@
 
         async function openSequenceModal() {
              const el = document.getElementById('sequence-modal');
-             el.classList.remove('hidden');
-             el.classList.add('active');
+             if (el) {
+                 el.classList.remove('hidden');
+                 el.classList.add('active');
+                 el.style.display = 'flex';
+             }
         }
         function closeSequenceModal() {
              const el = document.getElementById('sequence-modal');
-             el.classList.add('hidden');
-             el.classList.remove('active');
+             if (el) {
+                 el.classList.add('hidden');
+                 el.classList.remove('active');
+                 el.style.display = 'none';
+             }
         }
 
         async function saveSequence() {
-            const name = document.getElementById('seq-name').value;
-            const trigger = document.getElementById('seq-trigger').value;
-            const stepRows = document.querySelectorAll('#steps-container > div');
+            const btn = document.getElementById('save-seq-btn');
+            if (btn) btn.classList.add('btn-loading');
+            try {
+                const name = document.getElementById('seq-name').value;
+                const trigger = document.getElementById('seq-trigger').value;
+                const stepRows = document.querySelectorAll('#steps-container > div');
 
-            const steps = [];
-            stepRows.forEach((row, idx) => {
-                const campaignId = row.querySelector('.step-campaign').value;
-                const delay = parseInt(row.querySelector('.step-delay').value);
-                if (campaignId) {
-                    steps.push({ step_number: idx + 1, delay_days: delay, campaign_id: campaignId });
+                const steps = [];
+                stepRows.forEach((row, idx) => {
+                    const campaignId = row.querySelector('.step-campaign').value;
+                    const delay = parseInt(row.querySelector('.step-delay').value);
+                    if (campaignId) {
+                        steps.push({ step_number: idx + 1, delay_days: delay, campaign_id: campaignId });
+                    }
+                });
+
+                if (!name || steps.length === 0) {
+                    alert("Please provide a name and at least one step.");
+                    return;
                 }
-            });
 
-            if (!name || steps.length === 0) {
-                alert("Please provide a name and at least one step.");
-                return;
-            }
+                const res = await fetch('/api/marketing/sequences', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
+                    body: JSON.stringify({ name, trigger_event: trigger, steps })
+                });
 
-            const res = await fetch('/api/marketing/sequences', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                body: JSON.stringify({ name, trigger_event: trigger, steps })
-            });
-
-            if (res.ok) {
-                closeSequenceModal();
-                loadSequences();
-            } else {
-                alert("Error saving sequence.");
+                if (res.ok) {
+                    closeSequenceModal();
+                    loadSequences();
+                } else {
+                    alert("Error saving sequence.");
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                if (btn) btn.classList.remove('btn-loading');
             }
         }
 
@@ -2082,8 +2168,11 @@
                 }
 
                 const el = document.getElementById('contact-modal');
-                el.classList.remove('hidden');
-                el.classList.add('active');
+                if (el) {
+                    el.classList.remove('hidden');
+                    el.classList.add('active');
+                    el.style.display = 'flex';
+                }
             } catch (e) {
                 console.error(e);
                 alert("Error loading contact profile.");
@@ -2092,8 +2181,11 @@
 
         function closeContactModal() {
             const el = document.getElementById('contact-modal');
-            el.classList.add('hidden');
-            el.classList.remove('active');
+            if (el) {
+                el.classList.add('hidden');
+                el.classList.remove('active');
+                el.style.display = 'none';
+            }
         }
 
         // --- EDIT CONTACT LOGIC ---
@@ -2112,14 +2204,20 @@
             document.getElementById('edit-type').value = contact.contact_type;
 
             const el = document.getElementById('edit-contact-modal');
-            el.classList.remove('hidden');
-            el.classList.add('active');
+            if (el) {
+                el.classList.remove('hidden');
+                el.classList.add('active');
+                el.style.display = 'flex';
+            }
         }
 
         function closeEditContactModal() {
             const el = document.getElementById('edit-contact-modal');
-            el.classList.add('hidden');
-            el.classList.remove('active');
+            if (el) {
+                el.classList.add('hidden');
+                el.classList.remove('active');
+                el.style.display = 'none';
+            }
         }
 
         async function updateContact() {
@@ -2250,8 +2348,11 @@
                 document.getElementById('report-recipients-list').innerHTML = list.innerHTML;
                 
                 const el = document.getElementById('report-modal');
-                el.classList.remove('hidden');
-                el.classList.add('active');
+                if (el) {
+                    el.classList.remove('hidden');
+                    el.classList.add('active');
+                    el.style.display = 'flex';
+                }
             } catch (e) {
                 console.error(e);
                 alert("Error loading campaign report.");
@@ -2260,8 +2361,11 @@
 
         function closeReportModal() { 
             const el = document.getElementById('report-modal');
-            el.classList.add('hidden');
-            el.classList.remove('active');
+            if (el) {
+                el.classList.add('hidden');
+                el.classList.remove('active');
+                el.style.display = 'none';
+            }
         }
 
         function filterReportTable(val) {

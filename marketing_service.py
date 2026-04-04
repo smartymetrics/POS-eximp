@@ -150,7 +150,7 @@ def apply_segment_filters(query, rules: List[Dict[str, Any]]):
         if not field or not op:
             continue
 
-        # Date-based recency logic
+        # Date-based relative logic
         if op == "in_last":
             try:
                 days = int(val)
@@ -165,6 +165,30 @@ def apply_segment_filters(query, rules: List[Dict[str, Any]]):
                 query = query.lt(field, limit)
                 continue
             except: pass
+        elif op == "exactly":
+            try:
+                days = int(val)
+                start = (datetime.utcnow() - timedelta(days=days)).replace(hour=0, minute=0, second=0).isoformat()
+                end = (datetime.utcnow() - timedelta(days=days-1)).replace(hour=0, minute=0, second=0).isoformat()
+                query = query.gte(field, start).lt(field, end)
+                continue
+            except: pass
+
+        # Behavioral Subqueries (Industrial Grade)
+        if field == "has_opened":
+            # Contacts who opened specific campaign (val is UUID) or ANY (val is 'any')
+            if val == "any":
+                query = query.filter("id", "in", "(select contact_id from campaign_recipients where opened_at is not null)")
+            else:
+                query = query.filter("id", "in", f"(select contact_id from campaign_recipients where campaign_id = '{val}' and opened_at is not null)")
+            continue
+        
+        if field == "has_clicked":
+            if val == "any":
+                query = query.filter("id", "in", "(select contact_id from campaign_recipients where clicked_at is not null)")
+            else:
+                query = query.filter("id", "in", f"(select contact_id from campaign_recipients where campaign_id = '{val}' and clicked_at is not null)")
+            continue
 
         if op == "eq":
             query = query.eq(field, val)
@@ -179,7 +203,11 @@ def apply_segment_filters(query, rules: List[Dict[str, Any]]):
         elif op == "lte":
             query = query.lte(field, val)
         elif op == "contains":
-            query = query.ilike(field, f"%{val}%")
+            # For tags (array): use 'cs' (contains)
+            if field == "tags":
+                query = query.filter("tags", "cs", f"{{{val}}}") 
+            else:
+                query = query.ilike(field, f"%{val}%")
         elif op == "in":
             query = query.in_(field, val if isinstance(val, list) else [val])
         elif op == "is_null":

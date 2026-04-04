@@ -7,8 +7,8 @@ logger = logging.getLogger(__name__)
 
 async def process_active_sequences():
     """
-    Background job to find and send due sequence emails.
-    Called daily/hourly by the scheduler.
+    Industrial-Grade Background Engine for sequence automation.
+    Supports: Behavioral Branching, Universal Exit, and Dynamic Delay.
     """
     db = get_db()
     today = datetime.utcnow().date().isoformat()
@@ -16,7 +16,7 @@ async def process_active_sequences():
     logger.info(f"Starting automation engine for date: {today}")
 
     try:
-        # 1. Find enrollments due today
+        # 1. Find all active enrollments due today (or overdue)
         due_enrollments = db.table("contact_sequence_status")\
             .select("*, marketing_contacts(*), marketing_sequences(*)")\
             .eq("status", "active")\
@@ -24,15 +24,27 @@ async def process_active_sequences():
             .execute()
             
         if not due_enrollments.data:
-            logger.info("No automated emails due for sending today.")
+            logger.info("No sequence emails due today.")
             return
 
         for enrollment in due_enrollments.data:
             contact = enrollment["marketing_contacts"]
+            sequence = enrollment["marketing_sequences"]
             sequence_id = enrollment["sequence_id"]
             current_step_num = enrollment["current_step"]
             
-            # 2. Fetch step details
+            # --- 2. UNIVERSAL EXIT RULE (Professional Logic) ---
+            # If the contact is now a 'client', immediately exit any 'Lead' sequences
+            # to avoid unprofessional automated emails post-purchase.
+            if contact.get("contact_type") == "client" and "Lead" in (sequence.get("name") or ""):
+                logger.info(f"Auto-exiting contact {contact['email']} from Lead sequence (now a client).")
+                db.table("contact_sequence_status").update({
+                    "status": "exited",
+                    "last_step_at": datetime.utcnow().isoformat()
+                }).eq("id", enrollment["id"]).execute()
+                continue
+
+            # --- 3. FETCH STEP DETAILS ---
             step_res = db.table("sequence_steps")\
                 .select("*, email_campaigns(*)")\
                 .eq("sequence_id", sequence_id)\
@@ -48,42 +60,75 @@ async def process_active_sequences():
                 continue
             
             step = step_res.data[0]
-            campaign = step["email_campaigns"]
+            campaign = step.get("email_campaigns")
             
-            # 3. Send Email
-            logger.info(f"Sending sequence step {current_step_num} to {contact['email']}")
-            success = await send_marketing_email(campaign, contact)
-            
-            if success:
-                # 4. Schedule next step
-                next_step_num = current_step_num + 1
-                next_step_res = db.table("sequence_steps")\
-                    .select("delay_days")\
-                    .eq("sequence_id", sequence_id)\
-                    .eq("step_number", next_step_num)\
-                    .execute()
+            # --- 4. BEHAVIORAL BRANCHING (Smart Logic) ---
+            # If the step requires interaction from a previous step
+            if step.get("requires_interaction") and current_step_num > 1:
+                prev_step_num = current_step_num - 1
+                prev_step_res = db.table("sequence_steps").select("campaign_id").eq("sequence_id", sequence_id).eq("step_number", prev_step_num).execute()
                 
-                if next_step_res.data:
-                    # Calculate next send date
-                    delay = next_step_res.data[0]["delay_days"]
-                    next_date = (datetime.utcnow() + timedelta(days=delay)).date().isoformat()
+                if prev_step_res.data:
+                    prev_camp_id = prev_step_res.data[0]["campaign_id"]
+                    # Check if the contact interacted with that campaign
+                    rec_res = db.table("campaign_recipients").select("opened_at, clicked_at").eq("campaign_id", prev_camp_id).eq("contact_id", contact["id"]).execute()
                     
-                    db.table("contact_sequence_status").update({
-                        "current_step": next_step_num,
-                        "next_send_date": next_date,
-                        "last_step_at": datetime.utcnow().isoformat()
-                    }).eq("id", enrollment["id"]).execute()
+                    interacted = False
+                    if rec_res.data:
+                        rec = rec_res.data[0]
+                        i_type = step.get("interaction_type") or "open"
+                        # Check either opened_at or clicked_at depending on the rule
+                        interacted = (rec.get("opened_at") if i_type == "open" else rec.get("clicked_at")) is not None
+                    
+                    # If skip_if_not_met is True, we skip this step and look for the next
+                    if not interacted and step.get("skip_if_not_met"):
+                        logger.info(f"Skipping step {current_step_num} for {contact['email']} (interaction not met).")
+                        await move_to_next_step(db, enrollment["id"], sequence_id, current_step_num)
+                        continue
+
+            # --- 5. SEND EMAIL ---
+            if campaign:
+                logger.info(f"Sending sequence step {current_step_num} to {contact['email']}")
+                success = await send_marketing_email(campaign, contact)
+                
+                if success:
+                    await move_to_next_step(db, enrollment["id"], sequence_id, current_step_num)
                 else:
-                    # Completed
-                    db.table("contact_sequence_status").update({
-                        "status": "completed",
-                        "last_step_at": datetime.utcnow().isoformat()
-                    }).eq("id", enrollment["id"]).execute()
+                    logger.error(f"Failed to send sequence email to {contact['email']}")
             else:
-                logger.error(f"Failed to send sequence email to {contact['email']}")
+                # No campaign for this step? Maybe it's a 'Wait Only' step. Just move on.
+                await move_to_next_step(db, enrollment["id"], sequence_id, current_step_num)
 
     except Exception as e:
         logger.error(f"Automation Engine Error: {e}")
+
+async def move_to_next_step(db, enrollment_id, sequence_id, current_step_num):
+    """Helper to calculate the next step and schedule the next send_date."""
+    next_step_num = current_step_num + 1
+    next_step_res = db.table("sequence_steps")\
+        .select("delay_days")\
+        .eq("sequence_id", sequence_id)\
+        .eq("step_number", next_step_num)\
+        .execute()
+    
+    if next_step_res.data:
+        # Calculate next send date
+        delay = next_step_res.data[0].get("delay_days") or 1
+        next_date = (datetime.utcnow() + timedelta(days=delay)).date().isoformat()
+        
+        db.table("contact_sequence_status").update({
+            "current_step": next_step_num,
+            "next_send_date": next_date,
+            "last_step_at": datetime.utcnow().isoformat()
+        }).eq("id", enrollment_id).execute()
+        return True
+    else:
+        # No more steps - Mark as Completed
+        db.table("contact_sequence_status").update({
+            "status": "completed",
+            "last_step_at": datetime.utcnow().isoformat()
+        }).eq("id", enrollment_id).execute()
+        return False
 
 async def auto_enroll_contact(contact_id: str, trigger_event: str):
     """Utility to enroll a contact based on an event (e.g. 'client_created')."""

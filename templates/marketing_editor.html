@@ -235,6 +235,30 @@
         </div>
     </div>
 
+        </div>
+    </div>
+
+    <!-- PROPERTY PICKER MODAL -->
+    <div id="property-modal" class="modal-overlay hidden">
+        <div class="modal-box" style="max-width: 800px;">
+            <div class="modal-header">
+                <div>
+                    <h2>Insert Property Card</h2>
+                    <p>Select an active estate to insert into your email.</p>
+                </div>
+                <button class="modal-close" onclick="closePropertyPicker()">✕</button>
+            </div>
+            <div class="modal-body">
+                <div id="property-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+                    <!-- Loaded via JS -->
+                </div>
+            </div>
+            <div class="modal-footer">
+                <button class="btn btn-gray" onclick="closePropertyPicker()">Cancel</button>
+            </div>
+        </div>
+    </div>
+
     <!-- TEMPLATE PICKER MODAL -->
     <div id="template-modal" class="modal-overlay hidden">
         <div class="modal-box">
@@ -665,17 +689,10 @@
         });
 
         bm.add('ec-property-card', {
-            label: 'Property Card',
+            label: '🏠 Smart Property',
             category: 'Eximp & Cloves',
-            content: `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #eee;border-radius:8px;overflow:hidden;font-family:'Inter',sans-serif;">
-              <tr><td><img src="https://placehold.co/600x280/1A1A1A/C47D0A?text=Property+Image" width="100%" style="display:block;" /></td></tr>
-              <tr><td style="padding:24px;">
-                <h3 style="margin:0 0 8px;color:#1A1A1A;font-family:'Playfair Display',serif;font-size:22px;">Estate Name, Location</h3>
-                <p style="color:#666;font-size:14px;margin:0 0 16px;line-height:1.6;">Brief description of the estate and its key investment benefits.</p>
-                <div style="color:#C47D0A;font-weight:700;font-size:22px;margin-bottom:20px;">₦X,000,000</div>
-                <a href="#" style="background:#1A1A1A;color:#C47D0A;padding:12px 24px;text-decoration:none;font-weight:700;font-size:14px;border-radius:4px;display:inline-block;">View Details →</a>
-              </td></tr>
-            </table>`
+            content: { type: 'property-card-trigger' },
+            attributes: { class: 'fa fa-home' }
         });
 
         bm.add('ec-cta-button', {
@@ -721,7 +738,6 @@
         // ═══════════════════════════════════════
         // TEMPLATE PICKER LOGIC
         // ═══════════════════════════════════════
-        // --- MODAL CONTROLS ---
         function openTemplates() { document.getElementById('template-modal').classList.remove('hidden'); }
         function closeTemplates() { document.getElementById('template-modal').classList.add('hidden'); }
         
@@ -772,15 +788,104 @@
             closeTemplates();
             selectedTemplateId = null;
             
-            // Auto-save the applied template so the campaign is immediately registered as "started"
-            // and won't trigger the "New Campaign" picker again if the user accidentally backs out.
             const saveBtn = document.getElementById('save-campaign');
             if(saveBtn) saveBtn.click();
         }
 
         // ═══════════════════════════════════════
-        // LOAD / SAVE / TEST
+        // PROPERTY PICKER LOGIC
         // ═══════════════════════════════════════
+        function openPropertyPicker() {
+            document.getElementById('property-modal').classList.remove('hidden');
+            loadPropertiesForPicker();
+        }
+
+        function closePropertyPicker() {
+            document.getElementById('property-modal').classList.add('hidden');
+        }
+
+        async function loadPropertiesForPicker() {
+            const grid = document.getElementById('property-grid');
+            grid.innerHTML = '<p class="text-gray-400">Loading estates...</p>';
+            
+            try {
+                const token = localStorage.getItem('ec_token');
+                const res = await fetch('/api/properties', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const props = await res.json();
+                
+                grid.innerHTML = props.map(p => `
+                    <div class="p-4 bg-[#222] border border-[#333] rounded-lg hover:border-brand-gold transition cursor-pointer flex flex-col gap-2" onclick="insertPropertyCard(${JSON.stringify(p).replace(/"/g, '&quot;')})">
+                        <div class="text-brand-gold font-bold">${p.name}</div>
+                        <div class="text-xs text-gray-400">${p.location}</div>
+                        <div class="text-sm font-bold text-white">₦${parseFloat(p.starting_price).toLocaleString()}</div>
+                        <div class="mt-2 text-[10px] text-gray-500 uppercase font-black">Click to Insert →</div>
+                    </div>
+                `).join('');
+            } catch (e) {
+                grid.innerHTML = '<p class="text-red-500">Error loading properties.</p>';
+            }
+        }
+
+        function insertPropertyCard(p) {
+            const formatter = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' });
+            const price = formatter.format(p.starting_price);
+            
+            // Generate clean HTML for the card
+            const html = `
+                <table width="100%" cellpadding="0" cellspacing="0" style="border:1.5px solid #eee; border-radius:12px; overflow:hidden; font-family:'Inter', sans-serif; margin-bottom:24px;">
+                    <tr><td>
+                        <img src="https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=800&q=80" width="100%" style="display:block; border:none;" alt="${p.name}" />
+                    </td></tr>
+                    <tr><td style="padding:28px; background: #ffffff;">
+                        <div style="color:#C47D0A; font-size:11px; letter-spacing:2px; text-transform:uppercase; font-weight:700; margin-bottom:8px;">Featured Estate</div>
+                        <h3 style="margin:0 0 10px; color:#111111; font-family:'Playfair Display', serif; font-size:24px;">${p.name}</h3>
+                        <p style="color:#666666; font-size:15px; margin:0 0 18px; line-height:1.7;">${p.description || `Secure your spot at ${p.name} in ${p.location}. Premium investment with high appreciation value.`}</p>
+                        
+                        <table width="100%" cellpaddig="0" cellspacing="0" style="margin-bottom:24px;">
+                            <tr>
+                                <td width="50%">
+                                    <div style="font-size:12px; color:#999; margin-bottom:4px;">Starting Price</div>
+                                    <div style="color:#111; font-weight:800; font-size:20px;">${price}</div>
+                                </td>
+                                <td width="50%" style="text-align:right;">
+                                    <div style="font-size:12px; color:#999; margin-bottom:4px;">Location</div>
+                                    <div style="color:#111; font-weight:600; font-size:14px;">${p.location}</div>
+                                </td>
+                            </tr>
+                        </table>
+                        
+                        <div style="text-align:center;">
+                            <a href="https://eximps-cloves.com/properties?id=${p.id}&ec_cid={{id}}" style="background:#1A1A1A; color:#C47D0A; padding:15px 35px; text-decoration:none; font-weight:700; font-size:14px; border-radius:4px; display:inline-block; border:1px solid #C47D0A;">View Property Details →</a>
+                        </div>
+                    </td></tr>
+                </table>
+            `;
+            
+            editor.addComponents(html);
+            closePropertyPicker();
+        }
+
+        // Register custom component to handle the click
+        editor.DomComponents.addType('property-card-trigger', {
+            model: {
+                defaults: {
+                    tagName: 'div',
+                    attributes: { style: 'padding: 20px; border: 2px dashed #C47D0A; text-align: center; color: #C47D0A; cursor: pointer;' },
+                    content: '🏠 Click here to pick a property from your database'
+                }
+            },
+            view: {
+                events: {
+                    click: 'onPickerClick'
+                },
+                onPickerClick() {
+                    openPropertyPicker();
+                }
+            }
+        });
+
         async function loadCampaign() {
             const token = localStorage.getItem('ec_token');
             

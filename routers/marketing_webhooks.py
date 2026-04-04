@@ -123,10 +123,10 @@ async def tracking_pixel(campaign_id: str, contact_id: str):
 
 @router.get("/c/{campaign_id}/{contact_id}")
 async def click_tracking(campaign_id: str, contact_id: str, url: str, request: Request):
-    """Log the click event and redirect the user to the target URL."""
+    """Log the click event, handle auto-tagging, and redirect."""
     db = get_db()
     
-    # Log the click
+    # 1. Log the click event
     db.table("email_click_events").insert({
         "campaign_id": campaign_id,
         "contact_id": contact_id,
@@ -135,20 +135,63 @@ async def click_tracking(campaign_id: str, contact_id: str, url: str, request: R
         "user_agent": request.headers.get("user-agent")
     }).execute()
     
-    # Update recipient stats
+    # 2. Update recipient status & scoring
     db.table("campaign_recipients").update({
         "last_clicked_at": datetime.utcnow().isoformat(),
         # click_count handled via RPC or simple update
     }).eq("campaign_id", campaign_id).eq("contact_id", contact_id).execute()
     
-    # Update score
+    # Update score (+10 for click)
     db.rpc("increment_engagement_score", {"cid": contact_id, "amount": 10}).execute()
     
-    # Increment total clicks for campaign and contact
+    # Update campaign/contact stats
     db.rpc("increment_campaign_stats", {"camp_id": campaign_id, "event_type": "click"}).execute()
     db.rpc("increment_contact_stats", {"cont_id": contact_id, "event_type": "click"}).execute()
-    
+
+    # 3. INTEREST TAGGING (Industrial Grade)
+    # Check if URL has a tag parameter (e.g. ?tag=Lekki)
+    if "tag=" in url:
+        try:
+            # Simple tag extraction
+            tag = url.split("tag=")[1].split("&")[0]
+            # Fetch existing tags and append
+            contact_res = db.table("marketing_contacts").select("tags").eq("id", contact_id).execute()
+            if contact_res.data:
+                tags = contact_res.data[0].get("tags") or []
+                if tag not in tags:
+                    tags.append(tag)
+                    db.table("marketing_contacts").update({"tags": tags}).eq("id", contact_id).execute()
+        except: pass
+
     return RedirectResponse(url=url)
+
+@router.post("/api/marketing/track")
+async def site_tracking(request: Request):
+    """Deep Site Tracking endpoint for track.js."""
+    try:
+        payload = await request.json()
+        contact_id = payload.get("contact_id")
+        url = payload.get("url")
+        title = payload.get("title")
+
+        if not contact_id: return {"status": "ignored"}
+        
+        db = get_db()
+        
+        # 1. Log behavior in activity log
+        db.table("activity_log").insert({
+            "event_type": "site_view",
+            "description": f"Viewed listing: {title or url}",
+            "client_id": None, # Non-client lead activity
+            "metadata": {"url": url, "title": title}
+        }).execute()
+
+        # 2. Increment score (+2 for browsing)
+        db.rpc("increment_engagement_score", {"cid": contact_id, "amount": 2}).execute()
+
+        return {"status": "tracked"}
+    except Exception as e:
+        return {"status": "error", "message": str(e)}
 
 @router.get("/unsubscribe/{token}")
 async def confirm_unsubscribe(token: str):
@@ -161,13 +204,17 @@ async def confirm_unsubscribe(token: str):
         "unsubscribed_at": datetime.utcnow().isoformat()
     }).eq("id", token).execute()
     
-    # Return unsubscribe confirmation page
+    # Return professional unsubscribe confirmation page
     html = f"""
     <html>
-        <body style="font-family: Arial, sans-serif; text-align: center; padding-top: 50px;">
-            <h2>You Have Been Unsubscribed</h2>
-            <p>You will no longer receive marketing emails from Eximp & Cloves.</p>
-            <p>You will still receive important transactional emails related to your property holdings.</p>
+        <body style="font-family: 'Inter', sans-serif; text-align: center; padding-top: 100px; background: #f9f9f9;">
+            <div style="max-width: 500px; margin: auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
+                <h2 style="color: #111;">You Have Been Unsubscribed</h2>
+                <p style="color: #666; line-height: 1.6;">You will no longer receive marketing emails from Eximp & Cloves.</p>
+                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
+                    <p style="font-size: 0.85rem; color: #999;">Eximp & Cloves Infrastructure Limited<br>Lagos, Nigeria</p>
+                </div>
+            </div>
         </body>
     </html>
     """
