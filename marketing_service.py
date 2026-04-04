@@ -21,10 +21,12 @@ MARKETING_REPLY_TO = os.getenv("MARKETING_REPLY_TO", "marketing@mail.eximps-clov
 MARKETING_BCC_EMAIL = os.getenv("MARKETING_BCC_EMAIL", "marketing@mail.eximps-cloves.com")
 
 def personalize_content(html: str, contact: Dict[str, Any]) -> str:
-    """Replaces {{variable}} with contact data."""
+    """Replaces {{variable}} with contact data and live financial context."""
+    db = get_db()
     unsub_token = contact.get("id") or "test-id"
     unsub_url = f"{APP_BASE_URL}/unsubscribe/{unsub_token}"
 
+    # Basic Tags
     vars = {
         "first_name": contact.get("first_name") or "there",
         "last_name": contact.get("last_name") or "",
@@ -33,11 +35,41 @@ def personalize_content(html: str, contact: Dict[str, Any]) -> str:
         "phone": contact.get("phone", ""),
         "unsubscribe_url": unsub_url
     }
-    
+
+    # Financial Tags (Conditional)
+    client_id = contact.get("client_id")
+    if client_id:
+        try:
+            # Fetch latest active invoice for this client
+            inv_res = db.table("invoices").select("*, properties(name)")\
+                .eq("client_id", client_id)\
+                .order("created_at", desc=True)\
+                .limit(1)\
+                .execute()
+            
+            if inv_res.data:
+                inv = inv_res.data[0]
+                prop = inv.get("properties") or {}
+                
+                # Formatters
+                fmt = lambda x: f"₦{float(x or 0):,.2f}"
+                
+                vars.update({
+                    "outstanding": fmt(inv.get("balance_due")),
+                    "amount_paid": fmt(inv.get("amount_paid")),
+                    "total_invoiced": fmt(inv.get("amount")),
+                    "property_name": prop.get("name") or inv.get("property_name") or "Your Property",
+                    "due_date": inv.get("due_date") or "N/A",
+                    "invoice_number": inv.get("invoice_number") or "N/A"
+                })
+        except Exception as e:
+            logger.error(f"Financial personalization error for {client_id}: {e}")
+
+    # Apply replacements
     for key, val in vars.items():
         html = html.replace(f"{{{{{key}}}}}", str(val))
     
-    # Clean up any unreplaced variables
+    # Clean up any unreplaced variables or placeholders like [BALANCE]
     html = re.sub(r"\{\{.*?\}\}", "", html)
     return html
 
@@ -75,6 +107,12 @@ async def send_marketing_email(campaign: Dict[str, Any], contact: Dict[str, Any]
     campaign_id = campaign["id"]
     contact_id = contact["id"]
     
+    # 0. GLOBAL SUPPRESSION CHECK (Anti-Spam Compliance)
+    # If the contact is not subscribed, DO NOT SEND.
+    if not contact.get("is_subscribed", True):
+        logger.warning(f"Aborting send to {contact['email']} - Contact is UNSUBSCRIBED.")
+        return None
+
     # 1. Personalize
     html = personalize_content(campaign["html_body_a"], contact)
     

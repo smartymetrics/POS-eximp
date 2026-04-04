@@ -22,6 +22,8 @@
     if (!cid) return; // Anonymous visitor, no CRM link
 
     // 2. Track Page View
+    let lastUrl = window.location.href;
+
     async function trackView() {
         const payload = {
             contact_id: cid,
@@ -42,7 +44,32 @@
         }
     }
 
-    // Run on load
+    // 3. SPA Support: Listen for URL changes (React Router)
+    const handleUrlChange = () => {
+        const currentUrl = window.location.href;
+        if (currentUrl !== lastUrl) {
+            lastUrl = currentUrl;
+            trackView();
+        }
+    };
+
+    // Monkey-patch history methods
+    const originalPushState = history.pushState;
+    const originalReplaceState = history.replaceState;
+
+    history.pushState = function(...args) {
+        originalPushState.apply(this, args);
+        handleUrlChange();
+    };
+
+    history.replaceState = function(...args) {
+        originalReplaceState.apply(this, args);
+        handleUrlChange();
+    };
+
+    window.addEventListener('popstate', handleUrlChange);
+
+    // Initial run
     if (document.readyState === 'complete') {
         trackView();
     } else {

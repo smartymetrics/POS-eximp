@@ -304,7 +304,10 @@
                 </div>
             </div>
             
-            <button onclick="logout()" class="mt-3 w-full py-2 px-3 border border-slate-700 rounded text-gray-400 text-xs hover:bg-slate-800 hover:text-red-400 hover:border-red-500 transition-colors font-medium">
+            <button onclick="openProfileModal()" class="mt-4 w-full py-2 px-3 border border-slate-700 rounded text-gray-400 text-xs hover:bg-slate-800 hover:text-brand-gold hover:border-brand-gold transition-colors font-medium">
+                👤 My Profile
+            </button>
+            <button onclick="logout()" class="mt-2 w-full py-2 px-3 border border-slate-700 rounded text-gray-400 text-xs hover:bg-slate-800 hover:text-red-400 hover:border-red-500 transition-colors font-medium">
                 Sign Out
             </button>
         </div>
@@ -2003,20 +2006,36 @@
 
             list.innerHTML = data.map(s => `
                 <div class="card p-6 border border-gray-100 hover:shadow-lg transition group">
-                    <div class="flex justify-between items-start mb-4">
+                    <div class="flex justify-between items-start mb-6">
                         <div>
                             <h3 class="font-bold text-lg text-gray-800">${s.name}</h3>
-                            <p class="text-xs text-gray-400 uppercase font-black mt-1">Trigger: ${s.trigger_event}</p>
+                            <p class="text-xs text-brand-gold font-black uppercase tracking-widest mt-1">Trig: ${s.trigger_event}</p>
                         </div>
                         <span class="px-2 py-0.5 rounded text-[10px] font-black ${s.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'} uppercase">
                             ${s.is_active ? 'Active' : 'Paused'}
                         </span>
                     </div>
-                    <div class="flex gap-2 mb-6">
-                        <div class="text-xs text-gray-500 bg-gray-50 px-2 py-1 rounded">Automation Running</div>
+                    
+                    <div class="grid grid-cols-3 gap-2 mb-6">
+                        <div class="bg-gray-50 p-2 rounded text-center">
+                            <div class="text-xs font-black text-gray-800">${s.count_active || 0}</div>
+                            <div class="text-[8px] text-gray-400 uppercase font-black">Active</div>
+                        </div>
+                        <div class="bg-gray-50 p-2 rounded text-center">
+                            <div class="text-xs font-black text-green-600">${s.count_completed || 0}</div>
+                            <div class="text-[8px] text-gray-400 uppercase font-black">Finished</div>
+                        </div>
+                        <div class="bg-gray-50 p-2 rounded text-center">
+                            <div class="text-xs font-black text-red-400">${s.count_exited || 0}</div>
+                            <div class="text-[8px] text-gray-400 uppercase font-black">Exited</div>
+                        </div>
                     </div>
-                    <div class="flex justify-end gap-2 opacity-0 group-hover:opacity-100 transition">
-                        <button onclick="deleteSequence('${s.id}')" class="text-red-400 text-xs font-bold hover:text-red-600">Delete</button>
+
+                    <div class="flex justify-between items-center pt-4 border-t border-gray-50 opacity-0 group-hover:opacity-100 transition">
+                        <button onclick="deleteSequence('${s.id}')" class="text-red-400 text-xs font-bold hover:text-red-600 flex items-center gap-1 leading-none transition">
+                            <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 7l-.867 12.142A2 2 0 0116.138 21H7.862a2 2 0 01-1.995-1.858L5 7m5 4v6m4-6v6m1-10V4a1 1 0 00-1-1h-4a1 1 0 00-1 1v3M4 7h16"></path></svg>
+                            Delete
+                        </button>
                     </div>
                 </div>
             `).join('');
@@ -2024,15 +2043,35 @@
 
         let availableCampaigns = [];
         async function openSequenceModal() {
-            // Load campaigns for step templates
-            const res = await fetch('/api/marketing/campaigns', {
-                headers: { 'Authorization': 'Bearer ' + token }
-            });
-            availableCampaigns = await res.json();
+            const btn = event?.currentTarget;
+            if (btn) btn.classList.add('btn-loading');
+            
+            try {
+                // 1. Fetch campaigns for step templates
+                const res = await fetch('/api/marketing/campaigns', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                availableCampaigns = await res.json();
 
-            document.getElementById('steps-container').innerHTML = '';
-            addStepRow(); // Start with 1 step
-            document.getElementById('sequence-modal').classList.remove('hidden');
+                // 2. Clear and init modal
+                document.getElementById('steps-container').innerHTML = '';
+                document.getElementById('seq-name').value = '';
+                document.getElementById('seq-trigger').value = 'manual';
+                addStepRow(); // Start with 1 step
+
+                // 3. Show Modal
+                const el = document.getElementById('sequence-modal');
+                if (el) {
+                    el.classList.remove('hidden');
+                    el.classList.add('active');
+                    el.style.display = 'flex';
+                }
+            } catch (e) {
+                console.error("Error opening sequence modal:", e);
+                alert("Failed to load campaigns for sequences.");
+            } finally {
+                if (btn) btn.classList.remove('btn-loading');
+            }
         }
 
         function addStepRow() {
@@ -2050,27 +2089,28 @@
                 </div>
                 <div class="flex-1">
                     <label class="block text-[10px] font-black text-gray-400 uppercase mb-1">Email Template</label>
-                    <select class="step-campaign w-full px-3 py-2 border rounded-lg text-sm bg-white">
-                        <option value="">Select a campaign template...</option>
+                    <select class="step-campaign w-full px-3 py-2 border rounded-lg text-sm bg-white outline-none focus:ring-1 focus:ring-brand-gold">
+                        <option value="">Select a template...</option>
                         ${options}
                     </select>
                 </div>
                 <div class="w-24">
                     <label class="block text-[10px] font-black text-gray-400 uppercase mb-1">Delay (Days)</label>
-                    <input type="number" class="step-delay w-full px-3 py-2 border rounded-lg text-sm" value="${stepNum === 1 ? 0 : 2}">
+                    <input type="number" class="step-delay w-full px-3 py-2 border rounded-lg text-sm outline-none focus:ring-1 focus:ring-brand-gold" value="${stepNum === 1 ? 0 : 2}">
                 </div>
+                ${stepNum > 1 ? `
+                <div class="min-w-[140px] border-l pl-4 border-gray-200">
+                    <label class="block text-[10px] font-black text-gray-400 uppercase mb-1">Smart Branching</label>
+                    <div class="flex items-center gap-2">
+                        <input type="checkbox" class="step-requires-interaction rounded text-brand-gold focus:ring-brand-gold">
+                        <span class="text-[9px] font-bold text-gray-600 uppercase">Only if Opened Pre-Step</span>
+                    </div>
+                </div>
+                ` : ''}
             `;
             container.appendChild(row);
         }
 
-        async function openSequenceModal() {
-             const el = document.getElementById('sequence-modal');
-             if (el) {
-                 el.classList.remove('hidden');
-                 el.classList.add('active');
-                 el.style.display = 'flex';
-             }
-        }
         function closeSequenceModal() {
              const el = document.getElementById('sequence-modal');
              if (el) {
@@ -2092,8 +2132,17 @@
                 stepRows.forEach((row, idx) => {
                     const campaignId = row.querySelector('.step-campaign').value;
                     const delay = parseInt(row.querySelector('.step-delay').value);
+                    const requiresInteraction = row.querySelector('.step-requires-interaction')?.checked || false;
+                    
                     if (campaignId) {
-                        steps.push({ step_number: idx + 1, delay_days: delay, campaign_id: campaignId });
+                        steps.push({ 
+                            step_number: idx + 1, 
+                            delay_days: delay, 
+                            campaign_id: campaignId,
+                            requires_interaction: requiresInteraction,
+                            interaction_type: 'open',
+                            skip_if_not_met: true
+                        });
                     }
                 });
 
@@ -2102,7 +2151,7 @@
                     return;
                 }
 
-                const res = await fetch('/api/marketing/sequences', {
+                const res = await fetch('/api/marketing/sequences/', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
                     body: JSON.stringify({ name, trigger_event: trigger, steps })
@@ -2406,8 +2455,162 @@
             document.getElementById('sidebar-overlay').classList.toggle('active');
         }
 
+        // ═══════════════════════════════════════
+        // PROFILE MANAGEMENT
+        // ═══════════════════════════════════════
+        function openProfileModal() {
+            const modal = document.getElementById('profile-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('active');
+            modal.style.display = 'flex';
+            
+            fetch('/auth/me', {
+                headers: { 'Authorization': 'Bearer ' + localStorage.getItem('ec_token') }
+            })
+            .then(res => res.json())
+            .then(data => {
+                document.getElementById('profile-name-input').value = data.full_name || '';
+                document.getElementById('profile-email-display').value = data.email || '';
+                document.getElementById('profile-id-display').innerText = data.id || 'N/A';
+            })
+            .catch(err => console.error("Profile load error:", err));
+        }
+
+        function closeProfileModal() {
+            const modal = document.getElementById('profile-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('active');
+            modal.style.display = 'none';
+        }
+
+        async function updateProfileName() {
+            const newName = document.getElementById('profile-name-input').value;
+            if(!newName.trim()) return alert("Name cannot be empty");
+
+            try {
+                const res = await fetch('/auth/me/profile', {
+                    method: 'PATCH',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + localStorage.getItem('ec_token') 
+                    },
+                    body: JSON.stringify({ full_name: newName })
+                });
+                
+                if(res.ok) {
+                    alert("✅ Profile name updated!");
+                    document.getElementById('adminName').innerText = newName;
+                } else {
+                    const data = await res.json();
+                    alert("❌ Update failed: " + data.detail);
+                }
+            } catch (err) {
+                alert("❌ Error connecting to server");
+            }
+        }
+
+        async function changePassword() {
+            const currentPw = document.getElementById('profile-current-pw').value;
+            const newPw = document.getElementById('profile-new-pw').value;
+            const confirmPw = document.getElementById('profile-confirm-pw').value;
+
+            if(!currentPw || !newPw) return alert("Please fill in both current and new passwords.");
+            if(newPw !== confirmPw) return alert("New passwords do not match!");
+            if(newPw.length < 8) return alert("New password must be at least 8 characters.");
+
+            try {
+                const res = await fetch('/auth/me/password', {
+                    method: 'PATCH',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + localStorage.getItem('ec_token') 
+                    },
+                    body: JSON.stringify({ current_password: currentPw, new_password: newPw })
+                });
+                
+                if(res.ok) {
+                    alert("🔒 Password changed successfully! Please log in again.");
+                    logout();
+                } else {
+                    const data = await res.json();
+                    alert("❌ Password change failed: " + data.detail);
+                }
+            } catch (err) {
+                alert("❌ Error connecting to server");
+            }
+        }
+
         // Init is handled by checkAccessAndInit() above, which calls loadOverview() after role verification.
     </script>
+
+    <!-- PROFILE MODAL -->
+    <div id="profile-modal" 
+         onclick="if(event.target === this) closeProfileModal()"
+         class="modal-overlay fixed inset-0 z-[100] flex items-center justify-center bg-brand-dark bg-opacity-80 backdrop-blur-sm hidden p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-lg overflow-hidden transform transition-all border border-gray-100 flex flex-col max-h-[90vh]">
+
+            <div class="bg-brand-dark px-8 py-6 flex justify-between items-center text-white">
+                <div>
+                    <h2 class="text-2xl font-serif font-bold text-brand-gold">My Profile</h2>
+                    <p class="text-xs text-gray-400 uppercase tracking-widest mt-1">Manage your account details</p>
+                </div>
+                <button onclick="closeProfileModal()" class="text-gray-400 hover:text-white transition">
+                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                    </svg>
+                </button>
+            </div>
+
+            <div class="px-8 py-8 space-y-8 flex-1 overflow-y-auto">
+                <div class="space-y-4">
+                    <div class="flex items-center gap-2 border-b border-brand-gold border-opacity-20 pb-2">
+                        <span class="text-lg">👤</span>
+                        <h3 class="text-sm font-bold text-brand-dark uppercase tracking-wider">Personal Information</h3>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Display Name</label>
+                        <div class="flex gap-2">
+                            <input type="text" id="profile-name-input" class="flex-1 px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-gold outline-none transition" placeholder="Your name">
+                            <button onclick="updateProfileName()" class="bg-brand-dark text-white px-4 py-2 rounded-lg font-bold text-xs hover:bg-black transition">Save</button>
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Email Address</label>
+                        <input type="email" id="profile-email-display" disabled class="w-full px-4 py-2 bg-gray-100 border border-gray-200 rounded-lg text-gray-400 cursor-not-allowed italic font-medium" value="...">
+                    </div>
+                </div>
+
+                <div class="space-y-4 pt-4">
+                    <div class="flex items-center gap-2 border-b border-brand-gold border-opacity-20 pb-2">
+                        <span class="text-lg">🔐</span>
+                        <h3 class="text-sm font-bold text-brand-dark uppercase tracking-wider">Security</h3>
+                    </div>
+                    <div class="grid grid-cols-1 gap-4">
+                        <div>
+                            <label class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Current Password</label>
+                            <input type="password" id="profile-current-pw" class="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-gold outline-none transition">
+                        </div>
+                        <div class="grid grid-cols-2 gap-4">
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">New Password</label>
+                                <input type="password" id="profile-new-pw" class="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-gold outline-none transition">
+                            </div>
+                            <div>
+                                <label class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-1">Confirm New</label>
+                                <input type="password" id="profile-confirm-pw" class="w-full px-4 py-2 bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-brand-gold outline-none transition">
+                            </div>
+                        </div>
+                        <button onclick="changePassword()" class="w-full bg-brand-gold text-white py-3 rounded-xl font-bold text-sm shadow-lg shadow-brand-gold/20 hover:bg-brand-gold/90 transition">Update Password</button>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="bg-gray-50 px-8 py-4 flex justify-between items-center text-[10px] text-gray-400 uppercase tracking-widest font-bold border-t border-gray-100">
+                <span>Account ID: <span id="profile-id-display">...</span></span>
+                <button onclick="closeProfileModal()" class="text-gray-600 hover:text-black">Close</button>
+            </div>
+        </div>
+    </div>
 </body>
 
 </html>

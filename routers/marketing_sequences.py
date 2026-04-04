@@ -11,6 +11,9 @@ class SequenceStepCreate(BaseModel):
     step_number: int
     delay_days: int
     campaign_id: str
+    requires_interaction: Optional[bool] = False
+    interaction_type: Optional[str] = 'open' # 'open' or 'click'
+    skip_if_not_met: Optional[bool] = False
 
 class SequenceCreate(BaseModel):
     name: str
@@ -21,8 +24,19 @@ class SequenceCreate(BaseModel):
 @router.get("/")
 async def list_sequences(current_admin=Depends(verify_token)):
     db = get_db()
-    res = db.table("marketing_sequences").select("*").execute()
-    return res.data
+    # Fetch sequences
+    seq_res = db.table("marketing_sequences").select("*").execute()
+    sequences = seq_res.data
+    
+    # Fetch stats for each
+    for s in sequences:
+        stats_res = db.table("contact_sequence_status").select("status").eq("sequence_id", s["id"]).execute()
+        stats = stats_res.data
+        s["count_active"] = len([enr for enr in stats if enr["status"] == "active"])
+        s["count_completed"] = len([enr for enr in stats if enr["status"] == "completed"])
+        s["count_exited"] = len([enr for enr in stats if enr["status"] == "exited"])
+        
+    return sequences
 
 @router.post("/")
 async def create_sequence(data: SequenceCreate, current_admin=Depends(verify_token)):
@@ -47,7 +61,10 @@ async def create_sequence(data: SequenceCreate, current_admin=Depends(verify_tok
             "sequence_id": seq_id,
             "step_number": step.step_number,
             "delay_days": step.delay_days,
-            "campaign_id": step.campaign_id
+            "campaign_id": step.campaign_id,
+            "requires_interaction": step.requires_interaction,
+            "interaction_type": step.interaction_type,
+            "skip_if_not_met": step.skip_if_not_met
         })
     
     if step_entries:

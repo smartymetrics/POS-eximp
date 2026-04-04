@@ -198,35 +198,75 @@
                         <div class="tag-code">{{first_name}}</div>
                         <div class="tag-label">Recipient's first name (e.g. Chidi)</div>
                     </div>
-                    <button class="copy-btn" onclick="copyTag('{{first_name}}')">Copy</button>
+                    <button class="copy-btn" onclick="copyTag(event, '{{first_name}}')">Copy</button>
                 </div>
                 <div class="tag-item" style="margin-top: 10px;">
                     <div>
                         <div class="tag-code">{{last_name}}</div>
                         <div class="tag-label">Recipient's last name (e.g. Okeke)</div>
                     </div>
-                    <button class="copy-btn" onclick="copyTag('{{last_name}}')">Copy</button>
+                    <button class="copy-btn" onclick="copyTag(event, '{{last_name}}')">Copy</button>
                 </div>
                 <div class="tag-item" style="margin-top: 10px;">
                     <div>
                         <div class="tag-code">{{full_name}}</div>
                         <div class="tag-label">The full name found in the database.</div>
                     </div>
-                    <button class="copy-btn" onclick="copyTag('{{full_name}}')">Copy</button>
+                    <button class="copy-btn" onclick="copyTag(event, '{{full_name}}')">Copy</button>
                 </div>
                 <div class="tag-item" style="margin-top: 10px;">
                     <div>
                         <div class="tag-code">{{email}}</div>
                         <div class="tag-label">Recipient's email address</div>
                     </div>
-                    <button class="copy-btn" onclick="copyTag('{{email}}')">Copy</button>
+                    <button class="copy-btn" onclick="copyTag(event, '{{email}}')">Copy</button>
                 </div>
                 <div class="tag-item" style="margin-top: 10px;">
                     <div>
                         <div class="tag-code">{{phone}}</div>
                         <div class="tag-label">Recipient's phone number</div>
                     </div>
-                    <button class="copy-btn" onclick="copyTag('{{phone}}')">Copy</button>
+                    <button class="copy-btn" onclick="copyTag(event, '{{phone}}')">Copy</button>
+                </div>
+                <div class="tag-item" style="margin-top: 10px; border-top: 1px solid #333; padding-top: 15px;">
+                    <div>
+                        <div class="tag-code">{{unsubscribe_url}}</div>
+                        <div class="tag-label">Mandatory link for recipients to opt-out.</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyTag(event, '{{unsubscribe_url}}')">Copy</button>
+                </div>
+
+                <div style="margin-top: 25px; margin-bottom: 15px; border-bottom: 1px solid #C47D0A; padding-bottom: 5px;">
+                    <span style="color: #C47D0A; font-weight: 800; font-size: 0.75rem; text-transform: uppercase;">💰 Financial Intelligence</span>
+                </div>
+
+                <div class="tag-item">
+                    <div>
+                        <div class="tag-code">{{outstanding}}</div>
+                        <div class="tag-label">Current balance due (e.g. ₦500,000.00)</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyTag(event, '{{outstanding}}')">Copy</button>
+                </div>
+                <div class="tag-item" style="margin-top: 10px;">
+                    <div>
+                        <div class="tag-code">{{property_name}}</div>
+                        <div class="tag-label">Name of their estate (e.g. Coinfield Estate)</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyTag(event, '{{property_name}}')">Copy</button>
+                </div>
+                <div class="tag-item" style="margin-top: 10px;">
+                    <div>
+                        <div class="tag-code">{{amount_paid}}</div>
+                        <div class="tag-label">Total amount they've paid so far.</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyTag(event, '{{amount_paid}}')">Copy</button>
+                </div>
+                <div class="tag-item" style="margin-top: 10px;">
+                    <div>
+                        <div class="tag-code">{{due_date}}</div>
+                        <div class="tag-label">Their next payment deadline.</div>
+                    </div>
+                    <button class="copy-btn" onclick="copyTag(event, '{{due_date}}')">Copy</button>
                 </div>
             </div>
             <div class="modal-footer">
@@ -709,10 +749,10 @@
             content: `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;font-family:'Inter',sans-serif;">
               <tr><td colspan="2" style="background:#1A1A1A;padding:14px 20px;"><span style="color:#C47D0A;font-weight:700;font-size:13px;letter-spacing:1px;text-transform:uppercase;">Account Summary</span></td></tr>
               <tr><td style="padding:14px 20px;color:#666;font-size:14px;border-bottom:1px solid #f1f5f9;">Client Name</td><td style="padding:14px 20px;color:#333;font-weight:600;font-size:14px;border-bottom:1px solid #f1f5f9;">{{first_name}} {{last_name}}</td></tr>
-              <tr><td style="padding:14px 20px;color:#666;font-size:14px;border-bottom:1px solid #f1f5f9;">Property</td><td style="padding:14px 20px;color:#333;font-weight:600;font-size:14px;border-bottom:1px solid #f1f5f9;">[ESTATE NAME]</td></tr>
-              <tr><td style="padding:14px 20px;color:#666;font-size:14px;border-bottom:1px solid #f1f5f9;">Invoice Total</td><td style="padding:14px 20px;color:#333;font-weight:600;font-size:14px;border-bottom:1px solid #f1f5f9;">₦[AMOUNT]</td></tr>
-              <tr><td style="padding:14px 20px;color:#666;font-size:14px;border-bottom:1px solid #f1f5f9;">Amount Paid</td><td style="padding:14px 20px;color:#2ecc71;font-weight:600;font-size:14px;border-bottom:1px solid #f1f5f9;">₦[PAID]</td></tr>
-              <tr><td style="padding:16px 20px;color:#e74c3c;font-weight:700;font-size:15px;">Balance Due</td><td style="padding:16px 20px;color:#e74c3c;font-weight:700;font-size:20px;">₦[BALANCE]</td></tr>
+              <tr><td style="padding:14px 20px;color:#666;font-size:14px;border-bottom:1px solid #f1f5f9;">Property</td><td style="padding:14px 20px;color:#333;font-weight:600;font-size:14px;border-bottom:1px solid #f1f5f9;">{{property_name}}</td></tr>
+              <tr><td style="padding:14px 20px;color:#666;font-size:14px;border-bottom:1px solid #f1f5f9;">Invoice Total</td><td style="padding:14px 20px;color:#333;font-weight:600;font-size:14px;border-bottom:1px solid #f1f5f9;">{{total_invoiced}}</td></tr>
+              <tr><td style="padding:14px 20px;color:#666;font-size:14px;border-bottom:1px solid #f1f5f9;">Amount Paid</td><td style="padding:14px 20px;color:#2ecc71;font-weight:600;font-size:14px;border-bottom:1px solid #f1f5f9;">{{amount_paid}}</td></tr>
+              <tr><td style="padding:16px 20px;color:#e74c3c;font-weight:700;font-size:15px;">Balance Due</td><td style="padding:16px 20px;color:#e74c3c;font-weight:700;font-size:20px;">{{outstanding}}</td></tr>
             </table>`
         });
 
@@ -744,18 +784,43 @@
         function openTags() { document.getElementById('tags-modal').classList.remove('hidden'); }
         function closeTags() { document.getElementById('tags-modal').classList.add('hidden'); }
 
-        function copyTag(text) {
-            navigator.clipboard.writeText(text);
-            const btn = event.target;
-            const originalText = btn.innerText;
-            btn.innerText = 'Copied!';
-            btn.style.background = '#C47D0A';
-            btn.style.color = 'white';
-            setTimeout(() => {
-                btn.innerText = originalText;
-                btn.style.background = '#333';
-                btn.style.color = '#C47D0A';
-            }, 1500);
+        function copyTag(event, text) {
+            const btn = event.currentTarget || event.target;
+            
+            // Modern Clipboard API (Secure Context only)
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(text);
+                showSuccess(btn);
+            } else {
+                // Fallback for non-secure contexts (HTTP)
+                try {
+                    const textArea = document.createElement("textarea");
+                    textArea.value = text;
+                    textArea.style.position = "fixed";
+                    textArea.style.left = "-9999px";
+                    textArea.style.top = "0";
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    showSuccess(btn);
+                } catch (err) {
+                    console.error('Fallback copy failed', err);
+                }
+            }
+
+            function showSuccess(el) {
+                const originalText = el.innerText;
+                el.innerText = 'Copied!';
+                el.style.background = '#C47D0A';
+                el.style.color = 'white';
+                setTimeout(() => {
+                    el.innerText = originalText;
+                    el.style.background = '#333';
+                    el.style.color = '#C47D0A';
+                }, 1500);
+            }
         }
 
         function renderTemplates() {

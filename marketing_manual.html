@@ -1,0 +1,799 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Eximp & Cloves — Marketing System Manual</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@700;800&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --gold: #C47D0A;
+            --gold-light: #fff8ee;
+            --gold-border: #ffe0a0;
+            --dark: #1A1A1A;
+            --text: #2d2d2d;
+            --muted: #6b7280;
+            --bg: #f9fafb;
+            --white: #ffffff;
+            --border: #e5e7eb;
+            --green: #065f46;
+            --green-bg: #ecfdf5;
+            --blue: #1e3a8a;
+            --blue-bg: #eff6ff;
+            --purple: #4c1d95;
+            --purple-bg: #f5f3ff;
+            --red: #7f1d1d;
+            --red-bg: #fef2f2;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            color: var(--text);
+            background: var(--bg);
+            line-height: 1.75;
+        }
+
+        /* ── COVER ── */
+        .cover {
+            background: var(--dark);
+            color: white;
+            padding: 80px 60px 60px;
+            text-align: center;
+            position: relative;
+            overflow: hidden;
+        }
+        .cover::before {
+            content: '';
+            position: absolute;
+            top: -100px; left: 50%;
+            transform: translateX(-50%);
+            width: 600px; height: 600px;
+            border-radius: 50%;
+            background: radial-gradient(circle, rgba(196,125,10,0.15) 0%, transparent 70%);
+        }
+        .cover-badge {
+            display: inline-block;
+            background: rgba(196,125,10,0.2);
+            border: 1px solid rgba(196,125,10,0.4);
+            color: var(--gold);
+            font-size: 11px;
+            font-weight: 800;
+            letter-spacing: 3px;
+            text-transform: uppercase;
+            padding: 6px 16px;
+            border-radius: 999px;
+            margin-bottom: 24px;
+        }
+        .cover h1 {
+            font-family: 'Playfair Display', serif;
+            font-size: 48px;
+            line-height: 1.2;
+            margin-bottom: 16px;
+        }
+        .cover h1 span { color: var(--gold); }
+        .cover p {
+            font-size: 16px;
+            color: #9ca3af;
+            max-width: 550px;
+            margin: 0 auto 40px;
+        }
+        .cover-meta {
+            display: flex;
+            justify-content: center;
+            gap: 40px;
+            border-top: 1px solid rgba(255,255,255,0.1);
+            padding-top: 32px;
+        }
+        .cover-meta div { text-align: center; }
+        .cover-meta .label { font-size: 10px; font-weight: 700; letter-spacing: 2px; text-transform: uppercase; color: #6b7280; }
+        .cover-meta .val { font-size: 14px; font-weight: 600; color: #e5e7eb; margin-top: 4px; }
+
+        /* ── TOC ── */
+        .toc {
+            background: white;
+            border-bottom: 1px solid var(--border);
+            padding: 48px 60px;
+        }
+        .toc h2 { font-family: 'Playfair Display', serif; font-size: 22px; margin-bottom: 24px; }
+        .toc-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(200px, 1fr));
+            gap: 12px;
+        }
+        .toc-item {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            padding: 12px 16px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            text-decoration: none;
+            color: var(--text);
+            font-size: 13px;
+            font-weight: 600;
+            transition: all 0.2s;
+        }
+        .toc-item:hover { border-color: var(--gold); color: var(--gold); background: var(--gold-light); }
+        .toc-icon { font-size: 18px; }
+
+        /* ── WRAPPER ── */
+        .content { max-width: 900px; margin: 0 auto; padding: 60px 40px; }
+
+        /* ── CHAPTER ── */
+        .chapter {
+            background: white;
+            border-radius: 16px;
+            border: 1px solid var(--border);
+            overflow: hidden;
+            margin-bottom: 48px;
+            box-shadow: 0 2px 12px rgba(0,0,0,0.04);
+        }
+        .chapter-header {
+            padding: 32px 40px;
+            border-bottom: 1px solid var(--border);
+            display: flex;
+            align-items: center;
+            gap: 20px;
+        }
+        .chapter-icon {
+            width: 56px; height: 56px;
+            border-radius: 14px;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 26px;
+            flex-shrink: 0;
+        }
+        .chapter-header h2 {
+            font-family: 'Playfair Display', serif;
+            font-size: 26px;
+            color: var(--dark);
+            margin-bottom: 4px;
+        }
+        .chapter-header .sub {
+            font-size: 12px;
+            font-weight: 700;
+            letter-spacing: 2px;
+            text-transform: uppercase;
+            color: var(--muted);
+        }
+        .chapter-body { padding: 40px; }
+
+        /* ── TYPOGRAPHY ── */
+        h3 { font-size: 18px; font-weight: 800; color: var(--dark); margin: 32px 0 12px; }
+        h3:first-child { margin-top: 0; }
+        p { margin-bottom: 14px; color: #374151; font-size: 15px; }
+        ul, ol { padding-left: 22px; margin-bottom: 16px; }
+        li { margin-bottom: 8px; font-size: 15px; color: #374151; }
+        strong { color: var(--dark); font-weight: 700; }
+
+        /* ── CALLOUT BOXES ── */
+        .box {
+            border-radius: 10px;
+            padding: 20px 24px;
+            margin: 24px 0;
+            border-left: 4px solid;
+            font-size: 14px;
+        }
+        .box-gold { background: var(--gold-light); border-color: var(--gold); }
+        .box-gold strong { color: var(--gold); }
+        .box-green { background: var(--green-bg); border-color: #10b981; }
+        .box-green strong { color: var(--green); }
+        .box-blue { background: var(--blue-bg); border-color: #3b82f6; }
+        .box-blue strong { color: var(--blue); }
+        .box-purple { background: var(--purple-bg); border-color: #8b5cf6; }
+        .box-purple strong { color: var(--purple); }
+        .box-red { background: var(--red-bg); border-color: #ef4444; }
+        .box-red strong { color: var(--red); }
+
+        /* ── STEP LIST ── */
+        .steps { list-style: none; padding: 0; margin: 20px 0; }
+        .steps li {
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+            padding: 16px;
+            border: 1px solid var(--border);
+            border-radius: 10px;
+            margin-bottom: 10px;
+            background: #fafafa;
+        }
+        .step-num {
+            min-width: 28px; height: 28px;
+            background: var(--dark);
+            color: white;
+            border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 12px;
+            font-weight: 800;
+        }
+        .steps li p { margin: 0; font-size: 14px; }
+        .steps li strong { display: block; font-size: 15px; margin-bottom: 3px; }
+
+        /* ── FEATURE GRID ── */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(240px, 1fr));
+            gap: 16px;
+            margin: 24px 0;
+        }
+        .feature-card {
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 20px;
+            background: #fafafa;
+        }
+        .feature-card .fi { font-size: 24px; margin-bottom: 10px; }
+        .feature-card h4 { font-size: 14px; font-weight: 800; color: var(--dark); margin-bottom: 6px; }
+        .feature-card p { font-size: 13px; color: var(--muted); margin: 0; }
+
+        /* ── TAG PILL ── */
+        .tag {
+            display: inline-block;
+            font-family: monospace;
+            font-size: 13px;
+            font-weight: 700;
+            background: var(--dark);
+            color: var(--gold);
+            padding: 2px 10px;
+            border-radius: 4px;
+        }
+
+        /* ── SCORE TABLE ── */
+        .score-table { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        .score-table th { background: var(--dark); color: white; padding: 10px 16px; font-size: 12px; text-align: left; }
+        .score-table td { padding: 10px 16px; border-bottom: 1px solid var(--border); font-size: 14px; }
+        .score-table tr:last-child td { border: none; }
+        .score-table tr:nth-child(even) td { background: #f9fafb; }
+
+        /* ── DIVIDER ── */
+        .divider { border: none; border-top: 1px solid var(--border); margin: 32px 0; }
+
+        /* ── FOOTER ── */
+        footer {
+            text-align: center;
+            padding: 48px 40px;
+            color: var(--muted);
+            font-size: 13px;
+            border-top: 1px solid var(--border);
+        }
+        footer strong { color: var(--dark); }
+
+        @media print {
+            .chapter { break-inside: avoid; }
+            .cover { break-after: page; }
+        }
+    </style>
+</head>
+<body>
+
+<!-- ══════════════════════════════════════
+     COVER
+══════════════════════════════════════ -->
+<div class="cover">
+    <div class="cover-badge">Confidential — Internal Use Only</div>
+    <h1>The <span>Eximp & Cloves</span><br>Marketing System Manual</h1>
+    <p>A complete guide to mastering your marketing engine — from sending your first email to running fully automated drip campaigns while you sleep.</p>
+    <div class="cover-meta">
+        <div><div class="label">System</div><div class="val">Marketing Dashboard v2</div></div>
+        <div><div class="label">Prepared For</div><div class="val">Marketing Team</div></div>
+        <div><div class="label">Year</div><div class="val">2026</div></div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     TABLE OF CONTENTS
+══════════════════════════════════════ -->
+<div class="toc">
+    <h2>What's Inside This Manual</h2>
+    <div class="toc-grid">
+        <a href="#overview" class="toc-item"><span class="toc-icon">📊</span> Overview & Analytics</a>
+        <a href="#campaigns" class="toc-item"><span class="toc-icon">📧</span> Campaigns</a>
+        <a href="#editor" class="toc-item"><span class="toc-icon">🎨</span> The Email Editor</a>
+        <a href="#contacts" class="toc-item"><span class="toc-icon">👥</span> Contacts & CRM</a>
+        <a href="#segments" class="toc-item"><span class="toc-icon">🎯</span> Segments & Targeting</a>
+        <a href="#sequences" class="toc-item"><span class="toc-icon">⚡</span> Sequences (Auto)</a>
+        <a href="#calendar" class="toc-item"><span class="toc-icon">📅</span> Marketing Calendar</a>
+        <a href="#compliance" class="toc-item"><span class="toc-icon">🛡️</span> Compliance & Unsubscribe</a>
+        <a href="#tips" class="toc-item"><span class="toc-icon">🏆</span> Pro Tips & Playbooks</a>
+    </div>
+</div>
+
+<div class="content">
+
+<!-- ══════════════════════════════════════
+     INTRODUCTION
+══════════════════════════════════════ -->
+<div class="chapter" style="background: linear-gradient(135deg, #1A1A1A 0%, #2d2d2d 100%); color: white; border: none;">
+    <div class="chapter-body">
+        <h3 style="color: var(--gold); font-size: 22px; margin-bottom: 16px;">👋 Welcome to the Most Powerful Tool in Your Arsenal</h3>
+        <p style="color: #d1d5db; font-size: 16px; max-width: 700px;">This is not just a marketing tool. This is a complete revenue engine. You can now do things that companies spend millions on — automated sequences, live financial personalization, behavioral targeting, and real-time analytics — all from one dashboard.</p>
+        <div class="box box-gold" style="margin-top: 24px;">
+            <strong>💡 The Big Idea:</strong> Think of this system like having a team of ten people working for you 24/7. One person watches who opens your emails. Another one automatically sends follow-ups. A third one knows when a client's invoice is overdue and sends a gentle reminder — all without you lifting a finger. That's what this system does for you.
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     CH 1: OVERVIEW
+══════════════════════════════════════ -->
+<div class="chapter" id="overview">
+    <div class="chapter-header">
+        <div class="chapter-icon" style="background: #fff8ee;">📊</div>
+        <div>
+            <div class="sub">Chapter 1</div>
+            <h2>The Overview Dashboard</h2>
+        </div>
+    </div>
+    <div class="chapter-body">
+        <p>The <strong>Overview tab</strong> is your marketing command centre. The moment you log in, this is the first thing you see — a live, real-time snapshot of everything happening with your audience right now.</p>
+
+        <h3>What You're Looking At</h3>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="fi">👥</div>
+                <h4>Total Contacts</h4>
+                <p>The total number of people in your marketing system — leads, clients, and subscribers combined.</p>
+            </div>
+            <div class="feature-card">
+                <div class="fi">📨</div>
+                <h4>Emails Sent</h4>
+                <p>How many marketing emails have gone out in total across all your campaigns.</p>
+            </div>
+            <div class="feature-card">
+                <div class="fi">👁️</div>
+                <h4>Open Rate</h4>
+                <p>The percentage of people who actually opened your emails. Industry average is 20%. Aim higher!</p>
+            </div>
+            <div class="feature-card">
+                <div class="fi">🔥</div>
+                <h4>Hot Leads</h4>
+                <p>People with an Engagement Score above 70. These are your most interested prospects — call them first!</p>
+            </div>
+        </div>
+
+        <h3>The Engagement Score System</h3>
+        <p>Every contact in your system has a <strong>live Engagement Score</strong>. Think of it like a "temperature gauge" for how interested someone is. The higher the score, the hotter the lead.</p>
+        <table class="score-table">
+            <thead>
+                <tr><th>Action</th><th>Points Earned</th><th>What it means</th></tr>
+            </thead>
+            <tbody>
+                <tr><td>📧 Opens your email</td><td>+5 points</td><td>They're curious — they saw your subject line and clicked</td></tr>
+                <tr><td>🖱️ Clicks a link inside</td><td>+10 points</td><td>They're interested enough to take an action</td></tr>
+                <tr><td>🌐 Browses your website</td><td>+2 points each visit</td><td>They're exploring properties even without being emailed</td></tr>
+            </tbody>
+        </table>
+        <div class="box box-gold">
+            <strong>Scoring Tiers:</strong> Anyone below 30 is "Cold" (needs nurturing). 30–69 is "Warm" (they're interested, keep going). 70+ is "Hot" (call them today — they're ready to buy).
+        </div>
+
+        <h3>The Growth Chart</h3>
+        <p>The line chart on the Overview tab shows you how your contact list is growing over time. A growing list means your marketing is working. A flat line means you need to generate more leads. This is your progress report.</p>
+
+        <h3>The Audience Tier Donut Chart</h3>
+        <p>The donut chart on the right breaks your entire audience into three buckets: Hot, Warm, and Cold. Your goal is to steadily move people from Cold → Warm → Hot through great email campaigns.</p>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     CH 2: CAMPAIGNS
+══════════════════════════════════════ -->
+<div class="chapter" id="campaigns">
+    <div class="chapter-header">
+        <div class="chapter-icon" style="background: #eff6ff;">📧</div>
+        <div>
+            <div class="sub">Chapter 2</div>
+            <h2>Campaigns</h2>
+        </div>
+    </div>
+    <div class="chapter-body">
+        <p>A <strong>Campaign</strong> is a single marketing email that you design, write, and send to a group of people. Think of it like printing and delivering custom flyers — except you can track exactly who read them and who threw them away.</p>
+
+        <h3>Campaign Statuses Explained</h3>
+        <div class="feature-grid">
+            <div class="feature-card">
+                <div class="fi">✏️</div>
+                <h4>Draft</h4>
+                <p>You're still working on it. Only you can see it. Nothing has been sent yet.</p>
+            </div>
+            <div class="feature-card">
+                <div class="fi">🕐</div>
+                <h4>Scheduled</h4>
+                <p>You've approved it and set a specific time for it to go out automatically.</p>
+            </div>
+            <div class="feature-card">
+                <div class="fi">🚀</div>
+                <h4>Sending</h4>
+                <p>Emails are being delivered to recipients right now.</p>
+            </div>
+            <div class="feature-card">
+                <div class="fi">✅</div>
+                <h4>Sent</h4>
+                <p>All emails delivered. You can now view the full analytics report.</p>
+            </div>
+        </div>
+
+        <h3>Step-by-Step: Creating Your First Campaign</h3>
+        <ul class="steps">
+            <li><div class="step-num">1</div><div><strong>Click "New Campaign"</strong><p>A small form will appear. Give your campaign a clear name like "April Property Launch — Lekki" and write the email subject line (e.g. "Yours could be the best address in Lagos 🏡").</p></div></li>
+            <li><div class="step-num">2</div><div><strong>Open the Editor</strong><p>Click "Edit Draft" to open the full email designer. This is where you design the actual email your leads will receive. (See Chapter 3 for the full Editor guide.)</p></div></li>
+            <li><div class="step-num">3</div><div><strong>Click "Send Campaign"</strong><p>Once your design is ready, click the green Send button. You'll see two options: <strong>"Send Now"</strong> (instant! Goes out within minutes) or <strong>"Schedule for Later"</strong> (pick a future date & time).</p></div></li>
+            <li><div class="step-num">4</div><div><strong>Choose Your Audience</strong><p>You can send to "All Contacts", any custom segment you've created, or paste in a specific list of emails manually.</p></div></li>
+            <li><div class="step-num">5</div><div><strong>View the Report</strong><p>After sending, click the 👁️ "View Report" button on the campaign to see who opened it, who clicked, and who bounced.</p></div></li>
+        </ul>
+
+        <h3>Scheduling — Your Secret Weapon</h3>
+        <p>The best time to send marketing emails in Nigeria is <strong>Tuesday or Wednesday, between 9 AM and 11 AM</strong>. People are alert at work and checking their inbox. Avoid Monday mornings (too busy) and Friday afternoons (everyone's winding down). Use the scheduler to hit this window perfectly — even if you're on a site visit at the time.</p>
+
+        <h3>Duplicating a Campaign</h3>
+        <p>If you have a campaign that performed really well, don't start from scratch. Use the <strong>Duplicate button</strong> (the copy icon). It makes an exact copy as a new Draft, which you can then tweak and send to a different audience. This is great for A/B testing.</p>
+
+        <div class="box box-green">
+            <strong>✅ Quick Win:</strong> After a campaign is sent, use the Report's "Recipients" tab to see which contacts engaged. These are the people you should follow up with by phone — they've already shown interest.
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     CH 3: EMAIL EDITOR
+══════════════════════════════════════ -->
+<div class="chapter" id="editor">
+    <div class="chapter-header">
+        <div class="chapter-icon" style="background: #f5f3ff;">🎨</div>
+        <div>
+            <div class="sub">Chapter 3</div>
+            <h2>The Email Editor (Your Design Studio)</h2>
+        </div>
+    </div>
+    <div class="chapter-body">
+        <p>This is where you build emails that stop people from scrolling. The editor works on a <strong>drag-and-drop block system</strong> — think of building with Lego bricks. Each block is a piece of your email: a heading here, an image there, a button at the bottom.</p>
+
+        <h3>The Building Blocks — Left Sidebar</h3>
+        <div class="feature-grid">
+            <div class="feature-card"><div class="fi">📝</div><h4>Text Block</h4><p>A paragraph of text. Your main message. Supports formatting like bold, italic, and links.</p></div>
+            <div class="feature-card"><div class="fi">🖼️</div><h4>Image Block</h4><p>Upload a photo of a property, your team, or a banner. Images make emails 3x more engaging.</p></div>
+            <div class="feature-card"><div class="fi">🔘</div><h4>Button Block</h4><p>A clickable button. Great for "Book a Viewing", "Claim Your Offer", or "Learn More". Every click is tracked!</p></div>
+            <div class="feature-card"><div class="fi">➖</div><h4>Divider</h4><p>A horizontal line to separate sections and make your email look clean and organized.</p></div>
+            <div class="feature-card"><div class="fi">🏠</div><h4>Property Card Block</h4><p>Pulls LIVE property data from your database and creates a beautiful, fully-branded estate card automatically.</p></div>
+            <div class="feature-card"><div class="fi">📋</div><h4>Account Summary Block</h4><p>Shows a client's personalized financial data — outstanding balance, what they've paid, due dates — all automatically filled in from your finance system.</p></div>
+        </div>
+
+        <h3>Personalization Tags — Make Every Email Feel Personal</h3>
+        <p>Instead of saying "Dear Customer", you can make every email feel like it was written specifically for that one person. Click the <strong>"Tags"</strong> button in the editor toolbar to see all available tags. Click any tag to copy it, then paste it into your email text.</p>
+
+        <table class="score-table">
+            <thead><tr><th>Tag</th><th>What it inserts</th><th>Example Output</th></tr></thead>
+            <tbody>
+                <tr><td><span class="tag">{{first_name}}</span></td><td>Contact's first name</td><td>"Dear Emeka,"</td></tr>
+                <tr><td><span class="tag">{{last_name}}</span></td><td>Contact's last name</td><td>"Dear Mr. Okafor,"</td></tr>
+                <tr><td><span class="tag">{{outstanding}}</span></td><td>How much they still owe</td><td>"₦2,500,000 outstanding"</td></tr>
+                <tr><td><span class="tag">{{amount_paid}}</span></td><td>How much they've paid so far</td><td>"₦7,500,000 paid"</td></tr>
+                <tr><td><span class="tag">{{total_invoiced}}</span></td><td>Total amount of their invoice</td><td>"₦10,000,000 total"</td></tr>
+                <tr><td><span class="tag">{{property_name}}</span></td><td>Name of the property they bought</td><td>"Eximp Gardens Phase 2"</td></tr>
+                <tr><td><span class="tag">{{due_date}}</span></td><td>Their next payment due date</td><td>"30th April 2026"</td></tr>
+            </tbody>
+        </table>
+
+        <div class="box box-gold">
+            <strong>💡 Power Move:</strong> Combine tags for maximum impact. Write: <em>"Hi {{first_name}}, just a friendly reminder that your balance of {{outstanding}} for {{property_name}} is due on {{due_date}}. Please contact us if you need to discuss a payment plan."</em> — The system fills this in uniquely for every single client automatically!
+        </div>
+
+        <h3>The Template Library</h3>
+        <p>You don't have to start from a blank page every time. Click <strong>"Blocks"</strong> in the left panel to see pre-built sections you can drag in. There are templates for:</p>
+        <ul>
+            <li><strong>Welcome emails</strong> — for new leads</li>
+            <li><strong>Property showcase</strong> — with an automatic estate card</li>
+            <li><strong>Payment reminder</strong> — with the live Account Summary block</li>
+            <li><strong>Newsletter headers & footers</strong> — keep your brand consistent</li>
+        </ul>
+
+        <h3>The Unsubscribe Footer — It's Automatic</h3>
+        <p>Every email you send automatically includes a professional <strong>unsubscribe link</strong> at the bottom. This is not optional — it's the law (GDPR and CAN-SPAM compliance). You don't need to add it yourself; the system handles it. When someone clicks it, they are taken to a branded landing page, their record is updated, and the system will never email them again.</p>
+
+        <h3>Preview & Testing</h3>
+        <p>Before you send to hundreds of people, use the <strong>Preview</strong> button to see exactly how the email will look. If something looks off, fix it in the editor. Always preview on desktop AND check how it looks on mobile by resizing your browser window.</p>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     CH 4: CONTACTS
+══════════════════════════════════════ -->
+<div class="chapter" id="contacts">
+    <div class="chapter-header">
+        <div class="chapter-icon" style="background: #ecfdf5;">👥</div>
+        <div>
+            <div class="sub">Chapter 4</div>
+            <h2>Contacts — Your People</h2>
+        </div>
+    </div>
+    <div class="chapter-body">
+        <p>The <strong>Contacts tab</strong> is your full CRM (Customer Relationship Management) database. Every lead and every client who has ever expressed interest in your properties lives here. This is your most valuable business asset — treat it carefully.</p>
+
+        <h3>Contact Types</h3>
+        <div class="feature-grid">
+            <div class="feature-card"><div class="fi">🎯</div><h4>Lead</h4><p>Someone who has shown interest but hasn't bought yet. They're in the sales funnel. Your job is to nurture them until they're ready to buy.</p></div>
+            <div class="feature-card"><div class="fi">🤝</div><h4>Client</h4><p>Someone who has made a purchase. When a client is registered in the Finance system, they automatically sync here and get upgraded from Lead to Client.</p></div>
+        </div>
+
+        <h3>What You Can See on Each Contact</h3>
+        <ul>
+            <li><strong>Engagement Score</strong> — Their current "temperature" (see Chapter 1).</li>
+            <li><strong>Total Opens / Clicks</strong> — How many of your emails they've opened and clicked across all campaigns.</li>
+            <li><strong>Last Activity</strong> — The last time they interacted with any of your emails.</li>
+            <li><strong>Subscription Status</strong> — Green dot means subscribed (can receive emails). Red dot means they've unsubscribed (you must not email them).</li>
+            <li><strong>Lead Source</strong> — Where they came from (e.g. "Lagos Expo 2024", "Website Form", "Referral").</li>
+        </ul>
+
+        <h3>Viewing a Contact's Full Profile</h3>
+        <p>Click the <strong>⋮ menu</strong> next to any contact and select "View Profile & History." You'll see a full interaction timeline — every campaign they received, every email they opened, every link they clicked — in chronological order. This is gold for your sales team before they make a call.</p>
+
+        <h3>Adding Contacts</h3>
+        <p>There are three ways to add people to your contact list:</p>
+        <ul class="steps">
+            <li><div class="step-num">1</div><div><strong>Manually — One by One</strong><p>Click "Add Contact" and fill in their details. Good for people you met at an event, through referrals, or on calls.</p></div></li>
+            <li><div class="step-num">2</div><div><strong>CSV Import — Bulk Upload</strong><p>If you have a spreadsheet of leads, export it as a .CSV file and use the "Import CSV" button. The system will create records for all of them at once.</p></div></li>
+            <li><div class="step-num">3</div><div><strong>Automatic Sync from Finance</strong><p>When a new client is registered in the Finance Dashboard, they are automatically created or upgraded here <em>without any manual action</em>.</p></div></li>
+        </ul>
+
+        <h3>Syncing Clients from Finance</h3>
+        <p>Use the <strong>"Sync Clients"</strong> button (top right of Contacts tab) to do a one-time pull of all existing clients from your Finance system into your Marketing contacts. After the initial sync, all new clients are synced automatically.</p>
+
+        <div class="box box-blue">
+            <strong>📌 Important:</strong> If a person exists as both a Lead and a Client (they were a lead and then bought), the system is smart enough to <em>merge</em> them — upgrading the existing record to Client status rather than creating a duplicate.
+        </div>
+
+        <h3>The Search & Filter</h3>
+        <p>Use the search bar to quickly find any contact by name or email. You can also click any Segment card (Chapter 5) to filter the contacts list to show only people who match that segment's criteria. When filtering is active, a gold badge will appear at the top of the contacts table showing which filter is active.</p>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     CH 5: SEGMENTS
+══════════════════════════════════════ -->
+<div class="chapter" id="segments">
+    <div class="chapter-header">
+        <div class="chapter-icon" style="background: #fef2f2;">🎯</div>
+        <div>
+            <div class="sub">Chapter 5</div>
+            <h2>Segments — Laser-Focused Targeting</h2>
+        </div>
+    </div>
+    <div class="chapter-body">
+        <p>A <strong>Segment</strong> is a smart, filtered group of contacts. Instead of sending the same email to everyone and hoping it's relevant, you send targeted messages to specific groups who are most likely to respond. This is how the big players do it.</p>
+
+        <div class="box box-purple">
+            <strong>🧠 Think of it this way:</strong> Imagine you're a doctor. You wouldn't give every patient the same medicine. A Segment helps you give each group exactly what they need. Overdue clients need a payment reminder. New leads need an introduction. Hot prospects need an irresistible offer.
+        </div>
+
+        <h3>The Built-In Smart Segments (Ready to Use)</h3>
+        <p>These are pre-built and always up-to-date automatically — no setup needed:</p>
+        <div class="feature-grid">
+            <div class="feature-card"><div class="fi">✨</div><h4>Engaged Audience</h4><p>Everyone who has opened at least one email. These people know who you are — great for follow-up campaigns.</p></div>
+            <div class="feature-card"><div class="fi">🔥</div><h4>Hot Leads</h4><p>Everyone with an Engagement Score above 50. These are people who keep interacting with you. Prioritize these!</p></div>
+            <div class="feature-card"><div class="fi">🆕</div><h4>Recent Signups</h4><p>Anyone who joined your list in the last 30 days. Perfect for a "Welcome to the Eximp & Cloves family" campaign.</p></div>
+            <div class="feature-card"><div class="fi">🔴</div><h4>Overdue Clients</h4><p>Clients whose invoice due date has passed and still have a balance. Automatically calculated from your Finance system.</p></div>
+            <div class="feature-card"><div class="fi">🟡</div><h4>Outstanding Balance</h4><p>Clients who have made partial payments but still owe money. Great for a gentle reminder campaign.</p></div>
+            <div class="feature-card"><div class="fi">🟢</div><h4>Fully Paid</h4><p>Clients who have completed all payments. A great group to celebrate, ask for referrals, or upsell new phases.</p></div>
+        </div>
+
+        <h3>Creating Your Own Custom Segments</h3>
+        <p>Click <strong>"Build Custom Segment"</strong> to create your own group using rules. You can combine multiple rules for very precise targeting.</p>
+
+        <p><strong>Available Rules:</strong></p>
+        <ul>
+            <li><strong>Engagement Score</strong> is greater than / less than [number]</li>
+            <li><strong>Lead Type</strong> is equal to "Lead" or "Client"</li>
+            <li><strong>Lead Source</strong> contains "Lagos Expo" (target people from a specific event)</li>
+            <li><strong>Last Opened</strong> is in last [X] days (e.g. active in last 7 days)</li>
+            <li><strong>Has opened campaign...</strong> — Did they open a specific campaign?</li>
+            <li><strong>Has clicked link in...</strong> — Did they click a link in a specific campaign?</li>
+        </ul>
+
+        <h3>How to Use a Segment</h3>
+        <p>Click any segment card and it immediately filters your Contacts list to show only those people. You can then send them a campaign by clicking "Send Campaign" and choosing that segment as your audience. The system counts these people in real-time, so you always know exactly how many people you're reaching.</p>
+
+        <div class="box box-green">
+            <strong>🏆 Best Practice Playbook:</strong><br>
+            <strong>Week 1:</strong> Send a "New Property Launch" email to ALL contacts.<br>
+            <strong>Week 2:</strong> Resend a different version to the segment "Opened but didn't click" from Week 1.<br>
+            <strong>Week 3:</strong> Call or WhatsApp everyone in the "Hot Leads" segment personally.<br>
+            This three-step flow consistently outperforms blasting everyone with the same message repeatedly.
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     CH 6: SEQUENCES
+══════════════════════════════════════ -->
+<div class="chapter" id="sequences">
+    <div class="chapter-header">
+        <div class="chapter-icon" style="background: #fef9c3;">⚡</div>
+        <div>
+            <div class="sub">Chapter 6</div>
+            <h2>Sequences (Auto) — Your 24/7 Sales Machine</h2>
+        </div>
+    </div>
+    <div class="chapter-body">
+        <p>A <strong>Sequence</strong> is a series of emails that get sent to someone automatically over a period of days or weeks. You set it up once, and then it runs by itself — forever — for every new lead or client that enters it. This is the most powerful feature in the system.</p>
+
+        <div class="box box-gold">
+            <strong>💡 Real-World Example:</strong> A new lead submits their details on your website. At that exact moment, the system automatically enrolls them in a "New Lead Welcome Sequence." Day 0: They get a warm welcome email. Day 3: They get an email showcasing your top properties. Day 7: They get a "Limited Units Available" urgency email. Day 14: They get a testimonial email from a happy client. All of this happens without any human involvement.
+        </div>
+
+        <h3>How a Sequence Works — Step by Step</h3>
+        <ul class="steps">
+            <li><div class="step-num">1</div><div><strong>You create the sequence and its steps</strong><p>Give it a name ("New Lead Welcome"), set a trigger, and add as many email steps (drips) as you want, each with a delay in days.</p></div></li>
+            <li><div class="step-num">2</div><div><strong>Someone gets enrolled</strong><p>Either you add them manually, or the system adds them automatically based on the trigger (e.g. a new client is registered).</p></div></li>
+            <li><div class="step-num">3</div><div><strong>The engine runs hourly</strong><p>Every single hour, the system checks: "Are there any emails due to be sent today?" If yes, it sends them automatically.</p></div></li>
+            <li><div class="step-num">4</div><div><strong>The sequence completes or exits</strong><p>When all steps are done, the contact is marked "Completed." If they become a client mid-sequence, they are automatically "Exited" (so they don't get embarrassing lead-nurturing emails after buying!).</p></div></li>
+        </ul>
+
+        <h3>Automation Triggers — How People Enter a Sequence</h3>
+        <div class="feature-grid">
+            <div class="feature-card"><div class="fi">✋</div><h4>Manual Enrollment Only</h4><p>You decide who goes in. You manually add people from the Contacts tab. Good for focused campaigns.</p></div>
+            <div class="feature-card"><div class="fi">🤖</div><h4>New Client Registered</h4><p>The moment a new client is added to the Finance system, they are <em>automatically</em> enrolled. No manual work needed ever.</p></div>
+        </div>
+
+        <h3>Smart Branching — The "Intelligent" Part</h3>
+        <p>When creating a sequence with multiple steps, you can make any step (Step 2 and beyond) <strong>"Smart"</strong> by checking the <em>"Only if Opened Pre-Step"</em> checkbox. This means:</p>
+        <ul>
+            <li>If the person <strong>opened</strong> your previous email → they receive the next step as normal.</li>
+            <li>If they <strong>ignored</strong> your previous email → the system skips this step rather than spamming them.</li>
+        </ul>
+        <p>This makes your automation behave like a human would — not pestering people who aren't engaging, and rewarding those who are with more content.</p>
+
+        <h3>Reading the Analytics on a Sequence Card</h3>
+        <p>Each sequence card on the dashboard shows three numbers:</p>
+        <ul>
+            <li><strong>Active</strong> — People currently working through the sequence right now.</li>
+            <li><strong>Finished</strong> — People who completed every step. Congratulations to them!</li>
+            <li><strong>Exited</strong> — People who were automatically removed (e.g. they became a client).</li>
+        </ul>
+
+        <div class="box box-blue">
+            <strong>📌 Pro Tip:</strong> A high "Exited" count on a lead nurturing sequence is actually a <strong>great sign!</strong> It means lots of leads are converting to clients and being automatically removed from the sequence. That's the system working perfectly.
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     CH 7: CALENDAR
+══════════════════════════════════════ -->
+<div class="chapter" id="calendar">
+    <div class="chapter-header">
+        <div class="chapter-icon" style="background: #f0fdf4;">📅</div>
+        <div>
+            <div class="sub">Chapter 7</div>
+            <h2>The Marketing Calendar</h2>
+        </div>
+    </div>
+    <div class="chapter-body">
+        <p>The <strong>Calendar tab</strong> is your strategic planning board. It shows you all upcoming dates that matter for your marketing — Nigerian public holidays, invoice due dates, and your own custom business events — all in one place so you never miss a sending opportunity.</p>
+
+        <h3>What Populates Automatically</h3>
+        <div class="feature-grid">
+            <div class="feature-card"><div class="fi">🇳🇬</div><h4>Nigerian Public Holidays</h4><p>Pre-loaded for the entire year. Eid-el-Fitr, Christmas, Independence Day, etc. — these are all excellent windows for sending themed property offers.</p></div>
+            <div class="feature-card"><div class="fi">🔴</div><h4>Invoice Due Date Alerts</h4><p>If any of your clients have upcoming payment due dates, the system automatically places them on the calendar so you can send a timely, personal reminder.</p></div>
+        </div>
+
+        <h3>Adding Your Own Business Events</h3>
+        <p>Click <strong>"Add Business Event"</strong> and fill in:</p>
+        <ul>
+            <li><strong>Event Name</strong> — E.g. "Phase 3 Launch", "Open Day — Epe Road", "Referral Drive"</li>
+            <li><strong>Date</strong> — When does this happen?</li>
+            <li><strong>Recurrence</strong> — Should this repeat weekly, monthly, or yearly? Or is it a one-off?</li>
+            <li><strong>Recommended Action</strong> — Write a note for yourself like "Send 'Save the Date' email 2 weeks before and a final reminder 3 days before."</li>
+        </ul>
+
+        <h3>The Priority System — Urgency Labels</h3>
+        <p>Each event on the calendar gets an automatic urgency label based on how soon it is:</p>
+        <ul>
+            <li><strong style="color:#991b1b;">🔴 URGENT</strong> — Within the next 7 days. Act immediately!</li>
+            <li><strong style="color:#92400e;">🟡 FOCUS</strong> — Within 30 days. Start planning your campaign now.</li>
+            <li><strong style="color:#1e3a8a;">🔵 PLANNED</strong> — More than 30 days away. Enough time to design a great campaign.</li>
+        </ul>
+
+        <div class="box box-green">
+            <strong>🏆 The "Holiday Marketing" Playbook:</strong> Two weeks before a major holiday (e.g. Eid, Christmas), send a themed property offer email to your "Hot Leads" segment. Subject line: "Celebrate Eid in your NEW home 🌙". One week before, send a follow-up to those who opened but didn't click. This two-touch approach consistently drives inquiries during festive periods.
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     CH 8: COMPLIANCE
+══════════════════════════════════════ -->
+<div class="chapter" id="compliance">
+    <div class="chapter-header">
+        <div class="chapter-icon" style="background: #f0f4ff;">🛡️</div>
+        <div>
+            <div class="sub">Chapter 8</div>
+            <h2>Compliance & The Unsubscribe System</h2>
+        </div>
+    </div>
+    <div class="chapter-body">
+        <p>This chapter is critical. Sending emails to people who don't want them is not just annoying — it is <strong>illegal</strong> under international anti-spam laws (GDPR, CAN-SPAM) and can get your entire email domain blacklisted, meaning your emails stop working for everyone. Our system is built to protect you and your brand.</p>
+
+        <h3>How the Unsubscribe System Works</h3>
+        <ul class="steps">
+            <li><div class="step-num">1</div><div><strong>The Link is Automatic</strong><p>Every single email sent from this system contains an unsubscribe link at the footer. It is generated and injected automatically — you do not need to add it yourself.</p></div></li>
+            <li><div class="step-num">2</div><div><strong>Branded Landing Page</strong><p>When someone clicks "Unsubscribe", they are taken to a professional Eximp & Cloves branded page — not a generic plain page — where they can confirm their unsubscription.</p></div></li>
+            <li><div class="step-num">3</div><div><strong>Instant & Permanent</strong><p>The moment they confirm, their <code>is_subscribed</code> status is set to <code>false</code> in the database. No more emails will ever be sent to them, even if you accidentally try to include them.</p></div></li>
+            <li><div class="step-num">4</div><div><strong>The Hard Block</strong><p>The email sending engine checks every recipient before dispatching. If a contact has <code>is_subscribed = false</code>, the email is silently blocked — it will never leave the system.</p></div></li>
+        </ul>
+
+        <h3>What You'll See on a Contact's Record</h3>
+        <p>In the Contacts tab, each person has a small colored circle indicating their subscription status:</p>
+        <ul>
+            <li>🟢 <strong>Green dot</strong> — Active Subscriber (can receive emails)</li>
+            <li>🔴 <strong>Red dot</strong> — Unsubscribed (will NOT receive any emails — ever)</li>
+        </ul>
+
+        <div class="box box-red">
+            <strong>⚠️ Important Rule:</strong> You must never manually override an unsubscribe. If someone has chosen to opt out, that decision must be respected. Attempting to re-subscribe them or add them to a new list without their explicit consent is a legal violation.
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     CH 9: PRO TIPS
+══════════════════════════════════════ -->
+<div class="chapter" id="tips">
+    <div class="chapter-header">
+        <div class="chapter-icon" style="background: #1A1A1A;">🏆</div>
+        <div>
+            <div class="sub">Chapter 9</div>
+            <h2>Pro Tips & Winning Playbooks</h2>
+        </div>
+    </div>
+    <div class="chapter-body">
+        <h3>The "New Lead Nurture" Playbook (Set this up once)</h3>
+        <p>Create a Sequence named <strong>"New Lead Fast Track"</strong> with trigger: <em>Manual Enrollment</em>. Every time you collect a new lead from any source (event, referral, ad), manually enroll them here.</p>
+        <ul>
+            <li><strong>Day 0:</strong> Welcome email — "Thank you for your interest in Eximp & Cloves!"</li>
+            <li><strong>Day 3:</strong> Estate showcase — your best property with a Property Card block.</li>
+            <li><strong>Day 7:</strong> Social proof email — "3 families found their forever home last month."</li>
+            <li><strong>Day 14:</strong> Urgency email — "Only X units remaining in Phase 2."</li>
+            <li><strong>Day 21:</strong> Final touch — "We'd love to give you a personal tour."</li>
+        </ul>
+
+        <h3>The "Client Payment Reminder" Playbook</h3>
+        <p>Create a campaign targeting the <strong>"Outstanding Balance"</strong> smart segment. Use the Account Summary block and personalization tags. The email should feel like a personal message, not a bulk blast. Sample subject line: <em>"Hi {{first_name}}, a quick note about your account"</em>.</p>
+
+        <h3>The "Post-Purchase Delight" Playbook</h3>
+        <p>Create a Sequence with trigger: <em>New Client Registered</em>. When someone buys, they automatically receive:</p>
+        <ul>
+            <li><strong>Day 0:</strong> Congratulations + Welcome to the Eximp Family email.</li>
+            <li><strong>Day 7:</strong> "What happens next" — construction update, key date.</li>
+            <li><strong>Day 30:</strong> Referral ask — "Know someone who would love a home like yours?"</li>
+        </ul>
+
+        <h3>Essential Do's and Don'ts</h3>
+        <table class="score-table">
+            <thead><tr><th>✅ DO This</th><th>❌ DON'T Do This</th></tr></thead>
+            <tbody>
+                <tr><td>Use personalization tags in every email</td><td>Send generic "Dear Customer" emails</td></tr>
+                <tr><td>Use Segments to target specific groups</td><td>Blast the same email to all 1,000 contacts every time</td></tr>
+                <tr><td>Schedule emails for Tuesday–Thursday mornings</td><td>Send on Monday morning or Friday afternoon</td></tr>
+                <tr><td>Check your campaign reports to learn & improve</td><td>Send and forget — data is your most valuable asset</td></tr>
+                <tr><td>Use sequences for onboarding and nurturing</td><td>Manually follow up each lead one by one forever</td></tr>
+                <tr><td>Duplicate high-performing campaigns</td><td>Start every email from scratch</td></tr>
+            </tbody>
+        </table>
+
+        <div class="box box-gold" style="margin-top: 32px;">
+            <strong>🎯 Your Goal for Week 1:</strong> Set up one sequence (the "New Lead Fast Track"), sync all your clients from Finance, and send your first campaign to the "Hot Leads" segment. If you do just these three things, you'll already be doing marketing better than 90% of real estate companies in Nigeria.
+        </div>
+    </div>
+</div>
+
+</div><!-- /content -->
+
+<footer>
+    <strong>Eximp & Cloves Infrastructure Limited</strong> — RC 8311800<br>
+    This is a confidential internal document for the Marketing Team only.<br>
+    &copy; 2026 Eximp & Cloves. All Rights Reserved.
+</footer>
+
+</body>
+</html>

@@ -193,29 +193,126 @@ async def site_tracking(request: Request):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-@router.get("/unsubscribe/{token}")
-async def confirm_unsubscribe(token: str):
-    """Handle the public unsubscribe page."""
-    # In a real app, 'token' would be a signed JWT or similar. 
-    # For now we assume 'token' is the contact_id.
+@router.get("/unsubscribe/{token}", response_class=HTMLResponse)
+async def unsubscribe_page(token: str):
+    """Handle the public unsubscribe page with a survey."""
     db = get_db()
+    
+    # Verify contact exists
+    res = db.table("marketing_contacts").select("first_name, email").eq("id", token).execute()
+    contact = res.data[0] if res.data else None
+    
+    name = contact.get("first_name", "there") if contact else "there"
+    email = contact.get("email", "") if contact else ""
+
+    html = f"""
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Unsubscribe | Eximp & Cloves</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            body {{ font-family: 'Inter', sans-serif; background: #f9fafb; color: #1f2937; margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }}
+            .card {{ background: white; max-width: 440px; width: 100%; padding: 40px; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); border: 1px solid #e5e7eb; }}
+            .logo {{ color: #C47D0A; font-weight: 700; font-size: 1.2rem; letter-spacing: 0.1em; display: block; margin-bottom: 30px; text-decoration: none; text-align: center; }}
+            h1 {{ font-size: 1.5rem; font-weight: 700; margin-bottom: 12px; color: #111; text-align: center; }}
+            p {{ font-size: 0.95rem; line-height: 1.6; color: #6b7280; margin-bottom: 24px; text-align: center; }}
+            form {{ display: flex; flex-direction: column; gap: 12px; }}
+            label {{ font-size: 0.85rem; font-weight: 600; color: #374151; }}
+            select, textarea {{ padding: 12px; border-radius: 8px; border: 1px solid #d1d5db; outline: none; font-family: inherit; font-size: 0.9rem; }}
+            select:focus, textarea:focus {{ border-color: #C47D0A; ring: 2px solid #C47D0A; }}
+            button {{ background: #C47D0A; color: white; border: none; padding: 14px; border-radius: 8px; font-weight: 700; cursor: pointer; transition: 0.2s; margin-top: 10px; }}
+            button:hover {{ background: #A66908; transform: translateY(-1px); }}
+            .footer {{ margin-top: 30px; text-align: center; font-size: 0.75rem; color: #9ca3af; }}
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <a href="https://eximps-cloves.com" class="logo">EXIMP & CLOVES</a>
+            <h1>We're sorry to see you go</h1>
+            <p>Hi {name}, if you'd like to unsubscribe from our marketing emails ({email}), please confirm below.</p>
+            
+            <form action="/api/marketing/unsubscribe/confirm" method="POST">
+                <input type="hidden" name="token" value="{token}">
+                <label>Why are you leaving? (Optional)</label>
+                <select name="reason">
+                    <option value="too_many">Receiving too many emails</option>
+                    <option value="not_relevant">Content isn't relevant to me</option>
+                    <option value="bought_already">I've already purchased</option>
+                    <option value="other">Other</option>
+                </select>
+                <textarea name="feedback" rows="3" placeholder="Any other feedback?"></textarea>
+                <button type="submit">Unsubscribe Me</button>
+            </form>
+            
+            <div class="footer">
+                &copy; 2026 Eximp & Cloves Infrastructure Limited
+            </div>
+        </div>
+    </body>
+    </html>
+    """
+    return HTMLResponse(content=html)
+
+@router.post("/api/marketing/unsubscribe/confirm")
+async def process_unsubscribe(request: Request):
+    """Handle the unsubscribe confirmation and save the reason."""
+    form_data = await request.form()
+    token = form_data.get("token")
+    reason = form_data.get("reason")
+    feedback = form_data.get("feedback", "")
+    
+    if not token:
+        raise HTTPException(status_code=400, detail="Missing unsubscribe token")
+    
+    db = get_db()
+    
+    # 1. Update contact global status
+    timestamp = datetime.utcnow().isoformat()
     db.table("marketing_contacts").update({
         "is_subscribed": False,
-        "unsubscribed_at": datetime.utcnow().isoformat()
+        "unsubscribed_at": timestamp,
+        "unsubscribe_reason": f"{reason}: {feedback}" if feedback else reason
     }).eq("id", token).execute()
     
-    # Return professional unsubscribe confirmation page
+    # 2. Log to unsubscribe table (PRD 3.5)
+    contact_res = db.table("marketing_contacts").select("email").eq("id", token).execute()
+    if contact_res.data:
+        db.table("marketing_unsubscribes").insert({
+            "contact_id": token,
+            "email": contact_res.data[0]["email"],
+            "reason": reason,
+            "unsubscribed_at": timestamp
+        }).execute()
+    
+    # Return success page
     html = f"""
-    <html>
-        <body style="font-family: 'Inter', sans-serif; text-align: center; padding-top: 100px; background: #f9f9f9;">
-            <div style="max-width: 500px; margin: auto; background: white; padding: 40px; border-radius: 12px; box-shadow: 0 4px 12px rgba(0,0,0,0.05);">
-                <h2 style="color: #111;">You Have Been Unsubscribed</h2>
-                <p style="color: #666; line-height: 1.6;">You will no longer receive marketing emails from Eximp & Cloves.</p>
-                <div style="margin-top: 30px; padding-top: 20px; border-top: 1px solid #eee;">
-                    <p style="font-size: 0.85rem; color: #999;">Eximp & Cloves Infrastructure Limited<br>Lagos, Nigeria</p>
-                </div>
-            </div>
-        </body>
+    <!DOCTYPE html>
+    <html lang="en">
+    <head>
+        <meta charset="UTF-8">
+        <meta name="viewport" content="width=device-width, initial-scale=1.0">
+        <title>Success | Eximp & Cloves</title>
+        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
+        <style>
+            body {{ font-family: 'Inter', sans-serif; background: #f9fafb; color: #1f2937; margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }}
+            .card {{ background: white; max-width: 440px; width: 100%; padding: 40px; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); border: 1px solid #e5e7eb; text-align: center; }}
+            .icon {{ font-size: 3rem; margin-bottom: 20px; }}
+            h1 {{ font-size: 1.5rem; font-weight: 700; margin-bottom: 12px; color: #111; }}
+            p {{ font-size: 0.95rem; line-height: 1.6; color: #6b7280; margin-bottom: 30px; }}
+            .btn {{ display: inline-block; background: #111; color: white; text-decoration: none; padding: 12px 30px; border-radius: 8px; font-weight: 600; }}
+        </style>
+    </head>
+    <body>
+        <div class="card">
+            <div class="icon">✅</div>
+            <h1>Successfully Unsubscribed</h1>
+            <p>Your preferences have been updated. You will no longer receive marketing emails from us.</p>
+            <a href="https://eximps-cloves.com" class="btn">Return to Site</a>
+        </div>
+    </body>
     </html>
     """
     return HTMLResponse(content=html)
