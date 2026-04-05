@@ -130,6 +130,11 @@ async def legal_dashboard_page(request: Request):
 @app.get("/legal/editor", response_class=HTMLResponse)
 async def legal_editor_page(request: Request, id: str):
     return templates.TemplateResponse("legal_editor.html", {"request": request, "invoice_id": id})
+
+
+@app.get("/legal/manual", response_class=HTMLResponse)
+async def legal_manual_page(request: Request):
+    return templates.TemplateResponse("legal_manual.html", {"request": request})
 @app.get("/legal/{tag:path}")
 async def handle_legal_placeholders(tag: str):
     """

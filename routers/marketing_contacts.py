@@ -92,24 +92,36 @@ async def import_contacts(source: Optional[str] = "csv_import", file: UploadFile
     duplicate_count = 0
     
     for row in reader:
-        email = row.get("email") or row.get("Email")
-        if not email or "@" not in email:
+        # Standardize keys to lowercase for robust lookup
+        row_lower = {k.lower().strip(): v for k, v in row.items() if k}
+        
+        # 1. Email Lookup (Crucial)
+        email = row_lower.get("email") or row_lower.get("email address") or row_lower.get("e-mail") or row_lower.get("mail")
+        if not email or "@" not in str(email):
             skipped_count += 1
             continue
             
-        first_name = row.get("first_name") or row.get("First Name") or ""
-        last_name = row.get("last_name") or row.get("Last Name") or ""
-        phone = row.get("phone") or row.get("Phone") or ""
-        tags = [t.strip() for t in (row.get("tags") or "").split(",") if t.strip()]
+        # 2. First Name Lookup
+        first_name = row_lower.get("first_name") or row_lower.get("first name") or row_lower.get("firstname") or row_lower.get("fname") or ""
         
-        # Simple duplicate check inside the loop (better to do bulk upsert in Postgres)
+        # 3. Last Name Lookup
+        last_name = row_lower.get("last_name") or row_lower.get("last name") or row_lower.get("lastname") or row_lower.get("lname") or ""
+        
+        # 4. Phone Lookup
+        phone = row_lower.get("phone") or row_lower.get("phone number") or row_lower.get("telephone") or row_lower.get("mobile") or ""
+        
+        # 5. Tags Lookup
+        tags_raw = row_lower.get("tags") or row_lower.get("tag") or ""
+        tags = [t.strip() for t in str(tags_raw).split(",") if t.strip()]
+        
+        # Add to batch
         contacts_to_insert.append({
-            "email": email.lower().strip(),
-            "first_name": first_name,
-            "last_name": last_name,
-            "phone": phone,
+            "email": str(email).lower().strip(),
+            "first_name": str(first_name).strip(),
+            "last_name": str(last_name).strip(),
+            "phone": str(phone).strip(),
             "tags": tags,
-            "source": source or "csv_import",
+            "source": source or row_lower.get("source") or "csv_import",
             "contact_type": "lead"
         })
 

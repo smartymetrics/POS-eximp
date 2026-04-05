@@ -95,6 +95,20 @@
             cursor: text;
         }
 
+        @media (max-width: 768px) {
+            .paper-canvas {
+                width: calc(100vw - 32px);
+                padding: 24px 20px;
+                min-height: 60vh;
+                font-size: 13px;
+                border-radius: 12px;
+                margin: 0 16px;
+            }
+            .editor-workspace {
+                padding: 20px 0 120px 0;
+            }
+        }
+
         /* Toolbar */
         .editor-toolbar {
             background: #1E2128;
@@ -406,8 +420,8 @@
     </style>
 </head>
 
-<body class="bg-[#0F1115] text-[#E5E7EB] h-screen overflow-hidden">
-    <div class="grid grid-cols-1 lg:grid-cols-[280px_1fr_340px] h-screen w-full">
+<body class="bg-[#0F1115] text-[#E5E7EB] lg:h-screen lg:overflow-hidden">
+    <div class="grid grid-cols-1 lg:grid-cols-[280px_1fr_340px] lg:h-screen w-full">
 
         <!-- Sidebar Left -->
         <div class="sidebar-left flex flex-col justify-between p-8 border-r border-[#2D2F36] bg-[#0F1115]">
@@ -459,7 +473,7 @@
         </div>
 
         <!-- Main Workspace -->
-        <main class="flex-1 flex flex-col h-screen overflow-hidden">
+        <main class="flex-1 flex flex-col lg:h-screen lg:overflow-hidden">
             <div id="mobileNavDrawer" class="mobile-nav-drawer">
                 <div class="mobile-nav-backdrop" onclick="closeMobileNav()"></div>
                 <aside class="mobile-nav-panel">
@@ -509,31 +523,35 @@
                 </aside>
             </div>
 
-            <header class="flex items-center justify-between p-8 border-b border-[#2D2F36] bg-[#0F1115]">
-                <div class="flex items-center gap-4">
-                    <button onclick="window.location.href='/legal'" class="text-gray-500 hover:text-white transition"
+            <header class="flex items-center justify-between px-4 md:px-8 py-4 border-b border-[#2D2F36] bg-[#0F1115] flex-shrink-0">
+                <div class="flex items-center gap-3 min-w-0">
+                    <button onclick="window.location.href='/legal'" class="text-gray-500 hover:text-white transition flex-shrink-0"
                         title="Back to Legal Suite">
                         <i class="fas fa-arrow-left text-lg"></i>
                     </button>
-                    <button class="mobile-only mobile-nav-trigger text-gray-500 hover:text-white transition"
+                    <button class="mobile-only mobile-nav-trigger text-gray-500 hover:text-white transition flex-shrink-0"
                         onclick="openMobileNav()" title="Open menu">
                         <i class="fas fa-bars text-lg"></i>
                     </button>
-                    <div>
-                        <h1 class="font-serif text-2xl" id="invoiceNumber">--</h1>
-                        <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold" id="contractRef">REF:
-                            LOADING...</p>
+                    <div class="min-w-0">
+                        <h1 class="font-serif text-lg md:text-2xl truncate" id="invoiceNumber">--</h1>
+                        <div class="flex items-center gap-2">
+                            <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold hidden sm:block" id="contractRef">REF: LOADING...</p>
+                            <span id="currentTabPill" class="lg:hidden text-[9px] font-bold bg-brand-gold/10 text-brand-gold px-2 py-0.5 rounded uppercase tracking-wider">Cover</span>
+                        </div>
                     </div>
                 </div>
-                <div class="flex gap-4">
+                <div class="flex gap-2 flex-shrink-0">
+                    <button class="mobile-only bg-[#1A1C20] border border-[#2D2F36] text-gray-300 w-9 h-9 rounded-lg flex items-center justify-center hover:bg-[#2D2F36] transition" onclick="openIntelligence()" title="Deal Intelligence">
+                        <i class="fas fa-chart-pie text-sm"></i>
+                    </button>
                     <button id="saveBtn" onclick="saveChanges()"
-                        class="bg-brand-gold text-white px-6 py-2.5 rounded-lg font-bold shadow-lg hover:brightness-110 transition text-xs flex items-center gap-2">
+                        class="bg-brand-gold text-white px-4 py-2 rounded-lg font-bold shadow-lg hover:brightness-110 transition text-xs flex items-center gap-2">
                         <i class="fas fa-save"></i>
-                        <span id="saveLabel">Save Draft</span>
+                        <span id="saveLabel" class="hidden sm:inline">Save Draft</span>
                     </button>
                     <button id="executeBtn" onclick="openExecutionModal()"
-                        class="bg-brand-gold/10 text-brand-gold border border-brand-gold/20 px-6 py-2.5 rounded-lg font-bold hover:bg-brand-gold hover:text-white transition uppercase tracking-wider text-[10px] hidden">Seal
-                        & Execute</button>
+                        class="bg-brand-gold/10 text-brand-gold border border-brand-gold/20 px-3 md:px-5 py-2 rounded-lg font-bold hover:bg-brand-gold hover:text-white transition uppercase tracking-wider text-[10px] hidden">Seal &amp; Execute</button>
                 </div>
             </header>
 
@@ -560,7 +578,7 @@
             </div>
 
             <!-- Editor View -->
-            <div class="editor-workspace relative pt-10">
+            <div class="editor-workspace relative lg:pt-10 pt-6">
                 <div id="editor" class="paper-canvas shadow-2xl" contenteditable="true" oninput="autoSaveToBuffer()">
                 </div>
 
@@ -1018,7 +1036,12 @@
             const mobIcon = document.getElementById(`mob-icon-${tab}`);
             if (mobIcon) mobIcon.className = mobIcon.className.replace('text-gray-500', 'text-brand-gold');
 
-            // 4. Load new state from buffer instantly
+            // 4. Update mobile pill label
+            const pillLabels = { cover: 'Cover', body: 'Body', execution: 'Sign' };
+            const pill = document.getElementById('currentTabPill');
+            if (pill) pill.textContent = pillLabels[tab] || tab;
+
+            // 5. Load new state from buffer instantly
             currentTab = tab;
             document.getElementById('editor').innerHTML = contractBuffer[fieldMap[tab]] || '';
 

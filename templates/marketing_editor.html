@@ -1,332 +1,564 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
-    <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Email Designer | Eximp &amp; Cloves</title>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
-    <link href="https://unpkg.com/grapesjs/dist/css/grapes.min.css" rel="stylesheet">
-    <script src="https://unpkg.com/grapesjs"></script>
-    <script src="https://unpkg.com/grapesjs-preset-newsletter"></script>
-    <style>
-        *, *::before, *::after { box-sizing: border-box; }
-        body, html { height: 100%; margin: 0; overflow: hidden; background: #111; font-family: 'Inter', sans-serif; }
-        #gjs { border: none; height: calc(100vh - 60px) !important; }
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Email Designer | Eximp &amp; Cloves</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap"
+    rel="stylesheet">
+  <link href="https://unpkg.com/grapesjs/dist/css/grapes.min.css" rel="stylesheet">
+  <script src="https://unpkg.com/grapesjs"></script>
+  <script src="https://unpkg.com/grapesjs-preset-newsletter"></script>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
 
-        .editor-top-bar {
-            min-height: 60px;
-            background: #1A1A1A;
-            color: white;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            padding: 10px 20px;
-            border-bottom: 2px solid #C47D0A;
-            position: relative;
-            z-index: 9999;
-            flex-wrap: wrap;
-            gap: 12px;
-        }
-        @media (max-width: 800px) {
-            .editor-top-bar { flex-direction: column; align-items: stretch; padding: 12px; }
-            .brand-logo { justify-content: center; margin-bottom: 4px; }
-            .top-actions { flex-direction: column; width: 100%; gap: 10px; }
-            .save-status { margin-right: 0; width: 100%; text-align: center; margin-bottom: 4px; }
-            #gjs { height: calc(100vh - 160px) !important; }
-        }
-        .brand-logo { color: #C47D0A; font-weight: 700; font-size: 1.1rem; letter-spacing: 0.05em; display: flex; align-items: center; gap: 10px; }
-        .brand-logo img { height: 32px; }
-        .top-actions { display: flex; align-items: center; gap: 8px; }
-        .save-status { font-size: 0.8rem; color: #888; margin-right: 12px; }
+    body,
+    html {
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #111;
+      font-family: 'Inter', sans-serif;
+    }
 
-        .btn {
-            background: #C47D0A; color: white; border: none;
-            padding: 8px 16px; border-radius: 5px; cursor: pointer;
-            font-weight: 600; font-size: 0.85rem; transition: 0.2s; white-space: nowrap;
-        }
-        .btn:hover { background: #A66908; }
-        .btn-outline { background: transparent; border: 1.5px solid #C47D0A; color: #C47D0A; }
-        .btn-outline:hover { background: #C47D0A; color: white; }
-        .btn-gray { background: #333; border: 1px solid #444; color: #ccc; }
-        .btn-gray:hover { background: #444; color: white; }
+    #gjs {
+      border: none;
+      height: calc(100vh - 60px) !important;
+    }
 
-        /* ── TEMPLATE PICKER MODAL ── */
-        .modal-overlay {
-            position: fixed; inset: 0; background: rgba(0,0,0,0.85);
-            display: flex; align-items: center; justify-content: center;
-            z-index: 99999;
-        }
-        .modal-overlay.hidden { display: none; }
-        .modal-box {
-            background: #1a1a1a; border-radius: 14px; width: 90vw; max-width: 980px;
-            max-height: 88vh; overflow: hidden; display: flex; flex-direction: column;
-            border: 1px solid #333;
-        }
-        .modal-header {
-            padding: 24px 28px 16px;
-            border-bottom: 1px solid #2a2a2a;
-            display: flex; justify-content: space-between; align-items: center;
-        }
-        .modal-header h2 { color: white; font-family: 'Playfair Display', serif; font-size: 1.5rem; margin: 0; }
-        .modal-header p { color: #888; font-size: 0.85rem; margin: 4px 0 0 0; }
-        .modal-close { background: none; border: none; color: #666; font-size: 1.5rem; cursor: pointer; padding: 4px 8px; border-radius: 4px; }
-        .modal-close:hover { color: white; background: #333; }
-        .modal-body { overflow-y: auto; padding: 24px 28px; flex: 1; }
+    .editor-top-bar {
+      min-height: 60px;
+      background: #1A1A1A;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 20px;
+      border-bottom: 2px solid #C47D0A;
+      position: relative;
+      z-index: 9999;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
 
-        .template-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
-            gap: 16px;
-        }
-        .template-card {
-            background: #252525; border-radius: 10px; overflow: hidden;
-            cursor: pointer; border: 2px solid transparent;
-            transition: border-color 0.2s, transform 0.15s;
-        }
-        .template-card:hover { border-color: #C47D0A; transform: translateY(-2px); }
-        .template-card.selected { border-color: #C47D0A; }
-        .template-preview {
-            height: 140px; display: flex; flex-direction: column;
-            align-items: center; justify-content: center;
-            font-size: 2rem; border-bottom: 1px solid #333;
-            position: relative; overflow: hidden;
-        }
-        .template-preview-bar { position: absolute; top: 0; left: 0; right: 0; height: 4px; background: #C47D0A; }
-        .template-info { padding: 12px; }
-        .template-name { color: white; font-weight: 600; font-size: 0.9rem; }
-        .template-desc { color: #888; font-size: 0.75rem; margin-top: 4px; }
+    @media (max-width: 800px) {
+      .editor-top-bar {
+        flex-direction: column;
+        align-items: stretch;
+        padding: 12px;
+      }
 
-        .modal-footer {
-            padding: 16px 28px; border-top: 1px solid #2a2a2a;
-            display: flex; justify-content: flex-end; gap: 10px;
-        }
+      .brand-logo {
+        justify-content: center;
+        margin-bottom: 4px;
+      }
 
-        /* GrapesJS overrides */
-        .gjs-pn-panel { background: #1a1a1a !important; }
-        .gjs-block-category .gjs-title { color: #C47D0A !important; background: #1e1e1e !important; }
-        .gjs-block { border-color: #2a2a2a !important; color: #ccc !important; background: #222 !important; }
-        .gjs-block:hover { border-color: #C47D0A !important; }
+      .top-actions {
+        flex-direction: column;
+        width: 100%;
+        gap: 10px;
+      }
 
-        /* ── TAGS HELPER ── */
-        .tag-item {
-            background: #222; border: 1px solid #333; padding: 12px; border-radius: 8px;
-            display: flex; justify-content: space-between; align-items: center; margin-bottom: 8px;
-        }
-        .tag-code { color: #C47D0A; font-family: monospace; font-weight: 700; font-size: 1rem; }
-        .tag-label { color: #888; font-size: 0.8rem; }
-        .copy-btn { 
-            background: #333; color: #C47D0A; border: 1px solid #C47D0A; 
-            padding: 4px 10px; border-radius: 4px; font-size: 0.75rem; cursor: pointer;
-            transition: 0.2s;
-        }
-        .copy-btn:hover { background: #C47D0A; color: white; }
-        /* ── ASSET MANAGER MOBILE OPTIMIZATIONS ── */
-        .gjs-am-file-uploader {
-            padding: 15px !important;
-            background: rgba(196, 125, 10, 0.15) !important;
-            border: 2px dashed #C47D0A !important;
-            border-radius: 12px !important;
-            margin-bottom: 20px !important;
-            display: flex !important;
-            flex-direction: column !important;
-            align-items: center !important;
-            justify-content: center !important;
-            position: relative !important;
-        }
-        .gjs-am-file-uploader > form #gjs-am-title {
-            color: #C47D0A !important;
-            font-weight: 700 !important;
-            font-size: 1.1rem !important;
-        }
-        /* Create a subtext for mobile */
-        .gjs-am-file-uploader > form::after {
-            content: "Tap here to select an image from your gallery";
-            display: block;
-            margin-top: 6px;
-            color: #aaa;
-            font-size: 0.85rem;
-            text-align: center;
-            font-weight: 400;
-        }
-        /* Make sure the invisible input takes up the entire padded box */
-        .gjs-am-file-uploader > form input[type=file] {
-            cursor: pointer !important;
-            height: 100% !important;
-        }
-    </style>
+      .save-status {
+        margin-right: 0;
+        width: 100%;
+        text-align: center;
+        margin-bottom: 4px;
+      }
+
+      #gjs {
+        height: calc(100vh - 160px) !important;
+      }
+    }
+
+    .brand-logo {
+      color: #C47D0A;
+      font-weight: 700;
+      font-size: 1.1rem;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .brand-logo img {
+      height: 32px;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .save-status {
+      font-size: 0.8rem;
+      color: #888;
+      margin-right: 12px;
+    }
+
+    .btn {
+      background: #C47D0A;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.85rem;
+      transition: 0.2s;
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      background: #A66908;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1.5px solid #C47D0A;
+      color: #C47D0A;
+    }
+
+    .btn-outline:hover {
+      background: #C47D0A;
+      color: white;
+    }
+
+    .btn-gray {
+      background: #333;
+      border: 1px solid #444;
+      color: #ccc;
+    }
+
+    .btn-gray:hover {
+      background: #444;
+      color: white;
+    }
+
+    /* ── TEMPLATE PICKER MODAL ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+    }
+
+    .modal-overlay.hidden {
+      display: none;
+    }
+
+    .modal-box {
+      background: #1a1a1a;
+      border-radius: 14px;
+      width: 90vw;
+      max-width: 980px;
+      max-height: 88vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid #333;
+    }
+
+    .modal-header {
+      padding: 24px 28px 16px;
+      border-bottom: 1px solid #2a2a2a;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-header h2 {
+      color: white;
+      font-family: 'Playfair Display', serif;
+      font-size: 1.5rem;
+      margin: 0;
+    }
+
+    .modal-header p {
+      color: #888;
+      font-size: 0.85rem;
+      margin: 4px 0 0 0;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: #666;
+      font-size: 1.5rem;
+      cursor: pointer;
+      padding: 4px 8px;
+      border-radius: 4px;
+    }
+
+    .modal-close:hover {
+      color: white;
+      background: #333;
+    }
+
+    .modal-body {
+      overflow-y: auto;
+      padding: 24px 28px;
+      flex: 1;
+    }
+
+    .template-grid {
+      display: grid;
+      grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+      gap: 16px;
+    }
+
+    .template-card {
+      background: #252525;
+      border-radius: 10px;
+      overflow: hidden;
+      cursor: pointer;
+      border: 2px solid transparent;
+      transition: border-color 0.2s, transform 0.15s;
+    }
+
+    .template-card:hover {
+      border-color: #C47D0A;
+      transform: translateY(-2px);
+    }
+
+    .template-card.selected {
+      border-color: #C47D0A;
+    }
+
+    .template-preview {
+      height: 140px;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      font-size: 2rem;
+      border-bottom: 1px solid #333;
+      position: relative;
+      overflow: hidden;
+    }
+
+    .template-preview-bar {
+      position: absolute;
+      top: 0;
+      left: 0;
+      right: 0;
+      height: 4px;
+      background: #C47D0A;
+    }
+
+    .template-info {
+      padding: 12px;
+    }
+
+    .template-name {
+      color: white;
+      font-weight: 600;
+      font-size: 0.9rem;
+    }
+
+    .template-desc {
+      color: #888;
+      font-size: 0.75rem;
+      margin-top: 4px;
+    }
+
+    .modal-footer {
+      padding: 16px 28px;
+      border-top: 1px solid #2a2a2a;
+      display: flex;
+      justify-content: flex-end;
+      gap: 10px;
+    }
+
+    /* GrapesJS overrides */
+    .gjs-pn-panel {
+      background: #1a1a1a !important;
+    }
+
+    .gjs-block-category .gjs-title {
+      color: #C47D0A !important;
+      background: #1e1e1e !important;
+    }
+
+    .gjs-block {
+      border-color: #2a2a2a !important;
+      color: #ccc !important;
+      background: #222 !important;
+    }
+
+    .gjs-block:hover {
+      border-color: #C47D0A !important;
+    }
+
+    /* ── TAGS HELPER ── */
+    .tag-item {
+      background: #222;
+      border: 1px solid #333;
+      padding: 12px;
+      border-radius: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .tag-code {
+      color: #C47D0A;
+      font-family: monospace;
+      font-weight: 700;
+      font-size: 1rem;
+    }
+
+    .tag-label {
+      color: #888;
+      font-size: 0.8rem;
+    }
+
+    .copy-btn {
+      background: #333;
+      color: #C47D0A;
+      border: 1px solid #C47D0A;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      cursor: pointer;
+      transition: 0.2s;
+    }
+
+    .copy-btn:hover {
+      background: #C47D0A;
+      color: white;
+    }
+
+    /* ── ASSET MANAGER MOBILE OPTIMIZATIONS ── */
+    .gjs-am-file-uploader {
+      padding: 15px !important;
+      background: rgba(196, 125, 10, 0.15) !important;
+      border: 2px dashed #C47D0A !important;
+      border-radius: 12px !important;
+      margin-bottom: 20px !important;
+      display: flex !important;
+      flex-direction: column !important;
+      align-items: center !important;
+      justify-content: center !important;
+      position: relative !important;
+    }
+
+    .gjs-am-file-uploader>form #gjs-am-title {
+      color: #C47D0A !important;
+      font-weight: 700 !important;
+      font-size: 1.1rem !important;
+    }
+
+    /* Create a subtext for mobile */
+    .gjs-am-file-uploader>form::after {
+      content: "Tap here to select an image from your gallery";
+      display: block;
+      margin-top: 6px;
+      color: #aaa;
+      font-size: 0.85rem;
+      text-align: center;
+      font-weight: 400;
+    }
+
+    /* Make sure the invisible input takes up the entire padded box */
+    .gjs-am-file-uploader>form input[type=file] {
+      cursor: pointer !important;
+      height: 100% !important;
+    }
+  </style>
 </head>
+
 <body>
 
-    <!-- TOP BAR -->
-    <div class="editor-top-bar">
-        <div class="brand-logo">
-            <img src="/static/img/logo_dark.svg" alt="Eximp & Cloves" onerror="this.style.display='none'">
-            <span>Marketing Editor</span>
-        </div>
-        <div class="top-actions">
-            <span class="save-status" id="save-status"></span>
-            <div class="flex items-center gap-2 w-full md:w-auto md:mr-4">
-                <span class="text-xs text-gray-500 uppercase font-bold shrink-0">Subject:</span>
-                <input type="text" id="subject-field" class="bg-[#222] border border-[#333] text-sm px-3 py-1.5 rounded w-full md:w-[260px] outline-none focus:border-brand-gold text-white" placeholder="Email Subject...">
-            </div>
-            <div class="flex items-center justify-center gap-2 w-full md:w-auto flex-wrap">
-                <button class="btn btn-gray text-xs md:text-sm px-2 md:px-4" onclick="openTags()">🏷️ Tags</button>
-                <button class="btn btn-gray text-xs md:text-sm px-2 md:px-4" onclick="openTemplates()">📋 Templates</button>
-                <button class="btn btn-outline text-xs md:text-sm px-2 md:px-4" id="send-test">✉️ Test</button>
-                <button class="btn text-xs md:text-sm px-2 md:px-4" id="save-campaign">💾 Save</button>
-                <button class="btn btn-gray text-xs md:text-sm px-2 md:px-4" onclick="window.location.href='/marketing'">← Back</button>
-            </div>
-        </div>
+  <!-- TOP BAR -->
+  <div class="editor-top-bar">
+    <div class="brand-logo">
+      <img src="/static/img/logo_dark.svg" alt="Eximp & Cloves" onerror="this.style.display='none'">
+      <span>Marketing Editor</span>
     </div>
-
-    <!-- CANVAS -->
-    <div id="gjs"></div>
-
-    <!-- TAGS HELPER MODAL -->
-    <div id="tags-modal" class="modal-overlay hidden">
-        <div class="modal-box" style="max-width: 500px; height: auto; max-height: 80vh;">
-            <div class="modal-header">
-                <div>
-                    <h2 style="font-family: 'Playfair Display', serif; color: white;">Personalisation Tags</h2>
-                    <p style="color: #888; font-size: 0.85rem;">Copy and paste these into your text blocks or <b>Subject Line</b> to greet recipients.</p>
-                </div>
-                <button class="modal-close" onclick="closeTags()">✕</button>
-            </div>
-            <div class="modal-body" style="padding: 20px;">
-                <div class="tag-item">
-                    <div>
-                        <div class="tag-code">{{first_name}}</div>
-                        <div class="tag-label">Recipient's first name (e.g. Chidi)</div>
-                    </div>
-                    <button class="copy-btn" onclick="copyTag(event, '{{first_name}}')">Copy</button>
-                </div>
-                <div class="tag-item" style="margin-top: 10px;">
-                    <div>
-                        <div class="tag-code">{{last_name}}</div>
-                        <div class="tag-label">Recipient's last name (e.g. Okeke)</div>
-                    </div>
-                    <button class="copy-btn" onclick="copyTag(event, '{{last_name}}')">Copy</button>
-                </div>
-                <div class="tag-item" style="margin-top: 10px;">
-                    <div>
-                        <div class="tag-code">{{full_name}}</div>
-                        <div class="tag-label">The full name found in the database.</div>
-                    </div>
-                    <button class="copy-btn" onclick="copyTag(event, '{{full_name}}')">Copy</button>
-                </div>
-                <div class="tag-item" style="margin-top: 10px;">
-                    <div>
-                        <div class="tag-code">{{email}}</div>
-                        <div class="tag-label">Recipient's email address</div>
-                    </div>
-                    <button class="copy-btn" onclick="copyTag(event, '{{email}}')">Copy</button>
-                </div>
-                <div class="tag-item" style="margin-top: 10px;">
-                    <div>
-                        <div class="tag-code">{{phone}}</div>
-                        <div class="tag-label">Recipient's phone number</div>
-                    </div>
-                    <button class="copy-btn" onclick="copyTag(event, '{{phone}}')">Copy</button>
-                </div>
-                <div class="tag-item" style="margin-top: 10px; border-top: 1px solid #333; padding-top: 15px;">
-                    <div>
-                        <div class="tag-code">{{unsubscribe_url}}</div>
-                        <div class="tag-label">Mandatory link for recipients to opt-out.</div>
-                    </div>
-                    <button class="copy-btn" onclick="copyTag(event, '{{unsubscribe_url}}')">Copy</button>
-                </div>
-
-                <div style="margin-top: 25px; margin-bottom: 15px; border-bottom: 1px solid #C47D0A; padding-bottom: 5px;">
-                    <span style="color: #C47D0A; font-weight: 800; font-size: 0.75rem; text-transform: uppercase;">💰 Financial Intelligence</span>
-                </div>
-
-                <div class="tag-item">
-                    <div>
-                        <div class="tag-code">{{outstanding}}</div>
-                        <div class="tag-label">Current balance due (e.g. ₦500,000.00)</div>
-                    </div>
-                    <button class="copy-btn" onclick="copyTag(event, '{{outstanding}}')">Copy</button>
-                </div>
-                <div class="tag-item" style="margin-top: 10px;">
-                    <div>
-                        <div class="tag-code">{{property_name}}</div>
-                        <div class="tag-label">Name of their estate (e.g. Coinfield Estate)</div>
-                    </div>
-                    <button class="copy-btn" onclick="copyTag(event, '{{property_name}}')">Copy</button>
-                </div>
-                <div class="tag-item" style="margin-top: 10px;">
-                    <div>
-                        <div class="tag-code">{{amount_paid}}</div>
-                        <div class="tag-label">Total amount they've paid so far.</div>
-                    </div>
-                    <button class="copy-btn" onclick="copyTag(event, '{{amount_paid}}')">Copy</button>
-                </div>
-                <div class="tag-item" style="margin-top: 10px;">
-                    <div>
-                        <div class="tag-code">{{due_date}}</div>
-                        <div class="tag-label">Their next payment deadline.</div>
-                    </div>
-                    <button class="copy-btn" onclick="copyTag(event, '{{due_date}}')">Copy</button>
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-gray" onclick="closeTags()">Done</button>
-            </div>
-        </div>
+    <div class="top-actions">
+      <span class="save-status" id="save-status"></span>
+      <div class="flex items-center gap-2 w-full md:w-auto md:mr-4">
+        <span class="text-xs text-gray-500 uppercase font-bold shrink-0">Subject:</span>
+        <input type="text" id="subject-field"
+          class="bg-[#222] border border-[#333] text-sm px-3 py-1.5 rounded w-full md:w-[260px] outline-none focus:border-brand-gold text-white"
+          placeholder="Email Subject...">
+      </div>
+      <div class="flex items-center justify-center gap-2 w-full md:w-auto flex-wrap">
+        <button class="btn btn-gray text-xs md:text-sm px-2 md:px-4" onclick="openTags()">🏷️ Tags</button>
+        <button class="btn btn-gray text-xs md:text-sm px-2 md:px-4" onclick="openTemplates()">📋 Templates</button>
+        <button class="btn btn-outline text-xs md:text-sm px-2 md:px-4" id="send-test">✉️ Test</button>
+        <button class="btn text-xs md:text-sm px-2 md:px-4" id="save-campaign">💾 Save</button>
+        <button class="btn btn-gray text-xs md:text-sm px-2 md:px-4" onclick="window.location.href='/marketing'">←
+          Back</button>
+      </div>
     </div>
+  </div>
 
+  <!-- CANVAS -->
+  <div id="gjs"></div>
+
+  <!-- TAGS HELPER MODAL -->
+  <div id="tags-modal" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width: 500px; height: auto; max-height: 80vh;">
+      <div class="modal-header">
+        <div>
+          <h2 style="font-family: 'Playfair Display', serif; color: white;">Personalisation Tags</h2>
+          <p style="color: #888; font-size: 0.85rem;">Copy and paste these into your text blocks or <b>Subject Line</b>
+            to greet recipients.</p>
         </div>
-    </div>
-
-    <!-- PROPERTY PICKER MODAL -->
-    <div id="property-modal" class="modal-overlay hidden">
-        <div class="modal-box" style="max-width: 800px;">
-            <div class="modal-header">
-                <div>
-                    <h2>Insert Property Card</h2>
-                    <p>Select an active estate to insert into your email.</p>
-                </div>
-                <button class="modal-close" onclick="closePropertyPicker()">✕</button>
-            </div>
-            <div class="modal-body">
-                <div id="property-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
-                    <!-- Loaded via JS -->
-                </div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-gray" onclick="closePropertyPicker()">Cancel</button>
-            </div>
+        <button class="modal-close" onclick="closeTags()">✕</button>
+      </div>
+      <div class="modal-body" style="padding: 20px;">
+        {% raw %}
+        <div class="tag-item">
+          <div>
+            <div class="tag-code">{{first_name}}</div>
+            <div class="tag-label">Recipient's first name (e.g. Chidi)</div>
+          </div>
+          <button class="copy-btn" onclick="copyTag(event, '{{first_name}}')">Copy</button>
         </div>
-    </div>
-
-    <!-- TEMPLATE PICKER MODAL -->
-    <div id="template-modal" class="modal-overlay hidden">
-        <div class="modal-box">
-            <div class="modal-header">
-                <div>
-                    <h2>Choose a Template</h2>
-                    <p>Pick a starting point. You can customise everything after selecting.</p>
-                </div>
-                <button class="modal-close" onclick="closeTemplates()">✕</button>
-            </div>
-            <div class="modal-body">
-                <div class="template-grid" id="template-grid"></div>
-            </div>
-            <div class="modal-footer">
-                <button class="btn btn-gray" onclick="closeTemplates()">Cancel</button>
-                <button class="btn" onclick="applyTemplate()">Use Selected Template →</button>
-            </div>
+        <div class="tag-item" style="margin-top: 10px;">
+          <div>
+            <div class="tag-code">{{last_name}}</div>
+            <div class="tag-label">Recipient's last name (e.g. Okeke)</div>
+          </div>
+          <button class="copy-btn" onclick="copyTag(event, '{{last_name}}')">Copy</button>
         </div>
+        <div class="tag-item" style="margin-top: 10px;">
+          <div>
+            <div class="tag-code">{{full_name}}</div>
+            <div class="tag-label">The full name found in the database.</div>
+          </div>
+          <button class="copy-btn" onclick="copyTag(event, '{{full_name}}')">Copy</button>
+        </div>
+        <div class="tag-item" style="margin-top: 10px;">
+          <div>
+            <div class="tag-code">{{email}}</div>
+            <div class="tag-label">Recipient's email address</div>
+          </div>
+          <button class="copy-btn" onclick="copyTag(event, '{{email}}')">Copy</button>
+        </div>
+        <div class="tag-item" style="margin-top: 10px;">
+          <div>
+            <div class="tag-code">{{phone}}</div>
+            <div class="tag-label">Recipient's phone number</div>
+          </div>
+          <button class="copy-btn" onclick="copyTag(event, '{{phone}}')">Copy</button>
+        </div>
+        <div class="tag-item" style="margin-top: 10px; border-top: 1px solid #333; padding-top: 15px;">
+          <div>
+            <div class="tag-code">{{unsubscribe_url}}</div>
+            <div class="tag-label">Mandatory link for recipients to opt-out.</div>
+          </div>
+          <button class="copy-btn" onclick="copyTag(event, '{{unsubscribe_url}}')">Copy</button>
+        </div>
+
+        <div style="margin-top: 25px; margin-bottom: 15px; border-bottom: 1px solid #C47D0A; padding-bottom: 5px;">
+          <span style="color: #C47D0A; font-weight: 800; font-size: 0.75rem; text-transform: uppercase;">💰 Financial
+            Intelligence</span>
+        </div>
+
+        <div class="tag-item">
+          <div>
+            <div class="tag-code">{{outstanding}}</div>
+            <div class="tag-label">Current balance due (e.g. ₦500,000.00)</div>
+          </div>
+          <button class="copy-btn" onclick="copyTag(event, '{{outstanding}}')">Copy</button>
+        </div>
+        <div class="tag-item" style="margin-top: 10px;">
+          <div>
+            <div class="tag-code">{{property_name}}</div>
+            <div class="tag-label">Name of their estate (e.g. Coinfield Estate)</div>
+          </div>
+          <button class="copy-btn" onclick="copyTag(event, '{{property_name}}')">Copy</button>
+        </div>
+        <div class="tag-item" style="margin-top: 10px;">
+          <div>
+            <div class="tag-code">{{amount_paid}}</div>
+            <div class="tag-label">Total amount they've paid so far.</div>
+          </div>
+          <button class="copy-btn" onclick="copyTag(event, '{{amount_paid}}')">Copy</button>
+        </div>
+        <div class="tag-item" style="margin-top: 10px;">
+          <div>
+            <div class="tag-code">{{due_date}}</div>
+            <div class="tag-label">Their next payment deadline.</div>
+          </div>
+          <button class="copy-btn" onclick="copyTag(event, '{{due_date}}')">Copy</button>
+        </div>
+        {% endraw %}
+      </div>
     </div>
+    <div class="modal-footer">
+      <button class="btn btn-gray" onclick="closeTags()">Done</button>
+    </div>
+  </div>
+  </div>
 
-    <script>
-        const campaignId = new URLSearchParams(window.location.search).get('id');
-        const LOGO_URL = window.location.origin + '/static/img/logo_dark.svg';
+  </div>
+  </div>
 
-        // ═══════════════════════════════════════
-        // LOCKED HEADER & FOOTER HTML
-        // ═══════════════════════════════════════
-        const LOCKED_HEADER = `
+  <!-- PROPERTY PICKER MODAL -->
+  <div id="property-modal" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width: 800px;">
+      <div class="modal-header">
+        <div>
+          <h2>Insert Property Card</h2>
+          <p>Select an active estate to insert into your email.</p>
+        </div>
+        <button class="modal-close" onclick="closePropertyPicker()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div id="property-grid" class="grid grid-cols-1 md:grid-cols-2 gap-4">
+          <!-- Loaded via JS -->
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-gray" onclick="closePropertyPicker()">Cancel</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- TEMPLATE PICKER MODAL -->
+  <div id="template-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <h2>Choose a Template</h2>
+          <p>Pick a starting point. You can customise everything after selecting.</p>
+        </div>
+        <button class="modal-close" onclick="closeTemplates()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="template-grid" id="template-grid"></div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-gray" onclick="closeTemplates()">Cancel</button>
+        <button class="btn" onclick="applyTemplate()">Use Selected Template →</button>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const campaignId = new URLSearchParams(window.location.search).get('id');
+    const LOGO_URL = window.location.origin + '/static/img/logo_dark.svg';
+
+    // ═══════════════════════════════════════
+    // LOCKED HEADER & FOOTER HTML
+    // ═══════════════════════════════════════
+    const LOCKED_HEADER = `
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#1A1A1A; border-bottom: 3px solid #C47D0A;">
             <tr><td style="padding: 20px 30px; text-align: center;">
               <img src="${LOGO_URL}" alt="Eximp &amp; Cloves" style="height:50px; max-width:200px;" />
@@ -334,7 +566,7 @@
             </td></tr>
           </table>`;
 
-        const LOCKED_FOOTER = `
+    const LOCKED_FOOTER = `
           <table width="100%" cellpadding="0" cellspacing="0" style="background:#1A1A1A; margin-top:20px;">
             <tr><td style="padding: 30px; text-align: center; border-top: 1px solid #333;">
               <img src="${LOGO_URL}" alt="Eximp &amp; Cloves" style="height:36px; margin-bottom:16px;" />
@@ -357,17 +589,17 @@
             </td></tr>
           </table>`;
 
-        // ═══════════════════════════════════════
-        // EMAIL TEMPLATES
-        // ═══════════════════════════════════════
-        const TEMPLATES = [
-          {
-            id: 'coinfield-launch',
-            name: 'Coinfield Estate Launch',
-            desc: 'Promote our flagship Epe estate',
-            icon: '🏝️',
-            bg: 'linear-gradient(135deg, #1A1A1A 0%, #2a1a00 100%)',
-            html: `${LOCKED_HEADER}
+    // ═══════════════════════════════════════
+    // EMAIL TEMPLATES
+    // ═══════════════════════════════════════
+    const TEMPLATES = [
+      {
+        id: 'coinfield-launch',
+        name: 'Coinfield Estate Launch',
+        desc: 'Promote our flagship Epe estate',
+        icon: '🏝️',
+        bg: 'linear-gradient(135deg, #1A1A1A 0%, #2a1a00 100%)',
+        html: `${LOCKED_HEADER}
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr><td style="background:#1A1A1A; padding:60px 30px; text-align:center;">
                   <div style="color:#C47D0A;font-family:'Inter',sans-serif;font-size:12px;letter-spacing:3px;text-transform:uppercase;margin-bottom:16px;">FEATURED INVESTMENT</div>
@@ -406,14 +638,14 @@
                 </td></tr>
               </table>
               ${LOCKED_FOOTER}`
-          },
-          {
-            id: 'northstar-promo',
-            name: 'Northstar Promo',
-            desc: 'Limited-time offer for Abuja investors',
-            icon: '✨',
-            bg: 'linear-gradient(135deg, #001a33 0%, #1A1A1A 100%)',
-            html: `${LOCKED_HEADER}
+      },
+      {
+        id: 'northstar-promo',
+        name: 'Northstar Promo',
+        desc: 'Limited-time offer for Abuja investors',
+        icon: '✨',
+        bg: 'linear-gradient(135deg, #001a33 0%, #1A1A1A 100%)',
+        html: `${LOCKED_HEADER}
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr><td style="background:#1A1A1A;padding:50px 30px;text-align:center;">
                   <div style="color:#fff;font-family:'Inter',sans-serif;font-size:12px;letter-spacing:3px;text-transform:uppercase;margin-bottom:10px;">EXCLUSIVE OFFER</div>
@@ -436,15 +668,15 @@
                 </td></tr>
               </table>
               ${LOCKED_FOOTER}`
-          },
+      },
 
-          {
-            id: 'payment-reminder',
-            name: 'Payment Reminder',
-            desc: 'Outstanding balance reminder',
-            icon: '💰',
-            bg: 'linear-gradient(135deg, #003366 0%, #1A1A1A 100%)',
-            html: `${LOCKED_HEADER}
+      {
+        id: 'payment-reminder',
+        name: 'Payment Reminder',
+        desc: 'Outstanding balance reminder',
+        icon: '💰',
+        bg: 'linear-gradient(135deg, #003366 0%, #1A1A1A 100%)',
+        html: `${LOCKED_HEADER}
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr><td style="background:#f9f9f9;padding:40px 30px;">
                   <h2 style="color:#1A1A1A;font-family:'Playfair Display',serif;font-size:28px;margin:0 0 6px;">Payment Reminder</h2>
@@ -471,14 +703,14 @@
                 </td></tr>
               </table>
               ${LOCKED_FOOTER}`
-          },
-          {
-            id: 'investment-update',
-            name: 'Eximp & Cloves Update',
-            desc: 'Monthly investment & estate news',
-            icon: '📰',
-            bg: 'linear-gradient(135deg, #1a1a2e 0%, #1A1A1A 100%)',
-            html: `${LOCKED_HEADER}
+      },
+      {
+        id: 'investment-update',
+        name: 'Eximp & Cloves Update',
+        desc: 'Monthly investment & estate news',
+        icon: '📰',
+        bg: 'linear-gradient(135deg, #1a1a2e 0%, #1A1A1A 100%)',
+        html: `${LOCKED_HEADER}
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr><td style="background:#1A1A1A;padding:40px 30px;text-align:center;border-bottom:1px solid #2a2a2a;">
                   <div style="color:#C47D0A;font-family:'Inter',sans-serif;font-size:11px;letter-spacing:3px;text-transform:uppercase;">REAL ESTATE INSIGHTS</div>
@@ -498,14 +730,14 @@
                 </td></tr>
               </table>
               ${LOCKED_FOOTER}`
-          },
-          {
-            id: 'brand-welcome',
-            name: 'Welcome to Eximp',
-            desc: 'Onboarding for new leads',
-            icon: '🤝',
-            bg: 'linear-gradient(135deg, #004d1a 0%, #1A1A1A 100%)',
-            html: `${LOCKED_HEADER}
+      },
+      {
+        id: 'brand-welcome',
+        name: 'Welcome to Eximp',
+        desc: 'Onboarding for new leads',
+        icon: '🤝',
+        bg: 'linear-gradient(135deg, #004d1a 0%, #1A1A1A 100%)',
+        html: `${LOCKED_HEADER}
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr><td style="background:#1A1A1A;padding:50px 30px;text-align:center;">
                   <div style="font-size:48px;margin-bottom:16px;">🤝</div>
@@ -533,14 +765,14 @@
                 </td></tr>
               </table>
               ${LOCKED_FOOTER}`
-          },
-          {
-            id: 're-engagement',
-            name: 'Reconnect',
-            desc: 'Win back dormant contacts',
-            icon: '💌',
-            bg: 'linear-gradient(135deg, #4a0033 0%, #1A1A1A 100%)',
-            html: `${LOCKED_HEADER}
+      },
+      {
+        id: 're-engagement',
+        name: 'Reconnect',
+        desc: 'Win back dormant contacts',
+        icon: '💌',
+        bg: 'linear-gradient(135deg, #4a0033 0%, #1A1A1A 100%)',
+        html: `${LOCKED_HEADER}
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr><td style="background:#1A1A1A;padding:50px 30px;text-align:center;">
                   <div style="font-size:48px;margin-bottom:16px;">💌</div>
@@ -560,14 +792,14 @@
                 </td></tr>
               </table>
               ${LOCKED_FOOTER}`
-          },
-          {
-            id: 'site-inspection',
-            name: 'Inspection Invite',
-            desc: 'Site inspection or open day',
-            icon: '🚌',
-            bg: 'linear-gradient(135deg, #003344 0%, #1A1A1A 100%)',
-            html: `${LOCKED_HEADER}
+      },
+      {
+        id: 'site-inspection',
+        name: 'Inspection Invite',
+        desc: 'Site inspection or open day',
+        icon: '🚌',
+        bg: 'linear-gradient(135deg, #003344 0%, #1A1A1A 100%)',
+        html: `${LOCKED_HEADER}
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr><td style="background:#1A1A1A;padding:50px 30px;text-align:center;">
                   <div style="color:#C47D0A;font-family:'Inter',sans-serif;font-size:11px;letter-spacing:3px;text-transform:uppercase;margin-bottom:12px;">JOIN US THIS WEEKEND</div>
@@ -601,14 +833,14 @@
                 </td></tr>
               </table>
               ${LOCKED_FOOTER}`
-          },
-          {
-            id: 'new-month-message',
-            name: 'New Month Greeting',
-            desc: 'Inspirational start-of-month touchpoint',
-            icon: '🗓️',
-            bg: 'linear-gradient(135deg, #1A1A1A 0%, #C47D0A 100%)',
-            html: `${LOCKED_HEADER}
+      },
+      {
+        id: 'new-month-message',
+        name: 'New Month Greeting',
+        desc: 'Inspirational start-of-month touchpoint',
+        icon: '🗓️',
+        bg: 'linear-gradient(135deg, #1A1A1A 0%, #C47D0A 100%)',
+        html: `${LOCKED_HEADER}
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr><td style="background:#1A1A1A;padding:50px 30px;text-align:center;">
                   <h1 style="color:#ffffff;font-family:'Playfair Display',serif;font-size:42px;margin:0 0 16px;">Happy New Month! 🎉</h1>
@@ -623,14 +855,14 @@
                 </td></tr>
               </table>
               ${LOCKED_FOOTER}`
-          },
-          {
-            id: 'monday-motivation-brand',
-            name: 'Monday Motivation',
-            desc: 'Powerful weekly quote & focus',
-            icon: '💪',
-            bg: '#1A1A1A',
-            html: `${LOCKED_HEADER}
+      },
+      {
+        id: 'monday-motivation-brand',
+        name: 'Monday Motivation',
+        desc: 'Powerful weekly quote & focus',
+        icon: '💪',
+        bg: '#1A1A1A',
+        html: `${LOCKED_HEADER}
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr><td style="background:#1A1A1A;padding:50px 30px;text-align:center;">
                   <div style="color:#C47D0A;font-family:'Inter',sans-serif;font-size:12px;letter-spacing:3px;text-transform:uppercase;margin-bottom:10px;">MONDAY MOTIVATION</div>
@@ -644,14 +876,14 @@
                 </td></tr>
               </table>
               ${LOCKED_FOOTER}`
-          },
-          {
-            id: 'festive-seasonal',
-            name: 'Special Occasions',
-            desc: 'Eid, Christmas, Mothers/Fathers Day',
-            icon: '🎊',
-            bg: '#C47D0A',
-            html: `${LOCKED_HEADER}
+      },
+      {
+        id: 'festive-seasonal',
+        name: 'Special Occasions',
+        desc: 'Eid, Christmas, Mothers/Fathers Day',
+        icon: '🎊',
+        bg: '#C47D0A',
+        html: `${LOCKED_HEADER}
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr><td style="background:linear-gradient(180deg,#1A1A1A 0%,#2a1a00 100%);padding:60px 30px;text-align:center;">
                   <h1 style="color:#ffffff;font-family:'Playfair Display',serif;font-size:40px;margin:0 0 16px;">Happy {{occasion}}! 🎊</h1>
@@ -669,84 +901,87 @@
                 </td></tr>
               </table>
               ${LOCKED_FOOTER}`
-          },
+      },
 
-          {
-            id: 'blank',
-            name: 'Blank Canvas',
-            desc: 'Start from scratch',
-            icon: '✏️',
-            bg: '#252525',
-            html: `${LOCKED_HEADER}
+      {
+        id: 'blank',
+        name: 'Blank Canvas',
+        desc: 'Start from scratch',
+        icon: '✏️',
+        bg: '#252525',
+        html: `${LOCKED_HEADER}
               <table width="100%" cellpadding="0" cellspacing="0">
                 <tr><td style="background:#ffffff;padding:60px 30px;text-align:center;min-height:200px;">
                   <p style="color:#ccc;font-family:'Inter',sans-serif;font-size:14px;">Your content goes here. Delete this and start designing.</p>
                 </td></tr>
               </table>
               ${LOCKED_FOOTER}`
-          }
-        ];
+      }
+    ];
 
-        // ═══════════════════════════════════════
-        // EDITOR INIT
-        // ═══════════════════════════════════════
-        const editor = grapesjs.init({
-            container: '#gjs',
-            fromElement: false,
-            storageManager: false,
-            assetManager: {
-                embedAsBase64: true, // Forces uploaded images to be safely bundled in the HTML
-            },
-            plugins: ['gjs-preset-newsletter'],
-            pluginsOpts: {
-                'gjs-preset-newsletter': { modalTitleImport: 'Import HTML' }
-            },
-            canvas: {
-                styles: [
-                    'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;500;700&display=swap'
-                ]
-            }
-        });
+    // ═══════════════════════════════════════
+    // EDITOR INIT
+    // ═══════════════════════════════════════
+    const editor = grapesjs.init({
+      container: '#gjs',
+      fromElement: false,
+      storageManager: false,
+      assetManager: {
+        upload: '/api/marketing/media/upload',
+        uploadName: 'file',
+        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('ec_token') },
+        embedAsBase64: false, // Forces cloud-hosted links for better email delivery
+      },
+      plugins: ['gjs-preset-newsletter'],
+      pluginsOpts: {
+        'gjs-preset-newsletter': { modalTitleImport: 'Import HTML' }
+      },
+      canvas: {
+        styles: [
+          'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;500;700&display=swap'
+        ]
+      }
+    });
 
-        // ── CUSTOM BLOCKS ──
-        const bm = editor.BlockManager;
+    // ── CUSTOM BLOCKS ──
+    const bm = editor.BlockManager;
 
-        bm.add('ec-header', {
-            label: '🔒 Brand Header',
-            category: 'Eximp & Cloves',
-            content: LOCKED_HEADER,
-            attributes: { class: 'fa fa-header' }
-        });
+    bm.add('ec-header', {
+      label: '🔒 Brand Header',
+      category: 'Eximp & Cloves',
+      content: LOCKED_HEADER,
+      attributes: { class: 'fa fa-header' }
+    });
 
-        bm.add('ec-hero', {
-            label: 'Hero Section',
-            category: 'Eximp & Cloves',
-            content: `<div style="background:#1A1A1A;padding:60px 20px;text-align:center;color:#fff;">
+    bm.add('ec-hero', {
+      label: 'Hero Section',
+      category: 'Eximp & Cloves',
+      content: `<div style="background:#1A1A1A;padding:60px 20px;text-align:center;color:#fff;">
               <h1 style="font-family:'Playfair Display',serif;font-size:38px;margin:0 0 16px;color:#C47D0A;">Your Headline Here</h1>
               <p style="font-family:'Inter',sans-serif;font-size:16px;color:#ccc;max-width:480px;margin:0 auto 28px;line-height:1.7;">Your supporting message goes here. Keep it punchy and focused.</p>
               <a href="#" style="background:#C47D0A;color:#fff;padding:14px 36px;text-decoration:none;font-weight:700;font-family:'Inter',sans-serif;border-radius:4px;display:inline-block;">Call To Action</a>
             </div>`
-        });
+    });
 
-        bm.add('ec-property-card', {
-            label: '🏠 Smart Property',
-            category: 'Eximp & Cloves',
-            content: { type: 'property-card-trigger' },
-            attributes: { class: 'fa fa-home' }
-        });
+    bm.add('ec-property-card', {
+      label: '🏠 Smart Property',
+      category: 'Eximp & Cloves',
+      content: { type: 'property-card-trigger' },
+      attributes: { class: 'fa fa-home' }
+    });
 
-        bm.add('ec-cta-button', {
-            label: 'Gold CTA Button',
-            category: 'Eximp & Cloves',
-            content: `<div style="text-align:center;padding:20px;">
+    bm.add('ec-cta-button', {
+      label: 'Gold CTA Button',
+      category: 'Eximp & Cloves',
+      content: `<div style="text-align:center;padding:20px;">
               <a href="#" style="background:#C47D0A;color:#fff;padding:15px 40px;text-decoration:none;font-weight:700;font-size:15px;font-family:'Inter',sans-serif;border-radius:4px;display:inline-block;">Book a Consultation</a>
             </div>`
-        });
+    });
 
-        bm.add('ec-account-summary', {
-            label: 'Account Summary',
-            category: 'Eximp & Cloves',
-            content: `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;font-family:'Inter',sans-serif;">
+    bm.add('ec-account-summary', {
+      label: 'Account Summary',
+      category: 'Eximp & Cloves',
+      content: `<table width="100%" cellpadding="0" cellspacing="0" style="border:1px solid #e2e8f0;border-radius:8px;overflow:hidden;font-family:'Inter',sans-serif;">
               <tr><td colspan="2" style="background:#1A1A1A;padding:14px 20px;"><span style="color:#C47D0A;font-weight:700;font-size:13px;letter-spacing:1px;text-transform:uppercase;">Account Summary</span></td></tr>
               <tr><td style="padding:14px 20px;color:#666;font-size:14px;border-bottom:1px solid #f1f5f9;">Client Name</td><td style="padding:14px 20px;color:#333;font-weight:600;font-size:14px;border-bottom:1px solid #f1f5f9;">{{first_name}} {{last_name}}</td></tr>
               <tr><td style="padding:14px 20px;color:#666;font-size:14px;border-bottom:1px solid #f1f5f9;">Property</td><td style="padding:14px 20px;color:#333;font-weight:600;font-size:14px;border-bottom:1px solid #f1f5f9;">{{property_name}}</td></tr>
@@ -754,12 +989,12 @@
               <tr><td style="padding:14px 20px;color:#666;font-size:14px;border-bottom:1px solid #f1f5f9;">Amount Paid</td><td style="padding:14px 20px;color:#2ecc71;font-weight:600;font-size:14px;border-bottom:1px solid #f1f5f9;">{{amount_paid}}</td></tr>
               <tr><td style="padding:16px 20px;color:#e74c3c;font-weight:700;font-size:15px;">Balance Due</td><td style="padding:16px 20px;color:#e74c3c;font-weight:700;font-size:20px;">{{outstanding}}</td></tr>
             </table>`
-        });
+    });
 
-        bm.add('ec-social-links', {
-            label: 'Social Links',
-            category: 'Eximp & Cloves',
-            content: `<div style="padding:24px;text-align:center;background:#f9f9f9;font-family:'Inter',sans-serif;">
+    bm.add('ec-social-links', {
+      label: 'Social Links',
+      category: 'Eximp & Cloves',
+      content: `<div style="padding:24px;text-align:center;background:#f9f9f9;font-family:'Inter',sans-serif;">
               <p style="font-size:12px;color:#888;margin:0 0 14px;">Connect with us</p>
               <a href="https://www.linkedin.com/company/eximp-cloves" style="color:#C47D0A;text-decoration:none;font-weight:600;font-size:13px;margin:0 10px;">LinkedIn</a>
               <a href="https://x.com/eximp_cloves" style="color:#C47D0A;text-decoration:none;font-weight:600;font-size:13px;margin:0 10px;">X</a>
@@ -767,65 +1002,65 @@
               <a href="https://facebook.com/eximp.cloves" style="color:#C47D0A;text-decoration:none;font-weight:600;font-size:13px;margin:0 10px;">Facebook</a>
               <a href="https://tiktok.com/@eximp.cloves" style="color:#C47D0A;text-decoration:none;font-weight:600;font-size:13px;margin:0 10px;">TikTok</a>
             </div>`
-        });
+    });
 
-        bm.add('ec-footer', {
-            label: '🔒 Brand Footer',
-            category: 'Eximp & Cloves',
-            content: LOCKED_FOOTER
-        });
+    bm.add('ec-footer', {
+      label: '🔒 Brand Footer',
+      category: 'Eximp & Cloves',
+      content: LOCKED_FOOTER
+    });
 
-        // ═══════════════════════════════════════
-        // TEMPLATE PICKER LOGIC
-        // ═══════════════════════════════════════
-        function openTemplates() { document.getElementById('template-modal').classList.remove('hidden'); }
-        function closeTemplates() { document.getElementById('template-modal').classList.add('hidden'); }
-        
-        function openTags() { document.getElementById('tags-modal').classList.remove('hidden'); }
-        function closeTags() { document.getElementById('tags-modal').classList.add('hidden'); }
+    // ═══════════════════════════════════════
+    // TEMPLATE PICKER LOGIC
+    // ═══════════════════════════════════════
+    function openTemplates() { document.getElementById('template-modal').classList.remove('hidden'); }
+    function closeTemplates() { document.getElementById('template-modal').classList.add('hidden'); }
 
-        function copyTag(event, text) {
-            const btn = event.currentTarget || event.target;
-            
-            // Modern Clipboard API (Secure Context only)
-            if (navigator.clipboard && window.isSecureContext) {
-                navigator.clipboard.writeText(text);
-                showSuccess(btn);
-            } else {
-                // Fallback for non-secure contexts (HTTP)
-                try {
-                    const textArea = document.createElement("textarea");
-                    textArea.value = text;
-                    textArea.style.position = "fixed";
-                    textArea.style.left = "-9999px";
-                    textArea.style.top = "0";
-                    document.body.appendChild(textArea);
-                    textArea.focus();
-                    textArea.select();
-                    document.execCommand('copy');
-                    document.body.removeChild(textArea);
-                    showSuccess(btn);
-                } catch (err) {
-                    console.error('Fallback copy failed', err);
-                }
-            }
+    function openTags() { document.getElementById('tags-modal').classList.remove('hidden'); }
+    function closeTags() { document.getElementById('tags-modal').classList.add('hidden'); }
 
-            function showSuccess(el) {
-                const originalText = el.innerText;
-                el.innerText = 'Copied!';
-                el.style.background = '#C47D0A';
-                el.style.color = 'white';
-                setTimeout(() => {
-                    el.innerText = originalText;
-                    el.style.background = '#333';
-                    el.style.color = '#C47D0A';
-                }, 1500);
-            }
+    function copyTag(event, text) {
+      const btn = event.currentTarget || event.target;
+
+      // Modern Clipboard API (Secure Context only)
+      if (navigator.clipboard && window.isSecureContext) {
+        navigator.clipboard.writeText(text);
+        showSuccess(btn);
+      } else {
+        // Fallback for non-secure contexts (HTTP)
+        try {
+          const textArea = document.createElement("textarea");
+          textArea.value = text;
+          textArea.style.position = "fixed";
+          textArea.style.left = "-9999px";
+          textArea.style.top = "0";
+          document.body.appendChild(textArea);
+          textArea.focus();
+          textArea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textArea);
+          showSuccess(btn);
+        } catch (err) {
+          console.error('Fallback copy failed', err);
         }
+      }
 
-        function renderTemplates() {
-            const grid = document.getElementById('template-grid');
-            grid.innerHTML = TEMPLATES.map(t => `
+      function showSuccess(el) {
+        const originalText = el.innerText;
+        el.innerText = 'Copied!';
+        el.style.background = '#C47D0A';
+        el.style.color = 'white';
+        setTimeout(() => {
+          el.innerText = originalText;
+          el.style.background = '#333';
+          el.style.color = '#C47D0A';
+        }, 1500);
+      }
+    }
+
+    function renderTemplates() {
+      const grid = document.getElementById('template-grid');
+      grid.innerHTML = TEMPLATES.map(t => `
                 <div class="template-card" id="tc-${t.id}" onclick="selectTemplate('${t.id}')">
                   <div class="template-preview" style="background:${t.bg};">
                     <div class="template-preview-bar"></div>
@@ -837,50 +1072,50 @@
                   </div>
                 </div>
             `).join('');
-        }
+    }
 
-        function selectTemplate(id) {
-            selectedTemplateId = id;
-            document.querySelectorAll('.template-card').forEach(c => c.classList.remove('selected'));
-            document.getElementById('tc-' + id).classList.add('selected');
-        }
+    function selectTemplate(id) {
+      selectedTemplateId = id;
+      document.querySelectorAll('.template-card').forEach(c => c.classList.remove('selected'));
+      document.getElementById('tc-' + id).classList.add('selected');
+    }
 
-        function applyTemplate() {
-            if (!selectedTemplateId) { alert('Please select a template first.'); return; }
-            const tmpl = TEMPLATES.find(t => t.id === selectedTemplateId);
-            if (!tmpl) return;
-            editor.setComponents(tmpl.html);
-            closeTemplates();
-            selectedTemplateId = null;
-            
-            const saveBtn = document.getElementById('save-campaign');
-            if(saveBtn) saveBtn.click();
-        }
+    function applyTemplate() {
+      if (!selectedTemplateId) { alert('Please select a template first.'); return; }
+      const tmpl = TEMPLATES.find(t => t.id === selectedTemplateId);
+      if (!tmpl) return;
+      editor.setComponents(tmpl.html);
+      closeTemplates();
+      selectedTemplateId = null;
 
-        // ═══════════════════════════════════════
-        // PROPERTY PICKER LOGIC
-        // ═══════════════════════════════════════
-        function openPropertyPicker() {
-            document.getElementById('property-modal').classList.remove('hidden');
-            loadPropertiesForPicker();
-        }
+      const saveBtn = document.getElementById('save-campaign');
+      if (saveBtn) saveBtn.click();
+    }
 
-        function closePropertyPicker() {
-            document.getElementById('property-modal').classList.add('hidden');
-        }
+    // ═══════════════════════════════════════
+    // PROPERTY PICKER LOGIC
+    // ═══════════════════════════════════════
+    function openPropertyPicker() {
+      document.getElementById('property-modal').classList.remove('hidden');
+      loadPropertiesForPicker();
+    }
 
-        async function loadPropertiesForPicker() {
-            const grid = document.getElementById('property-grid');
-            grid.innerHTML = '<p class="text-gray-400">Loading estates...</p>';
-            
-            try {
-                const token = localStorage.getItem('ec_token');
-                const res = await fetch('/api/properties', {
-                    headers: { 'Authorization': 'Bearer ' + token }
-                });
-                const props = await res.json();
-                
-                grid.innerHTML = props.map(p => `
+    function closePropertyPicker() {
+      document.getElementById('property-modal').classList.add('hidden');
+    }
+
+    async function loadPropertiesForPicker() {
+      const grid = document.getElementById('property-grid');
+      grid.innerHTML = '<p class="text-gray-400">Loading estates...</p>';
+
+      try {
+        const token = localStorage.getItem('ec_token');
+        const res = await fetch('/api/properties', {
+          headers: { 'Authorization': 'Bearer ' + token }
+        });
+        const props = await res.json();
+
+        grid.innerHTML = props.map(p => `
                     <div class="p-4 bg-[#222] border border-[#333] rounded-lg hover:border-brand-gold transition cursor-pointer flex flex-col gap-2" onclick="insertPropertyCard(${JSON.stringify(p).replace(/"/g, '&quot;')})">
                         <div class="text-brand-gold font-bold">${p.name}</div>
                         <div class="text-xs text-gray-400">${p.location}</div>
@@ -888,17 +1123,17 @@
                         <div class="mt-2 text-[10px] text-gray-500 uppercase font-black">Click to Insert →</div>
                     </div>
                 `).join('');
-            } catch (e) {
-                grid.innerHTML = '<p class="text-red-500">Error loading properties.</p>';
-            }
-        }
+      } catch (e) {
+        grid.innerHTML = '<p class="text-red-500">Error loading properties.</p>';
+      }
+    }
 
-        function insertPropertyCard(p) {
-            const formatter = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' });
-            const price = formatter.format(p.starting_price);
-            
-            // Generate clean HTML for the card
-            const html = `
+    function insertPropertyCard(p) {
+      const formatter = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' });
+      const price = formatter.format(p.starting_price);
+
+      // Generate clean HTML for the card
+      const html = `
                 <table width="100%" cellpadding="0" cellspacing="0" style="border:1.5px solid #eee; border-radius:12px; overflow:hidden; font-family:'Inter', sans-serif; margin-bottom:24px;">
                     <tr><td>
                         <img src="https://images.unsplash.com/photo-1580587771525-78b9dba3b914?auto=format&fit=crop&w=800&q=80" width="100%" style="display:block; border:none;" alt="${p.name}" />
@@ -927,129 +1162,130 @@
                     </td></tr>
                 </table>
             `;
-            
-            editor.addComponents(html);
-            closePropertyPicker();
-        }
 
-        // Register custom component to handle the click
-        editor.DomComponents.addType('property-card-trigger', {
-            model: {
-                defaults: {
-                    tagName: 'div',
-                    attributes: { style: 'padding: 20px; border: 2px dashed #C47D0A; text-align: center; color: #C47D0A; cursor: pointer;' },
-                    content: '🏠 Click here to pick a property from your database'
-                }
-            },
-            view: {
-                events: {
-                    click: 'onPickerClick'
-                },
-                onPickerClick() {
-                    openPropertyPicker();
-                }
-            }
+      editor.addComponents(html);
+      closePropertyPicker();
+    }
+
+    // Register custom component to handle the click
+    editor.DomComponents.addType('property-card-trigger', {
+      model: {
+        defaults: {
+          tagName: 'div',
+          attributes: { style: 'padding: 20px; border: 2px dashed #C47D0A; text-align: center; color: #C47D0A; cursor: pointer;' },
+          content: '🏠 Click here to pick a property from your database'
+        }
+      },
+      view: {
+        events: {
+          click: 'onPickerClick'
+        },
+        onPickerClick() {
+          openPropertyPicker();
+        }
+      }
+    });
+
+    async function loadCampaign() {
+      const token = localStorage.getItem('ec_token');
+
+      if (!campaignId) {
+        renderTemplates(); openTemplates();
+        return;
+      }
+
+      try {
+        const res = await fetch(`/api/marketing/campaigns/${campaignId}`, {
+          headers: { 'Authorization': 'Bearer ' + token }
         });
 
-        async function loadCampaign() {
-            const token = localStorage.getItem('ec_token');
-            
-            if (!campaignId) { 
-                renderTemplates(); openTemplates(); 
-                return; 
-            }
-            
-            try {
-                const res = await fetch(`/api/marketing/campaigns/${campaignId}`, {
-                    headers: { 'Authorization': 'Bearer ' + token }
-                });
-                
-                const data = await res.json();
-                
-                // Set subject
-                document.getElementById('subject-field').value = data.subject_a || '';
-    
-                // Check if it's a completely new, untouched campaign
-                const content = (data.html_body_a || '').trim();
-                
-                // Very aggressive check for blank/placeholder
-                let isPlaceholder = false;
-                if (!content) isPlaceholder = true;
-                if (content.includes('<h1>Start Designing!</h1>')) isPlaceholder = true;
-                if (content.length < 50) isPlaceholder = true; // No valid campaign is under 50 chars
-                
-                if (!isPlaceholder) {
-                    // Instantly close the picker so the UI is immediately clean
-                    closeTemplates();
-                    
-                    // Safely load components to prevent JS halting on syntax errors
-                    try {
-                        // NOTE: For full HTML strings, grapesjs prefers extracting the body.
-                        // We will let grapesjs parse it cleanly.
-                        editor.setComponents(data.html_body_a);
-                    } catch (e) {
-                        console.error("GrapesJS failed to parse HTML:", e);
-                    }
-                } else {
-                    renderTemplates();
-                    openTemplates();
-                }
-            } catch (e) {
-                console.error("Campaign API Fetch crash:", e);
-            }
+        const data = await res.json();
+
+        // Set subject
+        document.getElementById('subject-field').value = data.subject_a || '';
+
+        // Check if it's a completely new, untouched campaign
+        const content = (data.html_body_a || '').trim();
+
+        // Very aggressive check for blank/placeholder
+        let isPlaceholder = false;
+        if (!content) isPlaceholder = true;
+        if (content.includes('<h1>Start Designing!</h1>')) isPlaceholder = true;
+        if (content.length < 50) isPlaceholder = true; // No valid campaign is under 50 chars
+
+        if (!isPlaceholder) {
+          // Instantly close the picker so the UI is immediately clean
+          closeTemplates();
+
+          // Safely load components to prevent JS halting on syntax errors
+          try {
+            // NOTE: For full HTML strings, grapesjs prefers extracting the body.
+            // We will let grapesjs parse it cleanly.
+            editor.setComponents(data.html_body_a);
+          } catch (e) {
+            console.error("GrapesJS failed to parse HTML:", e);
+          }
+        } else {
+          renderTemplates();
+          openTemplates();
         }
+      } catch (e) {
+        console.error("Campaign API Fetch crash:", e);
+      }
+    }
 
-        document.getElementById('save-campaign').onclick = async () => {
-            const statusLabel = document.getElementById('save-status');
-            statusLabel.innerText = '💾 Saving...';
-            
-            // Use core getHtml/getCss for maximum reliability
-            const html = editor.getHtml();
-            const css = editor.getCss();
-            const fullHtml = `<html><head><style>${css}</style></head><body>${html}</body></html>`;
-            
-            const payload = {
-                html_body_a: fullHtml,
-                subject_a: document.getElementById('subject-field').value
-            };
-            
-            const res = await fetch(`/api/marketing/campaigns/${campaignId}`, {
-                method: 'PUT',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('ec_token') },
-                body: JSON.stringify(payload)
-            });
-            
-            if (res.ok) {
-                statusLabel.innerText = '✅ Saved';
-                setTimeout(() => { statusLabel.innerText = ''; }, 3000);
-            } else {
-                statusLabel.innerText = '❌ Error saving';
-                console.error("Save failure:", await res.text());
-            }
-        };
+    document.getElementById('save-campaign').onclick = async () => {
+      const statusLabel = document.getElementById('save-status');
+      statusLabel.innerText = '💾 Saving...';
 
-        document.getElementById('send-test').onclick = async () => {
-            const email = prompt('Enter an email address to send the test to:');
-            if (!email) return;
-            
-            const html = editor.getHtml();
-            const css = editor.getCss();
-            const fullHtml = `<html><head><style>${css}</style></head><body>${html}</body></html>`;
-            const subject = document.getElementById('subject-field').value;
-            
-            await fetch(`/api/marketing/campaigns/${campaignId}/send-test`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('ec_token') },
-                body: JSON.stringify({ 
-                    email: email,
-                    html_body_a: fullHtml,
-                    subject_a: subject
-                })
-            });
-            alert(`✅ Test email sent to ${email}`);
-        };
+      // Use core getHtml/getCss for maximum reliability
+      const html = editor.getHtml();
+      const css = editor.getCss();
+      const fullHtml = `<html><head><style>${css}</style></head><body>${html}</body></html>`;
 
-        loadCampaign();
-    </script>
+      const payload = {
+        html_body_a: fullHtml,
+        subject_a: document.getElementById('subject-field').value
+      };
+
+      const res = await fetch(`/api/marketing/campaigns/${campaignId}`, {
+        method: 'PUT',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('ec_token') },
+        body: JSON.stringify(payload)
+      });
+
+      if (res.ok) {
+        statusLabel.innerText = '✅ Saved';
+        setTimeout(() => { statusLabel.innerText = ''; }, 3000);
+      } else {
+        statusLabel.innerText = '❌ Error saving';
+        console.error("Save failure:", await res.text());
+      }
+    };
+
+    document.getElementById('send-test').onclick = async () => {
+      const email = prompt('Enter an email address to send the test to:');
+      if (!email) return;
+
+      const html = editor.getHtml();
+      const css = editor.getCss();
+      const fullHtml = `<html><head><style>${css}</style></head><body>${html}</body></html>`;
+      const subject = document.getElementById('subject-field').value;
+
+      await fetch(`/api/marketing/campaigns/${campaignId}/send-test`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('ec_token') },
+        body: JSON.stringify({
+          email: email,
+          html_body_a: fullHtml,
+          subject_a: subject
+        })
+      });
+      alert(`✅ Test email sent to ${email}`);
+    };
+
+    loadCampaign();
+  </script>
 </body>
+
 </html>

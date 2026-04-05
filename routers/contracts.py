@@ -5,7 +5,7 @@ from database import get_db, SUPABASE_URL
 from models import CompanySignatureUpload, ExtendSigningLink, WitnessSignatureSubmit, ClientContractSignatureSubmit, WitnessRemovalRequest, CustomContractHTMLUpdate, ExecuteContractRequest
 from routers.auth import verify_token, resolve_admin_token, has_any_role
 from routers.analytics import log_activity
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, timezone
 import secrets
 import os
 import base64
@@ -1043,7 +1043,7 @@ async def get_execution_trends(current_admin=Depends(verify_token)):
         if dt:
             session_start[row["id"]] = dt
 
-    now = datetime.utcnow()
+    now = datetime.now(timezone.utc)
     window_start = now - timedelta(weeks=16)
 
     def week_key(dt):
