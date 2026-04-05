@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from database import get_db, SUPABASE_URL
 from models import CompanySignatureUpload, ExtendSigningLink, WitnessSignatureSubmit, ClientContractSignatureSubmit, WitnessRemovalRequest, CustomContractHTMLUpdate, ExecuteContractRequest
-from routers.auth import verify_token, resolve_admin_token
+from routers.auth import verify_token, resolve_admin_token, has_any_role
 from routers.analytics import log_activity
 from datetime import datetime, timedelta
 import secrets
@@ -151,7 +151,7 @@ async def initiate_contract_signing(invoice_id: str, background_tasks: Backgroun
     db = get_db()
     
     # Check role
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
         
     # Check if company signatures are set
@@ -247,7 +247,7 @@ async def get_contract_status(invoice_id: str, current_admin=Depends(verify_toke
 @router.post("/{invoice_id}/extend")
 async def extend_signing_session(invoice_id: str, current_admin=Depends(verify_token)):
     """Extend an active session by 48 hours."""
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
     
     db = get_db()
@@ -298,7 +298,7 @@ async def get_contract_html_draft(invoice_id: str, current_admin=Depends(resolve
 
 @router.post("/session/{invoice_id}")
 async def create_contract_session(invoice_id: str, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     sig_res = get_db().table("company_signatures").select("id, role").eq("is_active", True).execute()
@@ -311,7 +311,7 @@ async def create_contract_session(invoice_id: str, background_tasks: BackgroundT
 
 @router.post("/resend/{invoice_id}")
 async def resend_contract_link(invoice_id: str, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     db = get_db()
@@ -353,7 +353,7 @@ async def resend_contract_link(invoice_id: str, background_tasks: BackgroundTask
 
 @router.post("/execute/{invoice_id}")
 async def execute_final_contract(invoice_id: str, payload: ExecuteContractRequest, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     db = get_db()
@@ -429,7 +429,7 @@ async def execute_final_contract(invoice_id: str, payload: ExecuteContractReques
 
 @router.post("/resend-final/{invoice_id}")
 async def resend_executed_contract(invoice_id: str, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     db = get_db()
@@ -456,7 +456,7 @@ async def resend_executed_contract(invoice_id: str, background_tasks: Background
 @router.get("/{invoice_id}/contract")
 async def get_executed_contract_pdf(invoice_id: str, current_admin=Depends(resolve_admin_token)):
     """Download the final executed contract PDF."""
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     db = get_db()
@@ -479,7 +479,7 @@ async def get_executed_contract_pdf(invoice_id: str, current_admin=Depends(resol
 @router.get("/{invoice_id}/certificate")
 async def get_audit_certificate_pdf(invoice_id: str, current_admin=Depends(resolve_admin_token)):
     """Download the digital audit certificate for an executed contract."""
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     db = get_db()
@@ -555,7 +555,7 @@ async def get_final_contract_pdf(invoice_id: str, token: str | None = None, curr
 
 @router.post("/{invoice_id}/manual-witness")
 async def add_manual_witness(invoice_id: str, data: WitnessSignatureSubmit, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     db = get_db()
@@ -621,7 +621,7 @@ async def add_manual_witness(invoice_id: str, data: WitnessSignatureSubmit, back
 
 @router.post("/{invoice_id}/manual-client")
 async def add_manual_client_signature(invoice_id: str, data: ClientContractSignatureSubmit, current_admin=Depends(verify_token)):
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     db = get_db()
@@ -652,7 +652,7 @@ async def add_manual_client_signature(invoice_id: str, data: ClientContractSigna
 
 @router.post("/{invoice_id}/witness/{witness_id}/remove")
 async def remove_witness_signature(invoice_id: str, witness_id: str, data: WitnessRemovalRequest, current_admin=Depends(verify_token)):
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
     note = data.note.strip()
     if not note:
@@ -707,7 +707,7 @@ async def remove_witness_signature(invoice_id: str, witness_id: str, data: Witne
 
 @router.get("/signatures")
 async def list_company_signatures(current_admin=Depends(verify_token)):
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
     db = get_db()
     res = db.table("company_signatures").select("*").eq("is_active", True).execute()
@@ -715,7 +715,7 @@ async def list_company_signatures(current_admin=Depends(verify_token)):
 
 @router.post("/signatures")
 async def upload_company_signature(data: CompanySignatureUpload, current_admin=Depends(verify_token)):
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
     db = get_db()
     
@@ -798,7 +798,7 @@ async def upload_company_signature(data: CompanySignatureUpload, current_admin=D
 
 @router.delete("/signatures/{role}")
 async def delete_company_signature(role: str, current_admin=Depends(verify_token)):
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
     if role not in ["director", "secretary", "lawyer", "lawyer_seal", "witness"]:
         raise HTTPException(status_code=400, detail="Invalid role")
@@ -819,7 +819,7 @@ async def delete_company_signature(role: str, current_admin=Depends(verify_token
 @router.post("/{invoice_id}/generate")
 async def generate_final_contract(invoice_id: str, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
     db = get_db()
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
         
     # 1. Fetch all signatures
@@ -883,7 +883,7 @@ async def extend_contract_signing(invoice_id: str, background_tasks: BackgroundT
 @router.get("/{invoice_id}/default-html")
 @router.get("/{invoice_id}/custom-html")
 async def get_contract_html(invoice_id: str, current_admin=Depends(verify_token)):
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
         
     db = get_db()
@@ -932,7 +932,7 @@ async def get_contract_html(invoice_id: str, current_admin=Depends(verify_token)
 
 @router.put("/{invoice_id}/custom-html")
 async def update_contract_html(invoice_id: str, payload: CustomContractHTMLUpdate, current_admin=Depends(verify_token)):
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
         
     db = get_db()
@@ -977,7 +977,7 @@ async def update_contract_html(invoice_id: str, payload: CustomContractHTMLUpdat
 @router.get("/summary")
 async def get_legal_summary(current_admin=Depends(verify_token)):
     """Fetch high-level KPIs for the Legal Dashboard."""
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
     
     db = get_db()
@@ -1012,10 +1012,120 @@ async def get_legal_summary(current_admin=Depends(verify_token)):
         "pending_execution": int(pending_execution),
     }
 
+@router.get("/execution-trends")
+async def get_execution_trends(current_admin=Depends(verify_token)):
+    """Fetch weekly execution velocity and pipeline health for the Legal dashboard."""
+    if not has_any_role(current_admin, "admin", "lawyer"):
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    db = get_db()
+    execution_docs = db.table("contract_documents")\
+        .select("id, created_at, session_id, contract_signing_sessions(created_at)")\
+        .eq("document_type", "executed")\
+        .order("created_at", desc=True)\
+        .limit(200)\
+        .execute().data or []
+
+    session_rows = db.table("contract_signing_sessions")\
+        .select("id, created_at")\
+        .order("created_at", desc=True)\
+        .limit(300)\
+        .execute().data or []
+
+    session_start = {}
+    for row in session_rows:
+        dt = None
+        if row.get("created_at"):
+            try:
+                dt = datetime.fromisoformat(row["created_at"].replace("Z", "+00:00"))
+            except ValueError:
+                continue
+        if dt:
+            session_start[row["id"]] = dt
+
+    now = datetime.utcnow()
+    window_start = now - timedelta(weeks=16)
+
+    def week_key(dt):
+        iso = dt.isocalendar()
+        return (iso[0], iso[1])
+
+    weekly = {}
+
+    def ensure_bucket(key):
+        if key not in weekly:
+            weekly[key] = {
+                "label": f"{key[0]}-W{key[1]:02d}",
+                "initiated": 0,
+                "executed": 0,
+                "total_hours": 0.0,
+                "execution_count": 0
+            }
+        return weekly[key]
+
+    for row in session_rows:
+        created_at = row.get("created_at")
+        if not created_at:
+            continue
+        try:
+            dt = datetime.fromisoformat(created_at.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+        if dt < window_start:
+            continue
+        bucket = ensure_bucket(week_key(dt))
+        bucket["initiated"] += 1
+
+    for doc in execution_docs:
+        exec_at_raw = doc.get("created_at")
+        session_dt = None
+        if doc.get("contract_signing_sessions"):
+            nested = doc["contract_signing_sessions"]
+            if isinstance(nested, list) and nested:
+                session_created_at = nested[0].get("created_at")
+                if session_created_at:
+                    try:
+                        session_dt = datetime.fromisoformat(session_created_at.replace("Z", "+00:00"))
+                    except ValueError:
+                        session_dt = None
+
+        if not session_dt and doc.get("session_id"):
+            session_dt = session_start.get(doc["session_id"])
+
+        if not exec_at_raw or not session_dt:
+            continue
+
+        try:
+            exec_dt = datetime.fromisoformat(exec_at_raw.replace("Z", "+00:00"))
+        except ValueError:
+            continue
+
+        if exec_dt < window_start:
+            continue
+
+        bucket = ensure_bucket(week_key(exec_dt))
+        bucket["executed"] += 1
+        duration_hours = max((exec_dt - session_dt).total_seconds() / 3600, 0)
+        bucket["total_hours"] += duration_hours
+        bucket["execution_count"] += 1
+
+    sorted_weeks = sorted(weekly.items(), key=lambda item: item[0])
+    labels = [item[1]["label"] for item in sorted_weeks]
+    initiated_counts = [item[1]["initiated"] for item in sorted_weeks]
+    executed_counts = [item[1]["executed"] for item in sorted_weeks]
+    avg_hours = [round(item[1]["total_hours"] / item[1]["execution_count"], 1) if item[1]["execution_count"] else 0 for item in sorted_weeks]
+
+    return {
+        "labels": labels,
+        "initiated_counts": initiated_counts,
+        "executed_counts": executed_counts,
+        "avg_hours_to_execution": avg_hours
+    }
+
 @router.get("/archive")
 async def list_archived_contracts(current_admin=Depends(verify_token)):
     """Fetch all fully executed contracts for the legal archive."""
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
     
     db = get_db()
@@ -1032,7 +1142,7 @@ async def list_archived_contracts(current_admin=Depends(verify_token)):
 @router.get("/all-contracts")
 async def list_all_contracts(include_voided: bool = Query(False), current_admin=Depends(verify_token)):
     """Fetch a comprehensive list of all contracts and their real-time signing status."""
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
         
     db = get_db()
@@ -1070,7 +1180,7 @@ async def upload_custom_lawyer_seal(
     current_admin=Depends(verify_token)
 ):
     """Upload a one-off lawyer seal for a specific contract."""
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
         
     db = get_db()
@@ -1114,7 +1224,7 @@ async def upload_custom_lawyer_seal(
 @router.get("/authorities")
 async def list_authorities(current_admin=Depends(verify_token)):
     """List all company signatures (active and inactive)."""
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
     
     db = get_db()
@@ -1124,7 +1234,7 @@ async def list_authorities(current_admin=Depends(verify_token)):
 @router.post("/authorities")
 async def upload_authority_signature(payload: CompanySignatureUpload, current_admin=Depends(verify_token)):
     """Upload a new authority signature (Director, Secretary, Lawyer)."""
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
     
     db = get_db()
@@ -1176,7 +1286,7 @@ async def upload_authority_signature(payload: CompanySignatureUpload, current_ad
 @router.delete("/authorities/{sig_id}")
 async def deactivate_authority_signature(sig_id: str, current_admin=Depends(verify_token)):
     """Mark an authority signature as inactive."""
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
     
     db = get_db()
@@ -1192,7 +1302,7 @@ async def deactivate_authority_signature(sig_id: str, current_admin=Depends(veri
 @router.get("/activity")
 async def get_legal_activity(limit: int = 15, current_admin=Depends(verify_token)):
     """Fetch recent contract-related activity logs for the dashboard."""
-    if current_admin["role"] not in ["admin", "lawyer"]:
+    if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
     
     db = get_db()

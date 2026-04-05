@@ -1197,19 +1197,21 @@ async def broadcast_campaign_email(campaign: dict, recipients: list, admin_id: s
             logger.error(f"Error sending campaign {campaign_id} to {email_addr}: {e}")
             
 async def send_ready_for_execution_email(invoice, client):
-    """Notifies legal and admin that a contract is signed by the client and ready for final execution."""
+    """Notifies legal and admin that a contract is fully signed and ready for final execution."""
     from routers.analytics import log_activity
-    admin_email = os.getenv("LEGAL_EMAIL", os.getenv("FROM_EMAIL"))
-    
+    legal_email = os.getenv("LEGAL_EMAIL", "legal@eximps-cloves.com")
+    admin_email = os.getenv("ADMIN_ALERT_EMAIL", "admin@eximps-cloves.com")
+    recipients = list(dict.fromkeys([legal_email, admin_email]))
+
     html = f"""
     <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #C47D0A; border-radius: 10px;">
         <h2 style="color: #C47D0A;">⚖️ Contract Ready for Execution</h2>
-        <p>A client has just signed their contract and the document is now pending legal execution (sealing).</p>
+        <p>The contract has now been signed by the client and witnessed, and is pending final legal sealing.</p>
         
         <table style="width: 100%; font-size: 14px; border-collapse: collapse; margin: 20px 0;">
             <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #888;">Client</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">{client['full_name']}</td></tr>
-            <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #888;">Property</td><td style="padding: 8px; border-bottom: 1px solid #eee;">{invoice['property_name']}</td></tr>
-            <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #888;">Invoice No</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold; color: #C47D0A;">{invoice['invoice_number']}</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #888;">Property</td><td style="padding: 8px; border-bottom: 1px solid #eee;">{invoice.get('property_name', 'N/A')}</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #888;">Invoice No</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold; color: #C47D0A;">{invoice.get('invoice_number', 'N/A')}</td></tr>
             <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #888;">Signed On</td><td style="padding: 8px; border-bottom: 1px solid #eee;">{datetime.now().strftime("%B %d, %Y at %I:%M %p")}</td></tr>
         </table>
 
@@ -1225,17 +1227,17 @@ async def send_ready_for_execution_email(invoice, client):
         import resend
         res = resend.Emails.send({
             "from": f"Legal Suite <{FROM_EMAIL}>",
-            "to": [admin_email],
+            "to": recipients,
             "cc": CLIENT_CC_RECIPIENTS,
-            "subject": f"Ready for Execution: {invoice['invoice_number']} — {client['full_name']}",
+            "subject": f"Ready for Execution: {invoice.get('invoice_number', 'N/A')} — {client.get('full_name', 'Client')}",
             "html": html
         })
         
         await log_activity(
             "execution_ready_alert_sent",
-            f"Execution readiness alert for {invoice['invoice_number']} sent to legal team",
+            f"Execution readiness alert for {invoice.get('invoice_number', 'N/A')} sent to legal/admin team",
             "system",
-            invoice_id=invoice['id']
+            invoice_id=invoice.get('id')
         )
         return res
     except Exception as e:

@@ -155,10 +155,6 @@ async def submit_client_signature(token: str, data: ClientContractSignatureSubmi
             invoice_id=invoice["id"]
         )
 
-        # Notify Legal/Admin that contract is ready for execution
-        from email_service import send_ready_for_execution_email
-        background_tasks.add_task(send_ready_for_execution_email, invoice, invoice["clients"])
-
         return {"message": "Client contract signature recorded successfully"}
 
     except Exception as e:
@@ -354,10 +350,10 @@ async def submit_witness_signature(token: str, data: WitnessSignatureSubmit, req
             invoice_id=invoice["id"]
         )
         
-        # 7. Check if we should notify admin
+        # 7. Notify legal and admin once the contract is fully witnessed
         if new_status == "completed":
-            from email_service import send_admin_alert_email # We'll add a specialized one later or reuse
-            # For now, let's just log it. PRD says notify admin.
+            from email_service import send_ready_for_execution_email
+            background_tasks.add_task(send_ready_for_execution_email, invoice, invoice["clients"])
             await log_activity(
                 "contract_ready",
                 f"Contract for {invoice['invoice_number']} is now fully witnessed and ready for execution.",

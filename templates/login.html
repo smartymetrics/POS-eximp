@@ -262,13 +262,14 @@
 
         
         // Role-based redirection
-        const userRoles = (data.admin.role || '').toLowerCase().split(',').map(r => r.trim());
+        const userRoles = (data.admin.role || '').toLowerCase().split(',').map(r => r.trim()).filter(Boolean);
+        const hasLegalRole = userRoles.includes('legal') || userRoles.includes('lawyer');
         const onlyMarketing = userRoles.length === 1 && userRoles[0] === 'marketing';
-        const onlyLegal = userRoles.length === 1 && userRoles[0] === 'legal';
+        const onlyLegal = userRoles.length === 1 && (userRoles[0] === 'legal' || userRoles[0] === 'lawyer');
         
-        if (onlyMarketing || (data.admin && data.admin.primary_role === 'marketing')) {
+        if (onlyMarketing || (data.admin && data.admin.primary_role === 'marketing' && !hasLegalRole)) {
           window.location.href = '/marketing';
-        } else if (onlyLegal || (data.admin && data.admin.primary_role === 'legal')) {
+        } else if (hasLegalRole || onlyLegal || (data.admin && data.admin.primary_role === 'legal')) {
           window.location.href = '/legal';
         } else {
           window.location.href = '/dashboard';
