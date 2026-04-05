@@ -1,9 +1,9 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Header
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Header, Query
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from database import get_db, SUPABASE_URL
-from models import CompanySignatureUpload, ExtendSigningLink, WitnessSignatureSubmit, ClientContractSignatureSubmit, WitnessRemovalRequest, CustomContractHTMLUpdate
-from routers.auth import verify_token
+from models import CompanySignatureUpload, ExtendSigningLink, WitnessSignatureSubmit, ClientContractSignatureSubmit, WitnessRemovalRequest, CustomContractHTMLUpdate, ExecuteContractRequest
+from routers.auth import verify_token, resolve_admin_token
 from routers.analytics import log_activity
 from datetime import datetime, timedelta
 import secrets
@@ -226,10 +226,11 @@ async def get_contract_status(invoice_id: str, current_admin=Depends(verify_toke
         .select("*, witness_signatures(*)")\
         .eq("invoice_id", invoice_id)\
         .order("created_at", desc=True)\
+        .limit(1)\
         .execute()
     
     if not res.data:
-         raise HTTPException(status_code=404, detail="No contract session found")
+         return {"status": "not_started"}
 
     session = res.data[0]
     return {
@@ -243,30 +244,57 @@ async def get_contract_status(invoice_id: str, current_admin=Depends(verify_toke
         "is_executed": session["status"] == "completed"
     }
 
-@router.get("/session/{invoice_id}")
-async def get_contract_session(invoice_id: str, current_admin=Depends(verify_token)):
+@router.post("/{invoice_id}/extend")
+async def extend_signing_session(invoice_id: str, current_admin=Depends(verify_token)):
+    """Extend an active session by 48 hours."""
+    if current_admin["role"] not in ["admin", "lawyer"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
     db = get_db()
-    res = db.table("contract_signing_sessions")\
-        .select("*, witness_signatures(*)")\
-        .eq("invoice_id", invoice_id)\
-        .order("created_at", desc=True)\
-        .limit(1)\
-        .execute()
-
+    res = db.table("contract_signing_sessions").select("id, expires_at").eq("invoice_id", invoice_id).neq("status", "expired").order("created_at", desc=True).limit(1).execute()
     if not res.data:
-        raise HTTPException(status_code=404, detail="No contract session found")
+        raise HTTPException(status_code=404, detail="No active session found to extend")
+    
+    current_expiry = datetime.fromisoformat(res.data[0]["expires_at"].replace('Z', '+00:00'))
+    new_expiry = current_expiry + timedelta(hours=48)
+    
+    db.table("contract_signing_sessions").update({"expires_at": new_expiry.isoformat()}).eq("id", res.data[0]["id"]).execute()
+    
+    await log_activity(
+        "contract_extended",
+        f"Contract signing session extended by 48 hours for {invoice_id}",
+        current_admin["sub"],
+        invoice_id=invoice_id
+    )
+    return {"message": "Session extended", "new_expiry": new_expiry}
 
-    session = res.data[0]
-    return {
-        "id": session["id"],
-        "invoice_id": session["invoice_id"],
-        "token": session["token"],
-        "status": session["status"],
-        "expires_at": session["expires_at"],
-        "created_at": session.get("created_at"),
-        "witness_signatures": session.get("witness_signatures", []),
-        "is_executed": session["status"] == "completed"
-    }
+@router.get("/{invoice_id}/html-draft")
+async def get_contract_html_draft(invoice_id: str, current_admin=Depends(resolve_admin_token)):
+    """Render a high-fidelity HTML draft of the contract, NOT an invoice."""
+    from pdf_service import render_contract_html
+    from fastapi.responses import HTMLResponse
+    
+    db = get_db()
+    
+    # 1. Fetch Invoice
+    inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    if not inv_res.data: raise HTTPException(status_code=404, detail="Invoice not found")
+    invoice = inv_res.data[0]
+    
+    # 2. Fetch Session & Witnesses
+    session_res = db.table("contract_signing_sessions").select("*, witness_signatures(*)").eq("invoice_id", invoice_id).order("created_at", desc=True).limit(1).execute()
+    witnesses = session_res.data[0].get("witness_signatures", []) if session_res.data else []
+    
+    # 3. Render full contract (Draft mode, Browser-friendly URLs)
+    html_content = render_contract_html(
+        invoice, 
+        invoice["clients"], 
+        witnesses=witnesses, 
+        is_draft=True, 
+        embed_images=False # Use URLs for faster browser preview
+    )
+    
+    return HTMLResponse(content=html_content)
 
 @router.post("/session/{invoice_id}")
 async def create_contract_session(invoice_id: str, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
@@ -324,7 +352,7 @@ async def resend_contract_link(invoice_id: str, background_tasks: BackgroundTask
     return {"message": "Signing link resent"}
 
 @router.post("/execute/{invoice_id}")
-async def execute_final_contract(invoice_id: str, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+async def execute_final_contract(invoice_id: str, payload: ExecuteContractRequest, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
     if current_admin["role"] not in ["admin", "lawyer"]:
         raise HTTPException(status_code=403, detail="Unauthorized")
 
@@ -353,11 +381,22 @@ async def execute_final_contract(invoice_id: str, background_tasks: BackgroundTa
     if session["status"] != "completed":
         db.table("contract_signing_sessions").update({"status": "completed"}).eq("id", session["id"]).execute()
 
-    from pdf_service import generate_contract_pdf
+    from pdf_service import generate_contract_pdf, generate_audit_certificate_pdf
+    # 1. Generate Main Contract
     pdf_content = generate_contract_pdf(invoice, client, witnesses, is_draft=False)
+    
+    # 2. Generate Audit Certificate (Always generated for internal storage)
+    cert_content = generate_audit_certificate_pdf(invoice, client, witnesses)
 
+    # 3. Email Delivery (Optional Certificate)
     from email_service import send_executed_contract_email
-    background_tasks.add_task(send_executed_contract_email, invoice, client, pdf_content)
+    background_tasks.add_task(
+        send_executed_contract_email, 
+        invoice, 
+        client, 
+        pdf_content, 
+        cert_content if payload.send_certificate else None
+    )
 
     db.table("contract_documents").insert({
         "invoice_id": invoice_id,
@@ -401,36 +440,64 @@ async def resend_executed_contract(invoice_id: str, background_tasks: Background
     client = invoice["clients"]
 
     session_res = db.table("contract_signing_sessions")\
-        .select("*, witness_signatures(*)")\
-        .eq("invoice_id", invoice_id)\
-        .order("created_at", desc=True)\
-        .limit(1)\
-        .execute()
+        .select("*, witness_signatures(*)").eq("invoice_id", invoice_id).order("created_at", desc=True).limit(1).execute()
 
     if not session_res.data or session_res.data[0]["status"] != "completed":
         raise HTTPException(status_code=400, detail="The contract has not been executed yet")
 
-    session = session_res.data[0]
-    witnesses = session.get("witness_signatures", []) or []
-
+    witnesses = session_res.data[0].get("witness_signatures", []) or []
     from pdf_service import generate_contract_pdf
     pdf_content = generate_contract_pdf(invoice, client, witnesses, is_draft=False)
 
     from email_service import send_executed_contract_email
     background_tasks.add_task(send_executed_contract_email, invoice, client, pdf_content)
-
-    # Log to email_logs
-    db.table("email_logs").insert({
-        "client_id": client.get("id"),
-        "invoice_id": invoice_id,
-        "email_type": "contract",
-        "recipient_email": client.get("email"),
-        "subject": f"Resent: Executed Contract of Sale {invoice['invoice_number']}",
-        "status": "sent",
-        "sent_by": current_admin["sub"]
-    }).execute()
-
     return {"message": "Final contract resent to client"}
+
+@router.get("/{invoice_id}/contract")
+async def get_executed_contract_pdf(invoice_id: str, current_admin=Depends(resolve_admin_token)):
+    """Download the final executed contract PDF."""
+    if current_admin["role"] not in ["admin", "lawyer"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    db = get_db()
+    inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    if not inv_res.data: raise HTTPException(status_code=404, detail="Invoice not found")
+    invoice = inv_res.data[0]
+    client = invoice["clients"]
+
+    session_res = db.table("contract_signing_sessions").select("*, witness_signatures(*)").eq("invoice_id", invoice_id).order("created_at", desc=True).limit(1).execute()
+    if not session_res.data or session_res.data[0]["status"] != "completed":
+        raise HTTPException(status_code=400, detail="Contract not yet executed")
+
+    witnesses = session_res.data[0].get("witness_signatures", [])
+    from pdf_service import generate_contract_pdf
+    pdf_content = generate_contract_pdf(invoice, client, witnesses, is_draft=False)
+    
+    from fastapi.responses import Response
+    return Response(content=pdf_content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=Contract_{invoice['invoice_number']}.pdf"})
+
+@router.get("/{invoice_id}/certificate")
+async def get_audit_certificate_pdf(invoice_id: str, current_admin=Depends(resolve_admin_token)):
+    """Download the digital audit certificate for an executed contract."""
+    if current_admin["role"] not in ["admin", "lawyer"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    db = get_db()
+    inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    if not inv_res.data: raise HTTPException(status_code=404, detail="Invoice not found")
+    invoice = inv_res.data[0]
+    client = invoice["clients"]
+
+    session_res = db.table("contract_signing_sessions").select("*, witness_signatures(*)").eq("invoice_id", invoice_id).order("created_at", desc=True).limit(1).execute()
+    if not session_res.data or session_res.data[0]["status"] != "completed":
+        raise HTTPException(status_code=400, detail="Contract not yet executed")
+
+    witnesses = session_res.data[0].get("witness_signatures", [])
+    from pdf_service import generate_audit_certificate_pdf
+    pdf_content = generate_audit_certificate_pdf(invoice, client, witnesses)
+    
+    from fastapi.responses import Response
+    return Response(content=pdf_content, media_type="application/pdf", headers={"Content-Disposition": f"attachment; filename=Audit_Certificate_{invoice['invoice_number']}.pdf"})
 
 def _resolve_admin_token(token: str | None = None, authorization: str | None = Header(None)):
     if authorization:
@@ -813,6 +880,7 @@ async def extend_contract_signing(invoice_id: str, background_tasks: BackgroundT
     
     return {"message": "Link extended and client notified", "new_expiry": new_expiry}
 
+@router.get("/{invoice_id}/default-html")
 @router.get("/{invoice_id}/custom-html")
 async def get_contract_html(invoice_id: str, current_admin=Depends(verify_token)):
     if current_admin["role"] not in ["admin", "lawyer"]:
@@ -903,3 +971,244 @@ async def update_contract_html(invoice_id: str, payload: CustomContractHTMLUpdat
     )
     
     return {"message": "Custom contract wordings saved successfully"}
+
+# --- NEW LEGAL DASHBOARD ENDPOINTS ---
+
+@router.get("/summary")
+async def get_legal_summary(current_admin=Depends(verify_token)):
+    """Fetch high-level KPIs for the Legal Dashboard."""
+    if current_admin["role"] not in ["admin", "lawyer"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    db = get_db()
+    
+    # Run all 3 DB queries in parallel using asyncio
+    import asyncio
+    
+    def _count_invoices():
+        return db.table("invoices").select("id", count="exact").neq("status", "voided").execute().count or 0
+
+    def _count_sessions():
+        rows = db.table("contract_signing_sessions").select("status").execute().data or []
+        active = sum(1 for r in rows if r["status"] != "completed")
+        completed = sum(1 for r in rows if r["status"] == "completed")
+        pending = sum(1 for r in rows if r["status"] == "pending")
+        return active, completed, pending
+
+    loop = asyncio.get_event_loop()
+    try:
+        total_contracts, (active_sessions, executed_contracts, pending_execution) = await asyncio.gather(
+            loop.run_in_executor(None, _count_invoices),
+            loop.run_in_executor(None, _count_sessions)
+        )
+    except Exception as e:
+        print(f"Summary query error: {e}")
+        total_contracts = active_sessions = executed_contracts = pending_execution = 0
+
+    return {
+        "total_contracts": int(total_contracts),
+        "active_sessions": int(active_sessions),
+        "executed_contracts": int(executed_contracts),
+        "pending_execution": int(pending_execution),
+    }
+
+@router.get("/archive")
+async def list_archived_contracts(current_admin=Depends(verify_token)):
+    """Fetch all fully executed contracts for the legal archive."""
+    if current_admin["role"] not in ["admin", "lawyer"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    db = get_db()
+    # Slim select — only fields needed for the archive table display
+    result = db.table("contract_signing_sessions")\
+        .select("id, invoice_id, created_at, updated_at, invoices(id, invoice_number, clients(full_name))")\
+        .eq("status", "completed")\
+        .order("created_at", desc=True)\
+        .limit(50)\
+        .execute()
+        
+    return result.data
+
+@router.get("/all-contracts")
+async def list_all_contracts(include_voided: bool = Query(False), current_admin=Depends(verify_token)):
+    """Fetch a comprehensive list of all contracts and their real-time signing status."""
+    if current_admin["role"] not in ["admin", "lawyer"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+        
+    db = get_db()
+    
+    query = db.table("invoices")\
+        .select("id, invoice_number, property_name, property_location, amount, created_at, status, contract_signature_url, plot_size_sqm, clients(full_name, email), contract_signing_sessions(*, witness_signatures(*))") \
+        .order("created_at", desc=True)\
+        .limit(100)
+
+    if not include_voided:
+        query = query.neq("status", "voided")
+
+    result = query.execute()
+        
+    contracts = result.data
+    for c in contracts:
+        # Summarize status for the dashboard
+        session = c.get("contract_signing_sessions", [{}])[0] if c.get("contract_signing_sessions") else {}
+        c["signing_status"] = session.get("status", "not_started")
+        c["expires_at"] = session.get("expires_at")
+        
+        # Count signatures collected
+        sigs = 0
+        if c.get("contract_signature_url"): sigs += 1
+        if session.get("witness_signatures"):
+            sigs += len(session["witness_signatures"])
+        c["signatures_collected"] = sigs
+
+    return contracts
+
+@router.post("/{invoice_id}/seal")
+async def upload_custom_lawyer_seal(
+    invoice_id: str, 
+    payload: dict, # {seal_base64: "..."}
+    current_admin=Depends(verify_token)
+):
+    """Upload a one-off lawyer seal for a specific contract."""
+    if current_admin["role"] not in ["admin", "lawyer"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+        
+    db = get_db()
+    seal_b64 = payload.get("seal_base64")
+    if not seal_b64:
+        raise HTTPException(status_code=400, detail="Missing seal data")
+
+    # Upload to storage
+    try:
+        if "," in seal_b64:
+            _, encoded = seal_b64.split(",", 1)
+        else:
+            encoded = seal_b64
+        
+        img_data = base64.b64decode(encoded)
+        file_path = f"custom_seals/{invoice_id}_seal.png"
+        
+        # Optional: Remove old one if exists
+        try:
+            db.storage.from_("signatures").remove([file_path])
+        except: pass
+        
+        db.storage.from_("signatures").upload(
+            path=file_path,
+            file=img_data,
+            file_options={"content-type": "image/png"}
+        )
+        seal_url = f"{SUPABASE_URL}/storage/v1/object/public/signatures/{file_path}"
+        
+        # Update invoice
+        db.table("invoices").update({"custom_lawyer_seal_url": seal_url}).eq("id", invoice_id).execute()
+        
+        return {"message": "Custom lawyer seal uploaded successfully", "seal_url": seal_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Seal upload failed: {str(e)}")
+
+
+
+# --- SIGNATURE VAULT ENDPOINTS ---
+
+@router.get("/authorities")
+async def list_authorities(current_admin=Depends(verify_token)):
+    """List all company signatures (active and inactive)."""
+    if current_admin["role"] not in ["admin", "lawyer"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    db = get_db()
+    res = db.table("company_signatures").select("*").order("created_at", desc=True).execute()
+    return res.data
+
+@router.post("/authorities")
+async def upload_authority_signature(payload: CompanySignatureUpload, current_admin=Depends(verify_token)):
+    """Upload a new authority signature (Director, Secretary, Lawyer)."""
+    if current_admin["role"] not in ["admin", "lawyer"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    db = get_db()
+    
+    # Upload to storage
+    try:
+        sig_b64 = payload.signature_base64
+        if "," in sig_b64:
+            _, encoded = sig_b64.split(",", 1)
+        else:
+            encoded = sig_b64
+        
+        img_data = base64.b64decode(encoded)
+        filename = f"authorities/{payload.role}_{secrets.token_hex(4)}.png"
+        
+        db.storage.from_("signatures").upload(
+            path=filename,
+            file=img_data,
+            file_options={"content-type": "image/png"}
+        )
+        sig_url = f"{SUPABASE_URL}/storage/v1/object/public/signatures/{filename}"
+        
+        # Save to DB
+        new_sig = {
+            "role": payload.role,
+            "full_name": payload.full_name,
+            "address": payload.address,
+            "occupation": payload.occupation,
+            "signature_base64": sig_url, # We store the URL in this field for consistency
+            "uploaded_by": current_admin["sub"],
+            "is_active": True
+        }
+        
+        # Deactivate old signatures of the same role
+        db.table("company_signatures").update({"is_active": False}).eq("role", payload.role).execute()
+        
+        res = db.table("company_signatures").insert(new_sig).execute()
+        
+        await log_activity(
+            "authority_signature_uploaded",
+            f"New {payload.role} signature uploaded: {payload.full_name}",
+            current_admin["sub"]
+        )
+        
+        return res.data[0]
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+@router.delete("/authorities/{sig_id}")
+async def deactivate_authority_signature(sig_id: str, current_admin=Depends(verify_token)):
+    """Mark an authority signature as inactive."""
+    if current_admin["role"] not in ["admin", "lawyer"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    db = get_db()
+    db.table("company_signatures").update({"is_active": False}).eq("id", sig_id).execute()
+    
+    await log_activity(
+        "authority_signature_deactivated",
+        f"Authority signature {sig_id} deactivated",
+        current_admin["sub"]
+    )
+    return {"message": "Signature deactivated"}
+
+@router.get("/activity")
+async def get_legal_activity(limit: int = 15, current_admin=Depends(verify_token)):
+    """Fetch recent contract-related activity logs for the dashboard."""
+    if current_admin["role"] not in ["admin", "lawyer"]:
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    db = get_db()
+    # Filter for contract-related events
+    legal_events = [
+        "contract_created", "contract_signed", "contract_executed", 
+        "witness_signed", "witness_added", "contract_extended", 
+        "lawyer_seal_uploaded", "authority_signature_uploaded",
+        "client_signed_contract", "manual_client_contract_signed"
+    ]
+    
+    result = db.table("activity_log")\
+        .select("*, admins(full_name)")\
+        .in_("event_type", legal_events)\
+        .order("created_at", desc=True)\
+        .limit(limit)\
+        .execute()
+        
+    return result.data

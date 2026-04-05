@@ -596,18 +596,21 @@ def render_contract_html(invoice: dict, client: dict, witnesses: list = None, is
         "witness2":     None,
     }
 
+    # Priority: Custom Lawyer Seal (per contract) -> Default Company Seal
+    seal_to_use = invoice.get("custom_lawyer_seal_url") or company_sigs.get("lawyer_seal")
+
     if embed_images:
         signatures["director"]     = _resolve_sig_to_data_uri(company_sigs.get("director"),    max_width=180)
         signatures["secretary"]    = _resolve_sig_to_data_uri(company_sigs.get("secretary"),   max_width=180)
         signatures["lawyer"]       = _resolve_sig_to_data_uri(company_sigs.get("lawyer"),      max_width=180)
-        signatures["lawyer_seal"]  = _resolve_sig_to_data_uri(company_sigs.get("lawyer_seal"), max_width=160)
+        signatures["lawyer_seal"]  = _resolve_sig_to_data_uri(seal_to_use,                   max_width=160)
         signatures["purchaser"]    = _resolve_sig_to_data_uri(purchaser_sig,                    max_width=160)
     else:
         # Use direct URLs for faster browser loading
         signatures["director"]     = company_sigs.get("director")
         signatures["secretary"]    = company_sigs.get("secretary")
         signatures["lawyer"]       = company_sigs.get("lawyer")
-        signatures["lawyer_seal"]  = company_sigs.get("lawyer_seal")
+        signatures["lawyer_seal"]  = seal_to_use
         signatures["purchaser"]    = purchaser_sig
 
 
@@ -701,6 +704,31 @@ def generate_contract_pdf(invoice: dict, client: dict, witnesses: list = None, i
     """Generates the Contract of Sale PDF by first rendering the HTML."""
     html_content = render_contract_html(invoice, client, witnesses, is_draft=is_draft, embed_images=True)
     return _render_with_weasyprint(html_content)
+
+def render_audit_certificate_html(invoice: dict, client: dict, witnesses: list = None) -> str:
+    """Renders the Digital Audit Certificate as an HTML string."""
+    template = env.get_template("certificate.html")
+    
+    # Calculate checksum/hash for the document (mock for now or simple hash of ID)
+    import hashlib
+    doc_hash = hashlib.sha256(f"{invoice['id']}-{invoice['contract_signed_at']}".encode()).hexdigest()
+    if not invoice.get("contract_checksum"):
+        invoice["contract_checksum"] = doc_hash
+
+    return template.render(
+        company=COMPANY,
+        invoice=invoice,
+        client=client,
+        witnesses=witnesses or [],
+        signatures_count=1 + (len(witnesses) if witnesses else 0),
+        current_year=datetime.now().year
+    )
+
+def generate_audit_certificate_pdf(invoice: dict, client: dict, witnesses: list = None) -> bytes:
+    """Generates a standalone Audit Certificate PDF."""
+    html_content = render_audit_certificate_html(invoice, client, witnesses)
+    return _render_with_weasyprint(html_content)
+
 
 def get_default_contract_html_fragment(invoice: dict, client: dict) -> str:
     """

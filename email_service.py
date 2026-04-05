@@ -978,56 +978,66 @@ def send_admin_signing_alert(invoice, client, witnesses):
     except Exception as e:
         logger.error("Error sending admin signing alert: " + str(e))
 
-def send_executed_contract_email(invoice, client, pdf_content):
-    """Sends the final executed PDF to the client."""
+def send_executed_contract_email(invoice, client, pdf_content, certificate_pdf=None):
+    """Sends the final executed PDF to the client, optionally with an audit certificate."""
     sender = os.getenv("LEGAL_EMAIL", os.getenv("FROM_EMAIL"))
     email_addr = client.get("email")
     if not email_addr: return
 
     import base64
-    attachment = base64.b64encode(pdf_content).decode()
+    attachments = [
+        {
+            "content": base64.b64encode(pdf_content).decode(),
+            "filename": f"Executed_Contract_{invoice.get('invoice_number')}.pdf"
+        }
+    ]
+    
+    cert_note = ""
+    if certificate_pdf:
+        attachments.append({
+            "content": base64.b64encode(certificate_pdf).decode(),
+            "filename": f"Audit_Certificate_{invoice.get('invoice_number')}.pdf"
+        })
+        cert_note = "<p>Also attached is your <strong>Digital Audit Certificate</strong>, providing a secure log of all signing events, IP addresses, and document integrity checksums for your records.</p>"
 
-    html = """
+    html = f"""
     <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
-        <h2 style="color: #2e7d32;">Execution Complete: Your Contract of Sale</h2>
-        <p>Dear {CLIENT_NAME},</p>
-        <p>Congratulations! Your Contract of Sale for <strong>{ESTATE_NAME}</strong> has been fully executed by all parties.</p>
+        <div style="text-align: center; margin-bottom: 20px;">
+            <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style="max-height: 40px;">
+        </div>
+        <h2 style="color: #2e7d32; text-align: center;">Execution Complete</h2>
+        <p>Dear {client.get('full_name', 'Valued Client')},</p>
+        <p>Congratulations! Your Contract of Sale for <strong>{invoice.get('property_name')}</strong> has been fully executed by all parties.</p>
         <p>Please find the final signed document attached to this email. This is a legally binding document; please keep it in a safe place.</p>
         
+        {cert_note}
+
         <p><strong>Property Details:</strong><br>
-        Estate: {ESTATE_NAME}<br>
-        Plot Size: {PLOT_SIZE} SQM<br>
-        Execution Date: {DATE}</p>
+        Estate: {invoice.get('property_name')}<br>
+        Plot Size: {invoice.get('plot_size_sqm')} SQM<br>
+        Execution Date: {datetime.now().strftime("%B %d, %Y")}</p>
 
         <p>Our documentation team will contact you shortly regarding the next steps (Survey and Allocation).</p>
         <p>Thank you for choosing Eximp & Cloves Infrastructure Limited.</p>
         <p>Best regards,<br>Legal Department</p>
     </div>
     """
-    html = html.replace("{CLIENT_NAME}", client.get("full_name", "Valued Client"))
-    html = html.replace("{ESTATE_NAME}", invoice.get("property_name"))
-    html = html.replace("{PLOT_SIZE}", str(invoice.get("plot_size_sqm")))
-    html = html.replace("{DATE}", datetime.now().strftime("%B %d, %Y"))
 
     try:
         import resend
         res = resend.Emails.send({
-            "from": "Eximp & Cloves Legal <" + str(sender) + ">",
-            "to": email_addr,
+            "from": f"Eximp & Cloves Legal <{sender}>",
+            "to": [email_addr],
             "cc": CLIENT_CC_RECIPIENTS,
-            "subject": "Your Fully Executed Contract of Sale — Eximp & Cloves",
+            "subject": f"Your Fully Executed Contract of Sale — {invoice.get('invoice_number')}",
             "html": html,
-            "attachments": [
-                {
-                    "content": attachment,
-                    "filename": "Executed_Contract_" + str(invoice.get("invoice_number")) + ".pdf"
-                }
-            ]
+            "attachments": attachments
         })
         return res
     except Exception as e:
-        logger.error("Error sending executed contract email: " + str(e))
+        logger.error(f"Error sending executed contract email: {e}")
         return None
+
 
 def _witness_confirmation_html(witness_name, estate_name, client_name):
     return f"""
@@ -1185,6 +1195,53 @@ async def broadcast_campaign_email(campaign: dict, recipients: list, admin_id: s
             
         except Exception as e:
             logger.error(f"Error sending campaign {campaign_id} to {email_addr}: {e}")
+            
+async def send_ready_for_execution_email(invoice, client):
+    """Notifies legal and admin that a contract is signed by the client and ready for final execution."""
+    from routers.analytics import log_activity
+    admin_email = os.getenv("LEGAL_EMAIL", os.getenv("FROM_EMAIL"))
+    
+    html = f"""
+    <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #C47D0A; border-radius: 10px;">
+        <h2 style="color: #C47D0A;">⚖️ Contract Ready for Execution</h2>
+        <p>A client has just signed their contract and the document is now pending legal execution (sealing).</p>
+        
+        <table style="width: 100%; font-size: 14px; border-collapse: collapse; margin: 20px 0;">
+            <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #888;">Client</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">{client['full_name']}</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #888;">Property</td><td style="padding: 8px; border-bottom: 1px solid #eee;">{invoice['property_name']}</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #888;">Invoice No</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold; color: #C47D0A;">{invoice['invoice_number']}</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #888;">Signed On</td><td style="padding: 8px; border-bottom: 1px solid #eee;">{datetime.now().strftime("%B %d, %Y at %I:%M %p")}</td></tr>
+        </table>
+
+        <div style="text-align: center; margin-top: 24px;">
+            <a href="https://eximp-cloves.com/legal" style="background: #C47D0A; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; display: inline-block;">Open Legal Dashboard</a>
+        </div>
+        
+        <p style="color: #888; font-size: 12px; margin-top: 24px; text-align: center;">This is an automated notification from the Eximp & Cloves Legal Suite.</p>
+    </div>
+    """
+
+    try:
+        import resend
+        res = resend.Emails.send({
+            "from": f"Legal Suite <{FROM_EMAIL}>",
+            "to": [admin_email],
+            "cc": CLIENT_CC_RECIPIENTS,
+            "subject": f"Ready for Execution: {invoice['invoice_number']} — {client['full_name']}",
+            "html": html
+        })
+        
+        await log_activity(
+            "execution_ready_alert_sent",
+            f"Execution readiness alert for {invoice['invoice_number']} sent to legal team",
+            "system",
+            invoice_id=invoice['id']
+        )
+        return res
+    except Exception as e:
+        logger.error(f"Error sending execution ready email: {e}")
+        return None
+
 
     # Final Update
     db.table("marketing_campaigns").update({

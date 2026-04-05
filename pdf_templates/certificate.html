@@ -1,0 +1,192 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Digital Audit Certificate - {{ invoice.invoice_number }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 2cm;
+            border: 2pt solid #C47D0A;
+        }
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            font-size: 10pt;
+            color: #333;
+            line-height: 1.4;
+        }
+        .header {
+            text-align: center;
+            border-bottom: 2px solid #C47D0A;
+            padding-bottom: 1cm;
+            margin-bottom: 1cm;
+        }
+        .title {
+            font-size: 22pt;
+            font-weight: bold;
+            color: #C47D0A;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+        }
+        .doc-id {
+            font-family: monospace;
+            font-size: 8pt;
+            color: #666;
+            margin-top: 5pt;
+        }
+        .section-title {
+            font-size: 12pt;
+            font-weight: bold;
+            background: #f8f8f8;
+            padding: 8pt;
+            border-left: 4pt solid #C47D0A;
+            margin: 20pt 0 10pt 0;
+            text-transform: uppercase;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            margin-bottom: 20pt;
+        }
+        th, td {
+            text-align: left;
+            padding: 10pt;
+            border-bottom: 1px solid #eee;
+        }
+        th {
+            font-weight: bold;
+            color: #666;
+            width: 30%;
+        }
+        .audit-row {
+            display: flex;
+            justify-content: space-between;
+            border-bottom: 1px solid #eee;
+            padding: 10pt 0;
+        }
+        .seal-box {
+            float: right;
+            border: 1px solid #ddd;
+            padding: 10pt;
+            text-align: center;
+            width: 150pt;
+        }
+        .footer {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            text-align: center;
+            font-size: 8pt;
+            color: #999;
+            border-top: 1px solid #eee;
+            padding-top: 5pt;
+        }
+        .checksum {
+            font-family: monospace;
+            word-break: break-all;
+            background: #fafafa;
+            padding: 10pt;
+            border: 1px dashed #ccc;
+            margin-top: 10pt;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <div class="title">Digital Audit Certificate</div>
+        <div class="doc-id">Document ID: {{ invoice.id }}</div>
+        <div style="margin-top: 10pt; font-weight: bold;">{{ company.name }} - Legal Department</div>
+    </div>
+
+    <div class="section-title">Document Summary</div>
+    <table>
+        <tr>
+            <th>Invoice Number</th>
+            <td>{{ invoice.invoice_number }}</td>
+        </tr>
+        <tr>
+            <th>Property</th>
+            <td>{{ invoice.property_name }}</td>
+        </tr>
+        <tr>
+            <th>Execution Status</th>
+            <td>FULLY EXECUTED</td>
+        </tr>
+        <tr>
+            <th>Total Signatures</th>
+            <td>{{ signatures_count }}</td>
+        </tr>
+    </table>
+
+    <div class="section-title">Signer Events</div>
+    
+    <!-- Primary Signer (Purchaser) -->
+    <div style="margin-bottom: 20pt; border: 1px solid #eee; padding: 15pt; border-radius: 5pt;">
+        <div style="font-weight: bold; color: #C47D0A; margin-bottom: 5pt;">Signer: {{ client.full_name }} (Purchaser)</div>
+        <table style="margin-bottom: 0;">
+            <tr>
+                <th>Email</th>
+                <td>{{ client.email }}</td>
+            </tr>
+            <tr>
+                <th>Timestamp</th>
+                <td>{{ invoice.contract_signed_at }}</td>
+            </tr>
+            <tr>
+                <th>IP Address</th>
+                <td>{{ invoice.contract_audit_ip or 'Unknown' }}</td>
+            </tr>
+            <tr>
+                <th>Method</th>
+                <td>{{ (invoice.contract_signature_method or 'Drawn') | upper }}</td>
+            </tr>
+             <tr>
+                <th>Device Code</th>
+                <td style="font-size: 8pt; color: #888;">{{ invoice.contract_audit_agent or 'Unknown' }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <!-- Witnesses -->
+    {% for witness in witnesses %}
+    <div style="margin-bottom: 20pt; border: 1px solid #eee; padding: 15pt; border-radius: 5pt;">
+        <div style="font-weight: bold; color: #C47D0A; margin-bottom: 5pt;">Signer: {{ witness.full_name }} (Witness {{ witness.witness_number }})</div>
+        <table style="margin-bottom: 0;">
+            <tr>
+                <th>Email</th>
+                <td>{{ witness.witness_email }}</td>
+            </tr>
+            <tr>
+                <th>Timestamp</th>
+                <td>{{ witness.signed_at }}</td>
+            </tr>
+            <tr>
+                <th>IP Address</th>
+                <td>{{ witness.ip_address or 'Unknown' }}</td>
+            </tr>
+            <tr>
+                <th>Method</th>
+                <td>{{ (witness.signature_method or 'Drawn') | upper }}</td>
+            </tr>
+            <tr>
+                <th>User Agent</th>
+                <td style="font-size:8pt; color:#666;">{{ witness.user_agent or 'Unknown' }}</td>
+            </tr>
+        </table>
+    </div>
+    {% endfor %}
+
+    <div class="section-title">Integrity Verification</div>
+    <p>This document is protected by a unique digital fingerprint. Any modification to the original contract will invalidate this checksum.</p>
+    <div class="checksum">
+        <strong>SHA-256 Hash Index:</strong><br>
+        {{ invoice.contract_checksum or 'NOT_CALCULATED_YET' }}
+    </div>
+
+    <div class="footer">
+        © {{ current_year }} Eximp & Cloves - Legal Suite Security Service. All Rights Reserved.<br>
+        This certificate is a permanent part of the digital record for Invoice {{ invoice.invoice_number }}.
+    </div>
+</body>
+</html>

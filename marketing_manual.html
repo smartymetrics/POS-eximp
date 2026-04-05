@@ -174,17 +174,21 @@
             margin: 24px 0;
             border-left: 4px solid;
             font-size: 14px;
+            color: #1f2937 !important;
+        }
+        .box p, .box strong, .box li, .box span {
+            color: #1f2937 !important;
         }
         .box-gold { background: var(--gold-light); border-color: var(--gold); }
-        .box-gold strong { color: var(--gold); }
+        .box-gold strong { color: var(--gold) !important; }
         .box-green { background: var(--green-bg); border-color: #10b981; }
-        .box-green strong { color: var(--green); }
+        .box-green strong { color: var(--green) !important; }
         .box-blue { background: var(--blue-bg); border-color: #3b82f6; }
-        .box-blue strong { color: var(--blue); }
+        .box-blue strong { color: var(--blue) !important; }
         .box-purple { background: var(--purple-bg); border-color: #8b5cf6; }
-        .box-purple strong { color: var(--purple); }
+        .box-purple strong { color: var(--purple) !important; }
         .box-red { background: var(--red-bg); border-color: #ef4444; }
-        .box-red strong { color: var(--red); }
+        .box-red strong { color: var(--red) !important; }
 
         /* ── STEP LIST ── */
         .steps { list-style: none; padding: 0; margin: 20px 0; }
@@ -783,6 +787,42 @@
 
         <div class="box box-gold" style="margin-top: 32px;">
             <strong>🎯 Your Goal for Week 1:</strong> Set up one sequence (the "New Lead Fast Track"), sync all your clients from Finance, and send your first campaign to the "Hot Leads" segment. If you do just these three things, you'll already be doing marketing better than 90% of real estate companies in Nigeria.
+        </div>
+    </div>
+</div>
+
+<!-- ══════════════════════════════════════
+     CH 10: ADVANCED AUTOMATION
+══════════════════════════════════════ -->
+<div class="chapter" id="advanced">
+    <div class="chapter-header">
+        <div class="chapter-icon" style="background: #fdf2f8;">⚡</div>
+        <div>
+            <div class="sub">Chapter 10</div>
+            <h2>Smart Drip & Advanced Automation</h2>
+        </div>
+    </div>
+    <div class="chapter-body">
+        <p>This chapter covers the "Pro" features of the Smart Drip engine. These tools allow you to create low-touch marketing funnels that respond to lead behavior and segment status automatically.</p>
+
+        <h3>Behavioral Branching (Selective Drips)</h3>
+        <p>Standard sequences send emails on a fixed schedule. <strong>Behavioral Branching</strong> allows you to make your sequences "smarter" by conditioning steps on lead engagement:</p>
+        <ul class="steps">
+            <li><strong>Conditional Sends:</strong> You can set a step to "Only send if the contact <b>OPENED</b> the previous email."</li>
+            <li><strong>The "Skip" Logic:</strong> If a lead didn't engage with the previous step, the engine will automatically <em>skip</em> them to the next scheduled step instead of sending them irrelevant content.</li>
+            <li><strong>Why use this?</strong> It keeps your "Hot Leads" engaged while protecting your email reputation with cold leads.</li>
+        </ul>
+
+        <h3>Segment-Driven Triggers</h3>
+        <p>The manual enrollment button (⚡) is great for individual leads, but <strong>Segment Triggers</strong> allow for massive automation based on your targeted groups:</p>
+        <ul>
+            <li><strong>Zero-Touch Onboarding:</strong> Choose "Member of Segment" as your Sequence Trigger.</li>
+            <li><strong>How it works:</strong> Every hour, the engine scans your chosen segment. If it finds a contact who isn't in the sequence yet, it enrolls them <em>immediately</em>.</li>
+            <li><strong>Perfect for:</strong> "Welcome series" for different lead sources or "Follow-up" series for clients with outstanding balances.</li>
+        </ul>
+
+        <div class="box box-green">
+            <strong>💡 Pro Strategy:</strong> Combine these! Create a sequence triggered by your <em>"High Engagement"</em> segment, but use behavioral branching to skip people who stop opening. This ensures your most automated workflows are always your most relevant ones.
         </div>
     </div>
 </div>

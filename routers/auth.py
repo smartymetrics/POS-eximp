@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends
+from fastapi import APIRouter, HTTPException, Depends, Header
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
 import bcrypt
@@ -42,6 +42,28 @@ def has_any_role(admin_payload: dict, *roles: str) -> bool:
 
 # Alias for dependency consistency
 get_current_admin = verify_token
+
+def resolve_admin_token(token: str = None, authorization: str = Header(None)):
+    """
+    Dependency that resolves the admin payload from either:
+    1. Authorization: Bearer <token> header
+    2. token=<token> query parameter
+    """
+    if authorization:
+        try:
+            scheme, creds = authorization.split()
+            if scheme.lower() == "bearer":
+                return verify_token(HTTPAuthorizationCredentials(scheme=scheme, credentials=creds))
+        except Exception:
+            pass
+    
+    if token:
+        try:
+            return verify_token(HTTPAuthorizationCredentials(scheme="Bearer", credentials=token))
+        except Exception:
+            pass
+            
+    raise HTTPException(status_code=401, detail="Not authenticated")
 
 
 # LOGIN

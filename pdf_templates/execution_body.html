@@ -8,12 +8,16 @@
             <div class="seal-col">
                 {% if signatures.director %}
                 <img src="{{ signatures.director }}" class="sig-image" alt="director">
+                {% else %}
+                <div class="sig-placeholder" style="height: 50pt; width: 140pt;">Signature Area</div>
                 {% endif %}
                 <div class="sig-label">DIRECTOR</div>
             </div>
             <div class="seal-col">
                 {% if signatures.secretary %}
                 <img src="{{ signatures.secretary }}" class="sig-image" alt="secretary">
+                {% else %}
+                <div class="sig-placeholder" style="height: 50pt; width: 140pt;">Signature Area</div>
                 {% endif %}
                 <div class="sig-label">SECRETARY</div>
             </div>
@@ -24,6 +28,8 @@
         <div class="sig-purchaser-block">
             {% if signatures.purchaser %}
             <img src="{{ signatures.purchaser }}" class="sig-purchaser-img" alt="purchaser">
+            {% else %}
+            <div class="sig-placeholder" style="height: 60pt; width: 160pt; margin: 0 0 10pt 0;">Signature Area</div>
             {% endif %}
             <p><strong>{{ client.full_name | upper }}</strong></p>
         </div>
@@ -38,6 +44,8 @@
                 {% if signatures.witness1 %}
                 <img src="{{ signatures.witness1 }}" style="height:40pt; vertical-align:middle; margin-left:10pt;"
                     alt="witness 1">
+                {% else %}
+                <span class="sig-placeholder" style="display: inline-flex; height: 35pt; width: 120pt; vertical-align: middle; margin-left: 10pt;">Signature Area</span>
                 {% endif %}
             </div>
         </div>
@@ -50,6 +58,8 @@
                 {% if signatures.witness2 %}
                 <img src="{{ signatures.witness2 }}" style="height:40pt; vertical-align:middle; margin-left:10pt;"
                     alt="witness 2">
+                {% else %}
+                <span class="sig-placeholder" style="display: inline-flex; height: 35pt; width: 120pt; vertical-align: middle; margin-left: 10pt;">Signature Area</span>
                 {% endif %}
             </div>
         </div>

@@ -556,7 +556,7 @@
         class="fixed inset-0 bg-black bg-opacity-50 hidden z-[100] flex items-center justify-center p-4">
         <div class="bg-white rounded-xl w-full max-w-2xl max-h-[95vh] overflow-y-auto shadow-2xl p-6 md:p-8">
             <div class="flex justify-between items-center mb-6">
-                <h3 class="text-2xl font-bold text-gray-800">New Dynamic Segment</h3>
+                <h3 class="text-2xl font-bold text-gray-800" id="seg-modal-title">New Dynamic Segment</h3>
                 <button onclick="closeSegmentModal()" class="text-gray-400 hover:text-gray-600"><svg class="w-6 h-6"
                         fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
@@ -576,37 +576,48 @@
                         class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand-gold h-20"></textarea>
                 </div>
 
-                <div class="border-t pt-6">
-                    <div class="flex justify-between items-center mb-2">
-                        <h4 class="font-bold text-gray-800">Filter Rules (AND)</h4>
-                        <button onclick="addRuleRow()" class="text-brand-gold text-xs font-bold hover:underline">+ Add
-                            Rule</button>
-                    </div>
-                    <div id="rules-container" class="space-y-3">
-                        <!-- Rule Rows -->
-                    </div>
+                <div>
+                    <label class="block text-sm font-semibold text-gray-700 mb-1">Segment Type</label>
+                    <select id="seg-type" onchange="toggleSegmentTypeUI()"
+                        class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand-gold bg-white">
+                        <option value="dynamic">Dynamic (Automated / Rules-Based)</option>
+                        <option value="static">Static (Manual List / One-Time)</option>
+                    </select>
                 </div>
 
-                <div class="bg-gray-50 rounded-lg p-6 border border-gray-100 mt-6">
-                    <div class="flex justify-between items-center">
-                        <div class="flex items-center gap-3">
-                            <div class="p-2 bg-brand-gold bg-opacity-20 rounded-lg">
-                                <svg class="w-5 h-5 text-brand-gold" fill="none" stroke="currentColor"
-                                    viewBox="0 0 24 24">
-                                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z">
-                                    </path>
-                                </svg>
-                            </div>
-                            <div>
-                                <p class="text-xs font-bold text-gray-500 uppercase tracking-wider">Estimated Audience
-                                </p>
-                                <p class="text-xl font-black text-gray-800" id="preview-count">Select a rule...</p>
-                            </div>
+                <div id="segment-rules-section" class="space-y-4">
+                    <div class="border-t pt-6">
+                        <div class="flex justify-between items-center mb-2">
+                            <h4 class="font-bold text-gray-800">Filter Rules (AND)</h4>
+                            <button onclick="addRuleRow()" class="text-brand-gold text-xs font-bold hover:underline">+ Add
+                                Rule</button>
                         </div>
-                        <button onclick="previewSegment()" id="preview-btn"
-                            class="bg-white border border-gray-200 px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:shadow-md transition">Update
-                            Preview</button>
+                        <div id="rules-container" class="space-y-3">
+                            <!-- Rule Rows -->
+                        </div>
+                    </div>
+
+                    <div class="bg-gray-50 rounded-lg p-6 border border-gray-100 mt-6">
+                        <div class="flex justify-between items-center">
+                            <div class="flex items-center gap-3">
+                                <div class="p-2 bg-brand-gold bg-opacity-20 rounded-lg">
+                                    <svg class="w-5 h-5 text-brand-gold" fill="none" stroke="currentColor"
+                                        viewBox="0 0 24 24">
+                                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z">
+                                        </path>
+                                    </svg>
+                                </div>
+                                <div>
+                                    <p class="text-xs font-bold text-gray-500 uppercase tracking-wider">Estimated Audience
+                                    </p>
+                                    <p class="text-xl font-black text-gray-800" id="preview-count">Select a rule...</p>
+                                </div>
+                            </div>
+                            <button onclick="previewSegment()" id="preview-btn"
+                                class="bg-white border border-gray-200 px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:shadow-md transition">Update
+                                Preview</button>
+                        </div>
                     </div>
                 </div>
 
@@ -849,11 +860,20 @@
                     </div>
                     <div>
                         <label class="block text-sm font-semibold text-gray-700 mb-1">Automation Trigger</label>
-                        <select id="seq-trigger"
+                        <select id="seq-trigger" onchange="toggleSegmentTriggerField()"
                             class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand-gold">
                             <option value="manual">Manual Enrollment Only</option>
                             <option value="client_created">New Client Registered (ActiveCampaign Style)</option>
+                            <option value="segment_entry">Member of Segment (Dynamic/Static)</option>
                         </select>
+                    </div>
+                    <div id="seq-segment-container" class="hidden">
+                        <label class="block text-sm font-semibold text-gray-700 mb-1">Trigger Segment</label>
+                        <select id="seq-trigger-segment-id"
+                            class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand-gold">
+                            <option value="">Select a segment...</option>
+                        </select>
+                    </div>
                     </div>
                 </div>
 
@@ -1041,6 +1061,20 @@
                         <p class="text-[10px] font-black text-gray-400 uppercase mb-2">Lead Insights</p>
                         <p class="text-xs text-gray-600 leading-relaxed">This lead has a high engagement score. Target
                             them with property inspection offers.</p>
+                    </div>
+
+                    <!-- NEW: Segment Management -->
+                    <div class="pt-4 border-t border-gray-100">
+                        <p class="text-[10px] font-black text-gray-400 uppercase mb-3">Segment Membership</p>
+                        <div id="prof-segments-list" class="flex flex-wrap gap-2 mb-4">
+                            <!-- Selected segments appear here -->
+                        </div>
+                        <div class="flex gap-2">
+                            <select id="prof-add-segment-select" class="flex-1 text-xs px-3 py-2 border rounded-lg bg-white outline-none focus:ring-1 focus:ring-brand-gold">
+                                <option value="">Add to segment...</option>
+                            </select>
+                            <button onclick="addCurrentContactToSegment()" class="bg-brand-gold text-white px-3 py-2 rounded-lg text-xs font-bold hover:bg-brand-gold/90 transition">+</button>
+                        </div>
                     </div>
                 </div>
 
@@ -1304,7 +1338,7 @@
             let url = '/api/marketing/contacts';
             if (activeSegmentFilter) {
                 // If it's a smart segment (engaged, hot, recent), we use special logic or just pass ID
-                url = `/api/marketing/segments/${activeSegmentFilter}/contacts`;
+                url = `/api/marketing/segments/${activeSegmentFilter}/contacts/`;
             } else if (q) {
                 url += `?q=${encodeURIComponent(q)}`;
             }
@@ -1344,6 +1378,10 @@
                     </td>
                     <td>
                         <div class="flex gap-2">
+                            <button onclick="openEnrollModal('${c.id}', '${(c.first_name || c.email).replace(/'/g, "")}')" 
+                                class="p-2 text-gray-400 hover:text-purple-500 hover:bg-purple-50 rounded-full transition" title="Enroll in Sequence">
+                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                            </button>
                             <button onclick="openEditContactModal('${c.id}')" class="p-2 text-gray-400 hover:text-blue-500 hover:bg-gray-100 rounded-full transition" title="Edit Contact">
                                 <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
                             </button>
@@ -1416,7 +1454,7 @@
             // Dynamically load segments into the dropdown
             const segSelect = document.getElementById('target-segment');
             try {
-                const res = await fetch('/api/marketing/segments', { headers: { 'Authorization': 'Bearer ' + token } });
+                const res = await fetch('/api/marketing/segments/', { headers: { 'Authorization': 'Bearer ' + token } });
                 const customSegments = await res.json();
 
                 let options = `
@@ -1527,7 +1565,7 @@
             const list = document.getElementById('segment-list');
             try {
                 // Fetch custom segments
-                const segRes = await fetch('/api/marketing/segments', { headers: { 'Authorization': 'Bearer ' + token } });
+                const segRes = await fetch('/api/marketing/segments/', { headers: { 'Authorization': 'Bearer ' + token } });
                 const customSegments = await segRes.json();
 
                 // Fetch overview for smart counts
@@ -1574,13 +1612,28 @@
             document.getElementById('rules-container').innerHTML = '';
             document.getElementById('seg-name').value = '';
             document.getElementById('seg-desc').value = '';
+            document.getElementById('seg-type').value = 'dynamic';
             document.getElementById('preview-count').innerText = 'Select a rule...';
             addRuleRow();
+            toggleSegmentTypeUI();
             const el = document.getElementById('segment-modal');
             if (el) {
                 el.classList.remove('hidden');
                 el.classList.add('active');
                 el.style.display = 'flex';
+            }
+        }
+
+        function toggleSegmentTypeUI() {
+            const type = document.getElementById('seg-type').value;
+            const rulesSection = document.getElementById('segment-rules-section');
+            const title = document.getElementById('seg-modal-title');
+            if (type === 'static') {
+                rulesSection.classList.add('hidden');
+                if (title) title.innerText = 'New Static Segment';
+            } else {
+                rulesSection.classList.remove('hidden');
+                if (title) title.innerText = 'New Dynamic Segment';
             }
         }
 
@@ -1640,30 +1693,42 @@
             const valContainer = row.querySelector('.rule-val-container');
             const field = fieldSelect.value;
             
+            // Default state
+            opSelect.disabled = false;
+            opSelect.innerHTML = `
+                <option value="eq">is equal to</option>
+                <option value="gt">is greater than</option>
+                <option value="lt">is less than</option>
+                <option value="contains">contains</option>
+                <option value="in_last">is in last (days)</option>
+                <option value="older_than">is older than (days)</option>
+                <option value="exactly">is exactly (days ago)</option>
+            `;
+
             if (field === 'has_opened' || field === 'has_clicked') {
                 opSelect.innerHTML = `<option value="eq">did this action</option>`;
                 opSelect.disabled = true;
-                
-                // Switch value to campaign dropdown
                 let options = `<option value="any">Any Campaign</option>`;
                 allCampaigns.filter(c => c.status === 'sent').forEach(c => {
                     options += `<option value="${c.id}">${c.name}</option>`;
                 });
                 valContainer.innerHTML = `<select class="rule-val w-full px-3 py-1.5 border rounded text-sm bg-white outline-none">${options}</select>`;
+            } else if (field === 'contact_type') {
+                opSelect.innerHTML = `<option value="eq">is</option>`;
+                valContainer.innerHTML = `
+                    <select class="rule-val w-full px-3 py-1.5 border rounded text-sm bg-white outline-none">
+                        <option value="lead">Lead</option>
+                        <option value="client">Client</option>
+                    </select>`;
+            } else if (field === 'is_subscribed') {
+                opSelect.innerHTML = `<option value="eq">is</option>`;
+                valContainer.innerHTML = `
+                    <select class="rule-val w-full px-3 py-1.5 border rounded text-sm bg-white outline-none">
+                        <option value="true">Subscribed</option>
+                        <option value="false">Unsubscribed</option>
+                    </select>`;
             } else {
-                opSelect.disabled = false;
-                opSelect.innerHTML = `
-                    <option value="eq">is equal to</option>
-                    <option value="gt">is greater than</option>
-                    <option value="lt">is less than</option>
-                    <option value="contains">contains</option>
-                    <option value="in_last">is in last (days)</option>
-                    <option value="older_than">is older than (days)</option>
-                    <option value="exactly">is exactly (days ago)</option>
-                `;
                 valContainer.innerHTML = `<input type="text" class="rule-val w-full px-3 py-1.5 border rounded text-sm outline-none" placeholder="Value...">`;
-                
-                // If it's a date field, pre-select 'in_last'
                 if (field.includes('_at')) {
                     opSelect.value = 'in_last';
                     updateRuleValueType(opSelect);
@@ -1721,19 +1786,27 @@
                 const name = document.getElementById('seg-name').value;
                 if (!name) { alert("Please provide a name."); return; }
 
+                const type = document.getElementById('seg-type').value;
                 const rules = [];
-                document.querySelectorAll('#rules-container > div').forEach(row => {
-                    rules.push({
-                        field: row.querySelector('.rule-field').value,
-                        op: row.querySelector('.rule-op').value,
-                        val: row.querySelector('.rule-val').value
+                if (type === 'dynamic') {
+                    document.querySelectorAll('#rules-container > div').forEach(row => {
+                        rules.push({
+                            field: row.querySelector('.rule-field').value,
+                            op: row.querySelector('.rule-op').value,
+                            val: row.querySelector('.rule-val').value
+                        });
                     });
-                });
+                }
 
                 const res = await fetch('/api/marketing/segments/', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                    body: JSON.stringify({ name, description: document.getElementById('seg-desc').value, segment_type: 'dynamic', filter_rules: rules })
+                    body: JSON.stringify({ 
+                        name, 
+                        description: document.getElementById('seg-desc').value, 
+                        segment_type: type, 
+                        filter_rules: rules 
+                    })
                 });
 
                 if (res.ok) {
@@ -1749,7 +1822,7 @@
 
         async function deleteSegment(id) {
             if (!confirm("Delete this segment?")) return;
-            await fetch(`/api/marketing/segments/${id}`, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
+            await fetch(`/api/marketing/segments/${id}/`, { method: 'DELETE', headers: { 'Authorization': 'Bearer ' + token } });
             loadSegments();
         }
 
@@ -2009,7 +2082,9 @@
                     <div class="flex justify-between items-start mb-6">
                         <div>
                             <h3 class="font-bold text-lg text-gray-800">${s.name}</h3>
-                            <p class="text-xs text-brand-gold font-black uppercase tracking-widest mt-1">Trig: ${s.trigger_event}</p>
+                            <p class="text-[10px] text-brand-gold font-black uppercase tracking-widest mt-1">
+                                Trig: ${s.trigger_event === 'segment_entry' ? `Segment (${s.marketing_segments?.name || '...' })` : s.trigger_event}
+                            </p>
                         </div>
                         <span class="px-2 py-0.5 rounded text-[10px] font-black ${s.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'} uppercase">
                             ${s.is_active ? 'Active' : 'Paused'}
@@ -2047,16 +2122,24 @@
             if (btn) btn.classList.add('btn-loading');
             
             try {
-                // 1. Fetch campaigns for step templates
-                const res = await fetch('/api/marketing/campaigns', {
-                    headers: { 'Authorization': 'Bearer ' + token }
-                });
-                availableCampaigns = await res.json();
+                // 1. Fetch campaigns & segments
+                const [campRes, segRes] = await Promise.all([
+                    fetch('/api/marketing/campaigns', { headers: { 'Authorization': 'Bearer ' + token } }),
+                    fetch('/api/marketing/segments', { headers: { 'Authorization': 'Bearer ' + token } })
+                ]);
+                availableCampaigns = await campRes.json();
+                const segments = await segRes.json();
 
                 // 2. Clear and init modal
                 document.getElementById('steps-container').innerHTML = '';
                 document.getElementById('seq-name').value = '';
                 document.getElementById('seq-trigger').value = 'manual';
+                document.getElementById('seq-segment-container').classList.add('hidden');
+                
+                const segSelect = document.getElementById('seq-trigger-segment-id');
+                segSelect.innerHTML = '<option value="">Select a segment...</option>' + 
+                    segments.map(sg => `<option value="${sg.id}">${sg.name}</option>`).join('');
+
                 addStepRow(); // Start with 1 step
 
                 // 3. Show Modal
@@ -2120,12 +2203,23 @@
              }
         }
 
+        function toggleSegmentTriggerField() {
+            const trigger = document.getElementById('seq-trigger').value;
+            const container = document.getElementById('seq-segment-container');
+            if (trigger === 'segment_entry') {
+                container.classList.remove('hidden');
+            } else {
+                container.classList.add('hidden');
+            }
+        }
+
         async function saveSequence() {
             const btn = document.getElementById('save-seq-btn');
             if (btn) btn.classList.add('btn-loading');
             try {
                 const name = document.getElementById('seq-name').value;
                 const trigger = document.getElementById('seq-trigger').value;
+                const triggerSegmentId = document.getElementById('seq-trigger-segment-id').value;
                 const stepRows = document.querySelectorAll('#steps-container > div');
 
                 const steps = [];
@@ -2151,10 +2245,20 @@
                     return;
                 }
 
+                if (trigger === 'segment_entry' && !triggerSegmentId) {
+                    alert("Please select a segment for this trigger.");
+                    return;
+                }
+
                 const res = await fetch('/api/marketing/sequences/', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                    body: JSON.stringify({ name, trigger_event: trigger, steps })
+                    body: JSON.stringify({ 
+                        name, 
+                        trigger_event: trigger, 
+                        trigger_segment_id: triggerSegmentId || null,
+                        steps 
+                    })
                 });
 
                 if (res.ok) {
@@ -2179,6 +2283,62 @@
             loadSequences();
         }
 
+        // --- ENROLL CONTACT IN SEQUENCE ---
+        let enrollTargetContactId = null;
+
+        async function openEnrollModal(contactId, contactName) {
+            enrollTargetContactId = contactId;
+            document.getElementById('enroll-contact-name').innerText = contactName;
+            const select = document.getElementById('enroll-sequence-select');
+            select.innerHTML = '<option value="">Loading sequences...</option>';
+
+            const res = await fetch('/api/marketing/sequences/', { headers: { 'Authorization': 'Bearer ' + token } });
+            const sequences = await res.json();
+
+            if (!sequences.length) {
+                select.innerHTML = '<option value="">No sequences created yet</option>';
+            } else {
+                select.innerHTML = sequences.map(s =>
+                    `<option value="${s.id}">${s.name} (${s.trigger_event})</option>`
+                ).join('');
+            }
+
+            const modal = document.getElementById('enroll-modal');
+            modal.classList.remove('hidden');
+            modal.classList.add('active');
+            modal.style.display = 'flex';
+        }
+
+        function closeEnrollModal() {
+            const modal = document.getElementById('enroll-modal');
+            modal.classList.add('hidden');
+            modal.classList.remove('active');
+            modal.style.display = 'none';
+            enrollTargetContactId = null;
+        }
+
+        async function confirmEnroll() {
+            const sequenceId = document.getElementById('enroll-sequence-select').value;
+            if (!sequenceId) return alert('Please select a sequence.');
+            const btn = document.getElementById('confirm-enroll-btn');
+            btn.classList.add('btn-loading');
+
+            try {
+                const res = await fetch(`/api/marketing/sequences/${sequenceId}/enroll?contact_id=${enrollTargetContactId}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                const data = await res.json();
+                alert(`✅ ${data.message}`);
+                closeEnrollModal();
+                loadSequences(); // Refresh Active count
+            } catch (e) {
+                alert('❌ Failed to enroll contact.');
+            } finally {
+                btn.classList.remove('btn-loading');
+            }
+        }
+
         // --- CONTACT PROFILE LOGIC ---
         async function openContactModal(id) {
             try {
@@ -2188,12 +2348,15 @@
                 const contact = await res.json();
 
                 // Update basic info
-                document.getElementById('prof-name').innerText = `${contact.first_name} ${contact.last_name}`;
+                const fn = contact.first_name || '';
+                const ln = contact.last_name || '';
+                document.getElementById('prof-name').innerText = `${fn} ${ln}`.trim() || contact.email;
                 document.getElementById('prof-email').innerText = contact.email;
                 document.getElementById('prof-score').innerText = contact.engagement_score || 0;
-                document.getElementById('prof-initials').innerText = (contact.first_name[0] + contact.last_name[0]).toUpperCase();
+                const initials = (fn[0] || contact.email[0] || '?').toUpperCase() + (ln[0] || '').toUpperCase();
+                document.getElementById('prof-initials').innerText = initials;
                 document.getElementById('prof-phone').innerText = contact.phone || 'No phone';
-                document.getElementById('prof-type').innerText = contact.contact_type.toUpperCase();
+                document.getElementById('prof-type').innerText = (contact.contact_type || 'lead').toUpperCase();
 
                 // Load history
                 const histRes = await fetch(`/api/marketing/contacts/${id}/history`, {
@@ -2222,6 +2385,9 @@
                     el.classList.add('active');
                     el.style.display = 'flex';
                 }
+
+                // Load segment membership
+                loadContactSegments(id);
             } catch (e) {
                 console.error(e);
                 alert("Error loading contact profile.");
@@ -2235,6 +2401,68 @@
                 el.classList.remove('active');
                 el.style.display = 'none';
             }
+        }
+
+        // --- SEGMENT MEMBERSHIP LOGIC ---
+        let currentProfileContactId = null;
+
+        async function loadContactSegments(contactId) {
+            currentProfileContactId = contactId;
+            
+            // 1. Load available static segments for the dropdown
+            try {
+                const res = await fetch('/api/marketing/segments/', { headers: { 'Authorization': 'Bearer ' + token } });
+                if (!res.ok) throw new Error("Failed to load segments");
+                const segments = await res.json();
+                
+                const select = document.getElementById('prof-add-segment-select');
+                select.innerHTML = '<option value="">Add to segment...</option>' + 
+                    segments.filter(s => s.segment_type === 'static').map(s => `<option value="${s.id}">${s.name}</option>`).join('');
+
+                // 2. Load current memberships using the NEW optimized endpoint
+                const membershipList = document.getElementById('prof-segments-list');
+                membershipList.innerHTML = '<span class="text-[9px] text-gray-400">Loading...</span>';
+                
+                const memberRes = await fetch(`/api/marketing/segments/contact/${contactId}`, { 
+                    headers: { 'Authorization': 'Bearer ' + token } 
+                });
+                const currentSegments = await memberRes.json();
+                
+                if (!currentSegments || currentSegments.length === 0) {
+                    membershipList.innerHTML = '<span class="text-[9px] text-gray-400">No segment memberships</span>';
+                } else {
+                    membershipList.innerHTML = currentSegments.map(s => `
+                        <span class="px-2 py-0.5 bg-brand-gold bg-opacity-10 text-brand-gold text-[10px] font-bold rounded-lg flex items-center gap-1">
+                            ${s.name}
+                            <button onclick="removeContactFromSegment('${s.id}')" class="hover:text-red-500">×</button>
+                        </span>
+                    `).join('');
+                }
+            } catch (e) {
+                console.error("Error loading segment data:", e);
+                const list = document.getElementById('prof-segments-list');
+                if (list) list.innerHTML = '<span class="text-[9px] text-red-500">Error loading segments</span>';
+            }
+        }
+
+        async function addCurrentContactToSegment() {
+            const segmentId = document.getElementById('prof-add-segment-select').value;
+            if (!segmentId) return alert('Select a segment first.');
+            
+            await fetch(`/api/marketing/segments/${segmentId}/members?contact_id=${currentProfileContactId}`, {
+                method: 'POST',
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            loadContactSegments(currentProfileContactId);
+        }
+
+        async function removeContactFromSegment(segmentId) {
+            if (!confirm('Remove contact from this segment?')) return;
+            await fetch(`/api/marketing/segments/${segmentId}/members/${currentProfileContactId}`, {
+                method: 'DELETE',
+                headers: { 'Authorization': 'Bearer ' + token }
+            });
+            loadContactSegments(currentProfileContactId);
         }
 
         // --- EDIT CONTACT LOGIC ---
@@ -2542,6 +2770,38 @@
 
         // Init is handled by checkAccessAndInit() above, which calls loadOverview() after role verification.
     </script>
+
+    <!-- ENROLL IN SEQUENCE MODAL -->
+    <div id="enroll-modal"
+         onclick="if(event.target === this) closeEnrollModal()"
+         class="modal-overlay fixed inset-0 z-[110] flex items-center justify-center bg-brand-dark bg-opacity-80 backdrop-blur-sm hidden p-4">
+        <div class="bg-white rounded-2xl shadow-2xl w-full max-w-md overflow-hidden border border-gray-100">
+            <div class="bg-brand-dark px-6 py-5 flex justify-between items-center">
+                <div>
+                    <h2 class="text-lg font-bold text-brand-gold">⚡ Enroll in Sequence</h2>
+                    <p class="text-xs text-gray-400 mt-0.5">Contact: <span id="enroll-contact-name" class="text-white font-semibold"></span></p>
+                </div>
+                <button onclick="closeEnrollModal()" class="text-gray-400 hover:text-white transition">
+                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+                </button>
+            </div>
+            <div class="px-6 py-6 space-y-4">
+                <div>
+                    <label class="block text-xs font-bold text-gray-500 uppercase tracking-widest mb-2">Select a Sequence</label>
+                    <select id="enroll-sequence-select" class="w-full px-4 py-2.5 border border-gray-200 rounded-lg text-sm bg-white outline-none focus:ring-2 focus:ring-brand-gold">
+                        <option value="">Loading...</option>
+                    </select>
+                </div>
+                <div class="bg-amber-50 border border-amber-200 rounded-lg p-3 text-xs text-amber-800">
+                    <strong>ℹ️ What happens next:</strong> Step 1 of the sequence will be sent immediately (or on Day 0). Subsequent steps will send automatically based on their delay settings.
+                </div>
+                <div class="flex gap-3 pt-2">
+                    <button id="confirm-enroll-btn" onclick="confirmEnroll()" class="flex-1 bg-brand-gold text-white py-2.5 rounded-xl font-bold text-sm hover:bg-brand-gold/90 transition">Confirm Enrollment</button>
+                    <button onclick="closeEnrollModal()" class="flex-1 border border-gray-200 text-gray-600 py-2.5 rounded-xl font-bold text-sm hover:bg-gray-50 transition">Cancel</button>
+                </div>
+            </div>
+        </div>
+    </div>
 
     <!-- PROFILE MODAL -->
     <div id="profile-modal" 

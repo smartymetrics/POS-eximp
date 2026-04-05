@@ -133,12 +133,19 @@ async def submit_client_signature(token: str, data: ClientContractSignatureSubmi
         raise HTTPException(status_code=400, detail="Link expired")
 
     try:
+        # Capture Audit Data (New Professional Feature)
+        audit_ip = request.client.host if request.client else "unknown"
+        audit_agent = request.headers.get("User-Agent", "unknown")
+
         stored_signature = _upload_client_signature(db, invoice["id"], data.signature_base64)
         db.table("invoices").update({
             "contract_signature_url": stored_signature,
             "contract_signature_method": data.signature_method,
-            "contract_signed_at": datetime.now().isoformat()
+            "contract_signed_at": datetime.now().isoformat(),
+            "contract_audit_ip": audit_ip,
+            "contract_audit_agent": audit_agent
         }).eq("id", invoice["id"]).execute()
+
 
         await log_activity(
             "client_signed_contract",
@@ -148,7 +155,12 @@ async def submit_client_signature(token: str, data: ClientContractSignatureSubmi
             invoice_id=invoice["id"]
         )
 
+        # Notify Legal/Admin that contract is ready for execution
+        from email_service import send_ready_for_execution_email
+        background_tasks.add_task(send_ready_for_execution_email, invoice, invoice["clients"])
+
         return {"message": "Client contract signature recorded successfully"}
+
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to record client signature: {str(e)}")
 

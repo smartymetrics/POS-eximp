@@ -37,10 +37,10 @@ from scheduler import start_scheduler, stop_scheduler
 async def lifespan(app: FastAPI):
     await init_db()
     # Start the background scheduler
-    await start_scheduler()
+    # await start_scheduler()
     yield
     # Stop the background scheduler
-    await stop_scheduler()
+    # await stop_scheduler()
 
 app = FastAPI(title="Eximp & Cloves - Finance System", version="1.0.0", lifespan=lifespan)
 
@@ -120,6 +120,51 @@ async def marketing_dashboard_page(request: Request):
 @app.get("/marketing/editor", response_class=HTMLResponse)
 async def marketing_editor_page(request: Request, id: str):
     return templates.TemplateResponse("marketing_editor.html", {"request": request, "campaign_id": id})
+
+
+@app.get("/legal", response_class=HTMLResponse)
+async def legal_dashboard_page(request: Request):
+    return templates.TemplateResponse("legal_dashboard.html", {"request": request})
+
+
+@app.get("/legal/editor", response_class=HTMLResponse)
+async def legal_editor_page(request: Request, id: str):
+    return templates.TemplateResponse("legal_editor.html", {"request": request, "invoice_id": id})
+@app.get("/legal/{tag:path}")
+async def handle_legal_placeholders(tag: str):
+    """
+    Catch-all for Jinja placeholders like {{ signatures.witness1 }} when viewed 
+    literally in the browser editor. Returns a 1x1 transparent PNG for quiet logs.
+    Also handles legacy PDF download redirects for backward compatibility.
+    """
+    # 1. Signature Placeholder Interception
+    if "{{" in tag and "signatures" in tag:
+        import base64
+        from fastapi.responses import Response
+        # Return a 1x1 transparent PNG
+        return Response(content=base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="), media_type="image/png")
+    
+    # 2. Legacy Redirects for common PDF calls
+    if "api/invoices/pdf/" in tag:
+        from fastapi.responses import RedirectResponse
+        sub_id = tag.split("/")[-1]
+        return RedirectResponse(url=f"/api/invoices/{sub_id}/pdf/invoice")
+    
+    if "api/receipts/pdf/" in tag:
+        from fastapi.responses import RedirectResponse
+        sub_id = tag.split("/")[-1]
+        return RedirectResponse(url=f"/api/invoices/{sub_id}/pdf/receipt")
+
+    # 3. Fall through to 404
+    raise HTTPException(status_code=404, detail="Not Found")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    """Returns a transparent 1x1 pixel for favicon requests to keep logs clean."""
+    import base64
+    from fastapi.responses import Response
+    return Response(content=base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="), media_type="image/png")
 
 
 @app.head("/health")

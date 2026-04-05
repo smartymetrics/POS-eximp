@@ -1245,6 +1245,14 @@
         </svg>
         Marketing
       </a>
+      <a class="nav-item admin-only lawyer-only" href="/legal" id="nav-legal">
+        <svg width="18" height="18" viewBox="0 1 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 12px; opacity: 0.7;">
+          <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
+          <path d="M9 12l2 2 4-4"></path>
+        </svg>
+        Legal Suite
+      </a>
+
 
       <div class="nav-label" style="margin-top:8px;" id="nav-label-admin">Admin</div>
       <a class="nav-item admin-only" href="#" id="nav-team" onclick="showSection('team')" style="display:none;">
@@ -3119,6 +3127,7 @@
               <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="admin" style="accent-color:var(--gold);"> Admin</label>
               <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="staff" checked style="accent-color:var(--gold);"> Staff</label>
               <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="lawyer" style="accent-color:var(--gold);"> Lawyer</label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="legal" style="accent-color:var(--gold);"> Legal</label>
               <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="marketing" style="accent-color:var(--gold);"> Marketing</label>
               <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="operations" style="accent-color:var(--gold);"> Operations</label>
               <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="super_admin" style="accent-color:var(--gold);"> Super Admin</label>
@@ -3128,6 +3137,7 @@
             <label class="form-label">Primary Role (Redirection After Login) <span class="req">*</span></label>
             <select class="form-control" id="am-primary-role">
               <option value="staff">Staff Dashboard (/dashboard)</option>
+              <option value="legal">Legal Dashboard (/legal)</option>
               <option value="marketing">Marketing Dashboard (/marketing)</option>
               <option value="admin">Full Admin Dashboard (/dashboard)</option>
             </select>
@@ -3173,6 +3183,7 @@
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="admin" style="accent-color:var(--gold);"> Admin</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="staff" style="accent-color:var(--gold);"> Staff</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="lawyer" style="accent-color:var(--gold);"> Lawyer</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="legal" style="accent-color:var(--gold);"> Legal</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="marketing" style="accent-color:var(--gold);"> Marketing</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="operations" style="accent-color:var(--gold);"> Operations</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="super_admin" style="accent-color:var(--gold);"> Super Admin</label>
@@ -3182,6 +3193,7 @@
           <label class="form-label">Primary Role (Landing Page After Login) <span class="req">*</span></label>
           <select class="form-control" id="er-primary-role">
             <option value="staff">Staff Dashboard (/dashboard)</option>
+            <option value="legal">Legal Dashboard (/legal)</option>
             <option value="operations">Operations Dashboard (/dashboard)</option>
             <option value="admin">Full Admin Dashboard (/dashboard)</option>
             <option value="marketing">Marketing Dashboard (/marketing)</option>
@@ -5439,6 +5451,7 @@
         admin:       { bg: 'var(--gold-light)', color: 'var(--gold-dark)', badgeBg: '#fffbf0', badgeColor: '#7d5a0a' },
         super_admin: { bg: '#fee2e2',           color: '#991b1b',          badgeBg: '#fee2e2', badgeColor: '#991b1b' },
         lawyer:      { bg: '#f3e8ff',           color: '#7c3aed',          badgeBg: '#f3e8ff', badgeColor: '#6d28d9' },
+        legal:       { bg: '#eef2ff',           color: '#3730a3',          badgeBg: '#eef2ff', badgeColor: '#3730a3' },
         staff:       { bg: '#ebf5fb',           color: '#2980b9',          badgeBg: '#ebf5fb', badgeColor: '#2471a3' },
         marketing:   { bg: '#ecfdf5',           color: '#047857',          badgeBg: '#ecfdf5', badgeColor: '#047857' },
         operations:  { bg: '#fff7ed',           color: '#c2410c',          badgeBg: '#fff7ed', badgeColor: '#c2410c' },
@@ -5786,9 +5799,20 @@
             meta = `<span>${item.clients?.full_name || 'Unknown'}</span> <span class="badge-small badge-${statusClass}">${statusLabel}: ${fmtNGN(balance)}</span>`;
           }
 
+          const safeTitle = title
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+          const safeItemData = itemData
+            .replace(/&/g, '&amp;')
+            .replace(/</g, '&lt;')
+            .replace(/>/g, '&gt;')
+            .replace(/"/g, '&quot;');
+
           return `
-        <div class="search-item" onclick="selectSearchItem('${cid}', '${type}', '${id}', '${title.replace(/'/g, "\\'")}', '${itemData}')">
-          <div class="search-item-title">${title}</div>
+        <div class="search-item" data-cid="${cid}" data-type="${type}" data-id="${id}" data-title="${safeTitle}" data-item="${safeItemData}">
+          <div class="search-item-title">${safeTitle}</div>
           <div class="search-item-meta">${meta}</div>
         </div>`;
         }).join('');
@@ -5809,14 +5833,29 @@
         document.getElementById('inv-size').value = item.plot_size_sqm || '';
         document.getElementById('inv-amount').value = item.total_price || '';
       } else if (cid === 'pay-invoice-search') {
-        document.getElementById('pay-client-id').value = item.client_id;
-        document.getElementById('pay-client-display').value = item.clients?.full_name || '—';
-        document.getElementById('pay-amount').value = item.balance_due || '';
+        const clientId = item.client_id || item.clients?.id || (Array.isArray(item.clients) && item.clients[0]?.id) || '';
+        const clientName = item.clients?.full_name || (Array.isArray(item.clients) && item.clients[0]?.full_name) || '—';
+        const balance = item.balance_due ?? ((parseFloat(item.amount) || 0) - (parseFloat(item.amount_paid) || 0));
+
+        document.getElementById('pay-client-id').value = clientId;
+        document.getElementById('pay-client-display').value = clientName;
+        document.getElementById('pay-amount').value = balance || '';
       }
     }
 
-    // Global click handler to close search boxes
+    // Global click handler to close search boxes and handle selection for search items
     document.addEventListener('click', (e) => {
+      const clickedItem = e.target.closest('.search-item');
+      if (clickedItem) {
+        const cid = clickedItem.dataset.cid;
+        const type = clickedItem.dataset.type;
+        const id = clickedItem.dataset.id;
+        const title = clickedItem.dataset.title;
+        const itemData = clickedItem.dataset.item;
+        selectSearchItem(cid, type, id, title, itemData);
+        return;
+      }
+
       if (!e.target.closest('.search-select-container')) {
         document.querySelectorAll('.search-select-results').forEach(r => r.classList.remove('open'));
       }

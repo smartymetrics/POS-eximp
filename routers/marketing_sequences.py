@@ -19,13 +19,14 @@ class SequenceCreate(BaseModel):
     name: str
     description: Optional[str] = None
     trigger_event: str = 'manual'
+    trigger_segment_id: Optional[str] = None
     steps: List[SequenceStepCreate]
 
 @router.get("/")
 async def list_sequences(current_admin=Depends(verify_token)):
     db = get_db()
-    # Fetch sequences
-    seq_res = db.table("marketing_sequences").select("*").execute()
+    # Fetch sequences with segment info
+    seq_res = db.table("marketing_sequences").select("*, marketing_segments(name)").execute()
     sequences = seq_res.data
     
     # Fetch stats for each
@@ -46,7 +47,8 @@ async def create_sequence(data: SequenceCreate, current_admin=Depends(verify_tok
     seq_res = db.table("marketing_sequences").insert({
         "name": data.name,
         "description": data.description,
-        "trigger_event": data.trigger_event
+        "trigger_event": data.trigger_event,
+        "trigger_segment_id": data.trigger_segment_id
     }).execute()
     
     if not seq_res.data:

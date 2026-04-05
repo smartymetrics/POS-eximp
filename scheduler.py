@@ -9,7 +9,7 @@ import asyncio
 import io
 import base64
 from marketing_scheduler import setup_marketing_scheduler
-from marketing_sequencer_engine import process_active_sequences
+from marketing_sequencer_engine import process_active_sequences, process_segment_triggers
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -211,6 +211,14 @@ async def start_scheduler():
         process_active_sequences,
         CronTrigger(hour="*"),
         id="marketing_automation",
+        replace_existing=True,
+    )
+    
+    # 4. Segment Trigger Monitor (Runs Hourly)
+    scheduler.add_job(
+        process_segment_triggers,
+        CronTrigger(hour="*", minute="5"), # Offset by 5 mins to stagger DB load
+        id="segment_trigger_monitor",
         replace_existing=True,
     )
 

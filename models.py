@@ -418,3 +418,7 @@ class CustomContractHTMLUpdate(BaseModel):
     execution_html: Optional[str] = None
     lawfirm_name: Optional[str] = None
     lawfirm_address: Optional[str] = None
+
+
+class ExecuteContractRequest(BaseModel):
+    send_certificate: bool = True

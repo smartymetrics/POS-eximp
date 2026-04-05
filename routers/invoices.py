@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Request
 from fastapi.encoders import jsonable_encoder
-from fastapi.responses import StreamingResponse
+from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
 from models import InvoiceCreate, SendDocumentRequest, VoidReceiptRequest
 from database import get_db
-from routers.auth import verify_token
+from routers.auth import verify_token, resolve_admin_token
 from routers.analytics import log_activity
 from email_service import send_invoice_email, send_receipt_email, send_statement_email, send_void_notification_email
 from pdf_service import generate_invoice_pdf, generate_receipt_pdf, generate_statement_pdf
@@ -13,6 +14,7 @@ from datetime import datetime
 import io
 
 router = APIRouter()
+templates = Jinja2Templates(directory="templates")
 
 
 @router.get("/")
@@ -393,8 +395,32 @@ async def edit_invoice(
     return {"message": "Invoice updated successfully"}
 
 
+@router.get("/{invoice_id}/html-view")
+async def view_document_html(
+    request: Request, 
+    invoice_id: str, 
+    type: str = "invoice",
+    current_admin=Depends(resolve_admin_token)
+):
+    """Render a professional HTML view for terminal-free document viewing."""
+    db = get_db()
+    inv = db.table("invoices").select("*, clients(*), payments(*)").eq("id", invoice_id).execute()
+    if not inv.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    
+    invoice = inv.data[0]
+    is_receipt = type == "receipt" or ("Receipt" in type.title())
+    
+    return templates.TemplateResponse("invoice_view.html", {
+        "request": request,
+        "invoice": invoice,
+        "is_receipt": is_receipt,
+        "title": "Receipt" if is_receipt else "Invoice"
+    })
+
+
 @router.get("/{invoice_id}/pdf/{doc_type}")
-async def download_pdf(invoice_id: str, doc_type: str, current_admin=Depends(verify_token)):
+async def download_pdf(invoice_id: str, doc_type: str, current_admin=Depends(resolve_admin_token)):
     db = get_db()
     inv = db.table("invoices")\
         .select("*, clients(*), payments(*)")\

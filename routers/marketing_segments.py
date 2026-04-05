@@ -21,6 +21,17 @@ async def list_segments(current_admin=Depends(verify_token)):
     result = db.table("marketing_segments").select("*").execute()
     return result.data
 
+@router.get("/contact/{contact_id}")
+async def get_contact_segments(contact_id: str, current_admin=Depends(verify_token)):
+    """Fetch all static segments a specific contact belongs to."""
+    db = get_db()
+    res = db.table("marketing_segment_contacts")\
+        .select("marketing_segments(*)")\
+        .eq("contact_id", contact_id)\
+        .execute()
+    static_segments = [r["marketing_segments"] for r in res.data if r.get("marketing_segments")]
+    return static_segments
+
 @router.post("/")
 async def create_segment(data: SegmentCreate, current_admin=Depends(verify_token)):
     db = get_db()
@@ -69,7 +80,11 @@ async def get_segment_contacts(id: str, current_admin=Depends(verify_token)):
     segment = seg_res.data[0]
     
     if segment["segment_type"] == "static":
-        return []
+        res = db.table("marketing_segment_contacts")\
+            .select("marketing_contacts(*)")\
+            .eq("segment_id", id)\
+            .execute()
+        return [r["marketing_contacts"] for r in res.data if r.get("marketing_contacts")]
     
     rules = segment.get("filter_rules") or []
     query = db.table("marketing_contacts").select("*").eq("is_subscribed", True)
@@ -110,11 +125,41 @@ async def get_segment_count(id: str, current_admin=Depends(verify_token)):
         raise HTTPException(status_code=404, detail="Segment not found")
     
     segment = seg_res.data[0]
+    if segment["segment_type"] == "static":
+        res = db.table("marketing_segment_contacts").select("contact_id", count="exact").eq("segment_id", id).execute()
+        return {"count": res.count or 0}
+
     rules = segment.get("filter_rules") or []
     query = db.table("marketing_contacts").select("id", count="exact").eq("is_subscribed", True)
     query = apply_segment_filters(query, rules)
     result = query.execute()
     return {"count": result.count or 0}
+
+@router.post("/{id}/members")
+async def add_segment_member(id: str, contact_id: str, current_admin=Depends(verify_token)):
+    """Manually add a contact to a static segment."""
+    db = get_db()
+    # 1. Verify it's a static segment
+    seg = db.table("marketing_segments").select("segment_type").eq("id", id).execute()
+    if not seg.data or seg.data[0]["segment_type"] != "static":
+        raise HTTPException(status_code=400, detail="Members can only be manually added to static segments.")
+    
+    # 2. Insert
+    db.table("marketing_segment_contacts").upsert({
+        "segment_id": id,
+        "contact_id": contact_id
+    }).execute()
+    
+    return {"status": "ok"}
+
+@router.delete("/{id}/members/{contact_id}")
+async def remove_segment_member(id: str, contact_id: str, current_admin=Depends(verify_token)):
+    """Remove a contact from a static segment."""
+    db = get_db()
+    db.table("marketing_segment_contacts").delete().eq("segment_id", id).eq("contact_id", contact_id).execute()
+    return {"status": "ok"}
+
+
 
 @router.get("/diagnostic/financial-segmentation")
 async def test_financial_segmentation(current_admin=Depends(verify_token)):

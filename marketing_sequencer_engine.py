@@ -1,7 +1,7 @@
 import logging
 from datetime import datetime, timedelta
 from database import get_db
-from marketing_service import send_marketing_email
+from marketing_service import send_marketing_email, resolve_target_recipients
 
 logger = logging.getLogger(__name__)
 
@@ -150,3 +150,63 @@ async def auto_enroll_contact(contact_id: str, trigger_event: str):
                 "next_send_date": datetime.utcnow().date().isoformat()
             }).execute()
             logger.info(f"Auto-enrolled contact {contact_id} into sequence {seq['id']} via {trigger_event}")
+
+async def process_segment_triggers():
+    """
+    Scans for sequences triggered by segment entry and enrolls matching contacts.
+    Runs periodically via scheduler.
+    """
+    db = get_db()
+    try:
+        # 1. Fetch active sequences that use segment triggers
+        seq_res = db.table("marketing_sequences")\
+            .select("id, trigger_segment_id")\
+            .eq("trigger_event", "segment_entry")\
+            .eq("is_active", True)\
+            .not_.is_("trigger_segment_id", "null")\
+            .execute()
+            
+        if not seq_res.data:
+            logger.info("No active sequences found with segment triggers.")
+            return
+
+        logger.info(f"Checking {len(seq_res.data)} sequences for segment-based enrollment...")
+
+        for seq in seq_res.data:
+            seq_id = seq["id"]
+            segment_id = seq["trigger_segment_id"]
+            
+            # 2. Resolve ALL current members of the segment
+            contacts = await resolve_target_recipients(segment_ids=[segment_id])
+            
+            if not contacts:
+                continue
+                
+            enrolled_count = 0
+            for contact in contacts:
+                contact_id = contact["id"]
+                
+                # Check if already enrolled (any status)
+                existing = db.table("contact_sequence_status")\
+                    .select("id")\
+                    .eq("contact_id", contact_id)\
+                    .eq("sequence_id", seq_id)\
+                    .execute()
+                    
+                if not existing.data:
+                    try:
+                        db.table("contact_sequence_status").insert({
+                            "contact_id": contact_id,
+                            "sequence_id": seq_id,
+                            "current_step": 1,
+                            "status": "active",
+                            "next_send_date": datetime.utcnow().date().isoformat()
+                        }).execute()
+                        enrolled_count += 1
+                    except: pass
+            
+            if enrolled_count > 0:
+                logger.info(f"Sequence {seq_id}: Auto-enrolled {enrolled_count} new members from segment {segment_id}")
+
+    except Exception as e:
+        logger.error(f"Segment Trigger Engine Error: {e}")

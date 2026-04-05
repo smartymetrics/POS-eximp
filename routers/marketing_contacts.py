@@ -24,6 +24,7 @@ class ContactUpdate(BaseModel):
     last_name: Optional[str] = None
     email: Optional[str] = None
     phone: Optional[str] = None
+    source: Optional[str] = None
     tags: Optional[List[str]] = None
     is_subscribed: Optional[bool] = None
     engagement_score: Optional[int] = None

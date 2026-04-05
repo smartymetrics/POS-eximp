@@ -387,8 +387,14 @@ async def resolve_target_recipients(segment_ids: List[str] = None, manual_emails
                         res = query.execute()
                         all_contacts.extend(res.data)
                     else:
-                        # Static segments would use a join table (future PRD)
-                        pass
+                        # 5. Static segments use the join table
+                        res = db.table("marketing_segment_contacts")\
+                            .select("marketing_contacts(*)")\
+                            .eq("segment_id", sid)\
+                            .execute()
+                        if res.data:
+                            # Flatten the joined structure
+                            all_contacts.extend([r["marketing_contacts"] for r in res.data if r.get("marketing_contacts")])
         
         # De-duplicate by ID
         unique_contacts = {c['id']: c for c in all_contacts}.values()

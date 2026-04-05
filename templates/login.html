@@ -258,13 +258,18 @@
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Invalid credentials');
         localStorage.setItem('ec_token', data.access_token);
+        localStorage.setItem('admin', JSON.stringify(data.admin));
+
         
         // Role-based redirection
         const userRoles = (data.admin.role || '').toLowerCase().split(',').map(r => r.trim());
         const onlyMarketing = userRoles.length === 1 && userRoles[0] === 'marketing';
+        const onlyLegal = userRoles.length === 1 && userRoles[0] === 'legal';
         
         if (onlyMarketing || (data.admin && data.admin.primary_role === 'marketing')) {
           window.location.href = '/marketing';
+        } else if (onlyLegal || (data.admin && data.admin.primary_role === 'legal')) {
+          window.location.href = '/legal';
         } else {
           window.location.href = '/dashboard';
         }
