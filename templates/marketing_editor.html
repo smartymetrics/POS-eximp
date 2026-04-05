@@ -553,7 +553,8 @@
 
   <script>
     const campaignId = new URLSearchParams(window.location.search).get('id');
-    const LOGO_URL = window.location.origin + '/static/img/logo_dark.svg';
+    // Using a public cloud URL to ensure it renders for every recipient
+    const LOGO_URL = 'https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/marketing/logo_dark.svg';
 
     // ═══════════════════════════════════════
     // LOCKED HEADER & FOOTER HTML
@@ -1119,7 +1120,7 @@
                     <div class="p-4 bg-[#222] border border-[#333] rounded-lg hover:border-brand-gold transition cursor-pointer flex flex-col gap-2" onclick="insertPropertyCard(${JSON.stringify(p).replace(/"/g, '&quot;')})">
                         <div class="text-brand-gold font-bold">${p.name}</div>
                         <div class="text-xs text-gray-400">${p.location}</div>
-                        <div class="text-sm font-bold text-white">₦${parseFloat(p.starting_price).toLocaleString()}</div>
+                        <div class="text-sm font-bold text-white">₦${parseFloat(p.total_price || p.starting_price || 0).toLocaleString()}</div>
                         <div class="mt-2 text-[10px] text-gray-500 uppercase font-black">Click to Insert →</div>
                     </div>
                 `).join('');
@@ -1129,8 +1130,10 @@
     }
 
     function insertPropertyCard(p) {
+      const selected = editor.getSelected();
       const formatter = new Intl.NumberFormat('en-NG', { style: 'currency', currency: 'NGN' });
-      const price = formatter.format(p.starting_price);
+      const priceValue = p.total_price || p.starting_price || 0;
+      const price = formatter.format(priceValue);
 
       // Generate clean HTML for the card
       const html = `
@@ -1146,7 +1149,7 @@
                         <table width="100%" cellpaddig="0" cellspacing="0" style="margin-bottom:24px;">
                             <tr>
                                 <td width="50%">
-                                    <div style="font-size:12px; color:#999; margin-bottom:4px;">Starting Price</div>
+                                    <div style="font-size:12px; color:#999; margin-bottom:4px;">Total Price</div>
                                     <div style="color:#111; font-weight:800; font-size:20px;">${price}</div>
                                 </td>
                                 <td width="50%" style="text-align:right;">
@@ -1163,17 +1166,40 @@
                 </table>
             `;
 
-      editor.addComponents(html);
+      if (selected && selected.is('property-card-trigger')) {
+        selected.replaceWith(html);
+      } else {
+        editor.addComponents(html);
+      }
       closePropertyPicker();
     }
 
-    // Register custom component to handle the click
+    // Register custom component to handle the click and drop UX
     editor.DomComponents.addType('property-card-trigger', {
       model: {
         defaults: {
           tagName: 'div',
-          attributes: { style: 'padding: 20px; border: 2px dashed #C47D0A; text-align: center; color: #C47D0A; cursor: pointer;' },
-          content: '🏠 Click here to pick a property from your database'
+          attributes: { 
+            style: 'padding: 40px; border: 2px dashed #C47D0A; border-radius: 12px; background: #fdfaf3; text-align: center; cursor: pointer; transition: 0.3s;' 
+          },
+          content: `
+            <div style="pointer-events: none;">
+              <div style="font-size: 40px; margin-bottom: 12px;">🏠</div>
+              <div style="color: #C47D0A; font-weight: 800; font-family: 'Inter', sans-serif; font-size: 16px; margin-bottom: 4px;">Smart Property Placeholder</div>
+              <div style="color: #8a6d3b; font-size: 12px; font-family: 'Inter', sans-serif;">Click to select an Estate from your database</div>
+              <div style="margin-top: 20px; display: flex; flex-direction: column; gap: 8px;">
+                <div style="height: 120px; background: #eee; border-radius: 8px;"></div>
+                <div style="height: 20px; background: #eee; border-radius: 4px; width: 60%;"></div>
+                <div style="height: 15px; background: #eee; border-radius: 4px; width: 40%;"></div>
+              </div>
+            </div>
+          `
+        },
+        init() {
+          // Automatically open picker when DRAGGED into the canvas
+          setTimeout(() => {
+             if (this.collection) openPropertyPicker();
+          }, 100);
         }
       },
       view: {
@@ -1238,10 +1264,16 @@
       const statusLabel = document.getElementById('save-status');
       statusLabel.innerText = '💾 Saving...';
 
-      // Use core getHtml/getCss for maximum reliability
-      const html = editor.getHtml();
-      const css = editor.getCss();
-      const fullHtml = `<html><head><style>${css}</style></head><body>${html}</body></html>`;
+      // Use GrapesJS Newsletter command to inline CSS for maximum email compatibility
+      let fullHtml;
+      try {
+        fullHtml = editor.runCommand('gjs-get-inlined-html');
+      } catch (e) {
+        console.warn("Inliner command failed, falling back to manual merge:", e);
+        const html = editor.getHtml();
+        const css = editor.getCss();
+        fullHtml = `<html><head><style>${css}</style></head><body>${html}</body></html>`;
+      }
 
       const payload = {
         html_body_a: fullHtml,

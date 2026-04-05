@@ -102,6 +102,12 @@ def inject_tracking_pixel(html: str, campaign_id: str, contact_id: str) -> str:
         return html[:idx] + pixel_tag + html[idx:]
     return html + pixel_tag
 
+def sanitize_urls(html: str) -> str:
+    """Replaces any localhost or development URLs with the public APP_BASE_URL."""
+    # Matches http://127.0.0.1:8000/ or http://localhost:8000/ or alike
+    pattern = r"http://(?:localhost|127\.0\.0\.1):\d+/"
+    return re.sub(pattern, f"{APP_BASE_URL.rstrip('/')}/", html)
+
 async def send_marketing_email(campaign: Dict[str, Any], contact: Dict[str, Any]):
     """Sends a single personalized marketing email with tracking."""
     campaign_id = campaign["id"]
@@ -113,8 +119,9 @@ async def send_marketing_email(campaign: Dict[str, Any], contact: Dict[str, Any]
         logger.warning(f"Aborting send to {contact['email']} - Contact is UNSUBSCRIBED.")
         return None
 
-    # 1. Personalize
+    # 1. Personalize & Sanitize
     html = personalize_content(campaign["html_body_a"], contact)
+    html = sanitize_urls(html)
     
     # 2. Tracking (only for real campaigns, not tests)
     if campaign.get("status") != "test":
