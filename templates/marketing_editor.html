@@ -11,6 +11,22 @@
   <link href="https://unpkg.com/grapesjs/dist/css/grapes.min.css" rel="stylesheet">
   <script src="https://unpkg.com/grapesjs"></script>
   <script src="https://unpkg.com/grapesjs-preset-newsletter"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              gold: '#C47D0A',
+              dark: '#111111',
+              card: '#1A1A1A'
+            }
+          }
+        }
+      }
+    }
+  </script>
   <style>
     *,
     *::before,
@@ -1116,14 +1132,31 @@
         });
         const props = await res.json();
 
-        grid.innerHTML = props.map(p => `
-                    <div class="p-4 bg-[#222] border border-[#333] rounded-lg hover:border-brand-gold transition cursor-pointer flex flex-col gap-2" onclick="insertPropertyCard(${JSON.stringify(p).replace(/"/g, '&quot;')})">
-                        <div class="text-brand-gold font-bold">${p.name}</div>
-                        <div class="text-xs text-gray-400">${p.location}</div>
-                        <div class="text-sm font-bold text-white">₦${parseFloat(p.total_price || p.starting_price || 0).toLocaleString()}</div>
-                        <div class="mt-2 text-[10px] text-gray-500 uppercase font-black">Click to Insert →</div>
+        grid.innerHTML = props.map(p => {
+            const priceVal = parseFloat(p.total_price || p.starting_price || 0);
+            return `
+                <div class="group p-5 bg-[#1f1f1f] border border-[#333] rounded-xl hover:border-brand-gold hover:shadow-2xl hover:shadow-brand-gold/10 transition-all duration-300 cursor-pointer flex flex-col gap-3 relative overflow-hidden" onclick="insertPropertyCard(${JSON.stringify(p).replace(/"/g, '&quot;')})">
+                    <div class="absolute top-0 right-0 p-2 opacity-0 group-hover:opacity-100 transition-opacity">
+                        <span class="text-[10px] bg-brand-gold text-white px-2 py-1 rounded font-bold uppercase tracking-widest">Select</span>
                     </div>
-                `).join('');
+                    <div>
+                        <div class="text-white font-serif text-lg group-hover:text-brand-gold transition-colors">${p.name}</div>
+                        <div class="text-xs text-gray-500 flex items-center gap-1 mt-1">
+                            <span>📍</span> ${p.location}
+                        </div>
+                    </div>
+                    <div class="mt-auto pt-3 border-t border-[#2a2a2a] flex items-center justify-between">
+                        <div>
+                            <div class="text-[10px] text-gray-500 uppercase tracking-tighter">Total Asset Value</div>
+                            <div class="text-brand-gold font-bold text-lg">₦${priceVal.toLocaleString()}</div>
+                        </div>
+                        <div class="w-8 h-8 rounded-full bg-[#2a2a2a] flex items-center justify-center text-brand-gold group-hover:bg-brand-gold group-hover:text-white transition-all">
+                            →
+                        </div>
+                    </div>
+                </div>
+            `;
+        }).join('');
       } catch (e) {
         grid.innerHTML = '<p class="text-red-500">Error loading properties.</p>';
       }
