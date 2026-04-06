@@ -400,7 +400,7 @@
   <!-- TOP BAR -->
   <div class="editor-top-bar">
     <div class="brand-logo">
-      <img src="/static/img/logo_dark.svg" alt="Eximp & Cloves" onerror="this.style.display='none'">
+      <img src="https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/marketing/logo_dark.svg" alt="Eximp & Cloves" onerror="this.style.display='none'">
       <span>Marketing Editor</span>
     </div>
     <div class="top-actions">
@@ -966,7 +966,7 @@
     bm.add('ec-header', {
       label: '🔒 Brand Header',
       category: 'Eximp & Cloves',
-      content: LOCKED_HEADER,
+      content: { type: 'brand-header' }, // Uses component type
       attributes: { class: 'fa fa-header' }
     });
 
@@ -1024,7 +1024,7 @@
     bm.add('ec-footer', {
       label: '🔒 Brand Footer',
       category: 'Eximp & Cloves',
-      content: LOCKED_FOOTER
+      content: { type: 'brand-footer' } // Uses component type
     });
 
     // ═══════════════════════════════════════
@@ -1206,6 +1206,32 @@
       }
       closePropertyPicker();
     }
+
+    // Register custom component for Brand Header (Locked)
+    editor.DomComponents.addType('brand-header', {
+      model: {
+        defaults: {
+          tagName: 'div',
+          removable: false,
+          draggable: true,
+          copyable: false,
+          content: LOCKED_HEADER
+        }
+      }
+    });
+
+    // Register custom component for Brand Footer (Locked)
+    editor.DomComponents.addType('brand-footer', {
+      model: {
+        defaults: {
+          tagName: 'div',
+          removable: false, // Prevents deletion
+          draggable: true,
+          copyable: false,
+          content: LOCKED_FOOTER
+        }
+      }
+    });
 
     // Register custom component to handle the click and drop UX
     editor.DomComponents.addType('property-card-trigger', {

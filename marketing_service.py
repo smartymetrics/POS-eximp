@@ -20,6 +20,31 @@ MARKETING_FROM_NAME = os.getenv("MARKETING_FROM_NAME", "Eximp & Cloves")
 MARKETING_REPLY_TO = os.getenv("MARKETING_REPLY_TO", "marketing@mail.eximps-cloves.com")
 MARKETING_BCC_EMAIL = os.getenv("MARKETING_BCC_EMAIL", "marketing@mail.eximps-cloves.com")
 
+BRAND_LOGO_URL = "https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/marketing/logo_dark.svg"
+BRAND_FOOTER_HTML = f"""
+<table width="100%" cellpadding="0" cellspacing="0" style="background:#1A1A1A; margin-top:20px;">
+    <tr><td style="padding: 30px; text-align: center; border-top: 1px solid #333;">
+      <img src="{BRAND_LOGO_URL}" alt="Eximp &amp; Cloves" style="height:36px; margin-bottom:16px;" />
+      <div style="margin-bottom:16px;">
+        <a href="https://www.linkedin.com/company/eximp-cloves" style="color:#C47D0A;text-decoration:none;margin:0 10px;font-family:'Inter',sans-serif;font-size:13px;">LinkedIn</a>
+        <a href="https://x.com/eximp_cloves" style="color:#C47D0A;text-decoration:none;margin:0 10px;font-family:'Inter',sans-serif;font-size:13px;">X</a>
+        <a href="https://instagram.com/eximp.cloves" style="color:#C47D0A;text-decoration:none;margin:0 10px;font-family:'Inter',sans-serif;font-size:13px;">Instagram</a>
+        <a href="https://facebook.com/eximp.cloves" style="color:#C47D0A;text-decoration:none;margin:0 10px;font-family:'Inter',sans-serif;font-size:13px;">Facebook</a>
+        <a href="https://tiktok.com/@eximp.cloves" style="color:#C47D0A;text-decoration:none;margin:0 10px;font-family:'Inter',sans-serif;font-size:13px;">TikTok</a>
+      </div>
+      <div style="color:#666; font-family:'Inter',sans-serif; font-size:12px; line-height:1.7;">
+        Eximp &amp; Cloves Infrastructure Limited<br>
+        57B, Isaac John Street, Yaba, Lagos, Nigeria<br>
+        📞 +234 912 686 4383 &nbsp;|&nbsp; 📧 <a href="mailto:admin@eximps-cloves.com" style="color:#C47D0A;">admin@eximps-cloves.com</a><br>
+        🌐 <a href="https://eximps-cloves.com" style="color:#C47D0A;">eximps-cloves.com</a>
+      </div>
+      <div style="margin-top:16px; padding-top:16px; border-top:1px solid #2a2a2a;">
+        <a href="{{{{unsubscribe_url}}}}" style="color:#555; font-family:'Inter',sans-serif; font-size:11px; text-decoration:underline;">Unsubscribe from marketing emails</a>
+      </div>
+    </td></tr>
+</table>
+"""
+
 def personalize_content(html: str, contact: Dict[str, Any]) -> str:
     """Replaces {{variable}} with contact data and live financial context."""
     db = get_db()
@@ -131,8 +156,18 @@ async def send_marketing_email(campaign: Dict[str, Any], contact: Dict[str, Any]
         # Check for presence of "unsubscribe" in the HTML.
         # Use a more assertive check: if they have the {{unsubscribe_url}} tag OR the word unsubscribe in a link.
         has_unsubscribe = "unsubscribe" in html.lower()
+        has_address = "Isaac John Street" in html
         
-        if not has_unsubscribe:
+        if not has_address:
+            # Re-inject the professional brand footer if it was accidentally removed
+            logger.info(f"Re-injecting official brand footer for campaign {campaign_id}")
+            if "</body>" in html:
+                idx = html.rfind("</body>")
+                html = html[:idx] + BRAND_FOOTER_HTML + html[idx:]
+            else:
+                html += BRAND_FOOTER_HTML
+        elif not has_unsubscribe:
+            # If the address is there but unsubscribe is MISSING, add the minimal fallback
             unsub_token = contact.get("id") or "test-id"
             unsub_url = f"{APP_BASE_URL}/unsubscribe/{unsub_token}"
             unsub_footer = f'<div style="margin-top:40px; padding-top:20px; border-top:1px solid #eee; font-size:11px; color:#999; text-align:center;">' \
