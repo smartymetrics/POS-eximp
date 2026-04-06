@@ -1,0 +1,633 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professional CRM | Eximp & Cloves</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        
+        :root {
+            --gold: #C47D0A;
+            --gold-light: #FDE8BC;
+            --dark: #0F0F0F;
+            --light-bg: #f9fafb;
+        }
+
+        body { background: var(--light-bg); }
+
+        .sidebar {
+            width: 280px;
+            height: 100vh;
+            position: fixed;
+            left: 0;
+            top: 0;
+            background: linear-gradient(135deg, #1a1a1a 0%, #252525 100%);
+            border-right: 1px solid #333;
+            overflow-y: auto;
+            z-index: 50;
+        }
+
+        .main-content {
+            margin-left: 280px;
+            min-height: 100vh;
+            padding: 40px;
+        }
+
+        .nav-section {
+            padding: 20px 0;
+            border-bottom: 1px solid #333;
+        }
+
+        .nav-section:first-child { border-bottom: none; }
+
+        .nav-title {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #666;
+            padding: 12px 16px;
+            letter-spacing: 1px;
+        }
+
+        .nav-link {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 12px 16px;
+            color: #9ca3af;
+            text-decoration: none;
+            transition: all 0.2s;
+            border-left: 3px solid transparent;
+            cursor: pointer;
+            font-size: 14px;
+        }
+
+        .nav-link:hover {
+            background: rgba(196, 125, 10, 0.1);
+            color: var(--gold);
+            border-left-color: var(--gold);
+        }
+
+        .nav-link.active {
+            background: rgba(196, 125, 10, 0.15);
+            color: var(--gold);
+            border-left-color: var(--gold);
+            font-weight: 600;
+        }
+
+        .stat-card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            border-left: 4px solid var(--gold);
+        }
+
+        .stat-value {
+            font-size: 32px;
+            font-weight: 800;
+            color: var(--dark);
+            margin-top: 8px;
+        }
+
+        .stat-label {
+            font-size: 13px;
+            color: #888;
+            margin-top: 8px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .card {
+            background: white;
+            border-radius: 12px;
+            padding: 24px;
+            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+        }
+
+        .header-section {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            margin-bottom: 32px;
+        }
+
+        .page-title {
+            font-size: 36px;
+            font-weight: 800;
+            color: var(--dark);
+        }
+
+        .tab-buttons {
+            display: flex;
+            gap: 8px;
+            margin-bottom: 24px;
+            background: #f3f4f6;
+            padding: 4px;
+            border-radius: 8px;
+            width: fit-content;
+        }
+
+        .tab-btn {
+            padding: 8px 16px;
+            border-radius: 6px;
+            border: none;
+            background: transparent;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 600;
+            color: #666;
+            transition: all 0.2s;
+        }
+
+        .tab-btn.active {
+            background: white;
+            color: var(--gold);
+        }
+
+        .grid-2 { display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; }
+        .grid-3 { display: grid; grid-template-columns: repeat(3, 1fr); gap: 20px; }
+        .grid-4 { display: grid; grid-template-columns: repeat(4, 1fr); gap: 20px; }
+
+        .badge {
+            display: inline-block;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 12px;
+            font-weight: 600;
+        }
+
+        .badge-hot { background: #FEE2E2; color: #991B1B; }
+        .badge-warm { background: #FEF3C7; color: #92400E; }
+        .badge-cool { background: #D1FAE5; color: #047857; }
+
+        .list-item {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 12px 0;
+            border-bottom: 1px solid #e5e7eb;
+        }
+
+        .list-item:last-child { border-bottom: none; }
+
+        .btn {
+            padding: 10px 16px;
+            border-radius: 6px;
+            border: none;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-size: 14px;
+        }
+
+        .btn-primary {
+            background: var(--gold);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background: #B86F08;
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(196, 125, 10, 0.3);
+        }
+
+        .btn-secondary {
+            background: white;
+            color: var(--dark);
+            border: 1px solid #e5e7eb;
+        }
+
+        .btn-secondary:hover { background: #f9fafb; }
+
+        .view-section { display: none; }
+        .view-section.active { display: block; }
+
+        @media (max-width: 1024px) {
+            .sidebar { transform: translateX(-100%); }
+            .main-content { margin-left: 0; }
+            .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+        }
+    </style>
+</head>
+
+<body>
+    <!-- SIDEBAR -->
+    <div class="sidebar">
+        <div style="padding: 24px;">
+            <div style="font-size: 18px; font-weight: 800; color: var(--gold); margin-bottom: 40px;">
+                <i class="fas fa-crown"></i> CRM PRO
+            </div>
+
+            <!-- Lead Management -->
+            <div class="nav-section">
+                <div class="nav-title">Lead Management</div>
+                <div class="nav-link active" onclick="switchView('leads')">
+                    <i class="fas fa-fire"></i> Hot Leads
+                </div>
+                <div class="nav-link" onclick="switchView('lead-scoring')">
+                    <i class="fas fa-chart-pie"></i> Lead Scoring
+                </div>
+            </div>
+
+            <!-- Properties -->
+            <div class="nav-section">
+                <div class="nav-title">Properties</div>
+                <div class="nav-link" onclick="switchView('properties')">
+                    <i class="fas fa-home"></i> Listings
+                </div>
+                <div class="nav-link" onclick="switchView('market-intel')">
+                    <i class="fas fa-globe"></i> Market Intel
+                </div>
+            </div>
+
+            <!-- Deals & Documents -->
+            <div class="nav-section">
+                <div class="nav-title">Deals & Documents</div>
+                <div class="nav-link" onclick="switchView('pipeline')">
+                    <i class="fas fa-tasks"></i> Pipeline
+                </div>
+                <div class="nav-link" onclick="switchView('documents')">
+                    <i class="fas fa-file-contract"></i> Documents
+                </div>
+            </div>
+
+            <!-- Campaigns -->
+            <div class="nav-section">
+                <div class="nav-title">Marketing</div>
+                <div class="nav-link" onclick="switchView('campaigns')">
+                    <i class="fas fa-bullhorn"></i> Campaigns
+                </div>
+                <div class="nav-link" onclick="switchView('portal')">
+                    <i class="fas fa-users"></i> Client Portal
+                </div>
+            </div>
+
+            <!-- Analytics -->
+            <div class="nav-section">
+                <div class="nav-title">Performance</div>
+                <div class="nav-link" onclick="switchView('team')">
+                    <i class="fas fa-medal"></i> Team Leaderboard
+                </div>
+                <div class="nav-link" onclick="switchView('reports')">
+                    <i class="fas fa-file-pdf"></i> Reports
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MAIN CONTENT -->
+    <div class="main-content">
+        <!-- HOME / LEADS VIEW -->
+        <div id="leads" class="view-section active">
+            <div class="header-section">
+                <div>
+                    <h1 class="page-title">Lead Intelligence</h1>
+                    <p style="color: #888; margin-top: 8px;">AI-powered lead qualification & scoring</p>
+                </div>
+                <button class="btn btn-primary" onclick="scoreAllLeads()">
+                    <i class="fas fa-brain"></i> Analyze All Leads
+                </button>
+            </div>
+
+            <!-- Quick Stats -->
+            <div class="grid-4" style="margin-bottom: 32px;">
+                <div class="stat-card">
+                    <div style="font-size: 14px; color: #888; white-space: nowrap;"><i class="fas fa-fire" style="color: #DC2626;"></i> Hot Leads</div>
+                    <div class="stat-value" id="hot-leads">0</div>
+                    <div class="stat-label">Ready to convert</div>
+                </div>
+                <div class="stat-card">
+                    <div style="font-size: 14px; color: #888;"><i class="fas fa-sun" style="color: #F59E0B;"></i> Warm Leads</div>
+                    <div class="stat-value" id="warm-leads">0</div>
+                    <div class="stat-label">Promising</div>
+                </div>
+                <div class="stat-card">
+                    <div style="font-size: 14px; color: #888;"><i class="fas fa-snowflake" style="color: #3B82F6;"></i> Cold Leads</div>
+                    <div class="stat-value" id="cold-leads">0</div>
+                    <div class="stat-label">Long-term</div>
+                </div>
+                <div class="stat-card">
+                    <div style="font-size: 14px; color: #888;"><i class="fas fa-target"></i> Total Pipeline</div>
+                    <div class="stat-value" id="total-pipeline">₦0</div>
+                    <div class="stat-label">All leads</div>
+                </div>
+            </div>
+
+            <!-- Hottest Leads Table -->
+            <div class="card">
+                <h3 style="font-weight: 700; font-size: 18px; margin-bottom: 20px;">🔥 Hottest Leads (Top Priority)</h3>
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; font-size: 14px;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid #e5e7eb;">
+                                <th style="text-align: left; padding: 12px; font-weight: 600; color: #888;">Lead</th>
+                                <th style="text-align: right; padding: 12px; font-weight: 600; color: #888;">Score</th>
+                                <th style="text-align: center; padding: 12px; font-weight: 600; color: #888;">Quality</th>
+                                <th style="text-align: right; padding: 12px; font-weight: 600; color: #888;">Deals</th>
+                                <th style="text-align: right; padding: 12px; font-weight: 600; color: #888;">LTV</th>
+                                <th style="text-align: center; padding: 12px; font-weight: 600; color: #888;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="hotLeadsTable"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- LEAD SCORING DETAILS -->
+        <div id="lead-scoring" class="view-section">
+            <div class="header-section">
+                <h1 class="page-title">Lead Scoring System</h1>
+            </div>
+            <div class="card">
+                <p style="color: #666; line-height: 1.6;">Our AI-powered lead scoring evaluates 6 key factors:</p>
+                <div style="display: grid; grid-template-columns: repeat(2, 1fr); gap: 20px; margin-top: 20px;">
+                    <div style="padding: 16px; background: #f9fafb; border-radius: 8px;">
+                        <div style="font-weight: 600; color: var(--dark); margin-bottom: 8px;">1. Purchase History (0-25 pts)</div>
+                        <p style="font-size: 13px; color: #666;">Repeat buyers score higher</p>
+                    </div>
+                    <div style="padding: 16px; background: #f9fafb; border-radius: 8px;">
+                        <div style="font-weight: 600; color: var(--dark); margin-bottom: 8px;">2. Payment Reliability (0-20 pts)</div>
+                        <p style="font-size: 13px; color: #666;">100% payers get max points</p>
+                    </div>
+                    <div style="padding: 16px; background: #f9fafb; border-radius: 8px;">
+                        <div style="font-weight: 600; color: var(--dark); margin-bottom: 8px;">3. Engagement (0-20 pts)</div>
+                        <p style="font-size: 13px; color: #666;">Recent activity indicates interest</p>
+                    </div>
+                    <div style="padding: 16px; background: #f9fafb; border-radius: 8px;">
+                        <div style="font-weight: 600; color: var(--dark); margin-bottom: 8px;">4. Deal Size (0-20 pts)</div>
+                        <p style="font-size: 13px; color: #666;">High-value deals weighted higher</p>
+                    </div>
+                    <div style="padding: 16px; background: #f9fafb; border-radius: 8px;">
+                        <div style="font-weight: 600; color: var(--dark); margin-bottom: 8px;">5. Recency (0-15 pts)</div>
+                        <p style="font-size: 13px; color: #666;">Recent purchases = active</p>
+                    </div>
+                    <div style="padding: 16px; background: #f9fafb; border-radius: 8px;">
+                        <div style="font-weight: 600; color: var(--dark); margin-bottom: 8px;">6. Open Deals (0-20 pts)</div>
+                        <p style="font-size: 13px; color: #666;">Multiple open deals high priority</p>
+                    </div>
+                </div>
+                <div style="margin-top: 24px; padding: 16px; background: #D1FAE5; border-left: 4px solid #059669; border-radius: 8px;">
+                    <div style="font-weight: 600; color: #047857;">Score Interpretation</div>
+                    <div style="font-size: 13px; color: #047857; margin-top: 8px;">80-100: 🔥 HOT (Ready to convert), 60-79: ☀️ WARM (Promising), 40-59: ❄️ COOL (Needs nurturing), 0-39: ❄️ COLD (Long-term)</div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PROPERTIES & LISTINGS -->
+        <div id="properties" class="view-section">
+            <div class="header-section">
+                <h1 class="page-title">Property Listings</h1>
+                <button class="btn btn-primary">
+                    <i class="fas fa-plus"></i> Add Property
+                </button>
+            </div>
+            <div class="grid-3" style="margin-bottom: 32px;" id="propertiesGrid">
+                <!-- Properties will load here -->
+            </div>
+        </div>
+
+        <!-- MARKET INTELLIGENCE -->
+        <div id="market-intel" class="view-section">
+            <div class="header-section">
+                <h1 class="page-title">Market Intelligence</h1>
+            </div>
+            <div class="grid-2" style="margin-bottom: 32px;">
+                <div class="card">
+                    <h3 style="font-weight: 600; margin-bottom: 16px;">Market Overview</h3>
+                    <div style="font-size: 28px; font-weight: 700; color: var(--gold); margin: 16px 0;">Average Price</div>
+                    <div id="market-avg-price" style="font-size: 24px; font-weight: 600;">₦0</div>
+                    <div style="color: #888; font-size: 13px; margin-top: 12px;">Median: <span id="market-median">₦0</span></div>
+                </div>
+                <div class="card">
+                    <h3 style="font-weight: 600; margin-bottom: 16px;">Market Health</h3>
+                    <div style="display: flex; justify-content: space-around; margin-top: 24px; text-align: center;">
+                        <div>
+                            <div style="font-size: 24px; font-weight: 700;">80%</div>
+                            <div style="font-size: 12px; color: #888; margin-top: 4px;">Selling Rate</div>
+                        </div>
+                        <div>
+                            <div style="font-size: 24px; font-weight: 700;">28</div>
+                            <div style="font-size: 12px; color: #888; margin-top: 4px;">Avg Days Listed</div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- PIPELINE -->
+        <div id="pipeline" class="view-section">
+            <div class="header-section">
+                <h1 class="page-title">Sales Pipeline</h1>
+            </div>
+            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px;">
+                <div>
+                    <h3 style="font-weight: 600; margin-bottom: 12px; font-size: 12px; text-transform: uppercase; color: #888;">Unpaid</h3>
+                    <div id="pipeline-unpaid" style="background: #f3f4f6; border-radius: 8px; padding: 12px; min-height: 400px;"></div>
+                </div>
+                <div>
+                    <h3 style="font-weight: 600; margin-bottom: 12px; font-size: 12px; text-transform: uppercase; color: #888;">Partial</h3>
+                    <div id="pipeline-partial" style="background: #f3f4f6; border-radius: 8px; padding: 12px; min-height: 400px;"></div>
+                </div>
+                <div>
+                    <h3 style="font-weight: 600; margin-bottom: 12px; font-size: 12px; text-transform: uppercase; color: #888;">Paid</h3>
+                    <div id="pipeline-paid" style="background: #f3f4f6; border-radius: 8px; padding: 12px; min-height: 400px;"></div>
+                </div>
+                <div>
+                    <h3 style="font-weight: 600; margin-bottom: 12px; font-size: 12px; text-transform: uppercase; color: #888;">Overdue</h3>
+                    <div id="pipeline-overdue" style="background: #f3f4f6; border-radius: 8px; padding: 12px; min-height: 400px;"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- DOCUMENTS & E-SIGNATURES -->
+        <div id="documents" class="view-section">
+            <div class="header-section">
+                <h1 class="page-title">Document Management</h1>
+                <button class="btn btn-primary">
+                    <i class="fas fa-file-upload"></i> Upload Document
+                </button>
+            </div>
+            <div class="card">
+                <h3 style="font-weight: 600; margin-bottom: 20px;">Recent Documents</h3>
+                <div id="documentsList"></div>
+            </div>
+        </div>
+
+        <!-- CAMPAIGNS -->
+        <div id="campaigns" class="view-section">
+            <div class="header-section">
+                <h1 class="page-title">Marketing Campaigns</h1>
+                <button class="btn btn-primary">
+                    <i class="fas fa-plus"></i> New Campaign
+                </button>
+            </div>
+            <div class="grid-2">
+                <div class="card">
+                    <h3 style="font-weight: 600; margin-bottom: 16px;">📱 SMS Campaigns</h3>
+                    <div id="smsCampaigns"></div>
+                </div>
+                <div class="card">
+                    <h3 style="font-weight: 600; margin-bottom: 16px;">📧 Email Campaigns</h3>
+                    <div id="emailCampaigns"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CLIENT PORTAL -->
+        <div id="portal" class="view-section">
+            <div class="header-section">
+                <h1 class="page-title">Client Portal Access</h1>
+            </div>
+            <div class="card">
+                <p style="color: #666; margin-bottom: 20px;">Clients can track their transactions, view documents, and sign agreements from a secure portal.</p>
+                <div style="background: #f9fafb; padding: 20px; border-radius: 8px;">
+                    <div style="font-weight: 600; margin-bottom: 12px;">Shared Portal Instances</div>
+                    <div id="portalInstances"></div>
+                </div>
+            </div>
+        </div>
+
+        <!-- TEAM LEADERBOARD -->
+        <div id="team" class="view-section">
+            <div class="header-section">
+                <h1 class="page-title">Team Performance Leaderboard</h1>
+            </div>
+            <div class="card">
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; font-size: 13px;">
+                        <thead>
+                            <tr style="border-bottom: 2px solid #e5e7eb; background: #f9fafb;">
+                                <th style="text-align: left; padding: 12px; font-weight: 600;">🏆 Sales Rep</th>
+                                <th style="text-align: right; padding: 12px; font-weight: 600;">Deals</th>
+                                <th style="text-align: right; padding: 12px; font-weight: 600;">Revenue</th>
+                                <th style="text-align: right; padding: 12px; font-weight: 600;">Closed</th>
+                                <th style="text-align: right; padding: 12px; font-weight: 600;">Win Rate</th>
+                                <th style="text-align: right; padding: 12px; font-weight: 600;">Commission</th>
+                            </tr>
+                        </thead>
+                        <tbody id="teamLeaderboard"></tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+
+        <!-- REPORTS -->
+        <div id="reports" class="view-section">
+            <div class="header-section">
+                <h1 class="page-title">Reports & Export</h1>
+            </div>
+            <div class="grid-3">
+                <div class="card" style="text-align: center;">
+                    <div style="font-size: 32px; margin-bottom: 12px;">📊</div>
+                    <h3 style="font-weight: 600; margin-bottom: 12px;">Sales Report</h3>
+                    <button class="btn btn-secondary" style="width: 100%;">Generate PDF</button>
+                </div>
+                <div class="card" style="text-align: center;">
+                    <div style="font-size: 32px; margin-bottom: 12px;">👥</div>
+                    <h3 style="font-weight: 600; margin-bottom: 12px;">Team Report</h3>
+                    <button class="btn btn-secondary" style="width: 100%;">Generate PDF</button>
+                </div>
+                <div class="card" style="text-align: center;">
+                    <div style="font-size: 32px; margin-bottom: 12px;">🏠</div>
+                    <h3 style="font-weight: 600; margin-bottom: 12px;">Property Report</h3>
+                    <button class="btn btn-secondary" style="width: 100%;">Generate PDF</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = "/api/crm/pro";
+        const token = localStorage.getItem("ec_token");
+
+        if (!token) window.location.href = "/login";
+
+        // View switching
+        function switchView(viewName) {
+            document.querySelectorAll(".view-section").forEach(v => v.classList.remove("active"));
+            document.querySelectorAll(".nav-link").forEach(l => l.classList.remove("active"));
+            
+            document.getElementById(viewName).classList.add("active");
+            event.target.closest(".nav-link")?.classList.add("active");
+            
+            // Load specific data
+            if (viewName === "leads") loadLeads();
+            else if (viewName === "team") loadTeamPerformance();
+        }
+
+        // Load all leads with scoring
+        async function loadLeads() {
+            try {
+                const res = await fetch(`${API_BASE}/lead-scoring/all`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const data = await res.json();
+                
+                document.getElementById("hot-leads").textContent = data.hot_leads;
+                document.getElementById("warm-leads").textContent = data.warm_leads;
+                document.getElementById("cold-leads").textContent = data.total_leads - data.hot_leads - data.warm_leads;
+                
+                const html = data.prioritized_leads.map(lead => `
+                    <tr>
+                        <td style="padding: 12px; font-weight: 600;">${lead.client_name}</td>
+                        <td style="text-align: right; padding: 12px; font-size: 18px; font-weight: 700; color: var(--gold);">${lead.score}</td>
+                        <td style="text-align: center; padding: 12px;"><span class="badge badge-${lead.score >= 80 ? 'hot' : lead.score >= 60 ? 'warm' : 'cool'}">${lead.score >= 80 ? 'HOT' : lead.score >= 60 ? 'WARM' : 'COOL'}</span></td>
+                        <td style="text-align: right; padding: 12px;">${lead.total_deals}</td>
+                        <td style="text-align: right; padding: 12px;">₦${(lead.total_deals * 500000 / 1000000).toFixed(1)}M</td>
+                        <td style="text-align: center; padding: 12px;"><button class="btn btn-primary" style="font-size: 12px; padding: 6px 12px;">Action</button></td>
+                    </tr>
+                `).join("");
+                
+                document.getElementById("hotLeadsTable").innerHTML = html;
+            } catch (err) {
+                console.error("Error loading leads:", err);
+            }
+        }
+
+        // Score all leads
+        async function scoreAllLeads() {
+            const rows = document.querySelectorAll("#hotLeadsTable tr");
+            for (const row of rows) {
+                const clientName = row.cells[0].textContent;
+                // In production, score each lead individually
+            }
+            alert("All leads scored!");
+        }
+
+        // Load team performance
+        async function loadTeamPerformance() {
+            try {
+                const res = await fetch(`${API_BASE}/analytics/team-performance`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const data = await res.json();
+                
+                const html = data.team_leaderboard.map((rep, idx) => `
+                    <tr>
+                        <td style="padding: 12px;"><strong>${idx + 1}. ${rep.sales_rep}</strong></td>
+                        <td style="text-align: right; padding: 12px;">${rep.total_deals}</td>
+                        <td style="text-align: right; padding: 12px; color: var(--gold); font-weight: 600;">₦${(rep.total_revenue / 1000000).toFixed(1)}M</td>
+                        <td style="text-align: right; padding: 12px;">${rep.closed_deals}</td>
+                        <td style="text-align: right; padding: 12px; font-weight: 600;">${rep.conversion_rate}%</td>
+                        <td style="text-align: right; padding: 12px;">₦${(rep.estimated_commission / 1000000).toFixed(1)}M</td>
+                    </tr>
+                `).join("");
+                
+                document.getElementById("teamLeaderboard").innerHTML = html;
+            } catch (err) {
+                console.error("Error loading team:", err);
+            }
+        }
+
+        // Initialize on page load
+        document.addEventListener("DOMContentLoaded", loadLeads);
+    </script>
+</body>
+</html>

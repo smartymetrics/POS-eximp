@@ -27,7 +27,9 @@ from routers import (
     marketing_sequences,
     marketing_webhooks,
     marketing_media,
-    marketing_events
+    marketing_events,
+    crm,
+    crm_professional
 )
 from routers.auth import require_roles
 from database import init_db
@@ -78,6 +80,8 @@ app.include_router(marketing_sequences.router, prefix="/api/marketing/sequences"
 app.include_router(marketing_webhooks.router, tags=["webhooks"])  # tracking at root level, public
 app.include_router(marketing_media.router, prefix="/api/marketing/media", tags=["marketing"], dependencies=[Depends(require_roles(marketing_roles))])
 app.include_router(marketing_events.router, prefix="/api/marketing/events", tags=["marketing"], dependencies=[Depends(require_roles(marketing_roles))])
+app.include_router(crm.router, prefix="/api/crm", tags=["crm"], dependencies=[Depends(require_roles(["admin", "super_admin", "sales"]))])
+app.include_router(crm_professional.router, prefix="/api/crm/pro", tags=["crm"], dependencies=[Depends(require_roles(["admin", "super_admin", "sales"]))])
 
 
 
@@ -92,9 +96,14 @@ async def dashboard(request: Request):
     return templates.TemplateResponse("dashboard.html", {"request": request})
 
 
-@app.get("/login", response_class=HTMLResponse)
-async def login_page(request: Request):
-    return templates.TemplateResponse("login.html", {"request": request})
+@app.get("/crm", response_class=HTMLResponse)
+async def crm_dashboard(request: Request):
+    return templates.TemplateResponse("crm_dashboard.html", {"request": request})
+
+
+@app.get("/crm-pro", response_class=HTMLResponse)
+async def professional_crm_dashboard(request: Request):
+    return templates.TemplateResponse("professional_crm.html", {"request": request})
 
 
 @app.get("/clients", response_class=HTMLResponse)

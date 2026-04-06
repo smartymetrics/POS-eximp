@@ -422,3 +422,65 @@ class CustomContractHTMLUpdate(BaseModel):
 
 class ExecuteContractRequest(BaseModel):
     send_certificate: bool = True
+
+
+# ─── PROFESSIONAL CRM: PROPERTIES ────────────────────────────
+class PropertyListingCreate(BaseModel):
+    address: str
+    city: str
+    state: str
+    property_type: str  # "residential", "commercial", "land"
+    bedrooms: Optional[int] = None
+    bathrooms: Optional[int] = None
+    sq_feet: Optional[Decimal] = None
+    price: Decimal
+    description: Optional[str] = None
+    virtual_tour_url: Optional[str] = None
+
+
+class PropertyMediaAdd(BaseModel):
+    type: str  # "photo", "video", "tour"
+    url: str
+    description: Optional[str] = None
+    order: int = 0
+
+
+# ─── PROFESSIONAL CRM: DOCUMENTS ─────────────────────────────
+class DocumentUpload(BaseModel):
+    document_type: str  # "contract", "agreement", "deed", "proposal"
+    client_id: Optional[str] = None
+    invoice_id: Optional[str] = None
+    property_id: Optional[str] = None
+    title: str
+    file_url: str
+
+
+class DocumentSendForSignature(BaseModel):
+    email: EmailStr
+    client_id: str
+
+
+# ─── PROFESSIONAL CRM: CAMPAIGNS ─────────────────────────────
+class CampaignCreate(BaseModel):
+    type: str  # "sms", "email"
+    name: str
+    target_segment: str  # "hot_leads", "warm_leads", "past_buyers", "old_leads"
+    message_template: str
+    schedule: str  # "immediate", "daily", "weekly"
+    schedule_time: Optional[str] = None
+
+
+# ─── PROFESSIONAL CRM: LEAD SCORING ──────────────────────────
+class LeadScore(BaseModel):
+    client_id: str
+    score: Decimal
+    quality: str
+    urgency: str
+    factors: dict
+
+
+# ─── PROFESSIONAL CRM: REPORTS ───────────────────────────────
+class ReportGenerate(BaseModel):
+    report_type: str  # "sales", "team", "property", "client", "market"
+    date_range: str  # "this_month", "this_quarter", "this_year"
+
