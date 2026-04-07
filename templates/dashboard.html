@@ -71,7 +71,7 @@
       --green: #2ecc71;
       --red: #e74c3c;
       --amber: #f39c12;
-      --sidebar-w: 240px;
+      --sidebar-w: 260px;
     }
 
     * {
@@ -248,20 +248,21 @@
       gap: 12px;
       padding: 10px 20px;
       cursor: pointer;
-      font-size: 13px;
-      color: #bbb;
-      transition: all 0.2s;
-      border-left: 3px solid transparent;
+      color: var(--gray);
+      transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
       text-decoration: none;
+      font-size: 13px;
+      border-left: 3px solid transparent;
+      font-weight: 500;
     }
 
     .nav-item:hover {
-      background: var(--dark3);
+      background: rgba(255, 255, 255, 0.03);
       color: var(--white);
     }
 
     .nav-item.active {
-      background: var(--dark3);
+      background: rgba(245, 166, 35, 0.08);
       color: var(--gold);
       border-left-color: var(--gold);
     }

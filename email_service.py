@@ -1020,6 +1020,8 @@ def send_executed_contract_email(invoice, client, pdf_content, certificate_pdf=N
         <p>Our documentation team will contact you shortly regarding the next steps (Survey and Allocation).</p>
         <p>Thank you for choosing Eximp & Cloves Infrastructure Limited.</p>
         <p>Best regards,<br>Legal Department</p>
+        <hr style="border-top: 1px solid #eee; margin: 20px 0;">
+        <p style="color: #888; font-size: 11px; text-align: center;">Please review our official refund policy at <a href="https://www.eximps-cloves.com/refund" style="color: #C47D0A; text-decoration: none;">www.eximps-cloves.com/refund</a></p>
     </div>
     """
 

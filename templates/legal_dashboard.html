@@ -41,21 +41,41 @@
         }
 
         .sidebar {
-            width: 200px;
+            width: 260px;
             height: 100vh;
             position: fixed;
             left: 0;
             top: 0;
             z-index: 50;
-            background-color: #1A1C20;
-            /* Matte Black */
-            border-right: 1px solid #2D2F36;
+            background-color: #111317;
+            /* Deeper Matte Black */
+            border-right: 1px solid rgba(255, 255, 255, 0.05);
+            overflow-y: auto;
+            scrollbar-width: thin;
+            scrollbar-color: rgba(196, 125, 10, 0.3) transparent;
+        }
+
+        .sidebar::-webkit-scrollbar {
+            width: 6px;
+        }
+
+        .sidebar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: rgba(196, 125, 10, 0.2);
+            border-radius: 10px;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb:hover {
+            background: rgba(196, 125, 10, 0.5);
         }
 
         .main-content {
-            margin-left: 200px;
-            padding: 16px 24px;
-            max-width: 1200px;
+            margin-left: 260px;
+            padding: 32px 40px;
+            max-width: 1400px;
             margin-right: auto;
         }
 
@@ -75,24 +95,40 @@
         .nav-link {
             display: flex;
             align-items: center;
-            padding: 14px 20px;
-            border-radius: 12px;
+            padding: 12px 16px;
+            border-radius: 10px;
             color: #9CA3AF;
-            transition: 0.3s;
+            transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
             cursor: pointer;
-            margin-bottom: 4px;
+            margin-bottom: 6px;
+            border-left: 3px solid transparent;
+            font-size: 14px;
+            font-weight: 500;
         }
 
-        .nav-link:hover,
+        .nav-link:hover {
+            background: rgba(255, 255, 255, 0.03);
+            color: #E5E7EB;
+        }
+
         .nav-link.active {
-            background: rgba(196, 125, 10, 0.1);
+            background: rgba(196, 125, 10, 0.08);
             color: #C47D0A;
+            border-left-color: #C47D0A;
+            font-weight: 600;
         }
 
         .nav-link svg {
-            margin-right: 12px;
+            margin-right: 14px;
             width: 20px;
             height: 20px;
+            opacity: 0.7;
+            transition: opacity 0.25s;
+        }
+
+        .nav-link.active svg,
+        .nav-link:hover svg {
+            opacity: 1;
         }
 
         /* Status Badges */
@@ -227,16 +263,9 @@
             animation: pulse-gold 2s infinite;
         }
 
-        @media (max-width: 1280px) {
-            .sidebar {
-                display: none !important;
-            }
-
-            .main-content {
-                margin-left: 0 !important;
-                padding: 20px;
-            }
-        }
+        /* Removing the 1280px hide rule as it caused the nav bar to disappear on desktop. 
+           Mobile UI will now trigger strictly at 1024px. */
+        /* @media (max-width: 1024px) handled below */
 
         @media (max-width: 1024px) {
             .nav-link {
@@ -390,14 +419,15 @@
         }
 
         /* Re-enable mobile nav elements on small screens only */
-        @media (max-width: 1200px) {
+        /* ---- Combined Mobile Transition (replacing 1200px and 1280px rules) ---- */
+        @media (max-width: 1024px) {
             .sidebar {
                 display: none;
             }
 
             .main-content {
                 margin-left: 0;
-                padding: 72px 16px 40px;
+                padding: 80px 20px 40px;
                 width: 100%;
                 max-width: none;
             }
@@ -431,13 +461,14 @@
                 top: 0;
                 left: 0;
                 right: 0;
-                height: 60px;
-                background: #1A1C20;
-                border-bottom: 1px solid #2D2F36;
+                height: 64px;
+                background: #111317;
+                border-bottom: 1px solid rgba(255, 255, 255, 0.05);
                 z-index: 120;
-                padding: 0 16px;
+                padding: 0 20px;
                 align-items: center;
                 justify-content: space-between;
+                box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
             }
         }
     </style>
@@ -1034,34 +1065,80 @@
     </div>
 
     <!-- Execution Modal -->
-    <div id="executionModal"
-        class="fixed inset-0 z-[120] flex items-center justify-center bg-black/90 backdrop-blur-sm hidden">
-        <div
-            class="card w-full max-w-md bg-[#1E2128] border-brand-gold shadow-[0_0_50px_rgba(196,125,10,0.2)] rounded-2xl p-8 border border-brand-gold">
-            <div class="text-center mb-8">
-                <h3 class="font-serif text-2xl mb-2 text-white">Seal & Execute</h3>
-                <p class="text-gray-400 text-sm">Seal this contract and finalize the legal process.</p>
-            </div>
-            <div class="space-y-4 mb-8">
-                <label
-                    class="flex items-center justify-between p-4 bg-white/5 rounded-xl cursor-pointer hover:bg-white/10 transition">
-                    <p class="text-sm font-bold">Include Audit Certificate</p>
-                    <input type="checkbox" id="sendCertToggle" checked class="w-5 h-5 accent-brand-gold">
-                </label>
-                <div class="p-4 bg-white/5 rounded-xl border border-white/5">
-                    <p class="text-sm font-bold text-brand-gold mb-2">Custom Lawyer Seal (Optional)</p>
-                    <p class="text-[10px] text-gray-500 mb-3 tracking-wide">Upload a specific seal to override the
-                        global firm vault seal for this contract only.</p>
-                    <input type="file" id="customSealFile" accept="image/*"
-                        class="w-full bg-black/20 border border-white/10 rounded-lg px-3 py-2 text-xs text-gray-300 focus:outline-none">
+    <div id="executionModal" class="fixed inset-0 z-[120] flex items-center justify-center bg-black/90 backdrop-blur-sm hidden">
+        <div class="card w-full max-w-2xl bg-[#1E2128] shadow-[0_0_50px_rgba(196,125,10,0.2)] rounded-2xl border border-brand-gold max-h-[90vh] overflow-y-auto !p-0">
+            <div class="sticky top-0 bg-[#1E2128] p-6 border-b border-[#2D2F36] z-10 flex justify-between items-center">
+                <div>
+                    <h3 class="font-serif text-2xl text-white">Seal & Execute</h3>
+                    <p class="text-gray-400 text-sm">Choose your preferred execution method.</p>
                 </div>
+                <button onclick="closeExecutionModal()" class="text-gray-500 hover:text-white transition w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/5">✕</button>
             </div>
-            <div class="flex gap-4">
-                <button onclick="closeExecutionModal()"
-                    class="flex-1 py-3 bg-white/5 rounded-xl font-bold transition hover:bg-white/10 text-sm">Cancel</button>
-                <button id="confirmExecuteBtn" onclick="executeContract()"
-                    class="flex-1 py-3 bg-brand-gold text-white rounded-xl font-bold shadow-lg hover:brightness-110 transition text-sm">VERIFY
-                    & EXECUTE</button>
+            
+            <div class="p-6 space-y-8">
+                <!-- Option 1: Digital Sealing -->
+                <div class="p-6 bg-white/5 border border-white/10 rounded-2xl">
+                    <h4 class="text-brand-gold font-bold mb-2">Option 1: Digital Execution</h4>
+                    <p class="text-xs text-gray-400 mb-4 tracking-wide leading-relaxed">Automatically append the firm's digital seal and signatures from the vault. This is the fastest method.</p>
+                    
+                    <div class="space-y-4 mb-6">
+                        <label class="flex items-center justify-between p-4 bg-black/20 rounded-xl cursor-pointer hover:bg-black/30 transition">
+                            <p class="text-sm font-bold">Include Audit Certificate</p>
+                            <input type="checkbox" id="sendCertToggle" checked class="w-5 h-5 accent-brand-gold">
+                        </label>
+                        <div class="p-4 bg-black/20 rounded-xl">
+                            <p class="text-sm font-bold text-gray-300 mb-2">Override Global Seal (Optional)</p>
+                            <p class="text-[10px] text-gray-500 mb-3 tracking-wide">Upload a specific seal to override the global firm vault seal for this contract only.</p>
+                            <input type="file" id="customSealFile" accept="image/*" class="w-full bg-black/40 border border-white/5 rounded-lg px-3 py-2 text-xs text-gray-300 focus:outline-none">
+                        </div>
+                    </div>
+                    
+                    <button id="confirmExecuteBtn" onclick="executeContract()" class="w-full py-3 bg-brand-gold text-white rounded-xl font-bold shadow-[0_4px_15px_rgba(196,125,10,0.3)] hover:brightness-110 transition text-sm">
+                        DIGITALLY EXECUTE & SEND
+                    </button>
+                </div>
+
+                <!-- Option 2: External Sealing (Wet Signature/External Software) -->
+                <div class="p-6 bg-white/5 border border-brand-gold/30 rounded-2xl relative overflow-hidden">
+                    <div class="absolute top-0 right-0 bg-brand-gold text-black text-[9px] font-bold px-3 py-1 rounded-bl-lg uppercase tracking-widest">New Workflow</div>
+                    <h4 class="text-white font-bold mb-2">Option 2: External Sealing Workflow</h4>
+                    <p class="text-xs text-gray-400 mb-6 tracking-wide leading-relaxed">Download a clean copy, seal it externally (e.g., wet seal or specialized software), and upload the finalized version.</p>
+                    
+                    <div class="space-y-4 relative z-10">
+                        <!-- Step 1: Download -->
+                        <div class="flex items-center justify-between p-4 bg-black/40 rounded-xl border border-white/5">
+                            <div>
+                                <p class="text-sm font-bold text-gray-200">1. Clean PDF</p>
+                                <p class="text-[10px] text-gray-500">Download without 'Draft' watermark.</p>
+                            </div>
+                            <button onclick="downloadSealingPDF()" class="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold transition">Download</button>
+                        </div>
+                        
+                        <!-- Step 2: Upload -->
+                        <div class="p-4 bg-black/40 rounded-xl border border-white/5">
+                            <div class="flex items-center justify-between mb-3">
+                                <div>
+                                    <p class="text-sm font-bold text-brand-gold">2. Upload Sealed Copy</p>
+                                    <p class="text-[10px] text-gray-500">Upload the externally sealed PDF.</p>
+                                </div>
+                                <span id="sealedUploadStatus" class="hidden text-[10px] font-bold bg-green-900/50 text-green-400 px-2 py-1 rounded">ATTACHED ✓</span>
+                            </div>
+                            <div class="flex gap-2">
+                                <input type="file" id="sealedPdfFile" accept="application/pdf" class="flex-1 bg-white/5 border border-white/5 rounded-lg px-3 py-2 text-xs text-gray-300 focus:outline-none">
+                                <button id="uploadSealedBtn" onclick="uploadSealedPDF()" class="px-4 py-2 bg-brand-gold/20 hover:bg-brand-gold/40 text-brand-gold rounded-lg text-xs font-bold transition whitespace-nowrap">Upload</button>
+                            </div>
+                        </div>
+
+                        <!-- Step 3: Send -->
+                         <div class="flex items-center justify-between p-4 bg-black/40 rounded-xl border border-white/5">
+                            <div>
+                                <p class="text-sm font-bold text-gray-200">3. Finalize</p>
+                                <p class="text-[10px] text-gray-500">Email sealed PDF + certificate.</p>
+                            </div>
+                            <button id="sendSealedBtn" onclick="sendSealedPDF()" disabled class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition disabled:opacity-30 disabled:cursor-not-allowed">Finalize & Send</button>
+                        </div>
+                    </div>
+                </div>
             </div>
         </div>
     </div>
@@ -1830,6 +1907,13 @@
 
         function openExecutionModal(id) {
             document.getElementById('customSealFile').value = '';
+            document.getElementById('sealedPdfFile').value = '';
+            document.getElementById('sealedUploadStatus').classList.add('hidden');
+            
+            const sendBtn = document.getElementById('sendSealedBtn');
+            sendBtn.disabled = true;
+            sendBtn.classList.add('opacity-30', 'cursor-not-allowed');
+
             document.getElementById('executionModal').classList.remove('hidden');
         }
         function closeExecutionModal() { document.getElementById('executionModal').classList.add('hidden'); }
@@ -1876,6 +1960,79 @@
             } catch (err) { alert('Execution failed'); }
             finally {
                 btn.innerText = 'VERIFY & EXECUTE';
+                btn.disabled = false;
+            }
+        }
+
+        function downloadSealingPDF() {
+            window.location.href = `${API_BASE}/download-sealing/${activeInvoiceId}?token=${localStorage.getItem('ec_token')}`;
+        }
+
+        async function uploadSealedPDF() {
+            const file = document.getElementById('sealedPdfFile').files[0];
+            if (!file) return alert('Please select a PDF file to upload.');
+
+            const btn = document.getElementById('uploadSealedBtn');
+            btn.innerText = 'Uploading...';
+            btn.disabled = true;
+
+            const formData = new FormData();
+            formData.append('file', file);
+
+            try {
+                const res = await fetch(`${API_BASE}/upload-sealed/${activeInvoiceId}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` },
+                    body: formData
+                });
+
+                if (res.ok) {
+                    document.getElementById('sealedUploadStatus').classList.remove('hidden');
+                    const sendBtn = document.getElementById('sendSealedBtn');
+                    sendBtn.disabled = false;
+                    sendBtn.classList.remove('opacity-30', 'cursor-not-allowed');
+                } else {
+                    const err = await res.json();
+                    alert(err.detail || 'Upload failed');
+                }
+            } catch (err) {
+                alert('Upload failed due to connection error.');
+            } finally {
+                btn.innerText = 'Upload';
+                btn.disabled = false;
+            }
+        }
+
+        async function sendSealedPDF() {
+            const btn = document.getElementById('sendSealedBtn');
+            btn.innerText = 'Sending...';
+            btn.disabled = true;
+            
+            const sendCert = document.getElementById('sendCertToggle').checked;
+
+            try {
+                const res = await fetch(`${API_BASE}/send-sealed/${activeInvoiceId}`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('ec_token')}`
+                    },
+                    body: JSON.stringify({ send_certificate: sendCert })
+                });
+
+                if (res.ok) {
+                    alert('Sealed contract finalized, archived, and emailed to the client.');
+                    closeExecutionModal();
+                    closeStatusModal();
+                    fetchContracts();
+                } else {
+                    const err = await res.json();
+                    alert(err.detail || 'Failed to send sealed contract');
+                }
+            } catch (err) {
+                alert('Action failed due to connection error.');
+            } finally {
+                btn.innerText = 'Finalize & Send';
                 btn.disabled = false;
             }
         }

@@ -1,8 +1,12 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Header, Query
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Header, Query, File, UploadFile
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
 from database import get_db, SUPABASE_URL
-from models import CompanySignatureUpload, ExtendSigningLink, WitnessSignatureSubmit, ClientContractSignatureSubmit, WitnessRemovalRequest, CustomContractHTMLUpdate, ExecuteContractRequest
+from models import (
+    CompanySignatureUpload, ExtendSigningLink, WitnessSignatureSubmit, 
+    ClientContractSignatureSubmit, WitnessRemovalRequest, CustomContractHTMLUpdate, 
+    ExecuteContractRequest, SendSealedRequest
+)
 from routers.auth import verify_token, resolve_admin_token, has_any_role
 from routers.analytics import log_activity
 from datetime import datetime, timedelta, timezone
@@ -436,6 +440,141 @@ async def execute_final_contract(invoice_id: str, payload: ExecuteContractReques
     }).execute()
 
     return {"message": "Final contract executed and emailed"}
+
+@router.get("/download-sealing/{invoice_id}")
+async def download_sealing_contract(invoice_id: str, current_admin=Depends(resolve_admin_token)):
+    if not has_any_role(current_admin, "admin", "lawyer"):
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    db = get_db()
+    inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    if not inv_res.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    invoice = inv_res.data[0]
+    client = invoice["clients"]
+
+    session_res = db.table("contract_signing_sessions")\
+        .select("*, witness_signatures(*)")\
+        .eq("invoice_id", invoice_id)\
+        .order("created_at", desc=True)\
+        .limit(1)\
+        .execute()
+
+    witnesses = []
+    if session_res.data:
+        witnesses = session_res.data[0].get("witness_signatures", []) or []
+
+    from pdf_service import generate_contract_pdf
+    pdf_content = generate_contract_pdf(invoice, client, witnesses, is_draft=False)
+    
+    return StreamingResponse(
+        io.BytesIO(pdf_content),
+        media_type="application/pdf",
+        headers={"Content-Disposition": f"attachment; filename=Contract_FOR_SEALING_{invoice['invoice_number']}.pdf"}
+    )
+
+@router.post("/upload-sealed/{invoice_id}")
+async def upload_sealed_contract(invoice_id: str, file: UploadFile = File(...), current_admin=Depends(verify_token)):
+    if not has_any_role(current_admin, "admin", "lawyer"):
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    if not file.filename.lower().endswith(".pdf"):
+        raise HTTPException(status_code=400, detail="Only PDF files are allowed")
+
+    db = get_db()
+    content = await file.read()
+    
+    file_path = f"sealed_contracts/{invoice_id}/sealed_contract.pdf"
+    
+    try:
+        try:
+            db.storage.from_("signatures").remove([file_path])
+        except:
+            pass
+            
+        db.storage.from_("signatures").upload(
+            path=file_path,
+            file=content,
+            file_options={"content-type": "application/pdf"}
+        )
+        
+        db.table("contract_documents").insert({
+            "invoice_id": invoice_id,
+            "document_type": "sealed_lawyer_copy",
+            "generated_by": current_admin["sub"]
+        }).execute()
+
+        await log_activity(
+            "sealed_contract_uploaded",
+            f"Externally sealed contract uploaded for {invoice_id}",
+            current_admin["sub"],
+            invoice_id=invoice_id
+        )
+
+        return {"message": "Sealed contract uploaded successfully"}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Upload failed: {str(e)}")
+
+@router.post("/send-sealed/{invoice_id}")
+async def send_sealed_contract(invoice_id: str, payload: SendSealedRequest, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+    if not has_any_role(current_admin, "admin", "lawyer"):
+        raise HTTPException(status_code=403, detail="Unauthorized")
+
+    db = get_db()
+    inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    if not inv_res.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    invoice = inv_res.data[0]
+    client = invoice["clients"]
+
+    file_path = f"sealed_contracts/{invoice_id}/sealed_contract.pdf"
+    try:
+        sealed_pdf_res = db.storage.from_("signatures").download(file_path)
+    except Exception:
+        raise HTTPException(status_code=404, detail="Sealed contract not found. Please upload it first.")
+
+    session_res = db.table("contract_signing_sessions")\
+        .select("*, witness_signatures(*)")\
+        .eq("invoice_id", invoice_id)\
+        .order("created_at", desc=True)\
+        .limit(1)\
+        .execute()
+    
+    witnesses = []
+    if session_res.data:
+        witnesses = session_res.data[0].get("witness_signatures", []) or []
+    
+    from pdf_service import generate_audit_certificate_pdf
+    cert_content = generate_audit_certificate_pdf(invoice, client, witnesses)
+
+    from email_service import send_executed_contract_email
+    background_tasks.add_task(
+        send_executed_contract_email, 
+        invoice, 
+        client, 
+        sealed_pdf_res, 
+        cert_content if payload.send_certificate else None
+    )
+
+    await log_activity(
+        "sealed_contract_sent",
+        f"Externally sealed contract emailed to {client['email']}",
+        current_admin["sub"],
+        invoice_id=invoice_id,
+        client_id=client.get("id")
+    )
+
+    db.table("email_logs").insert({
+        "client_id": client.get("id"),
+        "invoice_id": invoice_id,
+        "email_type": "contract",
+        "recipient_email": client.get("email"),
+        "subject": f"Execution Complete: Your Contract of Sale {invoice['invoice_number']}",
+        "status": "sent",
+        "sent_by": current_admin["sub"]
+    }).execute()
+
+    return {"message": "Sealed contract emailed successfully"}
 
 @router.post("/resend-final/{invoice_id}")
 async def resend_executed_contract(invoice_id: str, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):

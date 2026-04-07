@@ -424,6 +424,10 @@ class ExecuteContractRequest(BaseModel):
     send_certificate: bool = True
 
 
+class SendSealedRequest(BaseModel):
+    send_certificate: bool = True
+
+
 # ─── PROFESSIONAL CRM: PROPERTIES ────────────────────────────
 class PropertyListingCreate(BaseModel):
     address: str
