@@ -59,6 +59,7 @@
             font-size: 32px; 
             background: linear-gradient(135deg, #FFF 0%, var(--brand) 100%);
             -webkit-background-clip: text;
+            background-clip: text;
             -webkit-text-fill-color: transparent;
             margin-bottom: 8px;
         }
@@ -613,36 +614,86 @@
                 document.getElementById('payee_email').readOnly = true;
                 document.getElementById('payee_email').style.opacity = '0.7';
 
-                // 3. One-Time Onboarding: If already onboarded, hide bank section
+                // 3. Universal Onboarding: Recognize any returning payee
                 if (inviteData.is_onboarded) {
                     const payee = inviteData.payee_data;
                     document.getElementById('payee_name').value = payee.name;
                     document.getElementById('payee_phone').value = payee.phone || "";
                     
-                    // Hide the profile/bank section to focus only on the claim
-                    const profileSection = document.querySelector('.form-section:first-child');
-                    const bankSection = document.querySelectorAll('.form-section')[1];
+                    // Pre-fill existing bank details (even if hidden initially)
+                    document.getElementById('bank_name').value = payee.bank_name || "";
+                    document.getElementById('acc_number').value = payee.account_number || "";
+                    document.getElementById('acc_name').value = payee.account_name || "";
+
                     const introSection = document.querySelector('.portal-header p');
+                    const bankSection = document.querySelectorAll('.form-section')[1];
                     
-                    introSection.innerHTML = `<span style="color:#10B981; font-weight:700;"><i class="fas fa-check-circle"></i> Profile Recognized.</span> Welcome back, ${payee.name}. Simply upload your receipt or proforma below to submit your claim.`;
+                    introSection.innerHTML = `<span style="color:#10B981; font-weight:700;"><i class="fas fa-check-circle"></i> Recognized Partner.</span> Welcome back, ${payee.name}. Simply upload your receipt or proforma below.`;
                     
-                    // Keep personal info visible but subtle, hide bank details
+                    // Show locked bank view with "Change" option
                     bankSection.innerHTML = `
-                        <div style="background:rgba(255,255,255,0.03); padding:20px; border-radius:16px; border:1px solid rgba(255,255,255,0.05);">
-                            <p style="font-size:12px; color:var(--gray); margin-bottom:8px;">Payout Method Locked:</p>
-                            <div style="display:flex; justify-content:space-between; align-items:center;">
-                                <div>
-                                    <strong style="display:block; font-size:16px;">${payee.bank_name}</strong>
-                                    <span style="font-size:14px; color:var(--gray)">${payee.account_number} | ${payee.account_name}</span>
-                                </div>
-                                <i class="fas fa-university fa-2x" style="opacity:0.2"></i>
+                        <div id="bank_locked_view" style="background:rgba(255,255,255,0.03); padding:24px; border-radius:24px; border:1px solid rgba(255,255,255,0.05); margin-bottom:20px;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                                <span style="font-size:12px; font-weight:700; color:var(--brand); text-transform:uppercase; letter-spacing:1px;">Payout Destination</span>
+                                <button type="button" onclick="unlockBankDetails()" style="background:none; border:none; color:var(--muted); font-size:12px; cursor:pointer; text-decoration:underline; font-family:inherit;">Update Bank Info</button>
                             </div>
-                            <p style="font-size:11px; margin-top:12px; color:var(--gold);">To change bank details, please contact Finance.</p>
+                            <div style="display:flex; align-items:center; gap:20px;">
+                                <div style="width:48px; height:48px; background:rgba(196, 125, 10, 0.1); border-radius:12px; display:flex; align-items:center; justify-content:center; color:var(--brand);">
+                                    <i class="fas fa-university fa-lg"></i>
+                                </div>
+                                <div>
+                                    <strong style="display:block; font-size:16px; color:#fff;">${payee.bank_name}</strong>
+                                    <span style="font-size:14px; color:var(--muted)">${payee.account_number} • ${payee.account_name}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div id="bank_editor_view" class="hidden">
+                            <!-- The hidden bank fields will be moved here in JS -->
                         </div>
                     `;
                 }
             } catch (err) {
                 console.error("Invite resolution error", err);
+            }
+        }
+
+        function unlockBankDetails() {
+            const lockedView = document.getElementById('bank_locked_view');
+            const editorView = document.getElementById('bank_editor_view');
+            
+            // Move original fields into the editor view area
+            const bankFormContent = `
+                <div class="form-section animate-fade-in">
+                    <div style="margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
+                        <h2 style="font-size:14px; font-weight:700; color:var(--brand); text-transform:uppercase;">Update Bank Details</h2>
+                    </div>
+                    <div class="form-group">
+                        <label>Bank Name</label>
+                        <select id="bank_name" class="form-input" onchange="checkOtherBank(this.value)">
+                            <option value="">Search or Select Bank...</option>
+                        </select>
+                    </div>
+                    <div class="form-group">
+                        <label>Account Number</label>
+                        <input type="text" id="acc_number" placeholder="0000000000" maxlength="10">
+                    </div>
+                    <div class="form-group">
+                        <label>Account Name</label>
+                        <input type="text" id="acc_name" placeholder="Name on account">
+                    </div>
+                </div>
+            `;
+            
+            editorView.innerHTML = bankFormContent;
+            editorView.classList.remove('hidden');
+            lockedView.style.display = 'none';
+            
+            // Re-populate the bank list for the editor
+            initializeBanks(); 
+            if (inviteData && inviteData.payee_data) {
+                document.getElementById('bank_name').value = inviteData.payee_data.bank_name;
+                document.getElementById('acc_number').value = inviteData.payee_data.account_number;
+                document.getElementById('acc_name').value = inviteData.payee_data.account_name;
             }
         }
 
