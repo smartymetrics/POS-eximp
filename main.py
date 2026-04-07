@@ -29,7 +29,8 @@ from routers import (
     marketing_media,
     marketing_events,
     crm,
-    crm_professional
+    crm_professional,
+    payouts
 )
 from routers.auth import require_roles, resolve_admin_token
 from database import init_db
@@ -82,6 +83,7 @@ app.include_router(marketing_media.router, prefix="/api/marketing/media", tags=[
 app.include_router(marketing_events.router, prefix="/api/marketing/events", tags=["marketing"], dependencies=[Depends(require_roles(marketing_roles))])
 app.include_router(crm.router, prefix="/api/crm", tags=["crm"], dependencies=[Depends(require_roles(["admin", "super_admin", "sales"]))])
 app.include_router(crm_professional.router, prefix="/api/crm/pro", tags=["crm"], dependencies=[Depends(require_roles(["admin", "super_admin", "sales"]))])
+app.include_router(payouts.router, prefix="/api/payouts", tags=["payouts"])
 
 
 
@@ -164,6 +166,21 @@ async def legal_editor_page(request: Request, id: str):
 @app.get("/legal/manual", response_class=HTMLResponse)
 async def legal_manual_page(request: Request):
     return templates.TemplateResponse("legal_manual.html", {"request": request})
+
+
+@app.get("/finance/payouts", response_class=HTMLResponse)
+async def payouts_dashboard_page(request: Request):
+    return templates.TemplateResponse("payouts_dashboard.html", {"request": request})
+
+
+@app.get("/finance/manual", response_class=HTMLResponse)
+async def finance_manual_page(request: Request):
+    return templates.TemplateResponse("finance_manual.html", {"request": request})
+
+
+@app.get("/payout/portal/{token}", response_class=HTMLResponse)
+async def payout_portal_page(request: Request, token: str):
+    return templates.TemplateResponse("payout_portal.html", {"request": request, "token": token})
 @app.get("/legal/{tag:path}")
 async def handle_legal_placeholders(tag: str):
     """

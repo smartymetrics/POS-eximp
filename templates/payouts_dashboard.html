@@ -1,0 +1,627 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finance & Assets | Eximp & Cloves</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #09090B;
+            --sidebar-w: 260px;
+            --dark2: #121214;
+            --dark3: #1C1C1E;
+            --gold: #C47D0A;
+            --gold-bright: #FFC107;
+            --white: #F8FAFC;
+            --gray: #94A3B8;
+            --border: rgba(255, 255, 255, 0.08);
+            --success: #10B981;
+            --warning: #F59E0B;
+            --error: #EF4444;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        
+        body {
+            background-color: var(--bg);
+            color: var(--white);
+            font-family: 'DM Sans', sans-serif;
+            display: flex;
+            min-height: 100vh;
+            overflow-x: hidden;
+        }
+
+        /* --- SIDEBAR --- */
+        .sidebar {
+            width: var(--sidebar-w);
+            background: var(--dark2);
+            position: fixed;
+            top: 0; left: 0; height: 100vh;
+            display: flex; flex-direction: column;
+            z-index: 100;
+            border-right: 1px solid var(--border);
+        }
+
+        .sidebar-logo { padding: 32px 24px; border-bottom: 1px solid var(--border); }
+        .logo-row { display: flex; align-items: center; gap: 12px; }
+        .sidebar-logo-img { width: 120px; filter: brightness(1.2); }
+        .brand { font-family: 'Playfair Display', serif; font-size: 16px; color: var(--white); line-height: 1.2; }
+        .brand span { display: block; font-family: 'DM Sans', sans-serif; font-size: 9px; letter-spacing: 2px; color: var(--gold); text-transform: uppercase; }
+
+        .nav-section { padding: 24px 0; flex: 1; overflow-y: auto; }
+        .nav-label { font-size: 9px; letter-spacing: 2px; text-transform: uppercase; color: var(--gray); padding: 8px 24px 12px; }
+        
+        .nav-item {
+            display: flex; align-items: center; gap: 12px; padding: 12px 24px;
+            cursor: pointer; font-size: 14px; color: var(--gray);
+            transition: all 0.3s; text-decoration: none; border-left: 3px solid transparent;
+        }
+        .nav-item:hover { background: var(--dark3); color: var(--white); }
+        .nav-item.active { background: var(--dark3); color: var(--gold); border-left-color: var(--gold); }
+        .nav-item i { width: 18px; text-align: center; font-size: 16px; opacity: 0.7; }
+        .nav-item:hover i, .nav-item.active i { opacity: 1; }
+
+        .sidebar-footer { padding: 24px; border-top: 1px solid var(--border); }
+        .admin-badge { display: flex; align-items: center; gap: 12px; margin-bottom: 20px; }
+        .admin-avatar { width: 36px; height: 36px; background: var(--gold); border-radius: 50%; display: flex; align-items: center; justify-content: center; font-weight: 700; color: #000; }
+        .admin-info div { font-size: 13px; font-weight: 600; }
+        .admin-info small { font-size: 10px; color: var(--gray); }
+        .logout-btn { width: 100%; padding: 10px; background: rgba(239, 68, 68, 0.1); border: 1px solid rgba(239, 68, 68, 0.2); color: var(--error); border-radius: 8px; font-weight: 700; font-size: 12px; cursor: pointer; transition: 0.3s; }
+        .logout-btn:hover { background: var(--error); color: #fff; }
+
+        /* --- MAIN CONTENT --- */
+        .main-content {
+            margin-left: var(--sidebar-w);
+            flex: 1;
+            padding: 48px;
+            max-width: 1600px;
+        }
+
+        .header { display: flex; justify-content: space-between; align-items: flex-end; margin-bottom: 48px; }
+        .header h1 { font-family: 'Playfair Display', serif; font-size: 36px; font-weight: 700; }
+        .header p { color: var(--gray); font-size: 16px; margin-top: 4px; }
+        .header-actions { display: flex; gap: 16px; }
+
+        .btn {
+            padding: 12px 24px; border-radius: 12px; font-size: 14px; font-weight: 700;
+            display: flex; align-items: center; gap: 10px; cursor: pointer; transition: 0.3s;
+            border: 1px solid var(--border); background: var(--dark3); color: var(--white);
+            font-family: inherit;
+        }
+        .btn-gold { background: var(--gold); color: #000; border: none; }
+        .btn-gold:hover { background: var(--gold-bright); transform: translateY(-2px); box-shadow: 0 10px 20px -5px rgba(196, 125, 10, 0.4); }
+        .btn:not(.btn-gold):hover { border-color: var(--gold); color: var(--gold); }
+
+        /* --- STATS --- */
+        .stats-grid { display: grid; grid-template-columns: repeat(4, 1fr); gap: 24px; margin-bottom: 48px; }
+        .stat-card {
+            background: var(--dark2); padding: 32px; border-radius: 24px;
+            border: 1px solid var(--border); position: relative; overflow: hidden;
+        }
+        .stat-card::after {
+            content: ''; position: absolute; top: 0; right: 0; width: 100px; height: 100px;
+            background: radial-gradient(circle at center, rgba(196, 125, 10, 0.05) 0%, transparent 70%);
+        }
+        .stat-card span { color: var(--gray); font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1.5px; }
+        .stat-card h3 { font-size: 28px; font-weight: 800; margin-top: 12px; font-family: 'Outfit', sans-serif; }
+        .stat-card .trend { font-size: 12px; margin-top: 8px; font-weight: 600; display: flex; align-items: center; gap: 4px; }
+        .trend.up { color: var(--success); }
+        .trend.neutral { color: var(--gray); }
+
+        /* --- TABS & TABLE --- */
+        .tabs { display: flex; gap: 40px; border-bottom: 1px solid var(--border); margin-bottom: 40px; }
+        .tab {
+            padding: 16px 0; color: var(--gray); font-weight: 700; font-size: 15px;
+            cursor: pointer; position: relative; transition: 0.3s;
+        }
+        .tab:hover { color: var(--white); }
+        .tab.active { color: var(--gold); }
+        .tab.active::after {
+            content: ''; position: absolute; bottom: -1px; left: 0; width: 100%; height: 3px;
+            background: var(--gold); border-radius: 3px 3px 0 0;
+        }
+
+        .table-container { background: var(--dark2); border-radius: 24px; border: 1px solid var(--border); overflow: hidden; }
+        .data-table { width: 100%; border-collapse: collapse; }
+        .data-table th { background: rgba(255, 255, 255, 0.02); text-align: left; padding: 20px; font-size: 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; color: var(--gray); }
+        .data-table td { padding: 20px; border-bottom: 1px solid var(--border); font-size: 14px; }
+        .data-table tr:hover { background: rgba(255, 255, 255, 0.01); }
+
+        .status-pill {
+            padding: 6px 12px; border-radius: 8px; font-size: 11px; font-weight: 800; text-transform: uppercase;
+        }
+        .status-pill.pending { background: rgba(245, 158, 11, 0.1); color: var(--warning); border: 1px solid rgba(245, 158, 11, 0.2); }
+        .status-pill.approved { background: rgba(16, 185, 129, 0.1); color: var(--success); border: 1px solid rgba(16, 185, 129, 0.2); }
+        .status-pill.rejected { background: rgba(239, 68, 68, 0.1); color: var(--error); border: 1px solid rgba(239, 68, 68, 0.2); }
+
+        /* --- MODAL --- */
+        .modal {
+            position: fixed; inset: 0; background: rgba(0, 0, 0, 0.85); backdrop-filter: blur(10px);
+            display: none; align-items: center; justify-content: center; z-index: 1000;
+            padding: 24px;
+        }
+        .modal-content {
+            background: #121214; width: 100%; max-width: 600px; padding: 48px; border-radius: 32px;
+            border: 1px solid var(--border); position: relative;
+            animation: modalIn 0.5s cubic-bezier(0.2, 0.8, 0.2, 1);
+            max-height: 90vh; overflow-y: auto;
+        }
+        @keyframes modalIn { from { opacity: 0; transform: translateY(30px); } to { opacity: 1; transform: translateY(0); } }
+
+        .wht-panel {
+            margin-top: 32px; padding: 24px; background: rgba(196, 125, 10, 0.05);
+            border-radius: 20px; border: 1px solid rgba(196, 125, 10, 0.1);
+        }
+
+        .form-label { display: block; margin-bottom: 8px; font-size: 12px; font-weight: 700; color: var(--gold); text-transform: uppercase; }
+        .form-input { 
+            width: 100%; background: rgba(255, 255, 255, 0.03); border: 1px solid var(--border);
+            padding: 12px 16px; border-radius: 12px; color: #fff; outline: none; transition: 0.3s;
+            font-family: inherit;
+        }
+        .form-input:focus { border-color: var(--gold); background: rgba(255, 255, 255, 0.06); }
+        
+        select.form-input option { background: var(--dark2); color: #fff; }
+
+        /* Toast notifications */
+        .toast {
+            position: fixed; bottom: 24px; right: 24px; padding: 16px 24px; 
+            border-radius: 12px; background: var(--dark2); border: 1px solid var(--border);
+            color: #fff; display: flex; align-items: center; gap: 12px; z-index: 2000;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.5); transform: translateY(100px);
+            transition: transform 0.4s cubic-bezier(0.2, 0.8, 0.2, 1);
+        }
+        .toast.visible { transform: translateY(0); }
+        .toast.error { border-color: var(--error); color: var(--error); }
+        .toast.success { border-color: var(--success); color: var(--success); }
+
+        .hidden { display: none; }
+    </style>
+</head>
+<body>
+
+    <!-- SIDEBAR -->
+    <aside class="sidebar">
+        <div class="sidebar-logo">
+            <div class="logo-row">
+                <img src="/static/img/logo.svg" alt="Eximp & Cloves" class="sidebar-logo-img">
+                <div class="brand">Eximp & Cloves<span>Infrastructure Ltd</span></div>
+            </div>
+        </div>
+
+        <nav class="nav-section">
+            <div class="nav-label">Main Suite</div>
+            <a href="/dashboard" class="nav-item"><i class="fas fa-th-large"></i> Dashboard</a>
+            <a href="/finance/payouts" class="nav-item active"><i class="fas fa-wallet"></i> Finance & Assets</a>
+            <a href="/marketing" class="nav-item"><i class="fas fa-bullhorn"></i> Marketing</a>
+            <a href="/legal" class="nav-item"><i class="fas fa-gavel"></i> Legal Suite</a>
+            
+            <div class="nav-label" style="margin-top:20px;">Operations</div>
+            <a href="/dashboard?section=invoices" class="nav-item"><i class="fas fa-file-invoice-dollar"></i> Invoices</a>
+            <a href="/dashboard?section=clients" class="nav-item"><i class="fas fa-users"></i> Clients</a>
+            <a href="/dashboard?section=properties" class="nav-item"><i class="fas fa-building"></i> Properties</a>
+
+            <div class="nav-label" style="margin-top:20px;">Support</div>
+            <a href="/finance/manual" class="nav-item"><i class="fas fa-book-open"></i> User Manual</a>
+        </nav>
+
+        <div class="sidebar-footer">
+            <div class="admin-badge">
+                <div class="admin-avatar" id="adminInitials">AD</div>
+                <div class="admin-info">
+                    <div id="adminName">Admin User</div>
+                    <small id="adminRole">Administrator</small>
+                </div>
+            </div>
+            <button class="logout-btn" onclick="logout()"><i class="fas fa-sign-out-alt"></i> SIGN OUT</button>
+        </div>
+    </aside>
+
+    <!-- CONTENT -->
+    <main class="main-content">
+        <div class="header">
+            <div>
+                <h1>Expenditure Cloud</h1>
+                <p>Central console for proforma review, tax withholding, and asset allocation.</p>
+            </div>
+            <div class="header-actions">
+                <button class="btn" onclick="copyOnboardingLink()">
+                    <i class="fas fa-user-plus"></i> Invite Vendor/Staff
+                </button>
+                <button class="btn btn-gold" onclick="openRequestModal()">
+                    <i class="fas fa-plus"></i> New Request
+                </button>
+            </div>
+        </div>
+
+        <div class="stats-grid">
+            <div class="stat-card">
+                <span>Total Expenditure</span>
+                <h3 id="stat-total-spend">₦0.00</h3>
+                <div class="trend neutral">Rolling 30 Days</div>
+            </div>
+            <div class="stat-card">
+                <span>Tax Withheld (WHT)</span>
+                <h3 id="stat-total-wht" style="color: var(--gold)">₦0.00</h3>
+                <div class="trend up"><i class="fas fa-arrow-up"></i> Awaiting Remittance</div>
+            </div>
+            <div class="stat-card">
+                <span>Active Requests</span>
+                <h3 id="stat-pending-count">0</h3>
+                <div class="trend neutral">Awaiting Audit</div>
+            </div>
+            <div class="stat-card">
+                <span>Asset Net Value</span>
+                <h3 id="stat-asset-value">₦0.00</h3>
+                <div class="trend neutral">Company Equipment</div>
+            </div>
+        </div>
+
+        <div class="tabs">
+            <div class="tab active" onclick="switchTab('requests')">Audit Queue</div>
+            <div class="tab" onclick="switchTab('vendors')">Vendor Registry</div>
+            <div class="tab" onclick="switchTab('reimbursements')">Staff Claims</div>
+            <div class="tab" onclick="switchTab('assets')">Asset Inventory</div>
+        </div>
+
+        <div class="table-container">
+            <table class="data-table">
+                <thead>
+                    <tr>
+                        <th>Submission</th>
+                        <th>Requester</th>
+                        <th>Objective</th>
+                        <th>Payee</th>
+                        <th>Gross Value</th>
+                        <th>Net Payout</th>
+                        <th>Status</th>
+                        <th>Audit</th>
+                    </tr>
+                </thead>
+                <tbody id="payoutBody">
+                    <tr><td colspan="8" style="text-align:center; padding:40px; color:var(--gray);">Initializing Audit Stream...</td></tr>
+                </tbody>
+            </table>
+        </div>
+    </main>
+
+    <!-- NEW REQUEST MODAL -->
+    <div class="modal" id="newRequestModal">
+        <div class="modal-content">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:32px;">
+                <h2 style="font-family: 'Playfair Display', serif; font-size:24px;">New Expenditure Request</h2>
+                <button onclick="closeModal('newRequestModal')" style="background:none; border:none; color:var(--gray); cursor:pointer;"><i class="fas fa-times fa-lg"></i></button>
+            </div>
+            
+            <form id="newRequestForm">
+                <div style="margin-bottom:20px;">
+                    <label class="form-label">Objective / Title</label>
+                    <input type="text" id="req-title" required class="form-input" placeholder="e.g. PC Maintenance or Vendor Invoice">
+                </div>
+                
+                <div style="margin-bottom:20px;">
+                    <label class="form-label">Recipient (Verified Vendor/Staff)</label>
+                    <select id="req-vendor" required class="form-input">
+                        <option value="">Loading partners...</option>
+                    </select>
+                    <small style="color:var(--gray); font-size:11px; margin-top:4px; display:block;">Only verified entities can receive payouts. Invite new partners using the link above.</small>
+                </div>
+                
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:24px;">
+                    <div>
+                        <label class="form-label">Total Gross Amount (₦)</label>
+                        <input type="number" id="req-amount" required class="form-input" placeholder="0.00" style="font-size:18px; font-weight:700; color:var(--gold-bright);">
+                    </div>
+                    <div>
+                        <label class="form-label">Category</label>
+                        <select id="req-method" class="form-input">
+                            <option value="direct_pay" selected>Vendor Direct Pay</option>
+                            <option value="procurement">Work Tool / Procurement</option>
+                            <option value="reimbursement">Staff Reimbursement</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <div style="margin-bottom:24px;">
+                    <label class="form-label">Upload Quotation / Proforma <span style="color:var(--gray); font-weight:400; font-size:10px;">(Optional)</span></label>
+                    <div style="border: 2px dashed var(--border); padding: 20px; border-radius: 16px; text-align: center; cursor: pointer; background: rgba(255,255,255,0.01);" onclick="document.getElementById('req-file').click()">
+                        <i class="fas fa-file-invoice" style="font-size:24px; color:var(--gray); margin-bottom:8px;"></i>
+                        <p id="req-file-status" style="font-size:12px; color:var(--gray);">Click to attach document</p>
+                        <input type="file" id="req-file" class="hidden" onchange="document.getElementById('req-file-status').innerText = this.files[0].name">
+                    </div>
+                </div>
+
+                <div style="margin-bottom:32px;">
+                    <label class="form-label">Audit Notes</label>
+                    <textarea id="req-desc" class="form-input" style="height:80px; resize:none;" placeholder="Explain the purpose of this expenditure..."></textarea>
+                </div>
+                
+                <button type="submit" class="btn btn-gold" style="width:100%; justify-content:center; padding:18px;">
+                    QUEUE FOR AUDIT REVIEW
+                </button>
+            </form>
+        </div>
+    </div>
+
+    <!-- AUDIT MODAL -->
+    <div class="modal" id="reviewModal">
+        <div class="modal-content">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:32px;">
+                <h2 style="font-family: 'Playfair Display', serif; font-size:24px;">Financial Audit Review</h2>
+                <button onclick="closeModal('reviewModal')" style="background:none; border:none; color:var(--gray); cursor:pointer;"><i class="fas fa-times fa-lg"></i></button>
+            </div>
+
+            <div id="requestDetails" STYLE="margin-bottom:32px;">
+                <!-- Summary of request -->
+            </div>
+
+            <div class="wht-panel">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                    <span style="font-weight:700; color:#fff;">Nigerian WHT Compliance</span>
+                    <label style="display:flex; align-items:center; gap:10px; cursor:pointer;">
+                        <input type="checkbox" id="wht-toggle" checked onchange="toggleWHT()" style="width:20px; height:20px; accent-color:var(--gold);">
+                        <span style="font-size:12px; font-weight:600;">Enable Withholding</span>
+                    </label>
+                </div>
+                
+                <div id="wht-config-inputs">
+                    <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px;">
+                        <div>
+                            <label class="form-label">WHT Rate (%)</label>
+                            <input type="number" id="wht-rate" step="0.01" class="form-input" oninput="recalculateWHT()">
+                        </div>
+                        <div>
+                            <label class="form-label">Deduction Amount</label>
+                            <div style="font-size:20px; font-weight:800; color:var(--error); margin-top:8px;" id="wht-amount-display">₦0.00</div>
+                        </div>
+                    </div>
+                    <div style="margin-top:20px; padding:12px; background:rgba(255,255,255,0.03); border-radius:12px; font-size:12px; color:var(--gray);">
+                        <i class="fas fa-info-circle" style="color:var(--gold)"></i> 
+                        <span id="wht-hint">Rates automatically double for payees without a valid TIN.</span>
+                    </div>
+                </div>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top:40px;">
+                <button class="btn btn-gold" style="justify-content:center; padding:18px;" onclick="submitReview('approved')">AUTHORIZE PAYMENT</button>
+                <button class="btn" style="justify-content:center; border-color:var(--error); color:var(--error);" onclick="submitReview('rejected')">REJECT CLAIM</button>
+            </div>
+        </div>
+    </div>
+
+    <div id="toast" class="toast"></div>
+
+    <script>
+        let requestsData = [];
+        let vendorsData = [];
+        let activeRequestId = null;
+
+        // --- UTILITIES ---
+        function toast(message, type = 'info') {
+            const el = document.getElementById('toast');
+            el.innerText = message;
+            el.className = `toast visible ${type}`;
+            setTimeout(() => el.classList.remove('visible'), 3000);
+        }
+
+        async function apiFetch(url, options = {}) {
+            const token = localStorage.getItem('ec_token');
+            const headers = { 
+                'Content-Type': 'application/json',
+                'Authorization': `Bearer ${token}`,
+                ...options.headers 
+            };
+            return fetch(url, { ...options, headers });
+        }
+
+        async function checkAuth() {
+            try {
+                const res = await apiFetch('/auth/me');
+                if (res.ok) {
+                    const user = await res.json();
+                    document.getElementById('adminName').innerText = user.full_name;
+                    document.getElementById('adminInitials').innerText = user.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0,2);
+                } else {
+                    window.location.href = '/login';
+                }
+            } catch (e) { console.error("Auth check failed", e); }
+        }
+
+        function logout() {
+            localStorage.removeItem('ec_token');
+            localStorage.removeItem('admin');
+            window.location.href = '/login';
+        }
+
+        // --- DATA LOADING ---
+        async function fetchRequests() {
+            try {
+                const res = await apiFetch('/api/payouts/requests');
+                requestsData = await res.json();
+                renderRequests(requestsData);
+                updateStats(requestsData);
+            } catch (e) {
+                console.error("Failed to fetch requests", e);
+                toast("Could not stream audit queue", "error");
+            }
+        }
+
+        async function loadVendors() {
+            const select = document.getElementById('req-vendor');
+            try {
+                const res = await apiFetch('/api/payouts/vendors');
+                vendorsData = await res.json();
+                select.innerHTML = '<option value="">Select Verified Partner</option>' + 
+                    vendorsData.map(v => `<option value="${v.id}">${v.name} (${v.type})</option>`).join('');
+            } catch (e) {
+                select.innerHTML = '<option value="">Failed to load partners</option>';
+            }
+        }
+
+        function renderRequests(data) {
+            const body = document.getElementById('payoutBody');
+            if (data.length === 0) {
+                body.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:var(--gray);">No pending payout requests found.</td></tr>';
+                return;
+            }
+            body.innerHTML = data.map(req => `
+                <tr>
+                    <td>${new Date(req.created_at).toLocaleDateString()}</td>
+                    <td>${req.admins?.full_name || 'System'}</td>
+                    <td><div style="font-weight:700;">${req.title}</div><small style="color:var(--gray)">ID: ${req.id.slice(0,8)}</small></td>
+                    <td>${req.vendors?.name || 'N/A'}</td>
+                    <td>₦${req.amount_gross.toLocaleString()}</td>
+                    <td style="font-weight:700; color:var(--success)">₦${req.net_payout_amount.toLocaleString()}</td>
+                    <td><span class="status-pill ${req.status}">${req.status}</span></td>
+                    <td>
+                        ${req.status === 'pending' ? `<button onclick="openReview('${req.id}')" class="btn" style="padding: 6px 12px; font-size:11px;">REVIEW</button>` : '<i class="fas fa-check-circle" style="color:var(--success)"></i>'}
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        function updateStats(data) {
+            const total = data.reduce((s, r) => s + (parseFloat(r.amount_gross)||0), 0);
+            const wht = data.reduce((s, r) => s + (parseFloat(r.wht_amount)||0), 0);
+            document.getElementById('stat-total-spend').innerText = '₦' + total.toLocaleString();
+            document.getElementById('stat-total-wht').innerText = '₦' + wht.toLocaleString();
+            document.getElementById('stat-pending-count').innerText = data.filter(r => r.status === 'pending').length;
+        }
+
+        // --- MODALS ---
+        function openReview(id) {
+            activeRequestId = id;
+            const req = requestsData.find(r => r.id === id);
+            document.getElementById('requestDetails').innerHTML = `
+                <div style="background:rgba(255,255,255,0.02); padding:20px; border-radius:16px; border:1px solid var(--border);">
+                    <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px;">
+                        <div><p class="form-label">Payee</p><strong>${req.vendors?.name}</strong></div>
+                        <div><p class="form-label">Gross Amount</p><strong>₦${req.amount_gross.toLocaleString()}</strong></div>
+                    </div>
+                    <div style="margin-top:15px;"><p class="form-label">Description</p><p style="font-size:14px;">${req.description || 'No description provided'}</p></div>
+                </div>
+            `;
+            document.getElementById('wht-rate').value = (req.wht_rate * 100).toFixed(1);
+            document.getElementById('wht-toggle').checked = req.is_wht_applicable;
+            recalculateWHT();
+            document.getElementById('reviewModal').style.display = 'flex';
+        }
+
+        function openRequestModal() {
+            document.getElementById('newRequestModal').style.display = 'flex';
+            loadVendors();
+        }
+
+        function closeModal(id) { document.getElementById(id).style.display = 'none'; }
+
+        // --- ACTIONS ---
+        function toggleWHT() {
+            const config = document.getElementById('wht-config-inputs');
+            const isChecked = document.getElementById('wht-toggle').checked;
+            config.style.opacity = isChecked ? '1' : '0.3';
+            config.style.pointerEvents = isChecked ? 'auto' : 'none';
+            recalculateWHT();
+        }
+
+        function recalculateWHT() {
+            const req = requestsData.find(r => r.id === activeRequestId);
+            if (!req) return;
+            const isChecked = document.getElementById('wht-toggle').checked;
+            if (!isChecked) {
+                document.getElementById('wht-amount-display').innerText = '₦0.00';
+                return;
+            }
+            const rate = parseFloat(document.getElementById('wht-rate').value) / 100 || 0;
+            const whtAmt = req.amount_gross * rate;
+            document.getElementById('wht-amount-display').innerText = '₦' + whtAmt.toLocaleString();
+        }
+
+        async function submitReview(status) {
+            const applyWht = document.getElementById('wht-toggle').checked;
+            const manualRate = parseFloat(document.getElementById('wht-rate').value) / 100;
+            
+            const payload = {
+                status: status,
+                apply_wht: applyWht,
+                manual_wht_rate: applyWht ? manualRate : 0,
+                payout_reference: 'TRANS-' + Math.random().toString(36).substr(2, 9).toUpperCase()
+            };
+
+            const res = await apiFetch(`/api/payouts/requests/${activeRequestId}/review`, {
+                method: 'PUT',
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                toast(`Request ${status.toUpperCase()}`, "success");
+                closeModal('reviewModal');
+                fetchRequests();
+            } else {
+                toast("Audit trace failed", "error");
+            }
+        }
+
+        document.getElementById('newRequestForm').onsubmit = async (e) => {
+            e.preventDefault();
+            const payload = {
+                title: document.getElementById('req-title').value,
+                vendor_id: document.getElementById('req-vendor').value,
+                amount_gross: parseFloat(document.getElementById('req-amount').value),
+                payout_method: document.getElementById('req-method').value,
+                description: document.getElementById('req-desc').value,
+                is_wht_applicable: document.getElementById('req-method').value === 'direct_pay'
+            };
+
+            const res = await apiFetch('/api/payouts/requests', {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                toast("Expenditure request queued", "success");
+                closeModal('newRequestModal');
+                fetchRequests();
+                e.target.reset();
+            } else {
+                toast("Failed to queue request", "error");
+            }
+        };
+
+        function copyOnboardingLink() {
+            const link = window.location.origin + '/payout/portal/OFFICIAL'
+            
+            // Modern clipboard API with fallback
+            if (navigator.clipboard && window.isSecureContext) {
+                navigator.clipboard.writeText(link).then(() => {
+                    toast("Onboarding Portal Link Copied!", "success");
+                }).catch(() => fallbackCopy(link));
+            } else {
+                fallbackCopy(link);
+            }
+        }
+
+        function fallbackCopy(text) {
+            const input = document.createElement('input');
+            input.value = text;
+            document.body.appendChild(input);
+            input.select();
+            document.execCommand('copy');
+            document.body.removeChild(input);
+            toast("Link Copied (Classic)", "success");
+        }
+
+        function switchTab(tab) {
+            document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            event.target.classList.add('active');
+            toast(`Filtering for ${tab}...`, 'info');
+            // Real filtering logic would go here
+        }
+
+        // Initialize
+        checkAuth();
+        fetchRequests();
+    </script>
+</body>
+</html>

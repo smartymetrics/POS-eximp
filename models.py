@@ -480,7 +480,46 @@ class LeadScore(BaseModel):
 
 
 # ─── PROFESSIONAL CRM: REPORTS ───────────────────────────────
-class ReportGenerate(BaseModel):
-    report_type: str  # "sales", "team", "property", "client", "market"
-    date_range: str  # "this_month", "this_quarter", "this_year"
+# ─── PAYOUTS & ASSETS (PRD v3) ───────────────────────────────
+class VendorCreate(BaseModel):
+    type: str # 'company', 'individual', 'staff'
+    name: str
+    rc_number: Optional[str] = None
+    tin: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    bank_name: Optional[str] = None
+    account_number: Optional[str] = None
+    account_name: Optional[str] = None
+    id_document_url: Optional[str] = None
+    admin_id: Optional[str] = None
+
+class ExpenditureRequestCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    vendor_id: Optional[str] = None
+    vendor_data: Optional[VendorCreate] = None # For inline creation
+    amount_gross: Decimal
+    payout_method: str # 'direct_pay', 'reimbursement'
+    is_wht_applicable: bool = True
+    wht_exemption_reason: Optional[str] = None
+    proforma_url: Optional[str] = None
+    receipt_url: Optional[str] = None
+
+class PayoutReview(BaseModel):
+    status: str # 'approved', 'rejected'
+    payout_reference: Optional[str] = None
+    rejection_reason: Optional[str] = None
+    apply_wht: bool = True
+    manual_wht_rate: Optional[Decimal] = None
+
+class AssetCreate(BaseModel):
+    asset_id: Optional[str] = None
+    name: str
+    category: str
+    serial_number: Optional[str] = None
+    purchase_cost: Optional[Decimal] = None
+    purchase_date: Optional[date] = None
+    procurement_id: Optional[str] = None
+    assigned_to: Optional[str] = None
 

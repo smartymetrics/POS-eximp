@@ -1,0 +1,153 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Finance & Payouts Manual | Eximp & Cloves</title>
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <style>
+        :root {
+            --bg: #09090B;
+            --dark2: #121214;
+            --dark3: #1C1C1E;
+            --gold: #C47D0A;
+            --white: #F8FAFC;
+            --gray: #94A3B8;
+            --border: rgba(255, 255, 255, 0.08);
+            --success: #10B981;
+            --warning: #F59E0B;
+            --error: #EF4444;
+        }
+
+        * { margin: 0; padding: 0; box-sizing: border-box; }
+        body {
+            background-color: var(--bg);
+            color: var(--white);
+            font-family: 'DM Sans', sans-serif;
+            line-height: 1.6;
+            padding: 48px;
+            max-width: 900px;
+            margin: 0 auto;
+        }
+
+        .header { margin-bottom: 64px; text-align: center; }
+        .header h1 { font-family: 'Playfair Display', serif; font-size: 48px; margin-bottom: 16px; }
+        .header p { color: var(--gold); font-weight: 700; letter-spacing: 2px; text-transform: uppercase; font-size: 14px; }
+
+        .nav-back { 
+            display: inline-flex; align-items: center; gap: 8px; color: var(--gray); 
+            text-decoration: none; font-weight: 600; margin-bottom: 32px; transition: 0.3s;
+        }
+        .nav-back:hover { color: var(--gold); }
+
+        .card { 
+            background: var(--dark2); border-radius: 24px; border: 1px solid var(--border); 
+            padding: 40px; margin-bottom: 32px; position: relative; overflow: hidden;
+        }
+        .card::before {
+            content: ''; position: absolute; top: 0; left: 0; width: 4px; height: 100%; background: var(--gold);
+        }
+
+        h2 { font-family: 'Playfair Display', serif; font-size: 28px; margin-bottom: 24px; display: flex; align-items: center; gap: 16px; }
+        h2 i { color: var(--gold); font-size: 20px; }
+
+        h3 { color: var(--gold); font-size: 18px; margin: 24px 0 12px; font-weight: 700; text-transform: uppercase; letter-spacing: 1px; }
+
+        p { margin-bottom: 20px; color: #D1D5DB; }
+
+        .step-pill {
+            display: inline-block; padding: 4px 12px; border-radius: 6px; background: rgba(196, 125, 10, 0.1);
+            color: var(--gold); font-weight: 800; font-size: 11px; margin-bottom: 12px;
+        }
+
+        .feature-box {
+            background: rgba(255,255,255,0.02); border: 1px dashed var(--border); border-radius: 16px;
+            padding: 24px; margin: 24px 0;
+        }
+
+        .alert-box {
+            padding: 20px; border-radius: 16px; margin: 24px 0; display: flex; gap: 16px;
+        }
+        .alert-box.important { background: rgba(16, 185, 129, 0.05); border: 1px solid rgba(16, 185, 129, 0.2); }
+        .alert-box i { font-size: 20px; margin-top: 4px; }
+        .alert-box.important i { color: var(--success); }
+
+        ul { margin-left: 20px; margin-bottom: 24px; }
+        li { margin-bottom: 12px; color: #D1D5DB; }
+
+        code { background: #000; padding: 2px 6px; border-radius: 4px; color: var(--gold); font-family: monospace; }
+        
+        .footer { text-align: center; margin-top: 64px; color: var(--gray); font-size: 13px; padding-bottom: 64px; }
+    </style>
+</head>
+<body>
+
+    <a href="/finance/payouts" class="nav-back"><i class="fas fa-arrow-left"></i> Back to Dashboard</a>
+
+    <div class="header">
+        <p>Official Standard Operating Procedure</p>
+        <h1>Finance & Payouts Manual</h1>
+    </div>
+
+    <div class="card">
+        <h2><i class="fas fa-microchip"></i> System Overview</h2>
+        <p>The Eximp & Cloves Expenditure System is designed for <b>Financial Integrity</b> and <b>Tax Compliance</b>. Every payment must be tied to a <b>Verified Partner</b> (Vendor or Staff Member) to ensure Nigerian WHT 2025 regulations are met automatically.</p>
+    </div>
+
+    <div class="card">
+        <h2><i class="fas fa-user-plus"></i> Step 1: Onboarding Partners</h2>
+        <div class="step-pill">CONTROL: "INVITE VENDOR/STAFF" BUTTON</div>
+        <p>Before you can initiate a payout, the recipient MUST be in our registry. This button is used for <b>NEW</b> contractors or staff members.</p>
+        
+        <h3>How it works:</h3>
+        <ul>
+            <li>Clicking the button copies a <b>Private Recruitment Link</b> to your clipboard.</li>
+            <li>Send this link to the Vendor or Staff via Email or WhatsApp.</li>
+            <li><b>The Partner (Recipient)</b> fills out their Bank Name, Account Number, TIN (for companies), and uploads their CAC documents or National ID.</li>
+        </ul>
+
+        <div class="alert-box important">
+            <i class="fas fa-info-circle"></i>
+            <div>
+                <strong>Automatic Data Capture</strong><br>
+                This process eliminates typing errors. The system captures their legal entity status automatically to determine if WHT applies.
+            </div>
+        </div>
+    </div>
+
+    <div class="card">
+        <h2><i class="fas fa-file-invoice-dollar"></i> Step 2: Initiating a Payout</h2>
+        <div class="step-pill">CONTROL: "+ NEW REQUEST" BUTTON</div>
+        <p>Once a partner is onboarded, use this button to request a specific payment for them.</p>
+
+        <h3>Workflow:</h3>
+        <ol style="margin-left:20px; list-style-position: inside;">
+            <li style="margin-bottom:12px;"><b>Identify Partner</b>: Select them from the dropdown list of verified entities.</li>
+            <li style="margin-bottom:12px;"><b>Gross Amount</b>: Enter the total invoice value (before tax).</li>
+            <li style="margin-bottom:12px;"><b>Category</b>: Choose between <code>Vendor Pay</code> or <code>Staff Reimbursement</code>.</li>
+        </ol>
+
+        <div class="feature-box">
+            <strong>The 2025 WHT Engine</strong><br>
+            The system instantly calculates a tax suggestion. 
+            <br>- Registered Companies: 2% - 10% depending on service type.
+            <br>- Non-Resident/No TIN: Double tax penalty applied automatically.
+        </div>
+    </div>
+
+    <div class="card">
+        <h2><i class="fas fa-shield-check"></i> Step 3: Audit & Approval</h2>
+        <p>All requests enter the <b>"Audit Queue"</b> as <code>pending</code>. A financial auditor must Review the proforma invoice and click <b>"Authorize Payment"</b>.</p>
+        
+        <h3>Correction Capability:</h3>
+        <p>Auditors have the "Final Word". In the Review Modal, you can override the WHT (Withholding Tax) if it doesn't apply to a specific item—for example, a staff member buying tools on behalf of the company.</p>
+    </div>
+
+    <div class="footer">
+        Eximp & Cloves Infrastructure Limited · Finance Department · Built April 2026<br>
+        <em>RC 8311800 · Standardized Expenditure Protocol v2.1</em>
+    </div>
+
+</body>
+</html>
