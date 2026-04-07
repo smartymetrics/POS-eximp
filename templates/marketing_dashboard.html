@@ -1428,6 +1428,7 @@
 
         async function duplicateCampaign(id) {
             if (!confirm("Duplicate this campaign? It will create a new editable draft copy.")) return;
+            showPageLoader('Duplicating Campaign...');
             try {
                 const res = await fetch(`/api/marketing/campaigns/${id}/duplicate`, {
                     method: 'POST',
@@ -1445,6 +1446,8 @@
                 }
             } catch (e) {
                 console.error(e);
+            } finally {
+                hidePageLoader();
             }
         }
 
@@ -2242,6 +2245,7 @@
         async function openSequenceModal() {
             const btn = event?.currentTarget;
             if (btn) btn.classList.add('btn-loading');
+            showPageLoader('Preparing Automation Builder...');
             
             try {
                 // 1. Fetch campaigns & segments
@@ -2276,6 +2280,7 @@
                 alert("Failed to load campaigns for sequences.");
             } finally {
                 if (btn) btn.classList.remove('btn-loading');
+                hidePageLoader();
             }
         }
 
@@ -2695,6 +2700,7 @@
         }
 
         async function viewReport(id) {
+            showPageLoader('Generating Campaign Report...');
             try {
                 // 1. Fetch Summary
                 const summaryRes = await fetch(`/api/marketing/analytics/campaign/${id}/report`, {
@@ -2718,7 +2724,8 @@
                 const recsRes = await fetch(`/api/marketing/analytics/campaign/${id}/recipients`, {
                     headers: { 'Authorization': 'Bearer ' + token }
                 });
-                const recipients = await recsRes.data || await recsRes.json();
+                const responseData = await recsRes.json();
+                const recipients = responseData.data || responseData;
 
                 const list = document.getElementById('report-recipients-list');
                 list.innerHTML = recipients.map(r => {
@@ -2744,8 +2751,6 @@
                     `;
                 }).join('');
 
-                document.getElementById('report-recipients-list').innerHTML = list.innerHTML;
-                
                 const el = document.getElementById('report-modal');
                 if (el) {
                     el.classList.remove('hidden');
@@ -2755,6 +2760,8 @@
             } catch (e) {
                 console.error(e);
                 alert("Error loading campaign report.");
+            } finally {
+                hidePageLoader();
             }
         }
 
