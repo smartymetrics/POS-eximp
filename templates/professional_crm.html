@@ -20,6 +20,52 @@
 
         body { background: var(--light-bg); }
 
+        .page-loader {
+            position: fixed;
+            inset: 0;
+            background: rgba(15, 15, 15, 0.82);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 9999;
+            transition: opacity 0.25s ease, visibility 0.25s ease;
+        }
+
+        .page-loader.hidden {
+            opacity: 0;
+            visibility: hidden;
+            pointer-events: none;
+        }
+
+        .page-loader .loader-card {
+            text-align: center;
+            padding: 22px 28px;
+            border-radius: 18px;
+            background: rgba(17, 24, 39, 0.96);
+            box-shadow: 0 24px 48px rgba(0,0,0,0.25);
+            width: min(360px, 100%);
+        }
+
+        .page-loader .spinner {
+            width: 46px;
+            height: 46px;
+            border: 5px solid rgba(255,255,255,0.16);
+            border-top-color: #C47D0A;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 14px;
+        }
+
+        .page-loader .loader-text {
+            color: #F9FAFB;
+            font-size: 14px;
+            font-weight: 700;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
         .sidebar {
             width: 280px;
             height: 100vh;
@@ -544,10 +590,42 @@
     </div>
 
     <script>
-        const API_BASE = "/api/crm/pro";
-        const token = localStorage.getItem("ec_token");
+        // Check authentication on page load
+        function checkAuth() {
+            try {
+                const token = localStorage.getItem('ec_token');
+                if (!token) {
+                    window.location.replace('/login');
+                    return false;
+                }
 
-        if (!token) window.location.href = "/login";
+                // Validate token
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                const now = Math.floor(Date.now() / 1000);
+                if (payload.exp && payload.exp < now) {
+                    // Token expired
+                    localStorage.removeItem('ec_token');
+                    localStorage.removeItem('admin');
+                    window.location.replace('/login');
+                    return false;
+                }
+
+                return token;
+            } catch (e) {
+                localStorage.removeItem('ec_token');
+                localStorage.removeItem('admin');
+                window.location.replace('/login');
+                return false;
+            }
+        }
+
+        const API_BASE = "/api/crm/pro";
+        const token = checkAuth();
+
+        if (!token) return; // Stop execution if not authenticated
+
+        // Set global token for API calls
+        window.ec_token = token;
 
         // View switching
         function switchView(viewName) {
@@ -586,8 +664,10 @@
                 `).join("");
                 
                 document.getElementById("hotLeadsTable").innerHTML = html;
+                hidePageLoader();
             } catch (err) {
                 console.error("Error loading leads:", err);
+                hidePageLoader();
             }
         }
 
@@ -627,7 +707,17 @@
         }
 
         // Initialize on page load
-        document.addEventListener("DOMContentLoaded", loadLeads);
+        document.addEventListener("DOMContentLoaded", () => {
+            showPageLoader('Loading CRM dashboard...');
+            loadLeads();
+        });
     </script>
+
+    <div id="pageLoader" class="page-loader">
+        <div class="loader-card">
+            <div class="spinner"></div>
+            <div id="pageLoaderMessage" class="loader-text">Loading CRM dashboard...</div>
+        </div>
+    </div>
 </body>
 </html>

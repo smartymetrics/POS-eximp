@@ -231,7 +231,7 @@ def _render_with_xhtml2pdf(html_content: str) -> bytes:
 
 
 
-def generate_invoice_pdf(invoice: dict) -> bytes:
+def render_invoice_html(invoice: dict) -> str:
     template = env.get_template("invoice.html")
     client = sanitize_client_address(invoice.get("clients", {}).copy())
     
@@ -294,11 +294,15 @@ def generate_invoice_pdf(invoice: dict) -> bytes:
         format_currency=format_currency,
         generated_at=datetime.now().strftime("%d %b %Y")
     )
+    return html_content
+
+def generate_invoice_pdf(invoice: dict) -> bytes:
+    html_content = render_invoice_html(invoice)
     return _render_with_xhtml2pdf(html_content)
 
 
 
-def generate_receipt_pdf(invoice: dict) -> bytes:
+def render_receipt_html(invoice: dict) -> str:
     template = env.get_template("receipt.html")
     client = sanitize_client_address(invoice.get("clients", {}).copy())
     # Only include standard payments (not refunds) in the payment receipt
@@ -361,11 +365,15 @@ def generate_receipt_pdf(invoice: dict) -> bytes:
         format_currency=format_currency,
         generated_at=datetime.now().strftime("%d %b %Y")
     )
+    return html_content
+
+def generate_receipt_pdf(invoice: dict) -> bytes:
+    html_content = render_receipt_html(invoice)
     return _render_with_xhtml2pdf(html_content)
 
 
 
-def generate_statement_pdf(invoices: list, client: dict) -> bytes:
+def render_statement_html(invoices: list, client: dict) -> str:
     template = env.get_template("statement.html")
     client = sanitize_client_address(client.copy())
 
@@ -446,6 +454,10 @@ def generate_statement_pdf(invoices: list, client: dict) -> bytes:
         period_start=invoices[0]["invoice_date"] if invoices else "",
         period_end=invoices[-1]["invoice_date"] if invoices else "",
     )
+    return html_content
+
+def generate_statement_pdf(invoices: list, client: dict) -> bytes:
+    html_content = render_statement_html(invoices, client)
     return _render_with_xhtml2pdf(html_content)
 
 
@@ -578,12 +590,7 @@ def render_contract_html(invoice: dict, client: dict, witnesses: list = None, is
     company_occupations = {s["role"]: s.get("occupation") for s in sig_res.data}
 
     # 2. Get Purchaser Signature
-    purchaser_sig = (
-        invoice.get("contract_signature_url")
-        or invoice.get("contract_signature_base64")
-        or invoice.get("signature_url")
-        or invoice.get("signature_base64")
-    )
+    purchaser_sig = invoice.get("contract_signature_url")
 
     # 3. Resolve signatures
     signatures = {

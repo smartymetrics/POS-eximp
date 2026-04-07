@@ -31,7 +31,7 @@ from routers import (
     crm,
     crm_professional
 )
-from routers.auth import require_roles
+from routers.auth import require_roles, resolve_admin_token
 from database import init_db
 from scheduler import start_scheduler, stop_scheduler
 
@@ -99,6 +99,26 @@ async def dashboard(request: Request):
 @app.get("/crm", response_class=HTMLResponse)
 async def crm_dashboard(request: Request):
     return templates.TemplateResponse("crm_dashboard.html", {"request": request})
+
+
+@app.get("/crm/professional", response_class=HTMLResponse)
+async def crm_professional_dashboard(request: Request):
+    return templates.TemplateResponse("professional_crm.html", {"request": request})
+
+
+@app.get("/marketing", response_class=HTMLResponse)
+async def marketing_dashboard(request: Request):
+    return templates.TemplateResponse("marketing_dashboard.html", {"request": request})
+
+
+@app.get("/legal", response_class=HTMLResponse)
+async def legal_dashboard(request: Request):
+    return templates.TemplateResponse("legal_dashboard.html", {"request": request})
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
 
 
 @app.get("/crm-pro", response_class=HTMLResponse)

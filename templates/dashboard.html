@@ -13,17 +13,48 @@
   <link href="https://cdn.quilljs.com/1.3.6/quill.snow.css" rel="stylesheet">
   <script src="https://cdn.quilljs.com/1.3.6/quill.min.js"></script>
   <script>
-    try {
-      const token = localStorage.getItem('ec_token');
-      if (token) {
+    // Check authentication on page load
+    function checkAuth() {
+      try {
+        const token = localStorage.getItem('ec_token');
+        if (!token) {
+          window.location.replace('/login');
+          return;
+        }
+
+        // Validate token
         const payload = JSON.parse(atob(token.split('.')[1]));
+        const now = Math.floor(Date.now() / 1000);
+        if (payload.exp && payload.exp < now) {
+          // Token expired
+          localStorage.removeItem('ec_token');
+          localStorage.removeItem('admin');
+          window.location.replace('/login');
+          return;
+        }
+
+        // Check roles and redirect if needed
         const roles = (payload.role || '').toLowerCase().split(',').map(r => r.trim());
-        // If strictly marketing and nothing else
         if (roles.includes('marketing') && roles.length === 1) {
           window.location.replace('/marketing');
+          return;
         }
+        if (roles.includes('legal') && roles.length === 1) {
+          window.location.replace('/legal');
+          return;
+        }
+
+        // Set Authorization header for API calls
+        window.ec_token = token;
+
+      } catch (e) {
+        localStorage.removeItem('ec_token');
+        localStorage.removeItem('admin');
+        window.location.replace('/login');
       }
-    } catch (e) {}
+    }
+
+    checkAuth();
   </script>
   <style>
     :root {

@@ -230,9 +230,18 @@ async def get_contract_status(invoice_id: str, current_admin=Depends(verify_toke
         .execute()
     
     if not res.data:
-         return {"status": "not_started"}
+         return {"status": "not_started", "client_signed": False}
 
     session = res.data[0]
+    
+    # Check if client has signed (look at invoice)
+    inv_res = db.table("invoices").select("contract_signature_url").eq("id", invoice_id).execute()
+    client_signed = False
+    if inv_res.data:
+        inv = inv_res.data[0]
+        client_signed = bool(inv.get("contract_signature_url"))
+
+
     return {
         "id": session["id"],
         "invoice_id": session["invoice_id"],
@@ -241,6 +250,7 @@ async def get_contract_status(invoice_id: str, current_admin=Depends(verify_toke
         "expires_at": session["expires_at"],
         "created_at": session.get("created_at"),
         "witness_signatures": session.get("witness_signatures", []),
+        "client_signed": client_signed,
         "is_executed": session["status"] == "completed"
     }
 
@@ -617,6 +627,14 @@ async def add_manual_witness(invoice_id: str, data: WitnessSignatureSubmit, back
     from email_service import send_admin_signing_alert
     background_tasks.add_task(send_admin_signing_alert, invoice, client, witnesses)
 
+    await log_activity(
+        "witness_added",
+        f"Manual witness recorded for invoice {invoice['invoice_number']} ({data.full_name})",
+        current_admin["sub"],
+        invoice_id=invoice_id,
+        client_id=invoice.get("client_id")
+    )
+
     return {"message": "Witness recorded successfully", "witness_number": witness_num}
 
 @router.post("/{invoice_id}/manual-client")
@@ -836,6 +854,9 @@ async def generate_final_contract(invoice_id: str, background_tasks: BackgroundT
 
 @router.post("/extend/{invoice_id}")
 async def extend_contract_signing(invoice_id: str, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+    if not has_any_role(current_admin, "admin", "lawyer"):
+        raise HTTPException(status_code=403, detail="Unauthorized")
+        
     db = get_db()
 
     # 1. Fetch invoice and client for the email
@@ -883,7 +904,7 @@ async def extend_contract_signing(invoice_id: str, background_tasks: BackgroundT
 @router.get("/{invoice_id}/default-html")
 @router.get("/{invoice_id}/custom-html")
 async def get_contract_html(invoice_id: str, current_admin=Depends(verify_token)):
-    if not has_any_role(current_admin, "admin", "lawyer"):
+    if not has_any_role(current_admin, "admin", "lawyer", "legal"):
         raise HTTPException(status_code=403, detail="Unauthorized")
         
     db = get_db()
@@ -977,7 +998,7 @@ async def update_contract_html(invoice_id: str, payload: CustomContractHTMLUpdat
 @router.get("/summary")
 async def get_legal_summary(current_admin=Depends(verify_token)):
     """Fetch high-level KPIs for the Legal Dashboard."""
-    if not has_any_role(current_admin, "admin", "lawyer"):
+    if not has_any_role(current_admin, "admin", "lawyer", "legal"):
         raise HTTPException(status_code=403, detail="Unauthorized")
     
     db = get_db()
@@ -1015,7 +1036,7 @@ async def get_legal_summary(current_admin=Depends(verify_token)):
 @router.get("/execution-trends")
 async def get_execution_trends(current_admin=Depends(verify_token)):
     """Fetch weekly execution velocity and pipeline health for the Legal dashboard."""
-    if not has_any_role(current_admin, "admin", "lawyer"):
+    if not has_any_role(current_admin, "admin", "lawyer", "legal"):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     db = get_db()
@@ -1125,7 +1146,7 @@ async def get_execution_trends(current_admin=Depends(verify_token)):
 @router.get("/archive")
 async def list_archived_contracts(current_admin=Depends(verify_token)):
     """Fetch all fully executed contracts for the legal archive."""
-    if not has_any_role(current_admin, "admin", "lawyer"):
+    if not has_any_role(current_admin, "admin", "lawyer", "legal"):
         raise HTTPException(status_code=403, detail="Unauthorized")
     
     db = get_db()
@@ -1142,7 +1163,7 @@ async def list_archived_contracts(current_admin=Depends(verify_token)):
 @router.get("/all-contracts")
 async def list_all_contracts(include_voided: bool = Query(False), current_admin=Depends(verify_token)):
     """Fetch a comprehensive list of all contracts and their real-time signing status."""
-    if not has_any_role(current_admin, "admin", "lawyer"):
+    if not has_any_role(current_admin, "admin", "lawyer", "legal"):
         raise HTTPException(status_code=403, detail="Unauthorized")
         
     db = get_db()
@@ -1160,15 +1181,26 @@ async def list_all_contracts(include_voided: bool = Query(False), current_admin=
     contracts = result.data
     for c in contracts:
         # Summarize status for the dashboard
-        session = c.get("contract_signing_sessions", [{}])[0] if c.get("contract_signing_sessions") else {}
+        sessions = c.get("contract_signing_sessions", [])
+        if isinstance(sessions, list) and sessions:
+             # Pick the latest session
+             session = sorted(sessions, key=lambda s: s.get("created_at", ""), reverse=True)[0]
+        else:
+             session = sessions if isinstance(sessions, dict) else {}
+
         c["signing_status"] = session.get("status", "not_started")
         c["expires_at"] = session.get("expires_at")
         
         # Count signatures collected
         sigs = 0
-        if c.get("contract_signature_url"): sigs += 1
-        if session.get("witness_signatures"):
-            sigs += len(session["witness_signatures"])
+        if c.get("contract_signature_url"): 
+            sigs += 1
+            
+        # Count witnesses in the same latest session
+        witnesses = session.get("witness_signatures", [])
+        if witnesses:
+            sigs += len(witnesses)
+            
         c["signatures_collected"] = sigs
 
     return contracts
@@ -1219,12 +1251,60 @@ async def upload_custom_lawyer_seal(
 
 
 
+from fastapi.responses import HTMLResponse
+
+@router.get("/{invoice_id}/html-preview/invoice", response_class=HTMLResponse)
+async def preview_invoice_html(invoice_id: str, current_admin=Depends(resolve_admin_token)):
+    db = get_db()
+    res = db.table("invoices").select("*, clients(*), payments(*)").eq("id", invoice_id).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    invoice = res.data[0]
+    
+    from pdf_service import render_invoice_html
+    html_content = render_invoice_html(invoice)
+    return HTMLResponse(content=html_content)
+
+@router.get("/{invoice_id}/html-preview/receipt", response_class=HTMLResponse)
+async def preview_receipt_html(invoice_id: str, current_admin=Depends(resolve_admin_token)):
+    db = get_db()
+    res = db.table("invoices").select("*, clients(*), payments(*)").eq("id", invoice_id).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    invoice = res.data[0]
+    
+    from pdf_service import render_receipt_html
+    html_content = render_receipt_html(invoice)
+    return HTMLResponse(content=html_content)
+
+@router.get("/{invoice_id}/html-preview/statement", response_class=HTMLResponse)
+async def preview_statement_html(invoice_id: str, current_admin=Depends(resolve_admin_token)):
+    db = get_db()
+    res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+        
+    client_id = res.data[0].get("client_id")
+    if not client_id:
+        raise HTTPException(status_code=404, detail="Client not found")
+        
+    client = res.data[0].get("clients")
+    
+    # Fetch all invoices for the client
+    inv_res = db.table("invoices").select("*, payments(*)").eq("client_id", client_id).order("invoice_date").execute()
+    invoices = inv_res.data
+    
+    from pdf_service import render_statement_html
+    html_content = render_statement_html(invoices, client)
+    return HTMLResponse(content=html_content)
+
+
 # --- SIGNATURE VAULT ENDPOINTS ---
 
 @router.get("/authorities")
 async def list_authorities(current_admin=Depends(verify_token)):
     """List all company signatures (active and inactive)."""
-    if not has_any_role(current_admin, "admin", "lawyer"):
+    if not has_any_role(current_admin, "admin", "lawyer", "legal"):
         raise HTTPException(status_code=403, detail="Unauthorized")
     
     db = get_db()
@@ -1302,7 +1382,7 @@ async def deactivate_authority_signature(sig_id: str, current_admin=Depends(veri
 @router.get("/activity")
 async def get_legal_activity(limit: int = 15, current_admin=Depends(verify_token)):
     """Fetch recent contract-related activity logs for the dashboard."""
-    if not has_any_role(current_admin, "admin", "lawyer"):
+    if not has_any_role(current_admin, "admin", "lawyer", "legal"):
         raise HTTPException(status_code=403, detail="Unauthorized")
     
     db = get_db()
@@ -1311,7 +1391,9 @@ async def get_legal_activity(limit: int = 15, current_admin=Depends(verify_token
         "contract_created", "contract_signed", "contract_executed", 
         "witness_signed", "witness_added", "contract_extended", 
         "lawyer_seal_uploaded", "authority_signature_uploaded",
-        "client_signed_contract", "manual_client_contract_signed"
+        "client_signed_contract", "manual_client_contract_signed",
+        "contract_initiated", "contract_wording_updated", "witness_removed",
+        "signature_updated", "signature_deactivated", "authority_signature_deactivated"
     ]
     
     result = db.table("activity_log")\
