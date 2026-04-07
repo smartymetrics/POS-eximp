@@ -6,6 +6,7 @@
 -- 1. Upgrade the Vendor Bills / Requests Table
 ALTER TABLE expenditure_requests ADD COLUMN IF NOT EXISTS vendor_invoice_number VARCHAR(100);
 ALTER TABLE expenditure_requests ADD COLUMN IF NOT EXISTS amount_paid DECIMAL(15,2) DEFAULT 0;
+ALTER TABLE expenditure_requests ADD COLUMN IF NOT EXISTS due_date DATE;
 
 -- Backfill legacy "paid" rows so accounting balances perfectly
 UPDATE expenditure_requests 

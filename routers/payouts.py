@@ -3,7 +3,7 @@ from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from database import get_db
 from models import ExpenditureRequestCreate, PayoutReview, AssetCreate, VendorCreate, VoidExpenditureRequest, PayoutPaymentData
-from routers.auth import verify_token, has_any_role
+from routers.auth import verify_token, has_any_role, require_roles
 from email_service import send_payout_receipt_email, send_portal_invite_email, send_report_email
 from report_service import ReportService
 from datetime import datetime, timezone, timedelta
@@ -57,7 +57,7 @@ def calculate_wht_2025(amount: Decimal, category: str, has_tin: bool = True, is_
 
 # ─── VENDORS ──────────────────────────────────────────────────
 @router.post("/vendors")
-async def create_vendor(data: VendorCreate, current_admin=Depends(verify_token)):
+async def create_vendor(data: VendorCreate, current_admin=Depends(require_roles(["admin", "super_admin"]))):
     db = get_db()
     res = db.table("vendors").insert(data.dict()).execute()
     if not res.data:
@@ -65,7 +65,7 @@ async def create_vendor(data: VendorCreate, current_admin=Depends(verify_token))
     return res.data[0]
 
 @router.get("/vendors")
-async def list_vendors(type: Optional[str] = None, current_admin=Depends(verify_token)):
+async def list_vendors(type: Optional[str] = None, current_admin=Depends(require_roles(["admin", "super_admin"]))):
     db = get_db()
     query = db.table("vendors").select("*")
     if type:
@@ -75,7 +75,7 @@ async def list_vendors(type: Optional[str] = None, current_admin=Depends(verify_
 
 # ─── EXPENDITURE REQUESTS ─────────────────────────────────────
 @router.post("/requests")
-async def submit_payout_request(data: ExpenditureRequestCreate, current_admin=Depends(verify_token)):
+async def submit_payout_request(data: ExpenditureRequestCreate, current_admin=Depends(require_roles(["admin", "super_admin"]))):
     db = get_db()
     
     vendor_id = data.vendor_id
@@ -118,7 +118,7 @@ async def submit_payout_request(data: ExpenditureRequestCreate, current_admin=De
     return res.data[0]
 
 @router.get("/requests")
-async def list_expenditure_requests(status: Optional[str] = None, show_voided: bool = False, current_admin=Depends(verify_token)):
+async def list_expenditure_requests(status: Optional[str] = None, show_voided: bool = False, current_admin=Depends(require_roles(["admin", "super_admin"]))):
     db = get_db()
     query = db.table("expenditure_requests").select("*, vendors(*), admins!requester_id(full_name), expenditure_payments(*)")
     
@@ -132,7 +132,7 @@ async def list_expenditure_requests(status: Optional[str] = None, show_voided: b
     return res.data
 
 @router.post("/requests/{request_id}/payments")
-async def record_payout_payment(request_id: str, data: PayoutPaymentData, current_admin=Depends(verify_token)):
+async def record_payout_payment(request_id: str, data: PayoutPaymentData, current_admin=Depends(require_roles(["admin", "super_admin"]))):
     db = get_db()
     
     # 1. Verify Request
@@ -181,7 +181,7 @@ async def verify_bill_request(
     request_id: str,
     action: str = Body(...),
     reason: str = Body(None),
-    current_admin=Depends(verify_token)
+    current_admin=Depends(require_roles(["admin", "super_admin"]))
 ):
     """Bill Verification: promote to 'pending' (audit queue) or reject outright."""
     if not has_any_role(current_admin, "admin"):
@@ -208,7 +208,7 @@ async def verify_bill_request(
     return {"status": "success", "new_status": action}
 
 @router.put("/requests/{request_id}/review")
-async def review_payout_request(request_id: str, data: PayoutReview, bg_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+async def review_payout_request(request_id: str, data: PayoutReview, bg_tasks: BackgroundTasks, current_admin=Depends(require_roles(["admin", "super_admin"]))):
     if not has_any_role(current_admin, "admin"):
         raise HTTPException(status_code=403, detail="Only Admins can approve payouts")
         
@@ -285,13 +285,13 @@ async def review_payout_request(request_id: str, data: PayoutReview, bg_tasks: B
 
 # ─── ASSETS ───────────────────────────────────────────────────
 @router.post("/assets")
-async def record_company_asset(data: AssetCreate, current_admin=Depends(verify_token)):
+async def record_company_asset(data: AssetCreate, current_admin=Depends(require_roles(["admin", "super_admin"]))):
     db = get_db()
     res = db.table("company_assets").insert(data.dict()).execute()
     return res.data[0]
 
 @router.get("/assets")
-async def list_assets(assigned_to: Optional[str] = None, current_admin=Depends(verify_token)):
+async def list_assets(assigned_to: Optional[str] = None, current_admin=Depends(require_roles(["admin", "super_admin"]))):
     db = get_db()
     query = db.table("company_assets").select("*, admins!assigned_to(full_name)")
     if assigned_to:
@@ -305,7 +305,7 @@ from storage_service import generate_signed_url
 from fastapi.responses import RedirectResponse
 
 @router.get("/requests/{request_id}/view-document/{doc_type}")
-async def view_secure_payout_document(request_id: str, doc_type: str, current_admin=Depends(verify_token)):
+async def view_secure_payout_document(request_id: str, doc_type: str, current_admin=Depends(require_roles(["admin", "super_admin"]))):
     """
     Securely redirects to a signed URL for proformas or receipts.
     doc_type: 'proforma', 'receipt'
@@ -325,8 +325,8 @@ async def view_secure_payout_document(request_id: str, doc_type: str, current_ad
     if path.startswith("http"):
         return RedirectResponse(url=path)
         
-    # Generate signed URL for private Supabase bucket 'expenditures'
-    signed_url = generate_signed_url("expenditures", path)
+    # Generate signed URL for private Supabase bucket 'Cloud Infrastructure'
+    signed_url = generate_signed_url("Cloud Infrastructure", path)
     if not signed_url:
         raise HTTPException(status_code=500, detail="Failed to generate secure access link")
         
@@ -340,7 +340,7 @@ class PortalInvite(BaseModel):
     category: str # 'staff', 'company', or 'individual'
 
 @router.post("/requests/portal-invite")
-async def trigger_portal_invite(data: PortalInvite, bg_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+async def trigger_portal_invite(data: PortalInvite, bg_tasks: BackgroundTasks, current_admin=Depends(require_roles(["admin", "super_admin"]))):
     """Triggers a professional system email invitation with a unique token."""
     db = get_db()
     
@@ -448,7 +448,7 @@ async def submit_payout_claim_from_portal(
         file_ext = file.filename.split('.')[-1]
         file_path = f"portal_claims/{vendor_id}_{uuid.uuid4().hex}.{file_ext}"
         content = await file.read()
-        db.storage.from_("expenditures").upload(file_path, content)
+        db.storage.from_("Cloud Infrastructure").upload(file_path, content)
         quotation_url = file_path
 
     # 3. Create Expenditure Request (Treating Amount as Gross)
@@ -480,7 +480,7 @@ async def submit_payout_claim_from_portal(
 
 
 @router.patch("/requests/{request_id}/void")
-async def void_payout_request(request_id: str, data: VoidExpenditureRequest, current_admin=Depends(verify_token)):
+async def void_payout_request(request_id: str, data: VoidExpenditureRequest, current_admin=Depends(require_roles(["admin", "super_admin"]))):
     """Voids an expenditure request so it's ignored in reporting."""
     if not has_any_role(current_admin, "admin"):
         raise HTTPException(status_code=403, detail="Only Admins can void expenditures")
@@ -517,7 +517,7 @@ async def void_payout_request(request_id: str, data: VoidExpenditureRequest, cur
 # ─── ANALYTICS & REPORTING ───────────────────────────────────
 
 @router.get("/stats/summary")
-async def get_payout_stats(current_admin=Depends(verify_token)):
+async def get_payout_stats(current_admin=Depends(require_roles(["admin", "super_admin"]))):
     """Aggregated stats for the dashboard charts."""
     db = get_db()
     
@@ -565,7 +565,7 @@ async def export_payout_report(
     report_type: str = "payout_audit",
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    current_admin=Depends(verify_token)
+    current_admin=Depends(require_roles(["admin", "super_admin"]))
 ):
     """Generate and stream a CSV report directly."""
     report_data = await ReportService.get_report_data(report_type, start_date, end_date)
@@ -595,7 +595,7 @@ class SendReportRequest(BaseModel):
 async def send_on_demand_report(
     data: SendReportRequest, 
     bg_tasks: BackgroundTasks, 
-    current_admin=Depends(verify_token)
+    current_admin=Depends(require_roles(["admin", "super_admin"]))
 ):
     """Triggers an immediate report email via background task."""
     bg_tasks.add_task(send_report_email, data.report_type, [data.email], data.start_date, data.end_date)
@@ -608,7 +608,7 @@ class ScheduleRequest(BaseModel):
     is_active: bool = True
 
 @router.post("/stats/schedule")
-async def save_report_schedule(data: ScheduleRequest, current_admin=Depends(verify_token)):
+async def save_report_schedule(data: ScheduleRequest, current_admin=Depends(require_roles(["admin", "super_admin"]))):
     """Saves or updates a report schedule."""
     db = get_db()
     payload = {

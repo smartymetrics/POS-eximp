@@ -149,5 +149,35 @@
         <em>RC 8311800 · Standardized Expenditure Protocol v2.1</em>
     </div>
 
+    <script>
+        async function checkAuth() {
+            const token = localStorage.getItem('ec_token');
+            if (!token) {
+                window.location.href = '/login';
+                return;
+            }
+
+            try {
+                const res = await fetch('/auth/me', {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (res.ok) {
+                    const user = await res.json();
+                    const userRoles = (user.role || '').toLowerCase().split(',').map(r => r.trim());
+                    const FINANCE_ALLOWED_ROLES = ['admin', 'super_admin'];
+                    
+                    if (!userRoles.some(r => FINANCE_ALLOWED_ROLES.includes(r))) {
+                        window.location.href = '/dashboard';
+                    }
+                } else {
+                    window.location.href = '/login';
+                }
+            } catch (e) {
+                console.error("Auth check failed", e);
+                window.location.href = '/login';
+            }
+        }
+        checkAuth();
+    </script>
 </body>
 </html>

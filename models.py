@@ -499,6 +499,7 @@ class ExpenditureRequestCreate(BaseModel):
     description: Optional[str] = None
     vendor_id: Optional[str] = None
     vendor_invoice_number: Optional[str] = None
+    due_date: Optional[date] = None
     vendor_data: Optional[VendorCreate] = None # For inline creation
     amount_gross: Decimal
     payout_method: str # 'direct_pay', 'reimbursement'

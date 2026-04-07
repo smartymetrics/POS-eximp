@@ -365,11 +365,13 @@
                     <i class="fas fa-history" style="width: 20px;"></i>
                     <span>Activity</span>
                 </div>
-                <hr style="border-color: #333; margin: 10px 0;">
-                <a href="/finance/payouts" class="nav-link">
-                    <i class="fas fa-wallet" style="width: 20px;"></i>
-                    <span>Finance & Assets</span>
-                </a>
+                <div id="nav-finance-section" style="display: none;">
+                    <hr style="border-color: #333; margin: 10px 0;">
+                    <a href="/finance/payouts" class="nav-link">
+                        <i class="fas fa-wallet" style="width: 20px;"></i>
+                        <span>Finance & Assets</span>
+                    </a>
+                </div>
             </nav>
         </div>
     </div>
@@ -568,6 +570,7 @@
         // Initialize
         document.addEventListener("DOMContentLoaded", () => {
             showPageLoader('Loading dashboard...');
+            checkAuthAndInit(); // Enforce roles first
             loadDashboard();
             setupEventListeners();
         });
@@ -852,12 +855,37 @@
             }
         }
 
-        function setupEventListeners() {
-            // Token check
+        async function checkAuthAndInit() {
             const token = localStorage.getItem("ec_token");
             if (!token) {
                 window.location.href = "/login";
+                return;
             }
+
+            try {
+                const res = await fetch("/auth/me", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                if (res.ok) {
+                    const user = await res.json();
+                    const userRoles = (user.role || '').toLowerCase().split(',').map(r => r.trim());
+                    
+                    // Enforce Payouts access ONLY for admins
+                    if (userRoles.includes('admin') || userRoles.includes('super_admin')) {
+                        const navFin = document.getElementById('nav-finance-section');
+                        if (navFin) navFin.style.display = 'block';
+                    }
+                } else {
+                    window.location.href = "/login";
+                }
+            } catch (e) {
+                console.error("Auth check failed", e);
+                window.location.href = "/login";
+            }
+        }
+
+        function setupEventListeners() {
+            // Already handled by checkAuthAndInit
         }
     </script>
 </body>

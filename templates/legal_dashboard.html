@@ -41,7 +41,7 @@
         }
 
         .sidebar {
-            width: 280px;
+            width: 200px;
             height: 100vh;
             position: fixed;
             left: 0;
@@ -53,15 +53,17 @@
         }
 
         .main-content {
-            margin-left: 280px;
-            padding: 40px;
+            margin-left: 200px;
+            padding: 16px 24px;
+            max-width: 1200px;
+            margin-right: auto;
         }
 
         .card {
             background: #1E2128;
             border: 1px solid #2D2F36;
-            border-radius: 16px;
-            padding: 24px;
+            border-radius: 12px;
+            padding: 16px;
             transition: all 0.3s ease;
         }
 
@@ -350,16 +352,21 @@
             display: none;
             position: fixed;
             inset: 0;
-            background: rgba(0,0,0,0.55);
+            background: rgba(0, 0, 0, 0.55);
             backdrop-filter: blur(3px);
             z-index: 130;
         }
-        .mobile-nav-overlay.open { display: block; }
+
+        .mobile-nav-overlay.open {
+            display: block;
+        }
 
         .mobile-nav-drawer {
-            display: none; /* Hidden on desktop completely */
+            display: none;
+            /* Hidden on desktop completely */
             position: fixed;
-            top: 0; left: 0;
+            top: 0;
+            left: 0;
             width: min(300px, 88vw);
             height: 100vh;
             background: #121317;
@@ -369,21 +376,41 @@
             transition: transform 0.28s cubic-bezier(0.4, 0, 0.2, 1);
             padding: 28px 20px;
             overflow-y: auto;
-            box-shadow: 24px 0 60px rgba(0,0,0,0.5);
+            box-shadow: 24px 0 60px rgba(0, 0, 0, 0.5);
         }
+
         .mobile-nav-button {
-            display: none; /* Hidden on desktop */
+            display: none;
+            /* Hidden on desktop */
+        }
+
+        .mobile-top-bar {
+            display: none;
+            /* Explicitly hidden on desktop */
         }
 
         /* Re-enable mobile nav elements on small screens only */
-        @media (max-width: 1024px) {
+        @media (max-width: 1200px) {
+            .sidebar {
+                display: none;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 72px 16px 40px;
+                width: 100%;
+                max-width: none;
+            }
+
             .mobile-nav-drawer {
                 display: block;
                 transform: translateX(-110%);
             }
+
             .mobile-nav-drawer.open {
                 transform: translateX(0);
             }
+
             .mobile-nav-button {
                 display: inline-flex;
                 align-items: center;
@@ -391,11 +418,26 @@
                 width: 44px;
                 height: 44px;
                 border-radius: 14px;
-                background: rgba(255,255,255,0.04);
-                border: 1px solid rgba(255,255,255,0.08);
+                background: rgba(255, 255, 255, 0.04);
+                border: 1px solid rgba(255, 255, 255, 0.08);
                 color: #E5E7EB;
                 cursor: pointer;
                 flex-shrink: 0;
+            }
+
+            .mobile-top-bar {
+                display: flex;
+                position: fixed;
+                top: 0;
+                left: 0;
+                right: 0;
+                height: 60px;
+                background: #1A1C20;
+                border-bottom: 1px solid #2D2F36;
+                z-index: 120;
+                padding: 0 16px;
+                align-items: center;
+                justify-content: space-between;
             }
         }
     </style>
@@ -403,6 +445,17 @@
 
 <body>
     <div id="mobileNavOverlay" class="mobile-nav-overlay" onclick="closeMobileNav()"></div>
+
+    <header class="mobile-top-bar" id="mobileTopBar">
+        <h2 class="font-serif text-lg brand-gold">Legal Suite</h2>
+        <button onclick="openMobileNav()" class="mobile-nav-button" aria-label="Open navigation">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                stroke="currentColor">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+            </svg>
+        </button>
+    </header>
+
     <div id="mobileNavDrawer" class="mobile-nav-drawer">
         <div class="flex items-center justify-between mb-8">
             <div>
@@ -457,21 +510,24 @@
                 </svg>
                 Legal Manual
             </a>
-            <hr class="border-[#2D2F36] my-4">
-            <a href="/dashboard" class="nav-link">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
-                    </path>
-                </svg>
-                Finance Dashboard
-            </a>
-            <a href="/finance/payouts" class="nav-link">
-                <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                </svg>
-                Finance & Assets
-            </a>
+            <div id="nav-finance-container" style="display: none;">
+                <hr class="border-[#2D2F36] my-4">
+                <a href="/dashboard" class="nav-link">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                        </path>
+                    </svg>
+                    Finance Dashboard
+                </a>
+                <a href="/finance/payouts" class="nav-link">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                    </svg>
+                    Finance & Assets
+                </a>
+            </div>
         </nav>
     </div>
 
@@ -483,7 +539,7 @@
                     onerror="this.src='https://via.placeholder.com/40x40?text=EC'">
                 <div class="leading-tight">
                     <h1 class="font-serif text-xl brand-gold">Legal Suite</h1>
-                    <p class="text-[10px] text-gray-500 tracking-[0.2em] font-bold">EXIMP & CLOVES</p>
+                    <!-- <p class="text-[10px] text-gray-500 tracking-[0.2em] font-bold">EXIMP & CLOVES</p> -->
                 </div>
             </div>
 
@@ -528,27 +584,24 @@
                     </svg>
                     Legal Manual
                 </a>
-                <hr class="border-[#2D2F36] my-4">
-                <a href="/dashboard" class="nav-link">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                            d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
-                        </path>
-                    </svg>
-                    Finance Dashboard
-                </a>
-                <a href="/finance/payouts" class="nav-link">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                    </svg>
-                    Finance & Assets
-                </a>
-                <a href="/finance/payouts" class="nav-link">
-                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
-                    </svg>
-                    Finance & Assets
-                </a>
+                <div id="nav-finance-container-sidebar" style="display: none;">
+                    <hr class="border-[#2D2F36] my-4">
+                    <a href="/dashboard" class="nav-link">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z">
+                            </path>
+                        </svg>
+                        Finance Dashboard
+                    </a>
+                    <a href="/finance/payouts" class="nav-link">
+                        <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                                d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"></path>
+                        </svg>
+                        Finance & Assets
+                    </a>
+                </div>
             </nav>
         </div>
 
@@ -572,42 +625,34 @@
     <div class="main-content">
         <!-- Tab: Dashboard -->
         <section id="tab-dashboard" class="tab-content">
-            <header class="mb-12">
-                <div class="flex items-center justify-between gap-4 mb-6">
-                    <button class="mobile-nav-button block md:hidden" onclick="openMobileNav()"
-                        aria-label="Open navigation">
-                        <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
-                            stroke="currentColor">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                                d="M4 6h16M4 12h16M4 18h16" />
-                        </svg>
-                    </button>
+            <header class="mb-8">
+                <div class="flex items-center justify-between gap-4">
                     <div class="flex-1 min-w-0">
-                        <h2 class="font-serif text-3xl md:text-4xl mb-1">Legal Oversight</h2>
-                        <p class="text-gray-500 text-sm">Managing contractual obligations and authority signatures.</p>
+                        <h2 class="font-serif text-2xl md:text-3xl mb-1">Legal Oversight</h2>
+                        <p class="text-gray-500 text-xs">Managing contractual obligations and authority signatures.</p>
                     </div>
                 </div>
             </header>
 
             <!-- Stats -->
-            <div class="grid grid-cols-2 md:grid-cols-4 gap-4 md:gap-6 mb-12" id="statsContainer">
+            <div class="grid grid-cols-2 md:grid-cols-4 gap-3 md:gap-4 mb-8" id="statsContainer">
                 <div class="card">
-                    <p class="text-gray-500 text-sm font-bold uppercase tracking-wider mb-2">Total Contracts</p>
-                    <h3 class="text-4xl font-serif" id="statTotal"><span class="skeleton w-12 h-8">&nbsp;</span></h3>
+                    <p class="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-1">Total Contracts</p>
+                    <h3 class="text-3xl font-serif" id="statTotal"><span class="skeleton w-12 h-8">&nbsp;</span></h3>
                 </div>
                 <div class="card">
-                    <p class="text-gray-500 text-sm font-bold uppercase tracking-wider mb-2">Active Sessions</p>
-                    <h3 class="text-4xl font-serif text-blue-400" id="statActive"><span
+                    <p class="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-1">Active Sessions</p>
+                    <h3 class="text-3xl font-serif text-blue-400" id="statActive"><span
                             class="skeleton w-12 h-8">&nbsp;</span></h3>
                 </div>
                 <div class="card">
-                    <p class="text-gray-500 text-sm font-bold uppercase tracking-wider mb-2">Fully Executed</p>
-                    <h3 class="text-4xl font-serif text-emerald-400" id="statExecuted"><span
+                    <p class="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-1">Fully Executed</p>
+                    <h3 class="text-3xl font-serif text-emerald-400" id="statExecuted"><span
                             class="skeleton w-12 h-8">&nbsp;</span></h3>
                 </div>
                 <div class="card">
-                    <p class="text-gray-500 text-sm font-bold uppercase tracking-wider mb-2">Execution Pipeline</p>
-                    <h3 class="text-4xl font-serif text-brand-gold" id="statPending"><span
+                    <p class="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-1">Execution Pipeline</p>
+                    <h3 class="text-3xl font-serif text-brand-gold" id="statPending"><span
                             class="skeleton w-12 h-8">&nbsp;</span></h3>
                 </div>
             </div>
@@ -615,10 +660,10 @@
             <div class="grid grid-cols-1 lg:grid-cols-3 gap-8">
                 <!-- Recent Activity Feed -->
                 <div class="lg:col-span-2 card">
-                    <div class="flex items-center justify-between mb-8">
-                        <h3 class="font-serif text-xl">Recent Legal Activity</h3>
+                    <div class="flex items-center justify-between mb-4">
+                        <h3 class="font-serif text-lg">Recent Legal Activity</h3>
                         <button onclick="switchTab('execution-portal')"
-                            class="text-xs font-bold brand-gold hover:underline">View Portal</button>
+                            class="text-[10px] font-bold brand-gold hover:underline">View Portal</button>
                     </div>
                     <div id="activityFeed" class="space-y-6">
                         <!-- Activity items -->
@@ -634,8 +679,8 @@
 
                 <!-- Execution Velocity Chart placeholder -->
                 <div class="card">
-                    <h3 class="font-serif text-xl mb-8">Execution Trends</h3>
-                    <div class="relative h-[340px]">
+                    <h3 class="font-serif text-lg mb-4">Execution Trends</h3>
+                    <div class="relative h-[280px]">
                         <canvas id="velocityChart" class="h-full w-full"></canvas>
                     </div>
                 </div>
@@ -670,22 +715,22 @@
 
             <div class="card overflow-hidden !p-0">
                 <div class="overflow-x-auto" style="-webkit-overflow-scrolling:touch">
-                <table class="w-full text-left" style="min-width:640px">
-                    <thead>
-                        <tr class="bg-[#1A1C20] border-b border-[#2D2F36]">
-                            <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Invoice</th>
-                            <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Client</th>
-                            <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Property</th>
-                            <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Status</th>
-                            <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Progress</th>
-                            <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Expiry</th>
-                            <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Actions</th>
-                        </tr>
-                    </thead>
-                    <tbody id="contractTableBody">
-                        <!-- Rows -->
-                    </tbody>
-                </table>
+                    <table class="w-full text-left" style="min-width:640px">
+                        <thead>
+                            <tr class="bg-[#1A1C20] border-b border-[#2D2F36]">
+                                <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Invoice</th>
+                                <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Client</th>
+                                <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Property</th>
+                                <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Status</th>
+                                <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Progress</th>
+                                <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Expiry</th>
+                                <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="contractTableBody">
+                            <!-- Rows -->
+                        </tbody>
+                    </table>
                 </div>
                 <div id="noContractsMsg" class="p-12 text-center text-gray-500 hidden">No contracts found matching your
                     query.</div>
@@ -1916,6 +1961,14 @@
             document.getElementById('adminName').innerText = displayName;
             document.getElementById('adminRole').innerText = admin.role;
             document.getElementById('adminInitial').innerText = displayName ? displayName[0].toUpperCase() : 'A';
+
+            // Show Finance links ONLY for admins
+            if (roles.includes('admin') || roles.includes('super_admin')) {
+                const navFin = document.getElementById('nav-finance-container');
+                const navFinSide = document.getElementById('nav-finance-container-sidebar');
+                if (navFin) navFin.style.display = 'block';
+                if (navFinSide) navFinSide.style.display = 'block';
+            }
         }
 
         function logout() {
@@ -1936,31 +1989,63 @@
     </script>
 
     <!-- Mobile Bottom Tab Bar (only visible on small screens) -->
-    <nav id="mobileBottomNav" class="fixed bottom-0 left-0 right-0 z-[200] lg:hidden bg-[#121317]/95 backdrop-blur-lg border-t border-[#2D2F36] flex items-stretch" style="padding-bottom: env(safe-area-inset-bottom);">
-        <button onclick="switchTab('dashboard'); updateBottomNav('dashboard')" id="bnav-dashboard" class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-brand-gold transition" aria-label="Dashboard">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+    <nav id="mobileBottomNav"
+        class="fixed bottom-0 left-0 right-0 z-[200] lg:hidden bg-[#121317]/95 backdrop-blur-lg border-t border-[#2D2F36] flex items-stretch"
+        style="padding-bottom: env(safe-area-inset-bottom);">
+        <button onclick="switchTab('dashboard'); updateBottomNav('dashboard')" id="bnav-dashboard"
+            class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-brand-gold transition"
+            aria-label="Dashboard">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+            </svg>
             <span class="text-[9px] font-bold uppercase tracking-wider">Overview</span>
         </button>
-        <button onclick="switchTab('execution-portal'); updateBottomNav('execution-portal')" id="bnav-execution-portal" class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-gray-500 hover:text-gray-300 transition" aria-label="Execution Portal">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"/></svg>
+        <button onclick="switchTab('execution-portal'); updateBottomNav('execution-portal')" id="bnav-execution-portal"
+            class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-gray-500 hover:text-gray-300 transition"
+            aria-label="Execution Portal">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+            </svg>
             <span class="text-[9px] font-bold uppercase tracking-wider">Portal</span>
         </button>
-        <button onclick="switchTab('signature-vault'); updateBottomNav('signature-vault')" id="bnav-signature-vault" class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-gray-500 hover:text-gray-300 transition" aria-label="Signature Vault">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z"/></svg>
+        <button onclick="switchTab('signature-vault'); updateBottomNav('signature-vault')" id="bnav-signature-vault"
+            class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-gray-500 hover:text-gray-300 transition"
+            aria-label="Signature Vault">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+            </svg>
             <span class="text-[9px] font-bold uppercase tracking-wider">Vault</span>
         </button>
-        <button onclick="switchTab('archive'); updateBottomNav('archive')" id="bnav-archive" class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-gray-500 hover:text-gray-300 transition" aria-label="Archive">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4"/></svg>
+        <button onclick="switchTab('archive'); updateBottomNav('archive')" id="bnav-archive"
+            class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-gray-500 hover:text-gray-300 transition"
+            aria-label="Archive">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+            </svg>
             <span class="text-[9px] font-bold uppercase tracking-wider">Archive</span>
         </button>
         <div class="w-px bg-[#2D2F36] self-stretch my-2"></div>
-        <a href="/dashboard" class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-gray-500 hover:text-amber-400 transition" aria-label="Finance Dashboard">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+        <a href="/dashboard"
+            class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-gray-500 hover:text-amber-400 transition"
+            aria-label="Finance Dashboard">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+            </svg>
             <span class="text-[9px] font-bold uppercase tracking-wider">Finance</span>
         </a>
         <div class="w-px bg-[#2D2F36] self-stretch my-2"></div>
-        <button onclick="logout()" class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-gray-500 hover:text-red-400 transition" aria-label="Sign Out">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1"/></svg>
+        <button onclick="logout()"
+            class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-gray-500 hover:text-red-400 transition"
+            aria-label="Sign Out">
+            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+            </svg>
             <span class="text-[9px] font-bold uppercase tracking-wider">Sign Out</span>
         </button>
     </nav>
@@ -1968,7 +2053,7 @@
     <script>
         // Bottom nav active state sync
         function updateBottomNav(tabId) {
-            ['dashboard','execution-portal','signature-vault','archive'].forEach(id => {
+            ['dashboard', 'execution-portal', 'signature-vault', 'archive'].forEach(id => {
                 const btn = document.getElementById(`bnav-${id}`);
                 if (!btn) return;
                 if (id === tabId) {
@@ -1982,7 +2067,7 @@
         }
 
         // Give content breathing room above bottom bar on mobile
-        (function() {
+        (function () {
             const style = document.createElement('style');
             style.textContent = '@media (max-width:768px) { .main-content { padding-bottom: 80px !important; } }';
             document.head.appendChild(style);
