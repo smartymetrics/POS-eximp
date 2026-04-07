@@ -1325,11 +1325,11 @@ async def send_ready_for_execution_email(invoice, client):
         logger.error(f"Error sending execution ready email: {e}")
         return None
 
-async def send_portal_invite_email(email_addr: str, inviter_name: str):
+async def send_portal_invite_email(email_addr: str, inviter_name: str, token: str = "OFFICIAL"):
     from routers.analytics import log_activity
     
     # Use the absolute URL via config or env
-    portal_link = "https://app.eximps-cloves.com/payout/portal/OFFICIAL"
+    portal_link = f"https://app.eximps-cloves.com/payout/portal/{token}"
     
     html = f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 12px; overflow: hidden;">

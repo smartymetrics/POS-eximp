@@ -498,6 +498,7 @@ class ExpenditureRequestCreate(BaseModel):
     title: str
     description: Optional[str] = None
     vendor_id: Optional[str] = None
+    vendor_invoice_number: Optional[str] = None
     vendor_data: Optional[VendorCreate] = None # For inline creation
     amount_gross: Decimal
     payout_method: str # 'direct_pay', 'reimbursement'
@@ -505,6 +506,11 @@ class ExpenditureRequestCreate(BaseModel):
     wht_exemption_reason: Optional[str] = None
     proforma_url: Optional[str] = None
     receipt_url: Optional[str] = None
+
+class PayoutPaymentData(BaseModel):
+    amount: Decimal
+    payment_method: str = "transfer"
+    reference: str
 
 class PayoutReview(BaseModel):
     status: str # 'approved', 'rejected'

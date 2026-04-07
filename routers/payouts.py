@@ -1,8 +1,8 @@
-from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks, File, UploadFile, Form
+from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks, File, UploadFile, Form, Body
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from database import get_db
-from models import ExpenditureRequestCreate, PayoutReview, AssetCreate, VendorCreate, VoidExpenditureRequest
+from models import ExpenditureRequestCreate, PayoutReview, AssetCreate, VendorCreate, VoidExpenditureRequest, PayoutPaymentData
 from routers.auth import verify_token, has_any_role
 from email_service import send_payout_receipt_email, send_portal_invite_email, send_report_email
 from report_service import ReportService
@@ -99,6 +99,7 @@ async def submit_payout_request(data: ExpenditureRequestCreate, current_admin=De
     payload = {
         "title": data.title,
         "description": data.description,
+        "vendor_invoice_number": data.vendor_invoice_number,
         "requester_id": current_admin['sub'],
         "vendor_id": vendor_id,
         "amount_gross": float(data.amount_gross),
@@ -110,7 +111,7 @@ async def submit_payout_request(data: ExpenditureRequestCreate, current_admin=De
         "net_payout_amount": float(wht_details['net_amount']),
         "proforma_url": data.proforma_url,
         "receipt_url": data.receipt_url,
-        "status": "pending"
+        "status": "pending_verification"
     }
     
     res = db.table("expenditure_requests").insert(payload).execute()
@@ -119,7 +120,7 @@ async def submit_payout_request(data: ExpenditureRequestCreate, current_admin=De
 @router.get("/requests")
 async def list_expenditure_requests(status: Optional[str] = None, show_voided: bool = False, current_admin=Depends(verify_token)):
     db = get_db()
-    query = db.table("expenditure_requests").select("*, vendors(*), admins!requester_id(full_name)")
+    query = db.table("expenditure_requests").select("*, vendors(*), admins!requester_id(full_name), expenditure_payments(*)")
     
     if status:
         query = query.eq("status", status)
@@ -129,6 +130,82 @@ async def list_expenditure_requests(status: Optional[str] = None, show_voided: b
         
     res = query.order("created_at", desc=True).execute()
     return res.data
+
+@router.post("/requests/{request_id}/payments")
+async def record_payout_payment(request_id: str, data: PayoutPaymentData, current_admin=Depends(verify_token)):
+    db = get_db()
+    
+    # 1. Verify Request
+    req_res = db.table("expenditure_requests").select("*").eq("id", request_id).execute()
+    if not req_res.data:
+        raise HTTPException(status_code=404, detail="Request not found")
+        
+    req = req_res.data[0]
+    
+    amount_to_pay = float(data.amount)
+    current_paid = float(req.get('amount_paid', 0))
+    net_payout = float(req.get('net_payout_amount', 0))
+    
+    # Ensure amount doesn't wildly exceed balance
+    if current_paid + amount_to_pay > net_payout + 0.05: # Float fuzziness
+        raise HTTPException(status_code=400, detail="Payment amount exceeds remaining balance.")
+        
+    # 2. Insert Payment Record
+    payment_payload = {
+        "request_id": request_id,
+        "amount": amount_to_pay,
+        "payment_method": data.payment_method,
+        "reference": data.reference,
+        "paid_by": current_admin['sub']
+    }
+    db.table("expenditure_payments").insert(payment_payload).execute()
+    
+    # 3. Update Request
+    new_paid = current_paid + amount_to_pay
+    new_status = "paid" if new_paid >= net_payout - 0.05 else "partially_paid"
+    
+    update_payload = {
+        "amount_paid": new_paid,
+        "status": new_status,
+        "payout_reference": data.reference,
+    }
+    
+    if new_status == "paid":
+        update_payload["paid_at"] = datetime.now(timezone.utc).isoformat()
+        
+    update_res = db.table("expenditure_requests").update(update_payload).eq("id", request_id).execute()
+    return {"status": "success", "new_status": new_status, "amount_paid": new_paid}
+
+@router.patch("/requests/{request_id}/verify")
+async def verify_bill_request(
+    request_id: str,
+    action: str = Body(...),
+    reason: str = Body(None),
+    current_admin=Depends(verify_token)
+):
+    """Bill Verification: promote to 'pending' (audit queue) or reject outright."""
+    if not has_any_role(current_admin, "admin"):
+        raise HTTPException(status_code=403, detail="Only Admins can verify bills")
+    
+    db = get_db()
+    req_res = db.table("expenditure_requests").select("*").eq("id", request_id).execute()
+    if not req_res.data:
+        raise HTTPException(status_code=404, detail="Bill not found")
+    
+    action = action  # 'pending' or 'rejected'
+    if action not in ('pending', 'rejected'):
+        raise HTTPException(status_code=400, detail="Invalid action. Use 'pending' or 'rejected'.")
+    
+    update_payload = {
+        "status": action,
+        "reviewed_by": current_admin['sub'],
+        "reviewed_at": datetime.now(timezone.utc).isoformat(),
+    }
+    if action == 'rejected':
+        update_payload["wht_exemption_reason"] = reason or "Bill rejected at verification stage"
+    
+    db.table("expenditure_requests").update(update_payload).eq("id", request_id).execute()
+    return {"status": "success", "new_status": action}
 
 @router.put("/requests/{request_id}/review")
 async def review_payout_request(request_id: str, data: PayoutReview, bg_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
@@ -289,7 +366,7 @@ async def trigger_portal_invite(data: PortalInvite, bg_tasks: BackgroundTasks, c
     # Note: In production, window.location.origin would be used on frontend, 
     # here we assume the portal is at /payout/portal/{token}
     
-    bg_tasks.add_task(send_portal_invite_email, data.email, admin_name)
+    bg_tasks.add_task(send_portal_invite_email, data.email, admin_name, token)
     
     return {
         "status": "success", 

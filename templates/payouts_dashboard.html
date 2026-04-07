@@ -197,6 +197,29 @@
         .toast.success { border-color: var(--success); color: var(--success); }
 
         .hidden { display: none; }
+
+        /* --- BILL SEARCH COMBOBOX --- */
+        .bill-search-wrap { position: relative; }
+        .bill-search-wrap input { width: 100%; }
+        .bill-dropdown {
+            position: absolute; top: calc(100% + 4px); left: 0; right: 0;
+            background: var(--dark2); border: 1px solid var(--gold);
+            border-radius: 12px; max-height: 240px; overflow-y: auto;
+            z-index: 3000; display: none; box-shadow: 0 16px 40px rgba(0,0,0,0.6);
+        }
+        .bill-dropdown-item {
+            padding: 12px 16px; cursor: pointer; font-size: 13px;
+            border-bottom: 1px solid rgba(255,255,255,0.04);
+            transition: background 0.15s;
+        }
+        .bill-dropdown-item:hover { background: rgba(196,125,10,0.12); }
+        .bill-dropdown-item strong { display: block; color: #fff; font-size: 14px; }
+        .bill-dropdown-item small { color: var(--gray); }
+        .bill-dropdown.open { display: block; }
+
+        /* Verification tab pills */
+        .status-pill.partially_paid { background: rgba(99,102,241,0.1); color:#818cf8; border: 1px solid rgba(99,102,241,0.2); }
+        .status-pill.pending_verification { background: rgba(236,72,153,0.1); color:#f472b6; border: 1px solid rgba(236,72,153,0.2); }
     </style>
 </head>
 <body>
@@ -255,9 +278,8 @@
                 <button class="btn" id="emailInviteBtn">
                     <i class="fas fa-envelope"></i> Email Invite
                 </button>
-                <button class="btn btn-gold" onclick="openRequestModal()">
-                    <i class="fas fa-plus"></i> New Request
-                </button>
+                <button class="btn btn-gold" onclick="openPaymentModal()" style="padding: 10px 16px;"><i class="fas fa-money-bill-wave"></i> Record Payment</button>
+                <button class="btn btn-gold" onclick="openRequestModal()" style="padding: 10px 16px; background:transparent; border:1px solid var(--gold); color:var(--gold);"><i class="fas fa-plus"></i> New Bill</button>
             </div>
         </div>
 
@@ -286,6 +308,7 @@
 
         <div class="tabs">
             <div class="tab active" onclick="switchTab('requests', event)">Audit Queue</div>
+            <div class="tab" onclick="switchTab('verification', event)" id="verif-tab">Bill Verification <span id="verif-badge" style="display:none; background:var(--error); color:#fff; font-size:10px; border-radius:8px; padding:2px 6px; margin-left:4px;">0</span></div>
             <div class="tab" onclick="switchTab('vendors', event)">Vendor Registry</div>
             <div class="tab" onclick="switchTab('reimbursements', event)">Staff Claims</div>
             <div class="tab" onclick="switchTab('assets', event)">Asset Inventory</div>
@@ -302,7 +325,9 @@
                         <th>Objective</th>
                         <th>Payee</th>
                         <th>Gross Value</th>
-                        <th>Net Payout</th>
+                        <th>Net Total</th>
+                        <th>Paid</th>
+                        <th>Balance</th>
                         <th>Status</th>
                         <th>Audit</th>
                     </tr>
@@ -312,6 +337,29 @@
                 </tbody>
             </table>
         </div>
+        </div>
+
+        <!-- BILL VERIFICATION VIEW -->
+        <div id="verification-view" class="view-content" style="display:none; padding-top:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+                <div><h3 style="font-size:20px;">Pending Bill Verification</h3><p style="color:var(--gray); font-size:13px;">Review submitted bills before they proceed to Financial Audit.</p></div>
+            </div>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead><tr>
+                        <th>Submitted</th>
+                        <th>Requester</th>
+                        <th>Bill / Invoice</th>
+                        <th>Vendor</th>
+                        <th>Gross Amount</th>
+                        <th>Category</th>
+                        <th>Action</th>
+                    </tr></thead>
+                    <tbody id="verifBody">
+                        <tr><td colspan="7" style="text-align:center; padding:40px; color:var(--gray);">No bills pending verification.</td></tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
 
         <!-- Analytics View -->
@@ -351,7 +399,7 @@
     <div class="modal" id="newRequestModal">
         <div class="modal-content">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:32px;">
-                <h2 style="font-family: 'Playfair Display', serif; font-size:24px;">New Expenditure Request</h2>
+                <h2 style="font-family: 'Playfair Display', serif; font-size:24px;">New Vendor Bill</h2>
                 <button onclick="closeModal('newRequestModal')" style="background:none; border:none; color:var(--gray); cursor:pointer;"><i class="fas fa-times fa-lg"></i></button>
             </div>
             
@@ -361,13 +409,19 @@
                     <input type="text" id="req-title" required class="form-input" placeholder="e.g. PC Maintenance or Vendor Invoice">
                 </div>
                 
-                <div style="margin-bottom:20px;">
-                    <label class="form-label">Recipient (Verified Vendor/Staff)</label>
-                    <select id="req-vendor" required class="form-input">
-                        <option value="">Loading partners...</option>
-                    </select>
-                    <small style="color:var(--gray); font-size:11px; margin-top:4px; display:block;">Only verified entities can receive payouts. Invite new partners using the link above.</small>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:20px;">
+                    <div>
+                        <label class="form-label">Recipient (Verified Vendor/Staff)</label>
+                        <select id="req-vendor" required class="form-input">
+                            <option value="">Loading partners...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="form-label">Vendor Invoice ID</label>
+                        <input type="text" id="req-vendor-invoice" class="form-input" placeholder="e.g. INV-2026-X">
+                    </div>
                 </div>
+                <small style="color:var(--gray); font-size:11px; display:block; margin-top:-10px; margin-bottom:20px;">Only verified entities can receive payouts. Invite new partners using the link above.</small>
                 
                 <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:24px;">
                     <div>
@@ -495,6 +549,65 @@
         </div>
     </div>
 
+    <div class="modal" id="newPaymentModal">
+        <div class="modal-content">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:32px;">
+                <h2 style="font-family: 'Playfair Display', serif; font-size:24px;">Record Vendor Payment</h2>
+                <button onclick="closeModal('newPaymentModal')" style="background:none; border:none; color:var(--gray); cursor:pointer;"><i class="fas fa-times fa-lg"></i></button>
+            </div>
+            
+            <form id="newPaymentForm" onsubmit="return false;">
+                <input type="hidden" id="pay-request-id" value="">
+                <div style="margin-bottom:20px;">
+                    <label class="form-label">Search Bills by Vendor Name or Invoice ID</label>
+                    <div class="bill-search-wrap">
+                        <input type="text" id="pay-bill-search" class="form-input" placeholder="Type vendor name or invoice ID..." autocomplete="off" oninput="filterBillSearch(this.value)" onfocus="showBillDropdown()">
+                        <div class="bill-dropdown" id="bill-dropdown"></div>
+                    </div>
+                </div>
+                
+                <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:20px; margin-bottom:24px; background: rgba(255,255,255,0.02); padding: 16px; border-radius:12px; border: 1px solid var(--border);">
+                    <div>
+                        <small style="color:var(--gray); font-size:10px; text-transform:uppercase;">Total Approved</small>
+                        <div id="pay-total" style="font-weight:700; font-size:16px;">₦0.00</div>
+                    </div>
+                    <div>
+                        <small style="color:var(--gray); font-size:10px; text-transform:uppercase;">Paid So Far</small>
+                        <div id="pay-paid" style="font-weight:700; font-size:16px; color:var(--success);">₦0.00</div>
+                    </div>
+                    <div>
+                        <small style="color:var(--gray); font-size:10px; text-transform:uppercase;">Balance Due</small>
+                        <div id="pay-balance" style="font-weight:700; font-size:16px; color:var(--error);">₦0.00</div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom:20px;">
+                    <label class="form-label">Payment Amount (₦)</label>
+                    <input type="number" id="pay-amount" required class="form-input" step="0.01" placeholder="0.00" style="font-size:18px; font-weight:700; color:var(--gold-bright);">
+                </div>
+                
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:32px;">
+                    <div>
+                        <label class="form-label">Transaction Reference</label>
+                        <input type="text" id="pay-reference" required class="form-input" placeholder="e.g. Bank Transfer ID">
+                    </div>
+                    <div>
+                        <label class="form-label">Payment Method</label>
+                        <select id="pay-method" class="form-input">
+                            <option value="bank_transfer" selected>Bank Transfer</option>
+                            <option value="cheque">Cheque</option>
+                            <option value="cash">Cash</option>
+                        </select>
+                    </div>
+                </div>
+                
+                <button type="submit" class="btn btn-gold" style="width:100%; justify-content:center; padding:18px;">
+                    LOG PAYMENT
+                </button>
+            </form>
+        </div>
+    </div>
+
     <div id="toast" class="toast"></div>
 
     <script>
@@ -546,6 +659,8 @@
                 const res = await apiFetch(`/api/payouts/requests?show_voided=${showVoided}`);
                 requestsData = await res.json();
                 renderRequests(requestsData);
+            renderVerifications(requestsData);
+            payableBills = requestsData.filter(r => r.status === 'approved' || r.status === 'partially_paid');
                 updateStats(requestsData);
             } catch (e) {
                 console.error("Failed to fetch requests", e);
@@ -577,13 +692,15 @@
                     <td>${req.admins?.full_name || 'System'}</td>
                     <td>
                         <div style="font-weight:700;">${req.title}</div>
-                        <small style="color:var(--gray)">ID: ${req.id.slice(0,8)}</small>
+                        <small style="color:var(--gray)">${req.vendor_invoice_number ? 'Ref: '+req.vendor_invoice_number : 'ID: '+req.id.slice(0,8)}</small>
                         ${req.status === 'voided' ? `<div style="color:var(--error); font-size:10px; font-weight:700;">VOIDED: ${req.void_reason || 'N/A'}</div>` : ''}
                     </td>
                     <td>${req.vendors?.name || 'N/A'}</td>
                     <td>₦${req.amount_gross.toLocaleString()}</td>
-                    <td style="font-weight:700; color:var(--success)">₦${req.net_payout_amount.toLocaleString()}</td>
-                    <td><span class="status-pill ${req.status}">${req.status}</span></td>
+                    <td style="color:var(--gray)">₦${req.net_payout_amount.toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+                    <td style="color:var(--success)">₦${(req.amount_paid||0).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+                    <td style="font-weight:700; color:var(--error)">₦${Math.max(0, req.net_payout_amount - (req.amount_paid||0)).toLocaleString(undefined, {minimumFractionDigits:2, maximumFractionDigits:2})}</td>
+                    <td><span class="status-pill ${(req.status === 'partially_paid' || req.status === 'paid') ? 'approved' : req.status}">${req.status.replace('_',' ')}</span></td>
                     <td>
                         ${req.status === 'pending' ? `<button onclick="openReview('${req.id}')" class="btn" style="padding: 6px 12px; font-size:11px;">REVIEW</button>` : 
                           req.status === 'voided' ? '<i class="fas fa-ban" style="color:var(--error)"></i>' :
@@ -781,6 +898,7 @@
                 amount_gross: parseFloat(document.getElementById('req-amount').value),
                 payout_method: document.getElementById('req-method').value,
                 description: document.getElementById('req-desc').value,
+                vendor_invoice_number: document.getElementById('req-vendor-invoice').value,
                 is_wht_applicable: document.getElementById('req-method').value === 'direct_pay'
             };
 
@@ -865,6 +983,174 @@
         function openInviteModal() {
             document.getElementById('invitePartnerModal').style.display = 'flex';
         }
+
+        function openPaymentModal() {
+            const select = document.getElementById('pay-request-id');
+            const payable = requestsData.filter(r => r.status === 'approved' || r.status === 'partially_paid');
+            
+            if (payable.length === 0) {
+                toast("No approved bills awaiting payment.", "error");
+                return;
+            }
+            
+            select.innerHTML = '<option value="">Select Vendor / Invoice ID...</option>' + 
+                payable.map(req => {
+                    const label = req.vendor_invoice_number ? `${req.vendors?.name} — Ref: ${req.vendor_invoice_number}` : `${req.vendors?.name} — ID: ${req.id.slice(0,8)}`;
+                    return `<option value="${req.id}">${label} (Bal: ₦${Math.max(0, req.net_payout_amount - (req.amount_paid||0)).toLocaleString()})</option>`;
+                }).join('');
+                
+            document.getElementById('newPaymentModal').style.display = 'flex';
+            
+            // Reset fields
+            document.getElementById('pay-amount').value = '';
+            document.getElementById('pay-reference').value = '';
+            updatePaymentContext();
+        }
+        
+        function updatePaymentContext() {
+            const id = document.getElementById('pay-request-id').value;
+            if (!id) {
+                document.getElementById('pay-total').innerText = '₦0.00';
+                document.getElementById('pay-paid').innerText = '₦0.00';
+                document.getElementById('pay-balance').innerText = '₦0.00';
+                document.getElementById('pay-amount').value = '';
+                return;
+            }
+            const req = requestsData.find(r => r.id === id);
+            
+            document.getElementById('pay-total').innerText = '₦' + req.net_payout_amount.toLocaleString(undefined, {minimumFractionDigits:2});
+            document.getElementById('pay-paid').innerText = '₦' + (req.amount_paid||0).toLocaleString(undefined, {minimumFractionDigits:2});
+            const bal = Math.max(0, req.net_payout_amount - (req.amount_paid||0));
+            document.getElementById('pay-balance').innerText = '₦' + bal.toLocaleString(undefined, {minimumFractionDigits:2});
+            document.getElementById('pay-amount').value = bal;
+        }
+
+        // ─── BILL SEARCH COMBOBOX ─────────────────────────────────
+        let payableBills = [];
+
+        function showBillDropdown() {
+            filterBillSearch(document.getElementById('pay-bill-search').value);
+        }
+
+        function filterBillSearch(query) {
+            const dropdown = document.getElementById('bill-dropdown');
+            const q = query.toLowerCase().trim();
+            const filtered = q
+                ? payableBills.filter(r => {
+                    const vname = (r.vendors?.name || '').toLowerCase();
+                    const ref = (r.vendor_invoice_number || '').toLowerCase();
+                    const sid = r.id.slice(0,8).toLowerCase();
+                    return vname.includes(q) || ref.includes(q) || sid.includes(q);
+                })
+                : payableBills;
+
+            if (filtered.length === 0) {
+                dropdown.innerHTML = '<div class="bill-dropdown-item" style="color:var(--gray);">No matching bills found</div>';
+            } else {
+                dropdown.innerHTML = filtered.map(req => {
+                    const ref = req.vendor_invoice_number || req.id.slice(0,8);
+                    const bal = Math.max(0, req.net_payout_amount - (req.amount_paid||0));
+                    return `<div class="bill-dropdown-item" onclick="selectBill('${req.id}')">
+                        <strong>${req.vendors?.name || 'Unknown Vendor'}</strong>
+                        <small>Ref: ${ref} &nbsp;|&nbsp; Balance Due: ₦${bal.toLocaleString(undefined,{minimumFractionDigits:2})}</small>
+                    </div>`;
+                }).join('');
+            }
+            dropdown.classList.add('open');
+        }
+
+        function selectBill(id) {
+            document.getElementById('pay-request-id').value = id;
+            const req = requestsData.find(r => r.id === id);
+            const ref = req.vendor_invoice_number || req.id.slice(0,8);
+            document.getElementById('pay-bill-search').value = `${req.vendors?.name}  —  ${ref}`;
+            document.getElementById('bill-dropdown').classList.remove('open');
+            updatePaymentContext();
+        }
+
+        document.addEventListener('click', (e) => {
+            if (!e.target.closest('.bill-search-wrap')) {
+                document.getElementById('bill-dropdown')?.classList.remove('open');
+            }
+        });
+
+        // ─── VERIFICATION TAB ─────────────────────────────────────
+        function renderVerifications(data) {
+            const pending = data.filter(r => r.status === 'pending_verification');
+            const badge = document.getElementById('verif-badge');
+            if (pending.length > 0) {
+                badge.innerText = pending.length;
+                badge.style.display = 'inline';
+            } else {
+                badge.style.display = 'none';
+            }
+            const body = document.getElementById('verifBody');
+            if (!body) return;
+            if (pending.length === 0) {
+                body.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px; color:var(--gray);">No bills pending verification.</td></tr>';
+                return;
+            }
+            body.innerHTML = pending.map(req => `
+                <tr>
+                    <td>${new Date(req.created_at).toLocaleDateString()}</td>
+                    <td>${req.admins?.full_name || 'System'}</td>
+                    <td>
+                        <div style="font-weight:700;">${req.title}</div>
+                        <small style="color:var(--gray)">${req.vendor_invoice_number ? 'Ref: '+req.vendor_invoice_number : 'ID: '+req.id.slice(0,8)}</small>
+                    </td>
+                    <td>${req.vendors?.name || 'N/A'}</td>
+                    <td>₦${req.amount_gross.toLocaleString()}</td>
+                    <td><span class="status-pill pending">${req.payout_method}</span></td>
+                    <td style="display:flex; gap:8px;">
+                        <button onclick="verifyBill('${req.id}', 'pending')" class="btn btn-gold" style="padding:6px 12px; font-size:11px;">✔ VERIFY</button>
+                        <button onclick="verifyBill('${req.id}', 'rejected')" class="btn" style="padding:6px 12px; font-size:11px; border-color:var(--error); color:var(--error);">✘ REJECT</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        async function verifyBill(id, action) {
+            const reason = action === 'rejected' ? prompt('Rejection reason (required):') : null;
+            if (action === 'rejected' && !reason) return toast('Reason required to reject', 'error');
+            const res = await apiFetch(`/api/payouts/requests/${id}/verify`, {
+                method: 'PATCH',
+                body: JSON.stringify({ action, reason })
+            });
+            if (res.ok) {
+                toast(action === 'pending' ? 'Bill verified — sent to Audit Queue' : 'Bill rejected', action === 'pending' ? 'success' : 'error');
+                fetchRequests();
+            } else {
+                const err = await res.json();
+                toast(err.detail || 'Action failed', 'error');
+            }
+        }
+
+        document.getElementById('newPaymentForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const reqId = document.getElementById('pay-request-id').value;
+            if(!reqId) return toast("Select a bill to pay", "error");
+            
+            const payload = {
+                amount: parseFloat(document.getElementById('pay-amount').value),
+                payment_method: document.getElementById('pay-method').value,
+                reference: document.getElementById('pay-reference').value
+            };
+
+            const res = await apiFetch(`/api/payouts/requests/${reqId}/payments`, {
+                method: 'POST',
+                body: JSON.stringify(payload)
+            });
+
+            if (res.ok) {
+                toast("Payment logged successfully!", "success");
+                closeModal('newPaymentModal');
+                fetchRequests();
+                e.target.reset();
+            } else {
+                const err = await res.json();
+                toast(err.detail || "Failed to log payment", "error");
+            }
+        };
 
         function fallbackCopy(text) {
             const input = document.createElement('input');
