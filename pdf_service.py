@@ -737,6 +737,27 @@ def generate_audit_certificate_pdf(invoice: dict, client: dict, witnesses: list 
     return _render_with_weasyprint(html_content)
 
 
+def generate_payout_receipt_pdf(payout: dict, vendor: dict) -> bytes:
+    """
+    Generates a professional Payment Advice / Payout Receipt for Vendors or Staff.
+    Includes WHT breakdown and digital authorization.
+    """
+    template = env.get_template("payout_receipt.html")
+    
+    # Get company context with fresh stamps
+    comp_ctx = get_company_context()
+
+    html_content = template.render(
+        company=comp_ctx,
+        payout=payout,
+        vendor=vendor,
+        amount_in_words=naira_in_words(payout["net_payout_amount"]),
+        format_currency=format_currency,
+        generated_at=datetime.now().strftime("%d %b %Y")
+    )
+    return _render_with_xhtml2pdf(html_content)
+
+
 def get_default_contract_html_fragment(invoice: dict, client: dict) -> str:
     """
     Renders just the body (clauses) of the contract so it can be passed to the frontend for editing.

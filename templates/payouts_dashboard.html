@@ -228,7 +228,10 @@
             </div>
             <div class="header-actions">
                 <button class="btn" onclick="copyOnboardingLink()">
-                    <i class="fas fa-user-plus"></i> Invite Vendor/Staff
+                    <i class="fas fa-link"></i> Copy Link
+                </button>
+                <button class="btn" onclick="emailOnboardingLink()">
+                    <i class="fas fa-envelope"></i> Email Invite
                 </button>
                 <button class="btn btn-gold" onclick="openRequestModal()">
                     <i class="fas fa-plus"></i> New Request
@@ -599,6 +602,36 @@
                 }).catch(() => fallbackCopy(link));
             } else {
                 fallbackCopy(link);
+            }
+        }
+
+        async function emailOnboardingLink() {
+            const email = prompt("Enter the Partner's Email Address to send an official invitation:");
+            if (!email || !email.includes('@')) {
+                if (email) toast("Please enter a valid email", "error");
+                return;
+            }
+
+            toast("Sending secure invitation...", "info");
+            try {
+                const response = await fetch('/requests/portal-invite', {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('admin_token')}`
+                    },
+                    body: JSON.stringify({ email: email })
+                });
+                
+                const res = await response.json();
+                if (res.status === "success") {
+                    toast(`Sent! Invitation delivered to ${email}`, "success");
+                } else {
+                    toast("Failed to send invitation. Check connection.", "error");
+                }
+            } catch (err) {
+                console.error(err);
+                toast("System Error: Could not send invite", "error");
             }
         }
 

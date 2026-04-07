@@ -1195,6 +1195,87 @@ async def broadcast_campaign_email(campaign: dict, recipients: list, admin_id: s
             
         except Exception as e:
             logger.error(f"Error sending campaign {campaign_id} to {email_addr}: {e}")
+
+    # Final Update
+    db.table("marketing_campaigns").update({
+        "status": "sent",
+        "delivered_count": delivered,
+        "sent_at": datetime.now().isoformat()
+    }).eq("id", campaign_id).execute()
+
+    logger.info(f"Campaign {campaign_id} broadcast finished. Delivered: {delivered}/{total}")
+
+
+def _payout_receipt_html(payout: dict, vendor: dict) -> str:
+    net = float(payout.get("net_payout_amount", 0))
+    ref = payout.get("payout_reference", "N/A")
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: #1A1A1A; padding: 24px; text-align: center;">
+        <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">
+      </div>
+      <div style="background: #C47D0A; padding: 12px 24px;">
+        <h2 style="color: #fff; margin: 0; font-size: 16px;">✓ Payment Authorized & Processed</h2>
+      </div>
+      <div style="padding: 32px 24px; background: #fff; border: 1px solid #eee;">
+        <p style="color: #333;">Dear <strong>{vendor['name']}</strong>,</p>
+        <p style="color: #555;">We are pleased to inform you that your payment has been authorized and processed via our expenditure cloud.</p>
+        <div style="background: #1A1A1A; border-radius: 8px; padding: 24px; margin: 24px 0;">
+          <p style="color: #aaa; margin: 0 0 8px; font-size: 13px; text-transform: uppercase;">Net Amount Paid</p>
+          <p style="color: #F5A623; font-size: 32px; font-weight: bold; margin: 0;">NGN {net:,.2f}</p>
+          <hr style="border-color: #333; margin: 16px 0;">
+          <table style="width: 100%; color: #ccc; font-size: 13px;">
+            <tr><td>Reference</td><td style="text-align:right;color:#fff;">{ref}</td></tr>
+            <tr><td>Payee Bank</td><td style="text-align:right;color:#fff;">{vendor.get('bank_name','N/A')}</td></tr>
+            <tr><td>Account</td><td style="text-align:right;color:#fff;">{vendor.get('account_number','N/A')}</td></tr>
+          </table>
+        </div>
+        <p style="color: #555; font-size: 13px;">The official Payment Advice (PDF) with full tax breakdown is attached to this email.</p>
+        <p style="color: #555; font-size: 13px;">Thank you for your partnership.</p>
+        <hr style="border-color: #eee;">
+        <p style="color: #999; font-size: 12px;">Eximp & Cloves Infrastructure Limited | RC 8311800<br>
+        57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383</p>
+      </div>
+    </div>"""
+
+
+async def send_payout_receipt_email(payout: dict, vendor: dict, sent_by: str):
+    from routers.analytics import log_activity
+    from pdf_service import generate_payout_receipt_pdf
+    
+    email_addr = vendor.get("email")
+    if not email_addr:
+        logger.warning(f"No email found for vendor {vendor['name']}. Payout receipt PDF generated but not sent.")
+        return None
+
+    try:
+        pdf = generate_payout_receipt_pdf(payout, vendor)
+        res = resend.Emails.send({
+            "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "cc": CLIENT_CC_RECIPIENTS,
+            "reply_to": "finance@eximps-cloves.com",
+            "subject": f"Payment Advice — {payout.get('payout_reference', 'Processed')} — Eximp & Cloves",
+            "html": _payout_receipt_html(payout, vendor),
+            "attachments": [{"filename": f"Payment_Advice_{payout.get('payout_reference', 'Ref')}.pdf", "content": list(pdf)}],
+        })
+        
+        await log_activity(
+            "email_sent",
+            f"Payout receipt for {payout.get('payout_reference')} sent to {vendor['name']} ({email_addr})",
+            sent_by,
+            metadata={"payout_id": payout.get("id"), "vendor_id": vendor.get("id")}
+        )
+        return res
+    except Exception as e:
+        logger.error(f"Error sending payout receipt to {email_addr}: {e}")
+        await log_activity(
+            "email_failed",
+            f"FAILED to send payout receipt to {vendor['name']} ({email_addr}): {str(e)}",
+            sent_by,
+            metadata={"error": str(e), "email_type": "payout_receipt"}
+        )
+        return None
             
 async def send_ready_for_execution_email(invoice, client):
     """Notifies legal and admin that a contract is fully signed and ready for final execution."""
@@ -1244,12 +1325,50 @@ async def send_ready_for_execution_email(invoice, client):
         logger.error(f"Error sending execution ready email: {e}")
         return None
 
+async def send_portal_invite_email(email_addr: str, inviter_name: str):
+    from routers.analytics import log_activity
+    
+    # Use the absolute URL via config or env
+    portal_link = "https://app.eximps-cloves.com/payout/portal/OFFICIAL"
+    
+    html = f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 12px; overflow: hidden;">
+      <div style="background: #1A1A1A; padding: 30px; text-align: center;">
+        <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style="max-height: 50px;">
+      </div>
+      <div style="padding: 40px 30px; background: #fff;">
+        <h2 style="color: #1A1A1A; font-size: 20px; margin-bottom: 20px;">Onboarding & Payment Invitation</h2>
+        <p style="color: #555; line-height: 1.6;">Dear Partner,</p>
+        <p style="color: #555; line-height: 1.6;"><strong>{inviter_name}</strong> from Eximp & Cloves Infrastructure Limited has invited you to submit your details for payout processing.</p>
+        <p style="color: #555; line-height: 1.6;">Our expenditure system is now fully automated. Please use the link below to provide your bank details and upload your quotation or receipt to initiate your payment request.</p>
+        
+        <div style="text-align: center; margin: 40px 0;">
+          <a href="{portal_link}" style="background: #C47D0A; color: #fff; padding: 16px 32px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block; box-shadow: 0 4px 15px rgba(196, 125, 10, 0.3);">Open Payout Portal</a>
+        </div>
+        
+        <p style="color: #888; font-size: 12px; font-style: italic;">Note: This link is secure and redirects you to the Eximp & Cloves Financial Cloud.</p>
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 30px 0;">
+        <p style="color: #999; font-size: 11px;">Eximp & Cloves Infrastructure Limited | RC 8311800<br>
+        57B, Isaac John Street, Yaba, Lagos</p>
+      </div>
+    </div>"""
 
-    # Final Update
-    db.table("marketing_campaigns").update({
-        "status": "sent",
-        "delivered_count": delivered,
-        "sent_at": datetime.now().isoformat()
-    }).eq("id", campaign_id).execute()
-
-    logger.info(f"Campaign {campaign_id} broadcast finished. Delivered: {delivered}/{total}")
+    try:
+        res = resend.Emails.send({
+            "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "subject": "Invitation: Submit Payout Request | Eximp & Cloves",
+            "html": html,
+            "reply_to": "finance@eximps-cloves.com"
+        })
+        
+        await log_activity(
+            "email_sent",
+            f"Portal invitation sent to {email_addr} by {inviter_name}",
+            "system",
+            metadata={"email_type": "portal_invite"}
+        )
+        return res
+    except Exception as e:
+        logger.error(f"Error sending portal invite to {email_addr}: {e}")
+        return None

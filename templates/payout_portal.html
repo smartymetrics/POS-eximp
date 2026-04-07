@@ -283,19 +283,49 @@
                 <!-- ID & TIN Row -->
                 <div class="input-row">
                     <div class="form-group">
-                        <label id="id-label">RC Number</label>
+                        <label id="id-label">Business RC Number</label>
                         <div class="input-wrapper">
                             <i class="fas fa-hashtag"></i>
                             <input type="text" id="payee_id_number" placeholder="RC-XXXXXX">
                         </div>
                     </div>
                     <div class="form-group" id="tin-group">
-                        <label>Tax ID (TIN)</label>
+                        <label>Tax ID (TIN) <span style="color:var(--muted); font-size:10px; font-weight:400;">(Required for standard rate)</span></label>
                         <div class="input-wrapper">
                             <i class="fas fa-stamp"></i>
                             <input type="text" id="payee_tin" placeholder="For tax compliance">
                         </div>
                     </div>
+                </div>
+
+                <!-- Email & Phone Row -->
+                <div class="input-row">
+                    <div class="form-group">
+                        <label>Email Address</label>
+                        <div class="input-wrapper">
+                            <i class="fas fa-envelope"></i>
+                            <input type="email" id="payee_email" required placeholder="For digital receipts">
+                        </div>
+                    </div>
+                    <div class="form-group">
+                        <label>Phone Number</label>
+                        <div class="input-wrapper">
+                            <i class="fas fa-phone"></i>
+                            <input type="tel" id="payee_phone" placeholder="+234...">
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Claim Amount Section -->
+                <div class="form-group" style="margin-top: 20px; padding: 20px; background: rgba(196, 125, 10, 0.03); border: 1px solid var(--border); border-radius: 12px;">
+                    <label style="color:var(--brand); font-weight:700;">Claim Amount (NGN)</label>
+                    <div class="input-wrapper" style="border-color: var(--brand);">
+                        <i class="fas fa-coins" style="color:var(--brand);"></i>
+                        <input type="number" id="claim_amount" required step="0.01" placeholder="Enter total amount to be paid">
+                    </div>
+                    <p style="font-size:11px; color:var(--muted); margin-top:8px;">
+                        Please specify the <b>Total Amount</b> as per your quotation or agreement. This amount will be reviewed and verified by the Finance Audit team.
+                    </p>
                 </div>
 
                 <!-- Bank Info Section -->
@@ -343,12 +373,27 @@
 
                 <!-- Document Upload -->
                 <div class="form-group">
-                    <label id="upload-label">Certificate of Incorporation (CAC) <span style="color:var(--muted); font-size:10px; font-weight:400;">(Optional)</span></label>
+                    <label id="upload-label">Quotation / Supporting Document <span style="color:var(--muted); font-size:10px; font-weight:400;">(Optional)</span></label>
                     <div class="upload-area" onclick="document.getElementById('fileInput').click()">
-                        <i class="fas fa-cloud-upload-alt"></i>
-                        <p id="file-name">Drag and drop or click to browse</p>
-                        <span>PDF, JPG or PNG (Max 5MB)</span>
+                        <i class="fas fa-file-upload"></i>
+                        <p id="file-name">Upload your quotation or receipt for verification</p>
+                        <span>PDF, JPG or PNG (Max 10MB)</span>
                         <input type="file" id="fileInput" class="hidden" accept="image/*,.pdf" onchange="updateFileName(this)">
+                    </div>
+                </div>
+
+                <!-- WHT Policy Notice -->
+                <div style="margin: 30px 0; padding: 20px; background: rgba(196, 125, 10, 0.05); border: 1px solid rgba(196, 125, 10, 0.2); border-radius: 16px;">
+                    <div style="display:flex; gap:12px; align-items:flex-start;">
+                        <i class="fas fa-info-circle" style="color:var(--brand); margin-top:3px;"></i>
+                        <div>
+                            <h4 style="font-size:13px; font-weight:700; color:var(--brand); text-transform:uppercase; margin-bottom:4px;">Tax Compliance Notice (WHT 2025)</h4>
+                            <p style="font-size:12px; color:var(--muted); line-height:1.5;">
+                                All payments are subject to Nigerian Withholding Tax regulations. 
+                                Providing a valid <b style="color:var(--text);">Tax ID (TIN)</b> allows us to apply the standard rate (2% - 10%). 
+                                Claims submitted without a verified TIN receive a <b style="color:var(--accent);">double-rate penalty</b> deduction as mandated by law.
+                            </p>
+                        </div>
                     </div>
                 </div>
 
@@ -356,11 +401,11 @@
                 <div class="verification-box">
                     <label class="checkbox-container">
                         <input type="checkbox" required>
-                        <span>I certify that I am authorized to submit these details for payout and that <b>payment is requested only for satisfactory services rendered or goods delivered</b>. I understand that Eximp & Cloves processes claims only against <b>audited and approved proforma invoices</b>. Payment terms apply.</span>
+                        <span>I certify that the information provided is accurate and that <b>payment is requested only for satisfactory services rendered or goods delivered</b>. I understand that Eximp & Cloves processes claims only against <b>audited and approved proformas/receipts</b>.</span>
                     </label>
                 </div>
 
-                <button type="submit" class="submit-btn" id="submitBtn">Finalize Onboarding</button>
+                <button type="submit" class="submit-btn" id="submitBtn">Submit Payout Request</button>
             </div>
         </form>
     </div>
@@ -375,29 +420,29 @@
 
             const nameLabel = document.getElementById('name-label');
             const idLabel = document.getElementById('id-label');
-            const uploadLabel = document.getElementById('upload-label');
             const tinGroup = document.getElementById('tin-group');
+            const uploadLabel = document.getElementById('upload-label');
             const nameIcon = document.querySelector('.form-group .fa-university');
 
             const optSuffix = ' <span style="color:var(--muted); font-size:10px; font-weight:400;">(Optional)</span>';
 
             if (type === 'company') {
                 nameLabel.innerText = 'Official Company Name';
-                idLabel.innerText = 'RC Number';
-                uploadLabel.innerHTML = 'Certificate of Incorporation (CAC)' + optSuffix;
+                idLabel.innerText = 'Business RC Number';
                 tinGroup.classList.remove('hidden');
+                uploadLabel.innerHTML = 'Quotation / Supporting Document' + optSuffix;
                 nameIcon.className = 'fas fa-university';
             } else if (type === 'individual') {
                 nameLabel.innerText = 'Full Legal Name';
-                idLabel.innerText = 'Govt. ID Number';
-                uploadLabel.innerHTML = 'Valid ID (NIN/Voters/Drivers)' + optSuffix;
-                tinGroup.classList.add('hidden');
+                idLabel.innerText = 'Personal ID Number';
+                tinGroup.classList.remove('hidden');
+                uploadLabel.innerHTML = 'Quotation / Supporting Document' + optSuffix;
                 nameIcon.className = 'fas fa-user-circle';
             } else {
                 nameLabel.innerText = 'Employee Full Name';
-                idLabel.innerText = 'Employee ID Number';
-                uploadLabel.innerHTML = 'Employee ID Card / NIN' + optSuffix;
+                idLabel.innerText = 'Staff ID Number';
                 tinGroup.classList.add('hidden');
+                uploadLabel.innerHTML = 'Quotation / Reimbursable Invoice' + optSuffix;
                 nameIcon.className = 'fas fa-id-card-alt';
             }
         }
@@ -487,16 +532,53 @@
                 document.getElementById('bank_name').value = custom;
             }
 
-            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Securing Data...';
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Submitting Claim...';
             btn.disabled = true;
             btn.style.opacity = '0.7';
 
-            // Real backend integration would go here
+            // Gather Data
+            const formData = new FormData();
+            formData.append('type', currentType);
+            formData.append('payee_name', document.getElementById('payee_name').value);
+            formData.append('payee_email', document.getElementById('payee_email').value);
+            formData.append('payee_phone', document.getElementById('payee_phone').value || "");
+            formData.append('payee_id_number', document.getElementById('payee_id_number').value || "");
+            formData.append('payee_tin', document.getElementById('payee_tin').value || "");
+            formData.append('bank_name', document.getElementById('bank_name').value);
+            formData.append('acc_number', document.getElementById('acc_number').value);
+            formData.append('acc_name', document.getElementById('acc_name').value);
+            formData.append('claim_amount', document.getElementById('claim_amount').value);
             
-            setTimeout(() => {
-                alert('Onboarding secure transmission complete. Our finance desk will verify your details within 48 hours.');
-                window.location.reload();
-            }, 2000);
+            const fileInput = document.getElementById('fileInput');
+            if (fileInput.files[0]) {
+                formData.append('file', fileInput.files[0]);
+            }
+
+            try {
+                const response = await fetch('/payout/portal/submit', {
+                    method: 'POST',
+                    body: formData
+                });
+                
+                const result = await response.json();
+                
+                if (result.status === "success") {
+                    btn.innerHTML = '<i class="fas fa-check-circle"></i> Success';
+                    btn.style.background = '#10B981';
+                    setTimeout(() => {
+                        alert('Submission Successful! Your claim has been queued for audit. You will receive an email once it is approved.');
+                        window.location.reload();
+                    }, 1000);
+                } else {
+                    throw new Error(result.detail || "Submission failed");
+                }
+            } catch (err) {
+                console.error(err);
+                alert(`Error: ${err.message || 'Could not connect to the server. Please try again later.'}`);
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+                btn.style.opacity = '1';
+            }
         };
 
         // Initialize view

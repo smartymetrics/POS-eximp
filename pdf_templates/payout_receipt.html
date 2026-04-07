@@ -1,0 +1,210 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <style>
+        @page {
+            size: A4;
+            margin: 0;
+        }
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            margin: 0;
+            padding: 0;
+            color: #1A1A1A;
+            line-height: 1.5;
+            background: #fff;
+        }
+        .header {
+            background: #1A1A1A;
+            color: #fff;
+            padding: 40px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+        .header-logo {
+            width: 180px;
+        }
+        .header-info {
+            text-align: right;
+            font-size: 11px;
+            opacity: 0.8;
+        }
+        .content {
+            padding: 60px 40px;
+        }
+        .document-title {
+            font-size: 24px;
+            font-weight: 800;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            color: #C47D0A;
+            margin-bottom: 40px;
+            border-bottom: 2px solid #F5A623;
+            display: inline-block;
+            padding-bottom: 8px;
+        }
+        .grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 40px;
+            margin-bottom: 60px;
+        }
+        .section-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            color: #888;
+            margin-bottom: 8px;
+            letter-spacing: 1px;
+        }
+        .section-value {
+            font-size: 14px;
+            font-weight: 600;
+        }
+        .payout-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 40px 0;
+        }
+        .payout-table th {
+            text-align: left;
+            font-size: 10px;
+            text-transform: uppercase;
+            color: #888;
+            padding: 12px 0;
+            border-bottom: 1px solid #EEE;
+        }
+        .payout-table td {
+            padding: 16px 0;
+            font-size: 14px;
+            border-bottom: 1px solid #F9F9F9;
+        }
+        .payout-table .amount-col {
+            text-align: right;
+        }
+        .summary-row {
+            background: #F9FAFB;
+        }
+        .summary-row td {
+            border-bottom: none;
+            padding: 20px 0;
+        }
+        .total-row {
+            background: #1A1A1A;
+            color: #F5A623;
+        }
+        .total-row td {
+            padding: 24px 20px;
+            font-size: 18px;
+            font-weight: 800;
+        }
+        .words-section {
+            margin-top: 24px;
+            font-size: 12px;
+            font-style: italic;
+            color: #555;
+        }
+        .footer {
+            margin-top: 80px;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+        .signature-area {
+            text-align: center;
+            width: 200px;
+        }
+        .signature-line {
+            border-top: 1px solid #DDD;
+            margin-top: 10px;
+            padding-top: 8px;
+            font-size: 10px;
+            color: #888;
+        }
+        .stamp-img {
+            height: 100px;
+            margin-bottom: -40px;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="{{ company.logo_url }}" class="header-logo" alt="Eximp & Cloves">
+        <div class="header-info">
+            {{ company.name }} | RC {{ company.rc }}<br>
+            {{ company.address }}<br>
+            {{ company.phone }} | {{ company.email }}
+        </div>
+    </div>
+
+    <div class="content">
+        <div class="document-title">Payment Advice / Payout Receipt</div>
+        
+        <div class="grid">
+            <div>
+                <div class="section-label">Payee Details</div>
+                <div class="section-value">{{ vendor.name }}</div>
+                <div class="section-value" style="font-weight:400; font-size:12px; margin-top:4px;">
+                    {{ vendor.bank_name }}<br>
+                    Account: {{ vendor.account_number }}<br>
+                    TIN: {{ vendor.tin or 'N/A' }}
+                </div>
+            </div>
+            <div style="text-align: right;">
+                <div class="section-label">Transaction Reference</div>
+                <div class="section-value" style="color: #C47D0A;">{{ payout.payout_reference }}</div>
+                <div class="section-label" style="margin-top:16px;">Date Generated</div>
+                <div class="section-value">{{ generated_at }}</div>
+            </div>
+        </div>
+
+        <table class="payout-table">
+            <thead>
+                <tr>
+                    <th>Description of Expenditure</th>
+                    <th class="amount-col">Amount (NGN)</th>
+                </tr>
+            </thead>
+            <tbody>
+                <tr>
+                    <td>
+                        <strong>{{ payout.title }}</strong><br>
+                        <span style="font-size:12px; color:#555;">Category: {{ payout.payout_method | replace('_', ' ') | title }}</span>
+                    </td>
+                    <td class="amount-col">{{ format_currency(payout.amount_gross) }}</td>
+                </tr>
+                
+                {% if payout.wht_amount and payout.wht_amount > 0 %}
+                <tr class="summary-row" style="color: #E74C3C;">
+                    <td style="text-align: right; padding-right: 20px;">Nigerian Withholding Tax (WHT) Deduction ({{ (payout.wht_rate * 100) | round(1) }}%)</td>
+                    <td class="amount-col">- {{ format_currency(payout.wht_amount) }}</td>
+                </tr>
+                {% endif %}
+
+                <tr class="total-row">
+                    <td style="text-align: right; padding-right: 20px;">NET PAYOUT AMOUNT</td>
+                    <td class="amount-col">{{ format_currency(payout.net_payout_amount) }}</td>
+                </tr>
+            </tbody>
+        </table>
+
+        <div class="words-section">
+            <strong>Amount in Words:</strong> {{ amount_in_words }}
+        </div>
+
+        <div class="footer">
+            <div>
+                <p style="font-size: 11px; color: #888;">This is a computer-generated digital receipt and does not require a physical signature.<br>Authenticity can be verified via the Eximp & Cloves Audit Cloud.</p>
+            </div>
+            <div class="signature-area">
+                {% if company.stamp_b64 %}
+                <img src="{{ company.stamp_b64 }}" class="stamp-img">
+                {% endif %}
+                <div class="signature-line">FINANCIAL AUDIT CONTROL</div>
+            </div>
+        </div>
+    </div>
+</body>
+</html>
