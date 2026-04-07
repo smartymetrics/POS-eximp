@@ -6,6 +6,7 @@
     <title>Finance & Assets | Eximp & Cloves</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@700&family=DM+Sans:wght@400;500;700&display=swap" rel="stylesheet">
+    <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <style>
         :root {
             --bg: #09090B;
@@ -122,6 +123,24 @@
             content: ''; position: absolute; bottom: -1px; left: 0; width: 100%; height: 3px;
             background: var(--gold); border-radius: 3px 3px 0 0;
         }
+
+        /* --- ANALYTICS --- */
+        .analytics-grid { display: grid; grid-template-columns: 2fr 1fr; gap: 32px; margin-bottom: 48px; }
+        .chart-card { background: var(--dark2); padding: 32px; border-radius: 24px; border: 1px solid var(--border); min-height: 400px; }
+        .chart-card h4 { font-size: 14px; color: var(--gray); margin-bottom: 24px; text-transform: uppercase; letter-spacing: 1px; }
+
+        .report-hub { 
+            display: grid; grid-template-columns: repeat(3, 1fr); gap: 24px; margin-top: 48px;
+        }
+        .report-tool {
+            background: linear-gradient(135deg, rgba(255,255,255,0.02) 0%, rgba(255,255,255,0.01) 100%);
+            padding: 32px; border-radius: 24px; border: 1px solid var(--border);
+            text-align: center; transition: 0.3s; cursor: pointer;
+        }
+        .report-tool:hover { border-color: var(--gold); transform: translateY(-5px); background: rgba(196, 125, 10, 0.05); }
+        .report-tool i { font-size: 28px; color: var(--gold); margin-bottom: 16px; }
+        .report-tool h4 { font-size: 16px; margin-bottom: 8px; }
+        .report-tool p { font-size: 13px; color: var(--gray); line-height: 1.5; }
 
         .table-container { background: var(--dark2); border-radius: 24px; border: 1px solid var(--border); overflow: hidden; }
         .data-table { width: 100%; border-collapse: collapse; }
@@ -270,8 +289,10 @@
             <div class="tab" onclick="switchTab('vendors', event)">Vendor Registry</div>
             <div class="tab" onclick="switchTab('reimbursements', event)">Staff Claims</div>
             <div class="tab" onclick="switchTab('assets', event)">Asset Inventory</div>
+            <div class="tab" onclick="switchTab('analytics', event)">Intelligence & Reporting</div>
         </div>
 
+        <div id="requests-view" class="view-content active">
         <div class="table-container">
             <table class="data-table">
                 <thead>
@@ -290,6 +311,39 @@
                     <tr><td colspan="8" style="text-align:center; padding:40px; color:var(--gray);">Initializing Audit Stream...</td></tr>
                 </tbody>
             </table>
+        </div>
+        </div>
+
+        <!-- Analytics View -->
+        <div id="analytics-view" class="view-content" style="display:none; padding-top:20px;">
+            <div class="analytics-grid">
+                <div class="chart-card">
+                    <h4>Monthly Financial Velocity</h4>
+                    <div style="height:300px;"><canvas id="burnChart"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <h4>Category Distribution</h4>
+                    <div style="height:300px;"><canvas id="categoryChart"></canvas></div>
+                </div>
+            </div>
+
+            <div class="report-hub">
+                <div class="report-tool" onclick="openReportModal('export')">
+                    <i class="fas fa-file-export"></i>
+                    <h4>Instant Export</h4>
+                    <p>Download professional CSV or Excel logs for your records.</p>
+                </div>
+                <div class="report-tool" onclick="openReportModal('email')">
+                    <i class="fas fa-paper-plane"></i>
+                    <h4>Email Report</h4>
+                    <p>Send a high-end PDF analysis directly to any recipient.</p>
+                </div>
+                <div class="report-tool" onclick="openReportModal('schedule')">
+                    <i class="fas fa-clock"></i>
+                    <h4>Schedule Automation</h4>
+                    <p>Setup autonomous daily, weekly, or monthly reporting.</p>
+                </div>
+            </div>
         </div>
     </main>
 
@@ -822,13 +876,124 @@
             toast("Link Copied", "success");
         }
 
-        function switchTab(tab, event) {
+        function switchTab(viewId, event) {
+            document.querySelectorAll('.view-content').forEach(v => v.style.display = 'none');
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
+            
+            const targetView = document.getElementById(`${viewId}-view`);
+            if (targetView) targetView.style.display = 'block';
+            
             if (event && event.target) {
                 event.target.classList.add('active');
+            } else {
+                // Fallback to finding tab by text if event is missing
+                const tabs = Array.from(document.querySelectorAll('.tab'));
+                const matched = tabs.find(t => t.innerText.toLowerCase().includes(viewId));
+                if (matched) matched.classList.add('active');
             }
-            toast(`Filtering for ${tab}...`, 'info');
-            // Real filtering logic would go here
+
+            if (viewId === 'analytics') fetchStats();
+            toast(`Switching to ${viewId.toUpperCase()}...`, 'info');
+        }
+
+        // --- ANALYTICS & CHARTS ---
+        let burnChart, categoryChart;
+
+        async function fetchStats() {
+            try {
+                const res = await apiFetch('/api/payouts/stats/summary');
+                const stats = await res.json();
+                renderCharts(stats);
+            } catch (e) {
+                console.error("Stats fail", e);
+                toast("Analytics Engine Delayed", "error");
+            }
+        }
+
+        function renderCharts(data) {
+            const ctx1 = document.getElementById('burnChart').getContext('2d');
+            const ctx2 = document.getElementById('categoryChart').getContext('2d');
+
+            if (burnChart) burnChart.destroy();
+            if (categoryChart) categoryChart.destroy();
+
+            burnChart = new Chart(ctx1, {
+                type: 'line',
+                data: {
+                    labels: data.trend.map(i => i.month),
+                    datasets: [{
+                        label: 'Gross Spend (NGN)',
+                        data: data.trend.map(i => i.total),
+                        borderColor: '#C47D0A',
+                        backgroundColor: 'rgba(196, 125, 10, 0.1)',
+                        fill: true,
+                        tension: 0.4,
+                        borderWidth: 3,
+                        pointBackgroundColor: '#FFC107'
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        y: { 
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#94A3B8', font: { family: 'Outfit' } }
+                        },
+                        x: {
+                            grid: { display: false },
+                            ticks: { color: '#94A3B8', font: { family: 'Outfit' } }
+                        }
+                    }
+                }
+            });
+
+            categoryChart = new Chart(ctx2, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(data.categories).map(k => k.replace('_', ' ').toUpperCase()),
+                    datasets: [{
+                        data: Object.values(data.categories),
+                        backgroundColor: ['#C47D0A', '#FFC107', '#10B981', '#1C1C1E'],
+                        borderWidth: 0,
+                        hoverOffset: 10
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { 
+                        legend: { 
+                            position: 'bottom', 
+                            labels: { color: '#94A3B8', font: { family: 'Outfit', size: 10 }, padding: 20 } 
+                        } 
+                    }
+                }
+            });
+        }
+
+        // --- REPORTING HUB ---
+        async function openReportModal(mode) {
+            if (mode === 'export') {
+                toast("Preparing CSV Data Stream...", "info");
+                window.location.href = '/api/payouts/stats/export?report_type=payout_audit';
+            } else if (mode === 'email') {
+                const email = prompt("Enter recipient email address:");
+                if (!email || !email.includes('@')) return;
+                
+                toast("Generating PDF Assets...", "info");
+                try {
+                    const res = await apiFetch('/api/payouts/stats/send-email', {
+                        method: 'POST',
+                        body: JSON.stringify({ report_type: 'payout_audit', email: email })
+                    });
+                    if (res.ok) toast("PDF Analysis Delivered", "success");
+                } catch (e) { toast("Delivery Failed", "error"); }
+            } else if (mode === 'schedule') {
+                toast("Scheduling Engine: Select frequency in next update", "info");
+            }
         }
 
         // --- GLOBAL EXPOSURE & EVENT BINDING ---

@@ -202,6 +202,72 @@ class ReportService:
                 "inactive": sum(1 for p in data if not p.get("is_active"))
             }
             return {"items": rows, "stats": stats, "type": "Property Inventory Status"}
+        
+        elif report_type == "payout_audit":
+            res = supabase.table("expenditure_requests").select("*, vendors(name, type), admins!requester_id(full_name)").gte("created_at", start_date).lte("created_at", end_date).neq("status", "voided").order("created_at", desc=True).execute()
+            data = res.data or []
+            rows = []
+            for p in data:
+                rows.append({
+                    "Date": str(p.get("created_at"))[:10],
+                    "Title": p.get("title", "—"),
+                    "Requester": p.get("admins", {}).get("full_name", "—") if p.get("admins") else "—",
+                    "Payee": p.get("vendors", {}).get("name", "—") if p.get("vendors") else "—",
+                    "Category": p.get("vendors", {}).get("type", "—").capitalize() if p.get("vendors") else "—",
+                    "Gross (NGN)": f"NGN {float(p.get('amount_gross', 0)):,.2f}",
+                    "WHT (NGN)": f"NGN {float(p.get('wht_amount', 0)):,.2f}",
+                    "Net Paid (NGN)": f"NGN {float(p.get('net_payout_amount', 0)):,.2f}",
+                    "Status": p.get("status", "").capitalize()
+                })
+            stats = {
+                "total_gross": sum(float(p.get("amount_gross") or 0) for p in data),
+                "total_wht": sum(float(p.get("wht_amount") or 0) for p in data),
+                "count": len(data)
+            }
+            return {"items": rows, "stats": stats, "type": "Expenditure & Payout Audit"}
+
+        elif report_type == "tax_compliance":
+            # Focused on FIRS / WHT obligations
+            res = supabase.table("expenditure_requests").select("*, vendors(name, tin, type)").gte("created_at", start_date).lte("created_at", end_date).eq("status", "paid").execute()
+            data = res.data or []
+            rows = []
+            for p in data:
+                vendor = p.get("vendors") or {}
+                rows.append({
+                    "Vendor/Payee": vendor.get("name", "—"),
+                    "TIN": vendor.get("tin", "NOT PROVIDED"),
+                    "Category": vendor.get("type", "—").capitalize(),
+                    "Transaction Date": str(p.get("created_at"))[:10],
+                    "Gross Amount": f"NGN {float(p.get('amount_gross', 0)):,.2f}",
+                    "WHT Rate": f"{float(p.get('wht_rate', 0)*100)}%",
+                    "WHT Withheld": f"NGN {float(p.get('wht_amount', 0)):,.2f}",
+                    "Payment Ref": p.get("payout_reference", "—")
+                })
+            stats = {
+                "total_tax_liability": sum(float(p.get("wht_amount") or 0) for p in data),
+                "count": len(data)
+            }
+            return {"items": rows, "stats": stats, "type": "Tax Compliance (WHT Duty) Report"}
+
+        elif report_type == "asset_registry":
+            res = supabase.table("company_assets").select("*, admins!assigned_to(full_name)").execute()
+            data = res.data or []
+            rows = []
+            for a in data:
+                rows.append({
+                    "Asset ID": a.get("asset_id", "—"),
+                    "Description": a.get("name", "—"),
+                    "Category": a.get("category", "—"),
+                    "Purchase Date": a.get("purchase_date", "—"),
+                    "Cost": f"NGN {float(a.get('purchase_cost', 0)):,.2f}",
+                    "Assigned To": a.get("admins", {}).get("full_name", "—") if a.get("admins") else "UNASSIGNED",
+                    "Status": a.get("current_status", "").capitalize()
+                })
+            stats = {
+                "inventory_count": len(data),
+                "total_asset_value": sum(float(a.get("purchase_cost") or 0) for a in data)
+            }
+            return {"items": rows, "stats": stats, "type": "Company Asset Registry"}
 
         return {"items": [], "stats": {}, "type": "Report"}
 
@@ -219,7 +285,10 @@ class ReportService:
             "Outstanding Payments": "standard_report.html",
             "Sales Rep Performance": "standard_report.html",
             "Client Register & KYC Report": "standard_report.html",
-            "Commission Earned Report": "standard_report.html"
+            "Commission Earned Report": "standard_report.html",
+            "Expenditure & Payout Audit": "standard_report.html",
+            "Tax Compliance (WHT Duty) Report": "standard_report.html",
+            "Company Asset Registry": "standard_report.html"
         }
         
         template_name = template_map.get(report_type, "standard_report.html")

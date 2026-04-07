@@ -414,16 +414,26 @@
     <script>
         let currentType = 'company';
 
-        function setType(type) {
+        function setType(type, evt=null) {
             currentType = type;
             document.querySelectorAll('.type-btn').forEach(btn => btn.classList.remove('active'));
-            event.currentTarget.classList.add('active');
+            
+            if (evt && evt.currentTarget) {
+                evt.currentTarget.classList.add('active');
+            } else {
+                // Programmatic selection
+                document.querySelectorAll('.type-btn').forEach(b => {
+                    if (b.getAttribute('onclick') && b.getAttribute('onclick').includes(`'${type}'`)) {
+                        b.classList.add('active');
+                    }
+                });
+            }
 
             const nameLabel = document.getElementById('name-label');
             const idLabel = document.getElementById('id-label');
             const tinGroup = document.getElementById('tin-group');
             const uploadLabel = document.getElementById('upload-label');
-            const nameIcon = document.querySelector('.form-group .fa-university');
+            const nameIcon = document.querySelector('.form-group .fa-university') || document.querySelector('.form-group .fa-user-circle') || document.querySelector('.form-group .fa-id-card-alt');
 
             const optSuffix = ' <span style="color:var(--muted); font-size:10px; font-weight:400;">(Optional)</span>';
 

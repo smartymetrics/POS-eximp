@@ -1,14 +1,18 @@
 from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks, File, UploadFile, Form
+from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
 from database import get_db
 from models import ExpenditureRequestCreate, PayoutReview, AssetCreate, VendorCreate, VoidExpenditureRequest
 from routers.auth import verify_token, has_any_role
-from email_service import send_payout_receipt_email, send_portal_invite_email
-from datetime import datetime, timezone
+from email_service import send_payout_receipt_email, send_portal_invite_email, send_report_email
+from report_service import ReportService
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal
-from typing import Optional
+from typing import Optional, List, Dict, Any
 import json
 import uuid
+import pandas as pd
+import io
 
 router = APIRouter()
 
@@ -431,3 +435,113 @@ async def void_payout_request(request_id: str, data: VoidExpenditureRequest, cur
     )
     
     return {"status": "success", "message": "Expenditure request voided successfully"}
+
+
+# ─── ANALYTICS & REPORTING ───────────────────────────────────
+
+@router.get("/stats/summary")
+async def get_payout_stats(current_admin=Depends(verify_token)):
+    """Aggregated stats for the dashboard charts."""
+    db = get_db()
+    
+    # 1. Monthly Spend Trend (Last 6 Months)
+    res = db.table("expenditure_requests")\
+        .select("amount_gross, net_payout_amount, wht_amount, created_at, status")\
+        .eq("status", "paid")\
+        .execute()
+        
+    data = res.data or []
+    
+    # Simple aggregation for Chart.js
+    monthly_totals = {}
+    for r in data:
+        month = r['created_at'][:7] # YYYY-MM
+        monthly_totals[month] = monthly_totals.get(month, 0) + float(r['amount_gross'])
+        
+    sorted_months = sorted(monthly_totals.keys())[-6:]
+    trend = [{"month": m, "total": monthly_totals[m]} for m in sorted_months]
+    
+    # 2. Category Breakdown
+    cat_res = db.table("expenditure_requests")\
+        .select("amount_gross, payout_method")\
+        .eq("status", "paid")\
+        .execute()
+        
+    cat_data = cat_res.data or []
+    categories = {}
+    for r in cat_data:
+        m = r['payout_method'] or 'Unknown'
+        categories[m] = categories.get(m, 0) + float(r['amount_gross'])
+        
+    # 3. Liability Summary
+    liability = sum(float(r['wht_amount'] or 0) for r in data)
+    
+    return {
+        "trend": trend,
+        "categories": categories,
+        "total_wht_liability": liability,
+        "total_payout_count": len(data)
+    }
+
+@router.get("/stats/export")
+async def export_payout_report(
+    report_type: str = "payout_audit",
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_admin=Depends(verify_token)
+):
+    """Generate and stream a CSV report directly."""
+    report_data = await ReportService.get_report_data(report_type, start_date, end_date)
+    
+    # Convert to DataFrame for easy export
+    df = pd.DataFrame(report_data['items'])
+    
+    output = io.StringIO()
+    df.to_csv(output, index=False)
+    output.seek(0)
+    
+    filename = f"{report_type}_{datetime.now().strftime('%Y%m%d')}.csv"
+    
+    return StreamingResponse(
+        iter([output.getvalue()]),
+        media_type="text/csv",
+        headers={"Content-Disposition": f"attachment; filename={filename}"}
+    )
+
+class SendReportRequest(BaseModel):
+    report_type: str
+    email: str
+    start_date: Optional[str] = None
+    end_date: Optional[str] = None
+
+@router.post("/stats/send-email")
+async def send_on_demand_report(
+    data: SendReportRequest, 
+    bg_tasks: BackgroundTasks, 
+    current_admin=Depends(verify_token)
+):
+    """Triggers an immediate report email via background task."""
+    bg_tasks.add_task(send_report_email, data.report_type, [data.email], data.start_date, data.end_date)
+    return {"status": "success", "message": f"Report queued for delivery to {data.email}"}
+
+class ScheduleRequest(BaseModel):
+    report_type: str
+    frequency: str # weekly, monthly
+    recipients: List[str]
+    is_active: bool = True
+
+@router.post("/stats/schedule")
+async def save_report_schedule(data: ScheduleRequest, current_admin=Depends(verify_token)):
+    """Saves or updates a report schedule."""
+    db = get_db()
+    payload = {
+        "report_type": data.report_type,
+        "frequency": data.frequency,
+        "recipients": data.recipients,
+        "is_active": data.is_active,
+        "owner_id": current_admin['sub']
+    }
+    
+    # Basic upsert logic
+    res = db.table("report_schedules").upsert(payload).execute()
+    return res.data[0]
