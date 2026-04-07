@@ -523,3 +523,6 @@ class AssetCreate(BaseModel):
     procurement_id: Optional[str] = None
     assigned_to: Optional[str] = None
 
+class VoidExpenditureRequest(BaseModel):
+    reason: str
+

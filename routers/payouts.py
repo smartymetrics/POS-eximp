@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks, File, UploadFile, Form
 from pydantic import BaseModel
 from database import get_db
-from models import ExpenditureRequestCreate, PayoutReview, AssetCreate, VendorCreate
+from models import ExpenditureRequestCreate, PayoutReview, AssetCreate, VendorCreate, VoidExpenditureRequest
 from routers.auth import verify_token, has_any_role
 from email_service import send_payout_receipt_email, send_portal_invite_email
 from datetime import datetime, timezone
@@ -95,7 +95,7 @@ async def submit_payout_request(data: ExpenditureRequestCreate, current_admin=De
     payload = {
         "title": data.title,
         "description": data.description,
-        "requester_id": current_admin['id'],
+        "requester_id": current_admin['sub'],
         "vendor_id": vendor_id,
         "amount_gross": float(data.amount_gross),
         "payout_method": data.payout_method,
@@ -113,11 +113,16 @@ async def submit_payout_request(data: ExpenditureRequestCreate, current_admin=De
     return res.data[0]
 
 @router.get("/requests")
-async def list_expenditure_requests(status: Optional[str] = None, current_admin=Depends(verify_token)):
+async def list_expenditure_requests(status: Optional[str] = None, show_voided: bool = False, current_admin=Depends(verify_token)):
     db = get_db()
     query = db.table("expenditure_requests").select("*, vendors(*), admins!requester_id(full_name)")
+    
     if status:
         query = query.eq("status", status)
+    
+    if not show_voided:
+        query = query.neq("status", "voided")
+        
     res = query.order("created_at", desc=True).execute()
     return res.data
 
@@ -134,7 +139,7 @@ async def review_payout_request(request_id: str, data: PayoutReview, bg_tasks: B
     req = req_res.data[0]
     update_payload = {
         "status": data.status,
-        "reviewed_by": current_admin['id'],
+        "reviewed_by": current_admin['sub'],
         "reviewed_at": datetime.now(timezone.utc).isoformat(),
         "payout_reference": data.payout_reference,
         "wht_exemption_reason": data.rejection_reason if data.status == 'rejected' else req.get('wht_exemption_reason')
@@ -159,12 +164,41 @@ async def review_payout_request(request_id: str, data: PayoutReview, bg_tasks: B
     res = db.table("expenditure_requests").update(update_payload).eq("id", request_id).execute()
     updated_req = res.data[0]
 
-    # TRIGGER AUTOMATED RECEIPT EMAIL
+    # ─── ASSET AUTOMATION ────────────────────────────────────
+    # If this was a procurement/tool request, auto-log it as a company asset
+    if data.status == 'approved' and req.get('payout_method') == 'procurement':
+        try:
+            # Generate a simple unique Asset ID
+            asset_slug = "".join([w[0] for w in req['title'].split() if w]).upper()[:4]
+            asset_id_code = f"EC-{asset_slug}-{str(uuid.uuid4())[:4].upper()}"
+            
+            asset_payload = {
+                "asset_id": asset_id_code,
+                "name": req['title'],
+                "category": "Equipment", # Default, can be refined in Asset view
+                "purchase_cost": float(req['amount_gross']),
+                "purchase_date": datetime.now(timezone.utc).date().isoformat(),
+                "procurement_id": request_id,
+                "assigned_to": req.get('requester_id'),
+                "current_status": "assigned",
+                "notes": f"Auto-logged via Procurement Approval. Ref: {request_id}"
+            }
+            
+            db.table("company_assets").insert(asset_payload).execute()
+        except Exception as asset_err:
+            print(f"⚠️ Warning: Payout approved but Asset logging failed: {asset_err}")
+            # We don't fail the whole payout if asset logging hits a snag, but we log it.
+
+    # ─── TRIGGER AUTOMATED RECEIPT EMAIL ──────────────────────
     if data.status == 'approved' and updated_req.get('vendor_id'):
         vendor = req.get('vendors')
         if vendor and vendor.get('email'):
+            # Fetch admin profile for the "Sent By" name
+            admin_res = db.table("admins").select("full_name").eq("id", current_admin['sub']).execute()
+            admin_name = admin_res.data[0]['full_name'] if admin_res.data else "Finance Team"
+            
             # Fetch fresh version of request for the receipt (includes updated WHT/amounts)
-            bg_tasks.add_task(send_payout_receipt_email, updated_req, vendor, current_admin['full_name'])
+            bg_tasks.add_task(send_payout_receipt_email, updated_req, vendor, admin_name)
 
     return updated_req
 
@@ -222,12 +256,66 @@ async def view_secure_payout_document(request_id: str, doc_type: str, current_ad
 
 class PortalInvite(BaseModel):
     email: str
+    category: str # 'staff', 'company', or 'individual'
 
 @router.post("/requests/portal-invite")
 async def trigger_portal_invite(data: PortalInvite, bg_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
-    """Triggers a professional system email invitation to a partner."""
-    bg_tasks.add_task(send_portal_invite_email, data.email, current_admin['full_name'])
-    return {"status": "success", "message": f"Invitation queued for {data.email}"}
+    """Triggers a professional system email invitation with a unique token."""
+    db = get_db()
+    
+    # 1. Fetch current admin for the invitation signature
+    admin_res = db.table("admins").select("full_name").eq("id", current_admin['sub']).execute()
+    admin_name = admin_res.data[0]['full_name'] if admin_res.data else "Eximp & Cloves Finance"
+    
+    # 2. Generate or Update Invite Token
+    token = str(uuid.uuid4())
+    invite_payload = {
+        "email": data.email,
+        "category": data.category,
+        "token": token,
+        "invited_by": current_admin['sub'],
+        "is_used": False,
+        "created_at": datetime.now(timezone.utc).isoformat()
+    }
+    
+    # Upsert the invite (so re-inviting updates the token/category)
+    db.table("portal_invites").upsert(invite_payload, on_conflict="email").execute()
+    
+    # 3. Generate Link
+    # Note: In production, window.location.origin would be used on frontend, 
+    # here we assume the portal is at /payout/portal/{token}
+    
+    bg_tasks.add_task(send_portal_invite_email, data.email, admin_name)
+    
+    return {
+        "status": "success", 
+        "message": f"Invitation queued for {data.email}",
+        "token": token
+    }
+
+@router.get("/payout/portal/invite/{token}")
+async def resolve_portal_invite(token: str):
+    """Checks the validity of an invitation token and returns the context."""
+    db = get_db()
+    
+    # 1. Validate Token
+    invite_res = db.table("portal_invites").select("*").eq("token", token).execute()
+    if not invite_res.data:
+        raise HTTPException(status_code=404, detail="Invalid or expired invitation link")
+    
+    invite = invite_res.data[0]
+    
+    # 2. Check if Payee is already onboarded
+    payee_res = db.table("vendors").select("*").eq("email", invite['email']).execute()
+    is_onboarded = len(payee_res.data) > 0
+    payee_data = payee_res.data[0] if is_onboarded else None
+    
+    return {
+        "email": invite['email'],
+        "category": invite['category'],
+        "is_onboarded": is_onboarded,
+        "payee_data": payee_data
+    }
 
 
 @router.post("/portal/submit")
@@ -308,3 +396,38 @@ async def submit_payout_claim_from_portal(
     db.table("expenditure_requests").insert(req_payload).execute()
     
     return {"status": "success", "message": "Claim submitted successfully. Our finance team will review it shortly."}
+
+
+@router.patch("/requests/{request_id}/void")
+async def void_payout_request(request_id: str, data: VoidExpenditureRequest, current_admin=Depends(verify_token)):
+    """Voids an expenditure request so it's ignored in reporting."""
+    if not has_any_role(current_admin, "admin"):
+        raise HTTPException(status_code=403, detail="Only Admins can void expenditures")
+        
+    db = get_db()
+    
+    # 1. Check if it exists
+    req_res = db.table("expenditure_requests").select("status, title").eq("id", request_id).execute()
+    if not req_res.data:
+        raise HTTPException(status_code=404, detail="Request not found")
+        
+    # 2. Update status to voided and log reason
+    update_data = {
+        "status": "voided",
+        "void_reason": data.reason,
+        "voided_at": datetime.now(timezone.utc).isoformat(),
+        "voided_by": current_admin['sub']
+    }
+    
+    db.table("expenditure_requests").update(update_data).eq("id", request_id).execute()
+    
+    # 3. Log Activity
+    from routers.analytics import log_activity
+    await log_activity(
+        "expenditure_voided",
+        f"Expenditure request '{req_res.data[0]['title']}' voided by Admin. Reason: {data.reason}",
+        current_admin['sub'],
+        metadata={"request_id": request_id}
+    )
+    
+    return {"status": "success", "message": "Expenditure request voided successfully"}

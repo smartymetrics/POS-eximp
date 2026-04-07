@@ -249,7 +249,7 @@
             <p id="portal-subtitle">Secure payout registration for verified partners</p>
         </div>
 
-        <div class="type-selector">
+        <div class="type-selector" id="type_selectors">
             <div class="type-btn active" onclick="setType('company')">
                 <i class="fas fa-building"></i>
                 <span>Company</span>
@@ -581,8 +581,75 @@
             }
         };
 
+        let inviteData = null;
+
+        async function resolveInvite() {
+            const urlParts = window.location.pathname.split('/');
+            const token = urlParts[urlParts.length - 1];
+            
+            if (!token || token === 'OFFICIAL') {
+                // If it's the legacy/generic link, we allow manual selection 
+                // but this will be deprecated once token invites are fully tested.
+                document.getElementById('type_selectors').classList.remove('hidden');
+                return;
+            }
+
+            try {
+                const res = await fetch(`/api/payouts/payout/portal/invite/${token}`);
+                if (!res.ok) {
+                    alert("This invitation link is invalid or has expired. Please contact support.");
+                    window.location.href = "https://eximpcloves.com";
+                    return;
+                }
+                
+                inviteData = await res.json();
+                
+                // 1. Lock Category
+                setType(inviteData.category);
+                document.getElementById('type_selectors').style.display = 'none';
+                
+                // 2. Pre-fill Email
+                document.getElementById('payee_email').value = inviteData.email;
+                document.getElementById('payee_email').readOnly = true;
+                document.getElementById('payee_email').style.opacity = '0.7';
+
+                // 3. One-Time Onboarding: If already onboarded, hide bank section
+                if (inviteData.is_onboarded) {
+                    const payee = inviteData.payee_data;
+                    document.getElementById('payee_name').value = payee.name;
+                    document.getElementById('payee_phone').value = payee.phone || "";
+                    
+                    // Hide the profile/bank section to focus only on the claim
+                    const profileSection = document.querySelector('.form-section:first-child');
+                    const bankSection = document.querySelectorAll('.form-section')[1];
+                    const introSection = document.querySelector('.portal-header p');
+                    
+                    introSection.innerHTML = `<span style="color:#10B981; font-weight:700;"><i class="fas fa-check-circle"></i> Profile Recognized.</span> Welcome back, ${payee.name}. Simply upload your receipt or proforma below to submit your claim.`;
+                    
+                    // Keep personal info visible but subtle, hide bank details
+                    bankSection.innerHTML = `
+                        <div style="background:rgba(255,255,255,0.03); padding:20px; border-radius:16px; border:1px solid rgba(255,255,255,0.05);">
+                            <p style="font-size:12px; color:var(--gray); margin-bottom:8px;">Payout Method Locked:</p>
+                            <div style="display:flex; justify-content:space-between; align-items:center;">
+                                <div>
+                                    <strong style="display:block; font-size:16px;">${payee.bank_name}</strong>
+                                    <span style="font-size:14px; color:var(--gray)">${payee.account_number} | ${payee.account_name}</span>
+                                </div>
+                                <i class="fas fa-university fa-2x" style="opacity:0.2"></i>
+                            </div>
+                            <p style="font-size:11px; margin-top:12px; color:var(--gold);">To change bank details, please contact Finance.</p>
+                        </div>
+                    `;
+                }
+            } catch (err) {
+                console.error("Invite resolution error", err);
+            }
+        }
+
         // Initialize view
-        setType('company');
+        resolveInvite().then(() => {
+            if (!inviteData) setType('company');
+        });
     </script>
 </body>
 </html>
