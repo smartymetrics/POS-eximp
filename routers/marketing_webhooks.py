@@ -162,6 +162,14 @@ async def click_tracking(campaign_id: str, contact_id: str, url: str, request: R
                     tags.append(tag)
                     db.table("marketing_contacts").update({"tags": tags}).eq("id", contact_id).execute()
         except: pass
+        
+    # 4. REVENUE ATTRIBUTION TRACKING
+    try:
+        db.table("marketing_contacts").update({
+            "last_campaign_id": campaign_id,
+            "last_interaction_at": datetime.utcnow().isoformat()
+        }).eq("id", contact_id).execute()
+    except: pass
 
     return RedirectResponse(url=url)
 

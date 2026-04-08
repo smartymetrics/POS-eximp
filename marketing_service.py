@@ -292,6 +292,11 @@ def apply_segment_filters(query, rules: List[Dict[str, Any]]):
             query = query.in_(field, val if isinstance(val, list) else [val])
         elif op == "is_null":
             query = query.is_(field, "null")
+        elif field == "total_revenue_attributed":
+            if op == "gt":
+                query = query.gt("total_revenue_attributed", val)
+            elif op == "gte":
+                query = query.gte("total_revenue_attributed", val)
     return query
 
 def get_financial_segment_contacts(segment_id: str) -> List[Dict[str, Any]]:
@@ -344,6 +349,8 @@ def get_financial_segment_contacts(segment_id: str) -> List[Dict[str, Any]]:
         elif segment_id == "financial_outstanding" and outstanding > 0:
             target_emails.append(email)
         elif segment_id == "financial_paid_fully" and outstanding <= 0 and stats["total_invoiced"] > 0:
+            target_emails.append(email)
+        elif segment_id == "vip" and stats["total_paid"] >= 10000000: # 10M threshold
             target_emails.append(email)
             
     if not target_emails:

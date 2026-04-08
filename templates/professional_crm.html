@@ -18,7 +18,7 @@
             --light-bg: #f9fafb;
         }
 
-        body { background: var(--light-bg); }
+        body { background: var(--dark); color: #F9FAFB; }
 
         .page-loader {
             position: fixed;
@@ -127,11 +127,13 @@
         }
 
         .stat-card {
-            background: white;
+            background: #1A1A1A;
             border-radius: 12px;
             padding: 24px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
             border-left: 4px solid var(--gold);
+            border: 1px solid #333;
+            border-left-width: 4px;
         }
 
         .stat-value {
@@ -150,10 +152,11 @@
         }
 
         .card {
-            background: white;
+            background: #1A1A1A;
             border-radius: 12px;
             padding: 24px;
-            box-shadow: 0 1px 3px rgba(0,0,0,0.1);
+            box-shadow: 0 4px 6px rgba(0,0,0,0.3);
+            border: 1px solid #333;
         }
 
         .header-section {
@@ -314,9 +317,20 @@
                 </div>
             </div>
 
+            <!-- Service Hub (NEW) -->
+            <div class="nav-section">
+                <div class="nav-title">Service Hub</div>
+                <div class="nav-link" onclick="switchView('support-desk')">
+                    <i class="fas fa-headset"></i> Support Desk
+                </div>
+            </div>
+
             <!-- Analytics -->
             <div class="nav-section">
-                <div class="nav-title">Performance</div>
+                <div class="nav-title">Intelligence</div>
+                <div class="nav-link" onclick="switchView('revenue-intel')">
+                    <i class="fas fa-chart-line"></i> Revenue Analytics
+                </div>
                 <div class="nav-link" onclick="switchView('team')">
                     <i class="fas fa-medal"></i> Team Leaderboard
                 </div>
@@ -333,12 +347,17 @@
         <div id="leads" class="view-section active">
             <div class="header-section">
                 <div>
-                    <h1 class="page-title">Lead Intelligence</h1>
+                    <h1 class="page-title" style="color: white !important;">Lead Intelligence</h1>
                     <p style="color: #888; margin-top: 8px;">AI-powered lead qualification & scoring</p>
                 </div>
-                <button class="btn btn-primary" onclick="scoreAllLeads()">
-                    <i class="fas fa-brain"></i> Analyze All Leads
-                </button>
+                <div class="flex gap-4">
+                    <button class="btn btn-secondary" onclick="window.location.href='/dashboard'">
+                        <i class="fas fa-arrow-left"></i> Back to Main
+                    </button>
+                    <button class="btn btn-primary" onclick="scoreAllLeads()">
+                        <i class="fas fa-brain"></i> Analyze All Leads
+                    </button>
+                </div>
             </div>
 
             <!-- Quick Stats -->
@@ -587,6 +606,97 @@
                 </div>
             </div>
         </div>
+
+        <!-- SUPPORT DESK (NEW) -->
+        <div id="support-desk" class="view-section">
+            <div class="header-section">
+                <h1 class="page-title">Service Hub: Support Desk</h1>
+                <div class="flex gap-2">
+                    <button class="btn btn-secondary" onclick="loadSupportTickets()">
+                        <i class="fas fa-sync"></i> Refresh
+                    </button>
+                </div>
+            </div>
+            
+            <div class="grid-4" style="margin-bottom: 32px;">
+                <div class="stat-card">
+                    <div style="color: #60A5FA;">Open Tickets</div>
+                    <div class="stat-value" id="open-tickets-count">0</div>
+                </div>
+                <div class="stat-card">
+                    <div style="color: #F59E0B;">Pending</div>
+                    <div class="stat-value" id="pending-tickets-count">0</div>
+                </div>
+                <div class="stat-card">
+                    <div style="color: #10B981;">Resolved</div>
+                    <div class="stat-value" id="resolved-tickets-count">0</div>
+                </div>
+                <div class="stat-card">
+                    <div style="color: #EF4444;">High Priority</div>
+                    <div class="stat-value" id="high-priority-count">0</div>
+                </div>
+            </div>
+
+            <div class="grid-2">
+                <div class="card">
+                    <h3 class="font-bold mb-4">Active Tickets</h3>
+                    <div id="ticketsList" class="space-y-4">
+                        <!-- Tickets load here -->
+                    </div>
+                </div>
+                <div class="card" id="ticketDetailPanel" style="display: none;">
+                    <h3 class="font-bold mb-4" id="ticketSubject">Ticket Details</h3>
+                    <div id="ticketThread" class="space-y-4 max-h-[400px] overflow-y-auto mb-4 p-4 bg-black/20 rounded-lg">
+                        <!-- Conversation history -->
+                    </div>
+                    <div>
+                        <textarea id="ticketResponse" class="w-full bg-[#222] border border-[#333] rounded-lg p-3 text-sm mb-2" rows="3" placeholder="Write your response..."></textarea>
+                        <div class="flex justify-between">
+                            <label class="flex items-center gap-2 text-xs text-gray-400">
+                                <input type="checkbox" id="isInternalResponse"> Internal Note
+                            </label>
+                            <button class="btn btn-primary btn-sm" onclick="submitTicketResponse()">Send Response</button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- REVENUE INTELLIGENCE (NEW) -->
+        <div id="revenue-intel" class="view-section">
+            <div class="header-section">
+                <h1 class="page-title">Revenue Intelligence</h1>
+            </div>
+
+            <div class="grid-2 mb-8">
+                <div class="card">
+                    <h3 class="font-bold mb-6">Weighted Pipeline Forecast</h3>
+                    <div class="flex justify-between items-end mb-4">
+                        <div>
+                            <div class="text-sm text-gray-400">Forecasted Value</div>
+                            <div class="text-3xl font-bold text-[#C47D0A]" id="weighted-forecast-val">₦0.0M</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-sm text-gray-400">Gross Pipeline</div>
+                            <div class="text-lg font-semibold" id="gross-pipeline-val">₦0.0M</div>
+                        </div>
+                    </div>
+                    <div class="w-full bg-gray-800 h-4 rounded-full overflow-hidden">
+                        <div id="forecast-progress" class="bg-[#C47D0A] h-full" style="width: 0%"></div>
+                    </div>
+                    <div class="mt-4 text-xs text-gray-500">
+                        Probabilities: Paid(100%), Partial(60%), Unpaid(10%)
+                    </div>
+                </div>
+                
+                <div class="card">
+                    <h3 class="font-bold mb-6">Marketing ROI Attribution</h3>
+                    <div id="attributionTable" class="space-y-3">
+                        <!-- Attribution stats load here -->
+                    </div>
+                </div>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -638,6 +748,8 @@
             // Load specific data
             if (viewName === "leads") loadLeads();
             else if (viewName === "team") loadTeamPerformance();
+            else if (viewName === "support-desk") loadSupportTickets();
+            else if (viewName === "revenue-intel") loadRevenueIntelligence();
         }
 
         // Load all leads with scoring
@@ -711,6 +823,168 @@
             showPageLoader('Loading CRM dashboard...');
             loadLeads();
         });
+
+        // --- SUPPORT DESK LOGIC ---
+        let currentTicketId = null;
+
+        async function loadSupportTickets() {
+            try {
+                const res = await fetch("/api/support/tickets", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const tickets = await res.json();
+                
+                // Update stats
+                const statsRes = await fetch("/api/support/stats", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const stats = await statsRes.json();
+                
+                document.getElementById("open-tickets-count").textContent = stats.open;
+                document.getElementById("pending-tickets-count").textContent = stats.pending;
+                document.getElementById("resolved-tickets-count").textContent = stats.resolved;
+                document.getElementById("high-priority-count").textContent = tickets.filter(t => t.priority === 'high' || t.priority === 'urgent').length;
+
+                const html = tickets.map(t => `
+                    <div class="p-4 border border-[#333] rounded-lg bg-black/10 hover:bg-black/20 cursor-pointer transition" onclick="viewTicket('${t.id}')">
+                        <div class="flex justify-between items-start mb-2">
+                            <span class="text-xs font-bold uppercase ${t.priority === 'high' ? 'text-red-500' : 'text-blue-500'}">${t.priority}</span>
+                            <span class="text-[10px] text-gray-500">${new Date(t.created_at).toLocaleDateString()}</span>
+                        </div>
+                        <div class="font-semibold text-sm mb-1">${t.subject}</div>
+                        <div class="text-xs text-gray-400 truncate">${t.contact_name || 'Anonymous'} (${t.contact_email})</div>
+                        <div class="mt-2 flex justify-between items-center">
+                            <span class="text-[10px] px-2 py-0.5 rounded bg-[#333] text-gray-300">${t.status}</span>
+                            <span class="text-[10px] text-gray-500">${t.category}</span>
+                        </div>
+                    </div>
+                `).join("");
+                
+                document.getElementById("ticketsList").innerHTML = html || '<div class="text-gray-500 text-sm italic">No tickets found.</div>';
+            } catch (err) {
+                console.error("Error loading tickets:", err);
+            }
+        }
+
+        async function viewTicket(id) {
+            currentTicketId = id;
+            try {
+                const res = await fetch(`/api/support/tickets/${id}`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const ticket = await res.json();
+                
+                document.getElementById("ticketSubject").textContent = ticket.subject;
+                document.getElementById("ticketDetailPanel").style.display = "block";
+                
+                let threadHtml = `<div class="mb-4 p-3 bg-white/5 rounded">
+                    <div class="text-[10px] text-[#C47D0A] font-bold mb-1">CUSTOMER: ${ticket.contact_name || 'Visitor'}</div>
+                    <div class="text-xs text-gray-200">${ticket.description}</div>
+                </div>`;
+                
+                threadHtml += (ticket.ticket_responses || []).map(r => `
+                    <div class="mb-4 p-3 ${r.is_internal ? 'bg-yellow-900/20 border-l-2 border-yellow-500' : 'bg-blue-900/10'} rounded ml-4">
+                        <div class="flex justify-between items-center mb-1">
+                            <span class="text-[10px] font-bold ${r.is_internal ? 'text-yellow-500' : 'text-blue-400'}">
+                                ${r.is_internal ? 'INTERNAL NOTE' : 'TEAM RESPONSE'} (${r.admins?.full_name || 'Admin'})
+                            </span>
+                            <span class="text-[9px] text-gray-500">${new Date(r.created_at).toLocaleTimeString()}</span>
+                        </div>
+                        <div class="text-xs text-gray-300">${r.message}</div>
+                    </div>
+                `).join("");
+                
+                document.getElementById("ticketThread").innerHTML = threadHtml;
+            } catch (err) {
+                console.error("Error viewing ticket:", err);
+            }
+        }
+
+        async function submitTicketResponse() {
+            const message = document.getElementById("ticketResponse").value;
+            const isInternal = document.getElementById("isInternalResponse").checked;
+            
+            if (!message) return;
+            
+            try {
+                await fetch(`/api/support/tickets/${currentTicketId}/respond`, {
+                    method: "POST",
+                    headers: { 
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: JSON.stringify({
+                        ticket_id: currentTicketId,
+                        message: message,
+                        is_internal: isInternal
+                    })
+                });
+                
+                document.getElementById("ticketResponse").value = "";
+                viewTicket(currentTicketId);
+                loadSupportTickets();
+            } catch (err) {
+                console.error("Error responding to ticket:", err);
+            }
+        }
+
+        // --- REVENUE INTELLIGENCE LOGIC ---
+        async function loadRevenueIntelligence() {
+            try {
+                // Load Attribution
+                const attrRes = await fetch("/api/intelligence/attribution/summary", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const attribution = await attrRes.json();
+                
+                const attrHtml = attribution.map(a => `
+                    <div class="flex justify-between items-center p-3 bg-white/5 rounded-lg border border-[#333]">
+                        <div>
+                            <div class="text-sm font-semibold">${a.campaign_name}</div>
+                            <div class="text-[10px] text-gray-500">${a.deal_count} Sales Attributed</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-sm font-bold text-green-500">₦${(a.total_revenue / 1000000).toFixed(1)}M</div>
+                            <div class="text-[10px] text-gray-400">ROI: High</div>
+                        </div>
+                    </div>
+                `).join("");
+                document.getElementById("attributionTable").innerHTML = attrHtml || '<div class="text-gray-500 text-xs italic">No attribution data yet.</div>';
+
+                // Load Forecast
+                const forecastRes = await fetch("/api/intelligence/forecast/weighted", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const forecast = await forecastRes.json();
+                
+                const weightedValue = (forecast.weighted_forecast_value / 1000000).toFixed(1);
+                const grossValue = (forecast.total_pipeline_value / 1000000).toFixed(1);
+                const percent = Math.min(100, (forecast.weighted_forecast_value / forecast.total_pipeline_value) * 100);
+
+                document.getElementById("weighted-forecast-val").textContent = `₦${weightedValue}M`;
+                document.getElementById("gross-pipeline-val").textContent = `₦${grossValue}M`;
+                document.getElementById("forecast-progress").style.width = `${percent}%`;
+
+            } catch (err) {
+                console.error("Error loading intelligence:", err);
+            }
+        }
+
+        // --- VIEW SWITCHER EXTENSION ---
+        const originalSwitchView = switchView;
+        switchView = function(viewName) {
+            originalSwitchView(viewName);
+            if (viewName === 'support-desk') loadSupportTickets();
+            if (viewName === 'revenue-intel') loadRevenueIntelligence();
+        };
+
+        function showPageLoader(msg) {
+            document.getElementById("pageLoaderMessage").textContent = msg;
+            document.getElementById("pageLoader").classList.remove("hidden");
+        }
+        function hidePageLoader() {
+            document.getElementById("pageLoader").classList.add("hidden");
+        }
     </script>
 
     <div id="pageLoader" class="page-loader">

@@ -1013,6 +1013,7 @@
                             <th>Paid</th>
                             <th>Balance</th>
                             <th>Due Date</th>
+                            <th>Type</th>
                             <th>Status</th>
                             <th>Audit</th>
                         </tr>
@@ -1712,6 +1713,14 @@
                     return `<div style="font-size:11px; font-weight:700; color:${color};">${label}</div><small style="color:var(--gray); font-size:10px;">${due.toLocaleDateString('en-GB', { day: '2-digit', month: 'short', year: 'numeric' })}</small>`;
                 })() : '<span style="color:var(--gray); font-size:11px;">—</span>'}
                     </td>
+                    <td>
+                        ${req.company_assets && req.company_assets.length > 0 ? 
+                            '<span style="color:var(--gold); font-weight:700; font-size:10px;"><i class="fas fa-box"></i> ASSET</span>' : 
+                            req.payout_method === 'reimbursement' ? 
+                            '<span style="color:var(--success); font-weight:700; font-size:10px;"><i class="fas fa-user"></i> REIMB</span>' : 
+                            '<span style="color:var(--gray); font-weight:700; font-size:10px;"><i class="fas fa-file-invoice-dollar"></i> EXPENSE</span>'
+                        }
+                    </td>
                     <td><span class="status-pill ${(req.status === 'partially_paid' || req.status === 'paid') ? 'approved' : req.status}">${req.status.replace('_', ' ')}</span></td>
                     <td>
                         ${(req.status === 'paid' || req.status === 'partially_paid') ? `<button onclick="triggerManualReceipt('${req.id}')" class="btn" style="padding: 6px 12px; font-size:11px; margin-bottom: 6px; border-color:var(--gold); color:var(--gold);"><i class="fas fa-paper-plane"></i> RECEIPT</button><br>` : ''}
@@ -2341,6 +2350,7 @@
                 document.getElementById('stat-total-spend').innerText = '₦' + (stats.total_expenditure || 0).toLocaleString(undefined, {minimumFractionDigits: 0});
                 document.getElementById('stat-total-wht').innerText = '₦' + (stats.total_net_liability || 0).toLocaleString(undefined, {minimumFractionDigits: 0});
                 document.getElementById('stat-total-ap').innerText = '₦' + (stats.total_ap || 0).toLocaleString(undefined, {minimumFractionDigits: 0});
+                document.getElementById('stat-asset-value').innerText = '₦' + (stats.total_asset_value || 0).toLocaleString(undefined, {minimumFractionDigits: 0});
                 document.getElementById('stat-pending-count').innerText = stats.active_request_count || 0;
                 
                 renderCharts(stats);

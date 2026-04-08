@@ -215,6 +215,13 @@ class WebhookFormPayload(BaseModel):
     consent: Optional[str] = None
     timestamp: Optional[str] = None
     submitter_email: Optional[str] = None
+    # Attribution (McID & UTMs)
+    mcid: Optional[str] = None
+    utm_source: Optional[str] = None
+    utm_medium: Optional[str] = None
+    utm_campaign: Optional[str] = None
+    utm_content: Optional[str] = None
+    utm_term: Optional[str] = None
 
 
 class VerificationConfirm(BaseModel):
@@ -537,3 +544,24 @@ class AssetCreate(BaseModel):
 class VoidExpenditureRequest(BaseModel):
     reason: str
 
+
+# ─── SUPPORT & TICKETING (Service Hub) ────────────────────────
+class SupportTicketCreate(BaseModel):
+    subject: str
+    description: str
+    category: str = "general" # "billing", "technical", "sales", "general"
+    priority: str = "medium" # "low", "medium", "high", "urgent"
+    client_id: Optional[str] = None
+    contact_email: EmailStr # For non-logged-in site visitors
+    contact_name: Optional[str] = None
+
+class SupportTicketUpdate(BaseModel):
+    status: Optional[str] = None # "open", "pending", "resolved", "closed"
+    priority: Optional[str] = None
+    assigned_to: Optional[str] = None # Admin ID
+    internal_notes: Optional[str] = None
+
+class TicketResponseCreate(BaseModel):
+    ticket_id: str
+    message: str
+    is_internal: bool = False

@@ -315,9 +315,22 @@
                 {% endif %}
 
                 <tr class="row-total">
-                    <td style="text-align: right;" class="total-label">NET REMITTANCE AMOUNT</td>
+                    <td style="text-align: right;" class="total-label">AUTHORIZED PAYOUT TOTAL</td>
                     <td class="col-amount total-amount">
                         {{ format_currency(payout.net_payout_amount) }}
+                    </td>
+                </tr>
+
+                <tr style="border-top: 2px solid #111;">
+                    <td style="text-align: right; font-size: 11px; font-weight: 700; color: #718096; padding-top: 15px; text-transform: uppercase; letter-spacing: 0.5px;">Total Amount Paid to Date</td>
+                    <td class="col-amount" style="padding-top: 15px; font-size: 15px; color: #2D3748;">
+                        {{ format_currency(payout.amount_paid) }}
+                    </td>
+                </tr>
+                <tr>
+                    <td style="text-align: right; font-size: 11px; font-weight: 700; color: #718096; text-transform: uppercase; letter-spacing: 0.5px;">Balance Outstanding</td>
+                    <td class="col-amount" style="font-size: 15px; font-weight: 800; color: {{ '#E53E3E' if (payout.net_payout_amount - payout.amount_paid) > 0 else '#2F855A' }};">
+                        {{ format_currency(payout.net_payout_amount - payout.amount_paid) }}
                     </td>
                 </tr>
             </tbody>

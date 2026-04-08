@@ -58,6 +58,49 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
         count = db.table("marketing_contacts").select("id", count="exact").lte("created_at", (d + timedelta(days=1)).isoformat()).execute().count or 0
         growth_data.append({"date": date_str, "count": count})
 
+    # 6. Total Attributed Revenue & Segment ROI/CPA
+    revenue_res = db.table("invoices").select("amount, marketing_campaign_id").not_.is_("marketing_campaign_id", "null").eq("status", "paid").execute()
+    total_revenue = sum([i["amount"] for i in revenue_res.data]) if revenue_res.data else 0
+    total_spend = sum([c.get("actual_spend") or 0 for c in campaigns])
+    
+    overall_roi = (total_revenue / total_spend * 100) if total_spend > 0 else 0
+    cpa = (total_spend / len(revenue_res.data)) if revenue_res.data and total_spend > 0 else 0
+
+    # Calculate Segment Details
+    segment_data = {}
+    if campaigns:
+        # Map campaign IDs to segments
+        camp_map = {c["id"]: {
+            "seg": c.get("target_segment") or "Uncategorized", 
+            "spend": c.get("actual_spend") or 0
+        } for c in campaigns}
+        
+        for inv in (revenue_res.data or []):
+            attr = camp_map.get(inv["marketing_campaign_id"], {"seg": "Unknown", "spend": 0})
+            seg = attr["seg"]
+            if seg not in segment_data:
+                segment_data[seg] = {"revenue": 0, "spend": 0, "conversions": 0}
+            segment_data[seg]["revenue"] += inv["amount"]
+            segment_data[seg]["conversions"] += 1
+            
+        # Add spend data for segments that might not have revenue yet
+        for c in campaigns:
+            seg = c.get("target_segment") or "Uncategorized"
+            if seg not in segment_data:
+                segment_data[seg] = {"revenue": 0, "spend": 0, "conversions": 0}
+            segment_data[seg]["spend"] += (c.get("actual_spend") or 0)
+    
+    segment_stats = []
+    for k, v in segment_data.items():
+        segment_stats.append({
+            "segment": k,
+            "revenue": v["revenue"],
+            "spend": v["spend"],
+            "roi": (v["revenue"] / v["spend"] * 100) if v["spend"] > 0 else 0,
+            "cpa": (v["spend"] / v["conversions"]) if v["conversions"] > 0 else 0
+        })
+    segment_stats.sort(key=lambda x: x["revenue"], reverse=True)
+
     return {
         "contacts": {
             "total": total_contacts or 0,
@@ -68,7 +111,10 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
         "campaigns": {
             "sent_this_month": sent_count,
             "avg_open_rate": avg_open,
-            "open_delta": "↑ 0.0% vs avg" # For future deep historical comparison
+            "total_revenue": total_revenue,
+            "total_spend": total_spend,
+            "overall_roi": f"{overall_roi:.1f}%",
+            "avg_cpa": cpa
         },
         "engagement": {
             "total_opens": db.table("marketing_contacts").select("id", count="exact").gt("total_emails_opened", 0).execute().count or 0,
@@ -76,6 +122,7 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
             "warm_leads": db.table("marketing_contacts").select("id", count="exact").lt("engagement_score", 50).gte("engagement_score", 30).execute().count or 0,
             "cold_leads": db.table("marketing_contacts").select("id", count="exact").lt("engagement_score", 30).execute().count or 0
         },
+        "segment_stats": segment_stats,
         "growth": growth_data
     }
 
@@ -122,6 +169,21 @@ async def get_campaign_recipients(id: str, current_admin=Depends(verify_token)):
         .select("*, marketing_contacts(first_name, last_name, email)")\
         .eq("campaign_id", id)\
         .order("open_count", desc=True)\
+        .execute()
+        
+    return res.data or []
+
+@router.get("/campaign/{id}/conversions")
+async def get_campaign_conversions(id: str, current_admin=Depends(verify_token)):
+    """Fetch the list of actual invoices and clients that make up the campaign ROI."""
+    db = get_db()
+    
+    # Fetch paid invoices attributed to this campaign joined with client names
+    res = db.table("invoices")\
+        .select("invoice_number, amount, paid_at, clients(full_name)")\
+        .eq("marketing_campaign_id", id)\
+        .eq("status", "paid")\
+        .order("paid_at", desc=True)\
         .execute()
         
     return res.data or []

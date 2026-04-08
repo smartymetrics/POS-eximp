@@ -30,7 +30,9 @@ from routers import (
     marketing_events,
     crm,
     crm_professional,
-    payouts
+    payouts,
+    support,
+    revenue_intelligence
 )
 from routers.auth import require_roles, resolve_admin_token
 from database import init_db
@@ -40,10 +42,10 @@ from scheduler import start_scheduler, stop_scheduler
 async def lifespan(app: FastAPI):
     await init_db()
     # Start the background scheduler
-    # await start_scheduler()
+    await start_scheduler()
     yield
     # Stop the background scheduler
-    # await stop_scheduler()
+    await stop_scheduler()
 
 app = FastAPI(title="Eximp & Cloves - Finance System", version="1.0.0", lifespan=lifespan)
 
@@ -84,6 +86,8 @@ app.include_router(marketing_events.router, prefix="/api/marketing/events", tags
 app.include_router(crm.router, prefix="/api/crm", tags=["crm"], dependencies=[Depends(require_roles(["admin", "super_admin", "sales"]))])
 app.include_router(crm_professional.router, prefix="/api/crm/pro", tags=["crm"], dependencies=[Depends(require_roles(["admin", "super_admin", "sales"]))])
 app.include_router(payouts.router, prefix="/api/payouts", tags=["payouts"])
+app.include_router(support.router, prefix="/api/support", tags=["support"])
+app.include_router(revenue_intelligence.router, prefix="/api/intelligence", tags=["intelligence"])
 
 
 
@@ -151,6 +155,11 @@ async def marketing_dashboard_page(request: Request):
 @app.get("/marketing/editor", response_class=HTMLResponse)
 async def marketing_editor_page(request: Request, id: str):
     return templates.TemplateResponse("marketing_editor.html", {"request": request, "campaign_id": id})
+
+
+@app.get("/marketing/manual", response_class=HTMLResponse)
+async def marketing_manual_page(request: Request):
+    return templates.TemplateResponse("marketing_manual.html", {"request": request})
 
 
 @app.get("/legal", response_class=HTMLResponse)

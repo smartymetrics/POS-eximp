@@ -1226,9 +1226,14 @@ async def broadcast_campaign_email(campaign: dict, recipients: list, admin_id: s
     logger.info(f"Campaign {campaign_id} broadcast finished. Delivered: {delivered}/{total}")
 
 
-def _payout_receipt_html(payout: dict, vendor: dict) -> str:
-    net = float(payout.get("net_payout_amount") or 0)
+def _payout_receipt_html(payout: dict, vendor: dict, payment_amount: float = None) -> str:
+    # Use payment_amount if passed, else fallback to net_payout_amount (old behavior)
+    amount_now = float(payment_amount or payout.get("net_payout_amount") or 0)
+    total_paid = float(payout.get("amount_paid") or 0)
+    total_due = float(payout.get("net_payout_amount") or 0)
+    balance = max(0, total_due - total_paid)
     ref = payout.get("payout_reference") or "N/A"
+    
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #1A1A1A; padding: 24px; text-align: center;">
@@ -1241,11 +1246,13 @@ def _payout_receipt_html(payout: dict, vendor: dict) -> str:
         <p style="color: #333;">Dear <strong>{vendor['name']}</strong>,</p>
         <p style="color: #555;">We are pleased to inform you that your payment has been authorized and processed via our expenditure cloud.</p>
         <div style="background: #1A1A1A; border-radius: 8px; padding: 24px; margin: 24px 0;">
-          <p style="color: #aaa; margin: 0 0 8px; font-size: 13px; text-transform: uppercase;">Net Amount Paid</p>
-          <p style="color: #F5A623; font-size: 32px; font-weight: bold; margin: 0;">NGN {net:,.2f}</p>
+          <p style="color: #aaa; margin: 0 0 8px; font-size: 13px; text-transform: uppercase;">Amount Remitted Now</p>
+          <p style="color: #F5A623; font-size: 32px; font-weight: bold; margin: 0;">NGN {amount_now:,.2f}</p>
           <hr style="border-color: #333; margin: 16px 0;">
           <table style="width: 100%; color: #ccc; font-size: 13px;">
-            <tr><td>Due Date</td><td style="text-align:right;color:#fff;">{payout.get('due_date', 'N/A')}</td></tr>
+            <tr><td>Total Paid to Date</td><td style="text-align:right;color:#fff;">NGN {total_paid:,.2f}</td></tr>
+            <tr><td>Balance Outstanding</td><td style="text-align:right;color:{'#27ae60' if balance == 0 else '#F5A623'};">NGN {balance:,.2f}</td></tr>
+            <tr style="height: 10px;"><td></td><td></td></tr>
             <tr><td>Reference</td><td style="text-align:right;color:#fff;">{ref}</td></tr>
             <tr><td>Payee Bank</td><td style="text-align:right;color:#fff;">{vendor.get('bank_name','N/A')}</td></tr>
             <tr><td>Account</td><td style="text-align:right;color:#fff;">{vendor.get('account_number','N/A')}</td></tr>
@@ -1266,7 +1273,7 @@ def _payout_receipt_html(payout: dict, vendor: dict) -> str:
     </div>"""
 
 
-async def send_payout_receipt_email(payout: dict, vendor: dict, admin_id: str = "system"):
+async def send_payout_receipt_email(payout: dict, vendor: dict, admin_id: str = "system", payment_amount: float = None):
     from routers.analytics import log_activity
     from pdf_service import generate_payout_receipt_pdf
     
@@ -1284,7 +1291,7 @@ async def send_payout_receipt_email(payout: dict, vendor: dict, admin_id: str = 
             "cc": CLIENT_CC_RECIPIENTS,
             "reply_to": "admin@eximps-cloves.com",
             "subject": f"Payment Remittance Advice [Ref: {payout_ref}] — Eximp & Cloves",
-            "html": _payout_receipt_html(payout, vendor),
+            "html": _payout_receipt_html(payout, vendor, payment_amount),
             "attachments": [{"filename": f"Payment_Advice_{payout_ref}.pdf", "content": list(pdf)}],
         })
         
@@ -1399,4 +1406,42 @@ async def send_portal_invite_email(email_addr: str, inviter_name: str, token: st
         return res
     except Exception as e:
         logger.error(f"Error sending portal invite to {email_addr}: {e}")
+        return None
+
+def _support_response_html(ticket: dict, message: str) -> str:
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 12px; overflow: hidden;">
+      <div style="background: #1A1A1A; padding: 24px; text-align: center;">
+        <h1 style="color: #C47D0A; margin: 0; font-size: 20px;">Support Hub Response</h1>
+      </div>
+      <div style="padding: 32px 24px; background: #fff;">
+        <p style="color: #333;">Hello <strong>{ticket.get('contact_name', 'Visitor')}</strong>,</p>
+        <p style="color: #555;">An admin has responded to your inquiry regarding <strong>"{ticket.get('subject')}"</strong>.</p>
+        
+        <div style="background: #fdfaf3; border-left: 4px solid #C47D0A; padding: 20px; margin: 24px 0; color: #444; font-size: 14px; line-height: 1.6;">
+          {message}
+        </div>
+        
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 24px 0;">
+        <p style="color: #888; font-size: 12px;">This is a response to your support ticket #{ticket.get('id', '').split('-')[0]}. You can reply to this email if you have further questions.</p>
+        <p style="color: #999; font-size: 11px; margin-top: 12px;">Eximp & Cloves Infrastructure Limited | RC 8311800<br>
+        57B, Isaac John Street, Yaba, Lagos</p>
+      </div>
+    </div>"""
+
+async def send_support_response_email(ticket: dict, message: str):
+    email_addr = ticket.get("contact_email")
+    if not email_addr: return
+    
+    try:
+        res = resend.Emails.send({
+            "from": f"Eximp & Cloves Support <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "subject": f"Re: {ticket.get('subject')}",
+            "html": _support_response_html(ticket, message),
+            "reply_to": "admin@eximps-cloves.com"
+        })
+        return res
+    except Exception as e:
+        logger.error(f"Error sending support response email to {email_addr}: {e}")
         return None

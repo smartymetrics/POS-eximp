@@ -265,6 +265,15 @@ async def form_submission(
                 # Fallback to saving base64 if upload fails
                 signature_url_to_save = payload.signature_base64
 
+        # 5b. REVENUE ATTRIBUTION (First-Touch / Multi-Source)
+        # 1. Primary: Campaign ID from Form (if explicitly passed)
+        marketing_campaign_id = payload.mcid
+
+        # 2. Fallback: Last Campaign from Marketing Contact record
+        if not marketing_campaign_id:
+            mc_attr = db.table("marketing_contacts").select("last_campaign_id").eq("email", payload.email.strip().lower()).execute()
+            marketing_campaign_id = mc_attr.data[0].get("last_campaign_id") if mc_attr.data and mc_attr.data[0].get("last_campaign_id") else None
+
         invoice_insert = {
             "invoice_number": invoice_number,
             "client_id": client_id,
@@ -287,6 +296,10 @@ async def form_submission(
             "payment_proof_url": payload.payment_proof_url,
             "passport_photo_url": payload.passport_photo_url,
             "purchase_purpose": payload.purchase_purpose,
+            "marketing_campaign_id": marketing_campaign_id,
+            "attribution_utm_source": payload.utm_source,
+            "attribution_utm_medium": payload.utm_medium,
+            "attribution_utm_campaign": payload.utm_campaign,
             "source": "google_form"
         }
 

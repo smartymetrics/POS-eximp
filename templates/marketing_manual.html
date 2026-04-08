@@ -1,0 +1,754 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Marketing Operations Manual | Eximp & Cloves</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800;900&family=Playfair+Display:wght@700;800;900&display=swap"
+        rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #0F1115;
+            color: #E5E7EB;
+            scroll-behavior: smooth;
+        }
+
+        .font-serif {
+            font-family: 'Playfair Display', serif;
+        }
+
+        .brand-gold {
+            color: #C47D0A;
+        }
+
+        .bg-brand-gold {
+            background-color: #C47D0A;
+        }
+
+        .border-brand-gold {
+            border-color: #C47D0A;
+        }
+
+        .manual-container {
+            max-width: 1100px;
+            margin: 0 auto;
+            padding: 60px 20px;
+        }
+
+        .chapter-card {
+            background: #1E2128;
+            border: 1px solid #2D2F36;
+            border-radius: 24px;
+            padding: 48px;
+            margin-bottom: 48px;
+            transition: 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .chapter-card:hover {
+            border-color: #C47D0A;
+            box-shadow: 0 20px 60px rgba(196, 125, 10, 0.08);
+        }
+
+        .step-blob {
+            width: 36px;
+            height: 36px;
+            background: #C47D0A;
+            color: white;
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 800;
+            font-size: 16px;
+            margin-right: 20px;
+            flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(196, 125, 10, 0.3);
+        }
+
+        .process-line {
+            border-left: 2px dashed #2D2F36;
+            margin-left: 17px;
+            padding-left: 36px;
+            margin-top: 12px;
+            margin-bottom: 12px;
+        }
+
+        code {
+            background: #111317;
+            color: #C47D0A;
+            padding: 3px 8px;
+            border-radius: 6px;
+            font-family: monospace;
+            font-weight: 700;
+            font-size: 0.9em;
+        }
+
+        .nav-sticky {
+            position: sticky;
+            top: 40px;
+        }
+
+        .power-move {
+            background: rgba(196, 125, 10, 0.05);
+            border: 1px solid rgba(196, 125, 10, 0.2);
+            border-left: 4px solid #C47D0A;
+            border-radius: 16px;
+            padding: 24px;
+            margin: 32px 0;
+        }
+
+        .quick-win {
+            background: rgba(34, 197, 94, 0.05);
+            border: 1px solid rgba(34, 197, 94, 0.2);
+            border-left: 4px solid #22C55E;
+            border-radius: 16px;
+            padding: 24px;
+            margin: 32px 0;
+        }
+
+        @media (max-width: 1024px) {
+            .main-flex {
+                flex-direction: column;
+            }
+
+            .nav-sticky {
+                position: static;
+                margin-bottom: 60px;
+            }
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+
+        ::-webkit-scrollbar-track {
+            background: #0F1115;
+        }
+
+        ::-webkit-scrollbar-thumb {
+            background: #2D2F36;
+            border-radius: 4px;
+        }
+
+        ::-webkit-scrollbar-thumb:hover {
+            background: #C47D0A;
+        }
+    </style>
+</head>
+
+<body>
+
+    <div class="manual-container">
+        <!-- HEADER -->
+        <header class="text-center mb-20 animate-in fade-in duration-1000">
+            <div
+                class="inline-flex items-center gap-2 px-4 py-1.5 rounded-full bg-brand-gold/10 text-brand-gold text-[10px] font-black uppercase tracking-[0.2em] mb-6 border border-brand-gold/20">
+                <span class="w-1.5 h-1.5 rounded-full bg-brand-gold animate-pulse"></span>
+                The Ultimate guide
+            </div>
+            <h1 class="text-6xl md:text-7xl font-serif mb-8 tracking-tight">Marketing <span
+                    class="brand-gold italic">System</span> Manual</h1>
+            <p class="text-gray-400 text-xl max-w-3xl mx-auto leading-relaxed font-light">
+                A complete guide to mastering your revenue engine — from sending your first email to running fully
+                automated drip campaigns while you sleep.
+            </p>
+        </header>
+
+        <div class="flex gap-16 main-flex">
+            <!-- SIDEBAR NAV -->
+            <aside class="w-full md:w-72 shrink-0">
+                <div class="nav-sticky">
+                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-[0.2em] mb-8">Navigation Hub</h3>
+                    <ul class="space-y-2.5 p-6 bg-[#16181D] rounded-3xl border border-[#2D2F36] shadow-2xl">
+                        <li><a href="#ch1"
+                                class="text-gray-400 hover:text-brand-gold transition-all text-sm flex items-center group"><span
+                                    class="w-2 h-2 rounded-full bg-brand-gold mr-3 group-hover:scale-125 transition"></span>
+                                01. The Overview Hub</a></li>
+                        <li><a href="#ch2"
+                                class="text-gray-400 hover:text-brand-gold transition-all text-sm flex items-center group"><span
+                                    class="w-2 h-2 rounded-full bg-orange-500 mr-3 group-hover:scale-125 transition"></span>
+                                02. Campaign Logic</a></li>
+                        <li><a href="#ch3"
+                                class="text-gray-400 hover:text-brand-gold transition-all text-sm flex items-center group"><span
+                                    class="w-2 h-2 rounded-full bg-blue-500 mr-3 group-hover:scale-125 transition"></span>
+                                03. The Design Studio</a></li>
+                        <li><a href="#ch4"
+                                class="text-gray-400 hover:text-brand-gold transition-all text-sm flex items-center group"><span
+                                    class="w-2 h-2 rounded-full bg-red-400 mr-3 group-hover:scale-125 transition"></span>
+                                04. Lead Attribution</a></li>
+                        <li><a href="#ch5"
+                                class="text-gray-400 hover:text-brand-gold transition-all text-sm flex items-center group"><span
+                                    class="w-2 h-2 rounded-full bg-gray-600 mr-3 group-hover:scale-125 transition"></span>
+                                05. CRM & Contacts</a></li>
+                        <li><a href="#ch6"
+                                class="text-gray-400 hover:text-brand-gold transition-all text-sm flex items-center group"><span
+                                    class="w-2 h-2 rounded-full bg-emerald-500 mr-3 group-hover:scale-125 transition"></span>
+                                06. Targeting Segments</a></li>
+                        <li><a href="#ch7"
+                                class="text-gray-400 hover:text-brand-gold transition-all text-sm flex items-center group"><span
+                                    class="w-2 h-2 rounded-full bg-blue-400 mr-3 group-hover:scale-125 transition"></span>
+                                07. Revenue Analytics</a></li>
+                        <li><a href="#ch8"
+                                class="text-gray-400 hover:text-brand-gold transition-all text-sm flex items-center group"><span
+                                    class="w-2 h-2 rounded-full bg-indigo-500 mr-3 group-hover:scale-125 transition"></span>
+                                08. Smart Sequences</a></li>
+                        <li><a href="#ch9"
+                                class="text-gray-400 hover:text-brand-gold transition-all text-sm flex items-center group"><span
+                                    class="w-2 h-2 rounded-full bg-purple-500 mr-3 group-hover:scale-125 transition"></span>
+                                09. The LTV Engine</a></li>
+                        <li><a href="#ch10"
+                                class="text-gray-400 hover:text-brand-gold transition-all text-sm flex items-center group"><span
+                                    class="w-2 h-2 rounded-full bg-amber-400 mr-3 group-hover:scale-125 transition"></span>
+                                10. Marketing Calendar</a></li>
+                        <li><a href="#ch11"
+                                class="text-gray-400 hover:text-brand-gold transition-all text-sm flex items-center group"><span
+                                    class="w-2 h-2 rounded-full bg-pink-500 mr-3 group-hover:scale-125 transition"></span>
+                                11. Compliance Laws</a></li>
+                        <li><a href="#ch12"
+                                class="text-gray-400 hover:text-brand-gold transition-all text-sm flex items-center group"><span
+                                    class="w-2 h-2 rounded-full bg-white mr-3 group-hover:scale-125 transition"></span>
+                                12. Strategy Playbooks</a></li>
+                    </ul>
+                    <div class="mt-12 p-8 rounded-[32px] bg-brand-gold/5 border border-brand-gold/20 relative group">
+                        <div
+                            class="absolute -top-4 -right-4 w-12 h-12 bg-brand-gold rounded-2xl flex items-center justify-center rotate-12 shadow-xl">
+                            <svg class="w-6 h-6 text-white" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path d="M13 10V3L4 14h7v7l9-11h-7z" stroke-width="2" stroke-linecap="round"
+                                    stroke-linejoin="round" />
+                            </svg>
+                        </div>
+                        <p class="text-sm text-gray-300 italic leading-relaxed">"This is not just a marketing tool. This
+                            is a complete revenue engine."</p>
+                    </div>
+                </div>
+            </aside>
+
+            <!-- CONTENT -->
+            <main class="flex-1">
+
+                <!-- WELCOME SECTION -->
+                <div class="chapter-card bg-brand-gold/5 border-brand-gold/30 mb-20">
+                    <h2 class="text-4xl font-serif mb-8 flex items-center gap-4">
+                        👋 Welcome to the Most Powerful Tool in Your Arsenal
+                    </h2>
+                    <p class="text-gray-300 text-lg leading-relaxed mb-8">
+                        Think of this system like having a team of ten people working for you 24/7. One person watches
+                        who opens your emails. Another one automatically sends follow-ups. A third one knows when a
+                        client's invoice is overdue and sends a gentle reminder — all without you lifting a finger.
+                        That's what this system does for you.
+                    </p>
+                </div>
+
+                <!-- CHAPTER 1: OVERVIEW -->
+                <section id="ch1" class="chapter-card">
+                    <span class="text-[10px] font-black brand-gold uppercase tracking-[0.3em] mb-4 block">Chapter
+                        01</span>
+                    <h2 class="text-4xl font-serif mb-10">The Overview Dashboard</h2>
+                    <p class="text-gray-400 mb-12">The Overview tab is your marketing command centre. The moment you log
+                        in, this is the first thing you see — a live, real-time snapshot of everything happening with
+                        your audience right now.</p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+                        <div class="p-6 bg-black/30 rounded-2xl border border-gray-800">
+                            <div class="flex items-center gap-3 mb-4">
+                                <span class="text-2xl">👥</span>
+                                <h4 class="font-bold text-white">Total Contacts</h4>
+                            </div>
+                            <p class="text-gray-400 text-sm">Leads, clients, and subscribers combined in the system.</p>
+                        </div>
+                        <div class="p-6 bg-black/30 rounded-2xl border border-gray-800">
+                            <div class="flex items-center gap-3 mb-4">
+                                <span class="text-2xl">📤</span>
+                                <h4 class="font-bold text-white">Emails Sent</h4>
+                            </div>
+                            <p class="text-gray-400 text-sm">Total historical volume across all broadcast campaigns.</p>
+                        </div>
+                        <div class="p-6 bg-black/30 rounded-2xl border border-gray-800">
+                            <div class="flex items-center gap-3 mb-4">
+                                <span class="text-2xl">👁️</span>
+                                <h4 class="font-bold text-white">Open Rate</h4>
+                            </div>
+                            <p class="text-gray-400 text-sm">Percentage of deliveries that resulted in an open. Industry
+                                average is 20%. Aim higher!</p>
+                        </div>
+                        <div class="p-6 bg-black/30 rounded-2xl border border-gray-800">
+                            <div class="flex items-center gap-3 mb-4">
+                                <span class="text-2xl">🔥</span>
+                                <h4 class="font-bold text-white">Hot Leads</h4>
+                            </div>
+                            <p class="text-gray-400 text-sm">People with an Engagement Score above 70. These are your
+                                most interested prospects.</p>
+                        </div>
+                    </div>
+
+                    <div class="power-move">
+                        <h5 class="text-brand-gold font-bold mb-3 flex items-center gap-2">💡 The Engagement Score
+                            System</h5>
+                        <p class="text-sm text-gray-300 leading-relaxed">
+                            Every contact has a live "temperature gauge". <br>
+                            • <b>Open Email</b>: +5 points <br>
+                            • <b>Click Link</b>: +10 points <br>
+                            • <b>Browse Website</b>: +2 points per visit <br>
+                            <span class="block mt-4 text-xs font-bold uppercase tracking-widest text-gray-500">Scoring
+                                Tiers:</span>
+                            <span class="text-gray-400 text-xs">0-29: Cold | 30-69: Warm | 70+: Hot (Call them
+                                today!)</span>
+                        </p>
+                    </div>
+                </section>
+
+                <!-- CHAPTER 2: CAMPAIGNS -->
+                <section id="ch2" class="chapter-card border-orange-500/20">
+                    <span class="text-[10px] font-black text-orange-400 uppercase tracking-[0.3em] mb-4 block">Chapter
+                        02</span>
+                    <h2 class="text-4xl font-serif mb-10">Campaign Logic & Statuses</h2>
+                    <p class="text-gray-300 mb-8">A Campaign is a single marketing email that you design, write, and
+                        send to a group of people. Think of it like printing custom flyers — except you can track
+                        exactly who read them.</p>
+
+                    <div class="space-y-4 mb-12">
+                        <div class="flex items-center p-5 bg-white/5 rounded-2xl border border-white/10 gap-6">
+                            <span class="text-2xl">✏️</span>
+                            <div>
+                                <h4 class="font-bold text-white text-sm uppercase tracking-wide">Draft</h4>
+                                <p class="text-gray-400 text-xs mt-1">Work in progress. Invisible to clients.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center p-5 bg-blue-500/10 rounded-2xl border border-blue-500/20 gap-6">
+                            <span class="text-2xl">⏰</span>
+                            <div>
+                                <h4 class="font-bold text-blue-400 text-sm uppercase tracking-wide">Scheduled</h4>
+                                <p class="text-gray-400 text-xs mt-1">Approved and waiting for the designated send time.
+                                </p>
+                            </div>
+                        </div>
+                        <div class="flex items-center p-5 bg-green-500/10 rounded-2xl border border-green-500/20 gap-6">
+                            <span class="text-2xl">✅</span>
+                            <div>
+                                <h4 class="font-bold text-green-400 text-sm uppercase tracking-wide">Sent</h4>
+                                <p class="text-gray-400 text-xs mt-1">Delivery complete. Full analytics available.</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="quick-win">
+                        <h5 class="text-green-500 font-bold mb-3 flex items-center gap-2">🔄 Duplicating a Campaign</h5>
+                        <p class="text-sm text-gray-300">Found a template that worked? Use the <b>Duplicate</b> button
+                            (copy icon). It makes an exact copy as a new Draft, so you can tweak and send to a different
+                            segment without starting from scratch.</p>
+                    </div>
+                </section>
+
+                <!-- CHAPTER 3: DESIGN STUDIO -->
+                <section id="ch3" class="chapter-card border-blue-500/20">
+                    <span class="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em] mb-4 block">Chapter
+                        03</span>
+                    <h2 class="text-4xl font-serif mb-10">The Design Studio (Email Editor)</h2>
+                    <p class="text-gray-300 mb-8">Build emails that stop people from scrolling using our drag-and-drop
+                        block system. Think of it like building with Lego bricks.</p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+                        <div class="p-6 bg-black/20 rounded-2xl border border-gray-800">
+                            <h4 class="text-blue-400 font-bold mb-4">🏦 Account Summary Block</h4>
+                            <p class="text-xs text-gray-400 leading-relaxed">The ultimate weapon. Automatically inserts
+                                a live financial table into the email showing the client's current outstanding balance,
+                                total paid, and next due date.</p>
+                        </div>
+                        <div class="p-6 bg-black/20 rounded-2xl border border-gray-800">
+                            <h4 class="text-blue-400 font-bold mb-4">🏠 Property Card Block</h4>
+                            <p class="text-xs text-gray-400 leading-relaxed">Pulls LIVE property data (images, prices,
+                                amenities) directly from our inventory and formats it into a beautiful, clickable card.
+                            </p>
+                        </div>
+                    </div>
+
+                    <div class="mt-8 overflow-x-auto">
+                        <table class="w-full text-left text-sm">
+                            <thead>
+                                <tr class="text-gray-500 border-b border-gray-800">
+                                    <th class="py-4 font-bold uppercase tracking-widest text-[10px]">Tag</th>
+                                    <th class="py-4 font-bold uppercase tracking-widest text-[10px]">Result</th>
+                                </tr>
+                            </thead>
+                            <tbody class="text-gray-400">
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-4"><code>{% raw %}{{ first_name }}{% endraw %}</code></td>
+                                    <td class="py-4">"Dear Emeka,"</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-4"><code>{% raw %}{{ outstanding }}{% endraw %}</code></td>
+                                    <td class="py-4">"₦2,500,000 outstanding"</td>
+                                </tr>
+                                <tr class="border-b border-gray-800/50">
+                                    <td class="py-4"><code>{% raw %}{{ due_date }}{% endraw %}</code></td>
+                                    <td class="py-4">"30th April 2026"</td>
+                                </tr>
+                            </tbody>
+                        </table>
+                    </div>
+                </section>
+
+                <!-- CHAPTER 4: ATTRIBUTION (NEW) -->
+                <section id="ch4" class="chapter-card border-red-500/20">
+                    <span class="text-[10px] font-black text-red-400 uppercase tracking-[0.3em] mb-4 block">Chapter
+                        04</span>
+                    <h2 class="text-4xl font-serif mb-10">First-Touch Lead Attribution</h2>
+                    <p class="text-gray-300 mb-8">How do we know which ad generated a sale? We use professional
+                        **First-Touch Attribution**. This credits the source that originally brought the customer into
+                        our ecosystem.</p>
+
+                    <div class="flex items-start">
+                        <div class="step-blob">1</div>
+                        <div>
+                            <h4 class="text-white font-bold mb-2">UTM Parameter Capture</h4>
+                            <p class="text-gray-500 text-sm">When a user clicks a link (e.g., from a Facebook Ad), we
+                                capture <code>utm_source</code>, <code>utm_medium</code>, and <code>utm_campaign</code>.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="process-line"></div>
+                    <div class="flex items-start">
+                        <div class="step-blob">2</div>
+                        <div>
+                            <h4 class="text-white font-bold mb-2">mCID Persistence</h4>
+                            <p class="text-gray-500 text-sm">The **Marketing Campaign ID** is locked onto the contact.
+                                Even if they don't buy for months, we remember the campaign that "hooked" them.</p>
+                        </div>
+                    </div>
+                    <div class="process-line"></div>
+                    <div class="flex items-start">
+                        <div class="step-blob">3</div>
+                        <div>
+                            <h4 class="text-white font-bold mb-2">Revenue Linking</h4>
+                            <p class="text-gray-500 text-sm">When they pay an invoice, the system automatically looks up
+                                their attribution history and credits the revenue to the original Campaign.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- CHAPTER 5: CRM -->
+                <section id="ch5" class="chapter-card border-gray-500/20">
+                    <span class="text-[10px] font-black text-gray-500 uppercase tracking-[0.3em] mb-4 block">Chapter
+                        05</span>
+                    <h2 class="text-4xl font-serif mb-10">CRM & The Profile Timeline</h2>
+                    <p class="text-gray-400 mb-12">Every lead and every client who has ever expressed interest lives
+                        here. This is your most valuable business asset — treat it carefully.</p>
+
+                    <div class="p-8 bg-black/20 rounded-3xl border border-gray-800 space-y-8">
+                        <div>
+                            <h5 class="brand-gold font-bold text-sm mb-3">🕒 Interaction Timeline</h5>
+                            <p class="text-gray-400 text-xs leading-relaxed">Click "View Profile" to see every email
+                                they've received, opened, and clicked in chronological order. This is gold for the sales
+                                team before making a follow-up call.</p>
+                        </div>
+                        <hr class="border-gray-800">
+                        <div>
+                            <h5 class="brand-gold font-bold text-sm mb-3">🔄 Automatic Sync from Finance</h5>
+                            <p class="text-gray-400 text-xs leading-relaxed">When a new client is registered in the
+                                Finance Dashboard, they are automatically created or upgraded here without any manual
+                                action.</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- CHAPTER 6: SEGMENTS -->
+                <section id="ch6" class="chapter-card border-emerald-500/20">
+                    <span class="text-[10px] font-black text-emerald-400 uppercase tracking-[0.3em] mb-4 block">Chapter
+                        06</span>
+                    <h2 class="text-4xl font-serif mb-10">Segmentation: Laser Targeting</h2>
+                    <p class="text-gray-300 leading-relaxed mb-10">Instead of sending the same email to everyone and
+                        hoping it's relevant, you send targeted messages to specific groups. Imagine you're a doctor —
+                        you wouldn't give every patient the same medicine.</p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-3 gap-4 mb-12 text-center">
+                        <div class="p-4 bg-emerald-500/5 border border-emerald-500/20 rounded-2xl">
+                            <span class="block text-2xl mb-2">✨</span>
+                            <p class="text-[10px] font-black uppercase text-emerald-400">Engaged</p>
+                            <p class="text-[8px] text-gray-500 mt-1">Opened at least one email</p>
+                        </div>
+                        <div class="p-4 bg-red-500/5 border border-red-500/20 rounded-2xl">
+                            <span class="block text-2xl mb-2">🔴</span>
+                            <p class="text-[10px] font-black uppercase text-red-400">Overdue</p>
+                            <p class="text-[8px] text-gray-500 mt-1">Invoice date passed</p>
+                        </div>
+                        <div class="p-4 bg-purple-500/5 border border-purple-500/20 rounded-2xl">
+                            <span class="block text-2xl mb-2">💎</span>
+                            <p class="text-[10px] font-black uppercase text-purple-400">VIP Clients</p>
+                            <p class="text-[8px] text-gray-500 mt-1">LTV &gt; ₦10M</p>
+                        </div>
+                    </div>
+
+                    <div class="power-move border-emerald-500">
+                        <h5 class="text-emerald-500 font-bold mb-3">💡 Custom Rule Building</h5>
+                        <p class="text-sm text-gray-300">You can create your own groups by combining rules. <br>
+                            Example: <i>Target people from <b>Lagos Expo</b> AND <b>Hot Leads</b> BUT <b>Not a
+                                    Client</b>.</i></p>
+                    </div>
+                </section>
+
+                <!-- CHAPTER 7: ANALYTICS (NEW) -->
+                <section id="ch7" class="chapter-card border-blue-400/20">
+                    <span class="text-[10px] font-black text-blue-400 uppercase tracking-[0.3em] mb-4 block">Chapter
+                        07</span>
+                    <h2 class="text-4xl font-serif mb-10">Measuring ROI & CPA Efficiency</h2>
+                    <p class="text-gray-400 mb-12">How we measure "Is it working?" using professional financial metrics.
+                    </p>
+
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8 mb-10">
+                        <div class="p-8 bg-black/40 rounded-3xl border border-gray-800">
+                            <h4 class="brand-gold font-bold mb-4 uppercase text-xs tracking-widest">Mastering CPA</h4>
+                            <p class="text-2xl font-black text-white mb-2">Cost Per Acquisition</p>
+                            <p class="text-xs text-gray-500">Total Campaign Spend / New Paid Customers.</p>
+                            <div class="mt-6 p-4 bg-gray-900 rounded-xl">
+                                <p class="text-xs text-gray-400 italic">"If CPA is higher than your profit margin, the
+                                    campaign is losing money."</p>
+                            </div>
+                        </div>
+                        <div class="p-8 bg-black/40 rounded-3xl border border-gray-800">
+                            <h4 class="brand-gold font-bold mb-4 uppercase text-xs tracking-widest">Mastering ROI</h4>
+                            <p class="text-2xl font-black text-white mb-2">Return on Investment</p>
+                            <p class="text-xs text-gray-500">Total Attributed Revenue / Total Spend.</p>
+                            <div class="mt-6 p-4 bg-gray-900 rounded-xl">
+                                <p class="text-xs text-brand-gold font-bold">🎯 Aim for 300% (3x Return)</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- CHAPTER 8: SEQUENCES -->
+                <section id="ch8" class="chapter-card border-indigo-500/20">
+                    <span class="text-[10px] font-black text-indigo-400 uppercase tracking-[0.3em] mb-4 block">Chapter
+                        08</span>
+                    <h2 class="text-4xl font-serif mb-10">The 24/7 Sales Machine (Sequences)</h2>
+                    <p class="text-gray-300 mb-8">A Sequence is a series of emails that get sent to someone
+                        automatically over time. You set it up once, and it runs by itself forever.</p>
+
+                    <div class="p-6 bg-indigo-500/5 rounded-2xl border border-indigo-500/10 mb-10">
+                        <h4 class="text-indigo-400 font-bold mb-4 text-sm">Real-World Case Study: New Lead Welcome</h4>
+                        <ul class="text-xs space-y-3 text-gray-400">
+                            <li>📍 <b>Day 0</b>: Warm welcome & brand introduction.</li>
+                            <li>📍 <b>Day 3</b>: Top 3 Property Picks (automatic cards).</li>
+                            <li>📍 <b>Day 7</b>: "Scarcity" email (Limited units remaining).</li>
+                            <li>📍 <b>Day 14</b>: Testimonials plying successful client stories.</li>
+                        </ul>
+                    </div>
+
+                    <div class="quick-win">
+                        <h5 class="text-green-500 font-bold mb-3 flex items-center gap-2">🤖 Smart Branching</h5>
+                        <p class="text-sm text-gray-300">"Only if Opened Pre-Step": If checked, the system skips the
+                            next step for users who ignored the previous one, ensuring we don't spam uninterested leads.
+                        </p>
+                    </div>
+                </section>
+
+                <!-- CHAPTER 9: LTV ENGINE (NEW) -->
+                <section id="ch9" class="chapter-card border-purple-500/20">
+                    <span class="text-[10px] font-black text-purple-400 uppercase tracking-[0.3em] mb-4 block">Chapter
+                        09</span>
+                    <h2 class="text-4xl font-serif mb-10">The LTV & VIP Engine</h2>
+                    <p class="text-gray-300 mb-8">Not all clients are equal. The LTV (Lifetime Value) Engine tracks
+                        actual revenue per client to trigger elite automations.</p>
+
+                    <div class="flex flex-col md:flex-row gap-8 items-center mb-12">
+                        <div class="flex-1 space-y-6">
+                            <h4 class="text-white font-bold">Revenue-Based Tagging</h4>
+                            <p class="text-sm text-gray-400">Every 6 hours, the system sums up all **Paid Invoices** for
+                                every contact. If they reach specific thresholds, their status is updated instantly.</p>
+                            <div class="bg-purple-900/20 p-4 border border-purple-500/30 rounded-xl">
+                                <span class="text-[10px] font-black text-purple-400 uppercase tracking-widest">VIP
+                                    Threshold</span>
+                                <p class="text-xl font-bold text-white mt-1">₦10,000,000.00</p>
+                            </div>
+                        </div>
+                        <div class="w-full md:w-48 bg-black/40 p-6 rounded-3xl border border-gray-800 text-center">
+                            <span class="text-4xl">👑</span>
+                            <p class="text-[10px] font-black uppercase text-brand-gold mt-4">Recognition</p>
+                            <p class="text-[8px] text-gray-500">Auto-Tagged as "VIP"</p>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- CHAPTER 10: CALENDAR -->
+                <section id="ch10" class="chapter-card border-amber-400/20">
+                    <span class="text-[10px] font-black text-amber-500 uppercase tracking-[0.3em] mb-4 block">Chapter
+                        10</span>
+                    <h2 class="text-4xl font-serif mb-10">The Marketing Strategic Planner</h2>
+                    <p class="text-gray-300 leading-relaxed mb-10">The Calendar tab is your strategic planning board. It
+                        shows you all upcoming dates that matter for your marketing — Public Holidays, Invoice Due
+                        Dates, and your own Custom Business Events.</p>
+
+                    <div class="space-y-6">
+                        <div class="flex gap-4 p-4 bg-[#111317] rounded-2xl border border-gray-800">
+                            <div class="w-2 h-auto bg-red-500 rounded-full"></div>
+                            <div>
+                                <h4 class="text-white font-bold text-xs uppercase tracking-wide">Urgent (7 Days)</h4>
+                                <p class="text-[10px] text-gray-500 mt-1 font-medium italic">"Act immediately. Draft the
+                                    campaign today."</p>
+                            </div>
+                        </div>
+                        <div class="flex gap-4 p-4 bg-[#111317] rounded-2xl border border-gray-800">
+                            <div class="w-2 h-auto bg-yellow-500 rounded-full"></div>
+                            <div>
+                                <h4 class="text-white font-bold text-xs uppercase tracking-wide">Focus (30 Days)</h4>
+                                <p class="text-[10px] text-gray-500 mt-1 font-medium italic">"Planning window. Reserve
+                                    design assets."</p>
+                            </div>
+                        </div>
+                    </div>
+
+                    <div class="power-move border-amber-400">
+                        <h5 class="text-amber-500 font-bold mb-3 flex items-center gap-2">🏆 Holiday Strategy</h5>
+                        <p class="text-sm text-gray-300">Two weeks before a major holiday (e.g. Eid, Independence Day),
+                            send a themed offer email to your "Hot Leads". One week before, send a follow-up to those
+                            who opened but didn't click.</p>
+                    </div>
+                </section>
+
+                <!-- CHAPTER 11: COMPLIANCE -->
+                <section id="ch11" class="chapter-card border-pink-500/20">
+                    <span class="text-[10px] font-black text-pink-400 uppercase tracking-[0.3em] mb-4 block">Chapter
+                        11</span>
+                    <div class="flex items-center gap-4 mb-10">
+                        <h2 class="text-4xl font-serif">Compliance & Laws</h2>
+                        <span
+                            class="bg-pink-600 text-white text-[10px] px-2 py-1 rounded font-black tracking-widest uppercase">Critical</span>
+                    </div>
+                    <p class="text-gray-300 mb-10 font-bold">Sending emails to people who don't want them is illegal.
+                    </p>
+
+                    <div class="space-y-8">
+                        <div>
+                            <h4 class="text-white font-bold mb-2">1. The Automatic Link</h4>
+                            <p class="text-gray-500 text-sm">Every single email sent contains an unsubscribe link at the
+                                footer. You do not need to add it yourself; it is mandatory.</p>
+                        </div>
+                        <div>
+                            <h4 class="text-white font-bold mb-2">2. Instant & Permanent Block</h4>
+                            <p class="text-gray-500 text-sm">The moment a contact clicks "Unsubscribe", their status is
+                                set to <code>false</code>. Our engine checks this status the split-second before
+                                dispatching any future email. They are silently blocked forever.</p>
+                        </div>
+                    </div>
+
+                    <div class="p-6 bg-pink-900/10 rounded-2xl border border-pink-500/30 text-center mt-12">
+                        <p class="text-sm font-black brand-gold leading-relaxed">NEVER manually override an unsubscribe.
+                            It is a legal violation under GDPR and Nigerian Data Protection laws.</p>
+                    </div>
+                </section>
+
+                <!-- CHAPTER 12: PLAYBOOKS -->
+                <section id="ch12" class="chapter-card border-white/20">
+                    <span class="text-[10px] font-black text-white uppercase tracking-[0.3em] mb-4 block">Chapter
+                        12</span>
+                    <h2 class="text-4xl font-serif mb-10">Pro Tips & Playbooks</h2>
+
+                    <div class="space-y-6">
+                        <div class="p-6 bg-black/60 rounded-3xl border border-gray-800">
+                            <h4 class="text-white font-bold mb-3">🔥 New Lead Fast Track</h4>
+                            <p class="text-xs text-gray-400 leading-relaxed mb-4">Set up once for any new lead coming
+                                from your website or events.</p>
+                            <span class="text-[10px] font-black text-brand-gold uppercase tracking-widest">Target: 30-60
+                                Day Conversion Window</span>
+                        </div>
+                        <div class="p-6 bg-black/60 rounded-3xl border border-gray-800">
+                            <h4 class="text-white font-bold mb-3">💰 Payment Reminder Playbook</h4>
+                            <p class="text-xs text-gray-400 leading-relaxed mb-4">Target the "Outstanding Balance"
+                                segment using the **Account Summary Block** to keep revenue flowing without manual
+                                calls.</p>
+                            <span class="text-[10px] font-black text-brand-gold uppercase tracking-widest">Target:
+                                Collections & Cash Flow</span>
+                        </div>
+                    </div>
+
+                    <div class="mt-16 text-center py-12 border-t border-gray-800">
+                        <h4 class="text-xs font-bold text-gray-600 uppercase tracking-widest mb-4">Essential Do's and
+                            Don'ts</h4>
+                        <div class="grid grid-cols-2 gap-8 text-left max-w-lg mx-auto">
+                            <div>
+                                <p class="text-[10px] font-black text-green-500 uppercase mb-4">✅ DO</p>
+                                <ul class="text-[10px] text-gray-400 space-y-2 font-medium">
+                                    <li>• Use Personalization tags</li>
+                                    <li>• Target specific Segments</li>
+                                    <li>• Schedule for mid-week mornings</li>
+                                    <li>• Use Sequences for nurturing</li>
+                                </ul>
+                            </div>
+                            <div>
+                                <p class="text-[10px] font-black text-red-500 uppercase mb-4">❌ DON'T</p>
+                                <ul class="text-[10px] text-gray-400 space-y-2 font-medium">
+                                    <li>• Send "Dear Customer" emails</li>
+                                    <li>• Blast 1,000+ people at once</li>
+                                    <li>• Send on Monday mornings</li>
+                                    <li>• Manually override opt-outs</li>
+                                </ul>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- FOOTER -->
+                <footer class="mt-20 text-center pb-20 border-t border-gray-800 pt-20">
+                    <img src="/static/dash_logo.jpg" alt="Eximp & Cloves Logo"
+                        class="h-10 mx-auto mb-8 opacity-40 grayscale contrast-125">
+                    <p class="text-gray-600 text-xs uppercase tracking-[0.3em] font-black">Infrastructure Limited | RC
+                        8311800</p>
+                    <p class="text-gray-700 text-[10px] mt-4 font-medium italic opacity-50">This is a confidential
+                        internal document for the Eximp & Cloves Marketing Team only.</p>
+                </footer>
+
+            </main>
+        </div>
+    </div>
+
+    <script>
+        // Smooth scroll for nav links with offset
+        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
+            anchor.addEventListener('click', function (e) {
+                e.preventDefault();
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    const offset = 40;
+                    const bodyRect = document.body.getBoundingClientRect().top;
+                    const elementRect = target.getBoundingClientRect().top;
+                    const elementPosition = elementRect - bodyRect;
+                    const offsetPosition = elementPosition - offset;
+
+                    window.scrollTo({
+                        top: offsetPosition,
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+
+        // Highlight active nav section on scroll
+        const sections = document.querySelectorAll('section[id]');
+        window.addEventListener('scroll', () => {
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                if (pageYOffset >= sectionTop - 150) {
+                    current = section.getAttribute('id');
+                }
+            });
+
+            document.querySelectorAll('.nav-sticky a').forEach(a => {
+                a.classList.remove('text-brand-gold', 'font-bold');
+                a.classList.add('text-gray-400');
+                if (a.getAttribute('href').substring(1) === current) {
+                    a.classList.add('text-brand-gold', 'font-bold');
+                    a.classList.remove('text-gray-400');
+                }
+            });
+        });
+    </script>
+</body>
+
+</html>

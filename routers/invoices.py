@@ -98,6 +98,14 @@ async def create_invoice(
         "created_by": current_admin["sub"]
     }
     
+    # 3. REVENUE ATTRIBUTION (HubSpot Standard)
+    try:
+        # Check if this client has a marketing contact with an attributed campaign
+        contact_res = db.table("marketing_contacts").select("last_campaign_id").eq("client_id", data.client_id).execute()
+        if contact_res.data and contact_res.data[0].get("last_campaign_id"):
+            invoice_data["marketing_campaign_id"] = contact_res.data[0]["last_campaign_id"]
+    except: pass
+
     # Use jsonable_encoder to handle Decimal/date types for Supabase
     encoded_data = jsonable_encoder(invoice_data)
     result = db.table("invoices").insert(encoded_data).execute()

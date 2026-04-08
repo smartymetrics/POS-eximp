@@ -205,17 +205,23 @@ async def sync_campaign_stats(id: str, current_admin=Depends(verify_token)):
     clicks_res = db.table("campaign_recipients").select("contact_id", count="exact").eq("campaign_id", id).not_.is_("clicked_at", "null").execute()
     total_clicks = clicks_res.count or 0
     
-    # 3. Update Campaign Table
+    # 3. Count Attributed revenue (sum of paid invoices linked to this campaign)
+    revenue_res = db.table("invoices").select("amount").eq("marketing_campaign_id", id).eq("status", "paid").execute()
+    total_revenue = sum([i["amount"] for i in revenue_res.data]) if revenue_res.data else 0
+    
+    # 4. Update Campaign Table
     db.table("email_campaigns").update({
         "total_opens": total_opens,
         "total_clicks": total_clicks,
+        "attributed_revenue": total_revenue,
         "updated_at": datetime.utcnow().isoformat()
     }).eq("id", id).execute()
     
     return {
         "id": id,
         "total_opens": total_opens,
-        "total_clicks": total_clicks
+        "total_clicks": total_clicks,
+        "attributed_revenue": total_revenue
     }
     
 @router.post("/{id}/duplicate")

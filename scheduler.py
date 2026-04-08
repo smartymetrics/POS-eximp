@@ -10,6 +10,7 @@ import io
 import base64
 from marketing_scheduler import setup_marketing_scheduler
 from marketing_sequencer_engine import process_active_sequences, process_segment_triggers
+from marketing_ltv_engine import refresh_marketing_ltv_stats
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -219,6 +220,14 @@ async def start_scheduler():
         process_segment_triggers,
         CronTrigger(hour="*", minute="5"), # Offset by 5 mins to stagger DB load
         id="segment_trigger_monitor",
+        replace_existing=True,
+    )
+    
+    # 5. LTV Sync (Runs every 6 hours)
+    scheduler.add_job(
+        refresh_marketing_ltv_stats,
+        CronTrigger(hour="*/6"),
+        id="marketing_ltv_sync",
         replace_existing=True,
     )
 

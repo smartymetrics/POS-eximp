@@ -59,7 +59,8 @@ def calculate_wht_2025(amount: Decimal, category: str, has_tin: bool = True, is_
 
 class PayoutPaymentData(BaseModel):
     amount: float
-    reference_number: Optional[str] = None
+    payment_method: str = "transfer"
+    reference: Optional[str] = None
 
 class VerifyRequest(BaseModel):
     action: str
@@ -130,7 +131,7 @@ async def submit_payout_request(data: ExpenditureRequestCreate, current_admin=De
 @router.get("/requests")
 async def list_expenditure_requests(status: Optional[str] = None, show_voided: bool = False, current_admin=Depends(require_roles(["admin", "super_admin"]))):
     db = get_db()
-    query = db.table("expenditure_requests").select("*, vendors(*), admins!requester_id(full_name), expenditure_payments(*)")
+    query = db.table("expenditure_requests").select("*, vendors(*), admins!requester_id(full_name), expenditure_payments(*), company_assets(*)")
     
     if status:
         query = query.eq("status", status)
@@ -192,7 +193,7 @@ async def record_payout_payment(request_id: str, data: PayoutPaymentData, bg_tas
             full_req = req_with_vendor.data[0]
             vendor = full_req.get('vendors')
             if vendor and vendor.get('email'):
-                bg_tasks.add_task(send_payout_receipt_email, full_req, vendor, current_admin['sub'])
+                bg_tasks.add_task(send_payout_receipt_email, full_req, vendor, current_admin['sub'], payment_amount=amount_to_pay)
 
     return {"status": "success", "new_status": new_status, "amount_paid": new_paid}
 
@@ -674,18 +675,29 @@ async def get_payout_stats(
     active_count = db.table("expenditure_requests").select("id", count="exact").eq("status", "pending").execute().count
     
     # 4. Liability (Cumulative WHT awaiting remittance)
-    # Falling back to a simpler calculation since is_wht_remitted column is missing in DB
+    # This reflects the current ledger state for FIRS compliance.
     try:
         liability_res = db.table("expenditure_requests")\
             .select("wht_amount")\
-            .in_("status", ["paid", "approved"])\
+            .in_("status", ["approved", "partially_paid", "paid"])\
+            .eq("is_wht_remitted", False)\
             .gt("wht_amount", 0)\
             .execute()
         total_liability = sum(float(r['wht_amount'] or 0) for r in liability_res.data)
     except Exception as e:
-        logger.warning(f"Liability calculation fallback: {e}")
-        total_liability = total_wht # Fallback to period total if query fails entirely
+        logger.warning(f"Liability calculation fallback (column likely missing): {e}")
+        # If the column doesn't exist yet, we fallback to the period total
+        # until the user runs the provided SQL migration.
+        total_liability = total_wht
     
+    # 5. Company Assets (Total Book Value)
+    try:
+        asset_res = db.table("company_assets").select("purchase_cost").execute()
+        total_assets = sum(float(r.get('purchase_cost') or 0) for r in asset_res.data)
+    except Exception as e:
+        logger.warning(f"Asset calculation failed: {e}")
+        total_assets = 0
+
     return {
         "trend": trend,
         "categories": categories,
@@ -697,6 +709,7 @@ async def get_payout_stats(
         "total_ap": total_ap,
         "total_wht_period": total_wht,
         "total_net_liability": total_liability,
+        "total_asset_value": total_assets,
         "active_request_count": active_count,
         "count_period": len(data)
     }
