@@ -249,6 +249,32 @@ class ReportService:
             }
             return {"items": rows, "stats": stats, "type": "Tax Compliance (WHT Duty) Report"}
 
+        elif report_type == "accounts_payable":
+            # Outstanding Liabilities (Owed but not Paid)
+            res = supabase.table("expenditure_requests").select("*, vendors(*)").in_("status", ["approved", "partially_paid"]).execute()
+            data = res.data or []
+            rows = []
+            for p in data:
+                net = float(p.get("net_payout_amount", 0))
+                paid = float(p.get("amount_paid", 0))
+                balance = net - paid
+                if balance <= 0: continue
+                
+                rows.append({
+                    "Payee": p.get("vendors", {}).get("name", "—") if p.get("vendors") else "—",
+                    "Description": p.get("title", "—"),
+                    "Due Date": p.get("due_date", "NOT SET"),
+                    "Total Approved": f"NGN {net:,.2f}",
+                    "Paid to Date": f"NGN {paid:,.2f}",
+                    "Balance Owed": f"NGN {balance:,.2f}",
+                    "Status": p.get("status", "").replace("_", " ").capitalize()
+                })
+            stats = {
+                "total_outstanding": sum(float(r["Balance Owed"].replace("NGN ", "").replace(",", "")) for r in rows),
+                "creditor_count": len(rows)
+            }
+            return {"items": rows, "stats": stats, "type": "Accounts Payable Registry"}
+
         elif report_type == "asset_registry":
             res = supabase.table("company_assets").select("*, admins!assigned_to(full_name)").execute()
             data = res.data or []
@@ -288,7 +314,8 @@ class ReportService:
             "Commission Earned Report": "standard_report.html",
             "Expenditure & Payout Audit": "standard_report.html",
             "Tax Compliance (WHT Duty) Report": "standard_report.html",
-            "Company Asset Registry": "standard_report.html"
+            "Company Asset Registry": "standard_report.html",
+            "Accounts Payable Registry": "standard_report.html"
         }
         
         template_name = template_map.get(report_type, "standard_report.html")

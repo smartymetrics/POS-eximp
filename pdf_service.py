@@ -77,8 +77,8 @@ def _get_image_as_base64(url):
 def get_company_logo_base64():
     import base64
     try:
-        with open("light theme logo.png", "rb") as f:
-            return "data:image/png;base64," + base64.b64encode(f.read()).decode('utf-8')
+        with open("logo.svg", "rb") as f:
+            return "data:image/svg+xml;base64," + base64.b64encode(f.read()).decode('utf-8')
     except Exception:
         pass
     return ""

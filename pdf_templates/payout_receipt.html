@@ -271,7 +271,11 @@
                         <strong style="color:#2D3748;">{{ generated_at }}</strong>
                     </div>
                     <div class="value-sub" style="margin-top:8px;">
-                        <span style="color:#A0AEC0; display:inline-block; width:80px;">Transaction:</span> 
+                        <span style="color:#A0AEC0; display:inline-block; width:95px;">Due Date:</span> 
+                        <strong style="color:#2D3748;">{{ payout.due_date or 'N/A' }}</strong>
+                    </div>
+                    <div class="value-sub" style="margin-top:8px;">
+                        <span style="color:#A0AEC0; display:inline-block; width:95px;">Reference:</span> 
                         <strong style="color:#C47D0A; font-family:monospace; font-size:14px;">{{ payout.payout_reference }}</strong>
                     </div>
                 </div>

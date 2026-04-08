@@ -1245,6 +1245,7 @@ def _payout_receipt_html(payout: dict, vendor: dict) -> str:
           <p style="color: #F5A623; font-size: 32px; font-weight: bold; margin: 0;">NGN {net:,.2f}</p>
           <hr style="border-color: #333; margin: 16px 0;">
           <table style="width: 100%; color: #ccc; font-size: 13px;">
+            <tr><td>Due Date</td><td style="text-align:right;color:#fff;">{payout.get('due_date', 'N/A')}</td></tr>
             <tr><td>Reference</td><td style="text-align:right;color:#fff;">{ref}</td></tr>
             <tr><td>Payee Bank</td><td style="text-align:right;color:#fff;">{vendor.get('bank_name','N/A')}</td></tr>
             <tr><td>Account</td><td style="text-align:right;color:#fff;">{vendor.get('account_number','N/A')}</td></tr>

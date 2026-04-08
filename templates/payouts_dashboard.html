@@ -868,6 +868,15 @@
             .stat-card h3 { font-size: 20px; }
             .data-table th, .data-table td { font-size: 9px; }
         }
+
+        /* --- SYNC ANIMATION --- */
+        .fa-spin-once {
+            animation: spinOnce 0.8s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+        @keyframes spinOnce {
+            from { transform: rotate(0deg); }
+            to { transform: rotate(360deg); }
+        }
     </style>
 </head>
 
@@ -936,6 +945,9 @@
                     <input type="checkbox" id="toggle-voided" onchange="fetchRequests()"
                         style="accent-color:var(--gold);"> Show Voided
                 </label>
+                <button class="btn" onclick="syncData(this)">
+                    <i class="fas fa-sync-alt"></i> Sync Data
+                </button>
                 <button class="btn" onclick="copyOnboardingLink()">
                     <i class="fas fa-link"></i> Copy Link
                 </button>
@@ -962,6 +974,11 @@
                 <span>Active Requests</span>
                 <h3 id="stat-pending-count">0</h3>
                 <div class="trend neutral">Awaiting Audit</div>
+            </div>
+            <div class="stat-card">
+                <span>Accounts Payable (Owed)</span>
+                <h3 id="stat-total-ap" style="color: var(--error)">₦0.00</h3>
+                <div class="trend neutral">Approved & Unpaid</div>
             </div>
             <div class="stat-card">
                 <span>Asset Net Value</span>
@@ -1041,17 +1058,150 @@
                 </table>
             </div>
         </div>
+        
+        <!-- VENDOR REGISTRY VIEW -->
+        <div id="vendors-view" class="view-content" style="display:none; padding-top:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+                <div>
+                    <h3 style="font-size:20px;">Vendor & Payee Registry</h3>
+                    <p style="color:var(--gray); font-size:13px;">Official records of verified suppliers and contractors.</p>
+                </div>
+                <button class="btn btn-gold" onclick="openInviteModal()" style="font-size:12px; padding:10px 16px;">
+                    <i class="fas fa-user-plus"></i> REGISTER NEW PARTNER
+                </button>
+            </div>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Partner Name</th>
+                            <th>Category</th>
+                            <th>TIN / Registration</th>
+                            <th>Bank Name</th>
+                            <th>Account Details</th>
+                            <th>Last Activity</th>
+                        </tr>
+                    </thead>
+                    <tbody id="vendorBody">
+                        <tr><td colspan="6" style="text-align:center; padding:40px; color:var(--gray);">Fetching partner records...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- STAFF CLAIMS VIEW -->
+        <div id="reimbursements-view" class="view-content" style="display:none; padding-top:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+                <div>
+                    <h3 style="font-size:20px;">Staff & Management Claims</h3>
+                    <p style="color:var(--gray); font-size:13px;">Reimbursements and internal expenditure requests.</p>
+                </div>
+            </div>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Submission</th>
+                            <th>Staff Member</th>
+                            <th>Description</th>
+                            <th>Gross Amount</th>
+                            <th>Status</th>
+                            <th>Audit Trail</th>
+                        </tr>
+                    </thead>
+                    <tbody id="reimbursementBody">
+                        <tr><td colspan="6" style="text-align:center; padding:40px; color:var(--gray);">Fetching internal claims...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- ASSET INVENTORY VIEW -->
+        <div id="assets-view" class="view-content" style="display:none; padding-top:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+                <div>
+                    <h3 style="font-size:20px;">Company Asset Inventory</h3>
+                    <p style="color:var(--gray); font-size:13px;">Tracking distributed equipment and high-value infrastructure.</p>
+                </div>
+                <button class="btn btn-gold" style="font-size:12px; padding:10px 16px;">
+                    <i class="fas fa-plus"></i> RECORD ASSET
+                </button>
+            </div>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Asset Tag</th>
+                            <th>Asset Name</th>
+                            <th>Category</th>
+                            <th>Purchase Value</th>
+                            <th>Assigned To</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="assetBody">
+                        <tr><td colspan="6" style="text-align:center; padding:40px; color:var(--gray);">Fetching asset inventory...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
 
         <!-- Analytics View -->
         <div id="analytics-view" class="view-content" style="display:none; padding-top:20px;">
+            <div style="background:var(--dark2); padding:24px; border-radius:16px; border:1px solid var(--border); margin-bottom:32px; display:flex; flex-wrap:wrap; gap:20px; align-items:flex-end;">
+                <div>
+                    <label class="form-label">Analysis Period</label>
+                    <select id="stat-timeframe" class="form-input" style="width:200px;" onchange="handleTimeframeChange()">
+                        <option value="7">Last 7 Days</option>
+                        <option value="30" selected>Last 30 Days</option>
+                        <option value="90">Last 90 Days</option>
+                        <option value="365">Last 1 Year</option>
+                        <option value="all">Financial Inception (All Time)</option>
+                        <option value="custom">Custom Date Range...</option>
+                    </select>
+                </div>
+                <div id="custom-date-inputs" style="display:none; gap:16px;">
+                    <div>
+                        <label class="form-label">Start Date</label>
+                        <input type="date" id="stat-start-date" class="form-input">
+                    </div>
+                    <div>
+                        <label class="form-label">End Date</label>
+                        <input type="date" id="stat-end-date" class="form-input">
+                    </div>
+                    <button class="btn btn-gold" onclick="fetchStats()" style="padding: 10px 16px;">APPLY RANGE</button>
+                </div>
+                <div style="flex:1; text-align:right;">
+                    <div id="active-period-label" style="font-size:11px; color:var(--gray); text-transform:uppercase; font-weight:700;">Dashboard Metrics: Rolling 30 Days</div>
+                </div>
+            </div>
+
             <div class="analytics-grid">
                 <div class="chart-card">
-                    <h4>Monthly Financial Velocity</h4>
+                    <h4 id="burnChartTitle">Gross Expenditure Trend</h4>
                     <div style="height:300px;"><canvas id="burnChart"></canvas></div>
                 </div>
                 <div class="chart-card">
-                    <h4>Category Distribution</h4>
+                    <h4>Spend Allocation</h4>
                     <div style="height:300px;"><canvas id="categoryChart"></canvas></div>
+                </div>
+            </div>
+
+            <div class="analytics-grid" style="margin-top:32px;">
+                <div class="chart-card">
+                    <h4>Top Spend by Payee (Vendors)</h4>
+                    <div style="height:300px;"><canvas id="payeeChart"></canvas></div>
+                </div>
+                <div class="chart-card">
+                    <h4>Top Outstanding Payables (Creditors)</h4>
+                    <div style="height:300px;"><canvas id="creditorChart"></canvas></div>
+                </div>
+            </div>
+
+            <div class="analytics-grid" style="margin-top:32px;">
+                <div class="chart-card" style="grid-column: span 2;">
+                    <h4>Top Spend by Requester (Staff)</h4>
+                    <div style="height:300px;"><canvas id="requesterChart"></canvas></div>
                 </div>
             </div>
 
@@ -1065,6 +1215,11 @@
                     <i class="fas fa-paper-plane"></i>
                     <h4>Email Report</h4>
                     <p>Send a high-end PDF analysis directly to any recipient.</p>
+                </div>
+                <div class="report-tool" style="border-color: var(--gold);" onclick="openReportModal('ap_export')">
+                    <i class="fas fa-file-invoice" style="color:var(--gold)"></i>
+                    <h4>Payables Registry</h4>
+                    <p>Generate a detailed log of all approved but unpaid obligations.</p>
                 </div>
                 <div class="report-tool" onclick="openReportModal('schedule')">
                     <i class="fas fa-clock"></i>
@@ -1367,8 +1522,6 @@
     </style>
 
     <script>
-        let requestsData = [];
-        let vendorsData = [];
         let activeRequestId = null;
 
         // --- UTILITIES ---
@@ -1434,15 +1587,108 @@
             }
         }
 
-        // loadVendors removed — bills now enter via the Vendor Portal
+        async function syncData(btn) {
+            const icon = btn.querySelector('i');
+            icon.classList.add('fa-spin-once');
+            toast("Syncing with ledger...", "info");
+            
+            // Refresh all buckets
+            await Promise.all([
+                fetchRequests(),
+                fetchVendors(),
+                fetchAssets()
+            ]);
+            
+            setTimeout(() => icon.classList.remove('fa-spin-once'), 800);
+            toast("Data synced", "success");
+        }
 
-        function renderRequests(data) {
-            const body = document.getElementById('payoutBody');
+        async function fetchVendors() {
+            try {
+                const res = await apiFetch('/api/payouts/vendors');
+                vendorsData = await res.json();
+                renderVendors(vendorsData);
+            } catch (e) { console.error("Vendor load fail", e); }
+        }
+
+        async function fetchAssets() {
+            try {
+                const res = await apiFetch('/api/payouts/assets');
+                const assetsData = await res.json();
+                renderAssets(assetsData);
+            } catch (e) { console.error("Asset load fail", e); }
+        }
+
+        function renderVendors(data) {
+            const body = document.getElementById('vendorBody');
+            if (!body) return;
             if (data.length === 0) {
-                body.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:var(--gray);">No payout records found.</td></tr>';
+                body.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--gray);">No registered partners found.</td></tr>';
                 return;
             }
-            body.innerHTML = data.map(req => `
+            body.innerHTML = data.map(v => `
+                <tr>
+                    <td><strong>${v.name}</strong><br><small style="color:var(--gray)">${v.email}</small></td>
+                    <td>${v.type.toUpperCase()}</td>
+                    <td>${v.tin || v.rc_number || 'N/A'}</td>
+                    <td>${v.bank_name || 'N/A'}</td>
+                    <td>${v.account_number || 'xxxxx'}<br><small style="color:var(--gray)">${v.account_name || ''}</small></td>
+                    <td>${new Date(v.updated_at || Date.now()).toLocaleDateString()}</td>
+                </tr>
+            `).join('');
+        }
+
+        function renderAssets(data) {
+            const body = document.getElementById('assetBody');
+            if (!body) return;
+            if (data.length === 0) {
+                body.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--gray);">No company assets recorded.</td></tr>';
+                return;
+            }
+            body.innerHTML = data.map(a => `
+                <tr>
+                    <td style="font-family:monospace; color:var(--gold)">${a.id.slice(0,8).toUpperCase()}</td>
+                    <td><strong>${a.name}</strong></td>
+                    <td>${a.category || 'General'}</td>
+                    <td style="font-weight:700;">₦${a.purchase_value.toLocaleString()}</td>
+                    <td>${a.admins?.full_name || 'Unassigned'}</td>
+                    <td><span class="status-pill approved" style="font-size:9px;">Active</span></td>
+                </tr>
+            `).join('');
+        }
+
+        function renderReimbursements(data) {
+            const staffList = data.filter(r => r.vendors?.type === 'staff' || r.vendors?.type === 'individual');
+            const body = document.getElementById('reimbursementBody');
+            if (!body) return;
+            if (staffList.length === 0) {
+                body.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--gray);">No staff claims found.</td></tr>';
+                return;
+            }
+            body.innerHTML = staffList.map(req => `
+                <tr>
+                    <td>${new Date(req.created_at).toLocaleDateString()}</td>
+                    <td><strong>${req.vendors?.name || 'Staff'}</strong></td>
+                    <td>${req.title}</td>
+                    <td style="font-weight:700;">₦${req.amount_gross.toLocaleString()}</td>
+                    <td><span class="status-pill pending">${req.status}</span></td>
+                    <td><button onclick="viewDocument('${req.id}')" class="btn" style="padding:4px 8px; font-size:10px;">PROFORMA</button></td>
+                </tr>
+            `).join('');
+        }
+
+        function renderRequests(data) {
+            const auditQueue = data.filter(r => r.status !== 'pending_verification' && r.status !== 'voided');
+            const body = document.getElementById('payoutBody');
+            
+            // Also update reimbursements view while we are looping
+            renderReimbursements(data);
+            
+            if (auditQueue.length === 0) {
+                body.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:40px; color:var(--gray);">No transactions in audit stream.</td></tr>';
+                return;
+            }
+            body.innerHTML = auditQueue.map(req => `
                 <tr style="${req.status === 'voided' ? 'opacity: 0.5; background: rgba(255,0,0,0.02);' : ''}">
                     <td>${new Date(req.created_at).toLocaleDateString()}</td>
                     <td>${req.admins?.full_name || 'System'}</td>
@@ -1478,13 +1724,23 @@
         }
 
         function updateStats(data) {
-            // Only count non-voided requests for totals
+            // This function is now mostly used for current session context (Audit Queue & Liability)
             const activeData = data.filter(r => r.status !== 'voided');
-            const total = activeData.reduce((s, r) => s + (parseFloat(r.amount_gross) || 0), 0);
-            const wht = activeData.reduce((s, r) => s + (!r.is_wht_remitted ? (parseFloat(r.wht_amount) || 0) : 0), 0);
-            document.getElementById('stat-total-spend').innerText = '₦' + total.toLocaleString();
-            document.getElementById('stat-total-wht').innerText = '₦' + wht.toLocaleString();
             document.getElementById('stat-pending-count').innerText = activeData.filter(r => r.status === 'pending').length;
+            
+            // Note: Total Expenditure and WHT are now driven by the fetchStats() API for better historical accuracy
+            // across different timeframes.
+        }
+
+        function handleTimeframeChange() {
+            const tf = document.getElementById('stat-timeframe').value;
+            const custom = document.getElementById('custom-date-inputs');
+            if (tf === 'custom') {
+                custom.style.display = 'flex';
+            } else {
+                custom.style.display = 'none';
+                fetchStats();
+            }
         }
 
         // --- MODALS ---
@@ -1990,56 +2246,8 @@
             }
         });
 
-        // ─── VERIFICATION TAB ─────────────────────────────────────
-        function renderVerifications(data) {
-            const pending = data.filter(r => r.status === 'pending_verification');
-            const badge = document.getElementById('verif-badge');
-            if (pending.length > 0) {
-                badge.innerText = pending.length;
-                badge.style.display = 'inline';
-            } else {
-                badge.style.display = 'none';
-            }
-            const body = document.getElementById('verifBody');
-            if (!body) return;
-            if (pending.length === 0) {
-                body.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px; color:var(--gray);">No bills pending verification.</td></tr>';
-                return;
-            }
-            body.innerHTML = pending.map(req => `
-                <tr>
-                    <td>${new Date(req.created_at).toLocaleDateString()}</td>
-                    <td>${req.admins?.full_name || 'System'}</td>
-                    <td>
-                        <div style="font-weight:700;">${req.title}</div>
-                        <small style="color:var(--gray)">${req.vendor_invoice_number ? 'Ref: ' + req.vendor_invoice_number : 'ID: ' + req.id.slice(0, 8)}</small>
-                    </td>
-                    <td>${req.vendors?.name || 'N/A'}</td>
-                    <td>₦${req.amount_gross.toLocaleString()}</td>
-                    <td><span class="status-pill pending">${req.payout_method}</span></td>
-                    <td style="display:flex; gap:8px;">
-                        <button onclick="verifyBill('${req.id}', 'pending')" class="btn btn-gold" style="padding:6px 12px; font-size:11px;">✔ VERIFY</button>
-                        <button onclick="verifyBill('${req.id}', 'rejected')" class="btn" style="padding:6px 12px; font-size:11px; border-color:var(--error); color:var(--error);">✘ REJECT</button>
-                    </td>
-                </tr>
-            `).join('');
-        }
-
-        async function verifyBill(id, action) {
-            const reason = action === 'rejected' ? prompt('Rejection reason (required):') : null;
-            if (action === 'rejected' && !reason) return toast('Reason required to reject', 'error');
-            const res = await apiFetch(`/api/payouts/requests/${id}/verify`, {
-                method: 'PATCH',
-                body: JSON.stringify({ action, reason })
-            });
-            if (res.ok) {
-                toast(action === 'pending' ? 'Bill verified — sent to Audit Queue' : 'Bill rejected', action === 'pending' ? 'success' : 'error');
-                fetchRequests();
-            } else {
-                const err = await res.json();
-                toast(err.detail || 'Action failed', 'error');
-            }
-        }
+        // Replaced by Modal System to support Due Dates
+        /* Redundant logic removed */
 
         document.getElementById('newPaymentForm').addEventListener('submit', async (e) => {
             e.preventDefault();
@@ -2095,16 +2303,46 @@
             }
 
             if (viewId === 'analytics') fetchStats();
+            if (viewId === 'vendors') fetchVendors();
+            if (viewId === 'assets') fetchAssets();
             toast(`Switching to ${viewId.toUpperCase()}...`, 'info');
         }
 
         // --- ANALYTICS & CHARTS ---
-        let burnChart, categoryChart;
+        let burnChart, categoryChart, payeeChart, requesterChart, creditorChart;
 
         async function fetchStats() {
             try {
-                const res = await apiFetch('/api/payouts/stats/summary');
+                const tf = document.getElementById('stat-timeframe').value;
+                const start = document.getElementById('stat-start-date').value;
+                const end = document.getElementById('stat-end-date').value;
+                
+                let url = '/api/payouts/stats/summary';
+                let label = "Total Expenditure";
+                
+                if (tf === 'custom') {
+                    if (!start || !end) return; // Wait for both
+                    url += `?start_date=${start}&end_date=${end}`;
+                    document.getElementById('active-period-label').innerText = `Dashboard Metrics: ${start} to ${end}`;
+                } else if (tf === 'all') {
+                    url += `?days=10000`;
+                    document.getElementById('active-period-label').innerText = `Dashboard Metrics: All Time`;
+                } else {
+                    url += `?days=${tf}`;
+                    document.getElementById('active-period-label').innerText = `Dashboard Metrics: Rolling ${tf} Days`;
+                    const tfMap = {'7': 'Rolling 7 Days', '30': 'Rolling 30 Days', '90': 'Rolling 90 Days', '365': 'Rolling 1 Year'};
+                    document.querySelector('.stat-card .trend.neutral').innerText = tfMap[tf] || `${tf} Days`;
+                }
+
+                const res = await apiFetch(url);
                 const stats = await res.json();
+                
+                // Update Top Level Cards
+                document.getElementById('stat-total-spend').innerText = '₦' + (stats.total_expenditure || 0).toLocaleString(undefined, {minimumFractionDigits: 0});
+                document.getElementById('stat-total-wht').innerText = '₦' + (stats.total_net_liability || 0).toLocaleString(undefined, {minimumFractionDigits: 0});
+                document.getElementById('stat-total-ap').innerText = '₦' + (stats.total_ap || 0).toLocaleString(undefined, {minimumFractionDigits: 0});
+                document.getElementById('stat-pending-count').innerText = stats.active_request_count || 0;
+                
                 renderCharts(stats);
             } catch (e) {
                 console.error("Stats fail", e);
@@ -2115,10 +2353,17 @@
         function renderCharts(data) {
             const ctx1 = document.getElementById('burnChart').getContext('2d');
             const ctx2 = document.getElementById('categoryChart').getContext('2d');
+            const ctx3 = document.getElementById('payeeChart').getContext('2d');
+            const ctx4 = document.getElementById('requesterChart').getContext('2d');
+            const ctx5 = document.getElementById('creditorChart').getContext('2d');
 
             if (burnChart) burnChart.destroy();
             if (categoryChart) categoryChart.destroy();
+            if (payeeChart) payeeChart.destroy();
+            if (requesterChart) requesterChart.destroy();
+            if (creditorChart) creditorChart.destroy();
 
+            // 1. Burn Chart
             burnChart = new Chart(ctx1, {
                 type: 'line',
                 data: {
@@ -2152,13 +2397,14 @@
                 }
             });
 
+            // 2. Allocation Chart
             categoryChart = new Chart(ctx2, {
                 type: 'doughnut',
                 data: {
                     labels: Object.keys(data.categories).map(k => k.replace('_', ' ').toUpperCase()),
                     datasets: [{
                         data: Object.values(data.categories),
-                        backgroundColor: ['#C47D0A', '#FFC107', '#10B981', '#1C1C1E'],
+                        backgroundColor: ['#C47D0A', '#FFC107', '#10B981', '#1C1C1E', '#3B82F6'],
                         borderWidth: 0,
                         hoverOffset: 10
                     }]
@@ -2174,13 +2420,110 @@
                     }
                 }
             });
+
+            // 3. Payee Intelligence (Horizontal Bar)
+            const payees = data.top_payees || {};
+            payeeChart = new Chart(ctx3, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(payees),
+                    datasets: [{
+                        label: 'Total Paid (NGN)',
+                        data: Object.values(payees),
+                        backgroundColor: '#C47D0A',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#94A3B8', font: { family: 'Outfit', size: 10 } }
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: { color: '#94A3B8', font: { family: 'Outfit', size: 10 } }
+                        }
+                    }
+                }
+            });
+
+            // 4. Requester Intelligence (Horizontal Bar)
+            const requesters = data.top_requesters || {};
+            requesterChart = new Chart(ctx4, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(requesters),
+                    datasets: [{
+                        label: 'Total Requested (NGN)',
+                        data: Object.values(requesters),
+                        backgroundColor: '#FFC107',
+                        borderRadius: 4
+                    }]
+                },
+                options: {
+                    indexAxis: 'y',
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: { legend: { display: false } },
+                    scales: {
+                        x: {
+                            beginAtZero: true,
+                            grid: { color: 'rgba(255,255,255,0.05)' },
+                            ticks: { color: '#94A3B8', font: { family: 'Outfit', size: 10 } }
+                        },
+                        y: {
+                            grid: { display: false },
+                            ticks: { color: '#94A3B8', font: { family: 'Outfit', size: 10 } }
+                        }
+                    }
+                }
+            });
         }
 
         // --- REPORTING HUB ---
         async function openReportModal(mode) {
-            if (mode === 'export') {
-                toast("Preparing CSV Data Stream...", "info");
-                window.location.href = '/api/payouts/stats/export?report_type=payout_audit';
+            const start = document.getElementById('stat-start-date').value;
+            const end = document.getElementById('stat-end-date').value;
+            const tf = document.getElementById('stat-timeframe').value;
+            
+            // Build query for dates
+            let dateParams = "";
+            if (tf === 'custom' && start && end) {
+                dateParams = `&start_date=${start}&end_date=${end}`;
+            } else if (tf !== 'all' && tf !== 'custom') {
+                const startObj = new Date();
+                startObj.setDate(startObj.getDate() - parseInt(tf));
+                dateParams = `&start_date=${startObj.toISOString().split('T')[0]}&end_date=${new Date().toISOString().split('T')[0]}`;
+            }
+
+            if (mode === 'export' || mode === 'ap_export') {
+                const rType = mode === 'ap_export' ? 'accounts_payable' : 'payout_audit';
+                toast("Securing Data Stream...", "info");
+                try {
+                    const response = await apiFetch(`/api/payouts/stats/export?report_type=${rType}${dateParams}`);
+                    if (!response.ok) {
+                        if (response.status === 403) throw new Error("Verification Expired (403). Please refresh page.");
+                        throw new Error("Export Failed");
+                    }
+                    const blob = await response.blob();
+                    const url = window.URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `${rType}_report_${new Date().toISOString().split('T')[0]}.csv`;
+                    document.body.appendChild(a);
+                    a.click();
+                    window.URL.revokeObjectURL(url);
+                    toast("Report Downloaded Successfully", "success");
+                } catch (e) {
+                    console.error(e);
+                    toast(e.message, "error");
+                }
             } else if (mode === 'email') {
                 const email = prompt("Enter recipient email address:");
                 if (!email || !email.includes('@')) return;
@@ -2189,12 +2532,32 @@
                 try {
                     const res = await apiFetch('/api/payouts/stats/send-email', {
                         method: 'POST',
-                        body: JSON.stringify({ report_type: 'payout_audit', email: email })
+                        body: JSON.stringify({ 
+                            report_type: 'payout_audit', 
+                            email: email,
+                            start_date: start || null,
+                            end_date: end || null
+                        })
                     });
                     if (res.ok) toast("PDF Analysis Delivered", "success");
-                } catch (e) { toast("Delivery Failed", "error"); }
+                    else toast("Delivery Failed", "error");
+                } catch (e) { toast("System Connection Error", "error"); }
             } else if (mode === 'schedule') {
-                toast("Scheduling Engine: Select frequency in next update", "info");
+                toast("Schedule automation: Saving configuration...", "info");
+                const email = prompt("Enter email for periodic reports:");
+                if (!email) return;
+                
+                try {
+                    const res = await apiFetch('/api/payouts/stats/schedule', {
+                        method: 'POST',
+                        body: JSON.stringify({
+                            report_type: 'payout_audit',
+                            frequency: 'weekly',
+                            recipients: [email]
+                        })
+                    });
+                    if (res.ok) toast("Automated schedule active", "success");
+                } catch(e) { toast("Schedule setup failed", "error"); }
             }
         }
 
@@ -2254,7 +2617,6 @@
         window.switchTab = switchTab;
         window.copyOnboardingLink = copyOnboardingLink;
         window.openPaymentModal = openPaymentModal;
-        window.verifyBill = verifyBill;
         window.viewDocument = viewDocument;
         window.closeDocModal = closeDocModal;
 
@@ -2265,6 +2627,7 @@
         // Initialize
         checkAuth();
         fetchRequests();
+        fetchStats();
         // --- MOBILE NAV TOGGLE ---
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
