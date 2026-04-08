@@ -953,10 +953,10 @@
                 <h3 id="stat-total-spend">₦0.00</h3>
                 <div class="trend neutral">Rolling 30 Days</div>
             </div>
-            <div class="stat-card">
+            <div class="stat-card" style="cursor: pointer; transition: 0.3s;" onclick="openWhtRemittanceModal()" onmouseover="this.style.borderColor='var(--gold)'" onmouseout="this.style.borderColor='var(--border)'">
                 <span>Tax Withheld (WHT)</span>
                 <h3 id="stat-total-wht" style="color: var(--gold)">₦0.00</h3>
-                <div class="trend up"><i class="fas fa-arrow-up"></i> Awaiting Remittance</div>
+                <div class="trend up"><i class="fas fa-arrow-up"></i> Awaiting Remittance (Click to Remit)</div>
             </div>
             <div class="stat-card">
                 <span>Active Requests</span>
@@ -1255,6 +1255,74 @@
         </div>
     </div>
 
+    <!-- VERIFICATION MODAL -->
+    <div class="modal" id="verifyModal">
+        <div class="modal-content">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:32px;">
+                <h2 style="font-family: 'Playfair Display', serif; font-size:24px;">Bill Verification</h2>
+                <button onclick="closeModal('verifyModal')" style="background:none; border:none; color:var(--gray); cursor:pointer;"><i class="fas fa-times fa-lg"></i></button>
+            </div>
+            
+            <div id="verifyDetails" style="margin-bottom:24px; padding:20px; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border);"></div>
+
+            <div style="margin-bottom:32px;">
+                <label class="form-label" style="display:flex; align-items:center; gap:8px;">
+                    <i class="far fa-calendar-alt"></i> Planned Due Date
+                </label>
+                <input type="date" id="verify-due-date" class="form-input" style="font-size:16px;">
+                <small style="color:var(--gray); font-size:11px; margin-top:8px; display:block;">Select the estimated date this bill should be paid.</small>
+            </div>
+
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
+                <button class="btn btn-gold" style="justify-content:center; padding:18px;" onclick="submitVerification('pending')">VERIFY & SEND TO AUDIT</button>
+                <button class="btn" style="justify-content:center; border-color:var(--error); color:var(--error);" onclick="submitVerification('rejected')">REJECT BILL</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- WHT REMITTANCE MODAL -->
+    <div class="modal" id="whtRemittanceModal">
+        <div class="modal-content" style="max-width:800px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:32px;">
+                <div>
+                    <h2 style="font-family: 'Playfair Display', serif; font-size:24px;">FIRS Tax Remittance</h2>
+                    <p style="color:var(--gray); font-size:13px; margin-top:4px;">Select the paid liabilities you are clearing today.</p>
+                </div>
+                <button onclick="closeModal('whtRemittanceModal')" style="background:none; border:none; color:var(--gray); cursor:pointer;"><i class="fas fa-times fa-lg"></i></button>
+            </div>
+            
+            <div style="margin-bottom:24px;">
+                <label class="form-label">FIRS Remittance Receipt Number</label>
+                <input type="text" id="wht-receipt-ref" class="form-input" placeholder="e.g. FIRS-2026-0001" style="font-size:16px; font-weight:700;">
+            </div>
+
+            <div class="table-container" style="max-height: 400px; overflow-y:auto; margin-bottom: 24px;">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th style="width:40px;"><input type="checkbox" id="wht-select-all" onclick="toggleAllWht(this)" style="accent-color:var(--gold);"></th>
+                            <th>Date Paid</th>
+                            <th>Payee</th>
+                            <th>Original Bill</th>
+                            <th>WHT Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody id="wht-checklist-body">
+                        <!-- Populated via JS -->
+                    </tbody>
+                </table>
+            </div>
+            
+            <div style="display:flex; justify-content:space-between; align-items:center; padding:20px; background:rgba(196,125,10,0.05); border-radius:12px; border:1px solid rgba(196,125,10,0.2);">
+                <div>
+                    <span style="font-size:12px; color:var(--gray); text-transform:uppercase;">Selected Total To Clear</span>
+                    <div id="wht-selected-total" style="font-size:24px; font-weight:800; color:var(--gold);">₦0.00</div>
+                </div>
+                <button class="btn btn-gold" onclick="submitWhtRemittance()" style="padding:16px 32px;"><i class="fas fa-check-double"></i> MARK AS REMITTED</button>
+            </div>
+        </div>
+    </div>
+
     <!-- DOCUMENT PREVIEW MODAL -->
     <div class="doc-preview-modal" id="docPreviewModal">
         <div class="doc-preview-content">
@@ -1400,6 +1468,7 @@
                     </td>
                     <td><span class="status-pill ${(req.status === 'partially_paid' || req.status === 'paid') ? 'approved' : req.status}">${req.status.replace('_', ' ')}</span></td>
                     <td>
+                        ${(req.status === 'paid' || req.status === 'partially_paid') ? `<button onclick="triggerManualReceipt('${req.id}')" class="btn" style="padding: 6px 12px; font-size:11px; margin-bottom: 6px; border-color:var(--gold); color:var(--gold);"><i class="fas fa-paper-plane"></i> RECEIPT</button><br>` : ''}
                         ${req.status === 'pending' ? `<button onclick="openReview('${req.id}')" class="btn" style="padding: 6px 12px; font-size:11px;">REVIEW</button>` :
                     req.status === 'voided' ? '<i class="fas fa-ban" style="color:var(--error)"></i>' :
                         `<button onclick="openReview('${req.id}')" class="btn" style="padding: 6px 12px; font-size:11px; border-color:var(--gray); color:var(--gray);">INFO</button>`}
@@ -1412,7 +1481,7 @@
             // Only count non-voided requests for totals
             const activeData = data.filter(r => r.status !== 'voided');
             const total = activeData.reduce((s, r) => s + (parseFloat(r.amount_gross) || 0), 0);
-            const wht = activeData.reduce((s, r) => s + (parseFloat(r.wht_amount) || 0), 0);
+            const wht = activeData.reduce((s, r) => s + (!r.is_wht_remitted ? (parseFloat(r.wht_amount) || 0) : 0), 0);
             document.getElementById('stat-total-spend').innerText = '₦' + total.toLocaleString();
             document.getElementById('stat-total-wht').innerText = '₦' + wht.toLocaleString();
             document.getElementById('stat-pending-count').innerText = activeData.filter(r => r.status === 'pending').length;
@@ -1584,7 +1653,176 @@
             }
         }
 
-        // newRequestForm submit removed — bills now enter via Vendor Portal
+        function renderVerifications(data) {
+            const pendingVars = data.filter(r => r.status === 'pending_verification');
+            const body = document.getElementById('verifBody');
+            
+            document.getElementById('verif-badge').innerText = pendingVars.length;
+            document.getElementById('verif-badge').style.display = pendingVars.length > 0 ? 'inline-block' : 'none';
+
+            if (pendingVars.length === 0) {
+                body.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px; color:var(--gray);">No bills pending verification.</td></tr>';
+                return;
+            }
+            body.innerHTML = pendingVars.map(req => `
+                <tr>
+                    <td>${new Date(req.created_at).toLocaleDateString()}</td>
+                    <td>${req.admins?.full_name || 'System'}</td>
+                    <td>
+                        <div style="font-weight:700;">${req.title}</div>
+                        <small style="color:var(--gray)">${req.vendor_invoice_number ? 'Ref: ' + req.vendor_invoice_number : 'ID: ' + req.id.slice(0, 8)}</small>
+                    </td>
+                    <td>${req.vendors?.name || 'N/A'}</td>
+                    <td style="font-weight:700;">₦${req.amount_gross.toLocaleString()}</td>
+                    <td>${req.vendors?.type || 'N/A'}</td>
+                    <td>
+                        <button onclick="openVerifyModal('${req.id}')" class="btn btn-gold" style="padding: 6px 12px; font-size:11px;">VERIFY</button>
+                    </td>
+                </tr>
+            `).join('');
+        }
+
+        // --- AP DASHBOARD REDESIGN: VERIFICATION, WHT, RECEIPTS ---
+        
+        // 1. Bill Verification
+        function openVerifyModal(id) {
+            activeRequestId = id;
+            const req = requestsData.find(r => r.id === id);
+            document.getElementById('verifyDetails').innerHTML = `
+                <div style="font-size:12px; color:var(--gray); margin-bottom:4px;">Vendor / Payee</div>
+                <div style="font-size:16px; font-weight:700; margin-bottom:12px; color:#fff;">${req.vendors?.name || 'N/A'}</div>
+                <div style="font-size:12px; color:var(--gray); margin-bottom:4px;">Bill Description</div>
+                <div style="font-size:14px; margin-bottom:12px; color:#fff;">${req.title}</div>
+                <div style="font-size:12px; color:var(--gray); margin-bottom:4px;">Gross Requested Amount</div>
+                <div style="font-size:20px; font-weight:800; color:var(--gold-bright);">₦${req.amount_gross.toLocaleString()}</div>
+            `;
+            // Default due date to today + 30 days
+            const defaultDate = new Date();
+            defaultDate.setDate(defaultDate.getDate() + 30);
+            document.getElementById('verify-due-date').value = defaultDate.toISOString().split('T')[0];
+            
+            document.getElementById('verifyModal').style.display = 'flex';
+        }
+
+        async function submitVerification(action) {
+            const dueDate = document.getElementById('verify-due-date').value;
+            let reason = "";
+            if (action === 'rejected') {
+                reason = prompt("Please provide a reason for rejecting this bill:");
+                if (!reason) return;
+            }
+            
+            try {
+                const res = await apiFetch(`/api/payouts/requests/${activeRequestId}/verify`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ action: action, reason: reason, due_date: dueDate })
+                });
+                
+                if (res.ok) {
+                    toast(action === 'pending' ? "Bill Verified & Sent to Audit" : "Bill Rejected", "success");
+                    closeModal('verifyModal');
+                    fetchRequests();
+                } else {
+                    const err = await res.json();
+                    toast(err.detail || "Action failed", "error");
+                }
+            } catch (e) {
+                toast("Network Error", "error");
+            }
+        }
+
+        // 2. WHT Remittance Checklist
+        let whtPendingList = [];
+        
+        function openWhtRemittanceModal() {
+            whtPendingList = requestsData.filter(r => (r.status === 'paid' || r.status === 'partially_paid') && !r.is_wht_remitted && (r.wht_amount || 0) > 0);
+            
+            const tbody = document.getElementById('wht-checklist-body');
+            if (whtPendingList.length === 0) {
+                tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:30px; color:var(--gray);">No pending WHT liabilities found.</td></tr>';
+                document.getElementById('wht-select-all').disabled = true;
+            } else {
+                document.getElementById('wht-select-all').disabled = false;
+                document.getElementById('wht-select-all').checked = false;
+                tbody.innerHTML = whtPendingList.map(req => `
+                    <tr>
+                        <td><input type="checkbox" class="wht-checkbox" value="${req.id}" data-amount="${req.wht_amount}" onclick="calcWhtTotal()" style="accent-color:var(--gold);"></td>
+                        <td>${req.paid_at ? new Date(req.paid_at).toLocaleDateString() : 'N/A'}</td>
+                        <td style="font-weight:700;">${req.vendors?.name || 'N/A'}</td>
+                        <td style="font-size:11px; color:var(--gray);">${req.title}</td>
+                        <td style="color:var(--error); font-weight:700;">₦${req.wht_amount.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                    </tr>
+                `).join('');
+            }
+            calcWhtTotal();
+            document.getElementById('wht-receipt-ref').value = '';
+            document.getElementById('whtRemittanceModal').style.display = 'flex';
+        }
+
+        function toggleAllWht(source) {
+            const checkboxes = document.querySelectorAll('.wht-checkbox');
+            checkboxes.forEach(cb => cb.checked = source.checked);
+            calcWhtTotal();
+        }
+
+        function calcWhtTotal() {
+            const checkboxes = document.querySelectorAll('.wht-checkbox:checked');
+            let total = 0;
+            checkboxes.forEach(cb => total += parseFloat(cb.getAttribute('data-amount')));
+            document.getElementById('wht-selected-total').innerText = '₦' + total.toLocaleString(undefined, {minimumFractionDigits: 2});
+        }
+
+        async function submitWhtRemittance() {
+            const ref = document.getElementById('wht-receipt-ref').value.trim();
+            if (!ref) {
+                toast("Please provide the FIRS Receipt Reference", "error");
+                document.getElementById('wht-receipt-ref').focus();
+                return;
+            }
+            
+            const checkboxes = document.querySelectorAll('.wht-checkbox:checked');
+            const ids = Array.from(checkboxes).map(cb => cb.value);
+            
+            if (ids.length === 0) {
+                toast("Select at least one liability to clear.", "error");
+                return;
+            }
+            
+            try {
+                const res = await apiFetch(`/api/payouts/requests/remit-wht`, {
+                    method: 'POST',
+                    body: JSON.stringify({ receipt_reference: ref, request_ids: ids })
+                });
+                
+                if (res.ok) {
+                    toast(`Successfully cleared ${ids.length} WHT liabilities`, "success");
+                    closeModal('whtRemittanceModal');
+                    fetchRequests();
+                } else {
+                    const err = await res.json();
+                    toast(err.detail || "Remittance Failed", "error");
+                }
+            } catch(e) {
+                toast("Network Error", "error");
+            }
+        }
+
+        // 3. On-Demand Receipts
+        async function triggerManualReceipt(id) {
+            toast("Queuing receipt for immediate delivery...", "info");
+            try {
+                const res = await apiFetch(`/api/payouts/requests/${id}/send-receipt`, { method: 'POST', body: JSON.stringify({}) });
+                if (res.ok) {
+                    toast("Vendor Remittance Receipt Sent!", "success");
+                } else {
+                    const err = await res.json();
+                    toast(err.detail || "Failed to send receipt", "error");
+                }
+            } catch(e) {
+                toast("Network Error while sending email", "error");
+            }
+        }
+
 
         function copyOnboardingLink() {
             const link = window.location.origin + '/payout/portal/OFFICIAL'

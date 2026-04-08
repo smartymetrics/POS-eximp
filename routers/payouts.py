@@ -132,7 +132,7 @@ async def list_expenditure_requests(status: Optional[str] = None, show_voided: b
     return res.data
 
 @router.post("/requests/{request_id}/payments")
-async def record_payout_payment(request_id: str, data: PayoutPaymentData, current_admin=Depends(require_roles(["admin", "super_admin"]))):
+async def record_payout_payment(request_id: str, data: PayoutPaymentData, bg_tasks: BackgroundTasks, current_admin=Depends(require_roles(["admin", "super_admin"]))):
     db = get_db()
     
     # 1. Verify Request
@@ -174,6 +174,16 @@ async def record_payout_payment(request_id: str, data: PayoutPaymentData, curren
         update_payload["paid_at"] = datetime.now(timezone.utc).isoformat()
         
     update_res = db.table("expenditure_requests").update(update_payload).eq("id", request_id).execute()
+    
+    # Trigger automated receipt
+    if update_res.data:
+        req_with_vendor = db.table("expenditure_requests").select("*, vendors(*)").eq("id", request_id).execute()
+        if req_with_vendor.data:
+            full_req = req_with_vendor.data[0]
+            vendor = full_req.get('vendors')
+            if vendor and vendor.get('email'):
+                bg_tasks.add_task(send_payout_receipt_email, full_req, vendor, current_admin['sub'])
+
     return {"status": "success", "new_status": new_status, "amount_paid": new_paid}
 
 @router.patch("/requests/{request_id}/verify")
@@ -181,6 +191,7 @@ async def verify_bill_request(
     request_id: str,
     action: str = Body(...),
     reason: str = Body(None),
+    due_date: Optional[str] = Body(None),
     current_admin=Depends(require_roles(["admin", "super_admin"]))
 ):
     """Bill Verification: promote to 'pending' (audit queue) or reject outright."""
@@ -203,6 +214,8 @@ async def verify_bill_request(
     }
     if action == 'rejected':
         update_payload["wht_exemption_reason"] = reason or "Bill rejected at verification stage"
+    elif action == 'pending' and due_date:
+        update_payload["due_date"] = due_date
     
     db.table("expenditure_requests").update(update_payload).eq("id", request_id).execute()
     return {"status": "success", "new_status": action}
@@ -274,14 +287,47 @@ async def review_payout_request(request_id: str, data: PayoutReview, bg_tasks: B
     if data.status == 'approved' and updated_req.get('vendor_id'):
         vendor = req.get('vendors')
         if vendor and vendor.get('email'):
-            # Fetch admin profile for the "Sent By" name
-            admin_res = db.table("admins").select("full_name").eq("id", current_admin['sub']).execute()
-            admin_name = admin_res.data[0]['full_name'] if admin_res.data else "Finance Team"
-            
             # Fetch fresh version of request for the receipt (includes updated WHT/amounts)
-            bg_tasks.add_task(send_payout_receipt_email, updated_req, vendor, admin_name)
+            bg_tasks.add_task(send_payout_receipt_email, updated_req, vendor, current_admin['sub'])
 
     return updated_req
+
+class WhtRemittanceData(BaseModel):
+    receipt_reference: str
+    request_ids: List[str]
+
+@router.post("/requests/remit-wht")
+async def record_wht_remittance(data: WhtRemittanceData, current_admin=Depends(require_roles(["admin", "super_admin"]))):
+    """Batch clears WHT liabilities by marking them remitted to FIRS."""
+    db = get_db()
+    if not data.request_ids:
+        raise HTTPException(status_code=400, detail="No requests selected for remittance")
+        
+    update_payload = {
+        "is_wht_remitted": True,
+        "wht_remittance_ref": data.receipt_reference,
+        "wht_remitted_at": datetime.now(timezone.utc).isoformat(),
+        "wht_remitted_by": current_admin['sub']
+    }
+    
+    res = db.table("expenditure_requests").update(update_payload).in_("id", data.request_ids).execute()
+    return {"status": "success", "cleared_count": len(res.data) if res.data else 0}
+
+@router.post("/requests/{request_id}/send-receipt")
+async def trigger_manual_receipt(request_id: str, bg_tasks: BackgroundTasks, current_admin=Depends(require_roles(["admin", "super_admin"]))):
+    """Manually triggers a remittance advice email to the vendor."""
+    db = get_db()
+    req_res = db.table("expenditure_requests").select("*, vendors(*)").eq("id", request_id).execute()
+    if not req_res.data:
+        raise HTTPException(status_code=404, detail="Request not found")
+        
+    req = req_res.data[0]
+    vendor = req.get('vendors')
+    if not vendor or not vendor.get('email'):
+        raise HTTPException(status_code=400, detail="Vendor has no email address on file")
+        
+    bg_tasks.add_task(send_payout_receipt_email, req, vendor, current_admin['sub'])
+    return {"status": "success", "message": f"Receipt queued for {vendor['email']}"}
 
 # ─── ASSETS ───────────────────────────────────────────────────
 @router.post("/assets")

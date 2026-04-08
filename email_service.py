@@ -43,7 +43,10 @@ def _welcome_html(client: dict, property_name: str) -> str:
         <p style="color: #999; font-size: 12px; margin: 0;">
           Eximp & Cloves Infrastructure Limited | RC 8311800<br>
           57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383<br>
-          www.eximps-cloves.com
+          <a href="https://www.eximps-cloves.com" style="color: #999; text-decoration: none;">www.eximps-cloves.com</a>
+        </p>
+        <p style="color: #888; font-size: 11px; text-align: center; margin-top: 16px;">
+          Please review our official refund policy at <a href="https://www.eximps-cloves.com/refund" style="color: #C47D0A; text-decoration: none;">www.eximps-cloves.com/refund</a>
         </p>
       </div>
     </div>"""
@@ -113,7 +116,10 @@ def _invoice_html(invoice: dict, client: dict) -> str:
         <p style="color: #999; font-size: 12px; margin: 0;">
           Eximp & Cloves Infrastructure Limited | RC 8311800<br>
           57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383<br>
-          www.eximps-cloves.com
+          <a href="https://www.eximps-cloves.com" style="color: #999; text-decoration: none;">www.eximps-cloves.com</a>
+        </p>
+        <p style="color: #888; font-size: 11px; text-align: center; margin-top: 16px;">
+          Please review our official refund policy at <a href="https://www.eximps-cloves.com/refund" style="color: #C47D0A; text-decoration: none;">www.eximps-cloves.com/refund</a>
         </p>
       </div>
     </div>"""
@@ -145,8 +151,14 @@ def _receipt_html(invoice: dict, client: dict) -> str:
         </div>
         <p style="color: #555; font-size: 13px;">The full receipt PDF is attached to this email.</p>
         <hr style="border-color: #eee;">
-        <p style="color: #999; font-size: 12px;">Eximp & Cloves Infrastructure Limited | RC 8311800<br>
-        57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383</p>
+        <p style="color: #999; font-size: 12px; margin: 0;">
+          Eximp & Cloves Infrastructure Limited | RC 8311800<br>
+          57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383<br>
+          <a href="https://www.eximps-cloves.com" style="color: #999; text-decoration: none;">www.eximps-cloves.com</a>
+        </p>
+        <p style="color: #888; font-size: 11px; text-align: center; margin-top: 16px;">
+          Please review our official refund policy at <a href="https://www.eximps-cloves.com/refund" style="color: #C47D0A; text-decoration: none;">www.eximps-cloves.com/refund</a>
+        </p>
       </div>
     </div>"""
 
@@ -172,8 +184,14 @@ def _statement_html(client: dict, total_invoiced: float, total_paid: float, bala
           </table>
         </div>
         <hr style="border-color: #eee;">
-        <p style="color: #999; font-size: 12px;">Eximp & Cloves Infrastructure Limited | RC 8311800<br>
-        57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383</p>
+        <p style="color: #999; font-size: 12px; margin: 0;">
+          Eximp & Cloves Infrastructure Limited | RC 8311800<br>
+          57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383<br>
+          <a href="https://www.eximps-cloves.com" style="color: #999; text-decoration: none;">www.eximps-cloves.com</a>
+        </p>
+        <p style="color: #888; font-size: 11px; text-align: center; margin-top: 16px;">
+          Please review our official refund policy at <a href="https://www.eximps-cloves.com/refund" style="color: #C47D0A; text-decoration: none;">www.eximps-cloves.com/refund</a>
+        </p>
       </div>
     </div>"""
 
@@ -1209,8 +1227,8 @@ async def broadcast_campaign_email(campaign: dict, recipients: list, admin_id: s
 
 
 def _payout_receipt_html(payout: dict, vendor: dict) -> str:
-    net = float(payout.get("net_payout_amount", 0))
-    ref = payout.get("payout_reference", "N/A")
+    net = float(payout.get("net_payout_amount") or 0)
+    ref = payout.get("payout_reference") or "N/A"
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #1A1A1A; padding: 24px; text-align: center;">
@@ -1235,13 +1253,19 @@ def _payout_receipt_html(payout: dict, vendor: dict) -> str:
         <p style="color: #555; font-size: 13px;">The official Payment Advice (PDF) with full tax breakdown is attached to this email.</p>
         <p style="color: #555; font-size: 13px;">Thank you for your partnership.</p>
         <hr style="border-color: #eee;">
-        <p style="color: #999; font-size: 12px;">Eximp & Cloves Infrastructure Limited | RC 8311800<br>
-        57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383</p>
+        <p style="color: #999; font-size: 12px; margin: 0;">
+          Eximp & Cloves Infrastructure Limited | RC 8311800<br>
+          57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383<br>
+          <a href="https://www.eximps-cloves.com" style="color: #999; text-decoration: none;">www.eximps-cloves.com</a>
+        </p>
+        <p style="color: #888; font-size: 11px; text-align: center; margin-top: 16px;">
+          Please review our official refund policy at <a href="https://www.eximps-cloves.com/refund" style="color: #C47D0A; text-decoration: none;">www.eximps-cloves.com/refund</a>
+        </p>
       </div>
     </div>"""
 
 
-async def send_payout_receipt_email(payout: dict, vendor: dict, sent_by: str):
+async def send_payout_receipt_email(payout: dict, vendor: dict, admin_id: str = "system"):
     from routers.analytics import log_activity
     from pdf_service import generate_payout_receipt_pdf
     
@@ -1251,21 +1275,22 @@ async def send_payout_receipt_email(payout: dict, vendor: dict, sent_by: str):
         return None
 
     try:
+        payout_ref = payout.get("payout_reference") or "Processed"
         pdf = generate_payout_receipt_pdf(payout, vendor)
         res = resend.Emails.send({
             "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
             "to": [email_addr],
             "cc": CLIENT_CC_RECIPIENTS,
-            "reply_to": "finance@eximps-cloves.com",
-            "subject": f"Payment Advice — {payout.get('payout_reference', 'Processed')} — Eximp & Cloves",
+            "reply_to": "admin@eximps-cloves.com",
+            "subject": f"Payment Remittance Advice [Ref: {payout_ref}] — Eximp & Cloves",
             "html": _payout_receipt_html(payout, vendor),
-            "attachments": [{"filename": f"Payment_Advice_{payout.get('payout_reference', 'Ref')}.pdf", "content": list(pdf)}],
+            "attachments": [{"filename": f"Payment_Advice_{payout_ref}.pdf", "content": list(pdf)}],
         })
         
         await log_activity(
             "email_sent",
-            f"Payout receipt for {payout.get('payout_reference')} sent to {vendor['name']} ({email_addr})",
-            sent_by,
+            f"Payout receipt for {payout_ref} sent to {vendor['name']} ({email_addr})",
+            admin_id,
             metadata={"payout_id": payout.get("id"), "vendor_id": vendor.get("id")}
         )
         return res
@@ -1274,7 +1299,7 @@ async def send_payout_receipt_email(payout: dict, vendor: dict, sent_by: str):
         await log_activity(
             "email_failed",
             f"FAILED to send payout receipt to {vendor['name']} ({email_addr}): {str(e)}",
-            sent_by,
+            admin_id,
             metadata={"error": str(e), "email_type": "payout_receipt"}
         )
         return None
@@ -1361,7 +1386,7 @@ async def send_portal_invite_email(email_addr: str, inviter_name: str, token: st
             "to": [email_addr],
             "subject": "Invitation: Submit Payout Request | Eximp & Cloves",
             "html": html,
-            "reply_to": "finance@eximps-cloves.com"
+            "reply_to": "admin@eximps-cloves.com"
         })
         
         await log_activity(

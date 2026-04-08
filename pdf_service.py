@@ -77,7 +77,7 @@ def _get_image_as_base64(url):
 def get_company_logo_base64():
     import base64
     try:
-        with open("logo.png", "rb") as f:
+        with open("light theme logo.png", "rb") as f:
             return "data:image/png;base64," + base64.b64encode(f.read()).decode('utf-8')
     except Exception:
         pass
@@ -747,15 +747,18 @@ def generate_payout_receipt_pdf(payout: dict, vendor: dict) -> bytes:
     # Get company context with fresh stamps
     comp_ctx = get_company_context()
 
+    payout_data = payout.copy()
+    payout_data["payout_reference"] = payout_data.get("payout_reference") or "Processed"
+
     html_content = template.render(
         company=comp_ctx,
-        payout=payout,
+        payout=payout_data,
         vendor=vendor,
-        amount_in_words=naira_in_words(payout["net_payout_amount"]),
+        amount_in_words=naira_in_words(payout_data.get("net_payout_amount") or 0),
         format_currency=format_currency,
         generated_at=datetime.now().strftime("%d %b %Y")
     )
-    return _render_with_xhtml2pdf(html_content)
+    return _render_with_weasyprint(html_content)
 
 
 def get_default_contract_html_fragment(invoice: dict, client: dict) -> str:
