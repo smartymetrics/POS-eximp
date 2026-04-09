@@ -43,6 +43,11 @@
           window.location.replace('/legal');
           return;
         }
+        // Sales reps and operations managers belong in the CRM
+        if (roles.includes('sales') || roles.includes('operations')) {
+          window.location.replace('/crm');
+          return;
+        }
 
         // Set Authorization header for API calls
         window.ec_token = token;
@@ -3189,6 +3194,7 @@
               <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="lawyer" style="accent-color:var(--gold);"> Lawyer</label>
               <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="legal" style="accent-color:var(--gold);"> Legal</label>
               <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="marketing" style="accent-color:var(--gold);"> Marketing</label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="sales" style="accent-color:var(--gold);"> Sales</label>
               <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="operations" style="accent-color:var(--gold);"> Operations</label>
               <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="super_admin" style="accent-color:var(--gold);"> Super Admin</label>
             </div>
@@ -3199,6 +3205,8 @@
               <option value="staff">Staff Dashboard (/dashboard)</option>
               <option value="legal">Legal Dashboard (/legal)</option>
               <option value="marketing">Marketing Dashboard (/marketing)</option>
+              <option value="sales">Sales Dashboard (/crm)</option>
+              <option value="operations">Operations Dashboard (/crm)</option>
               <option value="admin">Full Admin Dashboard (/dashboard)</option>
             </select>
             <div class="form-hint">Determines which page the user lands on after logging in.</div>
@@ -3245,6 +3253,7 @@
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="lawyer" style="accent-color:var(--gold);"> Lawyer</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="legal" style="accent-color:var(--gold);"> Legal</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="marketing" style="accent-color:var(--gold);"> Marketing</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="sales" style="accent-color:var(--gold);"> Sales</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="operations" style="accent-color:var(--gold);"> Operations</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="super_admin" style="accent-color:var(--gold);"> Super Admin</label>
           </div>
@@ -3254,9 +3263,10 @@
           <select class="form-control" id="er-primary-role">
             <option value="staff">Staff Dashboard (/dashboard)</option>
             <option value="legal">Legal Dashboard (/legal)</option>
-            <option value="operations">Operations Dashboard (/dashboard)</option>
-            <option value="admin">Full Admin Dashboard (/dashboard)</option>
             <option value="marketing">Marketing Dashboard (/marketing)</option>
+            <option value="sales">Sales Dashboard (/crm)</option>
+            <option value="operations">Operations Dashboard (/crm)</option>
+            <option value="admin">Full Admin Dashboard (/dashboard)</option>
           </select>
           <div class="form-hint" style="margin-top:4px;">Determines which page this user lands on after logging in.</div>
         </div>

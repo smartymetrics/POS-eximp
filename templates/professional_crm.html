@@ -8,6 +8,8 @@
     <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
     <script src="https://cdn.jsdelivr.net/npm/chart.js"></script>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <!-- Mobile Drag and Drop Polyfill -->
+    <script src="https://unpkg.com/drag-drop-touch"></script>
     <style>
         * { font-family: 'Inter', sans-serif; }
         
@@ -255,21 +257,181 @@
         }
 
         .btn-secondary:hover { background: #f9fafb; }
-
         .view-section { display: none; }
         .view-section.active { display: block; }
 
         @media (max-width: 1024px) {
-            .sidebar { transform: translateX(-100%); }
-            .main-content { margin-left: 0; }
-            .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+             .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+         }
+ 
+         /* KANBAN / PIPELINE ENHANCEMENTS */
+         .kanban-board {
+             display: grid;
+             grid-template-columns: repeat(4, 1fr);
+             gap: 20px;
+             align-items: start;
+             min-height: calc(100vh - 200px);
+         }
+         .kanban-col {
+             background: rgba(255, 255, 255, 0.02);
+             border-radius: 16px;
+             padding: 16px;
+             border: 1px solid rgba(255, 255, 255, 0.05);
+             min-height: 100%;
+         }
+         .deal-card {
+             background: #222;
+             border-radius: 12px;
+             padding: 16px;
+             margin-bottom: 12px;
+             border: 1px solid #333;
+             cursor: pointer;
+             transition: 0.2s;
+         }
+         .deal-card:hover { 
+             border-color: var(--gold); 
+             transform: translateY(-2px);
+         }
+         .deal-card.dragging { opacity: 0.5; }
+         
+         /* Timeline Activity Style */
+         .timeline { position: relative; padding-left: 20px; }
+         .timeline::before {
+             content: '';
+             position: absolute;
+             left: 0;
+             top: 0;
+             bottom: 0;
+             width: 2px;
+             background: #333;
+         }
+         .timeline-item { position: relative; margin-bottom: 16px; }
+         .timeline-item::after {
+             content: '';
+             position: absolute;
+             left: -24px;
+             top: 4px;
+             width: 10px;
+             height: 10px;
+             border-radius: 50%;
+             background: var(--gold);
+             border: 2px solid #222;
+         }
+
+        /* Notifications UI */
+        .notifications-container {
+            position: relative;
         }
+        .notifications-bell {
+            position: relative;
+            width: 42px;
+            height: 42px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 12px;
+            cursor: pointer;
+            transition: 0.2s;
+        }
+        .notifications-bell:hover {
+            background: rgba(255, 255, 255, 0.1);
+        }
+        .notification-badge {
+            position: absolute;
+            top: -2px;
+            right: -2px;
+            background: #EF4444;
+            color: white;
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 6px;
+            border-radius: 10px;
+            border: 2px solid var(--dark);
+        }
+        .notification-dropdown {
+            position: absolute;
+            top: 52px;
+            right: 0;
+            width: 320px;
+            background: rgba(17, 24, 39, 0.98);
+            backdrop-filter: blur(12px);
+            border: 1px solid #333;
+            border-radius: 16px;
+            box-shadow: 0 20px 40px rgba(0,0,0,0.5);
+            display: none;
+            z-index: 100;
+        }
+        .notification-dropdown.active {
+            display: block;
+        }
+        .notification-item {
+            padding: 16px;
+            border-bottom: 1px solid #333;
+            cursor: pointer;
+            transition: 0.15s;
+        }
+        .notification-item:hover {
+            background: rgba(255, 255, 255, 0.03);
+        }
+        .notification-item:last-child {
+            border-bottom: none;
+        }
+        .notification-item .title {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--gold);
+            margin-bottom: 4px;
+        }
+        .notification-item .msg {
+            font-size: 12px;
+            color: #bbb;
+            line-height: 1.4;
+        }
+        .notification-item .time {
+            font-size: 10px;
+            color: #666;
+            margin-top: 8px;
+        }
+
+        /* Global Header */
+        .global-header {
+            display: flex;
+            justify-content: flex-end;
+            align-items: center;
+            padding: 12px 24px;
+            margin-bottom: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            position: sticky;
+            top: 0;
+            background: #000;
+            z-index: 40;
+        }
+        /* --- MOBILE OVERRIDES --- */
+        @media (max-width: 1024px) {
+            .sidebar { transform: translateX(-100%); transition: transform 0.3s ease; }
+            .sidebar.mobile-open { transform: translateX(0); box-shadow: 10px 0 50px rgba(0,0,0,0.9); }
+            .mobile-close-btn { display: block !important; position: absolute; right: 24px; top: 24px; color: #fff; font-size: 24px; background: none; border: none; cursor: pointer;}
+            .main-content { margin-left: 0; padding: 16px; padding-top: 16px; }
+            .grid-2, .grid-3, .grid-4 { grid-template-columns: 1fr; }
+            .global-header { justify-content: space-between; padding: 12px 16px; }
+            #mobile-menu-btn { display: block !important; font-size: 24px; color: #fff; background: none; border: none; cursor: pointer; }
+            .modal-content { width: 95% !important; max-width: 95% !important; margin: 10px; max-height: 90vh; overflow-y: auto; }
+            #leadDetailModal > div > div:nth-child(2) { grid-template-columns: 1fr !important; display: flex; flex-direction: column; }
+            
+            /* Make Kanban swipeable horizontally */
+            .kanban-container { scroll-snap-type: x mandatory; display: flex; overflow-x: auto; -webkit-overflow-scrolling: touch; padding-bottom: 30px !important; }
+            .kanban-col-wrapper { min-width: 85vw !important; scroll-snap-align: center; flex: none !important; }
+        }
+        #mobile-menu-btn { display: none; }
+        .mobile-close-btn { display: none; }
     </style>
 </head>
 
 <body>
     <!-- SIDEBAR -->
-    <div class="sidebar">
+    <div class="sidebar" id="appSidebar">
+        <button class="mobile-close-btn" onclick="closeMobileNav()"><i class="fas fa-times"></i></button>
         <div style="padding: 24px;">
             <div style="font-size: 18px; font-weight: 800; color: var(--gold); margin-bottom: 40px;">
                 <i class="fas fa-crown"></i> CRM PRO
@@ -306,10 +468,13 @@
                 <div class="nav-link" onclick="switchView('documents')">
                     <i class="fas fa-file-contract"></i> Documents
                 </div>
+                <div class="nav-link" onclick="switchView('activity-logs')">
+                    <i class="fas fa-history"></i> Activity Logs
+                </div>
             </div>
 
             <!-- Campaigns -->
-            <div class="nav-section">
+            <div class="nav-section" id="section-marketing">
                 <div class="nav-title">Marketing</div>
                 <div class="nav-link" onclick="switchView('campaigns')">
                     <i class="fas fa-bullhorn"></i> Campaigns
@@ -320,7 +485,7 @@
             </div>
 
             <!-- Service Hub (NEW) -->
-            <div class="nav-section">
+            <div class="nav-section" id="section-servicehub">
                 <div class="nav-title">Service Hub</div>
                 <div class="nav-link" onclick="switchView('support-desk')">
                     <i class="fas fa-headset"></i> Support Desk
@@ -328,7 +493,7 @@
             </div>
 
             <!-- Analytics -->
-            <div class="nav-section">
+            <div class="nav-section" id="section-intelligence">
                 <div class="nav-title">Intelligence</div>
                 <div class="nav-link" onclick="switchView('revenue-intel')">
                     <i class="fas fa-chart-line"></i> Revenue Analytics
@@ -339,12 +504,48 @@
                 <div class="nav-link" onclick="switchView('reports')">
                     <i class="fas fa-file-pdf"></i> Reports
                 </div>
+                
+                <div class="mt-auto pt-4 border-t border-[#333]">
+                    <div class="nav-title">Account</div>
+                    <div class="nav-link" onclick="openProfileModal()">
+                        <i class="fas fa-user-circle"></i> Profile Settings
+                    </div>
+                    <div class="nav-link text-red-500 hover:bg-red-500/10 hover:border-red-500" onclick="logout()">
+                        <i class="fas fa-sign-out-alt"></i> Logout
+                    </div>
+                </div>
             </div>
         </div>
     </div>
 
     <!-- MAIN CONTENT -->
     <div class="main-content">
+        <!-- GLOBAL TOP BAR -->
+        <div class="global-header">
+            <button id="mobile-menu-btn" onclick="toggleMobileNav()"><i class="fas fa-bars"></i></button>
+            <div class="flex gap-4 items-center">
+                <div class="notifications-container mr-2">
+                    <div class="notifications-bell" id="notif-bell" onclick="toggleNotifications()">
+                        <i class="fas fa-bell text-lg"></i>
+                        <span class="notification-badge" id="notif-count" style="display: none;">0</span>
+                    </div>
+                    <div class="notification-dropdown" id="notif-dropdown">
+                        <div class="p-4 border-bottom border-[#333] flex justify-between items-center bg-black/40 rounded-t-16">
+                            <span class="font-bold text-sm">Notifications</span>
+                            <button class="text-xs text-blue-400" onclick="markAllNotificationsRead()">Mark all as read</button>
+                        </div>
+                        <div id="notif-list" class="max-h-[400px] overflow-y-auto">
+                            <!-- Notifications load here -->
+                            <div class="p-8 text-center text-gray-400 text-sm">No new notifications</div>
+                        </div>
+                    </div>
+                </div>
+                <button class="btn btn-secondary btn-sm" onclick="window.location.href='/dashboard'" style="padding: 6px 12px; font-size: 11px;">
+                    <i class="fas fa-arrow-left"></i> Exit CRM
+                </button>
+            </div>
+        </div>
+
         <!-- HOME / LEADS VIEW -->
         <div id="leads" class="view-section active">
             <div class="header-section">
@@ -352,10 +553,7 @@
                     <h1 class="page-title" style="color: white !important;">Lead Intelligence</h1>
                     <p style="color: #888; margin-top: 8px;">AI-powered lead qualification & scoring</p>
                 </div>
-                <div class="flex gap-4">
-                    <button class="btn btn-secondary" onclick="window.location.href='/dashboard'">
-                        <i class="fas fa-arrow-left"></i> Back to Main
-                    </button>
+                <div class="flex gap-4 items-center">
                     <button class="btn btn-primary" onclick="scoreAllLeads()">
                         <i class="fas fa-brain"></i> Analyze All Leads
                     </button>
@@ -488,44 +686,34 @@
             </div>
         </div>
 
-        <!-- PIPELINE -->
-        <div id="pipeline" class="view-section">
-            <div class="header-section">
-                <h1 class="page-title">Sales Pipeline</h1>
-            </div>
-            <div style="display: grid; grid-template-columns: repeat(4, 1fr); gap: 16px; margin-bottom: 32px;">
-                <div>
-                    <h3 style="font-weight: 600; margin-bottom: 12px; font-size: 12px; text-transform: uppercase; color: #888;">Unpaid</h3>
-                    <div id="pipeline-unpaid" style="background: #f3f4f6; border-radius: 8px; padding: 12px; min-height: 400px;"></div>
-                </div>
-                <div>
-                    <h3 style="font-weight: 600; margin-bottom: 12px; font-size: 12px; text-transform: uppercase; color: #888;">Partial</h3>
-                    <div id="pipeline-partial" style="background: #f3f4f6; border-radius: 8px; padding: 12px; min-height: 400px;"></div>
-                </div>
-                <div>
-                    <h3 style="font-weight: 600; margin-bottom: 12px; font-size: 12px; text-transform: uppercase; color: #888;">Paid</h3>
-                    <div id="pipeline-paid" style="background: #f3f4f6; border-radius: 8px; padding: 12px; min-height: 400px;"></div>
-                </div>
-                <div>
-                    <h3 style="font-weight: 600; margin-bottom: 12px; font-size: 12px; text-transform: uppercase; color: #888;">Overdue</h3>
-                    <div id="pipeline-overdue" style="background: #f3f4f6; border-radius: 8px; padding: 12px; min-height: 400px;"></div>
-                </div>
-            </div>
-        </div>
-
         <!-- DOCUMENTS & E-SIGNATURES -->
-        <div id="documents" class="view-section">
-            <div class="header-section">
-                <h1 class="page-title">Document Management</h1>
-                <button class="btn btn-primary">
-                    <i class="fas fa-file-upload"></i> Upload Document
-                </button>
-            </div>
-            <div class="card">
-                <h3 style="font-weight: 600; margin-bottom: 20px;">Recent Documents</h3>
-                <div id="documentsList"></div>
-            </div>
-        </div>
+         <div id="documents" class="view-section">
+             <div class="header-section">
+                 <h1 class="page-title">Document Management</h1>
+             </div>
+
+             <!-- Filters: visible to admin only -->
+             <div class="card" style="margin-bottom: 24px; padding: 16px;">
+                 <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                     <div style="flex: 1; min-width: 250px;">
+                         <input type="text" id="docSearchInput" placeholder="Search by client name or invoice number..." style="width: 100%; border-radius: 8px; padding: 10px; background: #111; color: #fff; border: 1px solid #333; outline: none; font-size: 13px;" onkeyup="if(event.key==='Enter') loadDocuments();">
+                     </div>
+                     <div id="adminDocRepFilterContainer" style="flex: 1; min-width: 200px; display: none;">
+                         <select id="docRepFilter" style="width: 100%; background: #111; border: 1px solid #333; color: #fff; border-radius: 8px; padding: 10px; font-size: 13px; outline: none;" onchange="loadDocuments()">
+                             <option value="">All Sales Reps</option>
+                         </select>
+                     </div>
+                     <div>
+                         <button class="btn btn-primary" onclick="loadDocuments()"><i class="fas fa-search"></i></button>
+                     </div>
+                 </div>
+             </div>
+
+             <div class="card">
+                 <h3 style="font-weight: 600; margin-bottom: 20px;">Contract Progress</h3>
+                 <div id="documentsList"></div>
+             </div>
+         </div>
 
         <!-- CAMPAIGNS -->
         <div id="campaigns" class="view-section">
@@ -562,14 +750,25 @@
         </div>
 
         <!-- PIPELINE (KANBAN BOARD) -->
-        <div id="pipeline" class="view-section">
-            <div class="header-section">
-                <h1 class="page-title">Sales Pipeline <span style="font-size: 14px; font-weight: normal; color: #888; margin-left: 10px;">Drag and Drop Deals</span></h1>
-            </div>
+         <div id="pipeline" class="view-section">
+             <div class="header-section">
+                 <div>
+                     <h1 class="page-title" style="color: #fff;">Sales Pipeline</h1>
+                     <p style="color: #888; font-size: 14px; margin-top: 4px;">Track and manage your leads and their daily activities.</p>
+                 </div>
+                 <div style="display: flex; gap: 12px;">
+                     <button class="btn btn-secondary" onclick="openImportModal()" style="background: rgba(255,255,255,0.05); color: #fff; border: 1px solid #333;">
+                         <i class="fas fa-file-import mr-2"></i> Import CSV
+                     </button>
+                     <button class="btn btn-primary" onclick="openAddLeadModal()">
+                         <i class="fas fa-plus mr-2"></i> Add Lead
+                     </button>
+                 </div>
+             </div>
             
-            <div style="display: flex; gap: 16px; overflow-x: auto; padding-bottom: 20px; align-items: flex-start; height: 75vh;">
+            <div class="kanban-container" style="display: flex; gap: 16px; overflow-x: auto; padding-bottom: 20px; align-items: flex-start; height: 75vh;">
                 <!-- INSPECTION COLUMN -->
-                <div class="card" style="flex: 1; min-width: 280px; background: rgba(0,0,0,0.2); border: 1px solid #333; height: 100%; display: flex; flex-direction: column;">
+                <div class="kanban-col-wrapper card" style="flex: 1; min-width: 280px; background: rgba(0,0,0,0.2); border: 1px solid #333; height: 100%; display: flex; flex-direction: column;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #444;">
                         <h3 style="font-weight: 700; color: #fff; text-transform: uppercase; font-size: 11px; letter-spacing: 1px;">1. Inspection <span style="font-weight: normal; color: #666;">(20%)</span></h3>
                         <span class="badge" style="background: rgba(255,255,255,0.1); color: #fff;" id="count-inspection">0</span>
@@ -580,7 +779,7 @@
                 </div>
 
                 <!-- OFFER COLUMN -->
-                <div class="card" style="flex: 1; min-width: 280px; background: rgba(0,0,0,0.2); border: 1px solid #333; height: 100%; display: flex; flex-direction: column;">
+                <div class="kanban-col-wrapper card" style="flex: 1; min-width: 280px; background: rgba(0,0,0,0.2); border: 1px solid #333; height: 100%; display: flex; flex-direction: column;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #444;">
                         <h3 style="font-weight: 700; color: #eab308; text-transform: uppercase; font-size: 11px; letter-spacing: 1px;">2. Offer <span style="font-weight: normal; color: #666;">(50%)</span></h3>
                         <span class="badge" style="background: rgba(234, 179, 8, 0.1); color: #eab308;" id="count-offer">0</span>
@@ -591,7 +790,7 @@
                 </div>
 
                 <!-- CONTRACT COLUMN -->
-                <div class="card" style="flex: 1; min-width: 280px; background: rgba(0,0,0,0.2); border: 1px solid #333; height: 100%; display: flex; flex-direction: column;">
+                <div class="kanban-col-wrapper card" style="flex: 1; min-width: 280px; background: rgba(0,0,0,0.2); border: 1px solid #333; height: 100%; display: flex; flex-direction: column;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #444;">
                         <h3 style="font-weight: 700; color: #60a5fa; text-transform: uppercase; font-size: 11px; letter-spacing: 1px;">3. Contract <span style="font-weight: normal; color: #666;">(80%)</span></h3>
                         <span class="badge" style="background: rgba(96, 165, 250, 0.1); color: #60a5fa;" id="count-contract">0</span>
@@ -602,7 +801,7 @@
                 </div>
 
                 <!-- CLOSED COLUMN -->
-                <div class="card" style="flex: 1; min-width: 280px; background: rgba(0,0,0,0.2); border: 1px solid #333; border-top: 3px solid #22c55e; height: 100%; display: flex; flex-direction: column;">
+                <div class="kanban-col-wrapper card" style="flex: 1; min-width: 280px; background: rgba(0,0,0,0.2); border: 1px solid #333; border-top: 3px solid #22c55e; height: 100%; display: flex; flex-direction: column;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #444;">
                         <h3 style="font-weight: 700; color: #22c55e; text-transform: uppercase; font-size: 11px; letter-spacing: 1px;">4. Closed <span style="font-weight: normal; color: #666;">(100%)</span></h3>
                         <span class="badge" style="background: rgba(34, 197, 94, 0.1); color: #22c55e;" id="count-closed">0</span>
@@ -667,6 +866,35 @@
             </div>
         </div>
 
+        <!-- ACTIVITY LOGS -->
+        <div id="activity-logs" class="view-section">
+            <div class="header-section">
+                <h1 class="page-title">Activity Logs</h1>
+            </div>
+            
+            <div class="card" style="margin-bottom: 24px; padding: 16px;">
+                <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 250px;">
+                        <input type="text" id="logSearchInput" placeholder="Search logs (e.g. email, client name...)" style="width: 100%; border-radius: 8px; padding: 10px; background: #111; color: #fff; border: 1px solid #333; outline: none; font-size: 13px;" onkeyup="if(event.key==='Enter') loadActivityLogs();">
+                    </div>
+                    <div id="adminRepFilterContainer" style="flex: 1; min-width: 200px; display: none;">
+                        <select id="logRepFilter" style="width: 100%; background: #111; border: 1px solid #333; color: #fff; border-radius: 8px; padding: 10px; font-size: 13px; outline: none;" onchange="loadActivityLogs()">
+                            <option value="">Loading Sales Reps...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <button class="btn btn-primary" onclick="loadActivityLogs()"><i class="fas fa-search"></i></button>
+                    </div>
+                </div>
+            </div>
+
+            <div class="card">
+                <div id="activityLogsFeed">
+                    <div style="text-align: center; color: #666; padding: 40px;">Loading logs...</div>
+                </div>
+            </div>
+        </div>
+
         <!-- REPORTS -->
         <div id="reports" class="view-section">
             <div class="header-section">
@@ -689,7 +917,122 @@
                     <button class="btn btn-secondary" style="width: 100%;">Generate PDF</button>
                 </div>
             </div>
-        </div>
+         </div>
+ 
+     <!-- MODAL: ADD LEAD -->
+     <div id="addLeadModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center;">
+         <div class="modal-content" style="background: #1A1A1A; width: 450px; border-radius: 16px; border: 1px solid #333; overflow: hidden;">
+             <div style="padding: 24px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+                 <h2 style="font-size: 18px; font-weight: 800; color: #fff;">Add New Lead</h2>
+                 <button onclick="closeAddLeadModal()" style="color: #666;"><i class="fas fa-times"></i></button>
+             </div>
+             <form id="addLeadForm" style="padding: 24px;" onsubmit="handleQuickAddLead(event)">
+                 <div style="margin-bottom: 16px;">
+                     <label style="display: block; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; margin-bottom: 8px;">Full Name</label>
+                     <input type="text" id="lead-name" required style="width: 100%; background: #222; border: 1px solid #333; border-radius: 8px; padding: 12px; color: #fff; outline: none;">
+                 </div>
+                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 16px; margin-bottom: 16px;">
+                     <div>
+                         <label style="display: block; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; margin-bottom: 8px;">Email</label>
+                         <input type="email" id="lead-email" required style="width: 100%; background: #222; border: 1px solid #333; border-radius: 8px; padding: 12px; color: #fff; outline: none;">
+                     </div>
+                     <div>
+                         <label style="display: block; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; margin-bottom: 8px;">Phone</label>
+                         <input type="text" id="lead-phone" required style="width: 100%; background: #222; border: 1px solid #333; border-radius: 8px; padding: 12px; color: #fff; outline: none;">
+                     </div>
+                 </div>
+                 <div style="margin-bottom: 24px;">
+                     <label style="display: block; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; margin-bottom: 8px;">Estimated Value (₦)</label>
+                     <input type="number" id="lead-value" placeholder="e.g. 5000000" style="width: 100%; background: #222; border: 1px solid #333; border-radius: 8px; padding: 12px; color: var(--gold); font-weight: 800; outline: none;">
+                 </div>
+                 <button type="submit" class="btn btn-primary" style="width: 100%; padding: 14px;">Create Lead</button>
+             </form>
+         </div>
+     </div>
+ 
+     <!-- MODAL: IMPORT CSV -->
+     <div id="importLeadsModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center;">
+         <div class="modal-content" style="background: #1A1A1A; width: 500px; border-radius: 16px; border: 1px solid #333; overflow: hidden;">
+             <div style="padding: 24px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+                 <h2 style="font-size: 18px; font-weight: 800; color: #fff;">Import Leads via CSV</h2>
+                 <button onclick="closeImportModal()" style="color: #666;"><i class="fas fa-times"></i></button>
+             </div>
+             <div style="padding: 24px;">
+                 <div style="background: rgba(196, 125, 10, 0.05); border: 1px solid rgba(196, 125, 10, 0.2); border-radius: 8px; padding: 16px; margin-bottom: 24px;">
+                     <h4 style="font-size: 12px; font-weight: 800; color: var(--gold); text-transform: uppercase; margin-bottom: 8px;">CSV Preparation Guide</h4>
+                     <p style="font-size: 11px; color: #888; line-height: 1.6;">Your CSV should have at least one column for the <strong>Name</strong>. Our system will automatically guess other columns like <strong>Email</strong>, <strong>Phone</strong>, and <strong>Value</strong>.</p>
+                 </div>
+ 
+                 <div style="border: 2px dashed #333; border-radius: 12px; padding: 40px; text-align: center; cursor: pointer;" onclick="document.getElementById('csvFile').click()">
+                     <i class="fas fa-cloud-upload-alt" style="font-size: 32px; color: var(--gold); margin-bottom: 12px;"></i>
+                     <p style="font-size: 13px; color: #fff; font-weight: 600;">Click to select CSV file</p>
+                     <p style="font-size: 11px; color: #555; margin-top: 4px;">Only .csv files are supported</p>
+                     <input type="file" id="csvFile" hidden accept=".csv" onchange="handleCSVUpload(this)">
+                 </div>
+                 
+                 <div id="importStatus" style="margin-top: 16px; font-size: 12px; text-align: center; display: none;"></div>
+             </div>
+         </div>
+     </div>
+ 
+     <!-- MODAL: LEAD DETAILS & EDIT -->
+     <div id="leadDetailModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center;">
+         <div class="modal-content" style="background: #111; width: 800px; height: 80vh; border-radius: 16px; border: 1px solid #333; display: flex; flex-direction: column;">
+             <div style="padding: 20px 24px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+                 <div>
+                     <h2 id="detail-lead-name" style="font-size: 20px; font-weight: 800; color: #fff;">Client Name</h2>
+                     <div style="font-size: 11px; color: #666; margin-top: 2px;">Assigned to: <span id="detail-lead-rep" style="color: var(--gold);">You</span></div>
+                 </div>
+                 <button onclick="closeLeadDetailModal()" style="color: #666; font-size: 18px;"><i class="fas fa-times"></i></button>
+             </div>
+             
+             <div style="display: grid; grid-template-columns: 320px 1fr; flex: 1; overflow: hidden;">
+                 <!-- Sidebar: Stats & Info -->
+                 <div style="padding: 24px; border-right: 1px solid #333; overflow-y: auto;">
+                     <div style="margin-bottom: 24px;">
+                         <label style="font-size: 10px; font-weight: 800; color: #555; text-transform: uppercase;">Lead Value</label>
+                         <div id="detail-lead-value" style="font-size: 24px; font-weight: 800; color: var(--gold);">₦0</div>
+                     </div>
+ 
+                     <div style="margin-bottom: 24px;">
+                         <label style="font-size: 10px; font-weight: 800; color: #555; text-transform: uppercase; margin-bottom: 4px; display: block;">Pipeline Stage (Mobile quick-move)</label>
+                         <select id="detail-lead-stage" onchange="saveLeadStage()" style="width: 100%; background: #1A1A1A; border: 1px solid #333; color: #fff; border-radius: 8px; padding: 10px; font-size: 13px; outline: none;">
+                             <option value="inspection">Inspection</option>
+                             <option value="offer">Offer</option>
+                             <option value="contract">Contract</option>
+                             <option value="closed">Closed (Won)</option>
+                         </select>
+                     </div>
+
+                     <div style="background: rgba(255,255,255,0.03); border: 1px solid #222; border-radius: 12px; padding: 16px;">
+                         <h4 style="font-size: 11px; font-weight: 800; color: #888; margin-bottom: 16px;">CONTACT INFO</h4>
+                         <div style="margin-bottom: 12px;">
+                             <label style="font-size: 10px; color: #555;">EMAIL</label>
+                             <div id="detail-lead-email" style="font-size: 13px; color: #fff; margin-top: 2px;">-</div>
+                         </div>
+                         <div style="margin-bottom: 12px;">
+                             <label style="font-size: 10px; color: #555;">PHONE</label>
+                             <div id="detail-lead-phone" style="font-size: 13px; color: #fff; margin-top: 2px;">-</div>
+                         </div>
+                     </div>
+ 
+                     <button class="btn btn-secondary" style="width: 100%; margin-top: 20px; border-color: #333; color: #fff;" onclick="openEditLeadForm()">
+                         Edit Details
+                     </button>
+                 </div>
+ 
+                 <!-- Main: Activity Log -->
+                 <div style="padding: 24px; overflow-y: auto;">
+                     <h4 style="font-size: 12px; font-weight: 800; color: #888; margin-bottom: 24px; display: flex; align-items: center; gap: 8px;">
+                         <i class="fas fa-history"></i> ACTIVITY TIMELINE
+                     </h4>
+                     <div id="lead-activity-timeline" class="timeline">
+                         <!-- Activities injected here -->
+                     </div>
+                 </div>
+             </div>
+         </div>
+     </div>
 
         <!-- SUPPORT DESK (NEW) -->
         <div id="support-desk" class="view-section">
@@ -721,29 +1064,52 @@
                 </div>
             </div>
 
-            <div class="grid-2">
-                <div class="card">
-                    <h3 class="font-bold mb-4">Active Tickets</h3>
-                    <div id="ticketsList" class="space-y-4">
-                        <!-- Tickets load here -->
-                    </div>
-                </div>
-                <div class="card" id="ticketDetailPanel" style="display: none;">
-                    <h3 class="font-bold mb-4" id="ticketSubject">Ticket Details</h3>
-                    <div id="ticketThread" class="space-y-4 max-h-[400px] overflow-y-auto mb-4 p-4 bg-black/20 rounded-lg">
-                        <!-- Conversation history -->
-                    </div>
-                    <div>
-                        <textarea id="ticketResponse" class="w-full bg-[#222] border border-[#333] rounded-lg p-3 text-sm mb-2" rows="3" placeholder="Write your response..."></textarea>
-                        <div class="flex justify-between">
-                            <label class="flex items-center gap-2 text-xs text-gray-400">
-                                <input type="checkbox" id="isInternalResponse"> Internal Note
-                            </label>
-                            <button class="btn btn-primary btn-sm" onclick="submitTicketResponse()">Send Response</button>
-                        </div>
-                    </div>
-                </div>
-            </div>
+            <div style="display: grid; grid-template-columns: 350px 1fr; gap: 24px; align-items: start;">
+                 <!-- TICKET LIST (LEFT) -->
+                 <div class="card">
+                     <h3 class="font-bold mb-4">Active Tickets</h3>
+                     <div id="ticketsList" class="space-y-4 max-h-[600px] overflow-y-auto">
+                         <!-- Tickets load here -->
+                     </div>
+                 </div>
+
+                 <!-- TICKET DETAIL / CHAT (RIGHT) -->
+                 <div class="card" id="ticketDetailPanel" style="display: none;">
+                     <div class="flex justify-between items-center mb-6">
+                         <h3 class="font-bold text-lg" id="ticketSubject">Ticket Details</h3>
+                         <button onclick="document.getElementById('ticketDetailPanel').style.display='none'" class="text-gray-500 hover:text-white"><i class="fas fa-times"></i></button>
+                     </div>
+
+                     <div id="ticketThread" class="space-y-4 max-h-[500px] overflow-y-auto mb-6 p-4 bg-black/40 rounded-xl border border-white/5">
+                         <!-- Conversation history -->
+                         <div class="text-center text-gray-500 py-10 italic">Select a ticket to view discussion</div>
+                     </div>
+
+                     <div class="pt-4 border-t border-white/5">
+                         <div id="admin-typing-indicator" class="text-[10px] italic text-[#C47D0A] mb-2" style="display: none;">Client is typing...</div>
+                         <textarea id="ticketResponse" class="w-full bg-[#0A0A0A] border border-[#333] rounded-xl p-4 text-sm mb-4 focus:border-[#C47D0A] transition-all outline-none" rows="4" placeholder="Write your response..."></textarea>
+                         
+                         <div class="flex justify-between items-center">
+                             <label class="flex items-center gap-2 text-xs text-gray-400 cursor-pointer hover:text-gray-200">
+                                 <input type="checkbox" id="isInternalResponse" class="rounded border-[#333] bg-transparent"> 
+                                 <span>Internal Note (Private)</span>
+                             </label>
+
+                             <div class="flex gap-2">
+                                 <button class="btn btn-secondary btn-sm" style="background: rgba(16, 185, 129, 0.1); color: #10B981; border: 1px solid rgba(16, 185, 129, 0.3);" onclick="resolveTicket()">
+                                     <i class="fas fa-check-circle"></i> Resolve & Close
+                                 </button>
+                                 <button class="btn btn-secondary" onclick="openSupportAttachment()" title="Attach Image or PDF" style="background: rgba(255,255,255,0.05); border-color: #333; color: #fff;">
+                                     <i class="fas fa-paperclip"></i>
+                                 </button>
+                                 <button class="btn btn-primary btn-sm" onclick="submitTicketResponse()" style="padding: 10px 24px;">
+                                     <i class="fas fa-paper-plane mr-2"></i> Send Response
+                                 </button>
+                             </div>
+                         </div>
+                     </div>
+                 </div>
+             </div>
         </div>
 
         <!-- REVENUE INTELLIGENCE (NEW) -->
@@ -815,9 +1181,44 @@
 
         const API_BASE = "/api/crm/pro";
         let token = checkAuth();
+        
+        // --- ROLE BASED UI RESTRICTIONS ---
+        function applyUIPermissions() {
+            const admin = JSON.parse(localStorage.getItem('admin') || '{}');
+            const roleStr = (admin.role || 'staff').toLowerCase();
+            const roles = roleStr.split(',').map(r => r.trim());
+            
+            const isPrivileged = roles.some(r => ['admin', 'operations', 'super_admin'].includes(r));
+            const isRestricted = roles.some(r => ['sales', 'staff'].includes(r)) && !isPrivileged;
+            
+            // Sales Reps & Staff are restricted
+            if (isRestricted) {
+                const restrictedSections = [
+                    'section-marketing',
+                    'section-servicehub',
+                    'section-intelligence'
+                ];
+                
+                restrictedSections.forEach(id => {
+                    const el = document.getElementById(id);
+                    if (el) el.style.display = 'none';
+                });
+            }
+        }
+        
+        document.addEventListener('DOMContentLoaded', applyUIPermissions);
 
         // GLOBAL TOKEN for other functions
         window.ec_token = token;
+
+        // Mobile Nav functions
+        function toggleMobileNav() {
+            document.getElementById("appSidebar").classList.toggle("mobile-open");
+        }
+        function closeMobileNav() {
+            const sidebar = document.getElementById("appSidebar");
+            if (sidebar) sidebar.classList.remove("mobile-open");
+        }
 
         // View switching
         function switchView(viewName) {
@@ -837,8 +1238,11 @@
             else if (viewName === "properties") loadProperties();
             else if (viewName === "market-intel") loadMarketIntelligence();
             else if (viewName === "documents") loadDocuments();
+            else if (viewName === "activity-logs") loadActivityLogs();
             else if (viewName === "campaigns") loadCampaigns();
             else if (viewName === "portal") loadPortalInstances();
+
+            if (window.innerWidth <= 1024) closeMobileNav();
         }
 
         async function loadCampaigns() {
@@ -940,6 +1344,9 @@
                 document.getElementById("hot-leads").textContent = data.hot_leads;
                 document.getElementById("warm-leads").textContent = data.warm_leads;
                 document.getElementById("cold-leads").textContent = data.total_leads - data.hot_leads - data.warm_leads;
+                
+                const totalPipeline = data.prioritized_leads.reduce((sum, lead) => sum + (lead.total_deals * 500000), 0);
+                document.getElementById("total-pipeline").textContent = `₦${(totalPipeline / 1000000).toFixed(1)}M`;
                 
                 const html = data.prioritized_leads.map(lead => `
                     <tr>
@@ -1106,52 +1513,460 @@
         // Initialize on page load
         document.addEventListener("DOMContentLoaded", () => {
             showPageLoader('Loading CRM dashboard...');
+            restrictViewsByRole();
             loadLeads();
         });
 
-        // --- PIPELINE / KANBAN LOGIC ---
+        // --- PIPELINE / KANBAN LOGIC (LEAD CENTRIC) ---
         async function loadPipeline() {
             try {
                 const res = await fetch("/api/crm/pipeline", {
                     headers: { "Authorization": `Bearer ${token}` }
                 });
                 const pipeline = await res.json();
-                
                 const stages = ["inspection", "offer", "contract", "closed"];
                 
                 stages.forEach(stage => {
                     const data = pipeline[stage];
                     if (!data) return;
-
                     document.getElementById(`count-${stage}`).textContent = data.count;
                     
-                    const html = data.deals.map(deal => {
-                        // Weighted value calculation for "Premium" feel
+                    const html = data.deals.map(lead => {
                         const probability = stage === 'inspection' ? 20 : stage === 'offer' ? 50 : stage === 'contract' ? 80 : 100;
-                        const weightedVal = (parseFloat(deal.amount) * (probability / 100)).toLocaleString();
+                        const weightedVal = (parseFloat(lead.estimated_value || 0) * (probability / 100)).toLocaleString();
 
                         return `
-                        <div class="deal-card" draggable="true" ondragstart="drag(event)" id="deal-${deal.id}" data-id="${deal.id}">
+                        <div class="deal-card" draggable="true" ondragstart="drag(event)" onclick="openLeadDetails('${lead.id}')" data-id="${lead.id}">
                             <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
-                                <div style="font-size: 11px; color: #888; font-weight: 600;">#${deal.invoice_number}</div>
-                                <div style="font-size: 10px; color: #555;">${new Date(deal.created_at).toLocaleDateString()}</div>
+                                <div style="font-size: 10px; color: #666; font-weight: 700;">PROSPECT</div>
+                                <div style="font-size: 10px; color: #555;">${new Date(lead.created_at).toLocaleDateString()}</div>
                             </div>
-                            <div style="font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 4px;">${deal.client_name || 'Unknown Client'}</div>
-                            <div style="font-size: 16px; font-weight: 800; color: var(--gold);">₦${parseFloat(deal.amount).toLocaleString()}</div>
-                            <div style="font-size: 10px; color: #22c55e; margin-top: 2px;">Forecast: ₦${weightedVal} <span style="color: #666; font-weight: normal;">(${probability}%)</span></div>
-                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 10px; padding-top: 8px; border-top: 1px solid #222;">
-                                <div style="font-size: 10px; color: #666;">REP: ${deal.sales_rep_name || 'N/A'}</div>
-                                ${deal.status === 'overdue' ? '<span style="color: #ef4444; font-size: 10px; font-weight: bold;">OVERDUE</span>' : ''}
+                            <div style="font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 4px;">${lead.full_name || 'Unknown Client'}</div>
+                            <div style="font-size: 16px; font-weight: 800; color: var(--gold);">₦${parseFloat(lead.estimated_value || 0).toLocaleString()}</div>
+                            <div style="font-size: 10px; color: #22c55e; margin-top: 2px;">Forecast: ₦${weightedVal} <span style="color: #666;">(${probability}%)</span></div>
+                            
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 8px; border-top: 1px solid #333;">
+                                <div style="display: flex; gap: 8px;">
+                                    <button onclick="event.stopPropagation(); initiateLeadChat('${lead.id}', '${lead.full_name}')" title="Start Chat" style="color: var(--gold); background: rgba(196,125,10,0.1); width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; border:0;">
+                                        <i class="fas fa-comment-dots" style="font-size:10px;"></i>
+                                    </button>
+                                    <button onclick="event.stopPropagation(); logDailyActivity('${lead.id}')" title="Log Activity" style="color: #fff; background: #333; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; border:0;">
+                                        <i class="fas fa-pen-nib" style="font-size:10px;"></i>
+                                    </button>
+                                </div>
+                                <div style="font-size: 9px; color: #444; font-weight: 700; text-transform: uppercase;">ID: ${lead.id.split('-')[0]}</div>
                             </div>
                         </div>
                     `}).join("");
-                    
-                    document.getElementById(`col-${stage}`).innerHTML = html || '<div style="text-align: center; color: #444; font-size: 12px; padding: 20px;">No deals</div>';
+                    document.getElementById(`col-${stage}`).innerHTML = html || '<div style="text-align: center; color: #444; font-size: 11px; padding: 20px;">No leads</div>';
                 });
             } catch (err) {
-                console.error("Error loading pipeline:", err);
+                console.error("Pipeline Error:", err);
             }
         }
+
+        // --- PROGRESSIVE DOCUMENT LOADING ---
+        async function loadDocuments() {
+            try {
+                let role = "sales";
+                if (token) {
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    role = payload.role;
+                }
+
+                const searchTxt = document.getElementById("docSearchInput")?.value || "";
+                const repId = document.getElementById("docRepFilter")?.value || "";
+
+                let url = "/api/crm/pro/documents?";
+                if (searchTxt) url += `search_text=${encodeURIComponent(searchTxt)}&`;
+                if (repId) url += `rep_id=${repId}&`;
+
+                const res = await fetch(url, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const docs = await res.json();
+
+                // Show/hide admin rep filter
+                const filterContainer = document.getElementById("adminDocRepFilterContainer");
+                if (role === "admin" || role === "legal") {
+                    if (filterContainer) filterContainer.style.display = "block";
+                    if (filterContainer && !filterContainer.dataset.loaded) {
+                        const repRes = await fetch("/api/sales-reps", {
+                            headers: { "Authorization": `Bearer ${token}` }
+                        });
+                        const reps = await repRes.json();
+                        let options = `<option value="">All Sales Reps</option>`;
+                        reps.forEach(r => {
+                            options += `<option value="${r.id}">${r.name}</option>`;
+                        });
+                        document.getElementById("docRepFilter").innerHTML = options;
+                        filterContainer.dataset.loaded = "true";
+                    }
+                } else {
+                    if (filterContainer) filterContainer.style.display = "none";
+                }
+                
+                const html = docs.map(doc => {
+                    let badgeStyle = "background: rgba(255,255,255,0.05); color: #888;";
+                    let badgeText = "Pending";
+                    let actionBtn = "";
+                    
+                    if (doc.signing_status === "completed") {
+                        badgeStyle = "background: rgba(34,197,94,0.15); color: #22c55e;";
+                        badgeText = "Fully Executed";
+                        actionBtn = `<a href="/api/contracts/${doc.invoice_id}/contract?token=${token}" target="_blank" class="btn btn-primary" style="padding: 6px 12px; font-size: 11px;">View Contract</a>`;
+                    } else if (doc.signing_status === "partial") {
+                        badgeStyle = "background: rgba(196,125,10,0.15); color: var(--gold);";
+                        badgeText = "Partially Signed";
+                        actionBtn = `<a href="/api/contracts/pdf/draft/${doc.invoice_id}?token=${token}" target="_blank" class="btn btn-secondary" style="padding: 6px 12px; font-size: 11px;">View Draft</a>`;
+                    } else if (doc.signing_status === "not_started") {
+                        badgeText = "Not Started";
+                    } else {
+                        badgeText = "Pending Signatures";
+                        actionBtn = `<a href="/api/contracts/pdf/draft/${doc.invoice_id}?token=${token}" target="_blank" class="btn btn-secondary" style="padding: 6px 12px; font-size: 11px;">View Draft</a>`;
+                    }
+
+                    return `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid #222;">
+                        <div>
+                            <div style="font-size: 14px; font-weight: 700; color: #fff;">${doc.client_name}</div>
+                            <div style="font-size: 11px; color: #888; margin-top: 4px;">Invoice: <span style="color:var(--gold);">${doc.invoice_number}</span></div>
+                            <div style="font-size: 11px; color: #555; margin-top: 2px;">Signatures: ${doc.signatures_collected || 0}</div>
+                        </div>
+                        <div style="text-align: right;">
+                            <div style="padding: 4px 10px; border-radius: 999px; font-size: 10px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.05em; ${badgeStyle} display: inline-block; margin-bottom: 8px;">${badgeText}</div>
+                            <div>${actionBtn}</div>
+                        </div>
+                    </div>
+                `}).join("");
+                
+                document.getElementById("documentsList").innerHTML = html || '<div style="text-align: center; color: #666; padding: 40px;">No documents found.</div>';
+            } catch (err) {
+                 console.error("Documents fetch error:", err);
+            }
+        }
+
+        // --- ACTIVITY LOGS (AUDITING) ---
+        async function loadActivityLogs() {
+            try {
+                // Determine if Admin by checking payload
+                let role = "sales";
+                let adminId = "";
+                if (token) {
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    role = payload.role;
+                    adminId = payload.sub;
+                }
+                
+                const searchTxt = document.getElementById("logSearchInput")?.value || "";
+                const repId = document.getElementById("logRepFilter")?.value || "";
+                
+                let url = "/api/crm/pro/activity-logs?";
+                if(searchTxt) url += `search_text=${encodeURIComponent(searchTxt)}&`;
+                if(repId) url += `rep_id=${repId}&`;
+                
+                const res = await fetch(url, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const logs = await res.json();
+                
+                // Show/hide rep filter
+                const filterContainer = document.getElementById("adminRepFilterContainer");
+                if (role === "admin" || role === "legal") {
+                    if (filterContainer) filterContainer.style.display = "block";
+                    if (filterContainer && !filterContainer.dataset.loaded) {
+                        // Load reps into dropdown
+                        const repRes = await fetch("/api/sales-reps", {
+                            headers: { "Authorization": `Bearer ${token}` }
+                        });
+                        const reps = await repRes.json();
+                        let options = `<option value="">All Sales Reps</option>`;
+                        reps.forEach(r => {
+                            options += `<option value="${r.id}">${r.name}</option>`;
+                        });
+                        document.getElementById("logRepFilter").innerHTML = options;
+                        filterContainer.dataset.loaded = "true";
+                    }
+                } else {
+                    if (filterContainer) filterContainer.style.display = "none";
+                }
+                
+                const html = logs.length > 0 ? logs.map(log => {
+                    const date_opt = new Date(log.created_at).toLocaleString();
+                    const admin_name = log.admins ? (log.admins.full_name || log.admins.email || 'System') : 'System';
+                    const client_name = log.clients ? `${log.clients.full_name}` : 'General';
+                    return `
+                    <div class="timeline-item" style="padding-bottom: 24px;">
+                        <div style="font-size: 13px; font-weight: 700; color: #fff;">${log.event_type.replace(/_/g, ' ').toUpperCase()}</div>
+                        <div style="font-size: 11px; color: #aaa; margin-top: 4px;">Actor: <span style="color:var(--gold);">${admin_name}</span> &bull; Context: ${client_name}</div>
+                        <div style="font-size: 13px; color: #bbb; margin-top: 8px; line-height: 1.5;">${log.description}</div>
+                        <div style="font-size: 10px; color: #666; margin-top: 4px;">${date_opt}</div>
+                    </div>
+                `}).join("") : '<div style="text-align: center; color: #666; padding: 40px;">No activity logs found.</div>';
+                
+                document.getElementById("activityLogsFeed").innerHTML = html;
+            } catch (err) {
+                 console.error("Activity logs fetch error:", err);
+            }
+        }
+
+        // Lead Details & Timeline
+        async function openLeadDetails(id) {
+            try {
+                const res = await fetch(`/api/crm/contacts/${id}`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const lead = await res.json();
+                
+                document.getElementById("detail-lead-name").textContent = lead.full_name;
+                document.getElementById("detail-lead-email").textContent = lead.email;
+                document.getElementById("detail-lead-phone").textContent = lead.phone;
+                document.getElementById("detail-lead-value").textContent = `₦${parseFloat(lead.estimated_value || 0).toLocaleString()}`;
+                
+                // Set the current stage dropdown
+                if(lead.pipeline_stage) {
+                    document.getElementById("detail-lead-stage").value = lead.pipeline_stage;
+                }
+                
+                // Render Timeline
+                const timelineHtml = lead.activities.map(act => `
+                    <div class="timeline-item">
+                        <div style="font-size: 12px; font-weight: 700; color: #fff;">${act.event_type.replace('_', ' ').toUpperCase()}</div>
+                        <div style="font-size: 11px; color: #888; margin-top: 2px;">${act.description}</div>
+                        <div style="font-size: 9px; color: #444; margin-top: 4px;">${new Date(act.created_at).toLocaleString()}</div>
+                    </div>
+                `).join("");
+                document.getElementById("lead-activity-timeline").innerHTML = timelineHtml || '<div style="color: #444; font-size: 12px;">No activities recorded yet.</div>';
+                
+                document.getElementById("leadDetailModal").style.display = "flex";
+                document.getElementById("leadDetailModal").dataset.id = id;
+
+                // Set current assignee if dropdown exists
+                const assigneeSelect = document.getElementById("detail-assignee-select");
+                if (assigneeSelect) {
+                    assigneeSelect.value = lead.assigned_rep_id || "";
+                }
+                
+                // Update "Assigned to" text
+                document.getElementById("detail-lead-rep").textContent = lead.assigned_rep_name || (lead.assigned_rep_id ? "Assigned" : "Unassigned");
+
+            } catch (err) {
+                console.error("Detail Error:", err);
+            }
+        }
+
+        function closeLeadDetailModal() { document.getElementById("leadDetailModal").style.display = "none"; }
+
+         // CSV Hub
+         function openImportModal() { document.getElementById("importLeadsModal").style.display = "flex"; }
+         function closeImportModal() { document.getElementById("importLeadsModal").style.display = "none"; }
+ 
+         // Quick Add Lead
+         function openAddLeadModal() { document.getElementById("addLeadModal").style.display = "flex"; }
+         function closeAddLeadModal() { document.getElementById("addLeadModal").style.display = "none"; }
+         
+         async function handleQuickAddLead(e) {
+             e.preventDefault();
+             const data = {
+                 full_name: document.getElementById("lead-name").value,
+                 email: document.getElementById("lead-email").value,
+                 phone: document.getElementById("lead-phone").value,
+                 estimated_value: parseFloat(document.getElementById("lead-value").value || 0),
+                 pipeline_stage: "inspection"
+             };
+ 
+             try {
+                 showPageLoader("Creating lead...");
+                 const res = await fetch("/api/crm/clients", {
+                     method: "POST",
+                     headers: { "Authorization": `Bearer ${token}`, "Content-Type": "application/json" },
+                     body: JSON.stringify(data)
+                 });
+                 hidePageLoader();
+                 if (res.ok) {
+                     alert("Lead created successfully!");
+                     closeAddLeadModal();
+                     document.getElementById("addLeadForm").reset();
+                     loadPipeline();
+                 } else {
+                     const err = await res.json();
+                     alert("Error: " + err.detail);
+                 }
+             } catch (err) { alert("Failed to add lead."); hidePageLoader(); }
+         }
+
+        async function handleCSVUpload(input) {
+            const file = input.files[0];
+            if (!file) return;
+            
+            const status = document.getElementById("importStatus");
+            status.style.display = "block";
+            status.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Processing your file...ingesting headers...';
+            
+            const formData = new FormData();
+            formData.append("file", file);
+            
+            try {
+                const res = await fetch("/api/crm/import-leads", {
+                    method: "POST",
+                    headers: { "Authorization": `Bearer ${token}` },
+                    body: formData
+                });
+                const result = await res.json();
+                if (res.ok) {
+                    status.innerHTML = `<span style="color: #10B981;">✅ Success! Imported ${result.imported} leads correctly.</span>`;
+                    setTimeout(() => { closeImportModal(); loadPipeline(); }, 2000);
+                } else {
+                    status.innerHTML = `<span style="color: #EF4444;">❌ Error: ${result.detail}</span>`;
+                }
+            } catch (err) {
+                status.innerHTML = `<span style="color: #EF4444;">❌ Request failed.</span>`;
+            }
+        }
+
+        // Chat Initiation
+        async function initiateLeadChat(clientId, name) {
+            if (!confirm(`Generate a secure live chat portal link for ${name}?`)) return;
+            try {
+                const res = await fetch(`/api/support/initiate-chat?client_id=${clientId}`, {
+                    method: "POST",
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const data = await res.json();
+                
+                const fullUrl = window.location.origin + data.portal_url;
+                const action = prompt("Chat Link Generated!\n\nType 'copy' to copy to clipboard\nType 'email' to notify client by email\n\nLink: " + fullUrl);
+                
+                if (action === 'copy') {
+                    navigator.clipboard.writeText(fullUrl);
+                    alert("Link copied to clipboard!");
+                }
+             } catch (err) {
+                 alert("Failed to initiate chat.");
+             }
+         }
+ 
+         // --- CRM LEAD EDITING & LOGGING ---
+         function openEditLeadForm() {
+             const name = document.getElementById("detail-lead-name").textContent;
+             const id = document.getElementById("leadDetailModal").dataset.id;
+             const val = document.getElementById("detail-lead-value").textContent.replace(/[₦,]/g, '');
+             
+             const newName = prompt("Edit Lead Name:", name);
+             const newVal = prompt("Edit Estimated Value (₦):", val);
+ 
+             if (newName || newVal) {
+                 saveLeadDetails(id, { 
+                     full_name: newName || name, 
+                     estimated_value: parseFloat(newVal || val) 
+                 });
+             }
+         }
+ 
+         async function saveLeadDetails(id, data) {
+             try {
+                 const res = await fetch(`/api/crm/clients/${id}`, {
+                     method: "PATCH",
+                     headers: { 
+                         "Authorization": `Bearer ${token}`,
+                         "Content-Type": "application/json"
+                     },
+                     body: JSON.stringify(data)
+                 });
+                 if (res.ok) {
+                     alert("Lead updated and change logged.");
+                     closeLeadDetailModal();
+                     loadPipeline();
+                 }
+             } catch (err) { alert("Update failed."); }
+         }
+
+         async function saveLeadStage() {
+             const id = document.getElementById("leadDetailModal").dataset.id;
+             const stage = document.getElementById("detail-lead-stage").value;
+             try {
+                 const res = await fetch(`/api/crm/pipeline/${id}/move`, {
+                     method: "PATCH",
+                     headers: { 
+                         "Authorization": `Bearer ${token}`,
+                         "Content-Type": "application/json"
+                     },
+                     body: JSON.stringify({ pipeline_stage: stage })
+                 });
+                 if (res.ok) {
+                     loadPipeline();
+                     // Optional alert: alert("Lead moved.");
+                 }
+             } catch (err) { alert("Stage update failed."); }
+         }
+ 
+         async function logDailyActivity(id) {
+             const activity = prompt("What was done today? (e.g. Called client, Sent proposal)");
+             if (!activity) return;
+ 
+             try {
+                 const res = await fetch(`/api/crm/contacts/${id}/notes`, {
+                     method: "POST",
+                     headers: { 
+                         "Authorization": `Bearer ${token}`,
+                         "Content-Type": "application/json"
+                     },
+                     body: JSON.stringify({ note: activity })
+                 });
+                 if (res.ok) {
+                     alert("Activity logged.");
+                     loadPipeline();
+                 }
+             } catch (err) { alert("Failed to log activity."); }
+         }
+ 
+         // --- MULTIMEDIA CHAT LOGIC ---
+         function openSupportAttachment() {
+             const input = document.createElement('input');
+             input.type = 'file';
+             input.accept = '.jpg,.jpeg,.png,.pdf';
+             input.onchange = async (e) => {
+                 const file = e.target.files[0];
+                 if (!file) return;
+ 
+                 const formData = new FormData();
+                 formData.append('file', file);
+ 
+                 try {
+                     const res = await fetch('/api/support/upload', {
+                         method: 'POST',
+                         headers: { 'Authorization': `Bearer ${token}` },
+                         body: formData
+                     });
+                     const result = await res.json();
+                     if (res.ok) {
+                         // Send message with attachment
+                         sendTicketResponse(activeTicketId, `Shared a file: ${file.name}`, false, result.url);
+                     } else { alert(result.detail); }
+                 } catch (err) { alert("Upload failed."); }
+             };
+             input.click();
+         }
+ 
+         function renderMessage(msg) {
+             const isMe = msg.admin_id !== null;
+             let content = msg.message;
+             
+             if (msg.attachment_url) {
+                 if (msg.attachment_url.match(/\.(jpg|jpeg|png|gif)$/i)) {
+                     content += `<div style="margin-top:8px;"><img src="${msg.attachment_url}" style="max-width:200px; border-radius:8px; border: 1px solid #333;"></div>`;
+                 } else {
+                     content += `<div style="margin-top:8px;"><a href="${msg.attachment_url}" target="_blank" style="color:var(--gold); font-size:12px;"><i class="fas fa-file-pdf"></i> View Document (PDF)</a></div>`;
+                 }
+             }
+ 
+             return `
+                 <div class="message ${isMe ? 'sent' : 'received'}">
+                     <div class="bubble">${content}</div>
+                     <div class="meta">${new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</div>
+                 </div>
+             `;
+         }
 
         // Drag and Drop Handlers
         function drag(ev) {
@@ -1199,6 +2014,8 @@
 
         // --- SUPPORT DESK LOGIC ---
         let currentTicketId = null;
+        let supportSocket = null;
+        let adminTypingTimeout = null;
 
         async function loadSupportTickets() {
             try {
@@ -1248,6 +2065,7 @@
 
         async function viewTicket(id) {
             currentTicketId = id;
+            initSupportWebSocket(id);
             try {
                 const res = await fetch(`/api/support/tickets/${id}`, {
                     headers: { "Authorization": `Bearer ${token}` }
@@ -1291,23 +2109,85 @@
                     <div class="text-xs text-gray-200">${ticket.description}</div>
                 </div>`;
                 
-                threadHtml += (ticket.ticket_responses || []).map(r => `
-                    <div class="mb-4 p-3 ${r.is_internal ? 'bg-yellow-900/20 border-l-2 border-yellow-500' : 'bg-blue-900/10'} rounded ml-4">
-                        <div class="flex justify-between items-center mb-1">
-                            <span class="text-[10px] font-bold ${r.is_internal ? 'text-yellow-500' : 'text-blue-400'}">
-                                ${r.is_internal ? 'INTERNAL NOTE' : 'TEAM RESPONSE'} (${r.admins?.full_name || 'Admin'})
-                            </span>
-                            <span class="text-[9px] text-gray-500">${new Date(r.created_at).toLocaleTimeString()}</span>
+                threadHtml += (ticket.ticket_responses || []).map(r => {
+                     const isClient = !r.admin_id;
+                     const label = r.is_internal ? 'INTERNAL NOTE' : (isClient ? 'CLIENT REPLY' : 'TEAM RESPONSE');
+                     const colorClass = r.is_internal ? 'text-yellow-500' : (isClient ? 'text-emerald-400' : 'text-blue-400');
+                     const bgClass = r.is_internal ? 'bg-yellow-900/20 border-l-2 border-yellow-500' : (isClient ? 'bg-emerald-900/10 border-l-2 border-emerald-500' : 'bg-blue-900/10');
+                     const sender = isClient ? (ticket.contact_name || 'Customer') : (r.admins?.full_name || 'Admin');
+                     
+                     return `
+                        <div class="mb-4 p-3 ${bgClass} rounded ml-4">
+                            <div class="flex justify-between items-center mb-1">
+                                <span class="text-[10px] font-bold ${colorClass}">
+                                    ${label} (${sender})
+                                </span>
+                                <span class="text-[9px] text-gray-500">${new Date(r.created_at).toLocaleTimeString()}</span>
+                            </div>
+                            <div class="text-xs text-gray-300">${r.message}</div>
                         </div>
-                        <div class="text-xs text-gray-300">${r.message}</div>
-                    </div>
-                `).join("");
+                     `;
+                 }).join("");
                 
-                document.getElementById("ticketThread").innerHTML = threadHtml;
-            } catch (err) {
-                console.error("Error viewing ticket:", err);
-            }
-        }
+                 document.getElementById("ticketThread").innerHTML = threadHtml;
+                 const threadDiv = document.getElementById("ticketThread");
+                 threadDiv.scrollTop = threadDiv.scrollHeight;
+             } catch (err) {
+                 console.error("Error viewing ticket:", err);
+             }
+         }
+
+         // --- SUPPORT WEBSOCKET LOGIC ---
+         function initSupportWebSocket(ticketId) {
+             if (supportSocket) {
+                 supportSocket.close();
+             }
+             
+             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+             supportSocket = new WebSocket(`${protocol}//${window.location.host}/api/ws/support/${ticketId}`);
+             
+             supportSocket.onmessage = (event) => {
+                 const data = JSON.parse(event.data);
+                 if (data.type === 'message') {
+                     viewTicket(ticketId); // Refresh detail
+                 } else if (data.type === 'typing') {
+                     const indicator = document.getElementById("admin-typing-indicator");
+                     if (indicator) {
+                         indicator.style.display = data.is_typing ? 'block' : 'none';
+                         
+                         if (data.is_typing) {
+                            clearTimeout(window.clientTypingTimer);
+                            window.clientTypingTimer = setTimeout(() => {
+                                indicator.style.display = 'none';
+                            }, 5000);
+                         }
+                     }
+                 }
+             };
+
+             supportSocket.onclose = () => {
+                 console.log("Support WS closed");
+             };
+         }
+
+         function sendAdminTypingSignal(isTyping) {
+             if (supportSocket && supportSocket.readyState === WebSocket.OPEN) {
+                 supportSocket.send(JSON.stringify({
+                     type: 'typing',
+                     is_typing: isTyping,
+                     is_admin: true
+                 }));
+             }
+         }
+
+         document.getElementById("ticketResponse").addEventListener("input", () => {
+             sendAdminTypingSignal(true);
+             clearTimeout(adminTypingTimeout);
+             adminTypingTimeout = setTimeout(() => sendAdminTypingSignal(false), 3000);
+             
+             // Fallback to REST for status tracking
+             fetch(`/api/support/tickets/${currentTicketId}/typing?is_typing=true&is_admin=true`, { method: 'POST' });
+         });
 
         async function submitTicketResponse() {
             const message = document.getElementById("ticketResponse").value;
@@ -1316,7 +2196,7 @@
             if (!message) return;
             
             try {
-                await fetch(`/api/support/tickets/${currentTicketId}/respond`, {
+                const res = await fetch(`/api/support/tickets/${currentTicketId}/respond`, {
                     method: "POST",
                     headers: { 
                         "Content-Type": "application/json",
@@ -1329,15 +2209,120 @@
                     })
                 });
                 
-                document.getElementById("ticketResponse").value = "";
-                viewTicket(currentTicketId);
-                loadSupportTickets();
+                 if (res.ok) {
+                     document.getElementById("ticketResponse").value = "";
+                     sendAdminTypingSignal(false);
+                     
+                     if (supportSocket && supportSocket.readyState === WebSocket.OPEN) {
+                         supportSocket.send(JSON.stringify({ type: 'message' }));
+                     }
+                     
+                     viewTicket(currentTicketId);
+                 }
+                 loadSupportTickets();
             } catch (err) {
                 console.error("Error responding to ticket:", err);
             }
         }
 
-        // --- REVENUE INTELLIGENCE LOGIC ---
+         async function resolveTicket() {
+             if (!currentTicketId) return;
+             if (!confirm("Are you sure you want to resolve and close this ticket?")) return;
+             
+             try {
+                 await fetch(`/api/support/tickets/${currentTicketId}/resolve`, {
+                     method: "POST",
+                     headers: { "Authorization": `Bearer ${token}` }
+                 });
+                 
+                 document.getElementById("ticketDetailPanel").style.display = "none";
+                 loadSupportTickets();
+                 showNotification("Ticket Resolved", "success");
+             } catch (err) {
+                 console.error("Error resolving ticket:", err);
+             }
+         }
+
+         // --- NOTIFICATION LOGIC ---
+         function toggleNotifications() {
+             document.getElementById("notif-dropdown").classList.toggle("active");
+             if (document.getElementById("notif-dropdown").classList.contains("active")) {
+                 fetchNotifications();
+             }
+         }
+
+         async function fetchNotifications() {
+             try {
+                 const res = await fetch("/api/notifications/", {
+                     headers: { "Authorization": `Bearer ${token}` }
+                 });
+                 const notifications = await res.json();
+                 
+                 const unreadCount = notifications.filter(n => !n.is_read).length;
+                 const countBadge = document.getElementById("notif-count");
+                 if (unreadCount > 0) {
+                     countBadge.textContent = unreadCount;
+                     countBadge.style.display = "block";
+                 } else {
+                     countBadge.style.display = "none";
+                 }
+
+                 const html = notifications.length > 0 ? notifications.map(n => `
+                     <div class="notification-item" onclick="handleNotificationClick('${n.id}', '${n.notification_type}', '${n.reference_id}')">
+                         <div class="title" style="${n.is_read ? 'color: #777' : ''}">
+                            ${n.is_read ? '' : '● '} ${n.title}
+                         </div>
+                         <div class="msg">${n.message}</div>
+                         <div class="time">${new Date(n.created_at).toLocaleString()}</div>
+                     </div>
+                 `).join("") : '<div class="p-8 text-center text-gray-400 text-sm">No new notifications</div>';
+                 
+                 document.getElementById("notif-list").innerHTML = html;
+             } catch (err) {
+                 console.error("Error fetching notifications:", err);
+             }
+         }
+
+         async function markAllNotificationsRead() {
+             try {
+                 await fetch("/api/notifications/mark-all-read", {
+                     method: "POST",
+                     headers: { "Authorization": `Bearer ${token}` }
+                 });
+                 fetchNotifications();
+             } catch (err) {
+                 console.error("Error marking all read:", err);
+             }
+         }
+
+         async function handleNotificationClick(id, type, refId) {
+             // Mark as read
+             await fetch(`/api/notifications/${id}/read`, {
+                 method: "PATCH",
+                 headers: { "Authorization": `Bearer ${token}` }
+             });
+
+             // Navigate if support
+             if (type === 'support' && refId) {
+                switchView('support-desk');
+                viewTicket(refId);
+                document.getElementById("notif-dropdown").classList.remove("active");
+             }
+             fetchNotifications();
+         }
+
+         // Start Polling
+         setInterval(fetchNotifications, 30000); // Every 30s
+         fetchNotifications();
+
+         // Close dropdown when clicking outside
+         window.addEventListener('click', (e) => {
+             if (!document.getElementById("notif-bell").contains(e.target) && !document.getElementById("notif-dropdown").contains(e.target)) {
+                 document.getElementById("notif-dropdown").classList.remove("active");
+             }
+         });
+
+         // --- REVENUE INTELLIGENCE LOGIC ---
         async function loadRevenueIntelligence() {
             try {
                 // Load Attribution
@@ -1386,6 +2371,100 @@
             if (viewName === 'support-desk') loadSupportTickets();
             if (viewName === 'revenue-intel') loadRevenueIntelligence();
         };
+
+        // --- RBAC & LEAD ASSIGNMENT (NEW) ---
+        function restrictViewsByRole() {
+            if (!token) return;
+            try {
+                const payload = JSON.parse(atob(token.split('.')[1]));
+                const role = payload.role; // admin, operations, sales
+                
+                // --- DYNAMIC INJECTION OF ASSIGNMENT TOOL ---
+                // If it doesn't exist in the HTML yet, inject it after the stage select
+                if (!document.getElementById('section-lead-assignment')) {
+                    const stageSelect = document.getElementById('detail-lead-stage');
+                    if (stageSelect) {
+                        const container = stageSelect.closest('div');
+                        const assignmentHtml = `
+                            <div id="section-lead-assignment" style="margin-bottom: 24px; display: none;">
+                                <label style="font-size: 10px; font-weight: 800; color: var(--gold); text-transform: uppercase; margin-bottom: 4px; display: block;">Assign to Sales Rep</label>
+                                <select id="detail-assignee-select" onchange="updateLeadAssignee()" style="width: 100%; background: #1A1A1A; border: 1px solid var(--gold); color: #fff; border-radius: 8px; padding: 10px; font-size: 13px; outline: none;">
+                                    <option value="">Unassigned</option>
+                                </select>
+                                <p style="font-size: 9px; color: #666; margin-top: 4px;">Changes are logged automatically.</p>
+                            </div>
+                        `;
+                        container.insertAdjacentHTML('afterend', assignmentHtml);
+                    }
+                }
+
+                // Operations and Admin see everything. Sales rep is restricted.
+                if (role === 'sales') {
+                    // Hide forbidden sections in sidebar
+                    const forbidden = ['section-marketing', 'section-servicehub', 'section-intelligence'];
+                    forbidden.forEach(id => {
+                        const el = document.getElementById(id);
+                        if (el) el.style.display = 'none';
+                    });
+                    
+                    // Hide lead assignment tool in modal
+                    const assignSection = document.getElementById('section-lead-assignment');
+                    if (assignSection) assignSection.style.display = 'none';
+                } else if (role === 'admin' || role === 'operations' || role === 'legal') {
+                    // Show lead assignment tool
+                    const assignSection = document.getElementById('section-lead-assignment');
+                    if (assignSection) {
+                        assignSection.style.display = 'block';
+                        fetchAssignableReps();
+                    }
+                }
+            } catch (err) { console.error("RBAC Error:", err); }
+        }
+
+        async function fetchAssignableReps() {
+            try {
+                const res = await fetch("/api/crm/pro/team/assignable", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const reps = await res.json();
+                const select = document.getElementById("detail-assignee-select");
+                if (!select) return;
+                
+                let html = '<option value="">Unassigned</option>';
+                reps.forEach(r => {
+                    html += `<option value="${r.id}">${r.full_name || r.email}</option>`;
+                });
+                select.innerHTML = html;
+            } catch (err) { console.error("Fetch Reps Error:", err); }
+        }
+
+        async function updateLeadAssignee() {
+            const id = document.getElementById("leadDetailModal").dataset.id;
+            const repId = document.getElementById("detail-assignee-select").value;
+            
+            showPageLoader("Re-assigning lead...");
+            try {
+                const res = await fetch(`/api/crm/pro/clients/${id}/assign`, {
+                    method: "PATCH",
+                    headers: { 
+                        "Authorization": `Bearer ${token}`,
+                        "Content-Type": "application/json" 
+                    },
+                    body: JSON.stringify({ assigned_rep_id: repId })
+                });
+                hidePageLoader();
+                if (res.ok) {
+                    alert("Lead successfully re-assigned.");
+                    loadActivityLogs(); // Refresh logs to show the assignment
+                } else {
+                    const err = await res.json();
+                    alert("Assignment failed: " + err.detail);
+                }
+            } catch (err) {
+                hidePageLoader();
+                alert("Network error during assignment.");
+            }
+        }
 
         function showPageLoader(msg) {
             document.getElementById("pageLoaderMessage").textContent = msg;
@@ -1439,10 +2518,103 @@
                 alert("Network error while saving property.");
             }
         }
+
+        // --- USER PROFILE & SETTINGS ---
+        function logout() {
+            if (confirm("Are you sure you want to log out?")) {
+                localStorage.removeItem("ec_token");
+                localStorage.removeItem("admin");
+                // The main.py will redirect to login if token is missing on next refresh
+                window.location.reload();
+            }
+        }
+
+        function openProfileModal() {
+            const admin = JSON.parse(localStorage.getItem('admin') || '{}');
+            document.getElementById("profile-name").value = admin.full_name || admin.name || '';
+            document.getElementById("profile-email").value = admin.email || '';
+            document.getElementById("profileModal").style.display = "flex";
+        }
+
+        function closeProfileModal() {
+            document.getElementById("profileModal").style.display = "none";
+        }
+
+        async function updateProfile(e) {
+            e.preventDefault();
+            const newName = document.getElementById("profile-name").value;
+            
+            showPageLoader("Updating profile...");
+            try {
+                const res = await fetch("/api/auth/me/profile", {
+                    method: "PATCH",
+                    headers: { 
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ full_name: newName })
+                });
+
+                if (res.ok) {
+                    // Update local storage
+                    const admin = JSON.parse(localStorage.getItem('admin_user') || '{}');
+                    admin.name = newName;
+                    localStorage.setItem('admin_user', JSON.stringify(admin));
+                    
+                    alert("Profile updated successfully!");
+                    closeProfileModal();
+                } else {
+                    const err = await res.json();
+                    alert("Update failed: " + (err.detail || "Unknown error"));
+                }
+            } catch (err) {
+                alert("Network error during profile update.");
+            } finally {
+                hidePageLoader();
+            }
+        }
+
+        async function updatePassword(e) {
+            e.preventDefault();
+            const currentPass = document.getElementById("current-pass").value;
+            const newPass = document.getElementById("new-pass").value;
+            const confirmPass = document.getElementById("confirm-pass").value;
+
+            if (newPass !== confirmPass) {
+                return alert("New passwords do not match!");
+            }
+
+            showPageLoader("Securing account...");
+            try {
+                const res = await fetch("/api/auth/me/password", {
+                    method: "PATCH",
+                    headers: { 
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ 
+                        current_password: currentPass,
+                        new_password: newPass
+                    })
+                });
+
+                if (res.ok) {
+                    alert("Password changed successfully!");
+                    document.getElementById("passwordForm").reset();
+                } else {
+                    const err = await res.json();
+                    alert("Error: " + (err.detail || "Credentials mismatch"));
+                }
+            } catch (err) {
+                alert("Network error during password update.");
+            } finally {
+                hidePageLoader();
+            }
+        }
     </script>
 
     <!-- ADD PROPERTY MODAL -->
-    <div id="addPropertyModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; display: flex; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
+    <div id="addPropertyModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
         <div class="card" style="width: 100%; max-width: 500px; background: #111; border: 1px solid #333;">
             <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 24px;">
                 <h2 style="font-weight: 800; color: #fff;">Register New Property</h2>
@@ -1487,6 +2659,58 @@
                     <button type="submit" class="btn btn-primary btn-sm">Create Listing</button>
                 </div>
             </form>
+        </div>
+    </div>
+
+    <!-- PROFILE SETTINGS MODAL -->
+    <div id="profileModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
+        <div class="card" style="width: 100%; max-width: 600px; background: #111; border: 1px solid #333; padding: 0; overflow: hidden;">
+            <div style="padding: 24px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="font-weight: 800; color: #fff;">My Profile Settings</h2>
+                <button onclick="closeProfileModal()" style="background: none; border: none; color: #888; cursor: pointer;"><i class="fas fa-times"></i></button>
+            </div>
+            
+            <div style="padding: 24px; display: grid; grid-template-columns: 1fr 1.5fr; gap: 32px;">
+                <!-- Profile Section -->
+                <div>
+                    <h3 class="text-xs font-bold uppercase text-gray-500 mb-4 tracking-widest">Personal Info</h3>
+                    <form onsubmit="updateProfile(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-[10px] uppercase font-bold text-gray-500 mb-1">Full Name</label>
+                            <input type="text" id="profile-name" required class="w-full bg-[#1A1A1A] border border-[#333] rounded p-2 text-sm text-white">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] uppercase font-bold text-gray-500 mb-1">Email (Read Only)</label>
+                            <input type="email" id="profile-email" readonly class="w-full bg-[#1A1A1A] border border-[#333] rounded p-2 text-sm text-gray-500 cursor-not-allowed">
+                        </div>
+                        <button type="submit" class="btn btn-primary btn-sm w-full">Update Name</button>
+                    </form>
+                </div>
+
+                <!-- Password Section -->
+                <div style="border-left: 1px solid #333; padding-left: 32px;">
+                    <h3 class="text-xs font-bold uppercase text-gray-500 mb-4 tracking-widest">Security</h3>
+                    <form id="passwordForm" onsubmit="updatePassword(event)" class="space-y-4">
+                        <div>
+                            <label class="block text-[10px] uppercase font-bold text-gray-500 mb-1">Current Password</label>
+                            <input type="password" id="current-pass" required class="w-full bg-[#1A1A1A] border border-[#333] rounded p-2 text-sm text-white">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] uppercase font-bold text-gray-500 mb-1">New Password</label>
+                            <input type="password" id="new-pass" required minlength="8" class="w-full bg-[#1A1A1A] border border-[#333] rounded p-2 text-sm text-white">
+                        </div>
+                        <div>
+                            <label class="block text-[10px] uppercase font-bold text-gray-500 mb-1">Confirm New Password</label>
+                            <input type="password" id="confirm-pass" required class="w-full bg-[#1A1A1A] border border-[#333] rounded p-2 text-sm text-white">
+                        </div>
+                        <button type="submit" class="btn btn-secondary btn-sm w-full" style="color: #fff; border-color: #444; background: #222;">Change Password</button>
+                    </form>
+                </div>
+            </div>
+            
+            <div style="padding: 16px; background: rgba(0,0,0,0.3); text-align: center; font-size: 11px; color: #666;">
+                Account managed by Eximp & Cloves Financial Infrastructure
+            </div>
         </div>
     </div>
 

@@ -266,11 +266,14 @@
         const hasLegalRole = userRoles.includes('legal') || userRoles.includes('lawyer');
         const onlyMarketing = userRoles.length === 1 && userRoles[0] === 'marketing';
         const onlyLegal = userRoles.length === 1 && (userRoles[0] === 'legal' || userRoles[0] === 'lawyer');
+        const isSalesOrOps = userRoles.includes('sales') || userRoles.includes('operations');
         
         if (onlyMarketing || (data.admin && data.admin.primary_role === 'marketing' && !hasLegalRole)) {
           window.location.href = '/marketing';
         } else if (hasLegalRole || onlyLegal || (data.admin && data.admin.primary_role === 'legal')) {
           window.location.href = '/legal';
+        } else if (isSalesOrOps) {
+          window.location.href = '/crm';
         } else {
           window.location.href = '/dashboard';
         }

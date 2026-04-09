@@ -201,11 +201,11 @@ async def record_payout_payment(request_id: str, data: PayoutPaymentData, bg_tas
 async def verify_bill_request(
     request_id: str,
     data: VerifyRequest,
-    current_admin=Depends(require_roles(["admin", "super_admin"]))
+    current_admin=Depends(require_roles(["admin", "super_admin", "operations"]))
 ):
     """Bill Verification: promote to 'pending' (audit queue) or reject outright."""
-    if not has_any_role(current_admin, "admin"):
-        raise HTTPException(status_code=403, detail="Only Admins can verify bills")
+    if not has_any_role(current_admin, ["admin", "operations"]):
+        raise HTTPException(status_code=403, detail="Only authorized roles can perform this action")
     
     db = get_db()
     req_res = db.table("expenditure_requests").select("*").eq("id", request_id).execute()
@@ -591,7 +591,7 @@ async def get_payout_stats(
     days: Optional[int] = None,
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    current_admin=Depends(require_roles(["admin", "super_admin"]))
+    current_admin=Depends(require_roles(["admin", "super_admin", "operations"]))
 ):
     """Aggregated stats for the dashboard charts and summary cards with flexible timeframes."""
     db = get_db()
@@ -718,7 +718,7 @@ async def get_payout_stats(
 async def send_on_demand_report(
     data: SendReportRequest, 
     bg_tasks: BackgroundTasks, 
-    current_admin=Depends(require_roles(["admin", "super_admin"]))
+    current_admin=Depends(require_roles(["admin", "super_admin", "operations"]))
 ):
     """Triggers an immediate report email via background task."""
     try:
@@ -742,7 +742,7 @@ async def export_payout_report(
     report_type: str = "payout_audit",
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
-    current_admin=Depends(require_roles(["admin", "super_admin"]))
+    current_admin=Depends(require_roles(["admin", "super_admin", "operations"]))
 ):
     """Generate and stream a CSV report directly."""
     report_data = await ReportService.get_report_data(report_type, start_date, end_date)

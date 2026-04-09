@@ -15,6 +15,7 @@ from datetime import date, timedelta
 from email_service import send_invoice_email, send_admin_alert_email, send_welcome_email
 from marketing_logic import sync_client_to_marketing
 from routers.analytics import log_activity
+from .sync_utils import associate_client_with_rep
 from utils import calculate_due_date
 
 router = APIRouter()
@@ -130,6 +131,16 @@ async def process_webhook_post_submission_tasks(
 
         # 5. Sync to Marketing
         await sync_client_to_marketing(full_client)
+        
+        # 6. SEAMLESS SYNC: Match legacy form rep to modern Admin account
+        # We use both name and potentially email if we can resolve it
+        if payload.sales_rep_name or payload.sales_rep_phone:
+            # The sales_rep_name from the form might be a legacy string.
+            # associate_client_with_rep will try to find the modern Admin ID.
+            await associate_client_with_rep(
+                client_id=client_id,
+                rep_name=payload.sales_rep_name
+            )
         
     except Exception as e:
         print(f"BACKGROUND WEBHOOK ERROR for {invoice_number}: {str(e)}")

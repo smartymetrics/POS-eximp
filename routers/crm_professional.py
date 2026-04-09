@@ -1,4 +1,4 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, Query
 from database import get_db
 from routers.auth import verify_token, require_roles
 from datetime import datetime, timedelta
@@ -209,7 +209,18 @@ async def score_all_leads(current_admin=Depends(verify_token)):
     db = get_db()
     
     # 1. Fetch all clients (single hit)
-    clients_data = db.table("clients").select("id, full_name, email").execute().data or []
+    query = db.table("clients").select("id, full_name, email, assigned_rep_id")
+    
+    # ROLE-BASED FILTERING ✅
+    roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
+    is_privileged = any(r in ["admin", "operations", "super_admin"] for r in roles)
+    is_restricted = any(r in ["sales", "staff"] for r in roles) and not is_privileged
+    
+    admin_id = current_admin.get("sub")
+    if is_restricted:
+        query = query.eq("assigned_rep_id", admin_id)
+        
+    clients_data = query.execute().data or []
     if not clients_data:
         return {"total_leads": 0, "hot_leads": 0, "warm_leads": 0, "prioritized_leads": []}
 
@@ -349,8 +360,8 @@ async def create_property(
     }
 
 
-@router.post("/properties")
-async def create_property(
+@router.post("/properties/v2")
+async def create_property_v2(
     data: PropertyCreate,
     current_admin=Depends(verify_token)
 ):
@@ -502,8 +513,7 @@ async def send_document_for_esignature(
         "esignature_link": f"https://esign.yourapp.com/{document_id}"
     }).eq("id", document_id).execute()
     
-    # In real system, integrate with DocuSign, Adobe Sign, or HelloSign
-    # For now, log the action
+    # Log the action
     db.table("activity_log").insert({
         "event_type": "document_sent_for_signature",
         "description": f"Document sent for e-signature: {body.get('email')}",
@@ -550,9 +560,9 @@ async def create_sms_campaign(
     campaign = {
         "type": "sms",
         "name": body.get("name"),
-        "target_segment": body.get("target_segment"),  # "hot_leads", "warm_leads", "past_buyers", "old_leads"
+        "target_segment": body.get("target_segment"),
         "message_template": body.get("message_template"),
-        "schedule": body.get("schedule"),  # "immediate", "daily", "weekly"
+        "schedule": body.get("schedule"),
         "schedule_time": body.get("schedule_time"),
         "created_by": current_admin["sub"],
         "status": "draft",
@@ -580,17 +590,11 @@ async def send_campaign(
     
     campaign = campaign.data[0]
     
-    # Get target contacts based on segment
-    if campaign["target_segment"] == "hot_leads":
-        # Get high-score leads (simplified)
-        target_clients = db.table("clients").select("id, phone, email").execute().data or []
-    else:
-        target_clients = db.table("clients").select("id, phone, email").execute().data or []
+    # Bulk fetch target contacts (simplified)
+    target_clients = db.table("clients").select("id, phone, email").execute().data or []
     
-    # In production, integrate with Twilio (SMS) and SendGrid/Mailgun (Email)
     sent_count = 0
     for client in target_clients:
-        # Log message sent
         db.table("campaign_messages").insert({
             "campaign_id": campaign_id,
             "client_id": client["id"],
@@ -600,7 +604,6 @@ async def send_campaign(
         }).execute()
         sent_count += 1
     
-    # Update campaign status
     db.table("campaigns").update({
         "status": "sent",
         "sent_at": datetime.now().isoformat(),
@@ -611,6 +614,87 @@ async def send_campaign(
         "status": "campaign_sent",
         "messages_sent": sent_count,
         "campaign_name": campaign["name"]
+    }
+# ============================================================
+# 3.5 LEAD DETAIL & PIPELINE DATA
+# ============================================================
+
+@router.get("/clients/{client_id}")
+async def get_lead_details(
+    client_id: str,
+    current_admin=Depends(verify_token)
+):
+    """
+    Get comprehensive lead profile for the Professional CRM modal.
+    ✅ INCLUDES: Assigned Rep Name, Activity Timeline, & Transaction Summary.
+    """
+    db = get_db()
+    
+    # 1. Fetch Client with Admin Name Join (for the primary assignee)
+    res = db.table("clients").select("*, admins:assigned_rep_id(full_name)").eq("id", client_id).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Lead not found")
+        
+    client = res.data[0]
+    
+    # ROLE-BASED ACCESS CHECK ✅
+    roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
+    is_privileged = any(r in ["admin", "operations", "super_admin"] for r in roles)
+    is_restricted = any(r in ["sales", "staff"] for r in roles) and not is_privileged
+    
+    admin_id = current_admin.get("sub")
+    if is_restricted:
+        if client.get("assigned_rep_id") != admin_id:
+            raise HTTPException(status_code=403, detail="Permission denied to access this lead")
+    
+    # Extract the joined name
+    assigned_rep_name = "Unassigned"
+    if client.get("admins") and isinstance(client["admins"], dict):
+        assigned_rep_name = client["admins"].get("full_name", "Unassigned")
+    
+    # 2. Fetch Invoices (EXCLUDE VOIDED)
+    invoices = db.table("invoices")\
+        .select("id, invoice_number, property_name, amount, amount_paid, status, created_at, pipeline_stage")\
+        .eq("client_id", client_id)\
+        .neq("status", "voided")\
+        .order("created_at", desc=True)\
+        .execute().data or []
+        
+    # 3. Fetch Activity Timeline
+    activities = db.table("activity_log")\
+        .select("id, event_type, description, created_at")\
+        .eq("client_id", client_id)\
+        .order("created_at", desc=True)\
+        .limit(20)\
+        .execute().data or []
+        
+    # 4. Fetch Email Logs
+    emails = db.table("email_logs")\
+        .select("id, email_type, subject, status, sent_at")\
+        .eq("client_id", client_id)\
+        .order("sent_at", desc=True)\
+        .limit(10)\
+        .execute().data or []
+
+    # Map the stage name if the client record has one
+    pipeline_stage = client.get("pipeline_stage") or (invoices[0].get("pipeline_stage") if invoices else "inspection")
+
+    return {
+        "id": client["id"],
+        "full_name": client["full_name"],
+        "email": client["email"],
+        "phone": client["phone"],
+        "pipeline_stage": pipeline_stage,
+        "estimated_value": sum(float(i["amount"]) for i in invoices),
+        "assigned_rep_id": client.get("assigned_rep_id"),
+        "assigned_rep_name": assigned_rep_name,
+        "activities": activities,
+        "invoices": invoices,
+        "emails": emails,
+        "summary": {
+            "total_deals": len(invoices),
+            "total_paid": sum(float(i["amount_paid"]) for i in invoices)
+        }
     }
 
 
@@ -646,46 +730,28 @@ async def get_market_intelligence(
     location: Optional[str] = None,
     current_admin=Depends(verify_token)
 ):
-    """
-    Market data, trends, neighborhood insights
-    ✅ REAL DATA: Uses invoices to calculate selling rate
-    """
+    """Market data, trends, neighborhood insights"""
     db = get_db()
     
-    # 1. Get properties
     prop_query = db.table("properties").select("*")
     if location:
         prop_query = prop_query.ilike("location", f"%{location}%")
     properties = prop_query.execute().data or []
     
-    # 2. Get active invoices (Sold units)
-    # We consider property 'sold' if there is an invoice that is NOT voided and at least partial/paid
-    inv_query = db.table("invoices").select("property_id")\
-        .neq("status", "voided")\
-        .in_("status", ["paid", "partial"])\
-        .execute()
+    inv_query = db.table("invoices").select("property_id, amount").neq("status", "voided").in_("status", ["paid", "partial"]).execute()
+    invoices = inv_query.data or []
+    sold_property_ids = {i["property_id"] for i in invoices if i.get("property_id")}
     
-    sold_property_ids = {i["property_id"] for i in inv_query.data if i.get("property_id")}
+    analysis_prices = [float(i["amount"]) for i in invoices if i.get("amount")]
+    if not analysis_prices:
+        analysis_prices = [float(p["starting_price"]) for p in properties if p.get("starting_price")]
     
-    # 3. Calculate market metrics
-    prices = [float(p["starting_price"]) for p in properties if p.get("starting_price")]
-    avg_price = statistics.mean(prices) if prices else 0
-    median_price = statistics.median(prices) if prices else 0
+    avg_price = statistics.mean(analysis_prices) if analysis_prices else 0
+    median_price = statistics.median(analysis_prices) if analysis_prices else 0
     
     total_listings = len(properties)
-    sold_count = 0
-    available_count = 0
-    
-    if total_listings > 0:
-        # Match properties with sold status
-        for p in properties:
-            if p["id"] in sold_property_ids:
-                sold_count += 1
-            else:
-                available_count += 1
-    
-    # Simulated Days on Market - Improvement for future: calculate from created_at vs invoice date
-    avg_days_on_market = 45 
+    sold_count = len([p for p in properties if p["id"] in sold_property_ids])
+    available_count = total_listings - sold_count
     
     return {
         "market_summary": {
@@ -695,37 +761,34 @@ async def get_market_intelligence(
             "sold": sold_count,
             "average_price": round(avg_price),
             "median_price": round(median_price),
-            "average_days_on_market": avg_days_on_market,
+            "average_days_on_market": 45,
             "selling_rate_percent": round((sold_count / total_listings * 100)) if total_listings > 0 else 0
         },
-        "market_health": "Strong" if (sold_count / total_listings if total_listings > 0 else 0) > 0.3 else "Steady",
-        "trends": {
-            "price_trend": "↑ Increasing" if avg_price > 5000000 else "→ Stable",
-            "inventory": "Healthy" if available_count > 5 else "Limited"
-        }
+        "market_health": "Strong" if (sold_count / total_listings if total_listings > 0 else 0) > 0.3 else "Steady"
     }
 
 
 @router.get("/analytics/client-lifetime-value")
 async def get_client_ltv_analysis(current_admin=Depends(verify_token)):
-    """
-    Analyze client lifetime value segments
-    ✅ PERFORMANCE OPTIMIZED: Fetches all invoice data in bulk.
-    """
+    """Analyze client lifetime value segments"""
     db = get_db()
     
-    clients = db.table("clients").select("id, full_name").execute().data or []
-    if not clients:
-        return {"total_clients": 0, "total_revenue": 0, "top_clients": []}
+    query = db.table("clients").select("id, full_name, assigned_rep_id")
+    
+    # ROLE-BASED FILTERING ✅
+    roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
+    is_privileged = any(r in ["admin", "operations", "super_admin"] for r in roles)
+    is_restricted = any(r in ["sales", "staff"] for r in roles) and not is_privileged
+    
+    admin_id = current_admin.get("sub")
+    if is_restricted:
+        query = query.eq("assigned_rep_id", admin_id)
+        
+    clients = query.execute().data or []
+    if not clients: return {"total_clients": 0, "total_revenue": 0, "top_clients": []}
 
     client_ids = [c["id"] for c in clients]
-    
-    # Bulk fetch invoices EXCLUDING VOIDED ✅
-    all_invoices = db.table("invoices")\
-        .select("client_id, amount")\
-        .eq("is_voided", False)\
-        .in_("client_id", client_ids)\
-        .execute().data or []
+    all_invoices = db.table("invoices").select("client_id, amount").eq("is_voided", False).in_("client_id", client_ids).execute().data or []
         
     inv_map = {}
     for inv in all_invoices:
@@ -737,7 +800,6 @@ async def get_client_ltv_analysis(current_admin=Depends(verify_token)):
     for client in clients:
         invoices = inv_map.get(client["id"], [])
         total_ltv = sum(float(i["amount"]) for i in invoices)
-        
         ltv_analysis.append({
             "client_id": client["id"],
             "client_name": client["full_name"],
@@ -745,38 +807,59 @@ async def get_client_ltv_analysis(current_admin=Depends(verify_token)):
             "deals_count": len(invoices),
             "segment": "High Value" if total_ltv > 50000000 else "Medium Value" if total_ltv > 10000000 else "Standard"
         })
-    
     ltv_analysis.sort(key=lambda x: x["lifetime_value"], reverse=True)
-    
-    high_value = len([c for c in ltv_analysis if c["segment"] == "High Value"])
-    medium_value = len([c for c in ltv_analysis if c["segment"] == "Medium Value"])
-    standard = len([c for c in ltv_analysis if c["segment"] == "Standard"])
-    
     return {
         "total_clients": len(ltv_analysis),
-        "high_value_clients": high_value,
-        "medium_value_clients": medium_value,
-        "standard_clients": standard,
         "total_revenue": sum(float(c["lifetime_value"]) for c in ltv_analysis),
         "top_clients": ltv_analysis[:10]
     }
 
 
-@router.get("/documents")
-async def list_documents(current_admin=Depends(verify_token)):
-    """
-    Consolidated view of all legal and transaction documents.
-    ✅ PERFORMANCE OPTIMIZED
-    """
+@router.get("/documents-pipeline")
+async def list_documents_pipeline(
+    rep_id: Optional[str] = Query(None),
+    search_text: Optional[str] = Query(None),
+    current_admin=Depends(verify_token)
+):
+    """Sales Rep document signing pipeline view"""
     db = get_db()
+    admin_id = current_admin.get("sub")
+    is_admin = current_admin.get("role") in ["admin", "operations"]
     
-    # Fetch contract documents with joins
-    res = db.table("contract_documents")\
-        .select("*, invoices(invoice_number, clients(full_name))")\
-        .order("created_at", desc=True)\
-        .execute()
-    
-    return res.data
+    query = db.table("invoices")\
+        .select("id, invoice_number, property_name, property_location, amount, created_at, status, contract_signature_url, clients(id, full_name, email, assigned_rep_id), contract_signing_sessions(*, witness_signatures(*))") \
+        .neq("status", "voided") \
+        .order("created_at", desc=True)
+
+    result = query.execute()
+    contracts = result.data or []
+
+    if not is_admin:
+        contracts = [c for c in contracts if c.get("clients") and c["clients"].get("assigned_rep_id") == admin_id]
+    elif rep_id:
+        contracts = [c for c in contracts if c.get("clients") and c["clients"].get("assigned_rep_id") == rep_id]
+
+    if search_text:
+        s = search_text.lower()
+        contracts = [c for c in contracts if s in (c.get("invoice_number") or "").lower() or (c.get("clients") and s in (c["clients"].get("full_name") or "").lower())]
+
+    formatted = []
+    for c in contracts:
+        sessions = c.get("contract_signing_sessions", [])
+        session = sorted(sessions, key=lambda x: x.get("created_at", ""), reverse=True)[0] if sessions else {}
+        sigs = 1 if c.get("contract_signature_url") else 0
+        if session.get("witness_signatures"): sigs += len(session["witness_signatures"])
+        
+        formatted.append({
+            "id": session.get("id") or str(c["id"]),
+            "invoice_id": c["id"],
+            "invoice_number": c["invoice_number"],
+            "client_name": c["clients"]["full_name"] if c.get("clients") else "Unknown",
+            "signing_status": session.get("status", "not_started"),
+            "signatures_collected": sigs,
+            "created_at": session.get("created_at") or c["created_at"]
+        })
+    return formatted
 
 
 # ============================================================
@@ -784,93 +867,48 @@ async def list_documents(current_admin=Depends(verify_token)):
 # ============================================================
 
 @router.get("/analytics/team-performance")
-async def get_team_comprehensive_performance(current_admin=Depends(verify_token)):
-    """
-    Comprehensive team leaderboard with all metrics
-    ✅ EXCLUDES VOIDED INVOICES and VOIDED COMMISSIONS
-    """
+async def get_team_performance(current_admin=Depends(verify_token)):
+    """Comprehensive team leaderboard"""
+    # ROLE-BASED ACCESS RESTRICTION ✅
+    roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
+    is_privileged = any(r in ["admin", "operations", "super_admin"] for r in roles)
+    
+    if not is_privileged:
+        # Reps shouldn't see full team intelligence
+        raise HTTPException(status_code=403, detail="Intelligence dashboard restricted to Admins & Operations")
+        
     db = get_db()
-    
-    # Get invoices EXCLUDING VOIDED ✅
     invoices = db.table("invoices").select("*").neq("status", "voided").execute().data or []
+    commissions = db.table("commission_earnings").select("*").eq("is_voided", False).execute().data or []
     
-    # Get actual commission earnings EXCLUDING VOIDED ✅
-    commissions = db.table("commission_earnings")\
-        .select("*")\
-        .eq("is_voided", False)\
-        .execute().data or []
-    
-    # Group by sales rep
     team_stats = {}
     for inv in invoices:
         rep = inv.get("sales_rep_name") or "Unassigned"
         if rep not in team_stats:
-            team_stats[rep] = {
-                "total_deals": 0,
-                "total_revenue": 0,
-                "total_collected": 0,
-                "closed_deals": 0,
-                "pending_deals": 0,
-                "overdue_deals": 0,
-                "actual_commissions": 0
-            }
+            team_stats[rep] = {"total_deals": 0, "total_revenue": 0, "total_collected": 0, "closed_deals": 0, "actual_commissions": 0}
         
         team_stats[rep]["total_deals"] += 1
         team_stats[rep]["total_revenue"] += float(inv["amount"])
         team_stats[rep]["total_collected"] += float(inv["amount_paid"])
-        
-        if inv["status"] == "paid":
-            team_stats[rep]["closed_deals"] += 1
-        elif inv["status"] in ["unpaid", "partial"]:
-            team_stats[rep]["pending_deals"] += 1
-        elif inv["status"] == "overdue":
-            team_stats[rep]["overdue_deals"] += 1
+        if inv["status"] == "paid": team_stats[rep]["closed_deals"] += 1
     
-    # Add actual commission earnings
     for comm in commissions:
         rep = comm.get("sales_rep_name") or "Unassigned"
-        if rep not in team_stats:
-            team_stats[rep] = {
-                "total_deals": 0,
-                "total_revenue": 0,
-                "total_collected": 0,
-                "closed_deals": 0,
-                "pending_deals": 0,
-                "overdue_deals": 0,
-                "actual_commissions": 0
-            }
-        team_stats[rep]["actual_commissions"] += float(comm.get("commission_amount", 0))
+        if rep in team_stats:
+            team_stats[rep]["actual_commissions"] += float(comm.get("commission_amount", 0))
     
-    # Calculate KPIs
     leaderboard = []
     for rep_name, stats in team_stats.items():
-        conversion_rate = (stats["closed_deals"] / stats["total_deals"] * 100) if stats["total_deals"] > 0 else 0
-        avg_deal_size = stats["total_revenue"] / stats["total_deals"] if stats["total_deals"] > 0 else 0
-        collection_rate = (stats["total_collected"] / stats["total_revenue"] * 100) if stats["total_revenue"] > 0 else 0
-        
         leaderboard.append({
             "sales_rep": rep_name,
             "total_deals": stats["total_deals"],
             "closed_deals": stats["closed_deals"],
-            "pending_deals": stats["pending_deals"],
-            "overdue_deals": stats["overdue_deals"],
             "total_revenue": round(stats["total_revenue"]),
             "total_collected": round(stats["total_collected"]),
-            "avg_deal_size": round(avg_deal_size),
-            "conversion_rate": round(conversion_rate, 1),
-            "collection_rate": round(collection_rate, 1),
-            "actual_commissions_earned": round(stats["actual_commissions"])  # Real data ✅
+            "actual_commissions_earned": round(stats["actual_commissions"])
         })
-    
     leaderboard.sort(key=lambda x: x["total_revenue"], reverse=True)
-    
-    return {
-        "total_team_members": len(leaderboard),
-        "total_team_revenue": sum(s["total_revenue"] for s in leaderboard),
-        "total_team_commissions": sum(s["actual_commissions_earned"] for s in leaderboard),
-        "top_performer": leaderboard[0] if leaderboard else None,
-        "team_leaderboard": leaderboard
-    }
+    return leaderboard
 
 
 # ============================================================
@@ -878,126 +916,124 @@ async def get_team_comprehensive_performance(current_admin=Depends(verify_token)
 # ============================================================
 
 @router.get("/portal/{client_id}/dashboard")
-async def get_client_portal_dashboard(
-    client_id: str,
-    request: Request
-):
-    """
-    Client-facing portal showing their transactions
-    ✅ EXCLUDES VOIDED INVOICES and VOIDED PAYMENTS
-    """
+async def get_portal_dashboard(client_id: str):
     db = get_db()
-    
     client = db.table("clients").select("*").eq("id", client_id).execute()
-    if not client.data:
-        raise HTTPException(status_code=404, detail="Client not found")
+    if not client.data: raise HTTPException(status_code=404, detail="Client not found")
     
-    # Get invoices EXCLUDING VOIDED ✅
-    invoices = db.table("invoices")\
-        .select("*")\
-        .eq("client_id", client_id)\
-        .neq("status", "voided")\
-        .execute().data or []
-    
-    # Get payments EXCLUDING VOIDED ✅
-    payments = db.table("payments")\
-        .select("*")\
-        .eq("client_id", client_id)\
-        .eq("is_voided", False)\
-        .execute().data or []
-    
-    # Get documents
-    documents = db.table("documents").select("*").eq("client_id", client_id).execute().data or []
-    
-    total_invoices = sum(float(i["amount"]) for i in invoices)
-    total_payments = sum(float(p["amount"]) for p in payments)
+    invoices = db.table("invoices").select("*").eq("client_id", client_id).neq("status", "voided").execute().data or []
+    payments = db.table("payments").select("*").eq("client_id", client_id).eq("is_voided", False).execute().data or []
     
     return {
         "client_name": client.data[0]["full_name"],
         "summary": {
             "total_deals": len(invoices),
-            "total_amount": round(total_invoices),
-            "total_paid": round(total_payments),
-            "balance": round(total_invoices - total_payments)
+            "total_amount": round(sum(float(i["amount"]) for i in invoices)),
+            "total_paid": round(sum(float(p["amount"]) for p in payments))
         },
         "recent_invoices": invoices[-5:],
-        "recent_payments": payments[-5:],
-        "pending_documents": [d for d in documents if d["status"] in ["draft", "sent"]],
-        "signed_documents": [d for d in documents if d["status"] == "signed"]
+        "recent_payments": payments[-5:]
     }
 
 
 # ============================================================
-# 8. CUSTOM REPORTING & EXPORTS
+# 8. CUSTOM REPORTING
 # ============================================================
 
 @router.post("/reports/generate")
-async def generate_custom_report(
-    request: Request,
-    current_admin=Depends(verify_token)
-):
-    """
-    Generate professional reports (PDF/Excel export ready)
-    ✅ EXCLUDES VOIDED INVOICES
-    """
+async def generate_report(request: Request, current_admin=Depends(verify_token)):
     db = get_db()
     body = await request.json()
-    
-    report_type = body.get("report_type")  # "sales", "team", "property", "client", "market"
-    date_range = body.get("date_range")  # "this_month", "this_quarter", "this_year"
+    report_type = body.get("report_type")
     
     if report_type == "sales":
-        # Get invoices EXCLUDING VOIDED ✅
-        invoices = db.table("invoices")\
-            .select("*")\
-            .neq("status", "voided")\
-            .execute().data or []
+        query = db.table("invoices").select("*").neq("status", "voided")
         
-        report_data = {
-            "total_sales": len(invoices),
-            "total_revenue": round(sum(float(i["amount"]) for i in invoices)),
-            "total_collected": round(sum(float(i["amount_paid"]) for i in invoices)),
-            "average_deal_size": round(sum(float(i["amount"]) for i in invoices) / len(invoices)) if invoices else 0,
-            "by_status": {
-                "paid": len([i for i in invoices if i["status"] == "paid"]),
-                "unpaid": len([i for i in invoices if i["status"] == "unpaid"]),
-                "partial": len([i for i in invoices if i["status"] == "partial"]),
-                "overdue": len([i for i in invoices if i["status"] == "overdue"])
-            }
-        }
-    elif report_type == "team":
-        # Get invoices EXCLUDING VOIDED ✅
-        invoices = db.table("invoices")\
-            .select("*")\
-            .neq("status", "voided")\
-            .execute().data or []
-        # Group by rep (simplified)
-        report_data = {"team_performance": "See /analytics/team-performance"}
-    
-    report = {
+        # ROLE-BASED FILTERING ✅
+        roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
+        is_privileged = any(r in ["admin", "operations", "super_admin"] for r in roles)
+        is_restricted = any(r in ["sales", "staff"] for r in roles) and not is_privileged
+        
+        admin_id = current_admin.get("sub")
+        if is_restricted:
+            # Reps can only report on clients assigned to them
+            query = query.filter("clients.assigned_rep_id", "eq", admin_id)
+            
+        invoices = query.execute().data or []
+        data = {"total_revenue": sum(float(i["amount"]) for i in invoices), "count": len(invoices)}
+    else:
+        data = {}
+        
+    return {
         "report_id": f"RPT-{datetime.now().strftime('%Y%m%d%H%M%S')}",
-        "report_type": report_type,
-        "date_range": date_range,
-        "generated_by": current_admin["sub"],
         "generated_at": datetime.now().isoformat(),
-        "data": report_data,
-        "export_url": f"/reports/export/pdf/RPT-{datetime.now().strftime('%Y%m%d%H%M%S')}"
+        "data": data
     }
-    
-    return report
 
 
-@router.get("/reports/{report_id}/export")
-async def export_report(
-    report_id: str,
-    format: str = "pdf",
+# ============================================================
+# 9. ACTIVITY LOGS & AUDITING
+# ============================================================
+
+@router.get("/activity-logs")
+async def get_activity_logs(
+    rep_id: Optional[str] = Query(None),
+    search_text: Optional[str] = Query(None),
     current_admin=Depends(verify_token)
 ):
-    """Export report as PDF or Excel"""
-    # In production, use reportlab (PDF) or openpyxl (Excel)
-    # For now, return download URL
-    return {
-        "status": "ready_for_download",
-        "download_url": f"/downloads/{report_id}.{format}",
-        "format": format
-    }
+    db = get_db()
+    current_role = current_admin.get("role")
+    current_sub = current_admin.get("sub")
+    
+    query = db.table("activity_log")\
+        .select("id, event_type, description, created_at, clients(id, full_name), admins(id, full_name, email)")\
+        .order("created_at", desc=True)\
+        .limit(100)
+        
+    roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
+    is_privileged = any(r in ["admin", "operations", "super_admin", "legal"] for r in roles)
+    
+    if not is_privileged:
+        query = query.eq("performed_by", current_sub)
+    elif rep_id:
+        query = query.eq("performed_by", rep_id)
+        
+    if search_text:
+        query = query.ilike("description", f"%{search_text}%")
+        
+    res = query.execute()
+    return res.data or []
+
+
+# ============================================================
+# 10. TEAM MANAGEMENT & ASSIGNMENT
+# ============================================================
+
+@router.get("/team/assignable")
+async def get_assignable_team(current_admin=Depends(verify_token)):
+    db = get_db()
+    res = db.table("admins").select("id, full_name, email, role").eq("is_active", True).execute()
+    assignable = []
+    for admin in res.data:
+        roles = [r.strip().lower() for r in (admin.get("role") or "").split(",")]
+        if "sales" in roles or "operations" in roles:
+            assignable.append({"id": admin["id"], "full_name": admin["full_name"], "email": admin["email"]})
+    return assignable
+
+@router.patch("/clients/{client_id}/assign")
+async def assign_client(client_id: str, request: Request, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+    db = get_db()
+    body = await request.json()
+    rep_id = body.get("assigned_rep_id")
+    
+    rep_res = db.table("admins").select("full_name").eq("id", rep_id).execute()
+    if not rep_res.data: raise HTTPException(status_code=404, detail="Team member not found")
+    
+    db.table("clients").update({"assigned_rep_id": rep_id}).eq("id", client_id).execute()
+    
+    background_tasks.add_task(db.table("activity_log").insert({
+        "client_id": client_id, "event_type": "lead_assigned", 
+        "description": f"Lead assigned to {rep_res.data[0]['full_name']}", "performed_by": current_admin["sub"]
+    }).execute)
+    
+    return {"message": "Assigned successfully"}

@@ -1,0 +1,330 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Support Portal | Eximp & Cloves</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <style>
+        * { font-family: 'Inter', sans-serif; }
+        body {
+            background: #0F0F0F;
+            color: #F9FAFB;
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            padding: 20px;
+        }
+        .portal-card {
+            background: rgba(17, 24, 39, 0.8);
+            backdrop-filter: blur(16px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            width: 100%;
+            max-width: 800px;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            height: min(90vh, 800px);
+        }
+        .header {
+            padding: 32px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            background: rgba(0, 0, 0, 0.2);
+        }
+        .logo {
+            color: #C47D0A;
+            font-weight: 800;
+            letter-spacing: 2px;
+            font-size: 14px;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+        .ticket-title {
+            font-size: 24px;
+            font-weight: 700;
+            color: white;
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 10px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            margin-top: 12px;
+        }
+        .status-open { background: rgba(16, 185, 129, 0.1); color: #10B981; }
+        .status-pending { background: rgba(245, 158, 11, 0.1); color: #F59E0B; }
+        .status-resolved { background: rgba(59, 130, 246, 0.1); color: #3B82F6; }
+
+        .chat-area {
+            flex: 1;
+            overflow-y: auto;
+            padding: 32px;
+            display: flex;
+            flex-direction: column;
+            gap: 24px;
+        }
+        .msg-bubble {
+            max-width: 85%;
+            padding: 16px 20px;
+            border-radius: 16px;
+            line-height: 1.6;
+            font-size: 15px;
+        }
+        .msg-agent {
+            align-self: flex-start;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.05);
+            color: #E5E7EB;
+        }
+        .msg-client {
+            align-self: flex-end;
+            background: #C47D0A;
+            color: white;
+        }
+        .msg-info {
+            font-size: 11px;
+            color: #6B7280;
+            margin-bottom: 6px;
+        }
+        .msg-client .msg-info {
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .input-area {
+            padding: 24px 32px;
+            background: rgba(0, 0, 0, 0.3);
+            border-top: 1px solid rgba(255, 255, 255, 0.05);
+        }
+        .text-input {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 14px 18px;
+            color: white;
+            outline: none;
+            transition: 0.2s;
+            resize: none;
+        }
+        .text-input:focus {
+            border-color: #C47D0A;
+            background: rgba(255, 255, 255, 0.05);
+        }
+        .btn-send {
+            background: #C47D0A;
+            color: white;
+            padding: 10px 24px;
+            border-radius: 8px;
+            font-weight: 700;
+            font-size: 14px;
+            margin-top: 12px;
+            float: right;
+            transition: 0.2s;
+        }
+        .btn-send:hover {
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(196, 125, 10, 0.3);
+        }
+        .btn-send:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        /* Scrollbar */
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: transparent; }
+        ::-webkit-scrollbar-thumb { background: rgba(255, 255, 255, 0.1); border-radius: 10px; }
+
+        #typing-indicator {
+            font-size: 12px;
+            color: #6B7280;
+            font-style: italic;
+            margin-bottom: 8px;
+            display: none;
+        }
+        .typing-dots::after {
+            content: '...';
+            animation: typing 1.5s infinite;
+        }
+        @keyframes typing {
+            0% { content: '.'; }
+            33% { content: '..'; }
+            66% { content: '...'; }
+        }
+    </style>
+</head>
+<body>
+    <div class="portal-card">
+        <div class="header">
+            <div class="logo">Eximp & Cloves Support</div>
+            <h1 class="ticket-title" id="ticketSubject">Loading ticket...</h1>
+            <div id="ticketStatus" class="status-badge">Processing</div>
+        </div>
+
+        <div class="chat-area" id="chatThread">
+            <!-- Messages go here -->
+        </div>
+        <div id="typing-indicator" class="px-8 pb-2">Admin is typing<span class="typing-dots"></span></div>
+
+        <div class="input-area" id="replyFormContainer">
+            <textarea id="replyText" class="text-input" rows="3" placeholder="Type your reply here..."></textarea>
+            <button id="sendBtn" class="btn-send" onclick="sendReply()">
+                <i class="fas fa-paper-plane mr-2"></i> Send Reply
+            </button>
+        </div>
+    </div>
+
+    <script>
+        const ticketId = "{{ ticket_id }}";
+        let socket = null;
+        let typingTimeout = null;
+        
+        async function loadTicket() {
+            try {
+                const res = await fetch(`/api/support/portal/${ticketId}`);
+                if (!res.ok) throw new Error("Ticket not found");
+                const data = await res.json();
+                
+                document.getElementById("ticketSubject").textContent = data.subject;
+                
+                const statusBadge = document.getElementById("ticketStatus");
+                statusBadge.textContent = data.status;
+                statusBadge.className = `status-badge status-${data.status}`;
+
+                const thread = document.getElementById("chatThread");
+                let html = `
+                    <div class="msg-bubble msg-agent">
+                        <div class="msg-info">Initial Description • ${new Date(data.created_at).toLocaleString()}</div>
+                        ${data.description}
+                    </div>
+                `;
+
+                data.ticket_responses.forEach(r => {
+                    const isAgent = r.admin_id !== null;
+                    html += `
+                        <div class="msg-bubble ${isAgent ? 'msg-agent' : 'msg-client'}">
+                            <div class="msg-info">${isAgent ? (r.admins?.full_name || 'Support Agent') : 'You'} • ${new Date(r.created_at).toLocaleString()}</div>
+                            ${r.message}
+                        </div>
+                    `;
+                });
+
+                thread.innerHTML = html;
+                thread.scrollTop = thread.scrollHeight;
+
+                if (data.status === 'resolved' || data.status === 'closed') {
+                    document.getElementById("replyFormContainer").innerHTML = `
+                        <div class="text-center p-4 text-gray-500 text-sm">
+                            This ticket has been marked as <strong>${data.status}</strong>. If you still need help, please open a new ticket.
+                        </div>
+                    `;
+                }
+
+            } catch (err) {
+                document.querySelector(".portal-card").innerHTML = `
+                    <div class="p-20 text-center">
+                        <i class="fas fa-exclamation-triangle text-4xl text-red-500 mb-4"></i>
+                        <h2 class="text-xl font-bold">Ticket Not Found</h2>
+                        <p class="text-gray-400 mt-2">The link may be invalid or the ticket has been removed.</p>
+                    </div>
+                `;
+            }
+        }
+
+        // --- WEBSOCKET LOGIC ---
+        function initWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            socket = new WebSocket(`${protocol}//${window.location.host}/api/ws/support/${ticketId}`);
+            
+            socket.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                if (data.type === 'message') {
+                    loadTicket(); // Refresh thread
+                } else if (data.type === 'typing') {
+                    const indicator = document.getElementById("typing-indicator");
+                    indicator.style.display = data.is_typing ? 'block' : 'none';
+                    
+                    // Auto-hide after 5s if we don't get a stop signal
+                    if (data.is_typing) {
+                        clearTimeout(window.agentTypingTimer);
+                        window.agentTypingTimer = setTimeout(() => {
+                            indicator.style.display = 'none';
+                        }, 5000);
+                    }
+                }
+            };
+
+            socket.onclose = () => {
+                console.log("WS closed, reconnecting...");
+                setTimeout(initWebSocket, 3000);
+            };
+        }
+
+        function sendTypingSignal(isTyping) {
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    type: 'typing',
+                    is_typing: isTyping,
+                    is_admin: false
+                }));
+            }
+        }
+
+        document.getElementById("replyText").addEventListener("input", () => {
+            sendTypingSignal(true);
+            clearTimeout(typingTimeout);
+            typingTimeout = setTimeout(() => sendTypingSignal(false), 3000);
+            
+            // Also notify backend for fallback
+            fetch(`/api/support/tickets/${ticketId}/typing?is_typing=true&is_admin=false`, { method: 'POST' });
+        });
+
+        async function sendReply() {
+            const msg = document.getElementById("replyText").value.trim();
+            if (!msg) return;
+
+            const btn = document.getElementById("sendBtn");
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Sending...';
+
+            try {
+                const res = await fetch(`/api/support/tickets/${ticketId}/client-reply`, {
+                    method: "POST",
+                    headers: { "Content-Type": "application/json" },
+                    body: JSON.stringify({ 
+                        ticket_id: ticketId,
+                        message: msg 
+                    })
+                });
+
+                if (res.ok) {
+                    document.getElementById("replyText").value = "";
+                    sendTypingSignal(false);
+                    
+                    // Send WebSocket message signal
+                    if (socket && socket.readyState === WebSocket.OPEN) {
+                        socket.send(JSON.stringify({ type: 'message' }));
+                    }
+                    
+                    loadTicket();
+                }
+            } catch (err) {
+                alert("Failed to send reply. Please try again.");
+            } finally {
+                btn.disabled = false;
+                btn.innerHTML = '<i class="fas fa-paper-plane mr-2"></i> Send Reply';
+            }
+        }
+
+        loadTicket();
+        initWebSocket();
+    </script>
+</body>
+</html>

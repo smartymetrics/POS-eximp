@@ -24,7 +24,7 @@ async def get_kpis(
     admin: dict = Depends(verify_token)
 ):
     db = get_db()
-    is_admin = admin.get("role") == "admin"
+    is_admin = admin.get("role") in ["admin", "operations"]
     
     # 1. Total Invoiced (Gross)
     invoiced_query = db.table("invoices").select("amount").filter("invoice_date", "gte", start.isoformat()).filter("invoice_date", "lte", end.isoformat()).neq("status", "voided")
@@ -124,8 +124,8 @@ async def get_revenue_trend(
     granularity: str = "daily",
     admin: dict = Depends(verify_token)
 ):
-    if admin.get("role") != "admin":
-        raise HTTPException(status_code=403, detail="Financial data restricted to admins")
+    if admin.get("role") not in ["admin", "operations"]:
+        raise HTTPException(status_code=403, detail="Financial data restricted to authorized roles")
         
     db = get_db()
     # Fetch all invoices and payments in period
@@ -160,7 +160,7 @@ async def get_estates(
     end: date = Query(...),
     admin: dict = Depends(verify_token)
 ):
-    if admin.get("role") != "admin":
+    if admin.get("role") not in ["admin", "operations"]:
         raise HTTPException(status_code=403, detail="Restricted")
         
     db = get_db()
@@ -243,7 +243,7 @@ async def get_rep_leaderboard(
     limit: int = 10,
     admin: dict = Depends(verify_token)
 ):
-    if admin.get("role") != "admin":
+    if admin.get("role") not in ["admin", "operations"]:
         raise HTTPException(status_code=403, detail="Restricted")
         
     db = get_db()

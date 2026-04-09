@@ -11,6 +11,7 @@ from pdf_service import generate_invoice_pdf, generate_receipt_pdf, generate_sta
 from utils import resolve_invoice_status
 from commission_service import sync_invoice_commissions
 from datetime import datetime
+from .sync_utils import associate_client_with_rep
 import io
 
 router = APIRouter()
@@ -95,6 +96,8 @@ async def create_invoice(
         "invoice_date": data.invoice_date,
         "due_date": data.due_date,
         "notes": data.notes,
+        "sales_rep_name": data.sales_rep_name,
+        "sales_rep_id": data.sales_rep_id,
         "created_by": current_admin["sub"]
     }
     
@@ -123,6 +126,15 @@ async def create_invoice(
         client_id=data.client_id,
         invoice_id=result.data[0]["id"]
     )
+
+    # SEAMLESS SYNC: Update client assignment if a rep is specified
+    if data.sales_rep_id or data.sales_rep_name:
+        background_tasks.add_task(
+            associate_client_with_rep,
+            client_id=data.client_id,
+            rep_name=data.sales_rep_name,
+            rep_id=data.sales_rep_id
+        )
 
     return {"message": "Invoice created", "invoice": result.data[0]}
 

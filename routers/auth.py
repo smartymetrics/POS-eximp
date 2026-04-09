@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Header
+from fastapi import APIRouter, HTTPException, Depends, Header, BackgroundTasks
 from fastapi.security import HTTPBearer, HTTPAuthorizationCredentials
 import jwt
 import bcrypt
@@ -9,6 +9,7 @@ from models import (
     ChangePasswordRequest, ResetPasswordRequest, UpdateProfileRequest
 )
 from database import get_db
+from .sync_utils import sync_historical_sales_data
 
 router = APIRouter()
 security = HTTPBearer()
@@ -101,7 +102,7 @@ async def me(current_admin=Depends(verify_token)):
 
 # CREATE TEAM MEMBER (admin only)
 @router.post("/register")
-async def register(data: AdminCreate, current_admin=Depends(verify_token)):
+async def register(data: AdminCreate, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
     if not has_any_role(current_admin, "admin", "super_admin"):
         raise HTTPException(status_code=403, detail="Only admins can create accounts")
     db = get_db()
@@ -109,13 +110,25 @@ async def register(data: AdminCreate, current_admin=Depends(verify_token)):
     if existing.data:
         raise HTTPException(status_code=400, detail="An account with this email already exists")
     password_hash = bcrypt.hashpw(data.password.encode(), bcrypt.gensalt()).decode()
+    
+    # Use transactional insert (simulated via Supabase execute)
     result = db.table("admins").insert({
         "full_name": data.full_name, "email": data.email,
         "password_hash": password_hash, "role": data.role,
         "primary_role": data.primary_role,
         "is_active": True, "is_archived": False,
     }).execute()
-    return {"message": "Account created successfully", "id": result.data[0]["id"]}
+    
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to create account")
+        
+    new_admin_id = result.data[0]["id"]
+    
+    # TRIGGER SEAMLESS DATA MATCHING
+    # We do this for anyone with sales or admin roles who might manage historical leads
+    background_tasks.add_task(sync_historical_sales_data, new_admin_id, data.full_name, data.email)
+    
+    return {"message": "Account created successfully", "id": new_admin_id}
 
 
 # LIST ALL TEAM MEMBERS (admin only)

@@ -11,7 +11,7 @@ import base64
 from marketing_scheduler import setup_marketing_scheduler
 from marketing_sequencer_engine import process_active_sequences, process_segment_triggers
 from marketing_ltv_engine import refresh_marketing_ltv_stats
-from email_service import send_appointment_reminder_email
+from email_service import send_appointment_reminder_email, send_followup_nudge_email
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -129,6 +129,36 @@ async def process_appointment_reminders():
                 
     except Exception as e:
         logger.error(f"Error in appointment reminder job: {e}")
+
+
+async def process_support_nudges():
+    """Find tickets with no client response for 1 hour and send a nudge."""
+    try:
+        # Find tickets where admin responded > 1hr ago and no nudge sent yet
+        one_hour_ago = (datetime.utcnow() - timedelta(hours=1)).isoformat()
+        
+        res = supabase.table("support_tickets")\
+            .select("*")\
+            .eq("status", "pending")\
+            .lt("last_admin_response_at", one_hour_ago)\
+            .is_("followup_sent_at", "null")\
+            .execute()
+            
+        if not res.data:
+            return
+            
+        logger.info(f"Found {len(res.data)} tickets needing a follow-up nudge.")
+        
+        for ticket in res.data:
+            await send_followup_nudge_email(ticket)
+            
+            # Mark as sent
+            supabase.table("support_tickets").update({
+                "followup_sent_at": datetime.utcnow().isoformat()
+            }).eq("id", ticket["id"]).execute()
+            
+    except Exception as e:
+        logger.error(f"Error processing support nudges: {e}")
 
 
 def _report_email_html(report_type: str, start: str, end: str, freq: str, item_count: int) -> str:
@@ -258,6 +288,14 @@ async def start_scheduler():
         process_appointment_reminders,
         CronTrigger(minute="0,30"),
         id="appointment_reminders",
+        replace_existing=True,
+    )
+
+    # 7. Support Nudges (Runs every 30 mins)
+    scheduler.add_job(
+        process_support_nudges,
+        CronTrigger(minute="15,45"),
+        id="support_nudges",
         replace_existing=True,
     )
 

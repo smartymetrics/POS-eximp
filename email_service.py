@@ -13,6 +13,7 @@ logger = logging.getLogger(__name__)
 
 resend.api_key = os.getenv("RESEND_API_KEY")
 FROM_EMAIL = os.getenv("FROM_EMAIL", "sales@eximps-cloves.com")
+APP_BASE_URL = os.getenv("APP_BASE_URL", "https://app.eximps-cloves.com")
 
 # CLIENT CC RECIPIENTS
 CC_LEGAL = os.getenv("CC_LEGAL")
@@ -1115,7 +1116,7 @@ def _marketing_wrapper(content_html: str, client_name: str) -> str:
         "instagram": "https://img.icons8.com/ios-filled/50/ffffff/instagram-new.png",
         "tiktok": "https://img.icons8.com/ios-filled/50/ffffff/tiktok.png",
         "x": "https://img.icons8.com/ios-filled/50/ffffff/twitterx--v2.png",
-        "linkedin": "https://img.icons8.com/ios-filled/50/ffffff/linkedin.png"
+        "linkedin": "https://img.icons8.com/ios-filled/50/linkedin.png"
     }
 
     social_html = "".join([
@@ -1364,7 +1365,7 @@ async def send_portal_invite_email(email_addr: str, inviter_name: str, token: st
     from routers.analytics import log_activity
     
     # Use the absolute URL via config or env
-    portal_link = f"https://app.eximps-cloves.com/payout/portal/{token}"
+    portal_link = f"{APP_BASE_URL}/payout/portal/{token}"
     
     html = f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 12px; overflow: hidden;">
@@ -1420,10 +1421,36 @@ def _support_response_html(ticket: dict, message: str) -> str:
         
         <div style="background: #fdfaf3; border-left: 4px solid #C47D0A; padding: 20px; margin: 24px 0; color: #444; font-size: 14px; line-height: 1.6;">
           {message}
+          <div style="text-align: center; margin: 32px 0;">
+            <a href="{APP_BASE_URL}/support/portal/{ticket.get('id')}" style="background-color: #C47D0A; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(196, 125, 10, 0.3);">View Discussion & Reply</a>
+          </div>
         </div>
         
         <hr style="border: 0; border-top: 1px solid #eee; margin: 24px 0;">
-        <p style="color: #888; font-size: 12px;">This is a response to your support ticket #{ticket.get('id', '').split('-')[0]}. You can reply to this email if you have further questions.</p>
+        <p style="color: #888; font-size: 12px;">This is a response to your support ticket #{ticket.get('id', '').split('-')[0]}. You can also reply to this email directly.</p>
+        <p style="color: #999; font-size: 11px; margin-top: 12px;">Eximp & Cloves Infrastructure Limited | RC 8311800<br>
+        57B, Isaac John Street, Yaba, Lagos</p>
+      </div>
+    </div>"""
+
+def _support_followup_html(ticket: dict) -> str:
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 12px; overflow: hidden;">
+      <div style="background: #C47D0A; padding: 24px; text-align: center;">
+        <h1 style="color: #FFFFFF; margin: 0; font-size: 20px;">Support Nudge</h1>
+      </div>
+      <div style="padding: 32px 24px; background: #fff;">
+        <p style="color: #333;">Hello <strong>{ticket.get('contact_name', 'Visitor')}</strong>,</p>
+        <p style="color: #555;">It's been an hour since we sent you a response regarding <strong>"{ticket.get('subject')}"</strong>, and we haven't heard back from you yet.</p>
+        
+        <p style="color: #555;">We just want to make sure your issue is fully resolved. Do you still need assistance?</p>
+        
+        <div style="text-align: center; margin: 32px 0;">
+          <a href="{APP_BASE_URL}/support/portal/{ticket.get('id')}" style="background-color: #C47D0A; color: white; padding: 14px 28px; text-decoration: none; border-radius: 8px; font-weight: bold; font-size: 14px; display: inline-block; box-shadow: 0 4px 12px rgba(196, 125, 10, 0.3);">View Discussion & Reply</a>
+        </div>
+        
+        <hr style="border: 0; border-top: 1px solid #eee; margin: 24px 0;">
+        <p style="color: #888; font-size: 12px;">This is a follow-up to your support ticket #{ticket.get('id', '').split('-')[0]}.</p>
         <p style="color: #999; font-size: 11px; margin-top: 12px;">Eximp & Cloves Infrastructure Limited | RC 8311800<br>
         57B, Isaac John Street, Yaba, Lagos</p>
       </div>
@@ -1443,8 +1470,23 @@ async def send_support_response_email(ticket: dict, message: str):
         })
         return res
     except Exception as e:
-        logger.error(f"Error sending support response email to {email_addr}: {e}")
-        return None
+        logger.error(f"Error sending support response email: {e}")
+
+async def send_followup_nudge_email(ticket: dict):
+    email_addr = ticket.get("contact_email")
+    if not email_addr: return
+    
+    try:
+        import resend
+        resend.Emails.send({
+            "from": f"Eximp & Cloves Support <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "subject": f"Checking in: {ticket.get('subject')}",
+            "html": _support_followup_html(ticket)
+        })
+        logger.info(f"Follow-up nudge sent for ticket {ticket.get('id')}")
+    except Exception as e:
+        logger.error(f"Error sending support nudge: {e}")
 
 def _appointment_reminder_html(appointment: dict) -> str:
     scheduled_at = datetime.fromisoformat(appointment["scheduled_at"])

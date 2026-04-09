@@ -1,8 +1,11 @@
-from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks
+from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, UploadFile, File
 from database import get_db
 from routers.auth import verify_token, require_roles
 from datetime import datetime, timedelta
 import json
+import csv
+import io
+from typing import List
 
 router = APIRouter()
 
@@ -136,86 +139,169 @@ async def get_contact_details(client_id: str, current_admin=Depends(verify_token
 @router.get("/pipeline")
 async def get_sales_pipeline(current_admin=Depends(verify_token)):
     """
-    Get all invoices grouped by Sales Stage (pipeline stages)
-    🔥 PERFORMANCE OPTIMIZED: Fetches all stages and client details in bulk.
+    Get all Leads (Clients) grouped by Sales Stage.
+    🔒 RBAC: Sales reps only see their assigned leads. Admins see all.
     """
     db = get_db()
-    
-    # 1. Fetch ALL pipeline invoices with client details in ONE query using foreign key join
-    # This replaces the 4-loop + nested client loop (N+1)
-    result = db.table("invoices").select("""
+    role = current_admin.get("role", "sales")
+    admin_id = current_admin.get("sub")
+
+    # 1. Base Query
+    query = db.table("clients").select("""
         id,
-        invoice_number,
-        amount,
-        amount_paid,
-        status,
+        full_name,
+        email,
+        phone,
         pipeline_stage,
-        due_date,
-        client_id,
-        sales_rep_name,
-        created_at,
-        clients (
-            full_name,
-            email
-        )
-    """).neq("pipeline_stage", "").order("created_at", desc=True).execute()
-    
-    all_invoices = result.data or []
-    
-    # 2. Group by stage in-memory
+        estimated_value,
+        assigned_rep_id,
+        created_at
+    """)
+    # 2. Apply RBAC Filter
+    if role == "sales":
+        query = query.eq("assigned_rep_id", admin_id)
+
+    result = query.order("created_at", desc=True).execute()
+    all_leads = result.data or []
+
+    # 3. Group by stage in-memory
     stages = ["inspection", "offer", "contract", "closed"]
-    pipeline = {stage: {"deals": [], "count": 0, "total_value": 0, "total_paid": 0} for stage in stages}
-    
-    for inv in all_invoices:
-        stage = inv.get("pipeline_stage")
+    pipeline = {stage: {"deals": [], "count": 0, "total_value": 0} for stage in stages}
+
+    for lead in all_leads:
+        stage = lead.get("pipeline_stage")
         if stage in pipeline:
-            # Flatten client data for frontend
-            client_data = inv.get("clients") or {}
-            inv["client_name"] = client_data.get("full_name", "Unknown Client")
-            inv["client_email"] = client_data.get("email", "N/A")
+            # Map 'full_name' to 'client_name' for frontend compatibility
+            lead["client_name"] = lead.get("full_name")
+            lead["amount"] = lead.get("estimated_value", 0)
             
-            pipeline[stage]["deals"].append(inv)
+            pipeline[stage]["deals"].append(lead)
             pipeline[stage]["count"] += 1
-            pipeline[stage]["total_value"] += float(inv.get("amount") or 0)
-            pipeline[stage]["total_paid"] += float(inv.get("amount_paid") or 0)
-    
+            pipeline[stage]["total_value"] += float(lead.get("estimated_value") or 0)
+
     return pipeline
 
-
-@router.put("/pipeline/{invoice_id}/move")
-async def move_deal_in_pipeline(
-    invoice_id: str,
-    new_stage: str,
-    current_admin=Depends(verify_token)
-):
-    """Update invoice pipeline stage"""
+@router.post("/import-leads")
+async def import_leads_csv(file: UploadFile = File(...), current_admin=Depends(verify_token)):
+    """
+    Smart CSV Importer for leads with fuzzy header matching.
+    """
     db = get_db()
+    admin_id = current_admin.get("sub")
     
-    valid_stages = ["inspection", "offer", "contract", "closed"]
-    if new_stage not in valid_stages:
-        raise HTTPException(status_code=400, detail=f"Invalid stage. Must be one of {valid_stages}")
+    content = await file.read()
+    decoded = content.decode("utf-8")
+    reader = csv.DictReader(io.StringIO(decoded))
     
-    # Update invoice
-    result = db.table("invoices")\
-        .update({"pipeline_stage": new_stage, "updated_at": datetime.now().isoformat()})\
-        .eq("id", invoice_id)\
-        .execute()
+    # Header Mapping (Fuzzy Guessing)
+    mapping = {
+        "full_name": ["name", "full name", "client name", "prospect", "customer name", "contact"],
+        "email": ["email", "email address", "mail"],
+        "phone": ["phone", "phone number", "mobile", "contact number"],
+        "estimated_value": ["value", "budget", "amount", "deal value", "price", "estimated value"],
+        "notes": ["notes", "description", "comments", "remark"]
+    }
+
+    imported_count = 0
+    rows = list(reader)
     
-    if not result.data:
-        raise HTTPException(status_code=404, detail="Invoice not found")
+    for row in rows:
+        row_lower = {k.lower().strip(): v for k, v in row.items()}
+        
+        lead_data = {
+            "assigned_rep_id": admin_id,
+            "pipeline_stage": "inspection",
+            "created_at": datetime.now().isoformat()
+        }
+
+        for db_field, common_names in mapping.items():
+            for possible_name in common_names:
+                if possible_name in row_lower:
+                    lead_data[db_field] = row_lower[possible_name]
+                    break
+        
+        if lead_data.get("full_name"):
+            db.table("clients").insert(lead_data).execute()
+            imported_count += 1
+
+    # Log the bulk action
+    db.table("activity_log").insert({
+        "event_type": "bulk_import",
+        "description": f"Imported {imported_count} leads via CSV",
+        "performed_by": admin_id,
+        "created_at": datetime.now().isoformat()
+    }).execute()
+
+    return {"status": "success", "imported": imported_count}
+
+@router.post("/clients")
+async def create_lead(data: dict, current_admin=Depends(verify_token)):
+    """Create a single lead manually and log the activity."""
+    db = get_db()
+    admin_id = current_admin["sub"]
+    
+    data["assigned_rep_id"] = admin_id
+    data["created_at"] = datetime.now().isoformat()
+    
+    res = db.table("clients").insert(data).execute()
+    lead = res.data[0]
     
     # Log activity
-    invoice = result.data[0]
     db.table("activity_log").insert({
-        "event_type": "pipeline_move",
-        "description": f"Deal moved to {new_stage} stage",
-        "client_id": invoice["client_id"],
-        "invoice_id": invoice_id,
-        "performed_by": current_admin["sub"],
-        "metadata": {"new_stage": new_stage}
+        "event_type": "lead_created",
+        "description": f"Manual lead creation: {lead.get('full_name')}",
+        "client_id": lead["id"],
+        "performed_by": admin_id,
+        "created_at": datetime.now().isoformat()
     }).execute()
     
-    return {"status": "updated", "new_stage": new_stage}
+    return lead
+
+@router.put("/pipeline/{client_id}/move")
+async def move_lead_in_pipeline(client_id: str, new_stage: str, current_admin=Depends(verify_token)):
+    """Update client pipeline stage and log the activity."""
+    db = get_db()
+    admin_id = current_admin["sub"]
+    
+    # Update stage
+    db.table("clients").update({
+        "pipeline_stage": new_stage, 
+        "updated_at": datetime.now().isoformat()
+    }).eq("id", client_id).execute()
+    
+    # Log activity
+    db.table("activity_log").insert({
+        "event_type": "pipeline_move",
+        "description": f"Lead moved to {new_stage} stage",
+        "client_id": client_id,
+        "performed_by": admin_id,
+        "created_at": datetime.now().isoformat()
+    }).execute()
+    
+    return {"status": "success"}
+
+@router.patch("/clients/{client_id}")
+async def update_client_details(client_id: str, data: dict, current_admin=Depends(verify_token)):
+    """Allow sales reps to edit lead data and log the changes."""
+    db = get_db()
+    admin_id = current_admin["sub"]
+    
+    # Exclude restricted fields
+    update_data = {k: v for k, v in data.items() if k not in ["id", "created_at", "assigned_rep_id"]}
+    update_data["updated_at"] = datetime.now().isoformat()
+    
+    res = db.table("clients").update(update_data).eq("id", client_id).execute()
+    
+    # Log activity
+    db.table("activity_log").insert({
+        "event_type": "client_edit",
+        "description": f"Updated client information: {', '.join(update_data.keys())}",
+        "client_id": client_id,
+        "performed_by": admin_id,
+        "created_at": datetime.now().isoformat()
+    }).execute()
+    
+    return res.data[0]
 
 
 # ============================================================

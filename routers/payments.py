@@ -109,6 +109,16 @@ async def record_payment(
         invoice_id=data.invoice_id
     )
 
+    # --- Auto-Close / Pipeline Movement Logic ---
+    # Fetch the fresh invoice status (after the Postgres trigger has updated it)
+    fresh_inv = db.table("invoices").select("status").eq("id", data.invoice_id).execute()
+    if fresh_inv.data:
+        new_status = fresh_inv.data[0]["status"]
+        if new_status == "paid":
+            db.table("clients").update({"pipeline_stage": "closed"}).eq("id", data.client_id).execute()
+        elif new_status in ["partial", "unpaid"]:
+            db.table("clients").update({"pipeline_stage": "contract"}).eq("id", data.client_id).execute()
+
     inv_num = inv.data[0].get('invoice_number', 'N/A')
     return {"message": "Payment recorded", "payment": result.data[0], "invoice_number": inv_num}
 

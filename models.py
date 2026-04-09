@@ -118,9 +118,10 @@ class InvoiceCreate(BaseModel):
     invoice_date: date
     due_date: date
     notes: Optional[str] = None
-    co_owner_name: Optional[str] = None
     co_owner_email: Optional[str] = None
     marketing_campaign_id: Optional[str] = None
+    sales_rep_id: Optional[str] = None
+    sales_rep_name: Optional[str] = None
 
 class InvoiceUpdate(BaseModel):
     due_date: Optional[date] = None
