@@ -9,6 +9,7 @@ ALTER TABLE marketing_contacts ADD COLUMN IF NOT EXISTS first_utm_campaign TEXT;
 ALTER TABLE marketing_contacts ADD COLUMN IF NOT EXISTS first_utm_content TEXT;
 ALTER TABLE marketing_contacts ADD COLUMN IF NOT EXISTS first_utm_term TEXT;
 ALTER TABLE marketing_contacts ADD COLUMN IF NOT EXISTS last_campaign_id UUID REFERENCES email_campaigns(id);
+ALTER TABLE marketing_contacts ADD COLUMN IF NOT EXISTS total_revenue_attributed NUMERIC(15,2) DEFAULT 0;
 
 -- 3. Add attribution columns to invoices
 ALTER TABLE invoices ADD COLUMN IF NOT EXISTS marketing_campaign_id UUID REFERENCES email_campaigns(id);

@@ -21,6 +21,7 @@ class CampaignCreate(BaseModel):
     html_body_a: str
     from_name: Optional[str] = 'Eximp & Cloves'
     reply_to: Optional[str] = 'marketing@mail.eximps-cloves.com'
+    budget: Optional[float] = 0
 
 class CampaignUpdate(BaseModel):
     name: Optional[str] = None
@@ -28,6 +29,8 @@ class CampaignUpdate(BaseModel):
     preview_text: Optional[str] = None
     html_body_a: Optional[str] = None
     status: Optional[str] = None
+    budget: Optional[float] = None
+    actual_spend: Optional[float] = None
     
     class Config:
         extra = "ignore"
@@ -75,14 +78,21 @@ async def get_campaign(id: str, current_admin=Depends(verify_token)):
 async def update_campaign(id: str, data: CampaignUpdate, current_admin=Depends(verify_token)):
     db = get_db()
     
-    # Check status
+    # Check status - restrict everything EXCEPT budget/spend for sent campaigns
     current = db.table("email_campaigns").select("status").eq("id", id).execute()
     if not current.data:
         raise HTTPException(status_code=404, detail="Campaign not found")
-    if current.data[0]["status"] in ["sent", "sending"]:
-        raise HTTPException(status_code=400, detail="Cannot edit a campaign that is already sent or sending.")
-
+    
+    is_locked = current.data[0]["status"] in ["sent", "sending"]
     update_dict = {k: v for k, v in data.dict().items() if v is not None}
+    
+    if is_locked:
+        # Only allow budget and actual_spend updates if already sent
+        allowed = {"budget", "actual_spend"}
+        final_update = {k: v for k, v in update_dict.items() if k in allowed}
+        if not final_update:
+            raise HTTPException(status_code=400, detail="Cannot edit campaign content after it has been sent. Only investment (Budget/Spend) can be updated.")
+        update_dict = final_update
     update_dict["updated_at"] = datetime.utcnow().isoformat()
     
     result = db.table("email_campaigns").update(update_dict).eq("id", id).execute()

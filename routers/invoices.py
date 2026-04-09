@@ -99,12 +99,17 @@ async def create_invoice(
     }
     
     # 3. REVENUE ATTRIBUTION (HubSpot Standard)
-    try:
-        # Check if this client has a marketing contact with an attributed campaign
-        contact_res = db.table("marketing_contacts").select("last_campaign_id").eq("client_id", data.client_id).execute()
-        if contact_res.data and contact_res.data[0].get("last_campaign_id"):
-            invoice_data["marketing_campaign_id"] = contact_res.data[0]["last_campaign_id"]
-    except: pass
+    # Priority 1: Use the campaign explicitly selected in the UI
+    if data.marketing_campaign_id:
+        invoice_data["marketing_campaign_id"] = data.marketing_campaign_id
+    else:
+        # Priority 2: Self-Healing fallback (Automatic Attribution)
+        try:
+            # Check if this client has a marketing contact with an attributed campaign
+            contact_res = db.table("marketing_contacts").select("last_campaign_id").eq("client_id", data.client_id).execute()
+            if contact_res.data and contact_res.data[0].get("last_campaign_id"):
+                invoice_data["marketing_campaign_id"] = contact_res.data[0]["last_campaign_id"]
+        except: pass
 
     # Use jsonable_encoder to handle Decimal/date types for Supabase
     encoded_data = jsonable_encoder(invoice_data)
@@ -353,7 +358,7 @@ async def edit_invoice(
     admin_only_fields = [
         "amount", "amount_paid", "quantity", "unit_price", "plot_size_sqm", "property_name", 
         "property_location", "property_id", "payment_terms", "sales_rep_name", 
-        "sales_rep_id", "invoice_date", "co_owner_name", "co_owner_email"
+        "sales_rep_id", "invoice_date", "co_owner_name", "co_owner_email", "marketing_campaign_id"
     ]
     staff_allowed_fields = ["due_date", "notes"]
     

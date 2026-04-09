@@ -559,6 +559,88 @@
             </div>
         </div>
 
+        <!-- PIPELINE (KANBAN BOARD) -->
+        <div id="pipeline" class="view-section">
+            <div class="header-section">
+                <h1 class="page-title">Sales Pipeline <span style="font-size: 14px; font-weight: normal; color: #888; margin-left: 10px;">Drag and Drop Deals</span></h1>
+            </div>
+            
+            <div style="display: flex; gap: 16px; overflow-x: auto; padding-bottom: 20px; align-items: flex-start; height: 75vh;">
+                <!-- UNPAID COLUMN -->
+                <div class="card" style="flex: 1; min-width: 280px; background: rgba(0,0,0,0.2); border: 1px solid #333; height: 100%; display: flex; flex-direction: column;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #444;">
+                        <h3 style="font-weight: 700; color: #fff; text-transform: uppercase; font-size: 12px; letter-spacing: 1px;">Leads / Unpaid</h3>
+                        <span class="badge" style="background: rgba(255,255,255,0.1); color: #fff;" id="count-unpaid">0</span>
+                    </div>
+                    <div id="col-unpaid" class="kanban-col" style="flex: 1; overflow-y: auto; padding: 5px; min-height: 200px;" ondragover="allowDrop(event)" ondrop="drop(event, 'unpaid')">
+                        <!-- cards go here -->
+                    </div>
+                </div>
+
+                <!-- PARTIAL COLUMN -->
+                <div class="card" style="flex: 1; min-width: 280px; background: rgba(0,0,0,0.2); border: 1px solid #333; height: 100%; display: flex; flex-direction: column;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #444;">
+                        <h3 style="font-weight: 700; color: #eab308; text-transform: uppercase; font-size: 12px; letter-spacing: 1px;">Negotiation / Partial</h3>
+                        <span class="badge" style="background: rgba(234, 179, 8, 0.1); color: #eab308;" id="count-partial">0</span>
+                    </div>
+                    <div id="col-partial" class="kanban-col" style="flex: 1; overflow-y: auto; padding: 5px; min-height: 200px;" ondragover="allowDrop(event)" ondrop="drop(event, 'partial')">
+                        <!-- cards go here -->
+                    </div>
+                </div>
+
+                <!-- PAID COLUMN -->
+                <div class="card" style="flex: 1; min-width: 280px; background: rgba(0,0,0,0.2); border: 1px solid #333; border-top: 3px solid #22c55e; height: 100%; display: flex; flex-direction: column;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #444;">
+                        <h3 style="font-weight: 700; color: #22c55e; text-transform: uppercase; font-size: 12px; letter-spacing: 1px;">Closed Won / Paid</h3>
+                        <span class="badge" style="background: rgba(34, 197, 94, 0.1); color: #22c55e;" id="count-paid">0</span>
+                    </div>
+                    <div id="col-paid" class="kanban-col" style="flex: 1; overflow-y: auto; padding: 5px; min-height: 200px;" ondragover="allowDrop(event)" ondrop="drop(event, 'paid')">
+                        <!-- cards go here -->
+                    </div>
+                </div>
+
+                <!-- OVERDUE COLUMN -->
+                <div class="card" style="flex: 1; min-width: 280px; background: rgba(0,0,0,0.2); border: 1px solid #333; border-top: 3px solid #ef4444; height: 100%; display: flex; flex-direction: column;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #444;">
+                        <h3 style="font-weight: 700; color: #ef4444; text-transform: uppercase; font-size: 12px; letter-spacing: 1px;">At Risk / Overdue</h3>
+                        <span class="badge" style="background: rgba(239, 68, 68, 0.1); color: #ef4444;" id="count-overdue">0</span>
+                    </div>
+                    <div id="col-overdue" class="kanban-col" style="flex: 1; overflow-y: auto; padding: 5px; min-height: 200px;" ondragover="allowDrop(event)" ondrop="drop(event, 'overdue')">
+                        <!-- cards go here -->
+                    </div>
+                </div>
+            </div>
+            
+            <!-- Drag styling -->
+            <style>
+                .kanban-col {
+                    transition: background 0.2s;
+                    border-radius: 6px;
+                }
+                .kanban-col.drag-over {
+                    background: rgba(196, 125, 10, 0.1) !important;
+                    outline: 1px dashed #C47D0A;
+                }
+                .deal-card {
+                    background: #1A1A1A;
+                    border: 1px solid #333;
+                    border-radius: 8px;
+                    padding: 12px;
+                    margin-bottom: 12px;
+                    cursor: grab;
+                    transition: transform 0.1s, box-shadow 0.1s;
+                }
+                .deal-card:hover {
+                    border-color: #555;
+                    box-shadow: 0 4px 12px rgba(0,0,0,0.5);
+                }
+                .deal-card:active {
+                    cursor: grabbing;
+                    transform: scale(0.98);
+                }
+            </style>
+        </div>
+
         <!-- TEAM LEADERBOARD -->
         <div id="team" class="view-section">
             <div class="header-section">
@@ -750,6 +832,7 @@
             else if (viewName === "team") loadTeamPerformance();
             else if (viewName === "support-desk") loadSupportTickets();
             else if (viewName === "revenue-intel") loadRevenueIntelligence();
+            else if (viewName === "pipeline") loadPipeline();
         }
 
         // Load all leads with scoring
@@ -877,7 +960,26 @@
                 document.getElementById("ticketSubject").textContent = ticket.subject;
                 document.getElementById("ticketDetailPanel").style.display = "block";
                 
-                let threadHtml = `<div class="mb-4 p-3 bg-white/5 rounded">
+                let threadHtml = '';
+                
+                // Financial Intelligence Widget
+                if (ticket.financial_intel) {
+                    const fi = ticket.financial_intel;
+                    const ltv = (fi.total_paid / 1000000).toFixed(1);
+                    threadHtml += `
+                    <div class="mb-4 p-3 bg-gradient-to-r from-gray-900 to-black rounded-lg border border-[#333] flex justify-between items-center">
+                        <div>
+                            <div class="text-[10px] text-gray-500 uppercase tracking-widest font-bold mb-1">Client Intelligence</div>
+                            <div class="text-xs text-white font-semibold">${fi.total_deals} Lifetime Deals // ₦${fi.balance_due ? (fi.balance_due / 1000000).toFixed(1) : 0}M Balance</div>
+                        </div>
+                        <div class="text-right">
+                            <div class="text-lg font-black text-[#C47D0A]">₦${ltv}M</div>
+                            <div class="text-[9px] text-[#C47D0A] uppercase">Total Life Value</div>
+                        </div>
+                    </div>`;
+                }
+
+                threadHtml += `<div class="mb-4 p-3 bg-white/5 rounded border border-[#333]">
                     <div class="text-[10px] text-[#C47D0A] font-bold mb-1">CUSTOMER: ${ticket.contact_name || 'Visitor'}</div>
                     <div class="text-xs text-gray-200">${ticket.description}</div>
                 </div>`;

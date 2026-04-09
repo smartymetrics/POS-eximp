@@ -31,9 +31,16 @@ async def create_ticket(data: SupportTicketCreate):
     client_res = db.table("clients").select("id").eq("email", data.contact_email).execute()
     if client_res.data:
         client_id = client_res.data[0]["id"]
-        # Logic to check revenue/LTV (simplified for now: check if they are in clients table)
-        # In a real app, we'd check invoices total
         ticket_payload["client_id"] = client_id
+        
+        # Calculate LTV
+        inv_res = db.table("invoices").select("amount").eq("client_id", client_id).eq("status", "paid").execute()
+        if inv_res.data:
+            total_ltv = sum(i["amount"] for i in inv_res.data)
+            if total_ltv >= 10_000_000:
+                ticket_payload["priority"] = "high"
+                if not ticket_payload["subject"].startswith("[VIP]"):
+                    ticket_payload["subject"] = f"[VIP] {ticket_payload['subject']}"
     
     res = db.table("support_tickets").insert(ticket_payload).execute()
     
@@ -65,7 +72,18 @@ async def get_ticket(ticket_id: str, current_admin=Depends(verify_token)):
     if not res.data:
         raise HTTPException(status_code=404, detail="Ticket not found")
         
-    return res.data[0]
+    ticket = res.data[0]
+    
+    # Financial Intelligence
+    ticket["financial_intel"] = {"total_deals": 0, "total_paid": 0, "balance_due": 0}
+    if ticket.get("client_id"):
+        inv_res = db.table("invoices").select("amount, status").eq("client_id", ticket["client_id"]).execute()
+        if inv_res.data:
+            ticket["financial_intel"]["total_deals"] = len(inv_res.data)
+            ticket["financial_intel"]["total_paid"] = sum(i["amount"] for i in inv_res.data if i["status"] == "paid")
+            ticket["financial_intel"]["balance_due"] = sum(i["amount"] for i in inv_res.data if i["status"] in ["unpaid", "partial"])
+
+    return ticket
 
 @router.patch("/tickets/{ticket_id}")
 async def update_ticket(ticket_id: str, data: SupportTicketUpdate, current_admin=Depends(verify_token)):

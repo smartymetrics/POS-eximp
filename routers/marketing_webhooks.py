@@ -53,6 +53,12 @@ async def resend_webhook(request: Request):
             campaign_id = db.table("campaign_recipients").select("campaign_id").eq("id", rec["id"]).execute().data[0]["campaign_id"]
             db.rpc("increment_campaign_stats", {"camp_id": campaign_id, "event_type": "open"}).execute()
             db.rpc("increment_contact_stats", {"cont_id": rec["contact_id"], "event_type": "open"}).execute()
+            
+            # Closing the Loop: Attribution on Open (HubSpot Standard)
+            db.table("marketing_contacts").update({
+                "last_campaign_id": campaign_id,
+                "last_interaction_at": datetime.utcnow().isoformat()
+            }).eq("id", rec["contact_id"]).execute()
 
     elif event_type == "email.clicked":
         # Similar logic for clicks
@@ -116,6 +122,12 @@ async def tracking_pixel(campaign_id: str, contact_id: str):
     # Increment total opens for campaign and contact
     db.rpc("increment_campaign_stats", {"camp_id": campaign_id, "event_type": "open"}).execute()
     db.rpc("increment_contact_stats", {"cont_id": contact_id, "event_type": "open"}).execute()
+    
+    # Closing the Loop: Attribution on Pixel Open
+    db.table("marketing_contacts").update({
+        "last_campaign_id": campaign_id,
+        "last_interaction_at": datetime.utcnow().isoformat()
+    }).eq("id", contact_id).execute()
     
     # Return a 1x1 transparent PNG
     pixel_data = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\x0bIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82'

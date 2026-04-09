@@ -15,15 +15,16 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
     total_contacts = db.table("marketing_contacts").select("id", count="exact").execute().count
     subscribed = db.table("marketing_contacts").select("id", count="exact").eq("is_subscribed", True).execute().count
     
-    # 2. Campaign Stats (Last 30 days)
-    last_30_days = (datetime.utcnow() - timedelta(days=30)).isoformat()
-    campaigns_res = db.table("email_campaigns").select("*").gte("created_at", last_30_days).execute()
+    # 2. Campaign Stats — fetch ALL campaigns (not limited to 30 days) so historical spend is included
+    campaigns_res = db.table("email_campaigns").select("*").execute()
     campaigns = campaigns_res.data or []
     
+    # Count "sent" this month for KPI display
+    last_30_days = (datetime.utcnow() - timedelta(days=30)).isoformat()
     sent_campaigns = [c for c in campaigns if c["status"] == "sent"]
-    sent_count = len(sent_campaigns)
+    sent_count = len([c for c in sent_campaigns if c.get("created_at", "") >= last_30_days])
 
-    # 3. Aggregated Open/Click Rate
+    # 3. Aggregated Open/Click Rate (all time)
     all_recs_res = db.table("campaign_recipients").select("open_count, click_count").execute()
     all_recs = all_recs_res.data or []
     
@@ -33,10 +34,9 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
     
     avg_open_val = (total_opened / total_delivered * 100) if total_delivered > 0 else 0
     avg_open = f"{avg_open_val:.1f}%"
-    avg_click = f"{(total_clicked / total_delivered * 100):.1f}%" if total_delivered > 0 else "0%"
+    open_delta = f"↑ {avg_open_val:.1f}% vs avg" if avg_open_val > 0 else "↑ 0% vs avg"
     
     # 4. Deltas (Month over Month)
-    # Contact Growth this month
     new_this_month = db.table("marketing_contacts").select("id", count="exact").gte("created_at", last_30_days).execute().count or 0
     previous_total = total_contacts - new_this_month
     
@@ -59,36 +59,46 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
         growth_data.append({"date": date_str, "count": count})
 
     # 6. Total Attributed Revenue & Segment ROI/CPA
-    revenue_res = db.table("invoices").select("amount, marketing_campaign_id").not_.is_("marketing_campaign_id", "null").eq("status", "paid").execute()
-    total_revenue = sum([i["amount"] for i in revenue_res.data]) if revenue_res.data else 0
-    total_spend = sum([c.get("actual_spend") or 0 for c in campaigns])
+    try:
+        revenue_res = db.table("invoices").select("amount, marketing_campaign_id").not_.is_("marketing_campaign_id", "null").eq("status", "paid").execute()
+        total_revenue = sum([i["amount"] for i in revenue_res.data]) if revenue_res.data else 0
+        attributed_invoices = revenue_res.data or []
+    except Exception:
+        total_revenue = 0
+        attributed_invoices = []
+
+    # Total spend: use actual_spend if set, otherwise fall back to budget
+    total_spend = sum([(c.get("actual_spend") or c.get("budget") or 0) for c in campaigns])
     
-    overall_roi = (total_revenue / total_spend * 100) if total_spend > 0 else 0
-    cpa = (total_spend / len(revenue_res.data)) if revenue_res.data and total_spend > 0 else 0
+    # Set ROI to 0 if there's no revenue yet to avoid an alarming -100% for new campaigns
+    if total_revenue == 0:
+        overall_roi = 0
+    else:
+        overall_roi = ((total_revenue - total_spend) / total_spend * 100) if total_spend > 0 else 0
+
+    cpa = (total_spend / len(attributed_invoices)) if attributed_invoices and total_spend > 0 else 0
 
     # Calculate Segment Details
     segment_data = {}
     if campaigns:
-        # Map campaign IDs to segments
         camp_map = {c["id"]: {
             "seg": c.get("target_segment") or "Uncategorized", 
-            "spend": c.get("actual_spend") or 0
+            "spend": (c.get("actual_spend") or c.get("budget") or 0)
         } for c in campaigns}
         
-        for inv in (revenue_res.data or []):
-            attr = camp_map.get(inv["marketing_campaign_id"], {"seg": "Unknown", "spend": 0})
+        for inv in attributed_invoices:
+            attr = camp_map.get(inv.get("marketing_campaign_id"), {"seg": "Unknown", "spend": 0})
             seg = attr["seg"]
             if seg not in segment_data:
                 segment_data[seg] = {"revenue": 0, "spend": 0, "conversions": 0}
             segment_data[seg]["revenue"] += inv["amount"]
             segment_data[seg]["conversions"] += 1
             
-        # Add spend data for segments that might not have revenue yet
         for c in campaigns:
             seg = c.get("target_segment") or "Uncategorized"
             if seg not in segment_data:
                 segment_data[seg] = {"revenue": 0, "spend": 0, "conversions": 0}
-            segment_data[seg]["spend"] += (c.get("actual_spend") or 0)
+            segment_data[seg]["spend"] += (c.get("actual_spend") or c.get("budget") or 0)
     
     segment_stats = []
     for k, v in segment_data.items():
@@ -96,7 +106,7 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
             "segment": k,
             "revenue": v["revenue"],
             "spend": v["spend"],
-            "roi": (v["revenue"] / v["spend"] * 100) if v["spend"] > 0 else 0,
+            "roi": 0 if v["revenue"] == 0 else ((v["revenue"] - v["spend"]) / v["spend"] * 100) if v["spend"] > 0 else 0,
             "cpa": (v["spend"] / v["conversions"]) if v["conversions"] > 0 else 0
         })
     segment_stats.sort(key=lambda x: x["revenue"], reverse=True)
@@ -111,9 +121,10 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
         "campaigns": {
             "sent_this_month": sent_count,
             "avg_open_rate": avg_open,
+            "open_delta": open_delta,
             "total_revenue": total_revenue,
             "total_spend": total_spend,
-            "overall_roi": f"{overall_roi:.1f}%",
+            "overall_roi": overall_roi,
             "avg_cpa": cpa
         },
         "engagement": {

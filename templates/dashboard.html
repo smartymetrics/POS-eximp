@@ -2150,6 +2150,13 @@
             </div>
           </div>
           <div class="form-group span2">
+            <label class="form-label font-bold text-brand-gold">Marketing Attribution (Optional)</label>
+            <select class="form-control" id="inv-marketing-campaign">
+              <option value="">-- No Campaign (Organic) --</option>
+            </select>
+            <small style="font-size:10px; color:var(--gray);">Select the campaign that drove this lead.</small>
+          </div>
+          <div class="form-group span2">
             <label class="form-label">Property / Plot Name <span class="req">*</span></label>
             <input type="text" class="form-control" id="inv-property-name"
               placeholder="e.g. Olive Park Estate, Plot 45">
@@ -2425,6 +2432,13 @@
             <input type="number" class="form-control" id="edit-inv-size">
             <div class="form-hint edit-inv-admin-lock" style="display:none; color:var(--red);">Only Admins can edit Plot
               Size.</div>
+          </div>
+          <div class="form-group span2">
+            <label class="form-label font-bold text-brand-gold">Marketing Attribution (Optional)</label>
+            <select class="form-control" id="edit-inv-marketing-campaign">
+              <option value="">-- No Campaign (Organic) --</option>
+            </select>
+            <div class="form-hint edit-inv-admin-lock" style="display:none; color:var(--red);">Only Admins can edit Attribution.</div>
           </div>
           <div class="form-group">
             <label class="form-label">Quantity</label>
@@ -4618,15 +4632,24 @@
         document.getElementById('edit-inv-due-reason').value = '';
         document.getElementById('edit-inv-due-reason-group').style.display = 'none';
 
-        // Add event listener to show reason input if due date changes
-        const dueInput = document.getElementById('edit-inv-due');
-        dueInput.onchange = function () {
-          if (this.value !== originalDueDate) {
-            document.getElementById('edit-inv-due-reason-group').style.display = 'block';
-          } else {
-            document.getElementById('edit-inv-due-reason-group').style.display = 'none';
-          }
-        };
+        // Attribution loading
+        const campSelect = document.getElementById('edit-inv-marketing-campaign');
+        if (campSelect) {
+            campSelect.innerHTML = '<option value="">-- No Campaign (Organic) --</option>';
+            try {
+                const cRes = await apiFetch('/api/marketing/campaigns');
+                const campaigns = await cRes.json();
+                campaigns.filter(c => c.status === 'sent').forEach(c => {
+                    const opt = document.createElement('option');
+                    opt.value = c.id;
+                    opt.textContent = `${c.name} (${new Date(c.created_at).toLocaleDateString()})`;
+                    campSelect.appendChild(opt);
+                });
+                campSelect.value = inv.marketing_campaign_id || '';
+            } catch (e) {
+                console.error("Failed to load campaigns for edit", e);
+            }
+        }
 
         const isStaff = currentUserRole === 'staff';
         const termsInput = document.getElementById('edit-inv-terms');
@@ -4643,38 +4666,41 @@
         const priceInput = document.getElementById('edit-inv-price');
         const dateInput = document.getElementById('edit-inv-date');
         const paidInput = document.getElementById('edit-inv-paid');
+        const attrInput = document.getElementById('edit-inv-marketing-campaign');
 
         if (isStaff) {
-          termsInput.classList.add('locked-field'); termsInput.disabled = true;
-          termsCustomInput.classList.add('locked-field'); termsCustomInput.readOnly = true;
-          coNameInput.classList.add('locked-field'); coNameInput.readOnly = true;
-          coEmailInput.classList.add('locked-field'); coEmailInput.readOnly = true;
-          repInput.classList.add('locked-field'); repInput.readOnly = true;
-          propSelectInput.classList.add('locked-field'); propSelectInput.disabled = true;
-          propCustomInput.classList.add('locked-field'); propCustomInput.readOnly = true;
-          locInput.classList.add('locked-field'); locInput.readOnly = true;
-          amountInput.classList.add('locked-field'); amountInput.readOnly = true;
-          sizeInput.classList.add('locked-field'); sizeInput.readOnly = true;
-          qtyInput.classList.add('locked-field'); qtyInput.readOnly = true;
-          priceInput.classList.add('locked-field'); priceInput.readOnly = true;
-          dateInput.classList.add('locked-field'); dateInput.readOnly = true;
-          paidInput.classList.add('locked-field'); paidInput.readOnly = true;
-          document.querySelectorAll('.edit-inv-admin-lock').forEach(el => el.style.display = 'block');
+            termsInput.classList.add('locked-field'); termsInput.disabled = true;
+            termsCustomInput.classList.add('locked-field'); termsCustomInput.readOnly = true;
+            coNameInput.classList.add('locked-field'); coNameInput.readOnly = true;
+            coEmailInput.classList.add('locked-field'); coEmailInput.readOnly = true;
+            repInput.classList.add('locked-field'); repInput.readOnly = true;
+            propSelectInput.classList.add('locked-field'); propSelectInput.disabled = true;
+            propCustomInput.classList.add('locked-field'); propCustomInput.readOnly = true;
+            locInput.classList.add('locked-field'); locInput.readOnly = true;
+            amountInput.classList.add('locked-field'); amountInput.readOnly = true;
+            sizeInput.classList.add('locked-field'); sizeInput.readOnly = true;
+            qtyInput.classList.add('locked-field'); qtyInput.readOnly = true;
+            priceInput.classList.add('locked-field'); priceInput.readOnly = true;
+            dateInput.classList.add('locked-field'); dateInput.readOnly = true;
+            paidInput.classList.add('locked-field'); paidInput.readOnly = true;
+            if (attrInput) { attrInput.classList.add('locked-field'); attrInput.disabled = true; }
+            document.querySelectorAll('.edit-inv-admin-lock').forEach(el => el.style.display = 'block');
         } else {
-          termsInput.classList.remove('locked-field'); termsInput.disabled = false;
-          termsCustomInput.classList.remove('locked-field'); termsCustomInput.readOnly = false;
-          coNameInput.classList.remove('locked-field'); coNameInput.readOnly = false;
-          coEmailInput.classList.remove('locked-field'); coEmailInput.readOnly = false;
-          repInput.classList.remove('locked-field'); repInput.readOnly = false;
-          propSelectInput.classList.remove('locked-field'); propSelectInput.disabled = false;
-          propCustomInput.classList.remove('locked-field'); propCustomInput.readOnly = false;
-          locInput.classList.remove('locked-field'); locInput.readOnly = false;
-          amountInput.classList.remove('locked-field'); amountInput.readOnly = false;
-          sizeInput.classList.remove('locked-field'); sizeInput.readOnly = false;
-          qtyInput.classList.remove('locked-field'); qtyInput.readOnly = false;
-          dateInput.classList.remove('locked-field'); dateInput.readOnly = false;
-          paidInput.classList.remove('locked-field'); paidInput.readOnly = false;
-          document.querySelectorAll('.edit-inv-admin-lock').forEach(el => el.style.display = 'none');
+            termsInput.classList.remove('locked-field'); termsInput.disabled = false;
+            termsCustomInput.classList.remove('locked-field'); termsCustomInput.readOnly = false;
+            coNameInput.classList.remove('locked-field'); coNameInput.readOnly = false;
+            coEmailInput.classList.remove('locked-field'); coEmailInput.readOnly = false;
+            repInput.classList.remove('locked-field'); repInput.readOnly = false;
+            propSelectInput.classList.remove('locked-field'); propSelectInput.disabled = false;
+            propCustomInput.classList.remove('locked-field'); propCustomInput.readOnly = false;
+            locInput.classList.remove('locked-field'); locInput.readOnly = false;
+            amountInput.classList.remove('locked-field'); amountInput.readOnly = false;
+            sizeInput.classList.remove('locked-field'); sizeInput.readOnly = false;
+            qtyInput.classList.remove('locked-field'); qtyInput.readOnly = false;
+            dateInput.classList.remove('locked-field'); dateInput.readOnly = false;
+            paidInput.classList.remove('locked-field'); paidInput.readOnly = false;
+            if (attrInput) { attrInput.classList.remove('locked-field'); attrInput.disabled = false; }
+            document.querySelectorAll('.edit-inv-admin-lock').forEach(el => el.style.display = 'none');
         }
 
         openModal('editInvoiceModal');
@@ -4723,6 +4749,7 @@
         body.amount = parseFloat(document.getElementById('edit-inv-amount').value) || 0;
         body.amount_paid = document.getElementById('edit-inv-paid').value ? parseFloat(document.getElementById('edit-inv-paid').value) : 0;
         body.invoice_date = document.getElementById('edit-inv-date').value || null;
+        body.marketing_campaign_id = document.getElementById('edit-inv-marketing-campaign').value || null;
       }
 
       if (newDue !== originalDueDate) {
@@ -5017,6 +5044,10 @@
       document.getElementById('inv-amount').value = '';
       document.getElementById('inv-notes').value = '';
 
+      // Reset campaign attribution
+      const campSelect = document.getElementById('inv-marketing-campaign');
+      if (campSelect) campSelect.innerHTML = '<option value="">-- No Campaign (Organic) --</option>';
+
       const today = new Date().toISOString().split('T')[0];
       document.getElementById('inv-date').value = today;
       document.getElementById('inv-due').value = today;
@@ -5027,6 +5058,21 @@
       toggleCustomTerms('inv');
 
       openModal('newInvoiceModal');
+
+      // Fetch campaigns for attribution
+      try {
+        const res = await apiFetch('/api/marketing/campaigns');
+        const camps = await res.json();
+        // Only show 'sent' campaigns for attribution logic
+        camps.filter(c => c.status === 'sent').forEach(c => {
+          const opt = document.createElement('option');
+          opt.value = c.id;
+          opt.textContent = `${c.name} (${new Date(c.created_at).toLocaleDateString()})`;
+          if (campSelect) campSelect.appendChild(opt);
+        });
+      } catch (e) {
+        console.error("Failed to load campaigns for attribution", e);
+      }
     }
 
     function toggleCustomTerms(prefix) {
@@ -5097,6 +5143,7 @@
         invoice_date: document.getElementById('inv-date').value,
         due_date: document.getElementById('inv-due').value,
         notes: document.getElementById('inv-notes').value,
+        marketing_campaign_id: document.getElementById('inv-marketing-campaign').value || null,
       };
 
       if (!body.client_id || !body.amount || !body.invoice_date) {
