@@ -8,7 +8,7 @@ from routers.analytics import log_activity
 
 router = APIRouter()
 
-@router.get("/")
+@router.get("")
 async def get_sales_reps(admin: dict = Depends(get_current_admin)):
     """List all sales representatives with basic stats."""
     res = supabase.table("sales_reps").select("*").order("name").execute()
@@ -27,7 +27,7 @@ async def get_sales_reps(admin: dict = Depends(get_current_admin)):
         
     return reps
 
-@router.post("/", status_code=status.HTTP_201_CREATED)
+@router.post("", status_code=status.HTTP_201_CREATED)
 async def create_sales_rep(
     rep: SalesRepCreate, 
     background_tasks: BackgroundTasks,
