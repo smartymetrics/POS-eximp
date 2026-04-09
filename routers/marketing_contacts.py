@@ -145,7 +145,13 @@ async def sync_clients(current_admin=Depends(verify_token)):
     clients = db.table("clients").select("id, full_name, email, phone").execute().data
     
     marketing_entries = []
+    seen_emails = set()
     for c in clients:
+        email = c["email"].lower().strip()
+        if not email or email in seen_emails:
+            continue
+        seen_emails.add(email)
+        
         names = (c["full_name"] or "Valued Client").split(" ", 1)
         first = names[0]
         last = names[1] if len(names) > 1 else ""
@@ -154,7 +160,7 @@ async def sync_clients(current_admin=Depends(verify_token)):
             "client_id": c["id"],
             "first_name": first,
             "last_name": last,
-            "email": c["email"].lower().strip(),
+            "email": email,
             "phone": c["phone"],
             "source": "ecoms_client",
             "contact_type": "client"

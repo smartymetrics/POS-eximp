@@ -64,3 +64,10 @@ async def restore_property(property_id: str, current_admin=Depends(verify_token)
     if not result.data:
         raise HTTPException(status_code=404, detail="Property not found")
     return {"message": "Property restored", "property": result.data[0]}
+@router.get("/{property_id}")
+async def get_property(property_id: str, current_admin=Depends(verify_token)):
+    db = get_db()
+    result = db.table("properties").select("*").eq("id", property_id).execute()
+    if not result.data:
+        raise HTTPException(status_code=404, detail="Property not found")
+    return result.data[0]

@@ -22,6 +22,120 @@ router = APIRouter()
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
 
 @router.post("/form-submission")
+async def process_webhook_post_submission_tasks(
+    payload: WebhookFormPayload,
+    invoice_id: str,
+    invoice_number: str,
+    client_id: str,
+    full_name: str,
+    property_name: str,
+):
+    """
+    Handles heavy IO tasks in the background:
+    1. Signature processing & Storage upload
+    2. Payment record creation
+    3. Pending verification creation
+    4. Email notifications
+    5. Marketing sync
+    """
+    db = get_db()
+    try:
+        # 1. Handle Signature Storage
+        signature_url_to_save = payload.signature_url
+        if payload.signature_base64:
+            try:
+                # 1. Parse MIME and data
+                if "," in payload.signature_base64:
+                    header, encoded = payload.signature_base64.split(",", 1)
+                    mime = header.split("data:")[1].split(";")[0] if "data:" in header else "image/png"
+                else:
+                    encoded = payload.signature_base64
+                    mime = "image/png"
+                
+                ext = mime.split("/")[1] if "/" in mime else "png"
+                img_data = base64.b64decode(encoded)
+                
+                # --- CONVERSION STEP: Force to PNG for PDF compatibility ---
+                try:
+                    with Image.open(io.BytesIO(img_data)) as img:
+                        if img.mode != 'RGBA':
+                            img = img.convert('RGBA')
+                        out_buf = io.BytesIO()
+                        img.save(out_buf, format="PNG")
+                        img_data = out_buf.getvalue()
+                        mime = "image/png"
+                        ext = "png"
+                except Exception as img_err:
+                    print(f"WARNING: Image conversion failed, uploading as-is: {img_err}")
+                
+                # 2. Upload to storage
+                file_path = f"customer_signatures/sig_{invoice_number}.{ext}"
+                try:
+                    db.storage.from_("signatures").remove([file_path])
+                except Exception:
+                    pass
+                db.storage.from_("signatures").upload(
+                    path=file_path, 
+                    file=img_data, 
+                    file_options={"content-type": mime}
+                )
+                
+                signature_url_to_save = f"{SUPABASE_URL}/storage/v1/object/public/signatures/{file_path}"
+                # Update invoice with the real signature URL
+                db.table("invoices").update({"signature_url": signature_url_to_save}).eq("id", invoice_id).execute()
+            except Exception as sig_e:
+                print(f"ERROR: Background signature process failed: {sig_e}")
+
+        # 2. Record deposit payment
+        if payload.deposit_amount > 0:
+            payment_data = {
+                "invoice_id": invoice_id,
+                "client_id": client_id,
+                "reference": f"{payload.payment_date or str(date.today())}_form_deposit",
+                "amount": payload.deposit_amount,
+                "payment_method": "Bank Transfer", # Default for form
+                "payment_date": payload.payment_date or str(date.today()),
+                "notes": "Initial deposit via subscription form"
+            }
+            db.table("payments").insert(jsonable_encoder(payment_data)).execute()
+
+        # 3. Create pending verification
+        verify_data = {
+            "invoice_id": invoice_id,
+            "client_id": client_id,
+            "payment_proof_url": payload.payment_proof_url,
+            "deposit_amount": payload.deposit_amount,
+            "payment_date": payload.payment_date,
+            "sales_rep_name": payload.sales_rep_name,
+            "status": "pending"
+        }
+        db.table("pending_verifications").insert(jsonable_encoder(verify_data)).execute()
+
+        # 4. Emails
+        # Fetch data for email
+        full_client = db.table("clients").select("*").eq("id", client_id).execute().data[0]
+        # Get invoice with potential updated signature_url
+        invoice = db.table("invoices").select("*").eq("id", invoice_id).execute().data[0]
+        
+        await send_welcome_email(full_client, property_name)
+        await send_admin_alert_email(invoice, full_client)
+        
+        await log_activity(
+            "form_submission",
+            f"New subscription for {full_name} via Google Form",
+            "system",
+            client_id=client_id,
+            invoice_id=invoice_id
+        )
+
+        # 5. Sync to Marketing
+        await sync_client_to_marketing(full_client)
+        
+    except Exception as e:
+        print(f"BACKGROUND WEBHOOK ERROR for {invoice_number}: {str(e)}")
+
+
+@router.post("/form-submission")
 async def form_submission(
     payload: WebhookFormPayload,
     request: Request,
@@ -36,7 +150,6 @@ async def form_submission(
     # Basic verification: ensure the user at least checked the consent box
     consent_text = (payload.consent or "").lower()
     if "confirm" not in consent_text and "agree" not in consent_text:
-        print(f"DEBUG: Skipping form due to missing consent: {payload.consent}")
         return {"status": "ignored", "message": "Consent not confirmed"}
 
     db = get_db()
@@ -80,12 +193,7 @@ async def form_submission(
         else:
             new_client = db.table("clients").insert(jsonable_encoder(client_data)).execute()
             client_id = new_client.data[0]["id"]
-            client_res = new_client # Use for sync below
             
-        # 3b. Sync to Marketing (Upgrades Lead -> Client)
-        if client_res.data:
-            sync_client_to_marketing(client_res.data[0])
-
         # 4. Sales Rep Detection
         rep_name_to_use = payload.sales_rep_name
         sales_rep_id_to_use = None
@@ -96,28 +204,21 @@ async def form_submission(
             if payload.sales_rep_phone:
                 import re
                 cleaned_phone = re.sub(r'\D', '', payload.sales_rep_phone)
-                # Normalize (assuming Nigerian numbers: strip '234' or leading '0')
+                # Normalize
                 if cleaned_phone.startswith('234') and len(cleaned_phone) > 10:
                     cleaned_phone = cleaned_phone[3:]
                 elif cleaned_phone.startswith('0') and len(cleaned_phone) == 11:
                     cleaned_phone = cleaned_phone[1:]
                 
-                if len(cleaned_phone) >= 7: # Safety check
+                if len(cleaned_phone) >= 7:
                     rep_res = db.table("sales_reps").select("*").ilike("phone", f"%{cleaned_phone}%").eq("is_active", True).execute()
                     if rep_res.data:
-                        matched_rep = rep_res.data[0] # Take first match for phone
+                        matched_rep = rep_res.data[0]
             
             # Phase 2: Try Exact Name Match
             if not matched_rep and payload.sales_rep_name:
                 rep_res = db.table("sales_reps").select("*").eq("name", payload.sales_rep_name).eq("is_active", True).execute()
                 if rep_res.data:
-                    matched_rep = rep_res.data[0]
-            
-            # Phase 3: Try Partial Name Match (ONLY if single result found)
-            if not matched_rep and payload.sales_rep_name:
-                rep_res = db.table("sales_reps").select("*").ilike("name", f"%{payload.sales_rep_name}%").eq("is_active", True).execute()
-                # Use ONLY if exactly one match found to prevent wrong commission assignment
-                if len(rep_res.data) == 1:
                     matched_rep = rep_res.data[0]
             
             if matched_rep:
@@ -140,7 +241,7 @@ async def form_submission(
         seq_result = db.rpc("generate_invoice_number").execute()
         invoice_number = seq_result.data
 
-        # Parse plot size sqm if possible (strip non-numeric except dot)
+        # Parse plot size sqm if possible
         import re
         plot_size_numeric = None
         if payload.plot_size:
@@ -160,8 +261,6 @@ async def form_submission(
             payment_duration=payload.payment_duration
         )
 
-        # 5. Get Property Price from DB
-        # Use the properties table as source of truth for unit price and total amount
         total_amount_to_use = payload.total_amount
         if total_amount_to_use <= 0 and payload.deposit_amount > 0 and payload.outstanding_amount > 0:
             total_amount_to_use = payload.deposit_amount + payload.outstanding_amount
@@ -178,98 +277,21 @@ async def form_submission(
             
             try:
                 prop_res = query.execute()
-            except Exception as e:
-                print(f"DEBUG: Error querying properties by name: {e}")
-                prop_res = None
-                
-            if not prop_res or not prop_res.data:
-                query = db.table("properties").select("*")\
-                    .ilike("estate_name", f"%{payload.property_name}%")\
-                    .eq("is_active", True)
-                if plot_size_numeric:
-                    query = query.eq("plot_size_sqm", plot_size_numeric)
-                try:
-                    prop_res = query.execute()
-                except Exception as e:
-                    print(f"DEBUG: Error querying properties by estate_name: {e}")
-                    prop_res = None
-            if prop_res.data:
-                prop = prop_res.data[0]
-                property_id_to_use = prop.get("id")
-                property_location_to_use = prop.get("location")
-
-                if prop.get("total_price") is not None and float(prop.get("total_price")) > 0:
-                    unit_price_to_use = float(prop.get("total_price"))
-                elif prop.get("price_per_sqm") is not None and float(prop.get("price_per_sqm")) > 0:
-                    unit_price_to_use = float(prop.get("price_per_sqm"))
-                elif prop.get("starting_price") is not None and float(prop.get("starting_price")) > 0:
-                    unit_price_to_use = float(prop.get("starting_price"))
-
-                if unit_price_to_use is not None:
-                    total_amount_to_use = unit_price_to_use * quantity_to_use
-                    print(f"DEBUG: Found property {payload.property_name} (ID: {property_id_to_use}, Unit Price: {unit_price_to_use}, Quantity: {quantity_to_use}, Amount: {total_amount_to_use})")
-                else:
-                    print(f"DEBUG: Found property {payload.property_name} (ID: {property_id_to_use}) but could not determine unit price")
+                if prop_res.data:
+                    prop = prop_res.data[0]
+                    property_id_to_use = prop.get("id")
+                    property_location_to_use = prop.get("location")
+                    unit_price_to_use = float(prop.get("total_price") or prop.get("price_per_sqm") or prop.get("starting_price") or 0)
+                    if unit_price_to_use > 0:
+                        total_amount_to_use = unit_price_to_use * quantity_to_use
+            except Exception:
+                pass
 
         if unit_price_to_use is None and total_amount_to_use > 0 and quantity_to_use > 0:
             unit_price_to_use = total_amount_to_use / quantity_to_use
 
-        # 5. Handle Signature Storage
-        signature_url_to_save = payload.signature_url
-        if payload.signature_base64:
-            try:
-                # 1. Parse MIME and data
-                if "," in payload.signature_base64:
-                    header, encoded = payload.signature_base64.split(",", 1)
-                    mime = header.split("data:")[1].split(";")[0] if "data:" in header else "image/png"
-                else:
-                    encoded = payload.signature_base64
-                    mime = "image/png"
-                
-                ext = mime.split("/")[1] if "/" in mime else "png"
-                img_data = base64.b64decode(encoded)
-                
-                # --- CONVERSION STEP: Force to PNG for PDF compatibility ---
-                try:
-                    with Image.open(io.BytesIO(img_data)) as img:
-                        # Convert to RGBA (keeps transparency) or RGB if needed
-                        if img.mode != 'RGBA':
-                            img = img.convert('RGBA')
-                        
-                        out_buf = io.BytesIO()
-                        img.save(out_buf, format="PNG")
-                        img_data = out_buf.getvalue()
-                        mime = "image/png"
-                        ext = "png"
-                except Exception as img_err:
-                    print(f"WARNING: Image conversion failed, uploading as-is: {img_err}")
-                
-                # 2. Upload to storage
-                file_path = f"customer_signatures/sig_{invoice_number}.{ext}"
-                # Use the storage client from db
-                try:
-                    db.storage.from_("signatures").remove([file_path])
-                except Exception:
-                    pass
-                db.storage.from_("signatures").upload(
-                    path=file_path, 
-                    file=img_data, 
-                    file_options={"content-type": mime}
-                )
-                
-                # 3. Build public URL
-                signature_url_to_save = f"{SUPABASE_URL}/storage/v1/object/public/signatures/{file_path}"
-                print(f"DEBUG: Signature uploaded to {signature_url_to_save}")
-            except Exception as e:
-                print(f"ERROR: Signature upload to storage failed: {e}")
-                # Fallback to saving base64 if upload fails
-                signature_url_to_save = payload.signature_base64
-
-        # 5b. REVENUE ATTRIBUTION (First-Touch / Multi-Source)
-        # 1. Primary: Campaign ID from Form (if explicitly passed)
+        # 5b. REVENUE ATTRIBUTION
         marketing_campaign_id = payload.mcid
-
-        # 2. Fallback: Last Campaign from Marketing Contact record
         if not marketing_campaign_id:
             mc_attr = db.table("marketing_contacts").select("last_campaign_id").eq("email", payload.email.strip().lower()).execute()
             marketing_campaign_id = mc_attr.data[0].get("last_campaign_id") if mc_attr.data and mc_attr.data[0].get("last_campaign_id") else None
@@ -292,7 +314,7 @@ async def form_submission(
             "sales_rep_id": sales_rep_id_to_use,
             "co_owner_name": payload.co_owner_name,
             "co_owner_email": payload.co_owner_email,
-            "signature_url": signature_url_to_save,
+            "signature_url": payload.signature_url, # Temporary (real one updated in background)
             "payment_proof_url": payload.payment_proof_url,
             "passport_photo_url": payload.passport_photo_url,
             "purchase_purpose": payload.purchase_purpose,
@@ -300,60 +322,23 @@ async def form_submission(
             "attribution_utm_source": payload.utm_source,
             "attribution_utm_medium": payload.utm_medium,
             "attribution_utm_campaign": payload.utm_campaign,
-            "source": "google_form"
+            "source": "google_form",
+            "pipeline_stage": "inspection"
         }
 
         invoice_res = db.table("invoices").insert(jsonable_encoder(invoice_insert)).execute()
-        invoice = invoice_res.data[0]
+        invoice_id = invoice_res.data[0]["id"]
 
-        # 5. Record deposit payment
-        if payload.deposit_amount > 0:
-            print(f"DEBUG: Inserting payment for {payload.deposit_amount}")
-            payment_data = {
-                "invoice_id": invoice["id"],
-                "client_id": client_id,
-                "reference": f"{payload.payment_date or str(invoice_date)}_form_deposit",
-                "amount": payload.deposit_amount,
-                "payment_method": "Bank Transfer", # Default for form
-                "payment_date": payload.payment_date or str(invoice_date),
-                "notes": "Initial deposit via subscription form"
-            }
-            db.table("payments").insert(jsonable_encoder(payment_data)).execute()
-
-        # 6. Create pending verification
-        verify_data = {
-            "invoice_id": invoice["id"],
-            "client_id": client_id,
-            "payment_proof_url": payload.payment_proof_url,
-            "deposit_amount": payload.deposit_amount,
-            "payment_date": payload.payment_date,
-            "sales_rep_name": rep_name_to_use,
-            "status": "pending"
-        }
-        db.table("pending_verifications").insert(jsonable_encoder(verify_data)).execute()
-
-        # 7. Emails
-        # Fetch full client data for email (with nested info if needed)
-        full_client = db.table("clients").select("*").eq("id", client_id).execute().data[0]
-        
-        background_tasks.add_task(send_welcome_email, full_client, payload.property_name)
-        background_tasks.add_task(send_admin_alert_email, invoice, full_client)
-        
+        # 6. Hand off heavy tasks to Background Worker
         background_tasks.add_task(
-            log_activity,
-            "form_submission",
-            f"New subscription for {full_name} via Google Form",
-            "system", # Webhook is system-triggered
-            client_id=client_id,
-            invoice_id=invoice["id"]
+            process_webhook_post_submission_tasks,
+            payload,
+            invoice_id,
+            invoice_number,
+            client_id,
+            full_name,
+            payload.property_name
         )
-
-        # Sync to Marketing
-        try:
-            await sync_client_to_marketing(full_client)
-        except Exception as e:
-            print(f"Marketing Sync Error: {e}")
-            raise HTTPException(status_code=500, detail=f"Internal error processing webhook: {str(e)}")
 
         return {
             "message": "Processed successfully",
@@ -362,5 +347,5 @@ async def form_submission(
         }
 
     except Exception as e:
-        print(f"WEBHOOK ERROR: {str(e)}")
-        raise HTTPException(status_code=500, detail=f"Internal error processing webhook: {str(e)}")
+        print(f"WEBHOOK PROCESSOR ERROR: {str(e)}")
+        raise HTTPException(status_code=500, detail=f"Internal error: {str(e)}")

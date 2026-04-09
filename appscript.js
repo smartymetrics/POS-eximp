@@ -4,16 +4,13 @@ const WEBHOOK_SECRET = "eximp_cloves_form_web_2026_xyz";
 
 function onFormSubmit(e) {
     try {
-        // --- DATA EXTRACTION ---
-        // For Spreadsheet-bound scripts, we use e.namedValues
-        // For Form-bound scripts, we use e.response
         let responses = {};
         let submitterEmail = "";
 
         if (e.namedValues) {
             // Spreadsheet Trigger
             for (let key in e.namedValues) {
-                responses[key.trim()] = e.namedValues[key][0]; // namedValues returns arrays
+                responses[key.trim()] = e.namedValues[key][0];
             }
             submitterEmail = responses["Email Address"] || responses["Email"] || "";
         } else if (e.response) {
@@ -25,113 +22,97 @@ function onFormSubmit(e) {
             submitterEmail = e.response.getRespondentEmail();
         }
 
+        // --- ROBUST MAPPING HELPER ---
+        function getVal(primaryKey, keywords) {
+            // Try exact match first
+            if (responses[primaryKey]) return responses[primaryKey];
+            
+            // Try keyword safety net
+            for (let key in responses) {
+                let match = true;
+                for (let word of keywords) {
+                    if (key.toLowerCase().indexOf(word.toLowerCase()) === -1) {
+                        match = false;
+                        break;
+                    }
+                }
+                if (match) {
+                    Logger.log("Keyword Match Found: '" + key + "' mapped to keywords [" + keywords.join(",") + "]");
+                    return responses[key];
+                }
+            }
+            return "";
+        }
+
         // --- FIELD MAPPING ---
         const payload = {
             // Client Info
-            title: responses["Title"] || "",
-            first_name: responses["Customer first name"] || responses["First Name"] || "",
-            last_name: responses["Customer last name (surname)"] || responses["Last Name"] || "",
-            middle_name: responses["Customer middle name"] || responses["Middle Name"] || "",
-            gender: responses["Gender"] || "",
-            dob: responses["Date of Birth"] || "",
-            address: responses["Client's residential address"] || responses["Residential Address"] || "",
-            city: responses["City"] || "",
-            state: responses["State"] || "",
-            email: submitterEmail || responses["Client's email address"] || responses["Email"] || "",
-            marital_status: responses["Marital Status"] || "",
-            phone: responses["Client's phone number\n(Whatsapp line)"] || responses["Phone Number"] || "",
-            occupation: responses["Occupation"] || "",
-            nin: responses['NIN \n(This data is strictly utilized for our Know-Your-Customer (KYC) verification, in accordance with the requirements of the Nigerian government.)\n\nNIN Lookup: Use the phone number linked to your NIN registration and:\n\nDial *346#.\n\nSelect \'1\' for ""NIN Retrieval"" from the service options.\n\nComplete the process by following the on-screen instructions and providing the requested information.'] || responses["NIN"] || "",
-            id_number: responses["International Passport No/NIN Number"] || responses["ID Card Number"] || "",
-            id_document_url: responses["Upload NIN/International Passport "] || responses["Upload ID Card"] || "",
-            nationality: responses["Nationality"] || "",
-            passport_photo_url: responses["Upload a passport photograph"] || responses["Upload Passport Photo"] || "",
+            title: getVal("Title", ["Title"]),
+            first_name: getVal("Customer first name", ["First Name"]),
+            last_name: getVal("Customer last name (surname)", ["Last Name"]),
+            middle_name: getVal("Customer middle name", ["Middle Name"]),
+            gender: getVal("Gender", ["Gender"]),
+            dob: getVal("Date of Birth", ["Date", "Birth"]),
+            address: getVal("Client's residential address", ["Residential Address", "Address"]),
+            city: getVal("City", ["City"]),
+            state: getVal("State", ["State"]),
+            email: submitterEmail || getVal("Client's email address", ["Email"]),
+            marital_status: getVal("Marital Status", ["Marital"]),
+            phone: getVal("Client's phone number\n(Whatsapp line)", ["Phone", "Whatsapp"]),
+            occupation: getVal("Occupation", ["Occupation"]),
+            
+            // KYC Fields (The problematic ones)
+            nin: getVal("NIN", ["NIN", "Retrieval"]),
+            id_number: getVal("International Passport No/NIN Number", ["Passport", "Number"]),
+            id_document_url: getVal("Upload NIN/International Passport", ["Upload", "NIN"]),
+            nationality: getVal("Nationality", ["Nationality"]),
+            passport_photo_url: getVal("Upload a passport photograph", ["Upload", "Passport Photo"]),
 
             // Next of Kin
-            nok_name: responses["Next of kin's full name"] || responses["Next of Kin Name"] || "",
-            nok_phone: responses["Next of kin phone number"] || responses["Next of Kin Phone"] || "",
-            nok_email: responses["Next of kin's email address"] || responses["Next of Kin Email"] || "",
-            nok_occupation: responses["Next of kin's occupation"] || responses["Next of Kin Occupation"] || "",
-            nok_relationship: responses["Relationship"] || responses["Relationship with Next of Kin"] || "",
-            nok_address: responses["Next of kin's home address"] || responses["Next of Kin Address"] || "",
+            nok_name: getVal("Next of kin's full name", ["Next of Kin", "Name"]),
+            nok_phone: getVal("Next of kin phone number", ["Next of Kin", "Phone"]),
+            nok_email: getVal("Next of kin's email address", ["Next of Kin", "Email"]),
+            nok_occupation: getVal("Next of kin's occupation", ["Next of Kin", "Occupation"]),
+            nok_relationship: getVal("Relationship", ["Relationship"]),
+            nok_address: getVal("Next of kin's home address", ["Next of Kin", "Address"]),
 
             // Ownership & Signature
-            ownership_type: responses["Ownership Type"] || "",
-            co_owner_name: responses["Full name of the Second Owner\n(Surname, First name, Other Name)"] || responses["Full name of the Second Owner"] || "",
-            co_owner_email: responses["Email address (Co-owner)"] || "",
-            signature_url: responses["Upload Signature"] || "",
-            signature_base64: getFileBase64(responses["Upload Signature"] || ""),
+            ownership_type: getVal("Ownership Type", ["Ownership"]),
+            co_owner_name: getVal("Full name of the Second Owner", ["Full name", "Second Owner"]),
+            co_owner_email: getVal("Email address (Co-owner)", ["Email", "Co-owner"]),
+            signature_url: getVal("Upload Signature", ["Upload Signature"]),
+            signature_base64: getFileBase64(getVal("Upload Signature", ["Upload Signature"])),
 
             // Property Info
-            property_name: responses["Property name"] || "",
-            plot_size: responses["Plot size"] || "",
-            quantity: parseInt(responses["Quantity"] || 1),
+            property_name: getVal("Property name", ["Property name"]),
+            plot_size: getVal("Plot size", ["Plot size"]),
+            quantity: parseInt(getVal("Quantity", ["Quantity"]) || 1),
 
             // Payment Info
-            payment_duration: responses["Payment Duration"] || "",
-            deposit_amount: parseFloat(stripCurrency(responses["Deposit Made (In Naira)"] || 0)),
-            total_amount: parseFloat(stripCurrency(responses["Total Selling Price"] || responses["Property Price"] || 0)),
-            payment_date: responses["Date of Payment/Deposit "] || responses["Payment Date"] || "",
-            payment_proof_url: responses["Upload receipt of payment/deposit"] || responses["Upload Payment Proof"] || "",
-            payment_terms: responses["Payment Duration"] || "Outright",
+            payment_duration: getVal("Payment Duration", ["Payment Duration"]),
+            deposit_amount: parseFloat(stripCurrency(getVal("Deposit Made (In Naira)", ["Deposit"]))),
+            total_amount: parseFloat(stripCurrency(getVal("Total Selling Price", ["Total", "Price"]))),
+            payment_date: getVal("Date of Payment/Deposit", ["Payment Date"]),
+            payment_proof_url: getVal("Upload receipt of payment/deposit", ["Upload", "Proof"]),
+            payment_terms: getVal("Payment Duration", ["Payment", "Duration"]) || "Outright",
 
             // Other
-            source_of_income: responses["Source of Income"] || "",
-            referral_source: responses["How did you get to know about our property"] || responses["How did you hear about us?"] || "",
-            purchase_purpose: responses["Is this property being purchased:"] || responses["Purchase Purpose"] || "",
-            sales_rep_name: responses["Sales Rep / Marketer Name  "] || responses["Name of Sales Rep"] || "",
-            sales_rep_phone: responses["Sales Rep Phone Number"] || "",
-            consent: responses["By checking this box, I confirm that I have read, understand, and consent to all of the following Land Republic documents: Terms and Conditions, Payment Protection Promise, and Resale and Refund Policies. I accept full responsibility for all legal implications and interpretations of this agreement. I understand that this subscription form becomes binding on all parties immediately upon the company's receipt of my payment.  "] || responses["Consent Checkbox"] || responses["Do you agree to the terms?"] || "I Confirm and Agree",
+            source_of_income: getVal("Source of Income", ["Source", "Income"]),
+            referral_source: getVal("How did you hear about us?", ["How", "hear"]),
+            purchase_purpose: getVal("Is this property being purchased:", ["Purchase", "Purpose"]),
+            sales_rep_name: getVal("Sales Rep / Marketer Name", ["Sales Rep"]),
+            sales_rep_phone: getVal("Sales Rep Phone Number", ["Sales Rep", "Phone"]),
+            consent: getVal("Consent Checkbox", ["Consent", "confirm"]),
+            
             submitter_email: submitterEmail,
             timestamp: new Date().toISOString()
         };
-
-        // Helper to strip currency symbols and commas
-        function stripCurrency(val) {
-            if (!val) return "0";
-            return val.toString().replace(/[^\d.]/g, "");
-        }
-
-        // Helper to get File content as Base64 from Drive
-        function getFileBase64(fileIdOrUrl) {
-            if (!fileIdOrUrl) return "";
-            try {
-                let fileId = fileIdOrUrl;
-                // If it's a Drive URL, extract ID
-                if (fileId.indexOf("id=") > -1) {
-                    fileId = fileId.split("id=")[1].split("&")[0];
-                } else if (fileId.indexOf("/d/") > -1) {
-                    fileId = fileId.split("/d/")[1].split("/")[0];
-                }
-                
-                // If multiple files (array), take the first
-                if (Array.isArray(fileId)) fileId = fileId[0];
-
-                const file = DriveApp.getFileById(fileId);
-                const blob = file.getBlob();
-                const mimeType = blob.getContentType() || "";
-                
-                // Only encode if it's an image
-                if (mimeType.indexOf("image/") === -1) {
-                    Logger.log("Skipping non-image file: " + mimeType);
-                    return "";
-                }
-                
-                const base64 = Utilities.base64Encode(blob.getBytes());
-                return "data:" + mimeType + ";base64," + base64;
-            } catch (err) {
-                Logger.log("Base64 conversion failed: " + err.toString());
-                return "";
-            }
-        }
 
         // --- SEND TO WEBHOOK ---
         const options = {
             method: "post",
             contentType: "application/json",
-            headers: {
-                "X-Webhook-Secret": WEBHOOK_SECRET
-            },
+            headers: { "X-Webhook-Secret": WEBHOOK_SECRET },
             payload: JSON.stringify(payload),
             muteHttpExceptions: true
         };
@@ -141,5 +122,36 @@ function onFormSubmit(e) {
 
     } catch (err) {
         Logger.log("Error: " + err.toString());
+    }
+}
+
+// Helper to strip currency symbols and commas
+function stripCurrency(val) {
+    if (!val) return "0";
+    return val.toString().replace(/[^\d.]/g, "");
+}
+
+// Helper to get File content as Base64 from Drive
+function getFileBase64(fileIdOrUrl) {
+    if (!fileIdOrUrl) return "";
+    try {
+        let fileId = fileIdOrUrl;
+        if (fileId.indexOf("id=") > -1) {
+            fileId = fileId.split("id=")[1].split("&")[0];
+        } else if (fileId.indexOf("/d/") > -1) {
+            fileId = fileId.split("/d/")[1].split("/")[0];
+        }
+        if (Array.isArray(fileId)) fileId = fileId[0];
+
+        const file = DriveApp.getFileById(fileId);
+        const blob = file.getBlob();
+        const mimeType = blob.getContentType() || "";
+        
+        if (mimeType.indexOf("image/") === -1) return "";
+        
+        const base64 = Utilities.base64Encode(blob.getBytes());
+        return "data:" + mimeType + ";base64," + base64;
+    } catch (err) {
+        return "";
     }
 }

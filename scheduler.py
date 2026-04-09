@@ -11,6 +11,7 @@ import base64
 from marketing_scheduler import setup_marketing_scheduler
 from marketing_sequencer_engine import process_active_sequences, process_segment_triggers
 from marketing_ltv_engine import refresh_marketing_ltv_stats
+from email_service import send_appointment_reminder_email
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -99,6 +100,35 @@ async def run_scheduled_report(schedule_id: str):
 
     except Exception as e:
         logger.error(f"Error running scheduled report {schedule_id}: {str(e)}")
+
+
+async def process_appointment_reminders():
+    """Check for appointments starting in ~2 hours and send reminders."""
+    try:
+        now = datetime.now()
+        two_hours_later = now + timedelta(hours=2)
+        three_hours_later = now + timedelta(hours=3)
+        
+        # We look for appointments in the next 2-3 hour window that haven't had a reminder
+        res = supabase.table("appointments")\
+            .select("*")\
+            .is_("reminder_sent_at", "null")\
+            .eq("status", "scheduled")\
+            .gte("scheduled_at", two_hours_later.isoformat())\
+            .lte("scheduled_at", three_hours_later.isoformat())\
+            .execute()
+            
+        appointments = res.data or []
+        for appt in appointments:
+            logger.info(f"Sending reminder for appointment {appt['id']} to {appt['contact_email']}")
+            sent = await send_appointment_reminder_email(appt)
+            if sent:
+                supabase.table("appointments").update({
+                    "reminder_sent_at": datetime.now().isoformat()
+                }).eq("id", appt["id"]).execute()
+                
+    except Exception as e:
+        logger.error(f"Error in appointment reminder job: {e}")
 
 
 def _report_email_html(report_type: str, start: str, end: str, freq: str, item_count: int) -> str:
@@ -223,11 +253,11 @@ async def start_scheduler():
         replace_existing=True,
     )
     
-    # 5. LTV Sync (Runs every 6 hours)
+    # 6. Appointment Reminders (Runs every 30 mins)
     scheduler.add_job(
-        refresh_marketing_ltv_stats,
-        CronTrigger(hour="*/6"),
-        id="marketing_ltv_sync",
+        process_appointment_reminders,
+        CronTrigger(minute="0,30"),
+        id="appointment_reminders",
         replace_existing=True,
     )
 

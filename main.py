@@ -32,7 +32,8 @@ from routers import (
     crm_professional,
     payouts,
     support,
-    revenue_intelligence
+    revenue_intelligence,
+    scheduling
 )
 from routers.auth import require_roles, resolve_admin_token
 from database import init_db
@@ -88,6 +89,7 @@ app.include_router(crm_professional.router, prefix="/api/crm/pro", tags=["crm"],
 app.include_router(payouts.router, prefix="/api/payouts", tags=["payouts"])
 app.include_router(support.router, prefix="/api/support", tags=["support"])
 app.include_router(revenue_intelligence.router, prefix="/api/intelligence", tags=["intelligence"])
+app.include_router(scheduling.router, prefix="/api/scheduling", tags=["scheduling"])
 
 
 
@@ -104,12 +106,12 @@ async def dashboard(request: Request):
 
 @app.get("/crm", response_class=HTMLResponse)
 async def crm_dashboard(request: Request):
-    return templates.TemplateResponse("crm_dashboard.html", {"request": request})
+    return templates.TemplateResponse("professional_crm.html", {"request": request})
 
 
 @app.get("/crm/professional", response_class=HTMLResponse)
 async def crm_professional_dashboard(request: Request):
-    return templates.TemplateResponse("professional_crm.html", {"request": request})
+    return RedirectResponse(url="/crm")
 
 
 @app.get("/marketing", response_class=HTMLResponse)
@@ -129,7 +131,7 @@ async def login_page(request: Request):
 
 @app.get("/crm-pro", response_class=HTMLResponse)
 async def professional_crm_dashboard(request: Request):
-    return templates.TemplateResponse("professional_crm.html", {"request": request})
+    return RedirectResponse(url="/crm")
 
 
 @app.get("/clients", response_class=HTMLResponse)
@@ -190,6 +192,10 @@ async def finance_manual_page(request: Request):
 @app.get("/payout/portal/{token}", response_class=HTMLResponse)
 async def payout_portal_page(request: Request, token: str):
     return templates.TemplateResponse("payout_portal.html", {"request": request, "token": token})
+
+@app.get("/book-inspection", response_class=HTMLResponse)
+async def book_inspection_page(request: Request):
+    return templates.TemplateResponse("book_inspection.html", {"request": request})
 @app.get("/legal/{tag:path}")
 async def handle_legal_placeholders(tag: str):
     """

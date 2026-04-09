@@ -1445,3 +1445,56 @@ async def send_support_response_email(ticket: dict, message: str):
     except Exception as e:
         logger.error(f"Error sending support response email to {email_addr}: {e}")
         return None
+
+def _appointment_reminder_html(appointment: dict) -> str:
+    scheduled_at = datetime.fromisoformat(appointment["scheduled_at"])
+    time_str = scheduled_at.strftime("%I:%M %p")
+    date_str = scheduled_at.strftime("%A, %d %B %Y")
+    
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 12px; overflow: hidden; background: #fff;">
+      <div style="background: #1A1A1A; padding: 30px; text-align: center;">
+        <h1 style="color: #C47D0A; margin: 0; font-size: 22px; letter-spacing: 1px;">Inspection Reminder</h1>
+        <p style="color: #888; margin: 8px 0 0; font-size: 13px;">Eximp & Cloves Infrastructure Limited</p>
+      </div>
+      <div style="padding: 40px 30px;">
+        <p style="color: #333; font-size: 16px;">Hello <strong>{appointment.get('contact_name')}</strong>,</p>
+        <p style="color: #555; font-size: 14px; line-height: 1.6;">This is a friendly reminder for your upcoming property inspection. We are looking forward to showing you the future of Nigerian real estate.</p>
+        
+        <div style="background: #f9f9f9; border-radius: 12px; padding: 24px; margin: 30px 0; border: 1px solid #eee;">
+          <table style="width: 100%; border-collapse: collapse;">
+            <tr>
+              <td style="padding-bottom: 12px; color: #888; font-size: 12px; text-transform: uppercase;">When</td>
+              <td style="padding-bottom: 12px; text-align: right; color: #1A1A1A; font-weight: bold; font-size: 14px;">{time_str}<br><span style="font-weight: normal; color: #666;">{date_str}</span></td>
+            </tr>
+            <tr>
+              <td style="padding-top: 12px; border-top: 1px solid #eee; color: #888; font-size: 12px; text-transform: uppercase;">Location</td>
+              <td style="padding-top: 12px; border-top: 1px solid #eee; text-align: right; color: #1A1A1A; font-weight: bold; font-size: 14px;">{appointment.get('location', 'To be provided by agent')}</td>
+            </tr>
+          </table>
+        </div>
+        
+        <p style="color: #555; font-size: 14px; line-height: 1.6;">If you need to reschedule or have any questions, please reply to this email or call us at +234 912 686 4383.</p>
+        
+        <div style="margin-top: 40px; text-align: center;">
+          <p style="color: #999; font-size: 12px;">Warm regards,<br>The Eximp & Cloves Team</p>
+        </div>
+      </div>
+    </div>"""
+
+async def send_appointment_reminder_email(appointment: dict):
+    email_addr = appointment.get("contact_email")
+    if not email_addr: return
+    
+    try:
+        res = resend.Emails.send({
+            "from": f"Eximp & Cloves <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "subject": "Reminder: Your Property Inspection",
+            "html": _appointment_reminder_html(appointment),
+            "reply_to": "sales@eximps-cloves.com"
+        })
+        return res
+    except Exception as e:
+        logger.error(f"Error sending appointment reminder to {email_addr}: {e}")
+        return None

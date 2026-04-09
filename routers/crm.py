@@ -135,38 +135,49 @@ async def get_contact_details(client_id: str, current_admin=Depends(verify_token
 
 @router.get("/pipeline")
 async def get_sales_pipeline(current_admin=Depends(verify_token)):
-    """Get all invoices grouped by status (pipeline stages)"""
+    """
+    Get all invoices grouped by Sales Stage (pipeline stages)
+    🔥 PERFORMANCE OPTIMIZED: Fetches all stages and client details in bulk.
+    """
     db = get_db()
     
-    statuses = ["unpaid", "partial", "paid", "overdue"]
-    pipeline = {}
+    # 1. Fetch ALL pipeline invoices with client details in ONE query using foreign key join
+    # This replaces the 4-loop + nested client loop (N+1)
+    result = db.table("invoices").select("""
+        id,
+        invoice_number,
+        amount,
+        amount_paid,
+        status,
+        pipeline_stage,
+        due_date,
+        client_id,
+        sales_rep_name,
+        created_at,
+        clients (
+            full_name,
+            email
+        )
+    """).neq("pipeline_stage", "").order("created_at", desc=True).execute()
     
-    for status in statuses:
-        invoices = db.table("invoices").select("""
-            id,
-            invoice_number,
-            amount,
-            amount_paid,
-            status,
-            due_date,
-            client_id,
-            sales_rep_name,
-            created_at
-        """).eq("status", status).order("created_at", desc=True).execute().data or []
-        
-        # Enrich with client names
-        for inv in invoices:
-            client = db.table("clients").select("full_name, email").eq("id", inv["client_id"]).execute()
-            if client.data:
-                inv["client_name"] = client.data[0]["full_name"]
-                inv["client_email"] = client.data[0]["email"]
-        
-        pipeline[status] = {
-            "deals": invoices,
-            "count": len(invoices),
-            "total_value": sum(float(i["amount"]) for i in invoices),
-            "total_paid": sum(float(i["amount_paid"]) for i in invoices)
-        }
+    all_invoices = result.data or []
+    
+    # 2. Group by stage in-memory
+    stages = ["inspection", "offer", "contract", "closed"]
+    pipeline = {stage: {"deals": [], "count": 0, "total_value": 0, "total_paid": 0} for stage in stages}
+    
+    for inv in all_invoices:
+        stage = inv.get("pipeline_stage")
+        if stage in pipeline:
+            # Flatten client data for frontend
+            client_data = inv.get("clients") or {}
+            inv["client_name"] = client_data.get("full_name", "Unknown Client")
+            inv["client_email"] = client_data.get("email", "N/A")
+            
+            pipeline[stage]["deals"].append(inv)
+            pipeline[stage]["count"] += 1
+            pipeline[stage]["total_value"] += float(inv.get("amount") or 0)
+            pipeline[stage]["total_paid"] += float(inv.get("amount_paid") or 0)
     
     return pipeline
 
@@ -174,19 +185,19 @@ async def get_sales_pipeline(current_admin=Depends(verify_token)):
 @router.put("/pipeline/{invoice_id}/move")
 async def move_deal_in_pipeline(
     invoice_id: str,
-    new_status: str,
+    new_stage: str,
     current_admin=Depends(verify_token)
 ):
-    """Update invoice status (move in pipeline)"""
+    """Update invoice pipeline stage"""
     db = get_db()
     
-    valid_statuses = ["unpaid", "partial", "paid", "overdue", "voided"]
-    if new_status not in valid_statuses:
-        raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of {valid_statuses}")
+    valid_stages = ["inspection", "offer", "contract", "closed"]
+    if new_stage not in valid_stages:
+        raise HTTPException(status_code=400, detail=f"Invalid stage. Must be one of {valid_stages}")
     
     # Update invoice
     result = db.table("invoices")\
-        .update({"status": new_status, "updated_at": datetime.now().isoformat()})\
+        .update({"pipeline_stage": new_stage, "updated_at": datetime.now().isoformat()})\
         .eq("id", invoice_id)\
         .execute()
     
@@ -196,15 +207,15 @@ async def move_deal_in_pipeline(
     # Log activity
     invoice = result.data[0]
     db.table("activity_log").insert({
-        "event_type": "pipeline_update",
-        "description": f"Deal moved to {new_status}",
+        "event_type": "pipeline_move",
+        "description": f"Deal moved to {new_stage} stage",
         "client_id": invoice["client_id"],
         "invoice_id": invoice_id,
         "performed_by": current_admin["sub"],
-        "metadata": {"new_status": new_status}
+        "metadata": {"new_stage": new_stage}
     }).execute()
     
-    return {"status": "updated", "new_status": new_status}
+    return {"status": "updated", "new_stage": new_stage}
 
 
 # ============================================================

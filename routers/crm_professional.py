@@ -6,6 +6,7 @@ import json
 from typing import Optional
 from decimal import Decimal
 import statistics
+from models import PropertyCreate
 
 router = APIRouter()
 
@@ -201,70 +202,110 @@ async def score_lead(
 
 @router.get("/lead-scoring/all")
 async def score_all_leads(current_admin=Depends(verify_token)):
-    """Score all clients and return ranked list of hottest leads (EXCLUDES VOIDED DATA) ✅"""
+    """
+    Score all clients and return ranked list of hottest leads (EXCLUDES VOIDED DATA) ✅
+    🔥 PERFORMANCE OPTIMIZED: Uses bulk queries instead of N+1 database hits.
+    """
     db = get_db()
     
-    clients = db.table("clients").select("id").execute().data or []
+    # 1. Fetch all clients (single hit)
+    clients_data = db.table("clients").select("id, full_name, email").execute().data or []
+    if not clients_data:
+        return {"total_leads": 0, "hot_leads": 0, "warm_leads": 0, "prioritized_leads": []}
+
+    client_ids = [c["id"] for c in clients_data]
     
+    # 2. Fetch related data in bulk chunks (limit N+1)
+    # PostgREST allows .in_ for bulk matching
+    all_invoices = db.table("invoices")\
+        .select("client_id, status, amount")\
+        .neq("status", "voided")\
+        .in_("client_id", client_ids)\
+        .execute().data or []
+        
+    all_activities = db.table("activity_log")\
+        .select("client_id, created_at")\
+        .in_("client_id", client_ids)\
+        .execute().data or []
+        
+    all_commissions = db.table("commission_earnings")\
+        .select("client_id, commission_amount")\
+        .eq("is_voided", False)\
+        .in_("client_id", client_ids)\
+        .execute().data or []
+
+    # 3. Create indices for O(1) in-memory lookup
+    inv_map = {}
+    for inv in all_invoices:
+        cid = inv["client_id"]
+        if cid not in inv_map: inv_map[cid] = []
+        inv_map[cid].append(inv)
+        
+    act_map = {}
+    for act in all_activities:
+        cid = act["client_id"]
+        if cid not in act_map: act_map[cid] = []
+        act_map[cid].append(act)
+        
+    comm_map = {}
+    for comm in all_commissions:
+        cid = comm["client_id"]
+        if cid not in comm_map: comm_map[cid] = []
+        comm_map[cid].append(comm)
+
+    # 4. Calculate scores in-memory (O(N))
     scored_leads = []
-    for client in clients:
-        # Quick score calculation - EXCLUDE VOIDED ✅
-        invoices = db.table("invoices")\
-            .select("*")\
-            .eq("client_id", client["id"])\
-            .neq("status", "voided")\
-            .execute().data or []
-        
-        activities = db.table("activity_log")\
-            .select("*")\
-            .eq("client_id", client["id"])\
-            .execute().data or []
-        
-        # Get commissions for total business value
-        commissions = db.table("commission_earnings")\
-            .select("*")\
-            .eq("client_id", client["id"])\
-            .eq("is_voided", False)\
-            .execute().data or []
+    now = datetime.now()
+    
+    for client in clients_data:
+        cid = client["id"]
+        invoices = inv_map.get(cid, [])
+        activities = act_map.get(cid, [])
+        commissions = comm_map.get(cid, [])
         
         score = 0
-        # Scoring factors
-        score += min(25, len(invoices) * 8)  # Purchase history
-        score += len([a for a in activities if 
-            (datetime.now() - datetime.fromisoformat(a["created_at"])).days <= 30]) * 2  # Recent engagement
+        # Purchase history (25 pts max)
+        score += min(25, len(invoices) * 8)
         
-        # Payment reliability
-        if len(invoices) > 0:
+        # Recent engagement (max 20 pts)
+        recent_acts = []
+        for a in activities:
+            try:
+                if (now - datetime.fromisoformat(a["created_at"].replace("Z", "+00:00")).replace(tzinfo=None)).days <= 30:
+                    recent_acts.append(a)
+            except: continue
+        
+        score += len(recent_acts) * 2
+        
+        # Payment reliability (20 pts)
+        if invoices:
             paid = len([i for i in invoices if i["status"] == "paid"])
             score += (paid / len(invoices)) * 20
         
-        # Commission bonus
-        if len(commissions) > 0:
-            total_commission = sum(float(c.get("commission_amount", 0)) for c in commissions)
-            if total_commission > 1000000:
+        # Commission bonus (10 pts)
+        if commissions:
+            total_comm = sum(float(c.get("commission_amount", 0)) for c in commissions)
+            if total_comm > 1000000:
                 score += 10
         
         score = min(100, max(0, score))
         
-        client_obj = db.table("clients").select("full_name, email").eq("id", client["id"]).execute()
-        if client_obj.data:
-            scored_leads.append({
-                "client_id": client["id"],
-                "client_name": client_obj.data[0]["full_name"],
-                "score": round(score, 1),
-                "total_deals": len(invoices),
-                "recent_activities": len([a for a in activities if 
-                    (datetime.now() - datetime.fromisoformat(a["created_at"])).days <= 30])
-            })
+        scored_leads.append({
+            "client_id": cid,
+            "client_name": client["full_name"],
+            "score": round(score, 1),
+            "total_deals": len(invoices),
+            "recent_activities": len(recent_acts)
+        })
     
-    # Sort by score descending
+    # Ranked results
     scored_leads.sort(key=lambda x: x["score"], reverse=True)
     
     return {
         "total_leads": len(scored_leads),
         "hot_leads": len([l for l in scored_leads if l["score"] >= 80]),
         "warm_leads": len([l for l in scored_leads if 60 <= l["score"] < 80]),
-        "prioritized_leads": scored_leads[:20]  # Top 20
+        "prioritized_leads": scored_leads[:20]
     }
 
 
@@ -308,17 +349,47 @@ async def create_property(
     }
 
 
+@router.post("/properties")
+async def create_property(
+    data: PropertyCreate,
+    current_admin=Depends(verify_token)
+):
+    """
+    Add a new property to the portfolio
+    ✅ PRD 8 Requirement: Real-time management
+    """
+    db = get_db()
+    
+    payload = data.dict()
+    payload["created_at"] = datetime.now().isoformat()
+    payload["updated_at"] = datetime.now().isoformat()
+    
+    result = db.table("properties").insert(payload).execute()
+    if not result.data:
+        raise HTTPException(status_code=500, detail="Failed to create property")
+        
+    return result.data[0]
+
+
 @router.get("/properties")
 async def list_properties(
     property_type: Optional[str] = None,
     status: Optional[str] = None,
+    include_archived: bool = False,
     current_admin=Depends(verify_token)
 ):
-    """List all properties with filters"""
+    """
+    List all properties with filters
+    ✅ Default: is_active=True
+    """
     db = get_db()
     
     query = db.table("properties").select("*")
     
+    # Apply filters
+    if not include_archived:
+        query = query.eq("is_active", True)
+        
     if property_type:
         query = query.eq("property_type", property_type)
     if status:
@@ -572,43 +643,65 @@ async def get_campaign_analytics(
 
 @router.get("/analytics/market-intelligence")
 async def get_market_intelligence(
-    city: Optional[str] = None,
+    location: Optional[str] = None,
     current_admin=Depends(verify_token)
 ):
-    """Market data, trends, neighborhood insights"""
+    """
+    Market data, trends, neighborhood insights
+    ✅ REAL DATA: Uses invoices to calculate selling rate
+    """
     db = get_db()
     
-    # Get all properties in area
-    query = db.table("properties").select("*")
-    if city:
-        query = query.eq("city", city)
+    # 1. Get properties
+    prop_query = db.table("properties").select("*")
+    if location:
+        prop_query = prop_query.ilike("location", f"%{location}%")
+    properties = prop_query.execute().data or []
     
-    properties = query.execute().data or []
+    # 2. Get active invoices (Sold units)
+    # We consider property 'sold' if there is an invoice that is NOT voided and at least partial/paid
+    inv_query = db.table("invoices").select("property_id")\
+        .neq("status", "voided")\
+        .in_("status", ["paid", "partial"])\
+        .execute()
     
-    # Calculate market metrics
-    avg_price = statistics.mean([float(p["price"]) for p in properties]) if properties else 0
-    median_price = statistics.median([float(p["price"]) for p in properties]) if properties else 0
+    sold_property_ids = {i["property_id"] for i in inv_query.data if i.get("property_id")}
     
-    sold_properties = [p for p in properties if p["status"] == "sold"]
-    available_properties = [p for p in properties if p["status"] == "available"]
+    # 3. Calculate market metrics
+    prices = [float(p["starting_price"]) for p in properties if p.get("starting_price")]
+    avg_price = statistics.mean(prices) if prices else 0
+    median_price = statistics.median(prices) if prices else 0
     
-    # Days on market
-    avg_days_on_market = 30  # Simplified
+    total_listings = len(properties)
+    sold_count = 0
+    available_count = 0
+    
+    if total_listings > 0:
+        # Match properties with sold status
+        for p in properties:
+            if p["id"] in sold_property_ids:
+                sold_count += 1
+            else:
+                available_count += 1
+    
+    # Simulated Days on Market - Improvement for future: calculate from created_at vs invoice date
+    avg_days_on_market = 45 
     
     return {
         "market_summary": {
-            "city": city or "All",
-            "total_listings": len(properties),
-            "available": len(available_properties),
-            "sold": len(sold_properties),
+            "location": location or "All Territories",
+            "total_listings": total_listings,
+            "available": available_count,
+            "sold": sold_count,
             "average_price": round(avg_price),
             "median_price": round(median_price),
-            "average_days_on_market": avg_days_on_market
+            "average_days_on_market": avg_days_on_market,
+            "selling_rate_percent": round((sold_count / total_listings * 100)) if total_listings > 0 else 0
         },
-        "market_health": "Strong" if len(available_properties) > len(sold_properties) else "Moderate",
+        "market_health": "Strong" if (sold_count / total_listings if total_listings > 0 else 0) > 0.3 else "Steady",
         "trends": {
             "price_trend": "↑ Increasing" if avg_price > 5000000 else "→ Stable",
-            "inventory": "Low" if len(available_properties) < 5 else "High"
+            "inventory": "Healthy" if available_count > 5 else "Limited"
         }
     }
 
@@ -617,21 +710,32 @@ async def get_market_intelligence(
 async def get_client_ltv_analysis(current_admin=Depends(verify_token)):
     """
     Analyze client lifetime value segments
-    ✅ EXCLUDES VOIDED INVOICES
+    ✅ PERFORMANCE OPTIMIZED: Fetches all invoice data in bulk.
     """
     db = get_db()
     
-    clients = db.table("clients").select("id, full_name, created_at").execute().data or []
+    clients = db.table("clients").select("id, full_name").execute().data or []
+    if not clients:
+        return {"total_clients": 0, "total_revenue": 0, "top_clients": []}
+
+    client_ids = [c["id"] for c in clients]
+    
+    # Bulk fetch invoices EXCLUDING VOIDED ✅
+    all_invoices = db.table("invoices")\
+        .select("client_id, amount")\
+        .eq("is_voided", False)\
+        .in_("client_id", client_ids)\
+        .execute().data or []
+        
+    inv_map = {}
+    for inv in all_invoices:
+        cid = inv["client_id"]
+        if cid not in inv_map: inv_map[cid] = []
+        inv_map[cid].append(inv)
     
     ltv_analysis = []
     for client in clients:
-        # Get invoices EXCLUDING VOIDED ✅
-        invoices = db.table("invoices")\
-            .select("amount")\
-            .eq("client_id", client["id"])\
-            .neq("status", "voided")\
-            .execute().data or []
-        
+        invoices = inv_map.get(client["id"], [])
         total_ltv = sum(float(i["amount"]) for i in invoices)
         
         ltv_analysis.append({
@@ -656,6 +760,23 @@ async def get_client_ltv_analysis(current_admin=Depends(verify_token)):
         "total_revenue": sum(float(c["lifetime_value"]) for c in ltv_analysis),
         "top_clients": ltv_analysis[:10]
     }
+
+
+@router.get("/documents")
+async def list_documents(current_admin=Depends(verify_token)):
+    """
+    Consolidated view of all legal and transaction documents.
+    ✅ PERFORMANCE OPTIMIZED
+    """
+    db = get_db()
+    
+    # Fetch contract documents with joins
+    res = db.table("contract_documents")\
+        .select("*, invoices(invoice_number, clients(full_name))")\
+        .order("created_at", desc=True)\
+        .execute()
+    
+    return res.data
 
 
 # ============================================================

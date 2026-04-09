@@ -105,6 +105,7 @@ CREATE TABLE IF NOT EXISTS invoices (
     due_date DATE NOT NULL,
     
     status VARCHAR(50) DEFAULT 'unpaid' CHECK (status IN ('unpaid', 'partial', 'paid', 'voided', 'overdue')),
+    pipeline_stage VARCHAR(50) DEFAULT 'inspection' CHECK (pipeline_stage IN ('inspection', 'offer', 'contract', 'closed')),
     notes TEXT,
     
     -- New fields for PRD v2
@@ -601,3 +602,62 @@ CREATE POLICY "Admins have full access to campaign_recipients" ON campaign_recip
 CREATE POLICY "Admins have full access to email_click_events" ON email_click_events FOR ALL TO authenticated USING (true);
 CREATE POLICY "Admins have full access to marketing_unsubscribes" ON marketing_unsubscribes FOR ALL TO authenticated USING (true);
 CREATE POLICY "Admins have full access to media_library" ON media_library FOR ALL TO authenticated USING (true);
+
+-- ============================================================
+-- SUPPORT HUB & TICKETING (PRD 8)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS support_tickets (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    subject VARCHAR(500) NOT NULL,
+    description TEXT NOT NULL,
+    category VARCHAR(100), -- 'billing', 'property', 'contract', 'general'
+    priority VARCHAR(50) DEFAULT 'medium' CHECK (priority IN ('low', 'medium', 'high', 'urgent')),
+    status VARCHAR(50) DEFAULT 'open' CHECK (status IN ('open', 'pending', 'resolved', 'closed')),
+    client_id UUID REFERENCES clients(id),
+    contact_email VARCHAR(255), -- for non-client visitors
+    contact_name VARCHAR(255),
+    assigned_admin_id UUID REFERENCES admins(id),
+    last_responded_at TIMESTAMPTZ,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+CREATE TABLE IF NOT EXISTS ticket_responses (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    ticket_id UUID NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
+    message TEXT NOT NULL,
+    admin_id UUID REFERENCES admins(id),
+    is_internal BOOLEAN DEFAULT false,
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE support_tickets ENABLE ROW LEVEL SECURITY;
+ALTER TABLE ticket_responses ENABLE ROW LEVEL SECURITY;
+
+-- ============================================================
+-- MEETING SCHEDULER (PRD 8)
+-- ============================================================
+
+CREATE TABLE IF NOT EXISTS appointments (
+    id UUID DEFAULT gen_random_uuid() PRIMARY KEY,
+    client_id UUID REFERENCES clients(id),
+    contact_name VARCHAR(255),
+    contact_email VARCHAR(255),
+    contact_phone VARCHAR(50),
+    property_id UUID REFERENCES properties(id),
+    appointment_type VARCHAR(100) DEFAULT 'inspection', -- 'inspection', 'consultation', 'signing'
+    scheduled_at TIMESTAMPTZ NOT NULL,
+    duration_minutes INTEGER DEFAULT 60,
+    status VARCHAR(50) DEFAULT 'scheduled' CHECK (status IN ('scheduled', 'completed', 'cancelled', 'no_show')),
+    medium VARCHAR(50) DEFAULT 'physical' CHECK (medium IN ('physical', 'virtual')),
+    location TEXT, -- office or property address
+    meeting_link TEXT, -- for virtual meetings
+    notes TEXT,
+    reminder_sent_at TIMESTAMPTZ,
+    created_by UUID REFERENCES admins(id),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE appointments ENABLE ROW LEVEL SECURITY;
