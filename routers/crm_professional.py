@@ -96,6 +96,7 @@ async def score_lead(
         if len(activities) > 0:
             recent_activities = len([a for a in activities if 
                 (datetime.now() - datetime.fromisoformat(a["created_at"])).days <= 30])
+            print(f"DEBUG: Recent activities count for {client_id}: {recent_activities}")
             
             if recent_activities >= 5:
                 factors["highly_engaged"] = 20
@@ -496,17 +497,21 @@ async def list_all_documents(
         .order("created_at", desc=True) \
         .limit(200)
 
-    # For sales reps, filter at DB level using the assigned_rep_id foreign key
-    if is_restricted:
-        inv_query = inv_query.eq("clients.assigned_rep_id", admin_id)
+    # For sales reps, fetch all then filter in Python for robustness (PostgREST join filtering can be finicky)
+    # if is_restricted:
+    #     inv_query = inv_query.eq("clients.assigned_rep_id", admin_id)
 
     invoices = inv_query.execute().data or []
+    print(f"DEBUG: All invoices found: {len(invoices)}")
 
     # For sales reps: drop any invoices where client didn't match (PostgREST returns null client on no match)
     if is_restricted:
+        original_count = len(invoices)
         invoices = [inv for inv in invoices if inv.get("clients") and inv["clients"].get("assigned_rep_id") == admin_id]
+        print(f"DEBUG: Restricted filter: {original_count} -> {len(invoices)} (admin_id: {admin_id})")
 
     if not invoices:
+        print("DEBUG: No invoices passing the filter.")
         return {"total_documents": 0, "draft": 0, "pending_signature": 0, "signed": 0, "documents": []}
 
     invoice_ids = [inv["id"] for inv in invoices]

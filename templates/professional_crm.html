@@ -540,9 +540,20 @@
                         </div>
                     </div>
                 </div>
-                <button class="btn btn-secondary btn-sm" onclick="window.location.href='/dashboard'" style="padding: 6px 12px; font-size: 11px;">
-                    <i class="fas fa-arrow-left"></i> Exit CRM
-                </button>
+                <div class="flex gap-2 items-center" id="app-switcher-container">
+                    <button id="nav-btn-finance" class="btn btn-secondary btn-sm" onclick="window.location.href='/dashboard'" style="display: none; padding: 6px 12px; font-size: 11px;">
+                        <i class="fas fa-wallet"></i> Finance
+                    </button>
+                    <button id="nav-btn-marketing" class="btn btn-secondary btn-sm" onclick="window.location.href='/marketing'" style="display: none; padding: 6px 12px; font-size: 11px;">
+                        <i class="fas fa-bullhorn"></i> Marketing
+                    </button>
+                    <button id="nav-btn-legal" class="btn btn-secondary btn-sm" onclick="window.location.href='/legal'" style="display: none; padding: 6px 12px; font-size: 11px;">
+                        <i class="fas fa-gavel"></i> Legal
+                    </button>
+                    <button id="nav-btn-payouts" class="btn btn-secondary btn-sm" onclick="window.location.href='/finance/payouts'" style="display: none; padding: 6px 12px; font-size: 11px;">
+                        <i class="fas fa-hand-holding-usd"></i> Payouts
+                    </button>
+                </div>
             </div>
         </div>
 
@@ -1296,42 +1307,6 @@
             }
         }
 
-        async function loadDocuments() {
-            try {
-                const res = await fetch(`${API_BASE}/documents`, {
-                    headers: { "Authorization": `Bearer ${token}` }
-                });
-                const documents = await res.json();
-                
-                const html = documents.map(doc => {
-                    const client = doc.invoices?.clients?.full_name || 'System';
-                    const invNo = doc.invoices?.invoice_number || 'N/A';
-                    const date = new Date(doc.created_at).toLocaleDateString();
-                    
-                    return `
-                        <div style="display: flex; align-items: center; justify-content: space-between; padding: 12px; border-bottom: 1px solid #222; transition: all 0.2s hover:bg-[#1A1A1A]">
-                            <div style="display: flex; align-items: center; gap: 12px;">
-                                <div style="width: 32px; height: 32px; background: rgba(184, 134, 11, 0.1); border-radius: 6px; display: flex; align-items: center; justify-content: center; color: var(--gold);">
-                                    <i class="fas fa-file-pdf"></i>
-                                </div>
-                                <div>
-                                    <div style="font-size: 13px; font-weight: 700; color: #fff;">${doc.document_type.replace(/_/g, ' ').toUpperCase()}</div>
-                                    <div style="font-size: 11px; color: #666;">Ref: ${invNo} // ${client}</div>
-                                </div>
-                            </div>
-                            <div style="text-align: right;">
-                                <div style="font-size: 11px; color: #888; font-weight: 600;">${date}</div>
-                                <div style="font-size: 10px; color: #10B981; font-weight: 700;">VERIFIED</div>
-                            </div>
-                        </div>
-                    `;
-                }).join("");
-                
-                document.getElementById("documentsList").innerHTML = html || '<div class="text-gray-500 text-sm italic p-4">No documents found.</div>';
-            } catch (err) {
-                console.error("Error loading documents:", err);
-            }
-        }
 
         // Load all leads with scoring
         async function loadLeads() {
@@ -1428,7 +1403,7 @@
                             </div>
                             <div style="display: flex; justify-content: space-between;">
                                 <span style="font-size: 10px; color: #666; font-weight: 700; text-transform: uppercase;">Total Price</span>
-                                <span style="font-size: 14px; color: var(--gold); font-weight: 900;">₦${parseFloat(prop.starting_price).toLocaleString()}</span>
+                                <span style="font-size: 14px; color: var(--gold); font-weight: 900;">₦${parseFloat(prop.starting_price || prop.total_price || 0).toLocaleString()}</span>
                             </div>
                         </div>
                         
@@ -1561,19 +1536,22 @@
                     document.getElementById(`col-${stage}`).innerHTML = html || '<div style="text-align: center; color: #444; font-size: 11px; padding: 20px;">No leads</div>';
                 });
             } catch (err) {
-                console.error("Pipeline Error:", err);
+                 console.error("Pipeline Error:", err);
             }
         }
 
         // --- PROGRESSIVE DOCUMENT LOADING ---
         async function loadDocuments() {
             try {
+                // Determine if Admin by checking payload
                 let role = "sales";
+                let adminId = "";
                 if (token) {
                     const payload = JSON.parse(atob(token.split('.')[1]));
-                    role = payload.role;
+                    role = (payload.role || "").toLowerCase();
+                    adminId = payload.sub;
                 }
-
+                
                 const searchTxt = document.getElementById("docSearchInput")?.value || "";
                 const repId = document.getElementById("docRepFilter")?.value || "";
 
@@ -1584,11 +1562,16 @@
                 const res = await fetch(url, {
                     headers: { "Authorization": `Bearer ${token}` }
                 });
-                const docs = await res.json();
+                const data = await res.json();
+                
+                // Handle object-wrapped response from optimized backend
+                const docs = Array.isArray(data) ? data : (data.documents || []);
 
                 // Show/hide admin rep filter
                 const filterContainer = document.getElementById("adminDocRepFilterContainer");
-                if (role === "admin" || role === "legal") {
+                const isPrivileged = role.includes("admin") || role.includes("operations") || role.includes("legal");
+                
+                if (isPrivileged) {
                     if (filterContainer) filterContainer.style.display = "block";
                     if (filterContainer && !filterContainer.dataset.loaded) {
                         const repRes = await fetch("/api/sales-reps", {
@@ -1611,15 +1594,20 @@
                     let badgeText = "Pending";
                     let actionBtn = "";
                     
-                    if (doc.signing_status === "completed") {
+                    // Map backend status to UI status
+                    const signingStatus = doc.signing_status || "not_started";
+                    const clientName = doc.client?.full_name || doc.client_name || 'System';
+                    const invNo = doc.invoice_number || 'N/A';
+
+                    if (signingStatus === "completed") {
                         badgeStyle = "background: rgba(34,197,94,0.15); color: #22c55e;";
                         badgeText = "Fully Executed";
                         actionBtn = `<a href="/api/contracts/${doc.invoice_id}/contract?token=${token}" target="_blank" class="btn btn-primary" style="padding: 6px 12px; font-size: 11px;">View Contract</a>`;
-                    } else if (doc.signing_status === "partial") {
+                    } else if (signingStatus === "partial") {
                         badgeStyle = "background: rgba(196,125,10,0.15); color: var(--gold);";
                         badgeText = "Partially Signed";
                         actionBtn = `<a href="/api/contracts/pdf/draft/${doc.invoice_id}?token=${token}" target="_blank" class="btn btn-secondary" style="padding: 6px 12px; font-size: 11px;">View Draft</a>`;
-                    } else if (doc.signing_status === "not_started") {
+                    } else if (signingStatus === "not_started") {
                         badgeText = "Not Started";
                     } else {
                         badgeText = "Pending Signatures";
@@ -1627,10 +1615,10 @@
                     }
 
                     return `
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid #222;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid #222; transition: all 0.2s hover:bg-[#1A1A1A]">
                         <div>
-                            <div style="font-size: 14px; font-weight: 700; color: #fff;">${doc.client_name}</div>
-                            <div style="font-size: 11px; color: #888; margin-top: 4px;">Invoice: <span style="color:var(--gold);">${doc.invoice_number}</span></div>
+                            <div style="font-size: 14px; font-weight: 700; color: #fff;">${clientName}</div>
+                            <div style="font-size: 11px; color: #888; margin-top: 4px;">Invoice: <span style="color:var(--gold);">${invNo}</span></div>
                             <div style="font-size: 11px; color: #555; margin-top: 2px;">Signatures: ${doc.signatures_collected || 0}</div>
                         </div>
                         <div style="text-align: right;">
@@ -2399,7 +2387,29 @@
                 }
 
                 // Operations and Admin see everything. Sales rep is restricted.
-                if (role === 'sales') {
+                const btnFinance = document.getElementById('nav-btn-finance');
+                const btnMarketing = document.getElementById('nav-btn-marketing');
+                const btnLegal = document.getElementById('nav-btn-legal');
+                const btnPayouts = document.getElementById('nav-btn-payouts');
+
+                const userRoles = role ? role.split(',').map(r => r.trim().toLowerCase()) : [];
+                const hasRole = (r) => userRoles.includes(r);
+
+                if (hasRole('admin') || hasRole('super_admin')) {
+                    if(btnFinance) btnFinance.style.display = 'block';
+                    if(btnMarketing) btnMarketing.style.display = 'block';
+                    if(btnLegal) btnLegal.style.display = 'block';
+                    if(btnPayouts) btnPayouts.style.display = 'block';
+                } else if (hasRole('operations')) {
+                    if(btnMarketing) btnMarketing.style.display = 'block';
+                    if(btnPayouts) btnPayouts.style.display = 'block';
+                } else if (hasRole('legal')) {
+                    if(btnLegal) btnLegal.style.display = 'block';
+                } else if (hasRole('marketing')) {
+                    if(btnMarketing) btnMarketing.style.display = 'block';
+                }
+
+                if (hasRole('sales') && !hasRole('admin') && !hasRole('operations')) {
                     // Hide forbidden sections in sidebar
                     const forbidden = ['section-marketing', 'section-servicehub', 'section-intelligence'];
                     forbidden.forEach(id => {
@@ -2410,7 +2420,7 @@
                     // Hide lead assignment tool in modal
                     const assignSection = document.getElementById('section-lead-assignment');
                     if (assignSection) assignSection.style.display = 'none';
-                } else if (role === 'admin' || role === 'operations' || role === 'legal') {
+                } else if (hasRole('admin') || hasRole('operations') || hasRole('legal')) {
                     // Show lead assignment tool
                     const assignSection = document.getElementById('section-lead-assignment');
                     if (assignSection) {
