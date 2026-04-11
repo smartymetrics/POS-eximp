@@ -13,7 +13,7 @@ CREATE TABLE IF NOT EXISTS properties (
     sq_feet DECIMAL(10, 2),
     price DECIMAL(15, 2),
     description TEXT,
-    owner_agent_id UUID REFERENCES auth.users(id),
+    owner_agent_id UUID REFERENCES admins(id),
     status VARCHAR(50) DEFAULT 'available',  -- available, sold, pending
     photos JSONB DEFAULT '[]',
     virtual_tour_url TEXT,
@@ -62,7 +62,7 @@ CREATE TABLE IF NOT EXISTS documents (
     title VARCHAR(255),
     file_url TEXT,
     status VARCHAR(50) DEFAULT 'draft',  -- draft, sent, signed, executed
-    created_by UUID REFERENCES auth.users(id),
+    created_by UUID REFERENCES admins(id),
     sent_at TIMESTAMP,
     sent_to_email VARCHAR(255),
     esignature_link TEXT,
@@ -81,7 +81,7 @@ CREATE TABLE IF NOT EXISTS campaigns (
     message_template TEXT,
     schedule VARCHAR(50),  -- immediate, daily, weekly
     schedule_time TIME,
-    created_by UUID REFERENCES auth.users(id),
+    created_by UUID REFERENCES admins(id),
     status VARCHAR(50) DEFAULT 'draft',  -- draft, scheduled, sent
     sent_at TIMESTAMP,
     messages_sent INT DEFAULT 0,

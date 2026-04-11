@@ -1,0 +1,296 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="utf-8">
+    <title>Subscription Form - {{ subscription.first_name }} {{ subscription.last_name }}</title>
+    <style>
+        @page {
+            size: A4;
+            margin: 1.5cm;
+            @bottom-right {
+                content: "Page " counter(page) " of " counter(pages);
+                font-size: 8pt;
+                color: #888;
+            }
+        }
+        body {
+            font-family: 'Helvetica', 'Arial', sans-serif;
+            font-size: 10pt;
+            color: #1A1A1A;
+            line-height: 1.6;
+        }
+        .header {
+            border-bottom: 3px solid #F5A623;
+            padding-bottom: 15pt;
+            margin-bottom: 20pt;
+        }
+        .logo {
+            max-height: 50pt;
+            float: left;
+        }
+        .company-info {
+            text-align: right;
+            font-size: 9pt;
+            color: #555;
+        }
+        .form-title {
+            background: #1A1A1A;
+            color: #F5A623;
+            text-align: center;
+            padding: 10pt;
+            font-size: 18pt;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 2pt;
+            margin-bottom: 20pt;
+            border-radius: 4pt;
+        }
+        .passport-box {
+            float: right;
+            width: 100pt;
+            height: 120pt;
+            border: 2pt solid #ddd;
+            text-align: center;
+            overflow: hidden;
+            background: #f9f9f9;
+            margin-left: 20pt;
+        }
+        .passport-img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+        .section {
+            clear: both;
+            margin-bottom: 15pt;
+        }
+        .section-header {
+            background: #F5A623;
+            color: #1A1A1A;
+            padding: 5pt 10pt;
+            font-weight: bold;
+            font-size: 11pt;
+            text-transform: uppercase;
+            margin-bottom: 10pt;
+        }
+        table {
+            width: 100%;
+            border-collapse: collapse;
+        }
+        th {
+            text-align: left;
+            color: #666;
+            font-size: 9pt;
+            text-transform: uppercase;
+            padding: 4pt 0;
+            width: 30%;
+        }
+        td {
+            padding: 4pt 0;
+            font-weight: 500;
+        }
+        .field-group {
+            margin-bottom: 8pt;
+            border-bottom: 1px solid #eee;
+        }
+        .signature-section {
+            margin-top: 30pt;
+            page-break-inside: avoid;
+        }
+        .signature-box {
+            border-top: 1px solid #1A1A1A;
+            text-align: center;
+            padding-top: 5pt;
+            font-size: 8pt;
+            text-transform: uppercase;
+            margin-top: 40pt;
+        }
+        .sig-container {
+            height: 60pt;
+            text-align: center;
+        }
+        .footer {
+            position: fixed;
+            bottom: 0;
+            width: 100%;
+            text-align: center;
+            font-size: 8pt;
+            color: #999;
+            border-top: 1px solid #eee;
+            padding-top: 5pt;
+        }
+        .highlight {
+            color: #F5A623;
+            font-weight: bold;
+        }
+    </style>
+</head>
+<body>
+    <div class="header">
+        <img src="{{ company.logo_b64 }}" class="logo">
+        <div class="company-info">
+            <strong style="font-size: 11pt; color: #1A1A1A;">{{ company.name }}</strong><br>
+            RC: {{ company.rc }} | {{ company.phone }}<br>
+            {{ company.address }}<br>
+            {{ company.email }} | {{ company.website }}
+        </div>
+        <div style="clear: both;"></div>
+    </div>
+
+    <div class="form-title">Property Subscription Form</div>
+
+    <div class="section">
+        <div class="passport-box">
+            {% if passport_photo_b64 %}
+                <img src="data:{{ passport_mime }};base64,{{ passport_photo_b64 }}" class="passport-img">
+            {% else %}
+                <div style="margin-top: 45pt; font-size: 8pt; color: #aaa;">PASSPORT PHOTO</div>
+            {% endif %}
+        </div>
+
+        <div class="section-header">1. Subscriber Information</div>
+        <table>
+            <tr>
+                <th>Full Name</th>
+                <td><span class="highlight">{{ subscription.title }} {{ subscription.first_name }} {{ subscription.middle_name }} {{ subscription.last_name }}</span></td>
+            </tr>
+            <tr>
+                <th>Email Address</th>
+                <td>{{ subscription.email }}</td>
+            </tr>
+            <tr>
+                <th>Whatsapp Phone</th>
+                <td>{{ subscription.whatsapp_phone }}</td>
+            </tr>
+            <tr>
+                <th>Residential Address</th>
+                <td>{{ subscription.residential_address }}</td>
+            </tr>
+            <tr>
+                <th>Occupation</th>
+                <td>{{ subscription.occupation }}</td>
+            </tr>
+            <tr>
+                <th>Date of Birth</th>
+                <td>{{ subscription.date_of_birth }}</td>
+            </tr>
+            <tr>
+                <th>Nationality</th>
+                <td>{{ subscription.nationality }}</td>
+            </tr>
+            <tr>
+                <th>ID Number (NIN/Passport)</th>
+                <td>{{ subscription.nin_id_number }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-header">2. Next of Kin Details</div>
+        <table>
+            <tr>
+                <th width="30%">Full Name</th>
+                <td>{{ subscription.nok_full_name }}</td>
+                <th width="20%">Relationship</th>
+                <td>{{ subscription.nok_relationship }}</td>
+            </tr>
+            <tr>
+                <th>Phone</th>
+                <td>{{ subscription.nok_phone }}</td>
+                <th>Occupation</th>
+                <td>{{ subscription.nok_occupation }}</td>
+            </tr>
+            <tr>
+                <th>Address</th>
+                <td colspan="3">{{ subscription.nok_address }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-header">3. Property & Payment Details</div>
+        <table>
+            <tr>
+                <th>Property Name</th>
+                <td><span class="highlight">{{ subscription.property_name }}</span></td>
+            </tr>
+            <tr>
+                <th>Ownership Type</th>
+                <td>{{ subscription.ownership_type | title }} Ownership</td>
+            </tr>
+            <tr>
+                <th>Plot Size</th>
+                <td>{{ subscription.plot_size }}</td>
+            </tr>
+            {% if subscription.co_owner_name %}
+            <tr>
+                <th>Co-Owner Name</th>
+                <td>{{ subscription.co_owner_name }} ({{ subscription.co_owner_email }})</td>
+            </tr>
+            {% endif %}
+            <tr>
+                <th>Initial Deposit</th>
+                <td><span class="highlight">NGN {{ "{:,.2f}".format(subscription.deposit_amount | float) }}</span></td>
+            </tr>
+            <tr>
+                <th>Payment Duration</th>
+                <td>{{ subscription.payment_duration }}</td>
+            </tr>
+            <tr>
+                <th>Source of Income</th>
+                <td>{{ subscription.source_of_income }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="section">
+        <div class="section-header">4. Marketing & Referral</div>
+        <table>
+            <tr>
+                <th>Assigned Consultant</th>
+                <td>{{ subscription.sales_rep_name or 'Not Assigned' }}</td>
+            </tr>
+            <tr>
+                <th>Referral Source</th>
+                <td>{{ subscription.referral_source or 'Direct' }}</td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="signature-section">
+        <div class="section-header">5. Acceptance & Declaration</div>
+        <p style="font-size: 8pt; text-align: justify; color: #555; margin-bottom: 20pt;">
+            I confirm that I have read, understand, and consent to all of the following Eximp & Cloves Infrastructure limited documents: 
+            Terms and Conditions, Payment Protection Promise and Refund Policies. I accept full responsibility for all legal implications 
+            and interpretations of this agreement. I understand that this subscription form becomes binding on all parties immediately 
+            upon the company's receipt of my payment.
+        </p>
+
+        <table width="100%">
+            <tr>
+                <td width="45%">
+                    <div class="sig-container">
+                        {% if signature_b64 %}
+                            <img src="data:{{ signature_mime }};base64,{{ signature_b64 }}" style="max-height: 50pt;">
+                        {% endif %}
+                    </div>
+                    <div class="signature-box">Subscriber Signature</div>
+                </td>
+                <td width="10%"></td>
+                <td width="45%">
+                    <div class="sig-container">
+                        {% if company.seal_b64 %}
+                            <img src="{{ company.seal_b64 }}" style="max-height: 60pt;">
+                        {% endif %}
+                    </div>
+                    <div class="signature-box">For: Eximp & Cloves Infrastructure Limited</div>
+                </td>
+            </tr>
+        </table>
+    </div>
+
+    <div class="footer">
+        © {{ current_year }} Eximp & Cloves Infrastructure Limited. This is a secure digital record of property subscription.
+    </div>
+</body>
+</html>

@@ -3,7 +3,7 @@ from fastapi.encoders import jsonable_encoder
 from fastapi.responses import StreamingResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from models import InvoiceCreate, SendDocumentRequest, VoidReceiptRequest
-from database import get_db
+from database import get_db, db_execute
 from routers.auth import verify_token, resolve_admin_token
 from routers.analytics import log_activity
 from email_service import send_invoice_email, send_receipt_email, send_statement_email, send_void_notification_email
@@ -19,14 +19,19 @@ templates = Jinja2Templates(directory="templates")
 
 
 @router.get("/")
-async def list_invoices(show_voided: bool = False, current_admin=Depends(verify_token)):
+async def list_invoices(
+    show_voided: bool = False,
+    limit: int = 100,
+    offset: int = 0,
+    current_admin=Depends(verify_token)
+):
     db = get_db()
     query = db.table("invoices").select("*, clients(full_name, email)")
     
     if not show_voided:
         query = query.neq("status", "voided")
         
-    result = query.order("created_at", desc=True).execute()
+    result = await db_execute(lambda: query.order("created_at", desc=True).range(offset, offset + limit - 1).execute())
     
     invoices = result.data
     for inv in invoices:

@@ -49,8 +49,9 @@
           return;
         }
 
-        // Set Authorization header for API calls
+        // Set global user data for role-based UI
         window.ec_token = token;
+        window.currentUser = payload;
 
       } catch (e) {
         localStorage.removeItem('ec_token');
@@ -5997,46 +5998,73 @@
           <thead>
             <tr>
               <th>Submitted</th>
-              <th>Client</th>
+              <th>Subscriber</th>
+              <th>Client Info</th>
               <th>Property</th>
               <th>Deposit</th>
-              <th>Status</th>
-              <th>Proof</th>
-              <th>Signature</th>
+              <th>Verification</th>
               <th>Actions</th>
             </tr>
           </thead>
           <tbody>
-            ${pending.map(v => `
+            ${pending.map(v => {
+              const sub = v.property_subscriptions || {};
+              const hasSub = !!v.subscription_id;
+              
+              return `
               <tr>
                 <td style="font-size:12px;color:var(--gray);">${new Date(v.created_at).toLocaleString()}</td>
                 <td>
-                  <div class="client-name">${v.clients?.full_name || '—'}</div>
+                  <div style="display:flex; align-items:center; gap:10px;">
+                    ${sub.passport_photo_url ? 
+                      `<img src="${sub.passport_photo_url}" style="width:36px; height:36px; border-radius:4px; object-fit:cover; border:1px solid #eee;" alt="Passport">` :
+                      `<div style="width:36px; height:36px; border-radius:4px; background:#f0f0f0; display:flex; align-items:center; justify-content:center; color:#ccc;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>`
+                    }
+                    <div>
+                      <div class="client-name">${v.clients?.full_name || '—'}</div>
+                      <div style="font-size:11px; color:var(--gold-dark); font-weight:500;">${sub.occupation || 'Subscriber'}</div>
+                    </div>
+                  </div>
+                </td>
+                <td>
                   <div class="client-email">${v.clients?.email || ''}</div>
+                  <div style="font-size:11px; color:var(--gray);">${sub.residential_address || ''}</div>
                 </td>
                 <td style="font-size:12px;">
                    <strong>${v.invoices?.invoice_number || '—'}</strong><br>
                    ${v.invoices?.property_name || '—'}
                 </td>
                 <td style="font-weight:600;color:var(--gold-dark);">${fmtNGN(v.deposit_amount)}</td>
-                <td><span class="status unpaid"><span class="status-dot"></span>${v.status}</span></td>
                 <td>
-                  <a href="${v.payment_proof_url}" target="_blank" class="action-btn" style="text-decoration:none;display:inline-block;border-color:#ccc;">View Proof</a>
-                </td>
-                <td>
-                  ${v.invoices && v.invoices.signature_url ? `
-                    <a href="${v.invoices.signature_url}" target="_blank" class="action-btn" style="text-decoration:none;display:inline-block;border-color:#ccc;">View Signature</a>
-                  ` : '<span style="color:var(--gray);font-size:11px;">No Signature</span>'}
+                  <div style="display:flex; flex-direction:column; gap:4px;">
+                    <a href="${v.payment_proof_url}" target="_blank" class="action-btn" style="text-decoration:none; display:flex; align-items:center; gap:4px; justify-content:center; border-color:#e2e8f0; font-size:10px; padding:4px;">
+                      <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg> Receipt
+                    </a>
+                    ${sub.nin_document_url ? `
+                      <a href="${sub.nin_document_url}" target="_blank" class="action-btn" style="text-decoration:none; display:flex; align-items:center; gap:4px; justify-content:center; border-color:#e2e8f0; font-size:10px; padding:4px;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><rect x="3" y="4" width="18" height="16" rx="2"/><line x1="7" y1="8" x2="17" y2="8"/><line x1="7" y1="12" x2="17" y2="12"/><line x1="7" y1="16" x2="13" y2="16"/></svg> ID Document
+                      </a>
+                    ` : ''}
+                    ${v.invoices?.signature_url ? `
+                      <a href="${v.invoices.signature_url}" target="_blank" class="action-btn" style="text-decoration:none; display:flex; align-items:center; gap:4px; justify-content:center; border-color:#e2e8f0; font-size:10px; padding:4px;">
+                        <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M12 20h9"/><path d="M16.5 3.5a2.121 2.121 0 0 1 3 3L7 19l-4 1 1-4L16.5 3.5z"/></svg> Signature
+                      </a>
+                    ` : ''}
+                  </div>
                 </td>
                 <td>
                   <div style="display:flex;gap:4px;">
-                    <button class="action-btn" onclick="openEditVerification('${v.id}')">Edit</button>
-                    <button class="action-btn gold" onclick="openConfirmVerification('${v.id}')">Confirm</button>
-                    <button class="action-btn" style="color:var(--red);border-color:#feb2b2;" onclick="openRejectVerification('${v.id}')">Reject</button>
+                    <button class="action-btn" onclick="openEditVerification('${v.id}')" title="Edit Amount/Date"><svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M11 4H4a2 2 0 0 0-2 2v14a2 2 0 0 0 2 2h14a2 2 0 0 0 2-2v-7"/><path d="M18.5 2.5a2.121 2.121 0 0 1 3 3 L12 15l-4 1 1-4 9.5-9.5z"/></svg></button>
+                    ${(window.currentUser?.role || '').toLowerCase().includes('admin') ? `
+                      <button class="action-btn gold" onclick="openConfirmVerification('${v.id}')">Confirm</button>
+                      <button class="action-btn" style="color:var(--red);border-color:#feb2b2;" onclick="openRejectVerification('${v.id}')">Reject</button>
+                    ` : `
+                      <span style="font-size:10px; color:var(--gray); padding:8px;">Admin review only</span>
+                    `}
                   </div>
                 </td>
               </tr>
-            `).join('')}
+            `;}).join('')}
           </tbody>
         </table>
       </div>

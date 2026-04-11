@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.encoders import jsonable_encoder
-from database import get_db
+from database import get_db, db_execute
 from routers.auth import verify_token
 from routers.analytics import log_activity
 from models import ClientCreate, ClientUpdate
@@ -10,9 +10,13 @@ router = APIRouter()
 
 
 @router.get("/")
-async def list_clients(current_admin=Depends(verify_token)):
+async def list_clients(
+    limit: int = 100,
+    offset: int = 0,
+    current_admin=Depends(verify_token)
+):
     db = get_db()
-    result = db.table("clients").select("*").order("created_at", desc=True).execute()
+    result = await db_execute(lambda: db.table("clients").select("*").order("created_at", desc=True).range(offset, offset + limit - 1).execute())
     return result.data
 
 

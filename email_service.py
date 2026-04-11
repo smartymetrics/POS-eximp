@@ -8,6 +8,12 @@ from utils import sanitize_client_address
 from datetime import datetime
 import logging
 
+async def async_resend(payload):
+    import asyncio
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, lambda: resend.Emails.send(payload))
+
+
 # Set up logging
 logger = logging.getLogger(__name__)
 
@@ -60,7 +66,7 @@ async def send_welcome_email(client: dict, property_name: str):
     
     try:
         client_sanitized = sanitize_client_address(client.copy())
-        res = resend.Emails.send({
+        res = await async_resend({
             "from": f"Eximp & Cloves <{FROM_EMAIL}>",
             "to": [email_addr],
             "cc": CLIENT_CC_RECIPIENTS,
@@ -206,7 +212,7 @@ async def send_invoice_email(invoice: dict, client: dict, sent_by: str):
     try:
         client_sanitized = sanitize_client_address(client.copy())
         pdf = generate_invoice_pdf(invoice)
-        res = resend.Emails.send({
+        res = await async_resend({
             "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
             "to": [email_addr],
             "cc": CLIENT_CC_RECIPIENTS,
@@ -246,7 +252,7 @@ async def send_receipt_email(invoice: dict, client: dict, sent_by: str):
     try:
         client_sanitized = sanitize_client_address(client.copy())
         pdf = generate_receipt_pdf(invoice)
-        res = resend.Emails.send({
+        res = await async_resend({
             "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
             "to": [email_addr],
             "cc": CLIENT_CC_RECIPIENTS,
@@ -289,7 +295,7 @@ async def send_statement_email(invoices: list, client: dict, sent_by: str):
         total_paid = sum(float(p["amount"]) for inv in invoices for p in (inv.get("payments") or []) if not p.get("is_voided"))
         balance = total_invoiced - total_paid
     
-        res = resend.Emails.send({
+        res = await async_resend({
             "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
             "to": [email_addr],
             "cc": CLIENT_CC_RECIPIENTS,
@@ -349,7 +355,7 @@ async def send_admin_alert_email(invoice: dict, client: dict):
     
     try:
         client_sanitized = sanitize_client_address(client.copy())
-        res = resend.Emails.send({
+        res = await async_resend({
             "from": f"EC Systems <{FROM_EMAIL}>",
             "to": [admin_email],
             "subject": f"New Subscription — {client_name} — {invoice_no}",
@@ -409,7 +415,7 @@ async def send_rejection_email(invoice: dict, client: dict, reason: str):
     
     try:
         client_sanitized = sanitize_client_address(client.copy())
-        res = resend.Emails.send({
+        res = await async_resend({
             "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
             "to": [email_addr],
             "cc": CLIENT_CC_RECIPIENTS,
@@ -456,7 +462,7 @@ async def send_receipt_and_statement_email(invoice: dict, client: dict, invoices
             "Your payment receipt and latest statement of account are attached to this email."
         )
     
-        res = resend.Emails.send({
+        res = await async_resend({
             "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
             "to": [email_addr],
             "cc": CLIENT_CC_RECIPIENTS,
@@ -520,7 +526,7 @@ async def send_void_notification_email(invoice: dict, client: dict, reason: str)
     
     try:
         client_sanitized = sanitize_client_address(client.copy())
-        res = resend.Emails.send({
+        res = await async_resend({
             "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
             "to": [email_addr],
             "cc": CLIENT_CC_RECIPIENTS,
@@ -573,7 +579,7 @@ def _report_html(message: str) -> str:
 async def send_report_email(emails: list, subject: str, message: str, attachment: dict, sent_by: str):
     from routers.analytics import log_activity
     try:
-        res = resend.Emails.send({
+        res = await async_resend({
             "from": f"Eximp & Cloves <{FROM_EMAIL}>",
             "to": emails,
             "subject": subject,
@@ -657,7 +663,7 @@ async def send_commission_earned_email(rep: dict, client: dict, invoice: dict, e
     client_name = client.get("full_name", "Client")
     
     try:
-        res = resend.Emails.send({
+        res = await async_resend({
             "from": f"Eximp & Cloves <{FROM_EMAIL}>",
             "to": [email_addr],
             "reply_to": "finance@eximps-cloves.com",
@@ -725,7 +731,7 @@ async def send_commission_void_email(rep: dict, client: dict, invoice: dict, ear
     client_name = client.get("full_name", "Client")
     
     try:
-        res = resend.Emails.send({
+        res = await async_resend({
             "from": f"Eximp & Cloves <{FROM_EMAIL}>",
             "to": [email_addr],
             "reply_to": "finance@eximps-cloves.com",
@@ -763,7 +769,7 @@ async def send_refund_receipt_email(invoice: dict, payment: dict, client: dict):
     try:
         client_sanitized = sanitize_client_address(client.copy())
         pdf = generate_refund_receipt_pdf(payment, invoice, client_sanitized)
-        res = resend.Emails.send({
+        res = await async_resend({
             "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
             "to": [email_addr],
             "cc": CLIENT_CC_RECIPIENTS,
@@ -866,7 +872,7 @@ async def send_commission_paid_email(rep: dict, batch: dict):
     rep_name = rep.get("name", "Rep")
     
     try:
-        res = resend.Emails.send({
+        res = await async_resend({
             "from": "Eximp & Cloves Finance <" + FROM_EMAIL + ">",
             "to": [email_addr],
             "reply_to": "finance@eximps-cloves.com",
@@ -886,7 +892,7 @@ async def send_commission_paid_email(rep: dict, batch: dict):
 
 # --- PRD 5: LEGAL & CONTRACT EMAILS ---
 
-def send_signing_link_email(invoice, client, token, expires_at):
+async def send_signing_link_email(invoice, client, token, expires_at):
     """Sent to the client with the witness signing link."""
     # Use LEGAL_EMAIL if set, else FROM_EMAIL
     sender = os.getenv("LEGAL_EMAIL", os.getenv("FROM_EMAIL"))
@@ -947,7 +953,7 @@ def send_signing_link_email(invoice, client, token, expires_at):
     try:
         from main import app # dummy to avoid circular import if needed, but resend is global
         import resend 
-        res = resend.Emails.send({
+        res = await async_resend({
             "from": "Eximp & Cloves Legal <" + str(sender) + ">",
             "to": email_addr,
             "cc": CLIENT_CC_RECIPIENTS,
@@ -959,7 +965,7 @@ def send_signing_link_email(invoice, client, token, expires_at):
         logger.error("Error sending signing link email: " + str(e))
         return None
 
-def send_admin_signing_alert(invoice, client, witnesses):
+async def send_admin_signing_alert(invoice, client, witnesses):
     """Notifies admin when both witnesses have signed."""
     sender = os.getenv("FROM_EMAIL")
     admin_email = os.getenv("ADMIN_ALERT_EMAIL", os.getenv("FROM_EMAIL"))
@@ -988,7 +994,7 @@ def send_admin_signing_alert(invoice, client, witnesses):
 
     try:
         import resend
-        resend.Emails.send({
+        await async_resend({
             "from": "System Alert <" + str(sender) + ">",
             "to": admin_email,
             "subject": "Contract Ready: " + str(client.get("full_name")) + " (" + str(invoice.get("invoice_number")) + ")",
@@ -997,7 +1003,7 @@ def send_admin_signing_alert(invoice, client, witnesses):
     except Exception as e:
         logger.error("Error sending admin signing alert: " + str(e))
 
-def send_executed_contract_email(invoice, client, pdf_content, certificate_pdf=None):
+async def send_executed_contract_email(invoice, client, pdf_content, certificate_pdf=None):
     """Sends the final executed PDF to the client, optionally with an audit certificate."""
     sender = os.getenv("LEGAL_EMAIL", os.getenv("FROM_EMAIL"))
     email_addr = client.get("email")
@@ -1046,7 +1052,7 @@ def send_executed_contract_email(invoice, client, pdf_content, certificate_pdf=N
 
     try:
         import resend
-        res = resend.Emails.send({
+        res = await async_resend({
             "from": f"Eximp & Cloves Legal <{sender}>",
             "to": [email_addr],
             "cc": CLIENT_CC_RECIPIENTS,
@@ -1084,7 +1090,7 @@ async def send_witness_confirmation_email(witness_name, witness_email, estate_na
     
     try:
         import resend
-        res = resend.Emails.send({
+        res = await async_resend({
             "from": "Eximp & Cloves Legal <" + str(sender) + ">",
             "to": [witness_email],
             "cc": CLIENT_CC_RECIPIENTS,
@@ -1195,7 +1201,7 @@ async def broadcast_campaign_email(campaign: dict, recipients: list, admin_id: s
             # We wrap the content for each recipient (enables future per-recipient personalization)
             html = _marketing_wrapper(campaign["content_html"], client.get("full_name", "Valued Client"))
             
-            resend.Emails.send({
+            await async_resend({
                 "from": f"Eximp & Cloves <{FROM_EMAIL}>",
                 "to": [email_addr],
                 "subject": campaign["subject"],
@@ -1286,7 +1292,7 @@ async def send_payout_receipt_email(payout: dict, vendor: dict, admin_id: str = 
     try:
         payout_ref = payout.get("payout_reference") or "Processed"
         pdf = generate_payout_receipt_pdf(payout, vendor)
-        res = resend.Emails.send({
+        res = await async_resend({
             "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
             "to": [email_addr],
             "cc": CLIENT_CC_RECIPIENTS,
@@ -1342,7 +1348,7 @@ async def send_ready_for_execution_email(invoice, client):
 
     try:
         import resend
-        res = resend.Emails.send({
+        res = await async_resend({
             "from": f"Legal Suite <{FROM_EMAIL}>",
             "to": recipients,
             "cc": CLIENT_CC_RECIPIENTS,
@@ -1390,7 +1396,7 @@ async def send_portal_invite_email(email_addr: str, inviter_name: str, token: st
     </div>"""
 
     try:
-        res = resend.Emails.send({
+        res = await async_resend({
             "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
             "to": [email_addr],
             "subject": "Invitation: Submit Payout Request | Eximp & Cloves",
@@ -1461,7 +1467,7 @@ async def send_support_response_email(ticket: dict, message: str):
     if not email_addr: return
     
     try:
-        res = resend.Emails.send({
+        res = await async_resend({
             "from": f"Eximp & Cloves Support <{FROM_EMAIL}>",
             "to": [email_addr],
             "subject": f"Re: {ticket.get('subject')}",
@@ -1478,7 +1484,7 @@ async def send_followup_nudge_email(ticket: dict):
     
     try:
         import resend
-        resend.Emails.send({
+        await async_resend({
             "from": f"Eximp & Cloves Support <{FROM_EMAIL}>",
             "to": [email_addr],
             "subject": f"Checking in: {ticket.get('subject')}",
@@ -1529,7 +1535,7 @@ async def send_appointment_reminder_email(appointment: dict):
     if not email_addr: return
     
     try:
-        res = resend.Emails.send({
+        res = await async_resend({
             "from": f"Eximp & Cloves <{FROM_EMAIL}>",
             "to": [email_addr],
             "subject": "Reminder: Your Property Inspection",
@@ -1539,4 +1545,44 @@ async def send_appointment_reminder_email(appointment: dict):
         return res
     except Exception as e:
         logger.error(f"Error sending appointment reminder to {email_addr}: {e}")
+        return None
+
+def _chat_invitation_html(name: str, inviter: str, join_url: str, ticket_subject: str) -> str:
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 12px; overflow: hidden; background: #fff;">
+      <div style="background: #1A1A1A; padding: 30px; text-align: center;">
+        <h1 style="color: #F5A623; margin: 0; font-size: 22px; letter-spacing: 1px;">Group Chat Invitation</h1>
+        <p style="color: #888; margin: 8px 0 0; font-size: 13px;">Secure Collaboration | Eximp & Cloves</p>
+      </div>
+      <div style="padding: 40px 30px;">
+        <p style="color: #333; font-size: 16px;">Hello <strong>{name}</strong>,</p>
+        <p style="color: #555; font-size: 14px; line-height: 1.6;"><strong>{inviter}</strong> has invited you to join a secure group chat regarding the support ticket: <strong>"{ticket_subject}"</strong>.</p>
+        
+        <p style="color: #555; font-size: 14px; line-height: 1.6;">This chat is a private, secure back-channel for real-time collaboration with our team.</p>
+
+        <div style="margin: 40px 0; text-align: center;">
+          <a href="{join_url}" style="background: #F5A623; color: #1A1A1A; text-decoration: none; padding: 15px 30px; border-radius: 8px; font-weight: bold; font-size: 16px; display: inline-block;">Accept & Join Chat</a>
+        </div>
+        
+        <p style="color: #888; font-size: 12px; text-align: center;">If the button above doesn't work, copy and paste this link into your browser:<br>
+        <a href="{join_url}" style="color: #C47D0A;">{join_url}</a></p>
+        
+        <div style="margin-top: 40px; padding-top: 20px; border-top: 1px solid #eee; text-align: center;">
+          <p style="color: #999; font-size: 12px;">Warm regards,<br>The Eximp & Cloves Team</p>
+        </div>
+      </div>
+    </div>"""
+
+async def send_chat_invitation_email(email_addr: str, name: str, inviter: str, join_url: str, ticket_subject: str):
+    try:
+        res = await async_resend({
+            "from": f"Eximp & Cloves <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "subject": f"Invitation to Group Chat: {ticket_subject}",
+            "html": _chat_invitation_html(name, inviter, join_url, ticket_subject),
+            "reply_to": "sales@eximps-cloves.com"
+        })
+        return res
+    except Exception as e:
+        logger.error(f"Error sending chat invitation to {email_addr}: {e}")
         return None

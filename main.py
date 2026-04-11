@@ -35,7 +35,8 @@ from routers import (
     revenue_intelligence,
     scheduling,
     notifications,
-    ws_support
+    ws_support,
+    subscriptions
 )
 from routers.auth import require_roles, resolve_admin_token
 from database import init_db
@@ -94,6 +95,7 @@ app.include_router(revenue_intelligence.router, prefix="/api/intelligence", tags
 app.include_router(scheduling.router, prefix="/api/scheduling", tags=["scheduling"])
 app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
 app.include_router(ws_support.router, prefix="/api", tags=["live-chat"])
+app.include_router(subscriptions.router, tags=["subscriptions"])
 
 
 
@@ -205,6 +207,70 @@ async def book_inspection_page(request: Request):
 async def support_portal_page(request: Request, ticket_id: str):
     return templates.TemplateResponse("support_portal.html", {"request": request, "ticket_id": ticket_id})
 
+@app.get("/support/chat/join/{invite_token}", response_class=HTMLResponse)
+async def chat_join_page(request: Request, invite_token: str):
+    return await render_chat_join(request, invite_token)
+
+@app.get("/join", response_class=HTMLResponse)
+async def short_chat_join_page(request: Request, token: str):
+    """Shorter link for client sharing that handles the token via query params."""
+    return await render_chat_join(request, token)
+
+async def render_chat_join(request: Request, token: str):
+    from database import get_db, db_execute
+    db = get_db()
+    
+    # 1. Fetch Inviter and Room Info
+    # This query joins chat_participants with admins and support_tickets to get the personalization data
+    query = """
+        SELECT 
+            a.full_name as inviter_name,
+            t.category as ticket_category
+        FROM chat_participants cp
+        JOIN admins a ON cp.invited_by_admin_id = a.id
+        JOIN chat_rooms cr ON cp.room_id = cr.id
+        JOIN support_tickets t ON cr.ticket_id = t.id
+        WHERE cp.invite_token = %s
+    """
+    # Using db_execute for safe execution
+    try:
+        # Note: Since we are using Supabase/PostgREST usually, I'll use the .rpc or .table interface if possible,
+        # but for complex joins, it's easier to use the .rpc if defined, or just multiple calls.
+        # Let's use multiple calls to be safe with the PostgREST library.
+        
+        cp_res = db.table("chat_participants").select("invited_by_admin_id, room_id").eq("invite_token", token).execute()
+        if not cp_res.data:
+            return templates.TemplateResponse("chat_join.html", {"request": request, "invite_token": token, "error": "Invalid or expired invitation link."})
+        
+        cp = cp_res.data[0]
+        admin_res = db.table("admins").select("full_name").eq("id", cp["invited_by_admin_id"]).execute()
+        room_res = db.table("chat_rooms").select("ticket_id").eq("id", cp["room_id"]).execute()
+        
+        inviter_name = admin_res.data[0]["full_name"] if admin_res.data else "a team member"
+        
+        ticket_id = room_res.data[0]["ticket_id"]
+        ticket_res = db.table("support_tickets").select("category").eq("id", ticket_id).execute()
+        category = ticket_res.data[0]["category"] if ticket_res.data else "support"
+
+        # Heuristic for Team Name
+        team_name = "Legal/Support"
+        if category == "property":
+            team_name = "Sales"
+        elif category == "legal":
+            team_name = "Legal"
+        else:
+            team_name = "Support"
+            
+        return templates.TemplateResponse("chat_join.html", {
+            "request": request, 
+            "invite_token": token,
+            "inviter_name": inviter_name,
+            "team_name": team_name
+        })
+    except Exception as e:
+        print(f"Error rendering join page: {e}")
+        return templates.TemplateResponse("chat_join.html", {"request": request, "invite_token": token, "error": "An error occurred while loading the invitation."})
+
 @app.get("/legal/{tag:path}")
 async def handle_legal_placeholders(tag: str):
     """
@@ -257,5 +323,5 @@ async def health():
 import os
 
 if __name__ == "__main__":
-    port = int(os.environ.get("PORT", 10000))
+    port = int(os.environ.get("PORT", 8000))
     uvicorn.run("main:app", host="0.0.0.0", port=port, reload=False)

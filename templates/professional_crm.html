@@ -450,26 +450,13 @@
 
             <!-- Properties -->
             <div class="nav-section">
-                <div class="nav-title">Properties</div>
+                <div class="nav-title">Inventory & Deals</div>
                 <div class="nav-link" onclick="switchView('properties')">
                     <i class="fas fa-home"></i> Listings
                 </div>
-                <div class="nav-link" onclick="switchView('market-intel')">
-                    <i class="fas fa-globe"></i> Market Intel
-                </div>
-            </div>
-
-            <!-- Deals & Documents -->
-            <div class="nav-section">
-                <div class="nav-title">Deals & Documents</div>
-                <div class="nav-link" onclick="switchView('pipeline')">
-                    <i class="fas fa-tasks"></i> Pipeline
-                </div>
-                <div class="nav-link" onclick="switchView('documents')">
-                    <i class="fas fa-file-contract"></i> Documents
-                </div>
-                <div class="nav-link" onclick="switchView('activity-logs')">
-                    <i class="fas fa-history"></i> Activity Logs
+                <div class="nav-link" id="nav-crm-verifications" onclick="switchView('verifications')">
+                    <i class="fas fa-check-circle"></i> Verifications
+                    <span id="crm-verifications-badge" class="badge-count" style="display:none; margin-left: auto;">0</span>
                 </div>
             </div>
 
@@ -479,7 +466,7 @@
                 <div class="nav-link" onclick="switchView('campaigns')">
                     <i class="fas fa-bullhorn"></i> Campaigns
                 </div>
-                <div class="nav-link" onclick="switchView('portal')">
+                <div class="nav-link" onclick="openPortalLinkModal()">
                     <i class="fas fa-users"></i> Client Portal
                 </div>
             </div>
@@ -930,6 +917,46 @@
             </div>
          </div>
  
+     <!-- MODAL: ACTIVITY LOG -->
+     <div id="activityLogModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center;">
+         <div class="modal-content" style="background: #1A1A1A; width: 450px; border-radius: 16px; border: 1px solid #333; overflow: hidden;">
+             <div style="padding: 24px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+                 <h2 style="font-size: 18px; font-weight: 800; color: #fff;">Log Daily Activity</h2>
+                 <button onclick="document.getElementById('activityLogModal').style.display='none'" style="color: #666;"><i class="fas fa-times"></i></button>
+             </div>
+             <div style="padding: 24px;">
+                 <label style="display: block; font-size: 11px; font-weight: 700; color: #888; text-transform: uppercase; margin-bottom: 12px;">What was done today?</label>
+                 <textarea id="activity-note-input" placeholder="e.g. Called client, Sent proposal via email..." style="width: 100%; height: 120px; background: #222; border: 1px solid #333; border-radius: 8px; padding: 12px; color: #fff; outline: none; margin-bottom: 24px; resize: none;"></textarea>
+                 <input type="hidden" id="activity-target-id">
+                 <button onclick="submitActivityLog()" class="btn btn-primary" style="width: 100%; padding: 14px;">Log Activity</button>
+             </div>
+         </div>
+     </div>
+
+     <!-- MODAL: CHAT LINK -->
+     <div id="chatLinkModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center;">
+         <div class="modal-content" style="background: #1A1A1A; width: 450px; border-radius: 16px; border: 1px solid #333; overflow: hidden;">
+             <div style="padding: 24px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+                 <h2 style="font-size: 18px; font-weight: 800; color: #fff;">Chat Link Generated</h2>
+                 <button onclick="document.getElementById('chatLinkModal').style.display='none'" style="color: #666;"><i class="fas fa-times"></i></button>
+             </div>
+             <div style="padding: 24px;">
+                 <p style="font-size: 13px; color: #aaa; margin-bottom: 16px;">Copy this link and send it to your client via WhatsApp or Email.</p>
+                 <div style="background: #000; border: 1px solid #333; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
+                     <code id="generated-chat-url" style="color: var(--gold); word-break: break-all; font-size: 12px;">Link here</code>
+                 </div>
+                 <div style="display: grid; grid-template-columns: 1fr 1fr; gap: 12px;">
+                     <button onclick="copyChatLink(event)" class="btn btn-secondary" style="background: #222; border-color: #333; color: #fff;">
+                         <i class="fas fa-copy"></i> Copy Link
+                     </button>
+                     <button id="email-client-btn" class="btn btn-primary">
+                         <i class="fas fa-envelope"></i> Email Client
+                     </button>
+                 </div>
+             </div>
+         </div>
+     </div>
+ 
      <!-- MODAL: ADD LEAD -->
      <div id="addLeadModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center;">
          <div class="modal-content" style="background: #1A1A1A; width: 450px; border-radius: 16px; border: 1px solid #333; overflow: hidden;">
@@ -1085,15 +1112,51 @@
                  </div>
 
                  <!-- TICKET DETAIL / CHAT (RIGHT) -->
-                 <div class="card" id="ticketDetailPanel" style="display: none;">
-                     <div class="flex justify-between items-center mb-6">
-                         <h3 class="font-bold text-lg" id="ticketSubject">Ticket Details</h3>
-                         <button onclick="document.getElementById('ticketDetailPanel').style.display='none'" class="text-gray-500 hover:text-white"><i class="fas fa-times"></i></button>
+                 <div class="card" id="ticketDetailPanel" style="display: none; height: 100%; display: flex; flex-direction: column;">
+                     <div class="flex justify-between items-center mb-4 border-b border-white/5 pb-4">
+                         <div class="flex gap-4">
+                             <button id="tab-ticket-details" class="text-lg font-bold border-b-2 border-amber-500 pb-1" onclick="switchTicketTab('details')">Ticket Details</button>
+                             <button id="tab-ticket-chat" class="text-lg font-bold text-gray-500 hover:text-white pb-1" onclick="switchTicketTab('chat')">Group Chat</button>
+                         </div>
+                         <div class="flex items-center gap-4">
+                             <span id="chat-room-id-display" class="text-[10px] text-gray-600 font-mono hidden"></span>
+                             <button onclick="document.getElementById('ticketDetailPanel').style.display='none'" class="text-gray-500 hover:text-white"><i class="fas fa-times"></i></button>
+                         </div>
                      </div>
 
-                     <div id="ticketThread" class="space-y-4 max-h-[500px] overflow-y-auto mb-6 p-4 bg-black/40 rounded-xl border border-white/5">
-                         <!-- Conversation history -->
-                         <div class="text-center text-gray-500 py-10 italic">Select a ticket to view discussion</div>
+                     <!-- Details Tab -->
+                     <div id="ticket-details-content">
+                         <h4 class="text-sm font-bold text-gray-400 mb-2" id="ticketSubjectDisplay">Subject</h4>
+                         <div id="ticketThread" class="space-y-4 max-h-[450px] overflow-y-auto mb-6 p-4 bg-black/40 rounded-xl border border-white/5">
+                             <!-- Conversation history -->
+                             <div class="text-center text-gray-500 py-10 italic">Select a ticket to view discussion</div>
+                         </div>
+                     </div>
+
+                     <!-- Group Chat Tab -->
+                     <div id="ticket-chat-content" style="display: none; flex: 1; display: flex; flex-direction: column;">
+                         <div id="chat-room-empty" class="text-center py-20 bg-black/20 rounded-xl border border-dashed border-[#333]">
+                             <div class="text-3xl mb-4">💬</div>
+                             <h4 class="font-bold text-white mb-2">No active Group Chat</h4>
+                             <p class="text-xs text-gray-500 mb-6 px-10">Start a private chat room to collaborate with other reps or external consultants on this ticket.</p>
+                             <button class="btn btn-primary btn-sm" onclick="startGroupChat()">
+                                 <i class="fas fa-plus mr-2"></i> Start Group Chat
+                             </button>
+                         </div>
+
+                         <div id="chat-room-active" style="display: none; flex: 1; display: flex; flex-direction: column;">
+                             <div class="flex justify-between items-center mb-4">
+                                 <div id="chat-participants-list" class="flex -space-x-2">
+                                     <!-- Participant bubbles -->
+                                 </div>
+                                 <button class="btn btn-secondary btn-sm" style="font-size: 10px; padding: 4px 10px;" onclick="openInviteModal()">
+                                     <i class="fas fa-user-plus mr-1"></i> Invite
+                                 </button>
+                             </div>
+                             <div id="chatThread" class="space-y-4 flex-1 overflow-y-auto mb-4 p-4 bg-black/40 rounded-xl border border-white/5" style="min-height: 350px;">
+                                 <!-- Group chat history -->
+                             </div>
+                         </div>
                      </div>
 
                      <div class="pt-4 border-t border-white/5">
@@ -1158,6 +1221,105 @@
                 </div>
             </div>
         </div>
+
+        <!-- VERIFICATIONS (NEW) -->
+        <div id="verifications" class="view-section">
+            <div class="header-section">
+                <div>
+                    <h1 class="page-title" style="color: white !important;">Payment Verifications</h1>
+                    <p style="color: #888; margin-top: 8px;">Review and track client payment proofs and subscription KYC</p>
+                </div>
+                <div class="flex gap-2">
+                    <button class="btn btn-secondary" onclick="loadVerifications()">
+                        <i class="fas fa-sync"></i> Refresh
+                    </button>
+                </div>
+            </div>
+
+            <div class="card p-0 overflow-hidden" style="background: rgba(0,0,0,0.2); border: 1px solid #333;">
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                        <thead style="background: rgba(255,255,255,0.03); border-bottom: 2px solid #333;">
+                            <tr>
+                                <th style="text-align: left; padding: 16px; font-weight: 700; color: #aaa; text-transform: uppercase; font-size: 10px; letter-spacing: 1px;">Submitted</th>
+                                <th style="text-align: left; padding: 16px; font-weight: 700; color: #aaa; text-transform: uppercase; font-size: 10px; letter-spacing: 1px;">Subscriber</th>
+                                <th style="text-align: left; padding: 16px; font-weight: 700; color: #aaa; text-transform: uppercase; font-size: 10px; letter-spacing: 1px;">Client Info</th>
+                                <th style="text-align: left; padding: 16px; font-weight: 700; color: #aaa; text-transform: uppercase; font-size: 10px; letter-spacing: 1px;">Deal / Inv</th>
+                                <th style="text-align: right; padding: 16px; font-weight: 700; color: #aaa; text-transform: uppercase; font-size: 10px; letter-spacing: 1px;">Amount</th>
+                                <th style="text-align: center; padding: 16px; font-weight: 700; color: #aaa; text-transform: uppercase; font-size: 10px; letter-spacing: 1px;">Status</th>
+                                <th style="text-align: right; padding: 16px; font-weight: 700; color: #aaa; text-transform: uppercase; font-size: 10px; letter-spacing: 1px;">Docs</th>
+                            </tr>
+                        </thead>
+                        <tbody id="crmVerificationsTable">
+                            <tr>
+                                <td colspan="7" style="padding: 40px; text-align: center; color: #666;">
+                                    <div class="flex flex-col items-center gap-2">
+                                        <i class="fas fa-spinner fa-spin text-2xl text-[#C47D0A]"></i>
+                                        <span>Loading verifications...</span>
+                                    </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: VERIFY CONFIRM -->
+    <div id="verifyConfirmModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center;">
+        <div class="modal-content" style="background: #1A1A1A; width: 450px; border-radius: 16px; border: 1px solid #333; overflow: hidden;">
+            <div style="padding: 24px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="font-size: 18px; font-weight: 800; color: #fff;">Confirm Verification</h2>
+                <button onclick="document.getElementById('verifyConfirmModal').style.display='none'" style="color: #666;"><i class="fas fa-times"></i></button>
+            </div>
+            <div style="padding: 24px;">
+                <p style="font-size: 13px; color: #aaa; margin-bottom: 24px;">Are you sure you want to confirm this payment? This action will generate official receipts and email the client.</p>
+                <input type="hidden" id="verify-confirm-id">
+                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    <button class="btn btn-secondary" onclick="document.getElementById('verifyConfirmModal').style.display='none'">Cancel</button>
+                    <button class="btn btn-primary" onclick="submitVerifyConfirm(this)">Confirm Payment</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: VERIFY REJECT -->
+    <div id="verifyRejectModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center;">
+        <div class="modal-content" style="background: #1A1A1A; width: 450px; border-radius: 16px; border: 1px solid #333; overflow: hidden;">
+            <div style="padding: 24px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="font-size: 18px; font-weight: 800; color: #ef4444;">Reject Verification</h2>
+                <button onclick="document.getElementById('verifyRejectModal').style.display='none'" style="color: #666;"><i class="fas fa-times"></i></button>
+            </div>
+            <div style="padding: 24px;">
+                <p style="font-size: 13px; color: #aaa; margin-bottom: 16px;">Please provide a reason for rejecting this payment proof. The client will be notified via email.</p>
+                <input type="hidden" id="verify-reject-id">
+                <textarea id="verify-reject-reason" placeholder="e.g. Blurry image, amount mismatch..." style="width: 100%; height: 100px; background: #222; border: 1px solid #333; border-radius: 8px; padding: 12px; color: #fff; outline: none; margin-bottom: 24px; resize: none;"></textarea>
+                <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                    <button class="btn btn-secondary" onclick="document.getElementById('verifyRejectModal').style.display='none'">Cancel</button>
+                    <button class="btn" style="background: #ef4444; color: #fff; padding: 8px 16px; font-size: 12px; font-weight: 600; border-radius: 6px;" onclick="submitVerifyReject(this)">Reject Payment</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: PORTAL LINK -->
+    <div id="portalLinkModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center;">
+        <div class="modal-content" style="background: #1A1A1A; width: 450px; border-radius: 16px; border: 1px solid #333; overflow: hidden;">
+            <div style="padding: 24px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="font-size: 18px; font-weight: 800; color: var(--gold);">Your Unique Portal Link</h2>
+                <button onclick="document.getElementById('portalLinkModal').style.display='none'" style="color: #666;"><i class="fas fa-times"></i></button>
+            </div>
+            <div style="padding: 24px;">
+                <p style="font-size: 13px; color: #aaa; margin-bottom: 16px;">Copy this link and send it to your clients. Any subscriptions made through this link will be automatically credited to you for commission.</p>
+                <div style="background: #000; border: 1px solid #333; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
+                    <code id="sales-rep-portal-url" style="color: var(--gold); word-break: break-all; font-size: 12px;">Link here</code>
+                </div>
+                <button onclick="copyPortalLink(event)" class="btn btn-primary" style="width: 100%; padding: 14px;">
+                    <i class="fas fa-copy"></i> Copy Portal Link
+                </button>
+            </div>
+        </div>
     </div>
 
     <script>
@@ -1192,6 +1354,10 @@
 
         const API_BASE = "/api/crm/pro";
         let token = checkAuth();
+        const adminData = JSON.parse(localStorage.getItem('admin') || '{}');
+        const adminId = adminData.id || "";
+        const adminName = adminData.name || "Admin";
+        const isAdminUser = (adminData.role || '').toLowerCase().includes('admin') || (adminData.role || '').toLowerCase().includes('operations');
         
         // --- ROLE BASED UI RESTRICTIONS ---
         function applyUIPermissions() {
@@ -1247,6 +1413,7 @@
             else if (viewName === "revenue-intel") loadRevenueIntelligence();
             else if (viewName === "pipeline") loadPipeline();
             else if (viewName === "properties") loadProperties();
+            else if (viewName === "verifications") loadVerifications();
             else if (viewName === "market-intel") loadMarketIntelligence();
             else if (viewName === "documents") loadDocuments();
             else if (viewName === "activity-logs") loadActivityLogs();
@@ -1255,6 +1422,181 @@
 
             if (window.innerWidth <= 1024) closeMobileNav();
         }
+
+        async function loadVerifications() {
+            const container = document.getElementById("crmVerificationsTable");
+            try {
+                const res = await fetch("/api/verifications/", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const pending = await res.json();
+
+                if (!pending || pending.length === 0) {
+                    container.innerHTML = '<tr><td colspan="7" style="padding: 40px; text-align: center; color: #666;">No pending verifications.</td></tr>';
+                    return;
+                }
+
+                container.innerHTML = pending.map(v => {
+                    const sub = v.property_subscriptions || {};
+                    const statusClass = v.status === 'pending' ? 'bg-amber-500/10 text-amber-500' : 
+                                      v.status === 'confirmed' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500';
+                    
+                    return `
+                        <tr style="border-bottom: 1px solid #222; transition: background 0.2s;" class="hover:bg-white/5">
+                            <td style="padding: 16px; color: #666; font-size: 11px;">${new Date(v.created_at).toLocaleString()}</td>
+                            <td style="padding: 16px;">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    ${sub.passport_photo_url ? 
+                                      `<img src="${sub.passport_photo_url}" style="width:32px; height:32px; border-radius:6px; object-fit:cover; border:1px solid #333;" alt="KYC">` :
+                                      `<div style="width:32px; height:32px; border-radius:6px; background:#111; display:flex; align-items:center; justify-content:center; color:#444; border:1px solid #333;"><i class="fas fa-user text-xs"></i></div>`
+                                    }
+                                    <div>
+                                        <div style="font-weight: 700; color: #fff;">${v.clients?.full_name || '—'}</div>
+                                        <div style="font-size: 11px; color: #C47D0A; font-weight: 500;">${sub.occupation || 'Investor'}</div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td style="padding: 16px;">
+                                <div style="color: #ccc;">${v.clients?.email || ''}</div>
+                                <div style="font-size: 11px; color: #555;">${sub.residential_address ? sub.residential_address.substring(0, 30) + '...' : ''}</div>
+                            </td>
+                            <td style="padding: 16px;">
+                                <div style="font-weight: 600; color: #fff;">${v.invoices?.invoice_number || '—'}</div>
+                                <div style="font-size: 11px; color: #666;">${v.invoices?.property_name || '—'}</div>
+                            </td>
+                            <td style="padding: 16px; text-align: right; font-weight: 700; color: #C47D0A;">
+                                ₦${v.deposit_amount.toLocaleString()}
+                            </td>
+                            <td style="padding: 16px; text-align: center;">
+                                <span style="font-size: 10px; padding: 4px 10px; border-radius: 99px; font-weight: 700; text-transform: uppercase;" class="${statusClass}">
+                                    ${v.status}
+                                </span>
+                            </td>
+                            <td style="padding: 16px; text-align: right;">
+                                <div style="display: flex; gap: 4px; justify-content: flex-end;">
+                                    ${v.status === 'pending' && isAdminUser ? `
+                                        <button style="width: 28px; height: 28px; border-radius: 6px; background: #ffe4e6; border: 1px solid #fecdd3; color: #e11d48; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 10px;" onclick="openRejectVerification('${v.id}')" title="Reject"><i class="fas fa-times"></i></button>
+                                        <button style="width: 28px; height: 28px; border-radius: 6px; background: #dcfce7; border: 1px solid #bbf7d0; color: #16a34a; display: flex; align-items: center; justify-content: center; cursor: pointer; font-size: 10px;" onclick="openConfirmVerification('${v.id}')" title="Confirm"><i class="fas fa-check"></i></button>
+                                    ` : ''}
+                                    <a href="${v.payment_proof_url}" target="_blank" title="View Receipt" style="width: 28px; height: 28px; border-radius: 6px; background: #111; border: 1px solid #333; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 10px;"><i class="fas fa-file-invoice-dollar"></i></a>
+                                    ${sub.nin_document_url ? `<a href="${sub.nin_document_url}" target="_blank" title="View ID" style="width: 28px; height: 28px; border-radius: 6px; background: #111; border: 1px solid #333; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 10px;"><i class="fas fa-id-card"></i></a>` : ''}
+                                    ${v.invoices?.signature_url ? `<a href="${v.invoices.signature_url}" target="_blank" title="View Signature" style="width: 28px; height: 28px; border-radius: 6px; background: #111; border: 1px solid #333; color: #fff; display: flex; align-items: center; justify-content: center; font-size: 10px;"><i class="fas fa-signature"></i></a>` : ''}
+                                </div>
+                            </td>
+                        </tr>
+                    `;
+                }).join("");
+
+                // Update badge
+                const badge = document.getElementById("crm-verifications-badge");
+                if (badge) {
+                    badge.textContent = pending.length;
+                    badge.style.display = pending.length > 0 ? "inline-block" : "none";
+                }
+
+            } catch (err) {
+                console.error("Error loading verifications:", err);
+                container.innerHTML = '<tr><td colspan="7" style="padding: 40px; text-align: center; color: #EF4444;">Error loading verifications.</td></tr>';
+            }
+        }
+
+        // --- VERIFICATION ADMIN ACTIONS ---
+        function openConfirmVerification(id) {
+            document.getElementById("verify-confirm-id").value = id;
+            document.getElementById("verifyConfirmModal").style.display = "flex";
+        }
+
+        async function submitVerifyConfirm(btn) {
+            const id = document.getElementById("verify-confirm-id").value;
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Confirming...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`/api/verifications/${id}/confirm`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                
+                if (res.ok) {
+                    document.getElementById("verifyConfirmModal").style.display = "none";
+                    loadVerifications();
+                } else {
+                    const data = await res.json();
+                    alert(data.detail || "Error confirming verification");
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Network error.");
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        function openRejectVerification(id) {
+            document.getElementById("verify-reject-id").value = id;
+            document.getElementById("verify-reject-reason").value = "";
+            document.getElementById("verifyRejectModal").style.display = "flex";
+        }
+
+        async function submitVerifyReject(btn) {
+            const id = document.getElementById("verify-reject-id").value;
+            const reason = document.getElementById("verify-reject-reason").value.trim();
+            
+            if (!reason) {
+                alert("Please provide a rejection reason.");
+                return;
+            }
+
+            const originalText = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Rejecting...';
+            btn.disabled = true;
+
+            try {
+                const res = await fetch(`/api/verifications/${id}/reject`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${token}` 
+                    },
+                    body: JSON.stringify({ reason: reason })
+                });
+                
+                if (res.ok) {
+                    document.getElementById("verifyRejectModal").style.display = "none";
+                    loadVerifications();
+                } else {
+                    const data = await res.json();
+                    alert(data.detail || "Error rejecting verification");
+                }
+            } catch (err) {
+                console.error(err);
+                alert("Network error.");
+            } finally {
+                btn.innerHTML = originalText;
+                btn.disabled = false;
+            }
+        }
+
+        // --- UNIQUE PORTAL LINK GENERATOR ---
+        function openPortalLinkModal() {
+            const baseUrl = window.location.origin;
+            document.getElementById("sales-rep-portal-url").textContent = `${baseUrl}/subscribe?rep=${adminId}`;
+            document.getElementById("portalLinkModal").style.display = "flex";
+        }
+
+        function copyPortalLink(e) {
+            const url = document.getElementById("sales-rep-portal-url").textContent;
+            navigator.clipboard.writeText(url).then(() => {
+                const originalHTML = e.currentTarget.innerHTML;
+                e.currentTarget.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                setTimeout(() => {
+                    e.currentTarget.innerHTML = originalHTML;
+                }, 2000);
+            });
+        }
+
 
         async function loadCampaigns() {
             try {
@@ -1517,7 +1859,8 @@
                                 <div style="font-size: 10px; color: #555;">${new Date(lead.created_at).toLocaleDateString()}</div>
                             </div>
                             <div style="font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 4px;">${lead.full_name || 'Unknown Client'}</div>
-                            <div style="font-size: 16px; font-weight: 800; color: var(--gold);">₦${parseFloat(lead.estimated_value || 0).toLocaleString()}</div>
+                            <div style="font-size: 16px; font-weight: 800; color: var(--gold);">₦${parseFloat(lead.amount || 0).toLocaleString()}</div>
+                            ${lead.actual_paid > 0 ? `<div style="font-size: 10px; color: #3498db; margin-top: 2px;">Paid: ₦${parseFloat(lead.actual_paid).toLocaleString()}</div>` : ''}
                             <div style="font-size: 10px; color: #22c55e; margin-top: 2px;">Forecast: ₦${weightedVal} <span style="color: #666;">(${probability}%)</span></div>
                             
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 8px; border-top: 1px solid #333;">
@@ -1814,25 +2157,42 @@
 
         // Chat Initiation
         async function initiateLeadChat(clientId, name) {
-            if (!confirm(`Generate a secure live chat portal link for ${name}?`)) return;
             try {
+                showPageLoader("Generating Secure Link...");
                 const res = await fetch(`/api/support/initiate-chat?client_id=${clientId}`, {
                     method: "POST",
                     headers: { "Authorization": `Bearer ${token}` }
                 });
                 const data = await res.json();
-                
-                const fullUrl = window.location.origin + data.portal_url;
-                const action = prompt("Chat Link Generated!\n\nType 'copy' to copy to clipboard\nType 'email' to notify client by email\n\nLink: " + fullUrl);
-                
-                if (action === 'copy') {
-                    navigator.clipboard.writeText(fullUrl);
-                    alert("Link copied to clipboard!");
+                hidePageLoader();
+
+                if (res.ok) {
+                    const fullUrl = window.location.origin + data.portal_url;
+                    document.getElementById("generated-chat-url").textContent = fullUrl;
+                    document.getElementById("chatLinkModal").style.display = "flex";
+                } else {
+                    alert("Failed to generate link: " + (data.detail || "Unknown error"));
                 }
-             } catch (err) {
-                 alert("Failed to initiate chat.");
-             }
-         }
+            } catch (err) {
+                hidePageLoader();
+                alert("Connection failed.");
+            }
+        }
+
+        async function copyChatLink(e) {
+            const url = document.getElementById("generated-chat-url").textContent;
+            await navigator.clipboard.writeText(url);
+            const btn = e.currentTarget;
+            const original = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check"></i> Copied!';
+            btn.style.borderColor = "#10B981";
+            btn.style.color = "#10B981";
+            setTimeout(() => {
+                btn.innerHTML = original;
+                btn.style.borderColor = "#333";
+                btn.style.color = "#fff";
+            }, 2000);
+        }
  
          // --- CRM LEAD EDITING & LOGGING ---
          function openEditLeadForm() {
@@ -1888,12 +2248,21 @@
              } catch (err) { alert("Stage update failed."); }
          }
  
-         async function logDailyActivity(id) {
-             const activity = prompt("What was done today? (e.g. Called client, Sent proposal)");
+         function logDailyActivity(id) {
+             document.getElementById("activity-target-id").value = id;
+             document.getElementById("activity-note-input").value = "";
+             document.getElementById("activityLogModal").style.display = "flex";
+             setTimeout(() => document.getElementById("activity-note-input").focus(), 100);
+         }
+
+         async function submitActivityLog() {
+             const id = document.getElementById("activity-target-id").value;
+             const activity = document.getElementById("activity-note-input").value;
              if (!activity) return;
- 
+
              try {
-                 const res = await fetch(`/api/crm/contacts/${id}/notes`, {
+                 showPageLoader("Logging Activity...");
+                 const res = await fetch(`/api/crm/pro/contacts/${id}/notes`, {
                      method: "POST",
                      headers: { 
                          "Authorization": `Bearer ${token}`,
@@ -1901,11 +2270,18 @@
                      },
                      body: JSON.stringify({ note: activity })
                  });
+                 hidePageLoader();
+                 
                  if (res.ok) {
-                     alert("Activity logged.");
+                     document.getElementById("activityLogModal").style.display = "none";
                      loadPipeline();
+                 } else {
+                     alert("Failed to record activity.");
                  }
-             } catch (err) { alert("Failed to log activity."); }
+             } catch (err) { 
+                 hidePageLoader();
+                 alert("Network error."); 
+             }
          }
  
          // --- MULTIMEDIA CHAT LOGIC ---
@@ -2060,8 +2436,9 @@
                 });
                 const ticket = await res.json();
                 
-                document.getElementById("ticketSubject").textContent = ticket.subject;
-                document.getElementById("ticketDetailPanel").style.display = "block";
+                document.getElementById("ticketSubjectDisplay").textContent = ticket.subject;
+                document.getElementById("ticketDetailPanel").style.display = "flex";
+                switchTicketTab('details'); // Reset to details tab
                 
                 let threadHtml = '';
                 
@@ -2290,10 +2667,15 @@
                  headers: { "Authorization": `Bearer ${token}` }
              });
 
-             // Navigate if support
+             // Route based on type
              if (type === 'support' && refId) {
                 switchView('support-desk');
                 viewTicket(refId);
+                document.getElementById("notif-dropdown").classList.remove("active");
+             } else if (type === 'chat_invite' && refId) {
+                // refId is room_id
+                switchView('support-desk');
+                openChatRoomById(refId);
                 document.getElementById("notif-dropdown").classList.remove("active");
              }
              fetchNotifications();
@@ -2621,6 +3003,239 @@
                 hidePageLoader();
             }
         }
+
+         // --- GROUP CHAT LOGIC ---
+         let currentChatRoomId = null;
+         let chatSocket = null;
+         let inviteType = 'internal';
+
+         function switchTicketTab(tab) {
+             const detailsTab = document.getElementById('tab-ticket-details');
+             const chatTab = document.getElementById('tab-ticket-chat');
+             const detailsContent = document.getElementById('ticket-details-content');
+             const chatContent = document.getElementById('ticket-chat-content');
+             const responseArea = document.querySelector('.pt-4.border-t');
+
+             if(!detailsTab || !chatTab) return;
+
+             if (tab === 'details') {
+                 detailsTab.className = "text-lg font-bold border-b-2 border-amber-500 pb-1";
+                 chatTab.className = "text-lg font-bold text-gray-500 hover:text-white pb-1";
+                 detailsContent.style.display = 'block';
+                 chatContent.style.display = 'none';
+                 responseArea.style.display = 'block';
+             } else {
+                 chatTab.className = "text-lg font-bold border-b-2 border-amber-500 pb-1";
+                 detailsTab.className = "text-lg font-bold text-gray-500 hover:text-white pb-1";
+                 detailsContent.style.display = 'none';
+                 chatContent.style.display = 'flex';
+                 responseArea.style.display = 'none';
+                 
+                 loadGroupChat();
+             }
+         }
+
+         async function openChatRoomById(roomId) {
+             try {
+                 const res = await fetch(`/api/support/chat/${roomId}`, {
+                     headers: { "Authorization": `Bearer ${token}` }
+                 });
+                 if (!res.ok) throw new Error("Room not found");
+                 const data = await res.json();
+                 
+                 await viewTicket(data.ticket_id);
+                 switchTicketTab('chat');
+             } catch (e) {
+                 console.error("Error opening room", e);
+             }
+         }
+
+         async function loadGroupChat() {
+             if (!currentTicketId) return;
+             try {
+                 const res = await fetch(`/api/support/chat/room/${currentTicketId}`, {
+                     headers: { "Authorization": `Bearer ${token}` }
+                 });
+                 
+                 if (res.status === 404) {
+                     document.getElementById('chat-room-empty').style.display = 'block';
+                     document.getElementById('chat-room-active').style.display = 'none';
+                     currentChatRoomId = null;
+                     return;
+                 }
+                 
+                 const room = await res.json();
+                 currentChatRoomId = room.id;
+                 document.getElementById('chat-room-empty').style.display = 'none';
+                 document.getElementById('chat-room-active').style.display = 'flex';
+                 document.getElementById('chat-room-id-display').textContent = `ROOM: ${room.id}`;
+                 document.getElementById('chat-room-id-display').classList.remove('hidden');
+
+                 const detailRes = await fetch(`/api/support/chat/${room.id}`, {
+                     headers: { "Authorization": `Bearer ${token}` }
+                 });
+                 const detail = await detailRes.json();
+                 
+                 renderChatParticipants(detail.participants);
+                 renderChatMessages(detail.messages);
+                 initChatWebSocket(room.id);
+                 
+             } catch (e) {
+                 console.error("Error loading chat", e);
+             }
+         }
+
+         async function startGroupChat() {
+             try {
+                 const res = await fetch(`/api/support/tickets/${currentTicketId}/chat/create`, {
+                     method: 'POST',
+                     headers: { "Authorization": `Bearer ${token}` }
+                 });
+                 if (res.ok) loadGroupChat();
+             } catch (e) { alert("Failed to start chat"); }
+         }
+
+         function renderChatParticipants(participants) {
+             const container = document.getElementById('chat-participants-list');
+             if(!container) return;
+             container.innerHTML = participants.map(p => {
+                 const name = p.participant_type === 'internal' ? 'Admin' : p.external_name;
+                 return `<div class="w-8 h-8 rounded-full border-2 border-black bg-amber-500 flex items-center justify-center text-[10px] font-bold text-black" title="${name}">${name.substring(0,2).toUpperCase()}</div>`;
+             }).join('');
+         }
+
+         function renderChatMessages(messages) {
+             const container = document.getElementById('chatThread');
+             if(!container) return;
+             container.innerHTML = '';
+             [...messages].reverse().forEach(m => appendChatMessage(m));
+             container.scrollTop = container.scrollHeight;
+         }
+
+         function appendChatMessage(msg) {
+             const container = document.getElementById('chatThread');
+             if(!container) return;
+             const el = document.createElement('div');
+             
+             if (msg.message_type === 'system') {
+                 el.className = "text-center text-[10px] text-gray-500 italic my-2";
+                 el.textContent = msg.message;
+             } else {
+                 const isMe = msg.sender_admin_id === adminId;
+                 el.className = `flex flex-col ${isMe ? 'items-end' : 'items-start'}`;
+                 const sender = msg.sender_name || (msg.sender_type === 'internal' ? 'Team' : (msg.external_name || 'Guest'));
+                 
+                 el.innerHTML = `
+                    <span class="text-[9px] text-gray-500 mb-1 font-bold uppercase">${sender}</span>
+                    <div class="px-3 py-2 rounded-lg text-xs max-w-[80%] ${isMe ? 'bg-amber-600 text-white' : 'bg-[#222] text-gray-200'}">
+                        ${msg.message_type === 'file' ? `<a href="${msg.file_url}" target="_blank" class="underline"><i class="fas fa-file mr-1"></i> ${msg.message}</a>` : msg.message}
+                    </div>
+                    <span class="text-[8px] text-gray-600 mt-1">${new Date(msg.created_at).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'})}</span>
+                 `;
+             }
+             container.appendChild(el);
+             container.scrollTop = container.scrollHeight;
+         }
+
+         function initChatWebSocket(roomId) {
+             if (chatSocket) chatSocket.close();
+             const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+             chatSocket = new WebSocket(`${protocol}//${window.location.host}/api/ws/chat/${roomId}?token=${token}`);
+             
+             chatSocket.onmessage = (event) => {
+                 const data = JSON.parse(event.data);
+                 if (data.type === 'message') appendChatMessage(data);
+                 else if (data.type === 'presence') { /* update UI */ }
+             };
+         }
+
+         function openInviteModal() {
+             document.getElementById('inviteChatModal').style.display = 'flex';
+             loadInviteAdmins();
+         }
+
+         function closeInviteModal() {
+             document.getElementById('inviteChatModal').style.display = 'none';
+         }
+
+         function switchInviteType(type) {
+             inviteType = type;
+             const intBtn = document.getElementById('invite-type-internal');
+             const extBtn = document.getElementById('invite-type-external');
+             const intForm = document.getElementById('invite-form-internal');
+             const extForm = document.getElementById('invite-form-external');
+
+             if (type === 'internal') {
+                 intBtn.classList.add('border-amber-500', 'bg-amber-500/10', 'text-white');
+                 intBtn.classList.remove('border-[#333]', 'bg-black/20', 'text-gray-400');
+                 extBtn.classList.remove('border-amber-500', 'bg-amber-500/10', 'text-white');
+                 extBtn.classList.add('border-[#333]', 'bg-black/20', 'text-gray-400');
+                 intForm.style.display = 'block';
+                 extForm.style.display = 'none';
+             } else {
+                 extBtn.classList.add('border-amber-500', 'bg-amber-500/10', 'text-white');
+                 extBtn.classList.remove('border-[#333]', 'bg-black/20', 'text-gray-400');
+                 intBtn.classList.remove('border-amber-500', 'bg-amber-500/10', 'text-white');
+                 intBtn.classList.add('border-[#333]', 'bg-black/20', 'text-gray-400');
+                 extForm.style.display = 'block';
+                 intForm.style.display = 'none';
+             }
+         }
+
+         async function loadInviteAdmins() {
+             const res = await fetch("/api/sales-reps", { headers: { "Authorization": `Bearer ${token}` } });
+             const reps = await res.json();
+             const select = document.getElementById('invite-admin-id');
+             select.innerHTML = reps.map(r => `<option value="${r.id}">${r.name} (${r.role})</option>`).join('');
+         }
+
+         async function submitInvitation() {
+             const payload = { type: inviteType };
+             if (inviteType === 'internal') {
+                 payload.admin_id = document.getElementById('invite-admin-id').value;
+             } else {
+                 payload.name = document.getElementById('invite-ext-name').value;
+                 payload.email = document.getElementById('invite-ext-email').value;
+             }
+
+             try {
+                 const res = await fetch(`/api/support/chat/${currentChatRoomId}/invite`, {
+                     method: 'POST',
+                     headers: { 
+                         'Content-Type': 'application/json',
+                         'Authorization': `Bearer ${token}`
+                     },
+                     body: JSON.stringify(payload)
+                 });
+                 if (res.ok) {
+                     showNotification("Invitation sent", "success");
+                     closeInviteModal();
+                 }
+             } catch (e) { showNotification("Failed to send invitation", "error"); }
+         }
+
+         // Override submitTicketResponse to handle chat messages
+         const originalSubmitResponse = submitTicketResponse;
+         submitTicketResponse = async function() {
+             const chatTab = document.getElementById('tab-ticket-chat');
+             if (chatTab && chatTab.className.includes('amber-500')) {
+                 const msg = document.getElementById('ticketResponse').value;
+                 if (!msg) return;
+                 try {
+                     const res = await fetch(`/api/support/chat/${currentChatRoomId}/message`, {
+                         method: 'POST',
+                         headers: { 
+                             'Content-Type': 'application/json',
+                             'Authorization': `Bearer ${token}`
+                         },
+                         body: JSON.stringify({ message: msg, message_type: 'text' })
+                     });
+                     if (res.ok) document.getElementById('ticketResponse').value = '';
+                 } catch (e) { console.error(e); }
+             } else {
+                 originalSubmitResponse();
+             }
+         }
     </script>
 
     <!-- ADD PROPERTY MODAL -->
@@ -2728,6 +3343,52 @@
         <div class="loader-card">
             <div class="spinner"></div>
             <div id="pageLoaderMessage" class="loader-text">Loading CRM dashboard...</div>
+        </div>
+    </div>
+    <!-- MODAL: INVITE TO CHAT -->
+    <div id="inviteChatModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center;">
+        <div class="modal-content" style="background: #1A1A1A; width: 450px; border-radius: 16px; border: 1px solid #333; overflow: hidden;">
+            <div style="padding: 24px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="font-size: 18px; font-weight: 800; color: #fff;">Invite to Chat</h2>
+                <button onclick="closeInviteModal()" style="color: #666;"><i class="fas fa-times"></i></button>
+            </div>
+            
+            <div style="padding: 24px;">
+                <div class="flex gap-4 mb-6">
+                    <button id="invite-type-internal" class="flex-1 p-3 rounded-lg border border-amber-500 bg-amber-500/10 text-white font-bold text-xs" onclick="switchInviteType('internal')">
+                        <i class="fas fa-user-shield block mb-2 text-lg"></i>
+                        Internal Rep
+                    </button>
+                    <button id="invite-type-external" class="flex-1 p-3 rounded-lg border border-[#333] bg-black/20 text-gray-400 font-bold text-xs" onclick="switchInviteType('external')">
+                        <i class="fas fa-user-tie block mb-2 text-lg"></i>
+                        External Guest
+                    </button>
+                </div>
+
+                <!-- Internal Form -->
+                <div id="invite-form-internal">
+                    <label class="block text-[10px] font-black uppercase text-gray-500 tracking-widest mb-2">Select Team Member</label>
+                    <select id="invite-admin-id" class="w-full bg-[#0A0A0A] border border-[#333] rounded-lg p-3 text-white outline-none focus:border-amber-500 mb-6">
+                        <option value="">Loading admins...</option>
+                    </select>
+                </div>
+
+                <!-- External Form -->
+                <div id="invite-form-external" style="display: none;">
+                    <div class="mb-4">
+                        <label class="block text-[10px] font-black uppercase text-gray-500 tracking-widest mb-2">Full Name</label>
+                        <input type="text" id="invite-ext-name" placeholder="John Doe" class="w-full bg-[#0A0A0A] border border-[#333] rounded-lg p-3 text-white outline-none focus:border-amber-500">
+                    </div>
+                    <div class="mb-6">
+                        <label class="block text-[10px] font-black uppercase text-gray-500 tracking-widest mb-2">Email Address</label>
+                        <input type="email" id="invite-ext-email" placeholder="john@lawfirm.com" class="w-full bg-[#0A0A0A] border border-[#333] rounded-lg p-3 text-white outline-none focus:border-amber-500">
+                    </div>
+                </div>
+
+                <button class="btn btn-primary w-full py-4" onclick="submitInvitation()">
+                    <i class="fas fa-paper-plane mr-2"></i> Send Invitation
+                </button>
+            </div>
         </div>
     </div>
 </body>

@@ -1,7 +1,7 @@
 import logging
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
-from database import supabase
+from database import supabase, db_execute, try_claim_job
 from report_service import ReportService
 from email_service import send_report_email
 from datetime import datetime, timedelta
@@ -22,9 +22,15 @@ scheduler = AsyncIOScheduler()
 
 async def run_scheduled_report(schedule_id: str):
     """Generate and email a scheduled report."""
+    job_key = f"report_{schedule_id}_{datetime.now().strftime('%Y-%m-%d_%H')}"
+    # Use a 50-minute threshold for hourly/daily reports to allow only one run per window
+    if not await try_claim_job(job_key, threshold_mins=50):
+        logger.info(f"Report {schedule_id} already claimed by another worker, skipping.")
+        return
+
     try:
         # 1. Get schedule details
-        res = supabase.table("report_schedules").select("*").eq("id", schedule_id).execute()
+        res = await db_execute(lambda: supabase.table("report_schedules").select("*").eq("id", schedule_id).execute())
         if not res.data:
             logger.warning(f"Schedule {schedule_id} not found, skipping.")
             return
@@ -50,7 +56,6 @@ async def run_scheduled_report(schedule_id: str):
         elif freq == "weekly":
             start_date = end_date - timedelta(days=7)
         else:  # monthly
-            # Calculate the first day and last day of the previous month
             first_day_current_month = end_date.replace(day=1)
             last_day_prev_month = first_day_current_month - timedelta(days=1)
             start_date = last_day_prev_month.replace(day=1)
@@ -64,10 +69,11 @@ async def run_scheduled_report(schedule_id: str):
         title = f"Scheduled {report_data['type']} ({start_str} to {end_str})"
 
         if fmt == "excel":
-            file_obj = ReportService.generate_excel(report_data, title)
+            # generate_excel and generate_pdf are usually CPU-bound and involve IO, wrapping for safety
+            file_obj = await asyncio.get_event_loop().run_in_executor(None, lambda: ReportService.generate_excel(report_data, title))
             attachment_name = f"{report_data['type'].replace(' ', '_')}_{start_str}.xlsx"
         else:
-            file_obj = ReportService.generate_pdf(report_data, title)
+            file_obj = await asyncio.get_event_loop().run_in_executor(None, lambda: ReportService.generate_pdf(report_data, title))
             attachment_name = f"{report_data['type'].replace(' ', '_')}_{start_str}.pdf"
 
         # 4. Send via Resend
@@ -78,8 +84,9 @@ async def run_scheduled_report(schedule_id: str):
 
         file_bytes = file_obj.getvalue()
 
+        # Wrap Resend call in executor (Culprit 6 fix pattern)
         try:
-            resend.Emails.send({
+            email_payload = {
                 "from": f"Eximp & Cloves Reports <{from_email}>",
                 "to": recipients,
                 "subject": f"Scheduled Report: {report_data['type']} - {start_str} to {end_str}",
@@ -88,44 +95,50 @@ async def run_scheduled_report(schedule_id: str):
                     "filename": attachment_name,
                     "content": list(file_bytes),
                 }],
-            })
+            }
+            await asyncio.get_event_loop().run_in_executor(None, lambda: resend.Emails.send(email_payload))
             logger.info(f"Scheduled report '{title}' emailed to {recipients}")
         except Exception as email_err:
             logger.error(f"Failed to email report: {email_err}")
 
         # 5. Update last_run timestamp
-        supabase.table("report_schedules").update({
+        await db_execute(lambda: supabase.table("report_schedules").update({
             "last_run": datetime.now().isoformat()
-        }).eq("id", schedule_id).execute()
+        }).eq("id", schedule_id).execute())
 
     except Exception as e:
         logger.error(f"Error running scheduled report {schedule_id}: {str(e)}")
 
 
 async def process_appointment_reminders():
-    """Check for appointments starting in ~2 hours and send reminders."""
+    """Find appointments due in 2-3 hours and send email reminders."""
+    # Claim for this 30-min window
+    job_key = f"appointment_reminders_{datetime.now().strftime('%Y-%m-%d_%H_%M')[:15]}0" # bucket to 30 mins
+    if not await try_claim_job(job_key, threshold_mins=25):
+        return
+
     try:
         now = datetime.now()
         two_hours_later = now + timedelta(hours=2)
         three_hours_later = now + timedelta(hours=3)
         
         # We look for appointments in the next 2-3 hour window that haven't had a reminder
-        res = supabase.table("appointments")\
+        res = await db_execute(lambda: supabase.table("appointments")\
             .select("*")\
             .is_("reminder_sent_at", "null")\
             .eq("status", "scheduled")\
             .gte("scheduled_at", two_hours_later.isoformat())\
             .lte("scheduled_at", three_hours_later.isoformat())\
-            .execute()
+            .execute())
             
         appointments = res.data or []
         for appt in appointments:
             logger.info(f"Sending reminder for appointment {appt['id']} to {appt['contact_email']}")
             sent = await send_appointment_reminder_email(appt)
             if sent:
-                supabase.table("appointments").update({
+                await db_execute(lambda: supabase.table("appointments").update({
                     "reminder_sent_at": datetime.now().isoformat()
-                }).eq("id", appt["id"]).execute()
+                }).eq("id", appt["id"]).execute())
                 
     except Exception as e:
         logger.error(f"Error in appointment reminder job: {e}")
@@ -133,16 +146,21 @@ async def process_appointment_reminders():
 
 async def process_support_nudges():
     """Find tickets with no client response for 1 hour and send a nudge."""
+    # Claim for this 30-min window
+    job_key = f"support_nudges_{datetime.now().strftime('%Y-%m-%d_%H_%M')[:15]}0"
+    if not await try_claim_job(job_key, threshold_mins=25):
+        return
+
     try:
         # Find tickets where admin responded > 1hr ago and no nudge sent yet
         one_hour_ago = (datetime.utcnow() - timedelta(hours=1)).isoformat()
         
-        res = supabase.table("support_tickets")\
+        res = await db_execute(lambda: supabase.table("support_tickets")\
             .select("*")\
             .eq("status", "pending")\
             .lt("last_admin_response_at", one_hour_ago)\
             .is_("followup_sent_at", "null")\
-            .execute()
+            .execute())
             
         if not res.data:
             return
@@ -153,9 +171,9 @@ async def process_support_nudges():
             await send_followup_nudge_email(ticket)
             
             # Mark as sent
-            supabase.table("support_tickets").update({
+            await db_execute(lambda: supabase.table("support_tickets").update({
                 "followup_sent_at": datetime.utcnow().isoformat()
-            }).eq("id", ticket["id"]).execute()
+            }).eq("id", ticket["id"]).execute())
             
     except Exception as e:
         logger.error(f"Error processing support nudges: {e}")
@@ -197,7 +215,7 @@ async def sync_schedules_from_db():
     """Load all active schedules from DB and register them as APScheduler jobs."""
     try:
         # Using a fresh query to verify table presence
-        res = supabase.table("report_schedules").select("*").eq("is_active", True).execute()
+        res = await db_execute(lambda: supabase.table("report_schedules").select("*").eq("is_active", True).execute())
         schedules = res.data or []
 
         # Remove all existing report jobs first

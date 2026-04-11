@@ -105,6 +105,16 @@ class PropertyUpdate(BaseModel):
 
 
 # ─── INVOICES ────────────────────────────────────────────────
+class InvoiceVoid(BaseModel):
+    reason: str
+    amount_reversed: Optional[Decimal] = 0
+    notify_client: Optional[bool] = False
+
+
+class ActivityNote(BaseModel):
+    note: str
+
+
 class InvoiceCreate(BaseModel):
     client_id: str
     property_id: Optional[str] = None
@@ -567,3 +577,14 @@ class TicketResponseCreate(BaseModel):
     ticket_id: str
     message: str
     is_internal: bool = False
+
+# ─── GROUP CHAT ──────────────────────────────────────────────
+class ChatInviteRequest(BaseModel):
+    type: str # 'internal' or 'external'
+    admin_id: Optional[str] = None
+    name: Optional[str] = None
+    email: Optional[str] = None
+
+class ChatMessageRequest(BaseModel):
+    message: str
+    message_type: str = "text"

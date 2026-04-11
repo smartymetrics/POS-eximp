@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Optional
 from pydantic import BaseModel
-from database import get_db
+from database import get_db, db_execute
 from routers.auth import verify_token
 from datetime import datetime
 
@@ -26,28 +26,28 @@ async def get_notifications(unread_only: bool = False, current_admin=Depends(ver
     if unread_only:
         query = query.eq("is_read", False)
         
-    res = query.execute()
+    res = await db_execute(lambda: query.execute())
     return res.data
 
 @router.patch("/{notification_id}/read")
 async def mark_as_read(notification_id: str, current_admin=Depends(verify_token)):
     db = get_db()
-    res = db.table("notifications").update({"is_read": True}).eq("id", notification_id).eq("admin_id", current_admin["sub"]).execute()
+    res = await db_execute(lambda: db.table("notifications").update({"is_read": True}).eq("id", notification_id).eq("admin_id", current_admin["sub"]).execute())
     return {"status": "ok"}
 
 @router.post("/mark-all-read")
 async def mark_all_read(current_admin=Depends(verify_token)):
     db = get_db()
-    db.table("notifications").update({"is_read": True}).eq("admin_id", current_admin["sub"]).eq("is_read", False).execute()
+    await db_execute(lambda: db.table("notifications").update({"is_read": True}).eq("admin_id", current_admin["sub"]).eq("is_read", False).execute())
     return {"status": "ok"}
 
 # Utility function for other routers to create notifications
-def create_notification(admin_id: str, title: str, message: str, n_type: str = "general", ref_id: Optional[str] = None):
+async def create_notification(admin_id: str, title: str, message: str, n_type: str = "general", ref_id: Optional[str] = None):
     db = get_db()
-    db.table("notifications").insert({
+    await db_execute(lambda: db.table("notifications").insert({
         "admin_id": admin_id,
         "title": title,
         "message": message,
         "notification_type": n_type,
         "reference_id": ref_id
-    }).execute()
+    }).execute())

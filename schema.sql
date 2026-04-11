@@ -524,6 +524,23 @@ CREATE TABLE IF NOT EXISTS marketing_segments (
 
 ALTER TABLE marketing_segments ENABLE ROW LEVEL SECURITY;
 
+-- 4. MARKETING CALENDAR EVENTS
+CREATE TABLE IF NOT EXISTS marketing_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name TEXT NOT NULL,
+    event_date DATE NOT NULL,
+    action TEXT,
+    event_type TEXT DEFAULT 'custom',
+    is_recurring BOOLEAN DEFAULT FALSE,
+    frequency TEXT CHECK (frequency IN ('weekly', 'monthly', 'yearly')),
+    end_date DATE,
+    created_at TIMESTAMP WITH TIME ZONE DEFAULT NOW(),
+    created_by UUID REFERENCES admins(id)
+);
+
+CREATE INDEX IF NOT EXISTS idx_marketing_events_date ON marketing_events(event_date);
+ALTER TABLE marketing_events ENABLE ROW LEVEL SECURITY;
+
 -- 4. CAMPAIGN SEGMENTS (Join table)
 CREATE TABLE IF NOT EXISTS campaign_segments (
   campaign_id UUID REFERENCES email_campaigns(id) ON DELETE CASCADE,

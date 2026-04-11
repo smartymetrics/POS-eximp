@@ -2,7 +2,7 @@ from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from fastapi.encoders import jsonable_encoder
 from models import VerificationConfirm, VerificationReject, VerificationUpdate
 from database import get_db
-from routers.auth import verify_token
+from routers.auth import verify_token, has_any_role
 from email_service import send_receipt_and_statement_email, send_rejection_email, send_commission_earned_email
 from routers.analytics import log_activity
 from datetime import datetime, date
@@ -15,9 +15,9 @@ router = APIRouter()
 @router.get("/")
 async def list_verifications(current_admin=Depends(verify_token)):
     db = get_db()
-    # Fetch pending verifications with client and invoice info
+    # Fetch pending verifications with client, invoice, and subscription info
     result = db.table("pending_verifications")\
-        .select("*, clients(full_name, email), invoices(invoice_number, property_name, plot_size_sqm, amount, amount_paid, signature_url)")\
+        .select("*, clients(full_name, email), invoices(invoice_number, property_name, plot_size_sqm, amount, amount_paid, signature_url), property_subscriptions(passport_photo_url, nin_document_url, international_passport_url, occupation, residential_address)")\
         .order("created_at", desc=True)\
         .execute()
     return result.data
@@ -40,6 +40,9 @@ async def confirm_verification(
     db = get_db()
     
     # 1. Fetch verification record
+    if not has_any_role(current_admin, "admin", "super_admin", "operations"):
+        raise HTTPException(status_code=403, detail="Unauthorized: Only admins can confirm verifications")
+
     v_res = db.table("pending_verifications").select("*").eq("id", id).execute()
     if not v_res.data:
         raise HTTPException(status_code=404, detail="Verification record not found")
@@ -171,6 +174,9 @@ async def reject_verification(
     db = get_db()
     
     # 1. Fetch verification record
+    if not has_any_role(current_admin, "admin", "super_admin", "operations"):
+        raise HTTPException(status_code=403, detail="Unauthorized: Only admins can reject verifications")
+
     v_res = db.table("pending_verifications").select("*").eq("id", id).execute()
     if not v_res.data:
         raise HTTPException(status_code=404, detail="Verification record not found")

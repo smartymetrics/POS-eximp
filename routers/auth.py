@@ -35,6 +35,19 @@ def verify_token(credentials: HTTPAuthorizationCredentials = Depends(security)):
         raise HTTPException(status_code=401, detail="Invalid token")
 
 
+def verify_token_optional(authorization: str = Header(None)):
+    if not authorization:
+        return None
+    try:
+        scheme, credentials = authorization.split()
+        if scheme.lower() != "bearer":
+            return None
+        payload = jwt.decode(credentials, SECRET_KEY, algorithms=[ALGORITHM])
+        return payload
+    except:
+        return None
+
+
 def has_any_role(admin_payload: dict, *roles: str) -> bool:
     """Check if the admin has any of the given roles (supports comma-separated multi-role)."""
     user_roles = {r.strip() for r in (admin_payload.get("role") or "").split(",") if r.strip()}

@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS marketing_events (
     frequency TEXT CHECK (frequency IN ('weekly', 'monthly', 'yearly')),
     end_date DATE,
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now()),
-    created_by UUID REFERENCES auth.users(id)
+    created_by UUID REFERENCES admins(id)
 );
 
 -- Index for date-based lookups

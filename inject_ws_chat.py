@@ -1,74 +1,13 @@
-from fastapi import APIRouter, WebSocket, WebSocketDisconnect
-from typing import Dict, List, Optional
-from dataclasses import dataclass
-import jwt
-from database import get_db, db_execute
-import json
-import asyncio
 import os
 
-router = APIRouter()
+with open("routers/ws_support.py", "r", encoding="utf-8") as f:
+    content = f.read()
 
-class ConnectionManager:
-    def __init__(self):
-        # ticket_id -> list of active websockets
-        self.active_connections: Dict[str, List[WebSocket]] = {}
+# Add dataclass and new imports
+if "from dataclasses import dataclass" not in content:
+    content = content.replace("from typing import Dict, List", "from typing import Dict, List, Optional\nfrom dataclasses import dataclass\nimport jwt\nfrom database import get_db, db_execute")
 
-    async def connect(self, websocket: WebSocket, ticket_id: str):
-        await websocket.accept()
-        if ticket_id not in self.active_connections:
-            self.active_connections[ticket_id] = []
-        self.active_connections[ticket_id].append(websocket)
-
-    def disconnect(self, websocket: WebSocket, ticket_id: str):
-        if ticket_id in self.active_connections:
-            self.active_connections[ticket_id].remove(websocket)
-            if not self.active_connections[ticket_id]:
-                del self.active_connections[ticket_id]
-
-    async def broadcast(self, message: dict, ticket_id: str, exclude: WebSocket = None):
-        if ticket_id in self.active_connections:
-            for connection in self.active_connections[ticket_id]:
-                if connection != exclude:
-                    await connection.send_json(message)
-
-manager = ConnectionManager()
-
-async def keepalive_ping(websocket: WebSocket):
-    try:
-        while True:
-            await asyncio.sleep(25)
-            await websocket.send_text("ping")
-    except asyncio.CancelledError:
-        pass
-    except Exception:
-        pass
-
-@router.websocket("/ws/support/{ticket_id}")
-async def support_websocket_endpoint(websocket: WebSocket, ticket_id: str):
-    await manager.connect(websocket, ticket_id)
-    ping_task = asyncio.create_task(keepalive_ping(websocket))
-    try:
-        while True:
-            # Wait for data from the client
-            data = await websocket.receive_text()
-            if data == "pong":
-                continue
-                
-            message = json.loads(data)
-            
-            # Broadcast the signal (new message, typing indicator, etc.)
-            # We add ticket_id to ensure the signal is scoped
-            await manager.broadcast(message, ticket_id, exclude=websocket)
-            
-    except WebSocketDisconnect:
-        manager.disconnect(websocket, ticket_id)
-    except Exception as e:
-        print(f"WS Error: {e}")
-        manager.disconnect(websocket, ticket_id)
-    finally:
-        ping_task.cancel()
-
+chat_ws_code = """
 
 @dataclass
 class ConnectionInfo:
@@ -128,14 +67,11 @@ async def chat_websocket_endpoint(websocket: WebSocket, room_id: str, token: str
     try:
         # A token could be either a valid admin JWT or a session_token string.
         # We will decode it.
-        # DYNAMIC SECRET: Match auth.py default
-        secret = os.getenv("JWT_SECRET", "eximp-cloves-secret-key-change-in-production")
-        payload = jwt.decode(token, secret, algorithms=["HS256"], options={"verify_exp": False})
+        payload = jwt.decode(token, os.getenv("JWT_SECRET", "super-secret"), algorithms=["HS256"], options={"verify_exp": False})
         
         if payload.get("type") == "external_chat":
             # Session token
             if payload.get("room_id") != room_id:
-                print(f"WS Reject: Room ID mismatch. Token={payload.get('room_id')}, Path={room_id}")
                 await websocket.close(code=4001)
                 return
             participant_id = payload.get("sub")
@@ -143,7 +79,6 @@ async def chat_websocket_endpoint(websocket: WebSocket, room_id: str, token: str
             # Admin JWT
             admin_id = payload.get("sub")
     except Exception as e:
-        print(f"WS Reject: Auth failed. Error: {e}")
         await websocket.close(code=4001)
         return
         
@@ -199,3 +134,11 @@ async def chat_websocket_endpoint(websocket: WebSocket, room_id: str, token: str
         await chat_manager.broadcast({
             "type": "presence", "event": "left", "participant_id": participant_id, "display_name": display_name
         }, room_id)
+"""
+
+if "ChatConnectionManager" not in content:
+    with open("routers/ws_support.py", "w", encoding="utf-8") as f:
+        f.write(content + chat_ws_code)
+        print("ws_support router updated successfully.")
+else:
+    print("ws_support router already contains chat endpoints.")

@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Query
 from typing import List, Optional
 from datetime import datetime, date, timedelta
-from database import get_db
+from database import get_db, db_execute
 from routers.auth import verify_token
 from models import (
     KPISummary, KPIDelta, RevenueTrend, EstateStat, 
@@ -28,13 +28,13 @@ async def get_kpis(
     
     # 1. Total Invoiced (Gross)
     invoiced_query = db.table("invoices").select("amount").filter("invoice_date", "gte", start.isoformat()).filter("invoice_date", "lte", end.isoformat()).neq("status", "voided")
-    invoiced_data = invoiced_query.execute().data
+    invoiced_data = (await db_execute(lambda: invoiced_query.execute())).data
     gross_revenue = sum(float(i["amount"]) for i in invoiced_data) if is_admin else 0
     plots_sold = len(invoiced_data)
     
     # 2. Amount Collected & Refunds
     collected_query = db.table("payments").select("amount, payment_type").filter("payment_date", "gte", start.isoformat()).filter("payment_date", "lte", end.isoformat()).eq("is_voided", False)
-    collected_data = collected_query.execute().data
+    collected_data = (await db_execute(lambda: collected_query.execute())).data
     
     total_refunds = sum(float(p["amount"]) for p in collected_data if p.get("payment_type") == "refund")
     amount_collected = sum(float(p["amount"]) for p in collected_data if p.get("payment_type") != "refund") - total_refunds
@@ -44,10 +44,10 @@ async def get_kpis(
     
     # 3. New Clients
     clients_query = db.table("clients").select("id", count="exact").filter("created_at", "gte", start.isoformat()).filter("created_at", "lte", end.isoformat() + "T23:59:59")
-    new_clients = clients_query.execute().count
+    new_clients = (await db_execute(lambda: clients_query.execute())).count
     
     # 4. Pending Verifications (Always live)
-    pending_count = db.table("pending_verifications").select("id", count="exact").eq("status", "pending").execute().count
+    pending_count = (await db_execute(lambda: db.table("pending_verifications").select("id", count="exact").eq("status", "pending").execute())).count
     
     # 5. Dynamic Status Counts (Overdue / Partial)
     # Fetch all relevant invoices to resolve status dynamically
@@ -57,7 +57,7 @@ async def get_kpis(
          # but usually KPIs are restricted. Line 31 already handles is_admin for totals.
          pass
     
-    all_inv_data = all_inv_query.execute().data
+    all_inv_data = (await db_execute(lambda: all_inv_query.execute())).data
     overdue_count = 0
     partial_count = 0
     
@@ -78,19 +78,19 @@ async def get_kpis(
     if is_admin:
         prev_start, prev_end = get_previous_period(start, end)
         # Prev Revenue (Net)
-        prev_rev_data = db.table("invoices").select("amount").filter("invoice_date", "gte", prev_start.isoformat()).filter("invoice_date", "lte", prev_end.isoformat()).neq("status", "voided").execute().data
-        prev_refund_data = db.table("payments").select("amount").filter("payment_date", "gte", prev_start.isoformat()).filter("payment_date", "lte", prev_end.isoformat()).eq("payment_type", "refund").eq("is_voided", False).execute().data
+        prev_rev_data = (await db_execute(lambda: db.table("invoices").select("amount").filter("invoice_date", "gte", prev_start.isoformat()).filter("invoice_date", "lte", prev_end.isoformat()).neq("status", "voided").execute())).data
+        prev_refund_data = (await db_execute(lambda: db.table("payments").select("amount").filter("payment_date", "gte", prev_start.isoformat()).filter("payment_date", "lte", prev_end.isoformat()).eq("payment_type", "refund").eq("is_voided", False).execute())).data
         prev_revenue = sum(float(i["amount"]) for i in prev_rev_data) - sum(float(r["amount"]) for r in prev_refund_data)
         
         # Prev Collected
-        prev_col_data = db.table("payments").select("amount, payment_type").filter("payment_date", "gte", prev_start.isoformat()).filter("payment_date", "lte", prev_end.isoformat()).eq("is_voided", False).execute().data
+        prev_col_data = (await db_execute(lambda: db.table("payments").select("amount, payment_type").filter("payment_date", "gte", prev_start.isoformat()).filter("payment_date", "lte", prev_end.isoformat()).eq("is_voided", False).execute())).data
         prev_collected = sum(
             float(p["amount"]) if p.get("payment_type") != "refund" else -float(p["amount"])
             for p in prev_col_data
         )
         
         # Prev Clients
-        prev_clients = db.table("clients").select("id", count="exact").filter("created_at", "gte", prev_start.isoformat()).filter("created_at", "lte", prev_end.isoformat() + "T23:59:59").execute().count
+        prev_clients = (await db_execute(lambda: db.table("clients").select("id", count="exact").filter("created_at", "gte", prev_start.isoformat()).filter("created_at", "lte", prev_end.isoformat() + "T23:59:59").execute())).count
         
         # Prev Refunds
         prev_refunds = sum(float(r["amount"]) for r in prev_refund_data)
@@ -129,8 +129,8 @@ async def get_revenue_trend(
         
     db = get_db()
     # Fetch all invoices and payments in period
-    invoices = db.table("invoices").select("amount", "invoice_date").filter("invoice_date", "gte", start.isoformat()).filter("invoice_date", "lte", end.isoformat()).neq("status", "voided").execute().data
-    payments = db.table("payments").select("amount", "payment_date", "payment_type").filter("payment_date", "gte", start.isoformat()).filter("payment_date", "lte", end.isoformat()).eq("is_voided", False).execute().data
+    invoices = (await db_execute(lambda: db.table("invoices").select("amount", "invoice_date").filter("invoice_date", "gte", start.isoformat()).filter("invoice_date", "lte", end.isoformat()).neq("status", "voided").execute())).data
+    payments = (await db_execute(lambda: db.table("payments").select("amount", "payment_date", "payment_type").filter("payment_date", "gte", start.isoformat()).filter("payment_date", "lte", end.isoformat()).eq("is_voided", False).execute())).data
     
     # Aggregate by date
     labels = []
@@ -164,7 +164,7 @@ async def get_estates(
         raise HTTPException(status_code=403, detail="Restricted")
         
     db = get_db()
-    data = db.table("invoices").select("property_name", "amount").filter("invoice_date", "gte", start.isoformat()).filter("invoice_date", "lte", end.isoformat()).neq("status", "voided").execute().data
+    data = (await db_execute(lambda: db.table("invoices").select("property_name", "amount").filter("invoice_date", "gte", start.isoformat()).filter("invoice_date", "lte", end.isoformat()).neq("status", "voided").execute())).data
     
     stats = {}
     for item in data:
@@ -183,7 +183,7 @@ async def get_payment_status(
     admin: dict = Depends(verify_token)
 ):
     db = get_db()
-    data = db.table("invoices").select("amount, amount_paid, due_date, status").filter("invoice_date", "gte", start.isoformat()).filter("invoice_date", "lte", end.isoformat()).neq("status", "voided").execute().data
+    data = (await db_execute(lambda: db.table("invoices").select("amount, amount_paid, due_date, status").filter("invoice_date", "gte", start.isoformat()).filter("invoice_date", "lte", end.isoformat()).neq("status", "voided").execute())).data
     
     stats = {"paid": 0, "partial": 0, "unpaid": 0, "overdue": 0}
     for inv in data:
@@ -200,7 +200,7 @@ async def get_referral_sources(
     admin: dict = Depends(verify_token)
 ):
     db = get_db()
-    data = db.table("clients").select("referral_source").filter("created_at", "gte", start.isoformat()).filter("created_at", "lte", end.isoformat() + "T23:59:59").execute().data
+    data = (await db_execute(lambda: db.table("clients").select("referral_source").filter("created_at", "gte", start.isoformat()).filter("created_at", "lte", end.isoformat() + "T23:59:59").execute())).data
     
     sources = {}
     for item in data:
@@ -217,11 +217,11 @@ async def get_activity(
 ):
     db = get_db()
     # Join with admins to get perforemed_by name
-    data = db.table("activity_log")\
+    data = (await db_execute(lambda: db.table("activity_log")\
         .select("*, admins(full_name)")\
         .order("created_at", desc=True)\
         .range(offset, offset + limit - 1)\
-        .execute().data
+        .execute())).data
         
     activity = []
     for item in data:
@@ -247,12 +247,12 @@ async def get_rep_leaderboard(
         raise HTTPException(status_code=403, detail="Restricted")
         
     db = get_db()
-    data = db.table("invoices")\
+    data = (await db_execute(lambda: db.table("invoices")\
         .select("sales_rep_name, amount, property_name, payments(amount, is_voided, payment_type)")\
         .filter("invoice_date", "gte", start.isoformat())\
         .filter("invoice_date", "lte", end.isoformat())\
         .neq("status", "voided")\
-        .execute().data
+        .execute())).data
         
     reps = {}
     for item in data:
@@ -315,6 +315,6 @@ async def log_activity(
         if performed_by and performed_by != "system":
             insert_data["performed_by"] = performed_by
             
-        db.table("activity_log").insert(insert_data).execute()
+        await db_execute(lambda: db.table("activity_log").insert(insert_data).execute())
     except Exception as e:
         print(f"Error logging activity: {e}")

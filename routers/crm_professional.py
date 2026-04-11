@@ -1,12 +1,12 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, Query
-from database import get_db
+from database import get_db, db_execute
 from routers.auth import verify_token, require_roles
 from datetime import datetime, timedelta
 import json
 from typing import Optional
 from decimal import Decimal
 import statistics
-from models import PropertyCreate
+from models import PropertyCreate, ActivityNote
 
 router = APIRouter()
 
@@ -221,7 +221,7 @@ async def score_all_leads(current_admin=Depends(verify_token)):
     if is_restricted:
         query = query.eq("assigned_rep_id", admin_id)
         
-    clients_data = query.execute().data or []
+    clients_data = (await db_execute(lambda: query.execute())).data or []
     if not clients_data:
         return {"total_leads": 0, "hot_leads": 0, "warm_leads": 0, "prioritized_leads": []}
 
@@ -229,22 +229,22 @@ async def score_all_leads(current_admin=Depends(verify_token)):
     
     # 2. Fetch related data in bulk chunks (limit N+1)
     # PostgREST allows .in_ for bulk matching
-    all_invoices = db.table("invoices")\
+    all_invoices = (await db_execute(lambda: db.table("invoices")\
         .select("client_id, status, amount")\
         .neq("status", "voided")\
         .in_("client_id", client_ids)\
-        .execute().data or []
+        .execute())).data or []
         
-    all_activities = db.table("activity_log")\
+    all_activities = (await db_execute(lambda: db.table("activity_log")\
         .select("client_id, created_at")\
         .in_("client_id", client_ids)\
-        .execute().data or []
+        .execute())).data or []
         
-    all_commissions = db.table("commission_earnings")\
+    all_commissions = (await db_execute(lambda: db.table("commission_earnings")\
         .select("client_id, commission_amount")\
         .eq("is_voided", False)\
         .in_("client_id", client_ids)\
-        .execute().data or []
+        .execute())).data or []
 
     # 3. Create indices for O(1) in-memory lookup
     inv_map = {}
@@ -501,7 +501,7 @@ async def list_all_documents(
     # if is_restricted:
     #     inv_query = inv_query.eq("clients.assigned_rep_id", admin_id)
 
-    invoices = inv_query.execute().data or []
+    invoices = (await db_execute(lambda: inv_query.execute())).data or []
     print(f"DEBUG: All invoices found: {len(invoices)}")
 
     # For sales reps: drop any invoices where client didn't match (PostgREST returns null client on no match)
@@ -517,20 +517,20 @@ async def list_all_documents(
     invoice_ids = [inv["id"] for inv in invoices]
 
     # ── Query 2: Latest signing session per invoice (no witness details) ──
-    sessions_res = db.table("contract_signing_sessions") \
+    sessions_res = (await db_execute(lambda: db.table("contract_signing_sessions") \
         .select("id, invoice_id, status, expires_at, created_at") \
         .in_("invoice_id", invoice_ids) \
         .order("created_at", desc=True) \
-        .execute().data or []
+        .execute())).data or []
 
     # ── Query 3: Witness counts per session (just IDs — no heavy data) ──
     session_ids = [s["id"] for s in sessions_res]
     witness_counts: dict = {}
     if session_ids:
-        witnesses_res = db.table("witness_signatures") \
+        witnesses_res = (await db_execute(lambda: db.table("witness_signatures") \
             .select("session_id") \
             .in_("session_id", session_ids) \
-            .execute().data or []
+            .execute())).data or []
         for w in witnesses_res:
             sid = w["session_id"]
             witness_counts[sid] = witness_counts.get(sid, 0) + 1
@@ -1115,6 +1115,34 @@ async def get_activity_logs(
         
     res = query.execute()
     return res.data or []
+
+
+@router.post("/contacts/{contact_id}/notes")
+async def log_contact_note(
+    contact_id: str,
+    data: ActivityNote,
+    current_admin=Depends(verify_token)
+):
+    db = get_db()
+    
+    # Verify contact exists
+    client = db.table("clients").select("id").eq("id", contact_id).execute()
+    if not client.data:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    # Insert activity log
+    res = db.table("activity_log").insert({
+        "client_id": contact_id,
+        "event_type": "manual_note",
+        "description": data.note,
+        "performed_by": current_admin["sub"],
+        "created_at": datetime.utcnow().isoformat()
+    }).execute()
+    
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to log activity")
+    
+    return {"message": "Activity logged", "id": res.data[0]["id"]}
 
 
 # ============================================================

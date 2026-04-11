@@ -56,3 +56,56 @@ async def init_db():
 def get_db() -> Client:
     """Return the shared Supabase client for use in routers."""
     return supabase
+
+async def db_execute(query_fn):
+    """
+    Wraps a synchronous query (or any blocking function) in a thread executor
+    so it doesn't block FastAPI's async event loop.
+    
+    Usage:
+        res = await db_execute(lambda: db.table("clients").select("*").execute())
+    """
+    import asyncio
+    loop = asyncio.get_event_loop()
+    return await loop.run_in_executor(None, query_fn)
+
+
+async def try_claim_job(job_key: str, threshold_mins: int = 10):
+    """
+    Attempts to claim a job for the current worker.
+    Returns True if successfully claimed, False if another worker is already running/has run it.
+    """
+    import logging
+    from datetime import datetime, timedelta
+    logger = logging.getLogger(__name__)
+    
+    now = datetime.utcnow()
+    threshold = now - timedelta(minutes=threshold_mins)
+    
+    try:
+        # Atomic Update: Claim if last_run_at is older than threshold or never run
+        res = await db_execute(lambda: supabase.table("scheduler_locks").update({
+            "last_run_at": now.isoformat(),
+            "locked_until": (now + timedelta(minutes=threshold_mins)).isoformat()
+        }).eq("job_key", job_key).or_(f"last_run_at.lt.{threshold.isoformat()},last_run_at.is.null").execute())
+        
+        if res.data:
+            logger.info(f"Successfully claimed job: {job_key}")
+            return True
+        
+        # If no rows updated, maybe it doesn't exist yet?
+        try:
+            await db_execute(lambda: supabase.table("scheduler_locks").insert({
+                "job_key": job_key,
+                "last_run_at": now.isoformat(),
+                "locked_until": (now + timedelta(minutes=threshold_mins)).isoformat()
+            }).execute())
+            logger.info(f"Successfully claimed new job: {job_key}")
+            return True
+        except:
+            # Lost the race or already updated
+            return False
+            
+    except Exception as e:
+        logger.error(f"Error checking job claim for {job_key}: {e}")
+        return False

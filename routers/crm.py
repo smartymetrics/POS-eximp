@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, UploadFile, File
-from database import get_db
+from database import get_db, db_execute
 from routers.auth import verify_token, require_roles
 from datetime import datetime, timedelta
 import json
@@ -59,14 +59,13 @@ async def get_contact_details(client_id: str, current_admin=Depends(verify_token
     db = get_db()
     
     # Get client
-    client_result = db.table("clients").select("*").eq("id", client_id).execute()
+    client_result = await db_execute(lambda: db.table("clients").select("*").eq("id", client_id).execute())
     if not client_result.data:
         raise HTTPException(status_code=404, detail="Client not found")
     
     client = client_result.data[0]
     
-    # Get all invoices/deals
-    invoices = db.table("invoices").select("""
+    invoices = (await db_execute(lambda: db.table("invoices").select("""
         id, 
         invoice_number,
         amount, 
@@ -78,10 +77,10 @@ async def get_contact_details(client_id: str, current_admin=Depends(verify_token
         property_name,
         sales_rep_name,
         created_at
-    """).eq("client_id", client_id).order("invoice_date", desc=True).execute().data or []
+    """).eq("client_id", client_id).order("invoice_date", desc=True).execute())).data or []
     
     # Get all payments
-    payments = db.table("payments").select("""
+    payments = (await db_execute(lambda: db.table("payments").select("""
         id,
         amount,
         payment_method,
@@ -89,27 +88,27 @@ async def get_contact_details(client_id: str, current_admin=Depends(verify_token
         payment_date,
         notes,
         created_at
-    """).eq("client_id", client_id).order("payment_date", desc=True).execute().data or []
+    """).eq("client_id", client_id).order("payment_date", desc=True).execute())).data or []
     
     # Get all activities
-    activities = db.table("activity_log").select("""
+    activities = (await db_execute(lambda: db.table("activity_log").select("""
         id,
         event_type,
         description,
         performed_by,
         created_at,
         metadata
-    """).eq("client_id", client_id).order("created_at", desc=True).limit(50).execute().data or []
+    """).eq("client_id", client_id).order("created_at", desc=True).limit(50).execute())).data or []
     
     # Get email logs
-    emails = db.table("email_logs").select("""
+    emails = (await db_execute(lambda: db.table("email_logs").select("""
         id,
         email_type,
         recipient_email,
         subject,
         status,
         sent_at
-    """).eq("client_id", client_id).order("sent_at", desc=True).limit(20).execute().data or []
+    """).eq("client_id", client_id).order("sent_at", desc=True).limit(20).execute())).data or []
     
     # Calculate totals
     total_value = sum(float(i["amount"]) for i in invoices)
@@ -164,20 +163,43 @@ async def get_sales_pipeline(current_admin=Depends(verify_token)):
     result = query.order("created_at", desc=True).execute()
     all_leads = result.data or []
 
-    # 3. Group by stage in-memory
+    # 3. Synchronize with real financial data
+    client_ids = [c["id"] for c in all_leads]
+    inv_res = await db_execute(lambda: db.table("invoices").select("client_id, amount, amount_paid").in_("client_id", client_ids).neq("status", "voided").execute())
+    
+    # Map invoice totals to client_id
+    fin_map = {}
+    for inv in inv_res.data:
+        cid = inv["client_id"]
+        if cid not in fin_map: fin_map[cid] = {"total_amount": 0, "total_paid": 0}
+        fin_map[cid]["total_amount"] += float(inv["amount"] or 0)
+        fin_map[cid]["total_paid"] += float(inv["amount_paid"] or 0)
+
+    # 4. Group by stage in-memory
     stages = ["inspection", "offer", "contract", "closed"]
     pipeline = {stage: {"deals": [], "count": 0, "total_value": 0} for stage in stages}
 
     for lead in all_leads:
         stage = lead.get("pipeline_stage")
         if stage in pipeline:
-            # Map 'full_name' to 'client_name' for frontend compatibility
+            cid = lead["id"]
+            # Use real invoice amount if it exists, fallback to estimated_value
+            actual_fin = fin_map.get(cid)
+            if actual_fin:
+                lead["actual_amount"] = actual_fin["total_amount"]
+                lead["actual_paid"] = actual_fin["total_paid"]
+                # Use actual for the primary display field
+                lead["amount"] = actual_fin["total_amount"]
+            else:
+                lead["actual_amount"] = 0
+                lead["actual_paid"] = 0
+                lead["amount"] = lead.get("estimated_value", 0)
+
             lead["client_name"] = lead.get("full_name")
-            lead["amount"] = lead.get("estimated_value", 0)
             
             pipeline[stage]["deals"].append(lead)
             pipeline[stage]["count"] += 1
-            pipeline[stage]["total_value"] += float(lead.get("estimated_value") or 0)
+            pipeline[stage]["total_value"] += float(lead["amount"] or 0)
 
     return pipeline
 

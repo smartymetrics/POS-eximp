@@ -1,0 +1,463 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Join Group Chat | Eximp & Cloves</title>
+    <!-- Use similar aesthetics to the rest of the app -->
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.0.0/css/all.min.css" rel="stylesheet">
+    <style>
+        :root {
+            --primary-color: #F5A623;
+            --primary-dark: #d48b1c;
+            --secondary-color: #333333;
+            --surface-color: #ffffff;
+            --background-color: #f4f6f8;
+            --text-color: #2c3e50;
+            --text-muted: #7f8c8d;
+            --border-color: #eaeaea;
+            --danger-color: #e74c3c;
+            --success-color: #2ecc71;
+            --radius-md: 10px;
+            --radius-lg: 16px;
+            --shadow-md: 0 4px 15px rgba(0, 0, 0, 0.05);
+            --shadow-lg: 0 10px 30px rgba(0, 0, 0, 0.08);
+        }
+
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: var(--background-color);
+            color: var(--text-color);
+            margin: 0;
+            padding: 0;
+            display: flex;
+            justify-content: center;
+            align-items: center;
+            min-height: 100vh;
+        }
+
+        .container {
+            width: 100%;
+            max-width: 800px;
+            background: var(--surface-color);
+            border-radius: var(--radius-lg);
+            box-shadow: var(--shadow-lg);
+            overflow: hidden;
+            display: flex;
+            flex-direction: column;
+            margin: 20px;
+            height: 90vh;
+        }
+
+        /* ─── ONBOARDING SCREEN ─── */
+        #onboarding-screen {
+            padding: 40px;
+            text-align: center;
+            display: flex;
+            flex-direction: column;
+            justify-content: center;
+            align-items: center;
+            height: 100%;
+        }
+
+        .logo {
+            width: 80px;
+            height: 80px;
+            background: var(--primary-color);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+            font-size: 32px;
+            margin-bottom: 24px;
+        }
+
+        h1 {
+            font-size: 24px;
+            margin-bottom: 8px;
+            color: var(--secondary-color);
+        }
+
+        p {
+            color: var(--text-muted);
+            margin-bottom: 32px;
+            line-height: 1.6;
+            max-width: 400px;
+        }
+
+        .actions {
+            display: flex;
+            gap: 16px;
+        }
+
+        .btn {
+            padding: 12px 24px;
+            border-radius: var(--radius-md);
+            font-weight: 600;
+            font-size: 14px;
+            cursor: pointer;
+            border: none;
+            transition: all 0.2s ease;
+        }
+
+        .btn-primary {
+            background-color: var(--primary-color);
+            color: white;
+        }
+
+        .btn-primary:hover {
+            background-color: var(--primary-dark);
+        }
+
+        .btn-secondary {
+            background-color: #f1f2f6;
+            color: var(--secondary-color);
+        }
+
+        .btn-secondary:hover {
+            background-color: #e2e4e9;
+        }
+
+        /* ─── CHAT SCREEN ─── */
+        #chat-screen {
+            display: none;
+            height: 100%;
+            flex-direction: column;
+        }
+
+        .chat-header {
+            padding: 20px;
+            background: var(--secondary-color);
+            color: white;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-header h2 {
+            margin: 0;
+            font-size: 18px;
+            color: var(--primary-color);
+        }
+        
+        .chat-subtitle {
+            font-size: 12px;
+            color: #ccc;
+            margin-top: 4px;
+        }
+
+        .chat-body {
+            flex: 1;
+            padding: 20px;
+            overflow-y: auto;
+            background: var(--background-color);
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+        }
+
+        .message {
+            display: flex;
+            flex-direction: column;
+            max-width: 80%;
+        }
+
+        .message.self {
+            align-self: flex-end;
+            align-items: flex-end;
+        }
+
+        .message.other {
+            align-self: flex-start;
+            align-items: flex-start;
+        }
+
+        .message-sender {
+            font-size: 11px;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+            font-weight: 600;
+        }
+
+        .message-bubble {
+            padding: 12px 16px;
+            border-radius: var(--radius-md);
+            font-size: 14px;
+            line-height: 1.5;
+            box-shadow: var(--shadow-md);
+        }
+
+        .message.self .message-bubble {
+            background: var(--primary-color);
+            color: white;
+            border-bottom-right-radius: 0;
+        }
+
+        .message.other .message-bubble {
+            background: white;
+            color: var(--text-color);
+            border-bottom-left-radius: 0;
+        }
+
+        .message-system {
+            align-self: center;
+            font-size: 12px;
+            color: var(--text-muted);
+            font-style: italic;
+            text-align: center;
+            margin: 10px 0;
+            background: rgba(0,0,0,0.03);
+            padding: 6px 16px;
+            border-radius: 20px;
+        }
+
+        .chat-input-area {
+            padding: 20px;
+            background: white;
+            border-top: 1px solid var(--border-color);
+            display: flex;
+            gap: 16px;
+        }
+
+        .chat-input {
+            flex: 1;
+            padding: 14px 20px;
+            border: 1px solid var(--border-color);
+            border-radius: 30px;
+            outline: none;
+            font-family: 'Inter', sans-serif;
+            font-size: 14px;
+            transition: border-color 0.2s;
+        }
+
+        .chat-input:focus {
+            border-color: var(--primary-color);
+        }
+
+        .btn-send {
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: var(--primary-color);
+            color: white;
+            border: none;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+        }
+
+        .btn-send:hover {
+            transform: scale(1.05);
+            background: var(--primary-dark);
+        }
+        
+        .loading {
+            align-self: center;
+            color: var(--text-muted);
+            font-style: italic;
+        }
+
+    </style>
+</head>
+<body>
+
+    <div class="container">
+        <!-- ONBOARDING -->
+        <div id="onboarding-screen">
+            <div class="logo"><i class="fas fa-comments"></i></div>
+            <h1>Join Group Chat</h1>
+            {% if error %}
+                <p style="color: var(--danger-color);">{{ error }}</p>
+            {% else %}
+                <p>You have been invited by <strong>{{ inviter_name or 'a team member' }}</strong> from the <strong>{{ team_name or 'Support' }}</strong> team to join a secure group chat regarding an ongoing ticket.</p>
+                <div class="actions">
+                    <button class="btn btn-secondary" onclick="declineChat()">Decline</button>
+                    <button class="btn btn-primary" onclick="acceptChat()">Accept & Join</button>
+                </div>
+            {% endif %}
+            <p id="error-msg" style="color: var(--danger-color); margin-top: 20px; display: none;"></p>
+        </div>
+
+        <!-- CHAT -->
+        <div id="chat-screen">
+            <div class="chat-header">
+                <div>
+                    <h2>Eximp & Cloves Support</h2>
+                    <div class="chat-subtitle" id="chat-ticket-subject">Loading...</div>
+                </div>
+                <div style="font-size: 12px; display: flex; align-items: center; gap: 8px;">
+                    <span id="ws-status" style="width: 8px; height: 8px; background: var(--success-color); border-radius: 50%; display: inline-block;"></span>
+                    Secured
+                </div>
+            </div>
+            
+            <div class="chat-body" id="chat-messages">
+                <div class="loading">Loading messages...</div>
+            </div>
+            
+            <div class="chat-input-area">
+                <input type="text" class="chat-input" id="message-input" placeholder="Type a message..." onkeypress="if(event.key === 'Enter') sendMessage()">
+                <button class="btn-send" onclick="sendMessage()"><i class="fas fa-paper-plane"></i></button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const inviteToken = "{{ invite_token }}";
+        let roomData = null;
+        let ws = null;
+        let pId = null;
+
+        async function acceptChat() {
+            try {
+                // Post to join
+                const res = await fetch(`/api/support/chat/join/${inviteToken}`, { method: 'POST' });
+                if (!res.ok) {
+                    const data = await res.json();
+                    if (res.status === 409) {
+                        // Already accepted? Try to fetch via session? 
+                        // Wait, if it's 409, we don't have the session token.
+                        throw new Error(data.detail || "You have already accepted and the session is active elsewhere, or link expired.");
+                    }
+                    throw new Error(data.detail || "Failed to join chat");
+                }
+                
+                roomData = await res.json();
+                pId = roomData.participant_id;
+                
+                // Switch UI
+                document.getElementById('onboarding-screen').style.display = 'none';
+                document.getElementById('chat-screen').style.display = 'flex';
+                document.getElementById('chat-ticket-subject').innerText = 'Ticket: ' + roomData.ticket_subject;
+                
+                renderMessages(roomData.messages);
+                connectWebSocket();
+            } catch (e) {
+                const errEl = document.getElementById('error-msg');
+                errEl.innerText = e.message;
+                errEl.style.display = 'block';
+            }
+        }
+
+        async function declineChat() {
+            if(!confirm("Are you sure you want to decline this invitation?")) return;
+            try {
+                const res = await fetch(`/api/support/chat/decline/${inviteToken}`, { method: 'POST' });
+                if (res.ok) {
+                    document.querySelector('.actions').style.display = 'none';
+                    document.getElementById('error-msg').style.color = 'var(--text-muted)';
+                    document.getElementById('error-msg').innerText = "You have declined the invitation. You may close this window.";
+                    document.getElementById('error-msg').style.display = 'block';
+                }
+            } catch (e) {
+                alert("Error declining.");
+            }
+        }
+
+        function renderMessages(messages) {
+            const container = document.getElementById('chat-messages');
+            container.innerHTML = '';
+            
+            if (messages.length === 0) {
+                container.innerHTML = '<div class="message-system">No messages yet. Say hello!</div>';
+                return;
+            }
+
+            messages.forEach(msg => appendMessage(msg));
+            scrollToBottom();
+        }
+
+        function appendMessage(msg) {
+            const container = document.getElementById('chat-messages');
+            
+            if (msg.message_type === 'system') {
+                const el = document.createElement('div');
+                el.className = 'message-system';
+                el.innerText = msg.message;
+                container.appendChild(el);
+            } else {
+                const el = document.createElement('div');
+                // Determine if self
+                // Assuming sender_participant_id is populated for external
+                const isSelf = (msg.sender_participant_id === pId);
+                
+                el.className = `message ${isSelf ? 'self' : 'other'}`;
+                
+                // Get name (for broadcast payloads it might be sender_name, for API fetch we might need to resolve it if not present, but let's assume it's passed or fallback)
+                const senderName = isSelf ? 'You' : (msg.sender_name || 'Participant');
+
+                el.innerHTML = `
+                    <div class="message-sender">${senderName}</div>
+                    <div class="message-bubble">${msg.message}</div>
+                `;
+                container.appendChild(el);
+            }
+            scrollToBottom();
+        }
+
+        function scrollToBottom() {
+            const container = document.getElementById('chat-messages');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function connectWebSocket() {
+            const protocol = window.location.protocol === "https:" ? "wss:" : "ws:";
+            ws = new WebSocket(`${protocol}//${window.location.host}/api/ws/chat/${roomData.room_id}?token=${roomData.session_token}`);
+            
+            ws.onopen = () => {
+                document.getElementById('ws-status').style.background = 'var(--success-color)';
+            };
+
+            ws.onmessage = (event) => {
+                const data = JSON.parse(event.data);
+                
+                if (data.type === 'ping') {
+                    ws.send(JSON.stringify({ type: 'pong' }));
+                } else if (data.type === 'message') {
+                    // Make sure it's not a duplicate if we just sent it (though usually it will just render)
+                    appendMessage(data);
+                } else if (data.type === 'system') {
+                    appendMessage({ message_type: 'system', message: data.message });
+                } else if (data.type === 'presence') {
+                    appendMessage({ message_type: 'system', message: `${data.display_name} ${data.event} the chat.`});
+                }
+            };
+
+            ws.onclose = () => {
+                document.getElementById('ws-status').style.background = 'var(--danger-color)';
+                setTimeout(connectWebSocket, 5000); // Reconnect loop
+            };
+        }
+
+        async function sendMessage() {
+            const input = document.getElementById('message-input');
+            const txt = input.value.trim();
+            if (!txt) return;
+            
+            input.value = '';
+            
+            try {
+                // To POST a message, we need auth. For external users without JWT, 
+                // the endpoint needs to accept the session_token in Header or as query param.
+                // NOTE: Let's pass it as a Bearer token. The API verify_session_token logic should check it.
+                await fetch(`/api/support/chat/${roomData.room_id}/message`, {
+                    method: 'POST',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${roomData.session_token}`
+                    },
+                    body: JSON.stringify({ message: txt, message_type: "text" })
+                });
+                
+                // the WS broadcast will render it
+            } catch (e) {
+                console.error("Failed to send message", e);
+            }
+        }
+    </script>
+</body>
+</html>

@@ -1,0 +1,1130 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Property Subscription | Eximp & Cloves Infrastructure Limited</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.5/dist/signature_pad.umd.min.js"></script>
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+
+        h1,
+        h2,
+        .playfair {
+            font-family: 'Playfair Display', serif;
+        }
+
+        :root {
+            --gold: #C47D0A;
+            --gold-light: #FDE8BC;
+            --dark: #0F0F0F;
+            --muted: #6B7280;
+        }
+
+        .step-progress {
+            display: flex;
+            justify-content: space-between;
+            position: relative;
+            margin-bottom: 3rem;
+        }
+
+        .step-progress::before {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: #E5E7EB;
+            z-index: 1;
+            transform: translateY(-50%);
+        }
+
+        .step-item {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #fff;
+            border: 2px solid #E5E7EB;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            color: var(--muted);
+        }
+
+        .step-item.active {
+            border-color: var(--gold);
+            color: var(--gold);
+            background: var(--gold-light);
+            transform: scale(1.1);
+        }
+
+        .step-item.completed {
+            background: var(--gold);
+            border-color: var(--gold);
+            color: #fff;
+        }
+
+        .form-card {
+            display: none;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        .form-card.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .gold-button {
+            background: var(--gold);
+            color: white;
+            padding: 0.75rem 2rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .gold-button:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(196, 125, 10, 0.3);
+        }
+
+        .gold-button:disabled {
+            background: #D1D5DB;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .nav-button {
+            padding: 0.75rem 2rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            transition: all 0.2s;
+            border: 1px solid #E5E7EB;
+            color: var(--muted);
+        }
+
+        .sig-pad {
+            border: 2px dashed #E5E7EB;
+            border-radius: 12px;
+            background: #FAFAFA;
+            cursor: crosshair;
+        }
+
+        .autocomplete-list {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            width: 100%;
+            max-height: 200px;
+            overflow-y: auto;
+            background: white;
+            border: 1px solid #E5E7EB;
+            border-radius: 8px;
+            z-index: 50;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+
+        .autocomplete-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid #F3F4F6;
+        }
+
+        .autocomplete-item:hover {
+            background: #F9FAFB;
+            color: var(--gold);
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 min-h-screen">
+
+    <!-- Header / Branding -->
+    <header class="bg-white border-b border-gray-100 shadow-sm py-4 sticky top-0 z-40">
+        <div class="max-w-4xl mx-auto px-6 flex justify-between items-center flex-wrap gap-4">
+            <div class="flex items-center gap-3">
+                <img src="/static/img/logo.png" alt="Eximp & Cloves" class="h-10 w-auto"
+                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+                <div class="w-10 h-10 bg-black rounded-lg flex items-center justify-center" style="display:none;">
+                    <span class="text-gold font-bold text-xl">EC</span>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-gray-900 leading-tight playfair">Eximp & Cloves Infrastructure
+                        Limited</h1>
+                    <p class="text-[10px] text-muted uppercase tracking-widest font-bold">Property Sales Subscription
+                        Form</p>
+                </div>
+            </div>
+            {% if rep %}
+            <div
+                class="flex items-center gap-4 bg-white px-4 py-2 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                <div
+                    class="w-10 h-10 rounded-full border-2 border-gold flex items-center justify-center bg-gray-50 overflow-hidden">
+                    <i class="fas fa-user-tie text-gold text-lg"></i>
+                </div>
+                <div class="text-sm border-l border-gray-100 pl-4">
+                    <p class="text-[10px] text-gold uppercase tracking-widest font-bold mb-0.5">Authorized Consultant
+                    </p>
+                    <p class="font-bold text-gray-900 text-sm leading-tight">{{ rep.name }}</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </header>
+
+    <main class="max-w-3xl mx-auto px-6 py-12">
+
+        <!-- Progress Bar -->
+        <div class="step-progress">
+            <div class="step-item active" data-step="1">1</div>
+            <div class="step-item" data-step="2">2</div>
+            <div class="step-item" data-step="3">3</div>
+            <div class="step-item" data-step="4">4</div>
+            <div class="step-item" data-step="5">5</div>
+        </div>
+
+        <form id="subscriptionForm" class="space-y-8 bg-white p-8 rounded-3xl shadow-xl border border-gray-100">
+
+            <!-- Inline Validation Error Banner -->
+            <div id="stepErrorBanner"
+                class="hidden bg-red-50 border border-red-200 rounded-2xl p-4 mb-2 animate-pulse-once"></div>
+
+            <!-- Step 1: Personal Details -->
+            <div class="form-card active" data-step="1">
+                <h2 class="text-3xl font-bold mb-2">Subscriber Bio-data</h2>
+                <p class="text-muted mb-8">Tell us about yourself to begin your property purchase.</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="md:col-span-1">
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Title</label>
+                        <select name="title"
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
+                            <option value="Mr">Mr.</option>
+                            <option value="Mrs">Mrs.</option>
+                            <option value="Ms">Ms.</option>
+                            <option value="Chief">Chief</option>
+                            <option value="Engr">Engr.</option>
+                            <option value="Dr">Dr.</option>
+                        </select>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-bold text-gray-700 mb-2">First Name</label>
+                        <input type="text" name="first_name" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                            placeholder="Enter first name">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Middle Name</label>
+                        <input type="text" name="middle_name"
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                            placeholder="Optional">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Last Name (Surname)</label>
+                        <input type="text" name="last_name" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                            placeholder="Enter surname">
+                    </div>
+                </div>
+
+                <div class="mt-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Residential Address</label>
+                    <textarea name="residential_address" required rows="2"
+                        class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                        placeholder="Full home address"></textarea>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Email Address</label>
+                        <input type="email" name="email" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                            placeholder="example@email.com">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Whatsapp Line</label>
+                        <input type="tel" name="whatsapp_phone" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                            placeholder="+234...">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Professional Profile -->
+            <div class="form-card" data-step="2">
+                <h2 class="text-3xl font-bold mb-2">Professional Profile</h2>
+                <p class="text-muted mb-8">This helps us customize your experience and future offers.</p>
+
+                <div class="relative">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Search Occupation / Job</label>
+                    <div class="relative">
+                        <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-muted"></i>
+                        <input type="text" id="occupationSearch" name="occupation" required autocomplete="off"
+                            class="w-full p-4 pl-12 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                            placeholder="Start typing your job (e.g. Engineer, Business...)">
+                    </div>
+                    <div id="occupationList" class="autocomplete-list"></div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Marital Status</label>
+                        <select name="marital_status"
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
+                            <option value="Single">Single</option>
+                            <option value="Married">Married</option>
+                            <option value="Divorced">Divorced</option>
+                            <option value="Widowed">Widowed</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Date of Birth</label>
+                        <input type="date" name="date_of_birth" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Nationality</label>
+                        <input type="text" name="nationality" value="Nigerian"
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Source of Income</label>
+                        <input type="text" name="source_of_income"
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                            placeholder="e.g. Business, Salary">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: KYC & Documents -->
+            <div class="form-card" data-step="3">
+                <h2 class="text-3xl font-bold mb-2">KYC Verification</h2>
+                <p class="text-muted mb-8">Secure identity verification is required for property authentication.</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Passport Photo -->
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-4">Passport Photograph <span
+                                class="text-red-500">*</span></label>
+                        <div class="group relative w-40 h-48 mx-auto">
+                            <div class="w-full h-full bg-gray-100 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-300 overflow-hidden"
+                                id="passportPreview">
+                                <i class="fas fa-user text-3xl text-gray-300"></i>
+                                <img src="" class="hidden w-full h-full object-cover">
+                            </div>
+                            <input type="file" name="passport_photo" accept="image/*" required
+                                class="absolute inset-0 opacity-0 cursor-pointer"
+                                onchange="previewFile(this, 'passportPreview')">
+                            <div class="mt-2 text-center text-xs text-gold font-bold">CLICK TO UPLOAD <span
+                                    class="text-red-500">*</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Identification -->
+                    <div class="space-y-6">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">NIN / ID Number</label>
+                            <input type="text" name="nin_id_number" required
+                                class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                                placeholder="Enter ID number">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">Upload ID Document (NIN/Passport)
+                                <span class="text-red-500">*</span></label>
+                            <div class="relative">
+                                <input type="file" name="nin_document" accept="image/*,application/pdf" required
+                                    class="w-full p-2.5 text-sm text-gray-500 border border-gray-300 rounded-xl cursor-pointer bg-gray-50 outline-none">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-blue-50 p-4 rounded-xl mt-8 flex gap-3">
+                    <i class="fas fa-shield-halved text-blue-500 mt-1"></i>
+                    <p class="text-xs text-blue-700">All documents are stored in encrypted environments and used only
+                        for legal property registration.</p>
+                </div>
+            </div>
+
+            <!-- Step 4: Property Selection -->
+            <div class="form-card" data-step="4">
+                <h2 class="text-3xl font-bold mb-2">Purchase Details</h2>
+                <p class="text-muted mb-8">Select the property and ownership structure.</p>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Select Estate / Property</label>
+                    <select name="property_name" id="propertySelect"
+                        class="w-full p-4 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                        onchange="toggleOtherProperty(this)">
+                        <option value="" disabled selected>-- Select a Property --</option>
+                        {% for prop in properties %}
+                        <option value="{{ prop }}">{{ prop }}</option>
+                        {% endfor %}
+                        <option value="Other">Other (Manual Entry)</option>
+                    </select>
+                </div>
+
+                <div id="otherPropertyContainer" class="mt-4 hidden">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Specify Property Name</label>
+                    <input type="text" id="otherPropertyName"
+                        class="w-full p-4 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                        placeholder="Type property name here">
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Plot Size</label>
+                        <select name="plot_size" id="plotSizeSelect" onchange="toggleOtherPlotSize(this)"
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
+                            <option value="300sqm">300sqm</option>
+                            <option value="450sqm">450sqm</option>
+                            <option value="500sqm" selected>500sqm</option>
+                            <option value="600sqm">600sqm</option>
+                            <option value="1 Acre">1 Acre</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <input type="text" id="otherPlotSize"
+                            class="mt-2 w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none hidden"
+                            placeholder="Enter custom size">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Ownership Type</label>
+                        <select name="ownership_type" id="ownershipSelect" onchange="handleOwnershipChange()"
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
+                            <option value="sole" selected>Sole Ownership</option>
+                            <option value="joint">Joint Ownership</option>
+                        </select>
+
+                        <!-- Hidden inputs to hold Co-Owner data -->
+                        <input type="hidden" name="co_owner_name" id="hidden_co_owner_name">
+                        <input type="hidden" name="co_owner_address" id="hidden_co_owner_address">
+                        <input type="hidden" name="co_owner_occupation" id="hidden_co_owner_occupation">
+                        <input type="hidden" name="co_owner_phone" id="hidden_co_owner_phone">
+                        <input type="hidden" name="co_owner_email" id="hidden_co_owner_email">
+                    </div>
+                </div>
+
+                <div class="mt-8 mb-8 bg-white border border-gray-100 shadow-sm p-6 rounded-2xl">
+                    <label class="block text-lg font-bold text-gray-900 mb-1">Quantity <span
+                            class="text-red-500">*</span></label>
+                    <p class="text-sm font-medium text-gray-600 mb-4">Please select the number of units or plots you
+                        wish to purchase for this property.</p>
+                    <div class="space-y-4">
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="radio" name="quantity" value="1" required
+                                class="w-5 h-5 text-gold border-gray-300 focus:ring-gold"
+                                onchange="toggleOtherQuantity(this)">
+                            <span class="text-gray-700 font-medium text-lg">1</span>
+                        </label>
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="radio" name="quantity" value="2"
+                                class="w-5 h-5 text-gold border-gray-300 focus:ring-gold"
+                                onchange="toggleOtherQuantity(this)">
+                            <span class="text-gray-700 font-medium text-lg">2</span>
+                        </label>
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="radio" name="quantity" value="3"
+                                class="w-5 h-5 text-gold border-gray-300 focus:ring-gold"
+                                onchange="toggleOtherQuantity(this)">
+                            <span class="text-gray-700 font-medium text-lg">3</span>
+                        </label>
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="radio" name="quantity" value="4"
+                                class="w-5 h-5 text-gold border-gray-300 focus:ring-gold"
+                                onchange="toggleOtherQuantity(this)">
+                            <span class="text-gray-700 font-medium text-lg">4</span>
+                        </label>
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="radio" name="quantity" value="Other"
+                                class="w-5 h-5 text-gold border-gray-300 focus:ring-gold"
+                                onchange="toggleOtherQuantity(this)">
+                            <span class="text-gray-700 font-medium text-lg whitespace-nowrap">Other:</span>
+                            <input type="number" id="otherQuantity" placeholder="..." disabled
+                                class="flex-1 max-w-[200px] bg-transparent border-b border-gray-300 p-1 outline-none focus:border-gold disabled:opacity-50">
+                        </label>
+                    </div>
+                </div>
+
+                <div
+                    class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8 p-6 bg-gray-50 rounded-2xl border border-gray-200">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2 text-gold">Deposit Amount (NGN)</label>
+                        <div class="relative">
+                            <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₦</span>
+                            <input type="number" name="deposit_amount" required
+                                class="w-full p-3 pl-8 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold outline-none font-bold"
+                                placeholder="0.00">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Payment Duration</label>
+                        <select name="payment_duration"
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold outline-none">
+                            <option value="Outright">Outright Payment</option>
+                            <option value="3 Months">3 Months Installment</option>
+                            <option value="6 Months">6 Months Installment</option>
+                            <option value="12 Months">12 Months Installment</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mt-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Upload Payment Receipt</label>
+                    <input type="file" name="payment_receipt" accept="image/*,application/pdf" required
+                        class="w-full p-2.5 text-sm text-gray-500 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gold outline-none">
+                </div>
+            </div>
+
+            <!-- Step 5: Review & Sign -->
+            <div class="form-card" data-step="5">
+                <h2 class="text-3xl font-bold mb-2">Finalize & Sign</h2>
+                <p class="text-muted mb-8">Please review all information and provide your signature.</p>
+
+                <!-- Terms Content -->
+                <div
+                    class="bg-gray-50 p-6 rounded-2xl border border-gray-200 mb-8 max-h-48 overflow-y-auto text-sm text-gray-600 leading-relaxed">
+                    <h3 class="font-bold text-gray-900 mb-2">DECLARATION & CONSENT</h3>
+                    By checking the box below, I confirm that I have read, understand, and consent to all of the
+                    following Eximp & Cloves Infrastructure limited documents:
+                    <a href="https://eximps-cloves.com/terms" target="_blank"
+                        class="text-gold font-bold underline">Terms and Conditions</a>,
+                    <a href="https://eximps-cloves.com/terms" target="_blank"
+                        class="text-gold font-bold underline">Payment Protection Promise</a> and
+                    <a href="https://eximps-cloves.com/refund" target="_blank"
+                        class="text-gold font-bold underline">Refund Policies</a>.
+                    I accept full responsibility for all legal implications and interpretations of this agreement. I
+                    understand that this subscription form becomes binding on all parties immediately upon the company's
+                    receipt of my payment.
+                </div>
+
+                <div class="flex items-start gap-3 mb-8">
+                    <input type="checkbox" id="consent" required
+                        class="mt-1 w-5 h-5 rounded border-gray-300 text-gold focus:ring-gold">
+                    <label for="consent" class="text-sm font-medium text-gray-700">I Agree to the Terms & Conditions and
+                        understand all legal implications.</label>
+                </div>
+
+                <!-- Signature Pad -->
+                <div class="mb-6">
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="text-sm font-bold text-gray-700">Client Signature <span
+                                class="text-red-500">*</span></label>
+                        <div class="flex gap-4 items-center">
+                            <label
+                                class="text-xs text-blue-600 font-bold hover:underline cursor-pointer flex items-center gap-1">
+                                <i class="fas fa-upload"></i> UPLOAD IMAGE
+                                <input type="file" accept="image/*" class="hidden"
+                                    onchange="uploadSignatureImage(this)">
+                            </label>
+                            <span class="text-gray-300">|</span>
+                            <button type="button" onclick="clearSignature()"
+                                class="text-xs text-red-500 font-bold hover:underline">CLEAR</button>
+                        </div>
+                    </div>
+                    <canvas id="signature-pad" class="sig-pad w-full h-48"></canvas>
+                    <p class="text-center text-[10px] text-muted mt-2 uppercase tracking-widest font-bold">Sign or
+                        Upload Inside the Box Above</p>
+                </div>
+
+                {% if not rep %}
+                <div class="mt-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Sales Consultant (Optional)</label>
+                    <input type="text" name="sales_rep_name"
+                        class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold outline-none"
+                        placeholder="Who are you working with?">
+                </div>
+                {% else %}
+                <input type="hidden" name="sales_rep_id" value="{{ rep.id }}">
+                <input type="hidden" name="sales_rep_name" value="{{ rep.name }}">
+                {% endif %}
+            </div>
+
+            <!-- Navigation -->
+            <div class="flex justify-between items-center pt-8 border-top border-gray-100">
+                <button type="button" id="prevBtn" onclick="changeStep(-1)" class="nav-button hidden">
+                    <i class="fas fa-arrow-left mr-2"></i> Previous
+                </button>
+                <div class="flex-1"></div>
+                <button type="button" id="nextBtn" onclick="changeStep(1)" class="gold-button">
+                    Next Step <i class="fas fa-arrow-right ml-2"></i>
+                </button>
+                <button type="submit" id="submitBtn" class="gold-button hidden">
+                    Complete Subscription <i class="fas fa-check-circle ml-2"></i>
+                </button>
+            </div>
+
+        </form>
+    </main>
+
+    <!-- SUCCESS MODAL -->
+    <div id="successModal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6 hidden">
+        <div class="bg-white rounded-3xl p-10 max-w-sm w-full text-center shadow-2xl">
+            <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <i class="fas fa-check text-4xl text-green-500 animate-bounce"></i>
+            </div>
+            <h3 class="text-2xl font-bold mb-2">Form Submitted!</h3>
+            <p class="text-muted mb-8">Your subscription is being processed. An advisor will contact you shortly.</p>
+            <button onclick="window.location.reload()" class="gold-button w-full">Home</button>
+        </div>
+    </div>
+
+    <!-- CO-OWNER MODAL -->
+    <div id="coOwnerModal"
+        class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button type="button" onclick="closeCoOwnerModal()"
+                class="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 text-gray-500">
+                <i class="fas fa-times"></i>
+            </button>
+            <div class="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+                <div class="w-10 h-10 rounded-full bg-gold-light/30 flex items-center justify-center text-gold">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold text-gray-900">Co-Owner Details</h3>
+                    <p class="text-xs text-muted">Required for Joint Ownership</p>
+                </div>
+            </div>
+
+            <!-- Inline error banner for co-owner modal -->
+            <div id="coOwnerErrorBanner"
+                class="hidden bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-red-700 text-sm"></div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Full Name</label>
+                    <input type="text" id="modal_co_owner_name"
+                        class="w-full p-3 rounded-xl border border-gray-300 focus:border-gold outline-none"
+                        placeholder="Co-owner's full name">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Residential Address</label>
+                    <input type="text" id="modal_co_owner_address"
+                        class="w-full p-3 rounded-xl border border-gray-300 focus:border-gold outline-none"
+                        placeholder="Full home address">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Occupation</label>
+                    <input type="text" id="modal_co_owner_occupation"
+                        class="w-full p-3 rounded-xl border border-gray-300 focus:border-gold outline-none"
+                        placeholder="e.g. Engineer">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Phone Number</label>
+                        <input type="tel" id="modal_co_owner_phone"
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:border-gold outline-none"
+                            placeholder="+234...">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Email Address</label>
+                        <input type="email" id="modal_co_owner_email"
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:border-gold outline-none"
+                            placeholder="email@example.com">
+                    </div>
+                </div>
+                <div class="pt-4">
+                    <button type="button" onclick="saveCoOwner()" class="gold-button w-full shadow-lg">Save Co-Owner
+                        Details</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 1;
+        const totalSteps = 5;
+        const form = document.getElementById('subscriptionForm');
+        let signaturePad;
+
+        // Initialize Signature Pad
+        function initSignaturePad() {
+            const canvas = document.getElementById('signature-pad');
+            const ratio = Math.max(window.devicePixelRatio || 1, 1);
+            canvas.width = canvas.offsetWidth * ratio;
+            canvas.height = canvas.offsetHeight * ratio;
+            canvas.getContext("2d").scale(ratio, ratio);
+            signaturePad = new SignaturePad(canvas, {
+                penColor: "rgb(0, 0, 0)"
+            });
+        }
+
+        function clearSignature() { if (signaturePad) signaturePad.clear(); }
+
+        // Upload Signature Image to Canvas
+        function uploadSignatureImage(input) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const img = new Image();
+                    img.onload = function () {
+                        const canvas = document.getElementById('signature-pad');
+                        const ctx = canvas.getContext('2d');
+
+                        // Clear previous signature
+                        clearSignature();
+
+                        // Calculate aspect ratio to fit image beautifully
+                        const hRatio = canvas.width / img.width;
+                        const vRatio = canvas.height / img.height;
+                        const ratio = Math.min(hRatio, vRatio);
+                        const centerShift_x = (canvas.width - img.width * ratio) / 2;
+                        const centerShift_y = (canvas.height - img.height * ratio) / 2;
+
+                        ctx.clearRect(0, 0, canvas.width, canvas.height); // Extra clear
+                        ctx.drawImage(img, 0, 0, img.width, img.height,
+                            centerShift_x, centerShift_y, img.width * ratio, img.height * ratio);
+
+                        // Notify signaturePad it isn't empty (since we bypassed its event handlers)
+                        signaturePad._isEmpty = false;
+                    }
+                    img.src = e.target.result;
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+            // Reset input so the same file can be uploaded again if cleared
+            input.value = '';
+        }
+
+        // --- INLINE VALIDATION ERROR BANNER ---
+        function showStepError(missingFields) {
+            let banner = document.getElementById('stepErrorBanner');
+            if (!banner) return;
+            let html = `<div class="flex items-start gap-3">
+                <i class="fas fa-exclamation-circle text-red-500 mt-0.5 text-lg"></i>
+                <div>
+                    <p class="font-bold text-red-700 text-sm mb-1">Please complete the following required fields:</p>
+                    <ul class="list-disc list-inside space-y-0.5">`;
+            missingFields.forEach(f => {
+                html += `<li class="text-red-600 text-sm">${f}</li>`;
+            });
+            html += `</ul></div></div>`;
+            banner.innerHTML = html;
+            banner.classList.remove('hidden');
+            banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+        }
+
+        function clearStepError() {
+            const banner = document.getElementById('stepErrorBanner');
+            if (banner) banner.classList.add('hidden');
+        }
+
+        // Wizard Logic
+        function updateSteps() {
+            document.querySelectorAll('.form-card').forEach(card => {
+                card.classList.remove('active');
+            });
+            document.querySelector(`.form-card[data-step="${currentStep}"]`).classList.add('active');
+
+            document.querySelectorAll('.step-item').forEach(dot => {
+                const stepIdx = parseInt(dot.dataset.step);
+                dot.classList.remove('active', 'completed');
+                if (stepIdx === currentStep) dot.classList.add('active');
+                if (stepIdx < currentStep) dot.classList.add('completed');
+            });
+
+            // Buttons
+            document.getElementById('prevBtn').classList.toggle('hidden', currentStep === 1);
+            document.getElementById('nextBtn').classList.toggle('hidden', currentStep === totalSteps);
+            document.getElementById('submitBtn').classList.toggle('hidden', currentStep !== totalSteps);
+
+            if (currentStep === 5 && !signaturePad) {
+                setTimeout(initSignaturePad, 100);
+            }
+        }
+
+        function changeStep(delta) {
+            // Validation
+            if (delta > 0) {
+                const currentInputs = document.querySelectorAll(`.form-card[data-step="${currentStep}"] input[required], .form-card[data-step="${currentStep}"] select[required]`);
+                let valid = true;
+                currentInputs.forEach(input => {
+                    if (!input.value) {
+                        input.classList.add('border-red-500');
+                        valid = false;
+                    } else {
+                        input.classList.remove('border-red-500');
+                    }
+                });
+                if (!valid) {
+                    const missing = [];
+                    currentInputs.forEach(input => {
+                        if (!input.value || (input.type === 'file' && input.files.length === 0)) {
+                            // Find label text for this input
+                            let labelText = input.getAttribute('placeholder') || input.name || 'Unknown field';
+                            // Try to find associated <label>
+                            const id = input.id || input.name;
+                            const label = document.querySelector(`label[for="${id}"]`) ||
+                                input.closest('div')?.querySelector('label');
+                            if (label) labelText = label.textContent.trim().replace('*', '').trim();
+                            missing.push(labelText);
+                        }
+                    });
+                    showStepError(missing);
+                    return;
+                } else {
+                    clearStepError();
+                }
+            }
+
+            currentStep += delta;
+            if (currentStep < 1) currentStep = 1;
+            if (currentStep > totalSteps) currentStep = totalSteps;
+            updateSteps();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // File Selection/Preview
+        async function previewFile(input, previewId) {
+            if (input.files && input.files[0]) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const container = document.getElementById(previewId);
+                    const img = container.querySelector('img');
+                    img.src = e.target.result;
+                    img.classList.remove('hidden');
+                    container.querySelector('.fa-user').classList.add('hidden');
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+        }
+
+        // Searchable Occupations
+        const occupations = [
+            'Accountant', 'Administrator', 'Advocate', 'Architect', 'Artist', 'Author', 'Banker', 'Barber', 'Biologist',
+            'Broadcaster', 'Businessman/Woman', 'Chef', 'Civil Engineer', 'Civil Servant', 'Clergy', 'Consultant',
+            'Data Analyst', 'Dentist', 'Doctor', 'Driver', 'Economist', 'Electrician', 'Engineer', 'Entrepreneur',
+            'Farmer', 'Fashion Designer', 'Fashion Consultant', 'Film Maker', 'Geologist', 'Graphic Designer',
+            'Hairstylist', 'Hotelier', 'Human Resources', 'Interior Decorator', 'Investment Analyst', 'IT Specialist',
+            'Journalist', 'Judge', 'Lawyer', 'Lecturer', 'Manager', 'Marketing Manager', 'Mason', 'Mechanic',
+            'Media Consultant', 'Merchant', 'Meteorologist', 'Microbiologist', 'Military Personnel', 'Model',
+            'Musician', 'Nurse', 'Optician', 'Pharmacist', 'Photographer', 'Pilot', 'Plumber', 'Police Officer',
+            'Politician', 'Professor', 'Project Manager', 'Public Servant', 'Quantity Surveyor', 'Radiographer',
+            'Real Estate Agent', 'Realtor', 'Retiree', 'Sales Executive', 'Scientist', 'Secretary', 'Security Personnel',
+            'Software Developer', 'Social Media Influencer', 'Statisticians', 'Student', 'Surgeon', 'Surveyor',
+            'Tailor', 'Teacher', 'Technician', 'Trader', 'Translator', 'Veterinary Doctor', 'Writer'
+        ];
+
+        const searchInput = document.getElementById('occupationSearch');
+        const listContainer = document.getElementById('occupationList');
+
+        searchInput.addEventListener('input', function () {
+            const val = this.value.toLowerCase();
+            listContainer.innerHTML = '';
+            if (!val) {
+                listContainer.style.display = 'none';
+                return;
+            }
+            const matches = occupations.filter(o => o.toLowerCase().includes(val));
+            matches.forEach(m => {
+                const div = document.createElement('div');
+                div.className = 'autocomplete-item';
+                div.textContent = m;
+                div.onclick = () => {
+                    searchInput.value = m;
+                    listContainer.style.display = 'none';
+                };
+                listContainer.appendChild(div);
+            });
+            listContainer.style.display = matches.length ? 'block' : 'none';
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!searchInput.contains(e.target)) listContainer.style.display = 'none';
+        });
+
+        // Other Property Toggle
+        function toggleOtherProperty(select) {
+            const container = document.getElementById('otherPropertyContainer');
+            const input = document.getElementById('otherPropertyName');
+            if (select.value === 'Other') {
+                container.classList.remove('hidden');
+                input.required = true;
+            } else {
+                container.classList.add('hidden');
+                input.required = false;
+            }
+        }
+
+        // Other Plot Size Toggle
+        function toggleOtherPlotSize(select) {
+            const input = document.getElementById('otherPlotSize');
+            if (select.value === 'Other') {
+                input.classList.remove('hidden');
+                input.required = true;
+            } else {
+                input.classList.add('hidden');
+                input.required = false;
+            }
+        }
+
+        // Other Quantity Toggle
+        function toggleOtherQuantity(radio) {
+            const input = document.getElementById('otherQuantity');
+            if (radio.value === 'Other') {
+                input.disabled = false;
+                input.required = true;
+                input.focus();
+            } else {
+                input.disabled = true;
+                input.required = false;
+                input.value = '';
+            }
+        }
+
+        // --- CO-OWNER MODAL LOGIC ---
+        function handleOwnershipChange(isLoad = false) {
+            const val = document.getElementById('ownershipSelect').value;
+            if (val === 'joint') {
+                if (!isLoad) {
+                    document.getElementById('coOwnerModal').classList.remove('hidden');
+                }
+            } else {
+                // Clear hidden fields when sole is selected
+                document.getElementById('hidden_co_owner_name').value = "";
+                document.getElementById('hidden_co_owner_address').value = "";
+                document.getElementById('hidden_co_owner_occupation').value = "";
+                document.getElementById('hidden_co_owner_phone').value = "";
+                document.getElementById('hidden_co_owner_email').value = "";
+            }
+        }
+
+        function closeCoOwnerModal() {
+            document.getElementById('coOwnerModal').classList.add('hidden');
+            // If they closed it without saving, and fields are empty, revert to sole
+            if (!document.getElementById('hidden_co_owner_name').value) {
+                document.getElementById('ownershipSelect').value = 'sole';
+            }
+        }
+
+        function saveCoOwner() {
+            const fields = [
+                { id: 'modal_co_owner_name', label: 'Full Name', required: true },
+                { id: 'modal_co_owner_address', label: 'Residential Address', required: true },
+                { id: 'modal_co_owner_occupation', label: 'Occupation', required: false },
+                { id: 'modal_co_owner_phone', label: 'Phone Number', required: true },
+                { id: 'modal_co_owner_email', label: 'Email Address', required: false },
+            ];
+
+            const missing = [];
+            fields.forEach(f => {
+                const el = document.getElementById(f.id);
+                if (f.required && !el.value.trim()) {
+                    missing.push(f.label);
+                    el.classList.add('border-red-500', 'ring-1', 'ring-red-400');
+                } else {
+                    el.classList.remove('border-red-500', 'ring-1', 'ring-red-400');
+                }
+            });
+
+            if (missing.length > 0) {
+                const banner = document.getElementById('coOwnerErrorBanner');
+                banner.innerHTML = `<div class="flex items-start gap-2">
+                    <i class="fas fa-exclamation-circle text-red-500 mt-0.5"></i>
+                    <div>
+                        <p class="font-bold text-red-700 text-sm mb-1">Please fill in the following required fields:</p>
+                        <ul class="list-disc list-inside">${missing.map(m => `<li class="text-red-600 text-sm">${m}</li>`).join('')}</ul>
+                    </div>
+                </div>`;
+                banner.classList.remove('hidden');
+                return;
+            }
+
+            document.getElementById('coOwnerErrorBanner').classList.add('hidden');
+
+            const name = document.getElementById('modal_co_owner_name').value.trim();
+            const addr = document.getElementById('modal_co_owner_address').value.trim();
+            const occ = document.getElementById('modal_co_owner_occupation').value.trim();
+            const phone = document.getElementById('modal_co_owner_phone').value.trim();
+            const email = document.getElementById('modal_co_owner_email').value.trim();
+
+            // Save to hidden form fields
+            document.getElementById('hidden_co_owner_name').value = name;
+            document.getElementById('hidden_co_owner_address').value = addr;
+            document.getElementById('hidden_co_owner_occupation').value = occ;
+            document.getElementById('hidden_co_owner_phone').value = phone;
+            document.getElementById('hidden_co_owner_email').value = email;
+
+            document.getElementById('coOwnerModal').classList.add('hidden');
+
+            // Optional: Show a subtle confirmation
+            const btn = document.querySelector('button[onclick="saveCoOwner()"]');
+            const oldTxt = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check"></i> Saved!';
+            btn.classList.replace('bg-gold', 'bg-green-500');
+            setTimeout(() => {
+                btn.innerHTML = oldTxt;
+                btn.classList.replace('bg-green-500', 'bg-gold');
+            }, 2000);
+        }
+
+        // --- AUTO-SAVE LOGIC ---
+        const AUTOSAVE_KEY = 'ecPropertyFormState';
+
+        function saveFormState() {
+            const state = {};
+            const inputs = form.querySelectorAll('input, select, textarea');
+            inputs.forEach(input => {
+                if (input.type === 'file' || input.type === 'hidden') return; // Skip files and raw hidden vars
+                if (input.type === 'radio' || input.type === 'checkbox') {
+                    if (input.checked) state[input.name || input.id] = input.value;
+                } else {
+                    if (input.name) state[input.name] = input.value;
+                    else if (input.id) state[input.id] = input.value;
+                }
+            });
+            localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(state));
+        }
+
+        function loadFormState() {
+            const savedString = localStorage.getItem(AUTOSAVE_KEY);
+            if (!savedString) return;
+            try {
+                const state = JSON.parse(savedString);
+                const inputs = form.querySelectorAll('input, select, textarea');
+                inputs.forEach(input => {
+                    if (input.type === 'file' || input.type === 'hidden') return;
+
+                    const val = state[input.name] !== undefined ? state[input.name] : state[input.id];
+                    if (val !== undefined && val !== "") {
+                        if (input.type === 'radio' || input.type === 'checkbox') {
+                            if (input.value === val) input.checked = true;
+                        } else {
+                            input.value = val;
+                        }
+                    }
+                });
+
+                // Re-trigger visual UI toggles based on loaded state
+                const propSelect = document.getElementById('propertySelect');
+                if (propSelect) toggleOtherProperty(propSelect);
+
+                const plotSelect = document.getElementById('plotSizeSelect');
+                if (plotSelect) toggleOtherPlotSize(plotSelect);
+
+                const qRadios = document.getElementsByName('quantity');
+                qRadios.forEach(r => { if (r.checked) toggleOtherQuantity(r); });
+
+                handleOwnershipChange(true); // Pass true to prevent modal popup on load
+            } catch (e) {
+                console.error("Autosave load failed", e);
+            }
+        }
+
+        form.addEventListener('input', saveFormState);
+        form.addEventListener('change', saveFormState);
+        document.addEventListener('DOMContentLoaded', loadFormState);
+
+        // Form Submission
+        form.onsubmit = async (e) => {
+            e.preventDefault();
+
+            // Validate Co-Owner
+            const ownershipType = document.getElementById('ownershipSelect').value;
+            if (ownershipType === 'joint' && !document.getElementById('hidden_co_owner_name').value) {
+                alert("Please provide the Co-Owner details for Joint Ownership.");
+                document.getElementById('coOwnerModal').classList.remove('hidden');
+                return;
+            }
+
+            // Validate signature
+            if (signaturePad.isEmpty()) {
+                alert("Please provide your signature before submitting.");
+                return;
+            }
+
+            const goldBtn = document.getElementById('submitBtn');
+            const originalText = goldBtn.innerHTML;
+            goldBtn.disabled = true;
+            goldBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> Submitting...';
+
+            const formData = new FormData(form);
+            const data = Object.fromEntries(formData.entries());
+
+            // Handle "Other" property, plot size, and quantity overrides
+            if (data.property_name === 'Other') {
+                data.property_name = document.getElementById('otherPropertyName').value;
+            }
+            if (data.plot_size === 'Other') {
+                data.plot_size = document.getElementById('otherPlotSize').value;
+            }
+            if (data.quantity === 'Other') {
+                data.quantity = document.getElementById('otherQuantity').value;
+            }
+
+            // Convert files to base64 for unified JSON payload (Service handles conversion)
+            // Or use FormData directly. I'll use a mix - convert images to data strings.
+            const fileFields = ['passport_photo', 'nin_document', 'payment_receipt'];
+            for (let field of fileFields) {
+                const file = formData.get(field);
+                if (file && file.size > 0) {
+                    const reader = new FileReader();
+                    const promise = new Promise(resolve => {
+                        reader.onload = (e) => resolve(e.target.result);
+                        reader.readAsDataURL(file);
+                    });
+                    data[`${field}_b64`] = await promise;
+                }
+            }
+
+            data.signature_data = signaturePad.toDataURL(); // Base64
+            data.consent_given = document.getElementById('consent').checked;
+
+            try {
+                const response = await fetch('/api/subscriptions/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+                if (result.status === 'success') {
+                    localStorage.removeItem(AUTOSAVE_KEY); // Clear saved data on success
+                    document.getElementById('successModal').classList.remove('hidden');
+                } else {
+                    alert("Error: " + result.message);
+                }
+            } catch (err) {
+                alert("Submission failed. Please check your connection.");
+            } finally {
+                goldBtn.disabled = false;
+                goldBtn.innerHTML = originalText;
+            }
+        };
+    </script>
+</body>
+
+</html>
