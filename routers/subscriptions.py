@@ -83,3 +83,34 @@ async def submit_subscription(
         print(f"SUBSCRIPTION SUBMISSION ERROR: {e}")
         return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
 
+@router.post("/api/subscriptions/upload-file")
+async def upload_subscription_file(
+    file: UploadFile = File(...),
+    file_type: str = Form(...) # 'passport', 'nin', 'receipt'
+):
+    """
+    Handles immediate, background file uploads from the subscription form.
+    Returns the public URL of the uploaded file.
+    """
+    try:
+        # 1. Read file content
+        content = await file.read()
+        
+        # 2. Extract base64 to reuse existing processing logic (normalization to PNG/PDF)
+        import base64
+        encoded = base64.b64encode(content).decode('utf-8')
+        mime = file.content_type or "image/png"
+        base64_data = f"data:{mime};base64,{encoded}"
+        
+        # 3. Process and upload
+        temp_invoice_num = f"UP_{uuid.uuid4().hex[:6]}"
+        url = SubscriptionService.process_base64_file(base64_data, temp_invoice_num, file_type)
+        
+        if not url:
+            raise Exception("File processing failed")
+            
+        return {"status": "success", "url": url}
+    except Exception as e:
+        print(f"ASYNC UPLOAD ERROR: {e}")
+        return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
+

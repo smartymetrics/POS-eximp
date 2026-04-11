@@ -23,21 +23,28 @@ class SubscriptionService:
         email = data.get("email", "").strip().lower()
         full_name = f"{data.get('first_name', '')} {data.get('middle_name', '') + ' ' if data.get('middle_name') else ''}{data.get('last_name', '')}".strip()
         
+        # Intelligent Mapping for Form Parity
+        id_number = data.get("nin_id_number") or data.get("id_number")
+        id_doc_url = data.get("nin_document_url") or data.get("id_document_url") or data.get("international_passport_url")
+        phone = data.get("whatsapp_phone") or data.get("phone")
+
         client_data = {
             "full_name": full_name,
             "email": email,
-            "phone": data.get("whatsapp_phone"),
-            "address": data.get("residential_address"),
+            "phone": phone,
+            "address": data.get("residential_address") or data.get("address"),
+            "city": data.get("city"),
+            "state": data.get("state"),
             "title": data.get("title"),
             "gender": data.get("gender"),
-            "dob": data.get("date_of_birth"),
+            "dob": data.get("date_of_birth") or data.get("dob"),
             "marital_status": data.get("marital_status"),
             "occupation": data.get("occupation"),
-            "nin": data.get("nin_id_number"),
+            "nin": id_number,
             "nationality": data.get("nationality", "Nigerian"),
             "passport_photo_url": data.get("passport_photo_url"),
-            "id_document_url": data.get("nin_document_url") or data.get("international_passport_url"),
-            "nok_name": data.get("nok_full_name"),
+            "id_document_url": id_doc_url,
+            "nok_name": data.get("nok_full_name") or data.get("nok_name"),
             "nok_phone": data.get("nok_phone"),
             "nok_email": data.get("nok_email"),
             "nok_occupation": data.get("nok_occupation"),
@@ -76,10 +83,19 @@ class SubscriptionService:
         # 3. Generate Invoice Number
         invoice_number = db.rpc("generate_invoice_number").execute().data
 
-        # 4. Property Matching
+        # 4. Property Matching & Numeric Casting
         property_id = None
         property_location = None
-        total_amount = data.get("total_amount", 0)
+        
+        # Explicitly cast form strings to numbers
+        try:
+            total_amount = float(data.get("total_amount") or 0)
+            deposit_amount = float(data.get("deposit_amount") or 0)
+            quantity = int(data.get("quantity") or 1)
+        except (ValueError, TypeError):
+            total_amount = 0
+            deposit_amount = 0
+            quantity = 1
         
         if data.get("property_name"):
             prop_res = db.table("properties").select("*").ilike("name", f"%{data['property_name']}%").execute()
@@ -98,10 +114,10 @@ class SubscriptionService:
             "property_name": data.get("property_name"),
             "property_location": property_location,
             "amount": total_amount,
-            "amount_paid": data.get("deposit_amount", 0),
+            "amount_paid": deposit_amount,
             "payment_terms": data.get("payment_duration", "Outright"),
             "invoice_date": str(date.today()),
-            "due_date": str(date.today()), # Default, usually updated on terms
+            "due_date": str(date.today()), # Default
             "sales_rep_id": final_sales_rep_id,
             "sales_rep_name": final_sales_rep_name,
             "co_owner_name": data.get("co_owner_name"),
@@ -116,18 +132,47 @@ class SubscriptionService:
         invoice_id = inv_res.data[0]["id"]
 
         # 6. Save raw subscription for audit/metadata
-        subscription_record = {**data, "sales_rep_id": final_sales_rep_id, "status": "processed", "client_id": client_id}
+        # Strict Whitelist Filtering to prevent PGRST204 Schema Errors
+        ALLOWED_SUB_COLUMNS = {
+            'sales_rep_id', 'status', 'title', 'first_name', 'last_name', 'middle_name', 
+            'gender', 'date_of_birth', 'residential_address', 'email', 'whatsapp_phone', 
+            'marital_status', 'occupation', 'nationality', 'passport_photo_url', 
+            'nin_id_number', 'nin_document_url', 'international_passport_url', 
+            'property_name', 'plot_size', 'ownership_type', 'purchase_purpose', 
+            'nok_full_name', 'nok_phone', 'nok_email', 'nok_occupation', 'nok_relationship', 
+            'nok_address', 'co_owner_name', 'co_owner_address', 'co_owner_occupation', 
+            'co_owner_phone', 'co_owner_email', 'payment_duration', 'deposit_amount', 
+            'payment_date', 'payment_receipt_url', 'source_of_income', 
+            'referral_source', 'signature_url', 'consent_given', 'consented_at', 
+            'ip_address', 'user_agent', 'city', 'state', 'phone', 'quantity', 
+            'total_amount', 'sales_rep_name', 'utm_source', 'utm_medium', 
+            'utm_campaign', 'utm_content', 'utm_term'
+        }
+
+        subscription_record = {
+            "sales_rep_id": final_sales_rep_id, 
+            "status": "processed",
+            "date_of_birth": data.get("date_of_birth") or data.get("dob"),
+            "nin_id_number": data.get("nin_id_number") or data.get("id_number"),
+            "nin_document_url": data.get("nin_document_url") or data.get("id_document_url")
+        }
+        
+        # Add all valid incoming data to the record
+        for key, value in data.items():
+            if key in ALLOWED_SUB_COLUMNS and key not in subscription_record:
+                subscription_record[key] = value
+
         sub_res = db.table("property_subscriptions").insert(jsonable_encoder(subscription_record)).execute()
         subscription_id = sub_res.data[0]["id"] if sub_res.data else None
 
         # 7. Create Pending Verification for Admin
-        if data.get("deposit_amount", 0) > 0:
+        if deposit_amount > 0:
             verify_data = {
                 "invoice_id": invoice_id,
                 "client_id": client_id,
                 "subscription_id": subscription_id,
                 "payment_proof_url": data.get("payment_receipt_url"),
-                "deposit_amount": data.get("deposit_amount"),
+                "deposit_amount": deposit_amount,
                 "payment_date": data.get("payment_date"),
                 "sales_rep_name": final_sales_rep_name,
                 "status": "pending"
@@ -137,6 +182,19 @@ class SubscriptionService:
         # 8. Notifications & Marketing Sync
         try:
             full_client = db.table("clients").select("*").eq("id", client_id).execute().data[0]
+            
+            # --- INTELLIGENT ATTRIBUTION LOOK-BACK ---
+            # If no campaign was provided by the form, try to find the last one from marketing_contacts
+            current_mcid = data.get("marketing_campaign_id") or data.get("mcid")
+            if not current_mcid:
+                mc_attr = db.table("marketing_contacts").select("last_campaign_id").eq("email", email).execute()
+                if mc_attr.data and mc_attr.data[0].get("last_campaign_id"):
+                    current_mcid = mc_attr.data[0]["last_campaign_id"]
+            
+            # Update invoice with attribution if found
+            if current_mcid:
+                db.table("invoices").update({"marketing_campaign_id": current_mcid}).eq("id", invoice_id).execute()
+
             await send_welcome_email(full_client, data.get("property_name"))
             
             invoice = inv_res.data[0]

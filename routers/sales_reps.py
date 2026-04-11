@@ -8,6 +8,20 @@ from routers.analytics import log_activity
 
 router = APIRouter()
 
+@router.get("/public/{rep_id}")
+async def get_rep_public_profile(rep_id: str):
+    """
+    PUBLIC endpoint — no auth required.
+    Used by the client-facing subscription form to display the consultant's name
+    when accessed via a referral link like /subscribe?rep={uuid}.
+    Only returns safe, non-sensitive fields.
+    """
+    res = supabase.table("sales_reps").select("id, name, is_active").eq("id", rep_id).eq("is_active", True).execute()
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Consultant not found or inactive")
+    rep = res.data[0]
+    return {"id": rep["id"], "name": rep["name"]}
+
 @router.get("")
 async def get_sales_reps(admin: dict = Depends(get_current_admin)):
     """List all sales representatives with basic stats."""
