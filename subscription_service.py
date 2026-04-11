@@ -98,13 +98,31 @@ class SubscriptionService:
             quantity = 1
         
         if data.get("property_name"):
-            prop_res = db.table("properties").select("*").ilike("name", f"%{data['property_name']}%").execute()
+            # Try to handle plot size matching (e.g. "500sqm" -> 500)
+            plot_size_str = data.get("plot_size", "")
+            size_match = re.search(r'(\d+)', plot_size_str)
+            target_size = float(size_match.group(1)) if size_match else None
+
+            prop_query = db.table("properties").select("*").ilike("name", f"%{data['property_name']}%").eq("is_active", True)
+            prop_res = prop_query.execute()
+            
             if prop_res.data:
-                prop = prop_res.data[0]
+                # Find best match based on plot size if available
+                prop = prop_res.data[0] # Default to first
+                if target_size:
+                    for p in prop_res.data:
+                        p_size = float(p.get("plot_size_sqm") or 0)
+                        if abs(p_size - target_size) < 1: # Close enough match
+                            prop = p
+                            break
+                
                 property_id = prop["id"]
                 property_location = prop.get("location")
+                
                 if total_amount <= 0:
-                    total_amount = float(prop.get("starting_price") or 0)
+                    # Priority order for price columns based on user database feedback
+                    unit_price = float(prop.get("total_price") or prop.get("starting_price") or prop.get("price_per_sqm") or 0)
+                    total_amount = unit_price * quantity
 
         # 5. Create Invoice record
         invoice_insert = {

@@ -216,9 +216,22 @@ async def get_activity(
     admin: dict = Depends(verify_token)
 ):
     db = get_db()
-    # Join with admins to get perforemed_by name
-    data = (await db_execute(lambda: db.table("activity_log")\
-        .select("*, admins(full_name)")\
+    role = admin.get("role", "")
+    admin_id = admin["sub"]
+    
+    # Check if user is restricted
+    # Privileged roles: admin, super_admin, operations
+    is_privileged = any(r in role.lower() for r in ["admin", "operations"])
+    
+    query = db.table("activity_log").select("*, admins(full_name), clients(assigned_rep_id)")
+    
+    if not is_privileged:
+        # Restricted users (Sales, Marketing, Staff) see:
+        # 1. Activities they performed
+        # 2. Activities related to clients assigned to them
+        query = query.or_(f"performed_by.eq.{admin_id},clients.assigned_rep_id.eq.{admin_id}")
+
+    data = (await db_execute(lambda: query\
         .order("created_at", desc=True)\
         .range(offset, offset + limit - 1)\
         .execute())).data

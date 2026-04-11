@@ -16,7 +16,19 @@ async def list_clients(
     current_admin=Depends(verify_token)
 ):
     db = get_db()
-    result = await db_execute(lambda: db.table("clients").select("*").order("created_at", desc=True).range(offset, offset + limit - 1).execute())
+    role = current_admin.get("role", "")
+    admin_id = current_admin["sub"]
+    
+    # Privileged check
+    is_privileged = any(r in role.lower() for r in ["admin", "operations"])
+    
+    query = db.table("clients").select("*")
+    
+    if not is_privileged:
+        # Restricted users see only their assigned clients
+        query = query.eq("assigned_rep_id", admin_id)
+
+    result = await db_execute(lambda: query.order("created_at", desc=True).range(offset, offset + limit - 1).execute())
     return result.data
 
 

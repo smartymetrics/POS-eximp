@@ -26,10 +26,22 @@ async def list_invoices(
     current_admin=Depends(verify_token)
 ):
     db = get_db()
-    query = db.table("invoices").select("*, clients(full_name, email)")
+    role = current_admin.get("role", "")
+    admin_id = current_admin["sub"]
+    
+    # Check if user is restricted
+    is_privileged = any(r in role.lower() for r in ["admin", "operations"])
+    
+    query = db.table("invoices").select("*, clients(full_name, email, assigned_rep_id)")
     
     if not show_voided:
         query = query.neq("status", "voided")
+        
+    if not is_privileged:
+        # Restricted users (Sales, Marketing, Staff) see:
+        # 1. Invoices where they are the sales rep
+        # 2. Invoices for clients assigned to them
+        query = query.or_(f"sales_rep_id.eq.{admin_id},clients.assigned_rep_id.eq.{admin_id}")
         
     result = await db_execute(lambda: query.order("created_at", desc=True).range(offset, offset + limit - 1).execute())
     

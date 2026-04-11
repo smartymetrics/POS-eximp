@@ -443,8 +443,14 @@
                 <div class="nav-link active" onclick="switchView('leads')">
                     <i class="fas fa-fire"></i> Hot Leads
                 </div>
+                <div class="nav-link" onclick="switchView('pipeline')">
+                    <i class="fas fa-grip-vertical"></i> Sales Pipeline
+                </div>
                 <div class="nav-link" onclick="switchView('lead-scoring')">
                     <i class="fas fa-chart-pie"></i> Lead Scoring
+                </div>
+                <div class="nav-link" onclick="switchView('activity-logs')">
+                    <i class="fas fa-history"></i> Activity Logs
                 </div>
             </div>
 
@@ -453,6 +459,9 @@
                 <div class="nav-title">Inventory & Deals</div>
                 <div class="nav-link" onclick="switchView('properties')">
                     <i class="fas fa-home"></i> Listings
+                </div>
+                <div class="nav-link" onclick="switchView('documents')">
+                    <i class="fas fa-file-invoice"></i> Document Hub
                 </div>
                 <div class="nav-link" id="nav-crm-verifications" onclick="switchView('verifications')">
                     <i class="fas fa-check-circle"></i> Verifications
@@ -2791,7 +2800,9 @@
                     if(btnMarketing) btnMarketing.style.display = 'block';
                 }
 
-                if (hasRole('sales') && !hasRole('admin') && !hasRole('operations')) {
+                const isRestricted = (hasRole('sales') || hasRole('marketing')) && !hasRole('admin') && !hasRole('operations');
+
+                if (isRestricted) {
                     // Hide forbidden sections in sidebar
                     const forbidden = ['section-marketing', 'section-servicehub', 'section-intelligence'];
                     forbidden.forEach(id => {
@@ -3086,6 +3097,10 @@
          }
 
          async function startGroupChat() {
+             if (!currentTicketId || currentTicketId === 'null') {
+                 showNotification("No ticket selected. Please select a ticket first.", "error");
+                 return;
+             }
              try {
                  const res = await fetch(`/api/support/tickets/${currentTicketId}/chat/create`, {
                      method: 'POST',

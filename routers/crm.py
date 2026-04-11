@@ -142,8 +142,10 @@ async def get_sales_pipeline(current_admin=Depends(verify_token)):
     🔒 RBAC: Sales reps only see their assigned leads. Admins see all.
     """
     db = get_db()
-    role = current_admin.get("role", "sales")
+    role = current_admin.get("role", "")
     admin_id = current_admin.get("sub")
+    
+    is_privileged = any(r in role.lower() for r in ["admin", "operations"])
 
     # 1. Base Query
     query = db.table("clients").select("""
@@ -157,19 +159,23 @@ async def get_sales_pipeline(current_admin=Depends(verify_token)):
         created_at
     """)
     # 2. Apply RBAC Filter
-    if role == "sales":
+    if not is_privileged:
         query = query.eq("assigned_rep_id", admin_id)
 
-    result = query.order("created_at", desc=True).execute()
+    result = await db_execute(lambda: query.order("created_at", desc=True).execute())
     all_leads = result.data or []
 
     # 3. Synchronize with real financial data
     client_ids = [c["id"] for c in all_leads]
-    inv_res = await db_execute(lambda: db.table("invoices").select("client_id, amount, amount_paid").in_("client_id", client_ids).neq("status", "voided").execute())
+    if client_ids:
+        inv_res = await db_execute(lambda: db.table("invoices").select("client_id, amount, amount_paid").in_("client_id", client_ids).neq("status", "voided").execute())
+        invoices_data = inv_res.data or []
+    else:
+        invoices_data = []
     
     # Map invoice totals to client_id
     fin_map = {}
-    for inv in inv_res.data:
+    for inv in invoices_data:
         cid = inv["client_id"]
         if cid not in fin_map: fin_map[cid] = {"total_amount": 0, "total_paid": 0}
         fin_map[cid]["total_amount"] += float(inv["amount"] or 0)
@@ -417,11 +423,22 @@ async def send_email_to_contact(
 async def get_pipeline_health(current_admin=Depends(verify_token)):
     """Pipeline health metrics"""
     db = get_db()
+    role = current_admin.get("role", "")
+    admin_id = current_admin["sub"]
     
-    # Get all invoices
-    all_invoices = db.table("invoices").select("""
-        id, amount, amount_paid, status, due_date, created_at
-    """).execute().data or []
+    is_privileged = any(r in role.lower() for r in ["admin", "operations"])
+    
+    # 1. Base Query
+    query = db.table("invoices").select("""
+        id, amount, amount_paid, status, due_date, created_at, clients(assigned_rep_id)
+    """)
+    
+    if not is_privileged:
+        # Join check: filter where the client's assigned rep is the current user
+        query = query.filter("clients.assigned_rep_id", "eq", admin_id)
+    
+    res = await db_execute(lambda: query.neq("status", "voided").execute())
+    all_invoices = res.data or []
     
     today = datetime.now().date()
     
@@ -456,10 +473,20 @@ async def get_pipeline_health(current_admin=Depends(verify_token)):
 async def get_sales_rep_performance(current_admin=Depends(verify_token)):
     """Sales rep performance metrics"""
     db = get_db()
+    role = current_admin.get("role", "")
+    admin_id = current_admin["sub"]
     
-    invoices = db.table("invoices").select("""
-        id, sales_rep_name, amount, amount_paid, status, created_at
-    """).execute().data or []
+    is_privileged = any(r in role.lower() for r in ["admin", "operations"])
+    
+    query = db.table("invoices").select("""
+        id, sales_rep_name, amount, amount_paid, status, created_at, clients(assigned_rep_id)
+    """)
+    
+    if not is_privileged:
+        query = query.filter("clients.assigned_rep_id", "eq", admin_id)
+        
+    res = await db_execute(lambda: query.neq("status", "voided").execute())
+    invoices = res.data or []
     
     # Group by sales rep
     reps = {}

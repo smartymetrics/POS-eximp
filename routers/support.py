@@ -420,6 +420,9 @@ async def _resolve_chat_auth(request: Request, current_admin: Optional[dict] = N
 
 @router.post("/tickets/{ticket_id}/chat/create")
 async def create_chat_room(ticket_id: str, current_admin=Depends(verify_token)):
+    if not ticket_id or ticket_id == "null":
+        raise HTTPException(status_code=400, detail="A valid ticket ID is required to create a chat room.")
+    
     db = get_db()
     # 1. Check if room exists
     existing = await db_execute(lambda: db.table("chat_rooms").select("id").eq("ticket_id", ticket_id).execute())
