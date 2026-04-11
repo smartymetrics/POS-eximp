@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
 from fastapi.encoders import jsonable_encoder
 from models import VerificationConfirm, VerificationReject, VerificationUpdate
-from database import get_db
+from database import get_db, db_execute
 from routers.auth import verify_token, has_any_role
 from email_service import send_receipt_and_statement_email, send_rejection_email, send_commission_earned_email
 from routers.analytics import log_activity
@@ -15,20 +15,38 @@ router = APIRouter()
 @router.get("/")
 async def list_verifications(current_admin=Depends(verify_token)):
     db = get_db()
+    role = current_admin.get("role", "")
+    admin_id = current_admin["sub"]
+    is_privileged = any(r in role.lower() for r in ["admin", "operations"])
+
     # Fetch pending verifications with client, invoice, and subscription info
-    result = db.table("pending_verifications")\
-        .select("*, clients(full_name, email), invoices(invoice_number, property_name, plot_size_sqm, amount, amount_paid, signature_url), property_subscriptions(passport_photo_url, nin_document_url, international_passport_url, occupation, residential_address)")\
-        .order("created_at", desc=True)\
-        .execute()
+    # Use !inner to ensure that the row is completely excluded if the client filter doesn't match
+    query = db.table("pending_verifications")\
+        .select("*, clients!inner(full_name, email, assigned_rep_id), invoices(invoice_number, property_name, plot_size_sqm, amount, amount_paid, signature_url), property_subscriptions(passport_photo_url, nin_document_url, international_passport_url, occupation, residential_address)")\
+        .order("created_at", desc=True)
+    
+    if not is_privileged:
+        # Join check: filter where the client's assigned rep is the current user
+        query = query.filter("clients.assigned_rep_id", "eq", admin_id)
+
+    result = await db_execute(lambda: query.execute())
     return result.data
 
 @router.get("/count")
 async def get_pending_count(current_admin=Depends(verify_token)):
     db = get_db()
-    result = db.table("pending_verifications")\
-        .select("id", count="exact")\
-        .eq("status", "pending")\
-        .execute()
+    role = current_admin.get("role", "")
+    admin_id = current_admin["sub"]
+    is_privileged = any(r in role.lower() for r in ["admin", "operations"])
+
+    query = db.table("pending_verifications")\
+        .select("id, clients!inner(assigned_rep_id)", count="exact")\
+        .eq("status", "pending")
+    
+    if not is_privileged:
+        query = query.filter("clients.assigned_rep_id", "eq", admin_id)
+
+    result = await db_execute(lambda: query.execute())
     return {"count": result.count or 0}
 
 @router.patch("/{id}/confirm")

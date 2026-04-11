@@ -425,6 +425,16 @@
                         placeholder="Type property name here">
                 </div>
 
+                <div class="mt-6 mb-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Is this property being purchased: <span class="text-red-500">*</span></label>
+                    <select name="purchase_purpose" required
+                        class="w-full p-4 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
+                        <option value="" disabled selected>-- Select an Option --</option>
+                        <option value="For yourself">For yourself</option>
+                        <option value="For someone else">For someone else</option>
+                    </select>
+                </div>
+
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">Plot Size</label>
@@ -500,15 +510,20 @@
                 </div>
 
                 <div
-                    class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8 p-6 bg-gray-50 rounded-2xl border border-gray-200">
+                    class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8 p-6 bg-gray-50 rounded-2xl border border-gray-200">
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2 text-gold">Deposit Amount (NGN)</label>
+                        <label class="block text-sm font-bold text-gray-700 mb-2 text-gold">Deposit Amount (NGN) <span class="text-red-500">*</span></label>
                         <div class="relative">
                             <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₦</span>
                             <input type="number" name="deposit_amount" required
                                 class="w-full p-3 pl-8 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold outline-none font-bold"
                                 placeholder="0.00">
                         </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Payment Date <span class="text-red-500">*</span></label>
+                        <input type="date" name="payment_date" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold outline-none">
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-2">Payment Duration</label>
@@ -587,17 +602,20 @@
                         Upload Inside the Box Above</p>
                 </div>
 
-                {% if not rep %}
-                <div class="mt-6">
+                <div class="mt-6 relative" id="salesRepSearchGroup">
                     <label class="block text-sm font-bold text-gray-700 mb-2">Sales Consultant (Optional)</label>
-                    <input type="text" name="sales_rep_name"
-                        class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold outline-none"
-                        placeholder="Who are you working with?">
+                    <div class="relative">
+                        <i class="fas fa-user-tie absolute left-4 top-1/2 -translate-y-1/2 text-muted"></i>
+                        <input type="text" id="salesRepSearch" name="sales_rep_name" autocomplete="off"
+                            class="w-full p-3 pl-12 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold outline-none"
+                            placeholder="Who are you working with?">
+                        <input type="hidden" name="sales_rep_id" id="sales_rep_id" value="{{ rep.id if rep else '' }}">
+                    </div>
+                    <div id="salesRepList" class="autocomplete-list shadow-2xl border-gold/20"></div>
+                    {% if rep %}
+                    <p class="text-[10px] text-green-600 font-bold mt-1 uppercase tracking-wider"><i class="fas fa-link mr-1"></i> Attribution Linked to {{ rep.name }}</p>
+                    {% endif %}
                 </div>
-                {% else %}
-                <input type="hidden" name="sales_rep_id" value="{{ rep.id }}">
-                <input type="hidden" name="sales_rep_name" value="{{ rep.name }}">
-                {% endif %}
             </div>
 
             <!-- Navigation -->
@@ -942,7 +960,59 @@
 
         document.addEventListener('click', (e) => {
             if (!searchInput.contains(e.target)) listContainer.style.display = 'none';
+            if (repSearch && !repSearch.contains(e.target)) repList.style.display = 'none';
         });
+
+        // Searchable Sales Representatives
+        let allReps = [];
+        const repSearch = document.getElementById('salesRepSearch');
+        const repList = document.getElementById('salesRepList');
+        const hiddenRepId = document.getElementById('sales_rep_id');
+
+        async function fetchReps() {
+            try {
+                const res = await fetch('/api/sales-reps/public/active');
+                if (res.ok) allReps = await res.json();
+            } catch (e) { console.error("Failed to load reps", e); }
+        }
+
+        if (repSearch) {
+            fetchReps();
+            repSearch.addEventListener('input', function() {
+                const val = this.value.toLowerCase();
+                repList.innerHTML = '';
+                // Clear ID if user starts typing something new (they need to re-select)
+                hiddenRepId.value = '';
+                
+                if (!val) {
+                    repList.style.display = 'none';
+                    return;
+                }
+                const matches = allReps.filter(r => 
+                    r.name.toLowerCase().includes(val) || 
+                    (r.phone && r.phone.includes(val))
+                );
+                matches.forEach(r => {
+                    const div = document.createElement('div');
+                    div.className = 'autocomplete-item group transition-all';
+                    div.innerHTML = `
+                        <div class="flex flex-col">
+                            <span class="font-bold text-gray-900 group-hover:text-gold">${r.name}</span>
+                            <span class="text-[10px] text-muted uppercase tracking-wider flex items-center gap-1">
+                                <i class="fas fa-phone-alt text-[8px]"></i> ${r.phone || 'No phone recorded'}
+                            </span>
+                        </div>
+                    `;
+                    div.onclick = () => {
+                        repSearch.value = r.name;
+                        hiddenRepId.value = r.id;
+                        repList.style.display = 'none';
+                    };
+                    repList.appendChild(div);
+                });
+                repList.style.display = matches.length ? 'block' : 'none';
+            });
+        }
 
         // Other Property Toggle
         function toggleOtherProperty(select) {
@@ -1237,11 +1307,12 @@
                     throw new Error(result.message || "Unknown error occurred");
                 }
             } catch (err) {
+                console.error("Submission error:", err);
                 const banner = document.getElementById('globalErrorBanner');
                 const msg = document.getElementById('globalErrorMessage');
                 if (banner && msg) {
                     banner.classList.remove('hidden');
-                    msg.textContent = err.message;
+                    msg.textContent = "Oops! We encountered an issue processing your submission. Please check your connection and try again, or contact our support team if the problem persists.";
                     banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
                 }
             } finally {

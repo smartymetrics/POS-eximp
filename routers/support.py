@@ -126,18 +126,30 @@ async def create_ticket(data: SupportTicketCreate):
 async def list_tickets(status: Optional[str] = None, current_admin=Depends(verify_token)):
     """Admin-only view for the CRM Support Hub."""
     db = get_db()
-    query = db.table("support_tickets").select("*, clients(full_name, email)")
+    role = current_admin.get("role", "")
+    admin_id = current_admin["sub"]
+    is_privileged = any(r in role.lower() for r in ["admin", "operations"])
+
+    # Use !inner to ensure we only return tickets where the client exists and matches any rep filters
+    query = db.table("support_tickets").select("*, clients!inner(full_name, email, assigned_rep_id)")
     
     if status:
         query = query.eq("status", status)
+    
+    if not is_privileged:
+        query = query.filter("clients.assigned_rep_id", "eq", admin_id)
         
-    res = query.order("created_at", desc=True).execute()
+    res = await db_execute(lambda: query.order("created_at", desc=True).execute())
     return res.data
 
 @router.get("/tickets/{ticket_id}")
 async def get_ticket(ticket_id: str, current_admin=Depends(verify_token)):
     db = get_db()
-    # Fetch ticket and responses separately from admins to avoid PostgREST join issues
+    role = current_admin.get("role", "")
+    admin_id = current_admin["sub"]
+    is_privileged = any(r in role.lower() for r in ["admin", "operations"])
+
+    # Fetch ticket and responses
     res = await db_execute(lambda: db.table("support_tickets")\
         .select("*, clients(*), ticket_responses(*)")\
         .eq("id", ticket_id)\
@@ -147,6 +159,13 @@ async def get_ticket(ticket_id: str, current_admin=Depends(verify_token)):
         raise HTTPException(status_code=404, detail="Ticket not found")
         
     ticket = res.data[0]
+
+    # RBAC Enforcement: Check if rep belongs to this client
+    if not is_privileged:
+        client = ticket.get("clients")
+        if not client or client.get("assigned_rep_id") != admin_id:
+            raise HTTPException(status_code=403, detail="Access denied: You are not assigned to this client.")
+
     
     # Manually join admin names for responses
     if ticket.get("ticket_responses"):
@@ -582,9 +601,28 @@ async def decline_chat(invite_token: str):
 @router.get("/chat/{room_id}")
 async def get_chat_room(room_id: str, token: str = None, current_admin=Depends(verify_token)):
     db = get_db()
-    # Very basic return logic for now
-    room = await db_execute(lambda: db.table("chat_rooms").select("*").eq("id", room_id).execute())
-    if not room.data: raise HTTPException(status_code=404)
+    role = current_admin.get("role", "")
+    admin_id = current_admin["sub"]
+    is_privileged = any(r in role.lower() for r in ["admin", "operations"])
+
+    # Fetch room with ticket and client info for RBAC check
+    room_res = await db_execute(lambda: db.table("chat_rooms")\
+        .select("*, support_tickets(id, client_id, clients(assigned_rep_id))")\
+        .eq("id", room_id)\
+        .execute())
+    
+    if not room_res.data:
+        raise HTTPException(status_code=404, detail="Chat room not found")
+    
+    room = room_res.data[0]
+
+    # RBAC Enforcement
+    if not is_privileged:
+        ticket = room.get("support_tickets")
+        client = ticket.get("clients") if ticket else None
+        if not client or client.get("assigned_rep_id") != admin_id:
+            raise HTTPException(status_code=403, detail="Access denied: You are not assigned to this client's chat room.")
+
     
     parts = await db_execute(lambda: db.table("chat_participants").select("*").eq("room_id", room_id).execute())
     msgs = await db_execute(lambda: db.table("chat_messages").select("*").eq("room_id", room_id).order("created_at", desc=False).limit(100).execute())

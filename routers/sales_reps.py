@@ -8,6 +8,16 @@ from routers.analytics import log_activity
 
 router = APIRouter()
 
+@router.get("/public/active")
+async def get_active_reps_public():
+    """
+    PUBLIC endpoint - no auth required.
+    Returns list of all active sales reps (id, name, phone).
+    Used by the custom subscription form for the consultant search field.
+    """
+    res = supabase.table("sales_reps").select("id, name, phone").eq("is_active", True).order("name").execute()
+    return res.data
+
 @router.get("/public/{rep_id}")
 async def get_rep_public_profile(rep_id: str):
     """
@@ -114,7 +124,7 @@ async def resolve_unmatched_rep(
     target_rep = supabase.table("sales_reps").select("*").eq("id", req.target_rep_id).execute()
     if not target_rep.data:
         raise HTTPException(status_code=404, detail="Target rep not found")
-        
+    
     target_name = target_rep.data[0]["name"]
     
     # 3. Update all invoices that used the unmatched name

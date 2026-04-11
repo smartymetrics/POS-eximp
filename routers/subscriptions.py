@@ -50,6 +50,10 @@ async def submit_subscription(
     Handles the multi-step form submission.
     """
     try:
+        # Capture legal metadata for audit/security
+        payload["ip_address"] = request.client.host
+        payload["user_agent"] = request.headers.get("user-agent")
+
         # 1. Signature Handling (Base64 from Canvas or Uploaded Image)
         signature_base64 = payload.get("signature_data")
         invoice_temp_num = f"TEMP_{uuid.uuid4().hex[:8]}"
