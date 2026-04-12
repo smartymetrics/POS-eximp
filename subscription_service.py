@@ -64,7 +64,7 @@ class SubscriptionService:
             client_id = new_client.data[0]["id"]
 
         # 2. Resolve Sales Rep for Commission Tracking
-        final_sales_rep_id = sales_rep_id
+        final_sales_rep_id = sales_rep_id if sales_rep_id and str(sales_rep_id).strip() else None
         final_sales_rep_name = None
         
         if final_sales_rep_id:
@@ -204,10 +204,15 @@ class SubscriptionService:
             # --- INTELLIGENT ATTRIBUTION LOOK-BACK ---
             # If no campaign was provided by the form, try to find the last one from marketing_contacts
             current_mcid = data.get("marketing_campaign_id") or data.get("mcid")
-            if not current_mcid:
+            if not current_mcid or not str(current_mcid).strip():
+                current_mcid = None
                 mc_attr = db.table("marketing_contacts").select("last_campaign_id").eq("email", email).execute()
                 if mc_attr.data and mc_attr.data[0].get("last_campaign_id"):
                     current_mcid = mc_attr.data[0]["last_campaign_id"]
+            
+            # Final safety check for UUID format
+            if current_mcid and not str(current_mcid).strip():
+                current_mcid = None
             
             # Update invoice with attribution if found
             if current_mcid:
@@ -267,8 +272,13 @@ class SubscriptionService:
             head, encoded = base64_data.split(",", 1)
             raw_bytes = base64.b64decode(encoded)
             
-            # Detect MIME type from the data URI header (e.g. data:application/pdf;base64)
+            # Detect MIME type and validate against strict whitelist
+            ALLOWED_MIME_TYPES = {"application/pdf", "image/jpeg", "image/png", "image/webp"}
             mime_type = head.split(":")[1].split(";")[0] if ":" in head and ";" in head else "image/png"
+            
+            if mime_type not in ALLOWED_MIME_TYPES:
+                print(f"REJECTED: Unsupported file type detected: {mime_type}")
+                return None
             
             if mime_type == "application/pdf":
                 # Upload PDF directly — skip PIL entirely

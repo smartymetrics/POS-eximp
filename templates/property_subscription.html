@@ -360,7 +360,7 @@
                                     <i class="fas fa-circle-notch fa-spin text-white"></i>
                                 </div>
                             </div>
-                            <input type="file" name="passport_photo" accept="image/*" required
+                            <input type="file" name="passport_photo" accept="image/jpeg,image/png,image/webp" required
                                 class="absolute inset-0 opacity-0 cursor-pointer"
                                 onchange="handleFileSelection(this, 'passportPreview', 'passport', 'passportStatus')">
                             <input type="hidden" name="passport_photo_url" id="passport_photo_url">
@@ -381,7 +381,7 @@
                             <label class="block text-sm font-bold text-gray-700 mb-2">Upload ID Document (NIN/Passport)
                                 <span class="text-red-500">*</span></label>
                             <div class="relative group">
-                                <input type="file" name="nin_document" accept="image/*,application/pdf" required
+                                <input type="file" name="nin_document" accept="image/jpeg,image/png,image/webp,application/pdf" required
                                     onchange="handleFileSelection(this, null, 'id_document', 'idStatus')"
                                     class="w-full p-2.5 text-sm text-gray-500 border border-gray-300 rounded-xl cursor-pointer bg-gray-50 outline-none">
                                 <div id="idStatus" class="absolute right-4 top-1/2 -translate-y-1/2 hidden">
@@ -540,7 +540,7 @@
                 <div class="mt-6">
                     <label class="block text-sm font-bold text-gray-700 mb-2">Upload Payment Receipt</label>
                     <div class="relative group">
-                        <input type="file" name="payment_receipt" accept="image/*,application/pdf" required
+                        <input type="file" name="payment_receipt" accept="image/jpeg,image/png,image/webp,application/pdf" required
                             onchange="handleFileSelection(this, null, 'receipt', 'receiptStatus')"
                             class="w-full p-2.5 text-sm text-gray-500 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gold outline-none">
                         <div id="receiptStatus" class="absolute right-4 top-1/2 -translate-y-1/2 hidden">
@@ -589,7 +589,7 @@
                             <label
                                 class="text-xs text-blue-600 font-bold hover:underline cursor-pointer flex items-center gap-1">
                                 <i class="fas fa-upload"></i> UPLOAD IMAGE
-                                <input type="file" accept="image/*" class="hidden"
+                                <input type="file" accept="image/jpeg,image/png,image/webp" class="hidden"
                                     onchange="uploadSignatureImage(this)">
                             </label>
                             <span class="text-gray-300">|</span>
@@ -603,12 +603,12 @@
                 </div>
 
                 <div class="mt-6 relative" id="salesRepSearchGroup">
-                    <label class="block text-sm font-bold text-gray-700 mb-2">Sales Consultant (Optional)</label>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Referring Representative / Realtor (Optional)</label>
                     <div class="relative">
                         <i class="fas fa-user-tie absolute left-4 top-1/2 -translate-y-1/2 text-muted"></i>
                         <input type="text" id="salesRepSearch" name="sales_rep_name" autocomplete="off"
                             class="w-full p-3 pl-12 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold outline-none"
-                            placeholder="Who are you working with?">
+                            placeholder="Search by name or phone number...">
                         <input type="hidden" name="sales_rep_id" id="sales_rep_id" value="{{ rep.id if rep else '' }}">
                     </div>
                     <div id="salesRepList" class="autocomplete-list shadow-2xl border-gold/20"></div>
@@ -738,6 +738,16 @@
         // Upload Signature Image to Canvas
         function uploadSignatureImage(input) {
             if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+                const ext = file.name.split('.').pop().toLowerCase();
+                const allowedExts = ['jpg', 'jpeg', 'png', 'webp'];
+
+                if (!allowedMimeTypes.includes(file.type) && !allowedExts.includes(ext)) {
+                    alert("Unsupported signature format. Please upload your signature as a clear Image (JPG, PNG).");
+                    input.value = '';
+                    return;
+                }
                 const reader = new FileReader();
                 reader.onload = function (e) {
                     const img = new Image();
@@ -808,9 +818,20 @@
             });
 
             // Buttons
-            document.getElementById('prevBtn').classList.toggle('hidden', currentStep === 1);
-            document.getElementById('nextBtn').classList.toggle('hidden', currentStep === totalSteps);
-            document.getElementById('submitBtn').classList.toggle('hidden', currentStep !== totalSteps);
+            // Navigation Buttons visibility logic
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const submitBtn = document.getElementById('submitBtn');
+
+            prevBtn.classList.toggle('hidden', currentStep === 1);
+            
+            if (currentStep === totalSteps) {
+                nextBtn.classList.add('hidden');
+                submitBtn.classList.remove('hidden');
+            } else {
+                nextBtn.classList.remove('hidden');
+                submitBtn.classList.add('hidden');
+            }
 
             if (currentStep === 5 && !signaturePad) {
                 setTimeout(initSignaturePad, 100);
@@ -862,6 +883,17 @@
         async function handleFileSelection(input, previewId, fileType, statusId) {
             if (!input.files || !input.files[0]) return;
             
+            const file = input.files[0];
+            const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+            const ext = file.name.split('.').pop().toLowerCase();
+            const allowedExts = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
+            
+            if (!allowedMimeTypes.includes(file.type) && !allowedExts.includes(ext)) {
+                alert("Unsupported file format detected. Please provide your documents as high-quality Images (JPG, PNG) or PDF files for processing.");
+                input.value = ''; // Reset the input
+                return;
+            }
+            
             // 1. Locally Preview if it's an image
             if (previewId) {
                 const reader = new FileReader();
@@ -908,11 +940,15 @@
                     if (statusEl) {
                         statusEl.innerHTML = '<i class="fas fa-check-circle text-green-500"></i>';
                     }
+                } else {
+                    throw new Error(result.message || "Upload failed");
                 }
-            } catch (err) {
-                console.error("Upload error:", err);
-                if (statusEl) statusEl.innerHTML = '<i class="fas fa-exclamation-circle text-red-500"></i>';
-                alert("File upload failed. Please try again.");
+            } catch (error) {
+                console.error("Upload error:", error);
+                if (statusEl) {
+                    statusEl.innerHTML = '<i class="fas fa-exclamation-triangle text-red-500" title="Upload failed. Please try again."></i>';
+                }
+                alert("Document upload failed. Please try selecting the file again.");
             } finally {
                 activeUploads = Math.max(0, activeUploads - 1);
             }
@@ -1203,95 +1239,73 @@
             clearStepError();
             document.getElementById('globalErrorBanner')?.classList.add('hidden');
 
-            // Wait/Block only if background uploads are still active
-            if (typeof activeUploads !== 'undefined' && activeUploads > 0) {
-                console.log("Waiting for uploads...", activeUploads);
-                const goldBtn = document.getElementById('submitBtn');
-                const originalInner = goldBtn.innerHTML;
-                goldBtn.disabled = true;
-                goldBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> Finishing Uploads...';
-                
-                // Poll for completion (max 10s)
-                let pollCount = 0;
-                while (activeUploads > 0 && pollCount < 20) {
-                    await new Promise(r => setTimeout(r, 500));
-                    pollCount++;
-                }
-                
-                if (activeUploads > 0) {
-                    // Force the counter to 0 if it's stuck but alert the user
-                    console.warn("Upload polling timed out. Forcing through.");
-                    const proceedAnyway = confirm("Some files are taking too long to upload. Submit anyway with current progress?");
-                    if (!proceedAnyway) {
-                        goldBtn.disabled = false;
-                        goldBtn.innerHTML = originalInner;
-                        return;
-                    }
-                }
-            }
-
-            // Validate Co-Owner
-            const ownershipType = document.getElementById('ownershipSelect').value;
-            if (ownershipType === 'joint' && !document.getElementById('hidden_co_owner_name').value) {
-                showStepError(["Co-Owner details (Joint ownership selected)"]);
-                currentStep = 4;
-                updateSteps();
-                return;
-            }
-
-
             const goldBtn = document.getElementById('submitBtn');
             const originalText = goldBtn.innerHTML;
+            
+            // 1. Enter Locked Loading State Immediately
             goldBtn.disabled = true;
-            goldBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> Finalizing...';
-
-            const formData = new FormData(form);
-            const data = Object.fromEntries(formData.entries());
-
-            // Add UTMs and Attribution
-            const urlParams = new URLSearchParams(window.location.search);
-            const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
-            
-            utmKeys.forEach(k => {
-                // Priority: 1. Current URL params 2. Pre-recorded tags from track.js (localStorage)
-                data[k] = urlParams.get(k) || localStorage.getItem(`ec_${k}`);
-            });
-
-            // Capture the Marketing Campaign ID (mcid) if present
-            data.marketing_campaign_id = urlParams.get('mcid') || localStorage.getItem('mcid');
-
-            // Handle "Other" property, plot size, and quantity overrides
-            if (data.property_name === 'Other') {
-                data.property_name = document.getElementById('otherPropertyName').value;
-            }
-            if (data.plot_size === 'Other') {
-                data.plot_size = document.getElementById('otherPlotSize').value;
-            }
-            if (data.quantity === 'Other') {
-                data.quantity = document.getElementById('otherQuantity').value;
-            }
-
-            // Signature stays base64 for processing into URL on backend
-            // Safety check for signaturePad
-            if (typeof signaturePad !== 'undefined' && signaturePad && !signaturePad.isEmpty()) {
-                data.signature_data = signaturePad.toDataURL(); 
-            } else if (typeof signaturePad === 'undefined' || !signaturePad) {
-                // Try to initialize if missing
-                initSignaturePad();
-                if (signaturePad && !signaturePad.isEmpty()) {
-                    data.signature_data = signaturePad.toDataURL();
-                } else {
-                    showStepError(["Client Signature (Tool was not ready, please try again)"]);
-                    return;
-                }
-            } else {
-                showStepError(["Client Signature (Required)"]);
-                return;
-            }
-            
-            data.consent_given = document.getElementById('consent').checked;
+            goldBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> Processing Application...';
 
             try {
+                // 2. Wait for background uploads (Max 5s silenty, then ask)
+                if (typeof activeUploads !== 'undefined' && activeUploads > 0) {
+                    console.log("Waiting for background uploads...", activeUploads);
+                    goldBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> Finishing Document Uploads...';
+                    
+                    let pollCount = 0;
+                    while (activeUploads > 0 && pollCount < 10) { // 5 seconds (10 * 500ms)
+                        await new Promise(r => setTimeout(r, 500));
+                        pollCount++;
+                    }
+                    
+                    if (activeUploads > 0) {
+                        const proceed = confirm("Some documents are still uploading. Do you want to submit with currently uploaded files anyway?");
+                        if (!proceed) {
+                            goldBtn.disabled = false;
+                            goldBtn.innerHTML = originalText;
+                            return; 
+                        }
+                    }
+                    // Restore processing text for finalize step
+                    goldBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> Finalizing Application...';
+                }
+
+                // 3. Document Validation & Preparation
+                const formData = new FormData(form);
+                const data = Object.fromEntries(formData.entries());
+
+                // Co-Owner check
+                if (data.ownership_type === 'joint' && !document.getElementById('hidden_co_owner_name').value) {
+                    showStepError(["Co-Owner details (Joint ownership selected)"]);
+                    currentStep = 4;
+                    updateSteps();
+                    throw new Error("Validation failed");
+                }
+
+                // Add UTMs and Attribution
+                const urlParams = new URLSearchParams(window.location.search);
+                const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+                utmKeys.forEach(k => {
+                    data[k] = urlParams.get(k) || localStorage.getItem(`ec_${k}`);
+                });
+                data.marketing_campaign_id = urlParams.get('mcid') || localStorage.getItem('mcid');
+
+                // Handle Overrides
+                if (data.property_name === 'Other') data.property_name = document.getElementById('otherPropertyName').value;
+                if (data.plot_size === 'Other') data.plot_size = document.getElementById('otherPlotSize').value;
+                if (data.quantity === 'Other') data.quantity = document.getElementById('otherQuantity').value;
+
+                // Handle Signature
+                if (typeof signaturePad !== 'undefined' && signaturePad && !signaturePad.isEmpty()) {
+                    data.signature_data = signaturePad.toDataURL(); 
+                } else {
+                    showStepError(["Client Signature (Required)"]);
+                    throw new Error("Validation failed");
+                }
+                
+                data.consent_given = document.getElementById('consent').checked;
+
+                // 4. API Submission
                 const response = await fetch('/api/subscriptions/submit', {
                     method: 'POST',
                     headers: { 'Content-Type': 'application/json' },
@@ -1307,13 +1321,15 @@
                     throw new Error(result.message || "Unknown error occurred");
                 }
             } catch (err) {
-                console.error("Submission error:", err);
-                const banner = document.getElementById('globalErrorBanner');
-                const msg = document.getElementById('globalErrorMessage');
-                if (banner && msg) {
-                    banner.classList.remove('hidden');
-                    msg.textContent = "Oops! We encountered an issue processing your submission. Please check your connection and try again, or contact our support team if the problem persists.";
-                    banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                if (err.message !== "Validation failed") {
+                    console.error("Submission error:", err);
+                    const banner = document.getElementById('globalErrorBanner');
+                    const msg = document.getElementById('globalErrorMessage');
+                    if (banner && msg) {
+                        banner.classList.remove('hidden');
+                        msg.textContent = "Oops! We encountered an issue. Please check your connection and try again.";
+                        banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
                 }
             } finally {
                 goldBtn.disabled = false;
