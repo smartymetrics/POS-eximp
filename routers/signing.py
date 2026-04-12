@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request, Depends, BackgroundTasks
 from fastapi.responses import HTMLResponse
 from fastapi.templating import Jinja2Templates
-from database import get_db, SUPABASE_URL
+from database import get_db, db_execute, SUPABASE_URL
 from models import WitnessSignatureSubmit, ClientContractSignatureSubmit
 from routers.analytics import log_activity
 from datetime import datetime

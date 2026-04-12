@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.encoders import jsonable_encoder
 from models import PropertyCreate, PropertyUpdate
-from database import get_db
+from database import get_db, db_execute
 from routers.auth import verify_token
 
 router = APIRouter()

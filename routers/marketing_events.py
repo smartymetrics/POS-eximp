@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException
 from pydantic import BaseModel
 from typing import List, Optional
-from database import get_db
+from database import get_db, db_execute
 from routers.auth import verify_token
 from datetime import date
 

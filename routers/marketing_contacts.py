@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, UploadFile, File
 from typing import List, Optional
 from pydantic import BaseModel
-from database import get_db
+from database import get_db, db_execute
 from routers.auth import verify_token
 from routers.analytics import log_activity
 from datetime import datetime

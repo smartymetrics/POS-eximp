@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Request, HTTPException, Depends, Response
 from fastapi.responses import RedirectResponse, HTMLResponse
 from typing import Optional
-from database import get_db
+from database import get_db, db_execute
 from datetime import datetime
 import os
 import logging

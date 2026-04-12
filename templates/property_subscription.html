@@ -784,6 +784,8 @@
                 <div>
                     <label class="block text-sm font-bold text-gray-700 mb-1">Full Name <span class="text-red-500">*</span></label>
                     <input type="text" id="modal_co_owner_name" required
+                        class="w-full p-3 rounded-xl border border-gray-300 focus:border-gold outline-none"
+                        placeholder="Full name">
                 </div>
                 <div>
                     <label class="block text-sm font-bold text-gray-700 mb-1">Residential Address <span class="text-red-500">*</span></label>
@@ -1477,11 +1479,13 @@
                 if (data.quantity === 'Other') data.quantity = document.getElementById('otherQuantity').value;
                 if (data.nok_relationship === 'Other') data.nok_relationship = document.getElementById('otherNokRelationship').value;
 
-                // Handle Signature
+                // 4. Handle Signature
                 if (typeof signaturePad !== 'undefined' && signaturePad && !signaturePad.isEmpty()) {
                     data.signature_data = signaturePad.toDataURL();
                 } else {
                     showStepError(["Client Signature (Required)"]);
+                    currentStep = 6;
+                    updateSteps();
                     throw new Error("Validation failed");
                 }
 

@@ -8,7 +8,7 @@ from models import (
     AdminLogin, AdminCreate, TokenResponse,
     ChangePasswordRequest, ResetPasswordRequest, UpdateProfileRequest
 )
-from database import get_db
+from database import get_db, db_execute
 from .sync_utils import sync_historical_sales_data
 
 router = APIRouter()

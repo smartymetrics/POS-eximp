@@ -1,5 +1,5 @@
 from fastapi import APIRouter, Depends, Request, HTTPException, status
-from database import get_db, SUPABASE_URL
+from database import get_db, SUPABASE_URL, db_execute
 from routers.auth import verify_token
 import uuid
 from datetime import datetime

@@ -1,5 +1,5 @@
 from fastapi import APIRouter, HTTPException, Depends, Request
-from database import get_db
+from database import get_db, db_execute
 from routers.auth import verify_token
 from datetime import datetime, timedelta
 import pytz
