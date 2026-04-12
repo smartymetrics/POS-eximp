@@ -26,12 +26,12 @@ class SequenceCreate(BaseModel):
 async def list_sequences(current_admin=Depends(verify_token)):
     db = get_db()
     # Fetch sequences with segment info
-    seq_res = db.table("marketing_sequences").select("*, marketing_segments(name)").execute()
+    seq_res = await db_execute(lambda: db.table("marketing_sequences").select("*, marketing_segments(name)").execute())
     sequences = seq_res.data
     
     # Fetch stats for each
     for s in sequences:
-        stats_res = db.table("contact_sequence_status").select("status").eq("sequence_id", s["id"]).execute()
+        stats_res = await db_execute(lambda: db.table("contact_sequence_status").select("status").eq("sequence_id", s["id"]).execute())
         stats = stats_res.data
         s["count_active"] = len([enr for enr in stats if enr["status"] == "active"])
         s["count_completed"] = len([enr for enr in stats if enr["status"] == "completed"])
@@ -70,14 +70,14 @@ async def create_sequence(data: SequenceCreate, current_admin=Depends(verify_tok
         })
     
     if step_entries:
-        db.table("sequence_steps").insert(step_entries).execute()
+        await db_execute(lambda: db.table("sequence_steps").insert(step_entries).execute())
         
     return {"id": seq_id, "message": "Sequence and steps created successfully."}
 
 @router.get("/{id}")
 async def get_sequence(id: str, current_admin=Depends(verify_token)):
     db = get_db()
-    seq_res = db.table("marketing_sequences").select("*, sequence_steps(*)").eq("id", id).execute()
+    seq_res = await db_execute(lambda: db.table("marketing_sequences").select("*, sequence_steps(*)").eq("id", id).execute())
     if not seq_res.data:
         raise HTTPException(status_code=404, detail="Sequence not found")
     return seq_res.data[0]
@@ -88,7 +88,7 @@ async def enroll_contact(id: str, contact_id: str, current_admin=Depends(verify_
     db = get_db()
     
     # 1. Check if already enrolled
-    existing = db.table("contact_sequence_status").select("*").eq("contact_id", contact_id).eq("sequence_id", id).execute()
+    existing = await db_execute(lambda: db.table("contact_sequence_status").select("*").eq("contact_id", contact_id).eq("sequence_id", id).execute())
     if existing.data:
         return {"message": "Contact already in this sequence."}
         
@@ -107,5 +107,5 @@ async def enroll_contact(id: str, contact_id: str, current_admin=Depends(verify_
 @router.delete("/{id}")
 async def delete_sequence(id: str, current_admin=Depends(verify_token)):
     db = get_db()
-    db.table("marketing_sequences").delete().eq("id", id).execute()
+    await db_execute(lambda: db.table("marketing_sequences").delete().eq("id", id).execute())
     return {"message": "Sequence deleted."}

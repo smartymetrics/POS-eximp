@@ -15,7 +15,7 @@ async def get_attribution_summary(current_admin=Depends(verify_token)):
     db = get_db()
     
     # 1. Fetch campaigns
-    campaigns_res = db.table("email_campaigns").select("id, name").execute()
+    campaigns_res = await db_execute(lambda: db.table("email_campaigns").select("id, name").execute())
     campaigns = campaigns_res.data or []
     
     # 2. Fetch attributed invoices (only non-voided)
@@ -64,7 +64,7 @@ async def get_weighted_forecast(current_admin=Depends(verify_token)):
     db = get_db()
     
     # Fetch all active (non-voided) invoices
-    invoices_res = db.table("invoices").select("amount, amount_paid, status").neq("status", "voided").execute()
+    invoices_res = await db_execute(lambda: db.table("invoices").select("amount, amount_paid, status").neq("status", "voided").execute())
     invoices = invoices_res.data or []
     
     total_pipeline = 0

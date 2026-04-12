@@ -46,7 +46,7 @@ class CampaignTest(BaseModel):
 @router.get("/")
 async def list_campaigns(current_admin=Depends(verify_token)):
     db = get_db()
-    result = db.table("email_campaigns").select("*, admins(full_name)").order("created_at", desc=True).execute()
+    result = await db_execute(lambda: db.table("email_campaigns").select("*, admins(full_name)").order("created_at", desc=True).execute())
     return result.data
 
 @router.post("/")
@@ -57,7 +57,7 @@ async def create_campaign(data: CampaignCreate, current_admin=Depends(verify_tok
         "status": "draft",
         "created_by": current_admin["sub"]
     }
-    result = db.table("email_campaigns").insert(campaign_data).execute()
+    result = await db_execute(lambda: db.table("email_campaigns").insert(campaign_data).execute())
     
     await log_activity(
         "marketing_campaign_created",
@@ -69,7 +69,7 @@ async def create_campaign(data: CampaignCreate, current_admin=Depends(verify_tok
 @router.get("/{id}")
 async def get_campaign(id: str, current_admin=Depends(verify_token)):
     db = get_db()
-    result = db.table("email_campaigns").select("*, admins(full_name)").eq("id", id).execute()
+    result = await db_execute(lambda: db.table("email_campaigns").select("*, admins(full_name)").eq("id", id).execute())
     if not result.data:
         raise HTTPException(status_code=404, detail="Campaign not found")
     return result.data[0]
@@ -79,7 +79,7 @@ async def update_campaign(id: str, data: CampaignUpdate, current_admin=Depends(v
     db = get_db()
     
     # Check status - restrict everything EXCEPT budget/spend for sent campaigns
-    current = db.table("email_campaigns").select("status").eq("id", id).execute()
+    current = await db_execute(lambda: db.table("email_campaigns").select("status").eq("id", id).execute())
     if not current.data:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
@@ -95,14 +95,14 @@ async def update_campaign(id: str, data: CampaignUpdate, current_admin=Depends(v
         update_dict = final_update
     update_dict["updated_at"] = datetime.utcnow().isoformat()
     
-    result = db.table("email_campaigns").update(update_dict).eq("id", id).execute()
+    result = await db_execute(lambda: db.table("email_campaigns").update(update_dict).eq("id", id).execute())
     return result.data[0]
 
 @router.post("/{id}/send-test")
 async def send_test_email(id: str, data: CampaignTest, current_admin=Depends(verify_token)):
     """Sends a single test email of the campaign with real-time editor content."""
     db = get_db()
-    camp_res = db.table("email_campaigns").select("*").eq("id", id).execute()
+    camp_res = await db_execute(lambda: db.table("email_campaigns").select("*").eq("id", id).execute())
     if not camp_res.data:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
@@ -132,7 +132,7 @@ async def send_campaign_broadcast(id: str, target: Optional[CampaignSendTarget],
     db = get_db()
     
     # Check status
-    camp_res = db.table("email_campaigns").select("status").eq("id", id).execute()
+    camp_res = await db_execute(lambda: db.table("email_campaigns").select("status").eq("id", id).execute())
     if not camp_res.data:
         raise HTTPException(status_code=404, detail="Campaign not found")
     if camp_res.data[0]["status"] != "draft":
@@ -182,7 +182,7 @@ async def cancel_scheduled_broadcast(id: str, current_admin=Depends(verify_token
     db = get_db()
     
     # Check status
-    camp_res = db.table("email_campaigns").select("status").eq("id", id).execute()
+    camp_res = await db_execute(lambda: db.table("email_campaigns").select("status").eq("id", id).execute())
     if not camp_res.data:
         raise HTTPException(status_code=404, detail="Campaign not found")
     if camp_res.data[0]["status"] != "scheduled":
@@ -208,15 +208,15 @@ async def sync_campaign_stats(id: str, current_admin=Depends(verify_token)):
     db = get_db()
     
     # 1. Count Opens (unique contacts who opened)
-    opens_res = db.table("campaign_recipients").select("contact_id", count="exact").eq("campaign_id", id).not_.is_("opened_at", "null").execute()
+    opens_res = await db_execute(lambda: db.table("campaign_recipients").select("contact_id", count="exact").eq("campaign_id", id).not_.is_("opened_at", "null").execute())
     total_opens = opens_res.count or 0
     
     # 2. Count Clicks (unique contacts who clicked)
-    clicks_res = db.table("campaign_recipients").select("contact_id", count="exact").eq("campaign_id", id).not_.is_("clicked_at", "null").execute()
+    clicks_res = await db_execute(lambda: db.table("campaign_recipients").select("contact_id", count="exact").eq("campaign_id", id).not_.is_("clicked_at", "null").execute())
     total_clicks = clicks_res.count or 0
     
     # 3. Count Attributed revenue (sum of paid invoices linked to this campaign)
-    revenue_res = db.table("invoices").select("amount").eq("marketing_campaign_id", id).eq("status", "paid").execute()
+    revenue_res = await db_execute(lambda: db.table("invoices").select("amount").eq("marketing_campaign_id", id).eq("status", "paid").execute())
     total_revenue = sum([i["amount"] for i in revenue_res.data]) if revenue_res.data else 0
     
     # 4. Update Campaign Table
@@ -240,7 +240,7 @@ async def duplicate_campaign(id: str, current_admin=Depends(verify_token)):
     db = get_db()
     
     # 1. Fetch source
-    res = db.table("email_campaigns").select("*").eq("id", id).execute()
+    res = await db_execute(lambda: db.table("email_campaigns").select("*").eq("id", id).execute())
     if not res.data:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
@@ -259,7 +259,7 @@ async def duplicate_campaign(id: str, current_admin=Depends(verify_token)):
     }
     
     # 3. Save
-    result = db.table("email_campaigns").insert(copy_data).execute()
+    result = await db_execute(lambda: db.table("email_campaigns").insert(copy_data).execute())
     
     await log_activity(
         "marketing_campaign_duplicated",

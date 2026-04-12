@@ -28,7 +28,7 @@ class CampaignUpdate(BaseModel):
 @router.get("/")
 async def list_campaigns(current_admin=Depends(verify_token)):
     db = get_db()
-    result = db.table("marketing_campaigns").select("*, admins(full_name)").order("created_at", desc=True).execute()
+    result = await db_execute(lambda: db.table("marketing_campaigns").select("*, admins(full_name)").order("created_at", desc=True).execute())
     return result.data
 
 @router.post("/")
@@ -43,7 +43,7 @@ async def create_campaign(data: CampaignCreate, current_admin=Depends(verify_tok
         "status": "draft",
         "created_by": current_admin["sub"]
     }
-    result = db.table("marketing_campaigns").insert(campaign_data).execute()
+    result = await db_execute(lambda: db.table("marketing_campaigns").insert(campaign_data).execute())
     
     await log_activity(
         "marketing_campaign_created",
@@ -55,7 +55,7 @@ async def create_campaign(data: CampaignCreate, current_admin=Depends(verify_tok
 @router.get("/{campaign_id}")
 async def get_campaign(campaign_id: str, current_admin=Depends(verify_token)):
     db = get_db()
-    result = db.table("marketing_campaigns").select("*, admins(full_name)").eq("id", campaign_id).execute()
+    result = await db_execute(lambda: db.table("marketing_campaigns").select("*, admins(full_name)").eq("id", campaign_id).execute())
     if not result.data:
         raise HTTPException(status_code=404, detail="Campaign not found")
     return result.data[0]
@@ -65,7 +65,7 @@ async def update_campaign(campaign_id: str, data: CampaignUpdate, current_admin=
     db = get_db()
     
     # Check if sending or sent
-    current = db.table("marketing_campaigns").select("status").eq("id", campaign_id).execute()
+    current = await db_execute(lambda: db.table("marketing_campaigns").select("status").eq("id", campaign_id).execute())
     if not current.data:
         raise HTTPException(status_code=404, detail="Campaign not found")
     if current.data[0]["status"] not in ["draft", "failed"]:
@@ -74,7 +74,7 @@ async def update_campaign(campaign_id: str, data: CampaignUpdate, current_admin=
     update_dict = {k: v for k, v in data.dict().items() if v is not None}
     update_dict["updated_at"] = datetime.utcnow().isoformat()
     
-    result = db.table("marketing_campaigns").update(update_dict).eq("id", campaign_id).execute()
+    result = await db_execute(lambda: db.table("marketing_campaigns").update(update_dict).eq("id", campaign_id).execute())
     return result.data[0]
 
 @router.post("/{campaign_id}/send")
@@ -82,7 +82,7 @@ async def send_campaign(campaign_id: str, background_tasks: BackgroundTasks, cur
     db = get_db()
     
     # 1. Fetch Campaign
-    camp_res = db.table("marketing_campaigns").select("*").eq("id", campaign_id).execute()
+    camp_res = await db_execute(lambda: db.table("marketing_campaigns").select("*").eq("id", campaign_id).execute())
     if not camp_res.data:
         raise HTTPException(status_code=404, detail="Campaign not found")
     campaign = camp_res.data[0]
@@ -106,7 +106,7 @@ async def send_campaign(campaign_id: str, background_tasks: BackgroundTasks, cur
             # Potential placeholder logic for owners
             pass
         
-        db_res = audience_query.execute()
+        db_res = await db_execute(lambda: audience_query.execute())
         recipients = db_res.data
 
     if not recipients:

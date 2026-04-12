@@ -60,7 +60,7 @@ async def upload_media(request: Request, current_admin=Depends(verify_token)):
             "uploaded_by": current_admin["sub"]
         }
         
-        db.table("media_library").insert(media_data).execute()
+        await db_execute(lambda: db.table("media_library").insert(media_data).execute())
 
         # GrapesJS expects a specific JSON response format
         return {"data": [file_url]}
@@ -73,7 +73,7 @@ async def upload_media(request: Request, current_admin=Depends(verify_token)):
 async def list_media(current_admin=Depends(verify_token)):
     db = get_db()
     try:
-        result = db.table("media_library").select("*").order("created_at", desc=True).execute()
+        result = await db_execute(lambda: db.table("media_library").select("*").order("created_at", desc=True).execute())
         return {"data": result.data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))

@@ -249,7 +249,7 @@ def render_invoice_html(invoice: dict) -> str:
             
     # Also include the signature_url from DB if it's a remote URL and not a data URI
     db_sig_url = invoice.get("signature_url")
-    if db_sig_url and db_sig_url.startswith("http") and "supabase" not in db_sig_url:
+    if db_sig_url and db_sig_url.startswith("http"):
         urls_to_fetch["db_signature"] = db_sig_url
 
     # 2. Fetch all images in parallel
@@ -322,7 +322,7 @@ def render_receipt_html(invoice: dict) -> str:
             urls_to_fetch["signature"] = f"{supabase_url}/storage/v1/object/public/signatures/customer_signatures/sig_{invoice_no}.png"
             
     db_sig_url = invoice.get("signature_url")
-    if db_sig_url and db_sig_url.startswith("http") and "supabase" not in db_sig_url:
+    if db_sig_url and db_sig_url.startswith("http"):
         urls_to_fetch["db_signature"] = db_sig_url
 
     # 2. Fetch all images in parallel
@@ -481,7 +481,7 @@ def generate_refund_receipt_pdf(payment: dict, invoice: dict, client: dict = Non
             urls_to_fetch["signature"] = f"{supabase_url}/storage/v1/object/public/signatures/customer_signatures/sig_{invoice_no}.png"
             
     db_sig_url = invoice.get("signature_url")
-    if db_sig_url and db_sig_url.startswith("http") and "supabase" not in db_sig_url:
+    if db_sig_url and db_sig_url.startswith("http"):
         urls_to_fetch["db_signature"] = db_sig_url
 
     # 2. Fetch all images in parallel

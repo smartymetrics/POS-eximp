@@ -16,7 +16,7 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
     subscribed = db.table("marketing_contacts").select("id", count="exact").eq("is_subscribed", True).execute().count
     
     # 2. Campaign Stats — fetch ALL campaigns (not limited to 30 days) so historical spend is included
-    campaigns_res = db.table("email_campaigns").select("*").execute()
+    campaigns_res = await db_execute(lambda: db.table("email_campaigns").select("*").execute())
     campaigns = campaigns_res.data or []
     
     # Count "sent" this month for KPI display
@@ -25,7 +25,7 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
     sent_count = len([c for c in sent_campaigns if c.get("created_at", "") >= last_30_days])
 
     # 3. Aggregated Open/Click Rate (all time)
-    all_recs_res = db.table("campaign_recipients").select("open_count, click_count").execute()
+    all_recs_res = await db_execute(lambda: db.table("campaign_recipients").select("open_count, click_count").execute())
     all_recs = all_recs_res.data or []
     
     total_delivered = len(all_recs)
@@ -60,7 +60,7 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
 
     # 6. Total Attributed Revenue & Segment ROI/CPA
     try:
-        revenue_res = db.table("invoices").select("amount, marketing_campaign_id").not_.is_("marketing_campaign_id", "null").eq("status", "paid").execute()
+        revenue_res = await db_execute(lambda: db.table("invoices").select("amount, marketing_campaign_id").not_.is_("marketing_campaign_id", "null").eq("status", "paid").execute())
         total_revenue = sum([i["amount"] for i in revenue_res.data]) if revenue_res.data else 0
         attributed_invoices = revenue_res.data or []
     except Exception:
@@ -143,7 +143,7 @@ async def get_campaign_report(id: str, current_admin=Depends(verify_token)):
     db = get_db()
     
     # 1. Campaign metadata
-    camp_res = db.table("email_campaigns").select("*").eq("id", id).execute()
+    camp_res = await db_execute(lambda: db.table("email_campaigns").select("*").eq("id", id).execute())
     if not camp_res.data:
         raise HTTPException(status_code=404, detail="Campaign not found")
     campaign = camp_res.data[0]

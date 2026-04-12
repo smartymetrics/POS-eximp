@@ -19,16 +19,32 @@ async def get_subscription_form(request: Request, rep: str = None):
     rep_data = None
     
     if rep:
+        rep_res = None
         try:
             # First, assume it's a unique ID (UUID)
             uuid_val = uuid.UUID(rep)
             rep_res = await db_execute(lambda: db.table("sales_reps").select("*").eq("id", str(uuid_val)).eq("is_active", True).execute())
+            
+            if not rep_res.data:
+                # Fallback: Check if the UUID is an admins table ID
+                admin_res = await db_execute(lambda: db.table("admins").select("email, full_name").eq("id", str(uuid_val)).execute())
+                if admin_res.data:
+                    admin_data = admin_res.data[0]
+                    # First map by email
+                    rep_res = await db_execute(lambda: db.table("sales_reps").select("*").eq("email", admin_data["email"]).eq("is_active", True).execute())
+                    if not rep_res.data:
+                        # Fallback match by name
+                        rep_res = await db_execute(lambda: db.table("sales_reps").select("*").ilike("name", f"%{admin_data['full_name']}%").eq("is_active", True).execute())
+                    
+                    # If still no match in sales_reps, construct a visual fallback
+                    if not rep_res.data:
+                        rep_data = {"id": str(uuid_val), "name": admin_data["full_name"]}
         except ValueError:
             # Fallback to name search for legacy links
             normalized_rep = rep.replace("_", " ").replace("-", " ")
             rep_res = await db_execute(lambda: db.table("sales_reps").select("*").ilike("name", f"%{normalized_rep}%").eq("is_active", True).execute())
             
-        if rep_res.data:
+        if rep_res and getattr(rep_res, 'data', None):
             rep_data = rep_res.data[0]
             
     # List of active properties for the dropdown (Ensuring unique names)

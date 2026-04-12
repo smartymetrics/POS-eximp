@@ -208,6 +208,7 @@
             <div class="step-item" data-step="3">3</div>
             <div class="step-item" data-step="4">4</div>
             <div class="step-item" data-step="5">5</div>
+            <div class="step-item" data-step="6">6</div>
         </div>
 
         <form id="subscriptionForm" class="space-y-8 bg-white p-8 rounded-3xl shadow-xl border border-gray-100">
@@ -235,9 +236,10 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
                     <div class="md:col-span-1">
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Title</label>
-                        <select name="title"
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Title <span class="text-red-500">*</span></label>
+                        <select name="title" required
                             class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
+                            <option value="">-- Title --</option>
                             <option value="Mr">Mr.</option>
                             <option value="Mrs">Mrs.</option>
                             <option value="Ms">Ms.</option>
@@ -247,7 +249,7 @@
                         </select>
                     </div>
                     <div class="md:col-span-2">
-                        <label class="block text-sm font-bold text-gray-700 mb-2">First Name</label>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">First Name <span class="text-red-500">*</span></label>
                         <input type="text" name="first_name" required
                             class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
                             placeholder="Enter first name">
@@ -262,7 +264,7 @@
                             placeholder="Optional">
                     </div>
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Last Name (Surname)</label>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Last Name (Surname) <span class="text-red-500">*</span></label>
                         <input type="text" name="last_name" required
                             class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
                             placeholder="Enter surname">
@@ -270,7 +272,7 @@
                 </div>
 
                 <div class="mt-6">
-                    <label class="block text-sm font-bold text-gray-700 mb-2">Residential Address</label>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Residential Address <span class="text-red-500">*</span></label>
                     <textarea name="residential_address" required rows="2"
                         class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
                         placeholder="Full home address"></textarea>
@@ -278,13 +280,13 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Email Address</label>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Email Address <span class="text-red-500">*</span></label>
                         <input type="email" name="email" required
                             class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
                             placeholder="example@email.com">
                     </div>
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Whatsapp Line</label>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Whatsapp Line <span class="text-red-500">*</span></label>
                         <input type="tel" name="whatsapp_phone" required
                             class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
                             placeholder="+234...">
@@ -298,7 +300,7 @@
                 <p class="text-muted mb-8">This helps us customize your experience and future offers.</p>
 
                 <div class="relative">
-                    <label class="block text-sm font-bold text-gray-700 mb-2">Search Occupation / Job</label>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Search Occupation / Job <span class="text-red-500">*</span></label>
                     <div class="relative">
                         <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-muted"></i>
                         <input type="text" id="occupationSearch" name="occupation" required autocomplete="off"
@@ -310,9 +312,10 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Marital Status</label>
-                        <select name="marital_status"
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Marital Status <span class="text-red-500">*</span></label>
+                        <select name="marital_status" required
                             class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
+                            <option value="">-- Status --</option>
                             <option value="Single">Single</option>
                             <option value="Married">Married</option>
                             <option value="Divorced">Divorced</option>
@@ -320,7 +323,7 @@
                         </select>
                     </div>
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Date of Birth</label>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Date of Birth <span class="text-red-500">*</span></label>
                         <input type="date" name="date_of_birth" required
                             class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
                     </div>
@@ -328,21 +331,117 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Nationality</label>
-                        <input type="text" name="nationality" value="Nigerian"
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Nationality <span class="text-red-500">*</span></label>
+                        <input type="text" name="nationality" value="Nigerian" required
                             class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
                     </div>
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Source of Income</label>
-                        <input type="text" name="source_of_income"
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Source of Income <span class="text-red-500">*</span></label>
+                        <input type="text" name="source_of_income" required
                             class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
                             placeholder="e.g. Business, Salary">
                     </div>
                 </div>
             </div>
 
-            <!-- Step 3: KYC & Documents -->
+            <!-- Step 3: Next of Kin -->
             <div class="form-card" data-step="3">
+                <h2 class="text-3xl font-bold mb-2">Next of Kin Details</h2>
+                <p class="text-muted mb-8">In case of emergency or legal representation, who should we contact?</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">NOK Full Name <span class="text-red-500">*</span></label>
+                        <input type="text" name="nok_name" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                            placeholder="Full name">
+                    </div>
+                    <div class="md:col-span-1">
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Relationship <span class="text-red-500">*</span></label>
+                        <div class="space-y-3 mt-2">
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="radio" name="nok_relationship" value="Parent" required
+                                    class="w-4 h-4 text-gold border-gray-300 focus:ring-gold" onchange="toggleOtherNok(this)">
+                                <span class="text-gray-700 text-sm">Parent</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="radio" name="nok_relationship" value="Spouse"
+                                    class="w-4 h-4 text-gold border-gray-300 focus:ring-gold" onchange="toggleOtherNok(this)">
+                                <span class="text-gray-700 text-sm">Spouse</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="radio" name="nok_relationship" value="Child"
+                                    class="w-4 h-4 text-gold border-gray-300 focus:ring-gold" onchange="toggleOtherNok(this)">
+                                <span class="text-gray-700 text-sm">Child</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="radio" name="nok_relationship" value="Sibling"
+                                    class="w-4 h-4 text-gold border-gray-300 focus:ring-gold" onchange="toggleOtherNok(this)">
+                                <span class="text-gray-700 text-sm">Sibling</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="radio" name="nok_relationship" value="Legal Guardian"
+                                    class="w-4 h-4 text-gold border-gray-300 focus:ring-gold" onchange="toggleOtherNok(this)">
+                                <span class="text-gray-700 text-sm">Legal Guardian</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="radio" name="nok_relationship" value="Friend"
+                                    class="w-4 h-4 text-gold border-gray-300 focus:ring-gold" onchange="toggleOtherNok(this)">
+                                <span class="text-gray-700 text-sm">Friend</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="radio" name="nok_relationship" value="Care Worker"
+                                    class="w-4 h-4 text-gold border-gray-300 focus:ring-gold" onchange="toggleOtherNok(this)">
+                                <span class="text-gray-700 text-sm">Care Worker</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="radio" name="nok_relationship" value="Healthcare Provider"
+                                    class="w-4 h-4 text-gold border-gray-300 focus:ring-gold" onchange="toggleOtherNok(this)">
+                                <span class="text-gray-700 text-sm">Healthcare Provider</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="radio" name="nok_relationship" value="Other"
+                                    class="w-4 h-4 text-gold border-gray-300 focus:ring-gold" onchange="toggleOtherNok(this)">
+                                <span class="text-gray-700 text-sm">Other:</span>
+                                <input type="text" id="otherNokRelationship" placeholder="..." disabled
+                                    class="flex-1 max-w-[200px] bg-transparent border-b border-gray-300 text-sm p-1 outline-none focus:border-gold disabled:opacity-50">
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">NOK Phone Number <span class="text-red-500">*</span></label>
+                        <input type="tel" name="nok_phone" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                            placeholder="+234...">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">NOK Email Address</label>
+                        <input type="email" name="nok_email"
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                            placeholder="Optional">
+                    </div>
+                </div>
+
+                <div class="mt-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">NOK Occupation <span class="text-red-500">*</span></label>
+                    <input type="text" name="nok_occupation" required
+                        class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                        placeholder="NOK's job description">
+                </div>
+
+                <div class="mt-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">NOK Residential Address <span class="text-red-500">*</span></label>
+                    <textarea name="nok_address" required rows="2"
+                        class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                        placeholder="NOK's full home address"></textarea>
+                </div>
+            </div>
+
+            <!-- Step 4: KYC & Documents -->
+            <div class="form-card" data-step="4">
                 <h2 class="text-3xl font-bold mb-2">KYC Verification</h2>
                 <p class="text-muted mb-8">Secure identity verification is required for property authentication.</p>
 
@@ -356,7 +455,8 @@
                                 id="passportPreview">
                                 <i class="fas fa-user text-3xl text-gray-300"></i>
                                 <img src="" class="hidden w-full h-full object-cover">
-                                <div id="passportStatus" class="absolute inset-0 bg-black/40 flex items-center justify-center hidden">
+                                <div id="passportStatus"
+                                    class="absolute inset-0 bg-black/40 flex items-center justify-center hidden">
                                     <i class="fas fa-circle-notch fa-spin text-white"></i>
                                 </div>
                             </div>
@@ -372,7 +472,7 @@
                     <!-- Identification -->
                     <div class="space-y-6">
                         <div>
-                            <label class="block text-sm font-bold text-gray-700 mb-2">NIN / ID Number</label>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">NIN / ID Number <span class="text-red-500">*</span></label>
                             <input type="text" name="nin_id_number" required
                                 class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
                                 placeholder="Enter ID number">
@@ -381,7 +481,8 @@
                             <label class="block text-sm font-bold text-gray-700 mb-2">Upload ID Document (NIN/Passport)
                                 <span class="text-red-500">*</span></label>
                             <div class="relative group">
-                                <input type="file" name="nin_document" accept="image/jpeg,image/png,image/webp,application/pdf" required
+                                <input type="file" name="nin_document"
+                                    accept="image/jpeg,image/png,image/webp,application/pdf" required
                                     onchange="handleFileSelection(this, null, 'id_document', 'idStatus')"
                                     class="w-full p-2.5 text-sm text-gray-500 border border-gray-300 rounded-xl cursor-pointer bg-gray-50 outline-none">
                                 <div id="idStatus" class="absolute right-4 top-1/2 -translate-y-1/2 hidden">
@@ -400,14 +501,14 @@
                 </div>
             </div>
 
-            <!-- Step 4: Property Selection -->
-            <div class="form-card" data-step="4">
+            <!-- Step 5: Property Selection -->
+            <div class="form-card" data-step="5">
                 <h2 class="text-3xl font-bold mb-2">Purchase Details</h2>
                 <p class="text-muted mb-8">Select the property and ownership structure.</p>
 
                 <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-2">Select Estate / Property</label>
-                    <select name="property_name" id="propertySelect"
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Select Estate / Property <span class="text-red-500">*</span></label>
+                    <select name="property_name" id="propertySelect" required
                         class="w-full p-4 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
                         onchange="toggleOtherProperty(this)">
                         <option value="" disabled selected>-- Select a Property --</option>
@@ -426,7 +527,8 @@
                 </div>
 
                 <div class="mt-6 mb-6">
-                    <label class="block text-sm font-bold text-gray-700 mb-2">Is this property being purchased: <span class="text-red-500">*</span></label>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Is this property being purchased: <span
+                            class="text-red-500">*</span></label>
                     <select name="purchase_purpose" required
                         class="w-full p-4 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
                         <option value="" disabled selected>-- Select an Option --</option>
@@ -437,7 +539,7 @@
 
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Plot Size</label>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Plot Size <span class="text-red-500">*</span></label>
                         <select name="plot_size" id="plotSizeSelect" onchange="toggleOtherPlotSize(this)"
                             class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
                             <option value="300sqm">300sqm</option>
@@ -452,7 +554,7 @@
                             placeholder="Enter custom size">
                     </div>
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Ownership Type</label>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Ownership Type <span class="text-red-500">*</span></label>
                         <select name="ownership_type" id="ownershipSelect" onchange="handleOwnershipChange()"
                             class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
                             <option value="sole" selected>Sole Ownership</option>
@@ -512,7 +614,8 @@
                 <div
                     class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8 p-6 bg-gray-50 rounded-2xl border border-gray-200">
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2 text-gold">Deposit Amount (NGN) <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-bold text-gray-700 mb-2 text-gold">Deposit Amount (NGN) <span
+                                class="text-red-500">*</span></label>
                         <div class="relative">
                             <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₦</span>
                             <input type="number" name="deposit_amount" required
@@ -521,13 +624,14 @@
                         </div>
                     </div>
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Payment Date <span class="text-red-500">*</span></label>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Payment Date <span
+                                class="text-red-500">*</span></label>
                         <input type="date" name="payment_date" required
                             class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold outline-none">
                     </div>
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-2">Payment Duration</label>
-                        <select name="payment_duration"
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Payment Duration <span class="text-red-500">*</span></label>
+                        <select name="payment_duration" required
                             class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold outline-none">
                             <option value="Outright">Outright Payment</option>
                             <option value="3 Months">3 Months Installment</option>
@@ -538,9 +642,10 @@
                 </div>
 
                 <div class="mt-6">
-                    <label class="block text-sm font-bold text-gray-700 mb-2">Upload Payment Receipt</label>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Upload Payment Receipt <span class="text-red-500">*</span></label>
                     <div class="relative group">
-                        <input type="file" name="payment_receipt" accept="image/jpeg,image/png,image/webp,application/pdf" required
+                        <input type="file" name="payment_receipt"
+                            accept="image/jpeg,image/png,image/webp,application/pdf" required
                             onchange="handleFileSelection(this, null, 'receipt', 'receiptStatus')"
                             class="w-full p-2.5 text-sm text-gray-500 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gold outline-none">
                         <div id="receiptStatus" class="absolute right-4 top-1/2 -translate-y-1/2 hidden">
@@ -551,8 +656,8 @@
                 </div>
             </div>
 
-            <!-- Step 5: Review & Sign -->
-            <div class="form-card" data-step="5">
+            <!-- Step 6: Review & Sign -->
+            <div class="form-card" data-step="6">
                 <h2 class="text-3xl font-bold mb-2">Finalize & Sign</h2>
                 <p class="text-muted mb-8">Please review all information and provide your signature.</p>
 
@@ -603,7 +708,8 @@
                 </div>
 
                 <div class="mt-6 relative" id="salesRepSearchGroup">
-                    <label class="block text-sm font-bold text-gray-700 mb-2">Referring Representative / Realtor (Optional)</label>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Referring Representative / Realtor
+                        (Optional)</label>
                     <div class="relative">
                         <i class="fas fa-user-tie absolute left-4 top-1/2 -translate-y-1/2 text-muted"></i>
                         <input type="text" id="salesRepSearch" name="sales_rep_name" autocomplete="off"
@@ -613,7 +719,8 @@
                     </div>
                     <div id="salesRepList" class="autocomplete-list shadow-2xl border-gold/20"></div>
                     {% if rep %}
-                    <p class="text-[10px] text-green-600 font-bold mt-1 uppercase tracking-wider"><i class="fas fa-link mr-1"></i> Attribution Linked to {{ rep.name }}</p>
+                    <p class="text-[10px] text-green-600 font-bold mt-1 uppercase tracking-wider"><i
+                            class="fas fa-link mr-1"></i> Attribution Linked to {{ rep.name }}</p>
                     {% endif %}
                 </div>
             </div>
@@ -675,33 +782,31 @@
 
             <div class="space-y-4">
                 <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-1">Full Name</label>
-                    <input type="text" id="modal_co_owner_name"
-                        class="w-full p-3 rounded-xl border border-gray-300 focus:border-gold outline-none"
-                        placeholder="Co-owner's full name">
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Full Name <span class="text-red-500">*</span></label>
+                    <input type="text" id="modal_co_owner_name" required
                 </div>
                 <div>
-                    <label class="block text-sm font-bold text-gray-700 mb-1">Residential Address</label>
-                    <input type="text" id="modal_co_owner_address"
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Residential Address <span class="text-red-500">*</span></label>
+                    <input type="text" id="modal_co_owner_address" required
                         class="w-full p-3 rounded-xl border border-gray-300 focus:border-gold outline-none"
                         placeholder="Full home address">
                 </div>
                 <div>
                     <label class="block text-sm font-bold text-gray-700 mb-1">Occupation</label>
-                    <input type="text" id="modal_co_owner_occupation"
+                    <input type="text" id="modal_co_owner_occupation" required
                         class="w-full p-3 rounded-xl border border-gray-300 focus:border-gold outline-none"
                         placeholder="e.g. Engineer">
                 </div>
                 <div class="grid grid-cols-2 gap-4">
                     <div>
-                        <label class="block text-sm font-bold text-gray-700 mb-1">Phone Number</label>
-                        <input type="tel" id="modal_co_owner_phone"
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Phone Number <span class="text-red-500">*</span></label>
+                        <input type="tel" id="modal_co_owner_phone" required
                             class="w-full p-3 rounded-xl border border-gray-300 focus:border-gold outline-none"
                             placeholder="+234...">
                     </div>
                     <div>
                         <label class="block text-sm font-bold text-gray-700 mb-1">Email Address</label>
-                        <input type="email" id="modal_co_owner_email"
+                        <input type="email" id="modal_co_owner_email" required
                             class="w-full p-3 rounded-xl border border-gray-300 focus:border-gold outline-none"
                             placeholder="email@example.com">
                     </div>
@@ -716,7 +821,7 @@
 
     <script>
         let currentStep = 1;
-        const totalSteps = 5;
+        const totalSteps = 6;
         let activeUploads = 0;
         const form = document.getElementById('subscriptionForm');
         let signaturePad;
@@ -795,7 +900,7 @@
             html += `</ul></div></div>`;
             banner.innerHTML = html;
             banner.classList.remove('hidden');
-            banner.scrollIntoView({ behavior: 'smooth', block: 'nearest' });
+            banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
         }
 
         function clearStepError() {
@@ -824,7 +929,7 @@
             const submitBtn = document.getElementById('submitBtn');
 
             prevBtn.classList.toggle('hidden', currentStep === 1);
-            
+
             if (currentStep === totalSteps) {
                 nextBtn.classList.add('hidden');
                 submitBtn.classList.remove('hidden');
@@ -833,38 +938,59 @@
                 submitBtn.classList.add('hidden');
             }
 
-            if (currentStep === 5 && !signaturePad) {
+            if (currentStep === 6 && !signaturePad) {
                 setTimeout(initSignaturePad, 100);
             }
         }
 
+        function validateCurrentStep() {
+            const card = document.querySelector(`.form-card[data-step="${currentStep}"]`);
+            const requiredFields = card.querySelectorAll('input[required], select[required], textarea[required]');
+            const missing = [];
+
+            requiredFields.forEach(field => {
+                let isMissing = false;
+
+                if (field.type === 'radio') {
+                    const name = field.name;
+                    const group = card.querySelectorAll(`input[name="${name}"]`);
+                    const checked = Array.from(group).find(r => r.checked);
+                    if (!checked) isMissing = true;
+                } else if (field.type === 'checkbox') {
+                    if (!field.checked) isMissing = true;
+                } else if (field.type === 'file') {
+                    // Check if file is selected OR if we already have an upload URL in a hidden field
+                    const hiddenId = field.name === 'payment_receipt' ? 'payment_receipt_url' :
+                                   field.name === 'passport_photo' ? 'passport_photo_url' :
+                                   field.name === 'id_document' ? 'nin_document_url' : null;
+                    const hiddenVal = hiddenId ? document.getElementById(hiddenId)?.value : null;
+
+                    if (!field.files.length && !hiddenVal) isMissing = true;
+                } else {
+                    if (!field.value.trim()) isMissing = true;
+                }
+
+                if (isMissing) {
+                    field.classList.add('border-red-500', 'ring-1', 'ring-red-400');
+                    // Label discovery
+                    let labelText = field.getAttribute('placeholder') || field.name || 'Unknown field';
+                    const label = card.querySelector(`label[for="${field.id}"]`) || 
+                                 field.closest('div')?.querySelector('label');
+                    if (label) labelText = label.textContent.trim().replace('*', '').trim();
+                    if (!missing.includes(labelText)) missing.push(labelText);
+                } else {
+                    field.classList.remove('border-red-500', 'ring-1', 'ring-red-400');
+                }
+            });
+
+            return missing;
+        }
+
         function changeStep(delta) {
-            // Validation
+            // Validation on forward move
             if (delta > 0) {
-                const currentInputs = document.querySelectorAll(`.form-card[data-step="${currentStep}"] input[required], .form-card[data-step="${currentStep}"] select[required]`);
-                let valid = true;
-                currentInputs.forEach(input => {
-                    if (!input.value) {
-                        input.classList.add('border-red-500');
-                        valid = false;
-                    } else {
-                        input.classList.remove('border-red-500');
-                    }
-                });
-                if (!valid) {
-                    const missing = [];
-                    currentInputs.forEach(input => {
-                        if (!input.value || (input.type === 'file' && input.files.length === 0)) {
-                            // Find label text for this input
-                            let labelText = input.getAttribute('placeholder') || input.name || 'Unknown field';
-                            // Try to find associated <label>
-                            const id = input.id || input.name;
-                            const label = document.querySelector(`label[for="${id}"]`) ||
-                                input.closest('div')?.querySelector('label');
-                            if (label) labelText = label.textContent.trim().replace('*', '').trim();
-                            missing.push(labelText);
-                        }
-                    });
+                const missing = validateCurrentStep();
+                if (missing.length > 0) {
                     showStepError(missing);
                     return;
                 } else {
@@ -882,18 +1008,18 @@
         // File Selection, Preview & Immediate Upload
         async function handleFileSelection(input, previewId, fileType, statusId) {
             if (!input.files || !input.files[0]) return;
-            
+
             const file = input.files[0];
             const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
             const ext = file.name.split('.').pop().toLowerCase();
             const allowedExts = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
-            
+
             if (!allowedMimeTypes.includes(file.type) && !allowedExts.includes(ext)) {
                 alert("Unsupported file format detected. Please provide your documents as high-quality Images (JPG, PNG) or PDF files for processing.");
                 input.value = ''; // Reset the input
                 return;
             }
-            
+
             // 1. Locally Preview if it's an image
             if (previewId) {
                 const reader = new FileReader();
@@ -914,7 +1040,7 @@
                 statusEl.classList.remove('hidden');
                 statusEl.innerHTML = '<i class="fas fa-circle-notch fa-spin text-gold"></i>';
             }
-            
+
             activeUploads++;
 
             try {
@@ -929,14 +1055,14 @@
 
                 if (!response.ok) throw new Error("Upload failed");
                 const result = await response.json();
-                
+
                 if (result.status === 'success') {
                     // Update hidden field with the URL
-                    const urlInputId = fileType === 'id_document' ? 'nin_document_url' : 
-                                     fileType === 'passport' ? 'passport_photo_url' : 
-                                     'payment_receipt_url';
+                    const urlInputId = fileType === 'id_document' ? 'nin_document_url' :
+                        fileType === 'passport' ? 'passport_photo_url' :
+                            'payment_receipt_url';
                     document.getElementById(urlInputId).value = result.url;
-                    
+
                     if (statusEl) {
                         statusEl.innerHTML = '<i class="fas fa-check-circle text-green-500"></i>';
                     }
@@ -956,18 +1082,59 @@
 
         // Searchable Occupations
         const occupations = [
-            'Accountant', 'Administrator', 'Advocate', 'Architect', 'Artist', 'Author', 'Banker', 'Barber', 'Biologist',
-            'Broadcaster', 'Businessman/Woman', 'Chef', 'Civil Engineer', 'Civil Servant', 'Clergy', 'Consultant',
-            'Data Analyst', 'Dentist', 'Doctor', 'Driver', 'Economist', 'Electrician', 'Engineer', 'Entrepreneur',
-            'Farmer', 'Fashion Designer', 'Fashion Consultant', 'Film Maker', 'Geologist', 'Graphic Designer',
-            'Hairstylist', 'Hotelier', 'Human Resources', 'Interior Decorator', 'Investment Analyst', 'IT Specialist',
-            'Journalist', 'Judge', 'Lawyer', 'Lecturer', 'Manager', 'Marketing Manager', 'Mason', 'Mechanic',
-            'Media Consultant', 'Merchant', 'Meteorologist', 'Microbiologist', 'Military Personnel', 'Model',
-            'Musician', 'Nurse', 'Optician', 'Pharmacist', 'Photographer', 'Pilot', 'Plumber', 'Police Officer',
-            'Politician', 'Professor', 'Project Manager', 'Public Servant', 'Quantity Surveyor', 'Radiographer',
-            'Real Estate Agent', 'Realtor', 'Retiree', 'Sales Executive', 'Scientist', 'Secretary', 'Security Personnel',
-            'Software Developer', 'Social Media Influencer', 'Statisticians', 'Student', 'Surgeon', 'Surveyor',
-            'Tailor', 'Teacher', 'Technician', 'Trader', 'Translator', 'Veterinary Doctor', 'Writer'
+            'Academic', 'Accountant', 'Account Manager', 'Actuary', 'Acupuncturist', 'Actor/Actress', 'Administrative Assistant', 'Administrator', 'Advocate', 'Aeronautical Engineer', 
+            'Agronomist', 'Air Traffic Controller', 'Aircraft Mechanic', 'Ambassador', 'Analyst', 'Anesthesiologist', 'Animal Breeder', 'Animator', 'Anthropologist', 'Appraiser', 
+            'Architect', 'Archivist', 'Artist', 'Art Director', 'Asset Manager', 'Astronomer', 'Athlete', 'Attorney', 'Auctioneer', 'Auditor', 'Author', 'Auto Mechanic', 'Aviation Consultant',
+            'Bailiff', 'Baker', 'Banker', 'Barber', 'Barrister', 'Bartender', 'Bellhop', 'Biochemist', 'Biologist', 'Biomedical Engineer', 'Biotechnologist', 'Blacksmith', 'Block Molder', 
+            'Blockchain Developer', 'Bodyguard', 'Bookkeeper', 'Botanist', 'Brand Ambassador', 'Bricklayer', 'Broadcaster', 'Broker', 'Budget Analyst', 'Building Contractor', 
+            'Business Analyst', 'Businessman/Woman', 'Business Consultant', 'Business Developer', 'Butcher', 'Buyer',
+            'Cabinet Maker', 'Call Center Agent', 'Camera Operator', 'Captain', 'Carpenter', 'Cartographer', 'Cashier', 'Caterer', 'Cell Biologist', 'Ceramic Artist', 'Chartered Accountant', 
+            'Chauffeur', 'Chef', 'Chemical Engineer', 'Chemist', 'Chief Executive Officer', 'Chief Financial Officer', 'Chief Operating Officer', 'Chiropractor', 'Cinematographer', 
+            'Civil Engineer', 'Civil Servant', 'Clergy', 'Clerk', 'Clinical Psychologist', 'Coach', 'Coast Guard', 'Content Creator', 'Cobbler', 'Comedian', 'Commercial Pilot', 
+            'Communications Specialist', 'Community Manager', 'Compliance Officer', 'Computer Programmer', 'Concierge', 'Constructor', 'Consultant', 'Content Writer', 'Contractor', 
+            'Copywriter', 'Corporate Trainer', 'Cosmetologist', 'Counselor', 'Courier', 'Court Registrar', 'Craftsman', 'Creative Director', 'Credit Analyst', 'Customer Service Rep', 'Cyber Security Analyst',
+            'Data Analyst', 'Data Scientist', 'Database Administrator', 'Dean', 'Debt Collector', 'Decorator', 'Delivery Driver', 'Dentist', 'Dermatologist', 'Designer', 'Detective', 
+            'Developer', 'Dietitian', 'Digital Marketer', 'Diplomat', 'Director', 'Dispatcher', 'District Manager', 'Diver', 'Doctor', 'Draftsman', 'Driver', 'Dry Cleaner',
+            'Ecologist', 'Economist', 'Editor', 'Education Consultant', 'Electrician', 'Electrical Engineer', 'Electronics Technician', 'Elementary Teacher', 'Embalmer', 'Emergency Medical Technician', 
+            'Employee Relations Specialist', 'Energy Auditor', 'Engineer', 'Engraver', 'Entrepreneur', 'Environmental Consultant', 'Epidemiologist', 'Estate Agent', 'Event Planner', 
+            'Executive Assistant', 'Exercise Physiologist', 'Exporter',
+            'Fabricator', 'Factory Worker', 'Farmer', 'Farm Manager', 'Fashion Designer', 'Fashion Consultant', 'Film Director', 'Film Maker', 'Finance Manager', 'Financial Advisor', 
+            'Financial Analyst', 'Firefighter', 'Fisherman', 'Fitness Trainer', 'Flight Attendant', 'Florist', 'Food Scientist', 'Forensic Scientist', 'Forester', 'Forklift Operator', 
+            'Freight Forwarder', 'Full Stack Developer', 'Funeral Director',
+            'Gardener', 'Gas Fitter', 'Geologist', 'Geophysicist', 'Glazier', 'General Contractor', 'General Manager', 'Goldsmith', 'Graphic Designer', 'Green Grocer', 'Guide', 'Guitarist',
+            'Haberdasher', 'Hairdresser', 'Hairstylist', 'Health Consultant', 'Health Inspector', 'Heavy Equipment Operator', 'Historian', 'Home Maker', 'Horticulturist', 'Hospital Administrator', 
+            'Hotelier', 'Hotel Manager', 'Housekeeper', 'Human Resources Manager', 'HVAC Technician', 'Hydrogeologist',
+            'Illustrator', 'Immigration Officer', 'Importer', 'Industrial Designer', 'Industrial Engineer', 'Information Officer', 'Insurance Agent', 'Insurance Broker', 'Interior Decorator', 
+            'Interior Designer', 'Interpreter', 'Inventor', 'Inventory Controller', 'Investment Analyst', 'Investment Banker', 'IT Consultant', 'IT Manager', 'IT Specialist',
+            'Janitor', 'Jeweler', 'Jockey', 'Journalist', 'Judge', 'Justice of the Peace',
+            'Kitchen Assistant', 'Knitter', 'Laboratory Technician', 'Laborer', 'Landlord/Lady', 'Land Surveyor', 'Landscape Architect', 'Lawyer', 'Lecturer', 'Legal Assistant', 
+            'Librarian', 'Lifeguard', 'Line Manager', 'Linguist', 'Livestock Farmer', 'Loan Officer', 'Locksmith', 'Logistician', 'Logistics Manager',
+            'Machine Operator', 'Magistrate', 'Maid', 'Mail Carrier', 'Makeup Artist', 'Management Consultant', 'Manager', 'Manufacturer', 'Marine Biologist', 'Marine Engineer', 
+            'Market Researcher', 'Marketing Manager', 'Marketing Specialist', 'Mason', 'Massage Therapist', 'Mathematician', 'Mechanical Engineer', 'Mechanic', 'Media Consultant', 
+            'Medical Lab Scientist', 'Medical Practitioner', 'Merchant', 'Merchant Seaman', 'Messenger', 'Metallurgist', 'Meteorologist', 'Microbiologist', 'Midwife', 'Military Personnel', 
+            'Miner', 'Minister', 'Model', 'Mortician', 'Musician',
+            'Nanny', 'Navigator', 'Network Administrator', 'Network Engineer', 'Neurosurgeon', 'Newsreader', 'Notary Public', 'Nurse', 'Nutritionist',
+            'Obstetrician', 'Occupational Therapist', 'Oceanographer', 'Office Manager', 'Oil Rig Worker', 'Operations Manager', 'Optician', 'Optometrist', 'Orthodontist', 'Orthopedic Surgeon', 'Osteopath',
+            'Painter', 'Paleontologist', 'Paramedic', 'Paralegal', 'Pastor', 'Pathologist', 'Payroll Clerk', 'Pediatrician', 'Permanent Secretary', 'Personal Assistant', 'Personnel Manager', 
+            'Pest Control Technician', 'Petroleum Engineer', 'Pharmacist', 'Pharmacologist', 'Philanthropist', 'Philosopher', 'Photographer', 'Physicist', 'Physiotherapist', 'Pilot', 
+            'Plumber', 'Podiatrist', 'Police Officer', 'Politician', 'Postmaster', 'Poultry Farmer', 'Preacher', 'President', 'Priest', 'Principal', 'Printers', 'Privacy Officer', 
+            'Private Investigator', 'Probation Officer', 'Producer', 'Product Manager', 'Professor', 'Programmer', 'Project Manager', 'Promoter', 'Proofreader', 'Property Manager', 
+            'Psychiatrist', 'Psychologist', 'Public Relations Officer', 'Public Servant', 'Publisher', 'Purchasing Agent',
+            'Quantity Surveyor', 'Quarry Manager',
+            'Radiographer', 'Radiologist', 'Real Estate Agent', 'Realtor', 'Receptionist', 'Recruiter', 'Referee', 'Relationship Manager', 'Reporter', 'Researcher', 'Resort Manager', 
+            'Retiree', 'Risk Manager', 'Road Worker', 'Roofer',
+            'Safety Officer', 'Sailor', 'Sales Executive', 'Sales Manager', 'Sales Representative', 'Sanitary Inspector', 'Scholar', 'Scientist', 'Sculptor', 'Seaman', 'Secretary', 
+            'Security Consultant', 'Security Personnel', 'Senior Advocate', 'Shop Assistant', 'Singer', 'Social Media Influencer', 'Social Worker', 'Software Developer', 'Software Engineer', 
+            'Solicitor', 'Sound Engineer', 'Specialist', 'Speech Therapist', 'Sports Coach', 'Statistician', 'Stockbroker', 'Stone Mason', 'Store Manager', 'Storekeeper', 'Strategist', 
+            'Structural Engineer', 'Student', 'Supervisor', 'Surgeon', 'Surveyor', 'Systems Analyst', 'Systems Engineer',
+            'Tailor', 'Tax Consultant', 'Taxi Driver', 'Teacher', 'Technical Writer', 'Technician', 'Telemarketer', 'Teller', 'Tiler', 'Tourism Consultant', 'Tour Guide', 'Town Planner', 
+            'Trader', 'Traffic Warden', 'Trainer', 'Translator', 'Travel Agent', 'Treasurer', 'Truck Driver', 'Tutor', 'Typist',
+            'UI/UX Designer', 'Underwriter', 'Upholsterer', 'Urban Planner', 'Urologist',
+            'Valuer', 'Vendor', 'Veterinary Doctor', 'Video Editor', 'Videographer', 'Virtual Assistant', 'Visual Artist', 'Vocational Instructor', 'Waiter/Waitress', 'Warehouse Manager', 
+            'Web Designer', 'Web Developer', 'Welder', 'Wholesaler', 'Woodworker', 'Writer',
+            'X-ray Technician',
+            'Yard Manager', 'Yoga Instructor', 'Youth Worker',
+            'Zoologist'
         ];
 
         const searchInput = document.getElementById('occupationSearch');
@@ -1014,18 +1181,18 @@
 
         if (repSearch) {
             fetchReps();
-            repSearch.addEventListener('input', function() {
+            repSearch.addEventListener('input', function () {
                 const val = this.value.toLowerCase();
                 repList.innerHTML = '';
                 // Clear ID if user starts typing something new (they need to re-select)
                 hiddenRepId.value = '';
-                
+
                 if (!val) {
                     repList.style.display = 'none';
                     return;
                 }
-                const matches = allReps.filter(r => 
-                    r.name.toLowerCase().includes(val) || 
+                const matches = allReps.filter(r =>
+                    r.name.toLowerCase().includes(val) ||
                     (r.phone && r.phone.includes(val))
                 );
                 matches.forEach(r => {
@@ -1089,6 +1256,20 @@
             }
         }
 
+        // Other NOK Relationship Toggle
+        function toggleOtherNok(radio) {
+            const input = document.getElementById('otherNokRelationship');
+            if (radio.value === 'Other') {
+                input.disabled = false;
+                input.required = true;
+                input.focus();
+            } else {
+                input.disabled = true;
+                input.required = false;
+                input.value = '';
+            }
+        }
+
         // --- CO-OWNER MODAL LOGIC ---
         function handleOwnershipChange(isLoad = false) {
             const val = document.getElementById('ownershipSelect').value;
@@ -1118,9 +1299,9 @@
             const fields = [
                 { id: 'modal_co_owner_name', label: 'Full Name', required: true },
                 { id: 'modal_co_owner_address', label: 'Residential Address', required: true },
-                { id: 'modal_co_owner_occupation', label: 'Occupation', required: false },
+                { id: 'modal_co_owner_occupation', label: 'Occupation', required: true },
                 { id: 'modal_co_owner_phone', label: 'Phone Number', required: true },
-                { id: 'modal_co_owner_email', label: 'Email Address', required: false },
+                { id: 'modal_co_owner_email', label: 'Email Address', required: true },
             ];
 
             const missing = [];
@@ -1241,7 +1422,7 @@
 
             const goldBtn = document.getElementById('submitBtn');
             const originalText = goldBtn.innerHTML;
-            
+
             // 1. Enter Locked Loading State Immediately
             goldBtn.disabled = true;
             goldBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> Processing Application...';
@@ -1251,19 +1432,19 @@
                 if (typeof activeUploads !== 'undefined' && activeUploads > 0) {
                     console.log("Waiting for background uploads...", activeUploads);
                     goldBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> Finishing Document Uploads...';
-                    
+
                     let pollCount = 0;
                     while (activeUploads > 0 && pollCount < 10) { // 5 seconds (10 * 500ms)
                         await new Promise(r => setTimeout(r, 500));
                         pollCount++;
                     }
-                    
+
                     if (activeUploads > 0) {
                         const proceed = confirm("Some documents are still uploading. Do you want to submit with currently uploaded files anyway?");
                         if (!proceed) {
                             goldBtn.disabled = false;
                             goldBtn.innerHTML = originalText;
-                            return; 
+                            return;
                         }
                     }
                     // Restore processing text for finalize step
@@ -1277,7 +1458,7 @@
                 // Co-Owner check
                 if (data.ownership_type === 'joint' && !document.getElementById('hidden_co_owner_name').value) {
                     showStepError(["Co-Owner details (Joint ownership selected)"]);
-                    currentStep = 4;
+                    currentStep = 5;
                     updateSteps();
                     throw new Error("Validation failed");
                 }
@@ -1294,16 +1475,22 @@
                 if (data.property_name === 'Other') data.property_name = document.getElementById('otherPropertyName').value;
                 if (data.plot_size === 'Other') data.plot_size = document.getElementById('otherPlotSize').value;
                 if (data.quantity === 'Other') data.quantity = document.getElementById('otherQuantity').value;
+                if (data.nok_relationship === 'Other') data.nok_relationship = document.getElementById('otherNokRelationship').value;
 
                 // Handle Signature
                 if (typeof signaturePad !== 'undefined' && signaturePad && !signaturePad.isEmpty()) {
-                    data.signature_data = signaturePad.toDataURL(); 
+                    data.signature_data = signaturePad.toDataURL();
                 } else {
                     showStepError(["Client Signature (Required)"]);
                     throw new Error("Validation failed");
                 }
-                
-                data.consent_given = document.getElementById('consent').checked;
+
+                // Check Consent
+                if (!document.getElementById('consent').checked) {
+                    showStepError(["Consent to terms (Required)"]);
+                    throw new Error("Validation failed");
+                }
+                data.consent_given = true;
 
                 // 4. API Submission
                 const response = await fetch('/api/subscriptions/submit', {
@@ -1314,7 +1501,7 @@
 
                 const result = await response.json();
                 if (result.status === 'success') {
-                    localStorage.removeItem(AUTOSAVE_KEY); 
+                    localStorage.removeItem(AUTOSAVE_KEY);
                     document.getElementById('successInvoiceNum').textContent = result.invoice_number;
                     document.getElementById('successModal').classList.remove('hidden');
                 } else {

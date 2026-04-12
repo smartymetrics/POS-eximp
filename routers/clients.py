@@ -35,7 +35,7 @@ async def list_clients(
 @router.get("/{client_id}")
 async def get_client(client_id: str, current_admin=Depends(verify_token)):
     db = get_db()
-    result = db.table("clients").select("*").eq("id", client_id).execute()
+    result = await db_execute(lambda: db.table("clients").select("*").eq("id", client_id).execute())
     if not result.data:
         raise HTTPException(status_code=404, detail="Client not found")
     return result.data[0]
@@ -62,7 +62,7 @@ async def create_client(
     client_data = jsonable_encoder(data)
     client_data["added_by"] = current_admin["sub"]
     
-    result = db.table("clients").insert(client_data).execute()
+    result = await db_execute(lambda: db.table("clients").insert(client_data).execute())
     
     background_tasks.add_task(
         log_activity,
@@ -95,7 +95,7 @@ async def update_client(client_id: str, data: ClientUpdate, current_admin=Depend
             if field in update_data:
                 raise HTTPException(status_code=403, detail=f"Permission denied to edit {field}")
 
-    result = db.table("clients").update(update_data).eq("id", client_id).execute()
+    result = await db_execute(lambda: db.table("clients").update(update_data).eq("id", client_id).execute())
     if not result.data:
          raise HTTPException(status_code=404, detail="Client not found")
          

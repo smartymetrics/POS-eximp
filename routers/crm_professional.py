@@ -202,7 +202,7 @@ async def get_lead_score(client_id: str, current_admin=Depends(verify_token)):
     db = get_db()
     
     # Check if we already have a profile
-    client = db.table("clients").select("full_name").eq("id", client_id).execute()
+    client = await db_execute(lambda: db.table("clients").select("full_name").eq("id", client_id).execute())
     if not client.data:
         raise HTTPException(status_code=404, detail="Client not found")
         

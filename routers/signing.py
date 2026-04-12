@@ -298,7 +298,7 @@ async def submit_witness_signature(token: str, data: WitnessSignatureSubmit, req
     
     # 3. Determine witness number (1 or 2)
     # Check what's already signed
-    existing_res = db.table("witness_signatures").select("witness_number").eq("session_id", session["id"]).execute()
+    existing_res = await db_execute(lambda: db.table("witness_signatures").select("witness_number").eq("session_id", session["id"]).execute())
     signed_numbers = [r["witness_number"] for r in existing_res.data]
     
     if len(signed_numbers) >= 2:
@@ -329,7 +329,7 @@ async def submit_witness_signature(token: str, data: WitnessSignatureSubmit, req
         
         # 5. Update session status
         new_status = "completed"
-        db.table("contract_signing_sessions").update({"status": new_status}).eq("id", session["id"]).execute()
+        await db_execute(lambda: db.table("contract_signing_sessions").update({"status": new_status}).eq("id", session["id"]).execute())
         
         # 5b. Send Confirmation Email to Witness
         from email_service import send_witness_confirmation_email

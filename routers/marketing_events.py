@@ -32,7 +32,7 @@ async def create_event(event: EventCreate, current_admin=Depends(verify_token)):
         "created_by": current_admin.get("sub")
     }
     
-    res = db.table("marketing_events").insert(data).execute()
+    res = await db_execute(lambda: db.table("marketing_events").insert(data).execute())
     if not res.data:
         raise HTTPException(status_code=400, detail="Failed to create event")
     return res.data[0]
@@ -41,5 +41,5 @@ async def create_event(event: EventCreate, current_admin=Depends(verify_token)):
 async def delete_event(id: str, current_admin=Depends(verify_token)):
     """Delete a custom business event."""
     db = get_db()
-    res = db.table("marketing_events").delete().eq("id", id).execute()
+    res = await db_execute(lambda: db.table("marketing_events").delete().eq("id", id).execute())
     return {"status": "ok"}

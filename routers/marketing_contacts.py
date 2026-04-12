@@ -41,7 +41,7 @@ async def list_contacts(current_admin=Depends(verify_token), type: Optional[str]
         # Search across multiple fields
         query = query.or_(f"first_name.ilike.%{q}%,last_name.ilike.%{q}%,email.ilike.%{q}%")
         
-    result = query.order("created_at", desc=True).execute()
+    result = await db_execute(lambda: query.order("created_at", desc=True).execute())
     return result.data
 
 @router.post("/")
@@ -49,11 +49,11 @@ async def create_contact(data: ContactCreate, current_admin=Depends(verify_token
     db = get_db()
     
     # Check if contact exists
-    check = db.table("marketing_contacts").select("id").eq("email", data.email).execute()
+    check = await db_execute(lambda: db.table("marketing_contacts").select("id").eq("email", data.email).execute())
     if check.data:
         raise HTTPException(status_code=400, detail="Contact with this email already exists.")
     
-    result = db.table("marketing_contacts").insert(data.dict()).execute()
+    result = await db_execute(lambda: db.table("marketing_contacts").insert(data.dict()).execute())
     
     await log_activity(
         "marketing_contact_created",
@@ -68,13 +68,13 @@ async def update_contact(id: str, data: ContactUpdate, current_admin=Depends(ver
     update_dict = {k: v for k, v in data.dict().items() if v is not None}
     update_dict["updated_at"] = datetime.utcnow().isoformat()
     
-    result = db.table("marketing_contacts").update(update_dict).eq("id", id).execute()
+    result = await db_execute(lambda: db.table("marketing_contacts").update(update_dict).eq("id", id).execute())
     return result.data[0]
 
 @router.get("/{id}")
 async def get_contact(id: str, current_admin=Depends(verify_token)):
     db = get_db()
-    res = db.table("marketing_contacts").select("*").eq("id", id).execute()
+    res = await db_execute(lambda: db.table("marketing_contacts").select("*").eq("id", id).execute())
     if not res.data:
         raise HTTPException(status_code=404, detail="Contact not found")
     return res.data[0]
@@ -127,7 +127,7 @@ async def import_contacts(source: Optional[str] = "csv_import", file: UploadFile
 
     if contacts_to_insert:
         # We use upsert on email to handle duplicates
-        result = db.table("marketing_contacts").upsert(contacts_to_insert, on_conflict="email").execute()
+        result = await db_execute(lambda: db.table("marketing_contacts").upsert(contacts_to_insert, on_conflict="email").execute())
         import_count = len(result.data)
     else:
         import_count = 0
@@ -142,7 +142,7 @@ async def import_contacts(source: Optional[str] = "csv_import", file: UploadFile
 async def sync_clients(current_admin=Depends(verify_token)):
     """Legacy: One-time sync of all current clients into marketing_contacts."""
     db = get_db()
-    clients = db.table("clients").select("id, full_name, email, phone").execute().data
+    clients = (await db_execute(lambda: db.table("clients").select("id, full_name, email, phone").execute())).data
     
     marketing_entries = []
     seen_emails = set()
@@ -167,14 +167,14 @@ async def sync_clients(current_admin=Depends(verify_token)):
         })
     
     if marketing_entries:
-        res = db.table("marketing_contacts").upsert(marketing_entries, on_conflict="email").execute()
+        res = await db_execute(lambda: db.table("marketing_contacts").upsert(marketing_entries, on_conflict="email").execute())
         return {"synced_count": len(res.data)}
     return {"synced_count": 0}
 
 @router.delete("/diagnostic/deduplicate")
 async def deduplicate_contacts(current_admin=Depends(verify_token)):
     db = get_db()
-    res = db.table("marketing_contacts").select("*").order("created_at", desc=False).execute()
+    res = await db_execute(lambda: db.table("marketing_contacts").select("*").order("created_at", desc=False).execute())
     contacts = res.data or []
     
     seen_clients = {}
@@ -209,9 +209,9 @@ async def deduplicate_contacts(current_admin=Depends(verify_token)):
     if to_delete:
         for i in range(0, len(to_delete), 50):
             chunk = to_delete[i:i+50]
-            db.table("marketing_contacts").delete().in_("id", chunk).execute()
+            await db_execute(lambda: db.table("marketing_contacts").delete().in_("id", chunk).execute())
             
-    final_count = db.table("marketing_contacts").select("id", count="exact").execute().count
+    final_count = (await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").execute())).count
     return {"status": "success", "deleted_duplicates": len(to_delete), "final_count": final_count}
 @router.get("/{id}/history")
 async def get_contact_history(id: str, current_admin=Depends(verify_token)):
@@ -219,7 +219,7 @@ async def get_contact_history(id: str, current_admin=Depends(verify_token)):
     db = get_db()
     
     # 1. Fetch contact details
-    contact_res = db.table("marketing_contacts").select("*").eq("id", id).execute()
+    contact_res = await db_execute(lambda: db.table("marketing_contacts").select("*").eq("id", id).execute())
     if not contact_res.data:
         raise HTTPException(status_code=404, detail="Contact not found")
     
@@ -244,7 +244,7 @@ async def get_contact_history(id: str, current_admin=Depends(verify_token)):
 @router.delete("/diagnostic/deduplicate")
 async def deduplicate_contacts(current_admin=Depends(verify_token)):
     db = get_db()
-    res = db.table("marketing_contacts").select("*").order("created_at", desc=False).execute()
+    res = await db_execute(lambda: db.table("marketing_contacts").select("*").order("created_at", desc=False).execute())
     contacts = res.data or []
     seen_clients, seen_emails, to_delete = {}, {}, []
     
@@ -271,9 +271,9 @@ async def deduplicate_contacts(current_admin=Depends(verify_token)):
 
     if to_delete:
         for i in range(0, len(to_delete), 50):
-            db.table("marketing_contacts").delete().in_("id", to_delete[i:i+50]).execute()
+            await db_execute(lambda: db.table("marketing_contacts").delete().in_("id", to_delete[i:i+50]).execute())
             
-    final_count = db.table("marketing_contacts").select("id", count="exact").execute().count
+    final_count = (await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").execute())).count
     return {"status": "success", "deleted_duplicates": len(to_delete), "final_count": final_count}
 
 @router.post("/sync-all-stats")
@@ -282,7 +282,7 @@ async def sync_all_marketing_stats(current_admin=Depends(verify_token)):
     db = get_db()
     
     # 1. Fetch all recipients with activity
-    rec_res = db.table("campaign_recipients").select("campaign_id, contact_id, opened_at, clicked_at").execute()
+    rec_res = await db_execute(lambda: db.table("campaign_recipients").select("campaign_id, contact_id, opened_at, clicked_at").execute())
     recs = rec_res.data or []
     
     # 2. Aggregate Campaigns

@@ -84,7 +84,7 @@ def resolve_admin_token(token: str = None, authorization: str = Header(None)):
 @router.post("/login", response_model=TokenResponse)
 async def login(data: AdminLogin):
     db = get_db()
-    result = db.table("admins").select("*").eq("email", data.email).eq("is_active", True).execute()
+    result = await db_execute(lambda: db.table("admins").select("*").eq("email", data.email).eq("is_active", True).execute())
     if not result.data:
         raise HTTPException(status_code=401, detail="Invalid credentials")
     admin = result.data[0]
@@ -109,7 +109,7 @@ async def login(data: AdminLogin):
 @router.get("/me")
 async def me(current_admin=Depends(verify_token)):
     db = get_db()
-    result = db.table("admins").select("id, full_name, email, role, primary_role, created_at").eq("id", current_admin["sub"]).execute()
+    result = await db_execute(lambda: db.table("admins").select("id, full_name, email, role, primary_role, created_at").eq("id", current_admin["sub"]).execute())
     return result.data[0] if result.data else {}
 
 
@@ -119,7 +119,7 @@ async def register(data: AdminCreate, background_tasks: BackgroundTasks, current
     if not has_any_role(current_admin, "admin", "super_admin"):
         raise HTTPException(status_code=403, detail="Only admins can create accounts")
     db = get_db()
-    existing = db.table("admins").select("id").eq("email", data.email).execute()
+    existing = await db_execute(lambda: db.table("admins").select("id").eq("email", data.email).execute())
     if existing.data:
         raise HTTPException(status_code=400, detail="An account with this email already exists")
     password_hash = bcrypt.hashpw(data.password.encode(), bcrypt.gensalt()).decode()
@@ -150,7 +150,7 @@ async def list_admins(current_admin=Depends(verify_token)):
     if not has_any_role(current_admin, "admin", "super_admin"):
         raise HTTPException(status_code=403, detail="Admins only")
     db = get_db()
-    result = db.table("admins").select("id, full_name, email, role, primary_role, is_active, is_archived, created_at").order("created_at").execute()
+    result = await db_execute(lambda: db.table("admins").select("id, full_name, email, role, primary_role, is_active, is_archived, created_at").order("created_at").execute())
     return result.data
 
 
@@ -175,7 +175,7 @@ async def update_profile(data: UpdateProfileRequest, current_admin=Depends(verif
     if not data.full_name.strip():
         raise HTTPException(status_code=400, detail="Name cannot be empty")
     db = get_db()
-    db.table("admins").update({"full_name": data.full_name.strip()}).eq("id", current_admin["sub"]).execute()
+    await db_execute(lambda: db.table("admins").update({"full_name": data.full_name.strip()}).eq("id", current_admin["sub"]).execute())
     return {"message": "Profile updated", "full_name": data.full_name.strip()}
 
 
@@ -185,13 +185,13 @@ async def change_password(data: ChangePasswordRequest, current_admin=Depends(ver
     if len(data.new_password) < 8:
         raise HTTPException(status_code=400, detail="New password must be at least 8 characters")
     db = get_db()
-    result = db.table("admins").select("password_hash").eq("id", current_admin["sub"]).execute()
+    result = await db_execute(lambda: db.table("admins").select("password_hash").eq("id", current_admin["sub"]).execute())
     if not result.data:
         raise HTTPException(status_code=404, detail="Account not found")
     if not bcrypt.checkpw(data.current_password.encode(), result.data[0]["password_hash"].encode()):
         raise HTTPException(status_code=400, detail="Current password is incorrect")
     new_hash = bcrypt.hashpw(data.new_password.encode(), bcrypt.gensalt()).decode()
-    db.table("admins").update({"password_hash": new_hash}).eq("id", current_admin["sub"]).execute()
+    await db_execute(lambda: db.table("admins").update({"password_hash": new_hash}).eq("id", current_admin["sub"]).execute())
     return {"message": "Password changed successfully"}
 
 
@@ -203,11 +203,11 @@ async def reset_password(admin_id: str, data: ResetPasswordRequest, current_admi
     if len(data.new_password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
     db = get_db()
-    target = db.table("admins").select("id, full_name").eq("id", admin_id).execute()
+    target = await db_execute(lambda: db.table("admins").select("id, full_name").eq("id", admin_id).execute())
     if not target.data:
         raise HTTPException(status_code=404, detail="Account not found")
     new_hash = bcrypt.hashpw(data.new_password.encode(), bcrypt.gensalt()).decode()
-    db.table("admins").update({"password_hash": new_hash}).eq("id", admin_id).execute()
+    await db_execute(lambda: db.table("admins").update({"password_hash": new_hash}).eq("id", admin_id).execute())
     return {"message": f"Password reset for {target.data[0]['full_name']}"}
 
 
@@ -219,7 +219,7 @@ async def deactivate_admin(admin_id: str, current_admin=Depends(verify_token)):
     if current_admin.get("sub") == admin_id:
         raise HTTPException(status_code=400, detail="You cannot deactivate your own account")
     db = get_db()
-    result = db.table("admins").update({"is_active": False}).eq("id", admin_id).execute()
+    result = await db_execute(lambda: db.table("admins").update({"is_active": False}).eq("id", admin_id).execute())
     if not result.data:
         raise HTTPException(status_code=404, detail="Account not found")
     return {"message": "Account deactivated"}
@@ -231,7 +231,7 @@ async def reactivate_admin(admin_id: str, current_admin=Depends(verify_token)):
     if not has_any_role(current_admin, "admin", "super_admin"):
         raise HTTPException(status_code=403, detail="Admins only")
     db = get_db()
-    result = db.table("admins").update({"is_active": True, "is_archived": False}).eq("id", admin_id).execute()
+    result = await db_execute(lambda: db.table("admins").update({"is_active": True, "is_archived": False}).eq("id", admin_id).execute())
     if not result.data:
         raise HTTPException(status_code=404, detail="Account not found")
     return {"message": "Account reactivated"}
@@ -245,10 +245,10 @@ async def archive_admin(admin_id: str, current_admin=Depends(verify_token)):
     if current_admin.get("sub") == admin_id:
         raise HTTPException(status_code=400, detail="You cannot archive your own account")
     db = get_db()
-    target = db.table("admins").select("id, full_name").eq("id", admin_id).execute()
+    target = await db_execute(lambda: db.table("admins").select("id, full_name").eq("id", admin_id).execute())
     if not target.data:
         raise HTTPException(status_code=404, detail="Account not found")
-    db.table("admins").update({"is_active": False, "is_archived": True}).eq("id", admin_id).execute()
+    await db_execute(lambda: db.table("admins").update({"is_active": False, "is_archived": True}).eq("id", admin_id).execute())
     return {"message": f"{target.data[0]['full_name']} has been archived"}
 
 
@@ -268,9 +268,9 @@ async def update_admin_roles(admin_id: str, data: dict, current_admin=Depends(ve
         raise HTTPException(status_code=400, detail="At least one role is required")
 
     db = get_db()
-    target = db.table("admins").select("id, full_name").eq("id", admin_id).execute()
+    target = await db_execute(lambda: db.table("admins").select("id, full_name").eq("id", admin_id).execute())
     if not target.data:
         raise HTTPException(status_code=404, detail="Account not found")
 
-    db.table("admins").update({"role": role, "primary_role": primary_role}).eq("id", admin_id).execute()
+    await db_execute(lambda: db.table("admins").update({"role": role, "primary_role": primary_role}).eq("id", admin_id).execute())
     return {"message": f"Roles updated for {target.data[0]['full_name']}"}

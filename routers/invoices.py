@@ -67,7 +67,7 @@ async def get_invoice(invoice_id: str, current_admin=Depends(verify_token)):
     
     # Fallback for missing location data
     if not invoice.get("property_location") and invoice.get("property_name"):
-        prop_res = db.table("properties").select("location").ilike("name", f"%{invoice['property_name']}%").execute()
+        prop_res = await db_execute(lambda: db.table("properties").select("location").ilike("name", f"%{invoice['property_name']}%").execute())
         if prop_res.data:
             invoice["property_location"] = prop_res.data[0]["location"]
             
@@ -507,7 +507,7 @@ async def download_pdf(invoice_id: str, doc_type: str, current_admin=Depends(res
         # Ensure property_location fallback for statement invoices too
         for ai in all_inv.data:
             if not ai.get("property_location") and ai.get("property_name"):
-                pr = db.table("properties").select("location").ilike("name", f"%{ai['property_name']}%").execute()
+                pr = await db_execute(lambda: db.table("properties").select("location").ilike("name", f"%{ai['property_name']}%").execute())
                 if pr.data:
                     ai["property_location"] = pr.data[0]["location"]
                     

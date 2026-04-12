@@ -82,7 +82,7 @@ async def book_appointment(request: Request):
         "created_at": datetime.now(LAGOS_TZ).isoformat()
     }
 
-    res = db.table("appointments").insert(appointment_payload).execute()
+    res = await db_execute(lambda: db.table("appointments").insert(appointment_payload).execute())
     
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to book appointment")

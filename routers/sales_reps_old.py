@@ -145,30 +145,7 @@ async def get_rep_stats(rep_id: str, admin: dict = Depends(get_current_admin)):
     else:
         stats["collection_rate"] = 0
         
-    return {"rep": rep.data[0], "stats": stats}    target_rep = supabase.table("sales_reps").select("*").eq("id", req.target_rep_id).execute()
-    if not target_rep.data:
-        raise HTTPException(status_code=404, detail="Target rep not found")
-        
-    target_name = target_rep.data[0]["name"]
-    
-    # 3. Update all invoices that used the unmatched name
-    supabase.table("invoices").update({"sales_rep_name": target_name}).eq("sales_rep_name", unmatched_name).execute()
-    
-    # 4. Mark as resolved
-    supabase.table("unmatched_reps").update({
-        "is_resolved": True, 
-        "resolved_to": req.target_rep_id
-    }).eq("id", req.unmatched_id).execute()
-    
-    background_tasks.add_task(
-        log_activity,
-        "rep_name_resolved",
-        f"Resolved unmatched name '{unmatched_name}' to rep '{target_name}'",
-        performed_by=admin["sub"]
-    )
-    
-    return {"message": f"Successfully mapped '{unmatched_name}' to '{target_name}'"}
-
+    return {"rep": rep.data[0], "stats": stats}
 @router.get("/{rep_id}/stats")
 async def get_rep_stats(rep_id: str, admin: dict = Depends(get_current_admin)):
     """Get detailed performance stats for a specific rep."""

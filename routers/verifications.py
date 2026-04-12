@@ -170,7 +170,7 @@ async def confirm_verification(
             "status": "sent",
             "sent_by": current_admin["sub"]
         })
-        db.table("email_logs").insert(log_data).execute()
+        await db_execute(lambda: db.table("email_logs").insert(log_data).execute())
 
     background_tasks.add_task(
         log_activity,
@@ -286,7 +286,7 @@ async def edit_verification(
     role = current_admin.get("role")
     
     # 1. Fetch verification
-    v_res = db.table("pending_verifications").select("*").eq("id", id).execute()
+    v_res = await db_execute(lambda: db.table("pending_verifications").select("*").eq("id", id).execute())
     if not v_res.data:
         raise HTTPException(status_code=404, detail="Verification record not found")
     
@@ -305,7 +305,7 @@ async def edit_verification(
                 raise HTTPException(status_code=403, detail=f"Permission denied to edit {field}")
 
     # 2. Update verification
-    db.table("pending_verifications").update(update_data).eq("id", id).execute()
+    await db_execute(lambda: db.table("pending_verifications").update(update_data).eq("id", id).execute())
     
     # If deposit amount changed, update the linked payment record if it exists
     if "deposit_amount" in update_data:
