@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks, File, UploadFile, Form, Body
 from fastapi.responses import StreamingResponse
 from pydantic import BaseModel
-from database import get_db
+from database import get_db, db_execute
 from models import ExpenditureRequestCreate, PayoutReview, AssetCreate, VendorCreate, VoidExpenditureRequest, PayoutPaymentData
 from routers.auth import verify_token, has_any_role, require_roles
 from email_service import send_payout_receipt_email, send_portal_invite_email, send_report_email
@@ -70,7 +70,7 @@ class VerifyRequest(BaseModel):
 @router.post("/vendors")
 async def create_vendor(data: VendorCreate, current_admin=Depends(require_roles(["admin", "super_admin"]))):
     db = get_db()
-    res = db.table("vendors").insert(data.dict()).execute()
+    res = await db_execute(lambda: db.table("vendors").insert(data.dict()).execute())
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to create vendor")
     return res.data[0]
@@ -81,7 +81,7 @@ async def list_vendors(type: Optional[str] = None, current_admin=Depends(require
     query = db.table("vendors").select("*")
     if type:
         query = query.eq("type", type)
-    res = query.order("name").execute()
+    res = await db_execute(lambda: query.order("name").execute())
     return res.data
 
 # ─── EXPENDITURE REQUESTS ─────────────────────────────────────
@@ -92,7 +92,7 @@ async def submit_payout_request(data: ExpenditureRequestCreate, current_admin=De
     vendor_id = data.vendor_id
     # Inline vendor creation (e.g. for one-off staff claims)
     if not vendor_id and data.vendor_data:
-        vendor_res = db.table("vendors").insert(data.vendor_data.dict()).execute()
+        vendor_res = await db_execute(lambda: db.table("vendors").insert(data.vendor_data.dict()).execute())
         if vendor_res.data:
             vendor_id = vendor_res.data[0]['id']
             
@@ -101,7 +101,8 @@ async def submit_payout_request(data: ExpenditureRequestCreate, current_admin=De
     wht_details = {"rate": 0, "wht_amount": 0, "net_amount": data.amount_gross}
     
     if data.is_wht_applicable:
-        vendor = db.table("vendors").select("tin, type").eq("id", vendor_id).execute().data[0]
+        vendor_res = await db_execute(lambda: db.table("vendors").select("tin, type").eq("id", vendor_id).execute())
+        vendor = vendor_res.data[0]
         has_tin = bool(vendor.get('tin'))
         # Default to 'professional' for services, 'goods' if mentioned
         cat = 'goods' if 'get' in data.title.lower() or 'buy' in data.title.lower() else 'professional'
@@ -125,7 +126,7 @@ async def submit_payout_request(data: ExpenditureRequestCreate, current_admin=De
         "status": "pending_verification"
     }
     
-    res = db.table("expenditure_requests").insert(payload).execute()
+    res = await db_execute(lambda: db.table("expenditure_requests").insert(payload).execute())
     return res.data[0]
 
 @router.get("/requests")
@@ -139,7 +140,7 @@ async def list_expenditure_requests(status: Optional[str] = None, show_voided: b
     if not show_voided:
         query = query.neq("status", "voided")
         
-    res = query.order("created_at", desc=True).execute()
+    res = await db_execute(lambda: query.order("created_at", desc=True).execute())
     return res.data
 
 @router.post("/requests/{request_id}/payments")
@@ -147,7 +148,7 @@ async def record_payout_payment(request_id: str, data: PayoutPaymentData, bg_tas
     db = get_db()
     
     # 1. Verify Request
-    req_res = db.table("expenditure_requests").select("*").eq("id", request_id).execute()
+    req_res = await db_execute(lambda: db.table("expenditure_requests").select("*").eq("id", request_id).execute())
     if not req_res.data:
         raise HTTPException(status_code=404, detail="Request not found")
         
@@ -169,7 +170,7 @@ async def record_payout_payment(request_id: str, data: PayoutPaymentData, bg_tas
         "reference": data.reference,
         "paid_by": current_admin['sub']
     }
-    db.table("expenditure_payments").insert(payment_payload).execute()
+    await db_execute(lambda: db.table("expenditure_payments").insert(payment_payload).execute())
     
     # 3. Update Request
     new_paid = current_paid + amount_to_pay
@@ -184,11 +185,11 @@ async def record_payout_payment(request_id: str, data: PayoutPaymentData, bg_tas
     if new_status == "paid":
         update_payload["paid_at"] = datetime.now(timezone.utc).isoformat()
         
-    update_res = db.table("expenditure_requests").update(update_payload).eq("id", request_id).execute()
+    update_res = await db_execute(lambda: db.table("expenditure_requests").update(update_payload).eq("id", request_id).execute())
     
     # Trigger automated receipt
     if update_res.data:
-        req_with_vendor = db.table("expenditure_requests").select("*, vendors(*)").eq("id", request_id).execute()
+        req_with_vendor = await db_execute(lambda: db.table("expenditure_requests").select("*, vendors(*)").eq("id", request_id).execute())
         if req_with_vendor.data:
             full_req = req_with_vendor.data[0]
             vendor = full_req.get('vendors')
@@ -208,7 +209,7 @@ async def verify_bill_request(
         raise HTTPException(status_code=403, detail="Only authorized roles can perform this action")
     
     db = get_db()
-    req_res = db.table("expenditure_requests").select("*").eq("id", request_id).execute()
+    req_res = await db_execute(lambda: db.table("expenditure_requests").select("*").eq("id", request_id).execute())
     if not req_res.data:
         raise HTTPException(status_code=404, detail="Bill not found")
     
@@ -226,7 +227,7 @@ async def verify_bill_request(
     elif action == 'pending' and data.due_date:
         update_payload["due_date"] = data.due_date
     
-    db.table("expenditure_requests").update(update_payload).eq("id", request_id).execute()
+    await db_execute(lambda: db.table("expenditure_requests").update(update_payload).eq("id", request_id).execute())
     return {"status": "success", "new_status": action}
 
 @router.put("/requests/{request_id}/review")
@@ -235,7 +236,7 @@ async def review_payout_request(request_id: str, data: PayoutReview, bg_tasks: B
         raise HTTPException(status_code=403, detail="Only Admins can approve payouts")
         
     db = get_db()
-    req_res = db.table("expenditure_requests").select("*, vendors(*)").eq("id", request_id).execute()
+    req_res = await db_execute(lambda: db.table("expenditure_requests").select("*, vendors(*)").eq("id", request_id).execute())
     if not req_res.data:
         raise HTTPException(status_code=404, detail="Request not found")
         
@@ -264,7 +265,7 @@ async def review_payout_request(request_id: str, data: PayoutReview, bg_tasks: B
     if data.status == 'approved':
         update_payload['paid_at'] = datetime.now(timezone.utc).isoformat()
 
-    res = db.table("expenditure_requests").update(update_payload).eq("id", request_id).execute()
+    res = await db_execute(lambda: db.table("expenditure_requests").update(update_payload).eq("id", request_id).execute())
     updated_req = res.data[0]
 
     # ─── ASSET AUTOMATION ────────────────────────────────────
@@ -287,7 +288,7 @@ async def review_payout_request(request_id: str, data: PayoutReview, bg_tasks: B
                 "notes": f"Auto-logged via Procurement Approval. Ref: {request_id}"
             }
             
-            db.table("company_assets").insert(asset_payload).execute()
+            await db_execute(lambda: db.table("company_assets").insert(asset_payload).execute())
         except Exception as asset_err:
             print(f"⚠️ Warning: Payout approved but Asset logging failed: {asset_err}")
             # We don't fail the whole payout if asset logging hits a snag, but we log it.
@@ -319,14 +320,14 @@ async def record_wht_remittance(data: WhtRemittanceData, current_admin=Depends(r
         "wht_remitted_by": current_admin['sub']
     }
     
-    res = db.table("expenditure_requests").update(update_payload).in_("id", data.request_ids).execute()
+    res = await db_execute(lambda: db.table("expenditure_requests").update(update_payload).in_("id", data.request_ids).execute())
     return {"status": "success", "cleared_count": len(res.data) if res.data else 0}
 
 @router.post("/requests/{request_id}/send-receipt")
 async def trigger_manual_receipt(request_id: str, bg_tasks: BackgroundTasks, current_admin=Depends(require_roles(["admin", "super_admin"]))):
     """Manually triggers a remittance advice email to the vendor."""
     db = get_db()
-    req_res = db.table("expenditure_requests").select("*, vendors(*)").eq("id", request_id).execute()
+    req_res = await db_execute(lambda: db.table("expenditure_requests").select("*, vendors(*)").eq("id", request_id).execute())
     if not req_res.data:
         raise HTTPException(status_code=404, detail="Request not found")
         
@@ -342,7 +343,7 @@ async def trigger_manual_receipt(request_id: str, bg_tasks: BackgroundTasks, cur
 @router.post("/assets")
 async def record_company_asset(data: AssetCreate, current_admin=Depends(require_roles(["admin", "super_admin"]))):
     db = get_db()
-    res = db.table("company_assets").insert(data.dict()).execute()
+    res = await db_execute(lambda: db.table("company_assets").insert(data.dict()).execute())
     return res.data[0]
 
 @router.get("/assets")
@@ -351,7 +352,7 @@ async def list_assets(assigned_to: Optional[str] = None, current_admin=Depends(r
     query = db.table("company_assets").select("*, admins!assigned_to(full_name)")
     if assigned_to:
         query = query.eq("assigned_to", assigned_to)
-    res = query.execute()
+    res = await db_execute(lambda: query.execute())
     return res.data
 
 
@@ -366,7 +367,7 @@ async def view_secure_payout_document(request_id: str, doc_type: str, current_ad
     doc_type: 'proforma', 'receipt'
     """
     db = get_db()
-    req_res = db.table("expenditure_requests").select("*").eq("id", request_id).execute()
+    req_res = await db_execute(lambda: db.table("expenditure_requests").select("*").eq("id", request_id).execute())
     if not req_res.data:
         raise HTTPException(status_code=404, detail="Request not found")
     
@@ -403,7 +404,7 @@ async def trigger_portal_invite(data: PortalInvite, bg_tasks: BackgroundTasks, c
     db = get_db()
     
     # 1. Fetch current admin for the invitation signature
-    admin_res = db.table("admins").select("full_name").eq("id", current_admin['sub']).execute()
+    admin_res = await db_execute(lambda: db.table("admins").select("full_name").eq("id", current_admin['sub']).execute())
     admin_name = admin_res.data[0]['full_name'] if admin_res.data else "Eximp & Cloves Finance"
     
     # 2. Generate or Update Invite Token
@@ -418,7 +419,7 @@ async def trigger_portal_invite(data: PortalInvite, bg_tasks: BackgroundTasks, c
     }
     
     # Upsert the invite (so re-inviting updates the token/category)
-    db.table("portal_invites").upsert(invite_payload, on_conflict="email").execute()
+    await db_execute(lambda: db.table("portal_invites").upsert(invite_payload, on_conflict="email").execute())
     
     # 3. Generate Link
     # Note: In production, window.location.origin would be used on frontend, 
@@ -438,14 +439,14 @@ async def resolve_portal_invite(token: str):
     db = get_db()
     
     # 1. Validate Token
-    invite_res = db.table("portal_invites").select("*").eq("token", token).execute()
+    invite_res = await db_execute(lambda: db.table("portal_invites").select("*").eq("token", token).execute())
     if not invite_res.data:
         raise HTTPException(status_code=404, detail="Invalid or expired invitation link")
     
     invite = invite_res.data[0]
     
     # 2. Check if Payee is already onboarded
-    payee_res = db.table("vendors").select("*").eq("email", invite['email']).execute()
+    payee_res = await db_execute(lambda: db.table("vendors").select("*").eq("email", invite['email']).execute())
     is_onboarded = len(payee_res.data) > 0
     payee_data = payee_res.data[0] if is_onboarded else None
     
@@ -492,12 +493,12 @@ async def submit_payout_claim_from_portal(
     }
     
     # Check if vendor exists
-    existing = db.table("vendors").select("id").eq("email", payee_email).execute()
+    existing = await db_execute(lambda: db.table("vendors").select("id").eq("email", payee_email).execute())
     if existing.data:
         vendor_id = existing.data[0]['id']
-        db.table("vendors").update(vendor_data).eq("id", vendor_id).execute()
+        await db_execute(lambda: db.table("vendors").update(vendor_data).eq("id", vendor_id).execute())
     else:
-        res = db.table("vendors").insert(vendor_data).execute()
+        res = await db_execute(lambda: db.table("vendors").insert(vendor_data).execute())
         vendor_id = res.data[0]['id']
 
     # 2. File Upload (Quotation)
@@ -531,7 +532,7 @@ async def submit_payout_claim_from_portal(
         "proforma_url": quotation_url,
         "status": "pending_verification"
     }
-    db.table("expenditure_requests").insert(req_payload).execute()
+    await db_execute(lambda: db.table("expenditure_requests").insert(req_payload).execute())
     
     return {"status": "success", "message": "Claim submitted successfully. Our finance team will review it shortly."}
 
@@ -544,7 +545,7 @@ async def void_payout_request(request_id: str, data: VoidExpenditureRequest, cur
     db = get_db()
     
     # 1. Check if it exists
-    req_res = db.table("expenditure_requests").select("status, title").eq("id", request_id).execute()
+    req_res = await db_execute(lambda: db.table("expenditure_requests").select("status, title").eq("id", request_id).execute())
     if not req_res.data:
         raise HTTPException(status_code=404, detail="Request not found")
         
@@ -556,7 +557,7 @@ async def void_payout_request(request_id: str, data: VoidExpenditureRequest, cur
         "voided_by": current_admin['sub']
     }
     
-    db.table("expenditure_requests").update(update_data).eq("id", request_id).execute()
+    await db_execute(lambda: db.table("expenditure_requests").update(update_data).eq("id", request_id).execute())
     
     # 3. Log Activity
     try:
@@ -615,7 +616,7 @@ async def get_payout_stats(
         .gte("created_at", start_ts)\
         .lte("created_at", end_ts)
         
-    res = query.execute()
+    res = await db_execute(lambda: query.execute())
     data = res.data or []
     
     # Aggregation for Charts
@@ -672,17 +673,17 @@ async def get_payout_stats(
     top_creditors = sorted(creditors.items(), key=lambda x: x[1], reverse=True)[:5]
     
     # 3. Active Requests (Always Current State)
-    active_count = db.table("expenditure_requests").select("id", count="exact").eq("status", "pending").execute().count
+    active_count = (await db_execute(lambda: db.table("expenditure_requests").select("id", count="exact").eq("status", "pending").execute())).count
     
     # 4. Liability (Cumulative WHT awaiting remittance)
     # This reflects the current ledger state for FIRS compliance.
     try:
-        liability_res = db.table("expenditure_requests")\
+        liability_res = await db_execute(lambda: db.table("expenditure_requests")\
             .select("wht_amount")\
             .in_("status", ["approved", "partially_paid", "paid"])\
             .eq("is_wht_remitted", False)\
             .gt("wht_amount", 0)\
-            .execute()
+            .execute())
         total_liability = sum(float(r['wht_amount'] or 0) for r in liability_res.data)
     except Exception as e:
         logger.warning(f"Liability calculation fallback (column likely missing): {e}")
@@ -692,7 +693,7 @@ async def get_payout_stats(
     
     # 5. Company Assets (Total Book Value)
     try:
-        asset_res = db.table("company_assets").select("purchase_cost").execute()
+        asset_res = await db_execute(lambda: db.table("company_assets").select("purchase_cost").execute())
         total_assets = sum(float(r.get('purchase_cost') or 0) for r in asset_res.data)
     except Exception as e:
         logger.warning(f"Asset calculation failed: {e}")
@@ -776,7 +777,7 @@ async def save_report_schedule(data: ScheduleRequest, current_admin=Depends(requ
     }
     
     try:
-        res = db.table("report_schedules").upsert(payload).execute()
+        res = await db_execute(lambda: db.table("report_schedules").upsert(payload).execute())
         return {"status": "success", "data": res.data[0] if res.data else {}}
     except Exception as e:
         logger.warning(f"Failed to upsert schedule (table might be missing): {e}")

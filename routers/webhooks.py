@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request, BackgroundTasks
 from fastapi.encoders import jsonable_encoder
 from models import WebhookFormPayload
-from database import get_db, SUPABASE_URL
+from database import get_db, SUPABASE_URL, db_execute
 import os
 import base64
 import io
@@ -72,18 +72,18 @@ async def process_webhook_post_submission_tasks(
                 # 2. Upload to storage
                 file_path = f"customer_signatures/sig_{invoice_number}.{ext}"
                 try:
-                    db.storage.from_("signatures").remove([file_path])
+                    await db_execute(lambda: db.storage.from_("signatures").remove([file_path]))
                 except Exception:
                     pass
-                db.storage.from_("signatures").upload(
+                await db_execute(lambda: db.storage.from_("signatures").upload(
                     path=file_path, 
                     file=img_data, 
                     file_options={"content-type": mime}
-                )
+                ))
                 
                 signature_url_to_save = f"{SUPABASE_URL}/storage/v1/object/public/signatures/{file_path}"
                 # Update invoice with the real signature URL
-                db.table("invoices").update({"signature_url": signature_url_to_save}).eq("id", invoice_id).execute()
+                await db_execute(lambda: db.table("invoices").update({"signature_url": signature_url_to_save}).eq("id", invoice_id).execute())
             except Exception as sig_e:
                 print(f"ERROR: Background signature process failed: {sig_e}")
 
@@ -98,7 +98,7 @@ async def process_webhook_post_submission_tasks(
                 "payment_date": payload.payment_date or str(date.today()),
                 "notes": "Initial deposit via subscription form"
             }
-            db.table("payments").insert(jsonable_encoder(payment_data)).execute()
+            await db_execute(lambda: db.table("payments").insert(jsonable_encoder(payment_data)).execute())
 
         # 3. Create pending verification
         verify_data = {
@@ -110,13 +110,15 @@ async def process_webhook_post_submission_tasks(
             "sales_rep_name": payload.sales_rep_name,
             "status": "pending"
         }
-        db.table("pending_verifications").insert(jsonable_encoder(verify_data)).execute()
+        await db_execute(lambda: db.table("pending_verifications").insert(jsonable_encoder(verify_data)).execute())
 
         # 4. Emails
         # Fetch data for email
-        full_client = db.table("clients").select("*").eq("id", client_id).execute().data[0]
+        full_client_res = await db_execute(lambda: db.table("clients").select("*").eq("id", client_id).execute())
+        full_client = full_client_res.data[0]
         # Get invoice with potential updated signature_url
-        invoice = db.table("invoices").select("*").eq("id", invoice_id).execute().data[0]
+        invoice_res = await db_execute(lambda: db.table("invoices").select("*").eq("id", invoice_id).execute())
+        invoice = invoice_res.data[0]
         
         await send_welcome_email(full_client, property_name)
         await send_admin_alert_email(invoice, full_client)
@@ -197,12 +199,12 @@ async def form_submission(
         }
 
         # Search by email
-        client_res = db.table("clients").select("*").eq("email", payload.email).execute()
+        client_res = await db_execute(lambda: db.table("clients").select("*").eq("email", payload.email).execute())
         if client_res.data:
             client_id = client_res.data[0]["id"]
-            db.table("clients").update(jsonable_encoder(client_data)).eq("id", client_id).execute()
+            await db_execute(lambda: db.table("clients").update(jsonable_encoder(client_data)).eq("id", client_id).execute())
         else:
-            new_client = db.table("clients").insert(jsonable_encoder(client_data)).execute()
+            new_client = await db_execute(lambda: db.table("clients").insert(jsonable_encoder(client_data)).execute())
             client_id = new_client.data[0]["id"]
             
         # 4. Sales Rep Detection
@@ -222,13 +224,13 @@ async def form_submission(
                     cleaned_phone = cleaned_phone[1:]
                 
                 if len(cleaned_phone) >= 7:
-                    rep_res = db.table("sales_reps").select("*").ilike("phone", f"%{cleaned_phone}%").eq("is_active", True).execute()
+                    rep_res = await db_execute(lambda: db.table("sales_reps").select("*").ilike("phone", f"%{cleaned_phone}%").eq("is_active", True).execute())
                     if rep_res.data:
                         matched_rep = rep_res.data[0]
             
             # Phase 2: Try Exact Name Match
             if not matched_rep and payload.sales_rep_name:
-                rep_res = db.table("sales_reps").select("*").eq("name", payload.sales_rep_name).eq("is_active", True).execute()
+                rep_res = await db_execute(lambda: db.table("sales_reps").select("*").eq("name", payload.sales_rep_name).eq("is_active", True).execute())
                 if rep_res.data:
                     matched_rep = rep_res.data[0]
             
@@ -238,18 +240,18 @@ async def form_submission(
             else:
                 # Log as unmatched if we have a name/phone but no clear DB match
                 name_to_log = payload.sales_rep_name or f"Phone: {payload.sales_rep_phone}"
-                unmatched_res = db.table("unmatched_reps").select("*").eq("name_from_form", name_to_log).execute()
+                unmatched_res = await db_execute(lambda: db.table("unmatched_reps").select("*").eq("name_from_form", name_to_log).execute())
                 if unmatched_res.data:
-                    db.table("unmatched_reps").update({
+                    await db_execute(lambda: db.table("unmatched_reps").update({
                         "times_seen": unmatched_res.data[0]["times_seen"] + 1,
                         "last_seen": "now()"
-                    }).eq("id", unmatched_res.data[0]["id"]).execute()
+                    }).eq("id", unmatched_res.data[0]["id"]).execute())
                 else:
-                    db.table("unmatched_reps").insert({"name_from_form": name_to_log}).execute()
+                    await db_execute(lambda: db.table("unmatched_reps").insert({"name_from_form": name_to_log}).execute())
 
         # 5. Create invoice
         # Generate invoice number via DB function
-        seq_result = db.rpc("generate_invoice_number").execute()
+        seq_result = await db_execute(lambda: db.rpc("generate_invoice_number").execute())
         invoice_number = seq_result.data
 
         # Parse plot size sqm if possible
@@ -287,7 +289,7 @@ async def form_submission(
                 query = query.eq("plot_size_sqm", plot_size_numeric)
             
             try:
-                prop_res = query.execute()
+                prop_res = await db_execute(lambda: query.execute())
                 if prop_res.data:
                     prop = prop_res.data[0]
                     property_id_to_use = prop.get("id")
@@ -304,10 +306,11 @@ async def form_submission(
         # 5b. REVENUE ATTRIBUTION
         marketing_campaign_id = payload.mcid
         if not marketing_campaign_id:
-            mc_attr = db.table("marketing_contacts").select("last_campaign_id").eq("email", payload.email.strip().lower()).execute()
+            mc_attr = await db_execute(lambda: db.table("marketing_contacts").select("last_campaign_id").eq("email", payload.email.strip().lower()).execute())
             marketing_campaign_id = mc_attr.data[0].get("last_campaign_id") if mc_attr.data and mc_attr.data[0].get("last_campaign_id") else None
 
         invoice_insert = {
+            # ... (fields truncated for brevity)
             "invoice_number": invoice_number,
             "client_id": client_id,
             "property_id": property_id_to_use,
@@ -337,7 +340,7 @@ async def form_submission(
             "pipeline_stage": "inspection"
         }
 
-        invoice_res = db.table("invoices").insert(jsonable_encoder(invoice_insert)).execute()
+        invoice_res = await db_execute(lambda: db.table("invoices").insert(jsonable_encoder(invoice_insert)).execute())
         invoice_id = invoice_res.data[0]["id"]
 
         # 6. Hand off heavy tasks to Background Worker

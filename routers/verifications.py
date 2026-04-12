@@ -61,7 +61,7 @@ async def confirm_verification(
     if not has_any_role(current_admin, "admin", "super_admin", "operations"):
         raise HTTPException(status_code=403, detail="Unauthorized: Only admins can confirm verifications")
 
-    v_res = db.table("pending_verifications").select("*").eq("id", id).execute()
+    v_res = await db_execute(lambda: db.table("pending_verifications").select("*").eq("id", id).execute())
     if not v_res.data:
         raise HTTPException(status_code=404, detail="Verification record not found")
     
@@ -75,37 +75,37 @@ async def confirm_verification(
         "reviewed_by": current_admin["sub"],
         "reviewed_at": datetime.now().isoformat()
     })
-    db.table("pending_verifications").update(update_data).eq("id", id).execute()
+    await db_execute(lambda: db.table("pending_verifications").update(update_data).eq("id", id).execute())
 
     # 3. Fetch invoice and client for email
-    inv_res = db.table("invoices").select("*, clients(*)").eq("id", verify_rec["invoice_id"]).execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", verify_rec["invoice_id"]).execute())
     invoice = inv_res.data[0]
     client = invoice["clients"]
 
     # Fetch all invoices for statement
-    all_inv = db.table("invoices")\
+    all_inv = await db_execute(lambda: db.table("invoices")\
         .select("*, payments(*)")\
         .eq("client_id", client["id"])\
         .order("invoice_date")\
-        .execute()
+        .execute())
 
     rep_id = invoice.get("sales_rep_id")
     rep = None
     if not rep_id and invoice.get("sales_rep_name"):
         # Fallback for old invoices without sales_rep_id
         rep_name = invoice["sales_rep_name"].strip()
-        rep_res = db.table("sales_reps")\
+        rep_res = await db_execute(lambda: db.table("sales_reps")\
             .select("*")\
             .ilike("name", f"%{rep_name}%")\
             .eq("is_active", True)\
-            .execute()
+            .execute())
         
         if rep_res.data:
             rep = rep_res.data[0]
             rep_id = rep["id"]
 
     if rep_id and not rep:
-        rep_res = db.table("sales_reps").select("*").eq("id", rep_id).execute()
+        rep_res = await db_execute(lambda: db.table("sales_reps").select("*").eq("id", rep_id).execute())
         if rep_res.data:
             rep = rep_res.data[0]
             
@@ -122,20 +122,20 @@ async def confirm_verification(
             
             # Robust payment lookup: try reference first, then any payment on this invoice with 'deposit'
             ref = f"{verify_rec['payment_date']}_form_deposit"
-            pay_res = db.table("payments").select("id").eq("invoice_id", invoice["id"]).eq("reference", ref).execute()
+            pay_res = await db_execute(lambda: db.table("payments").select("id").eq("invoice_id", invoice["id"]).eq("reference", ref).execute())
             if not pay_res.data:
                 # Fallback: find any payment on this invoice with webhook-style reference
-                pay_res = db.table("payments")\
+                pay_res = await db_execute(lambda: db.table("payments")\
                     .select("id")\
                     .eq("invoice_id", invoice["id"])\
                     .ilike("reference", "%form_deposit")\
-                    .execute()
+                    .execute())
                     
             payment_id = pay_res.data[0]["id"] if pay_res.data else None
             
             if payment_id:
                 # Insert earnings record
-                earning = db.table("commission_earnings").insert({
+                earning_res = await db_execute(lambda: db.table("commission_earnings").insert({
                     "sales_rep_id": rep_id,
                     "invoice_id": invoice["id"],
                     "payment_id": payment_id,
@@ -144,7 +144,8 @@ async def confirm_verification(
                     "payment_amount": deposit,
                     "commission_rate": rate,
                     "commission_amount": commission_amount,
-                }).execute().data[0]
+                }).execute())
+                earning = earning_res.data[0]
                 
                 if rep:
                     background_tasks.add_task(
@@ -195,19 +196,19 @@ async def reject_verification(
     if not has_any_role(current_admin, "admin", "super_admin", "operations"):
         raise HTTPException(status_code=403, detail="Unauthorized: Only admins can reject verifications")
 
-    v_res = db.table("pending_verifications").select("*").eq("id", id).execute()
+    v_res = await db_execute(lambda: db.table("pending_verifications").select("*").eq("id", id).execute())
     if not v_res.data:
         raise HTTPException(status_code=404, detail="Verification record not found")
     
     verify_rec = v_res.data[0]
     
     # 2. Update verification status
-    db.table("pending_verifications").update({
+    await db_execute(lambda: db.table("pending_verifications").update({
         "status": "rejected",
         "rejection_reason": data.reason,
         "reviewed_by": current_admin["sub"],
         "reviewed_at": datetime.now().isoformat()
-    }).eq("id", id).execute()
+    }).eq("id", id).execute())
 
     # 3. Mark invoice form deposit payments as voided so they are excluded from
     # revenue analytics, statements, and commission calculations.
@@ -216,37 +217,39 @@ async def reject_verification(
     payment_query = payment_query.eq("invoice_id", verify_rec["invoice_id"])
     payment_query = payment_query.eq("is_voided", False)
     payment_query = payment_query.ilike("reference", "%form_deposit")
-    payments_to_void = payment_query.execute().data or []
+    pmt_res = await db_execute(lambda: payment_query.execute())
+    payments_to_void = pmt_res.data or []
 
     if not payments_to_void and verify_rec.get("deposit_amount") is not None:
         # Fallback: match deposit amount and form deposit note if the reference
         # changed or was missing.
-        payments_to_void = db.table("payments")\
+        pmt_res = await db_execute(lambda: db.table("payments")\
             .select("*")\
             .eq("invoice_id", verify_rec["invoice_id"])\
             .eq("is_voided", False)\
             .eq("amount", verify_rec["deposit_amount"])\
             .ilike("notes", "%subscription form%")\
-            .execute().data or []
+            .execute())
+        payments_to_void = pmt_res.data or []
 
     if payments_to_void:
         payment_ids = [p["id"] for p in payments_to_void]
-        db.table("payments").update({
+        await db_execute(lambda: db.table("payments").update({
             "is_voided": True,
             "voided_by": current_admin["sub"],
             "voided_at": datetime.now().isoformat(),
             "notes": f"Rejected during verification: {data.reason}"
-        }).in_("id", payment_ids).execute()
+        }).in_("id", payment_ids).execute())
 
-        db.table("commission_earnings").update({
+        await db_execute(lambda: db.table("commission_earnings").update({
             "is_voided": True,
             "voided_by": current_admin["sub"],
             "voided_at": datetime.now().isoformat(),
             "void_reason": f"Rejected during verification: {data.reason}"
-        }).in_("payment_id", payment_ids).execute()
+        }).in_("payment_id", payment_ids).execute())
     
     # 4. Fetch invoice and client for email
-    inv_res = db.table("invoices").select("*, clients(*)").eq("id", verify_rec["invoice_id"]).execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", verify_rec["invoice_id"]).execute())
     invoice = inv_res.data[0]
     client = invoice["clients"]
 

@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.encoders import jsonable_encoder
-from database import get_db
+from database import get_db, db_execute
 from routers.auth import verify_token
 from routers.analytics import log_activity
 from models import PaymentCreate, PaymentUpdate
@@ -23,7 +23,7 @@ async def record_payment(
     db = get_db()
 
     # Verify invoice exists
-    inv = db.table("invoices").select("*").eq("id", data.invoice_id).execute()
+    inv = await db_execute(lambda: db.table("invoices").select("*").eq("id", data.invoice_id).execute())
     if not inv.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
@@ -41,7 +41,7 @@ async def record_payment(
     
     # Use jsonable_encoder to handle Decimal/date types for Supabase
     encoded_data = jsonable_encoder(payment_data)
-    result = db.table("payments").insert(encoded_data).execute()
+    result = await db_execute(lambda: db.table("payments").insert(encoded_data).execute())
 
     payment_id = result.data[0]["id"]
 
@@ -53,31 +53,31 @@ async def record_payment(
         # Fallback for old invoices without sales_rep_id but have a name
         if not rep_id and invoice.get("sales_rep_name"):
             rep_name = invoice["sales_rep_name"].strip()
-            rep_res = db.table("sales_reps")\
+            rep_res = await db_execute(lambda: db.table("sales_reps")\
                 .select("id")\
                 .ilike("name", f"%{rep_name}%")\
                 .eq("is_active", True)\
-                .execute()
+                .execute())
             if rep_res.data:
                 rep_id = rep_res.data[0]["id"]
                 
         if rep_id:
             # Calculate commission rate
-            rate = get_commission_rate(
+            rate = await db_execute(lambda: get_commission_rate(
                 sales_rep_id=rep_id,
                 estate_name=invoice.get("property_name", ""),
                 verification_date=date.today(),
                 db=db
-            )
+            ))
             deposit = float(data.amount)
             commission_amount = round(deposit * rate / 100, 2)
             
             # Fetch client for email payload
-            client_res = db.table("clients").select("*").eq("id", data.client_id).execute()
+            client_res = await db_execute(lambda: db.table("clients").select("*").eq("id", data.client_id).execute())
             client_data = client_res.data[0] if client_res.data else {}
             
             # Insert standard commission earning
-            earning = db.table("commission_earnings").insert({
+            earning_res = await db_execute(lambda: db.table("commission_earnings").insert({
                 "sales_rep_id": rep_id,
                 "invoice_id": invoice["id"],
                 "payment_id": payment_id,
@@ -86,10 +86,11 @@ async def record_payment(
                 "payment_amount": deposit,
                 "commission_rate": rate,
                 "commission_amount": commission_amount,
-            }).execute().data[0]
+            }).execute())
+            earning = earning_res.data[0]
             
             # Send email
-            rep_res = db.table("sales_reps").select("*").eq("id", rep_id).execute()
+            rep_res = await db_execute(lambda: db.table("sales_reps").select("*").eq("id", rep_id).execute())
             if rep_res.data:
                 background_tasks.add_task(
                     send_commission_earned_email,
@@ -111,13 +112,13 @@ async def record_payment(
 
     # --- Auto-Close / Pipeline Movement Logic ---
     # Fetch the fresh invoice status (after the Postgres trigger has updated it)
-    fresh_inv = db.table("invoices").select("status").eq("id", data.invoice_id).execute()
+    fresh_inv = await db_execute(lambda: db.table("invoices").select("status").eq("id", data.invoice_id).execute())
     if fresh_inv.data:
         new_status = fresh_inv.data[0]["status"]
         if new_status == "paid":
-            db.table("clients").update({"pipeline_stage": "closed"}).eq("id", data.client_id).execute()
+            await db_execute(lambda: db.table("clients").update({"pipeline_stage": "closed"}).eq("id", data.client_id).execute())
         elif new_status in ["partial", "unpaid"]:
-            db.table("clients").update({"pipeline_stage": "contract"}).eq("id", data.client_id).execute()
+            await db_execute(lambda: db.table("clients").update({"pipeline_stage": "contract"}).eq("id", data.client_id).execute())
 
     inv_num = inv.data[0].get('invoice_number', 'N/A')
     return {"message": "Payment recorded", "payment": result.data[0], "invoice_number": inv_num}
@@ -126,11 +127,11 @@ async def record_payment(
 @router.get("/invoice/{invoice_id}")
 async def get_payments_for_invoice(invoice_id: str, current_admin=Depends(verify_token)):
     db = get_db()
-    result = db.table("payments")\
+    result = await db_execute(lambda: db.table("payments")\
         .select("*")\
         .eq("invoice_id", invoice_id)\
         .order("payment_date")\
-        .execute()
+        .execute())
     return result.data
 @router.patch("/{payment_id}")
 async def update_payment(
@@ -144,7 +145,7 @@ async def update_payment(
         raise HTTPException(status_code=403, detail="Only administrators can edit payments")
     
     # 1. Fetch current payment to get invoice_id
-    pay_res = db.table("payments").select("*").eq("id", payment_id).execute()
+    pay_res = await db_execute(lambda: db.table("payments").select("*").eq("id", payment_id).execute())
     if not pay_res.data:
         raise HTTPException(status_code=404, detail="Payment not found")
     
@@ -156,14 +157,15 @@ async def update_payment(
     if not update_data:
         return {"message": "No changes applied"}
         
-    db.table("payments").update(update_data).eq("id", payment_id).execute()
+    await db_execute(lambda: db.table("payments").update(update_data).eq("id", payment_id).execute())
     
     # 3. Recalculate invoice (Note: The DB trigger 'after_payment_update' in schema.sql 
     # should already handle this, but we'll log it)
-    inv_res = db.table("invoices").select("invoice_number").eq("id", invoice_id).execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("invoice_number").eq("id", invoice_id).execute())
     inv_num = inv_res.data[0]["invoice_number"] if inv_res.data else "N/A"
     
-    log_activity(
+    background_tasks.add_task(
+        log_activity,
         "payment_edited",
         f"Payment of NGN {payment['amount']} for invoice {inv_num} updated by Admin",
         current_admin["sub"],
@@ -182,7 +184,7 @@ async def download_refund_receipt(payment_id: str, current_admin=Depends(verify_
     db = get_db()
     
     # 1. Fetch payment
-    pay_res = db.table("payments").select("*").eq("id", payment_id).execute()
+    pay_res = await db_execute(lambda: db.table("payments").select("*").eq("id", payment_id).execute())
     if not pay_res.data:
         raise HTTPException(status_code=404, detail="Payment not found")
     
@@ -191,10 +193,10 @@ async def download_refund_receipt(payment_id: str, current_admin=Depends(verify_
         raise HTTPException(status_code=400, detail="This transaction is not a refund")
         
     # 2. Fetch invoice and client
-    inv_res = db.table("invoices")\
+    inv_res = await db_execute(lambda: db.table("invoices")\
         .select("*, clients(*)")\
         .eq("id", payment["invoice_id"])\
-        .execute()
+        .execute())
     
     if not inv_res.data:
         raise HTTPException(status_code=404, detail="Linked invoice not found")

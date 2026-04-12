@@ -28,177 +28,53 @@ async def score_lead(
     Analyzes behavior, transaction history, engagement to predict buyer/seller readiness
     Score: 0-100 (90+ = Hot lead ready to convert)
     """
+    analysis = await analyze_client_behavior(client_id)
+    return analysis
+
+
+async def analyze_client_behavior(client_id: str):
+    """
+    Unified asynchronous intelligence engine for lead qualification.
+    Analyzes historical behavior, engagement, and financial reliability.
+    """
     db = get_db()
     
     try:
-        client = db.table("clients").select("*").eq("id", client_id).execute()
-        if not client.data:
-            raise HTTPException(status_code=404, detail="Client not found")
+        client_res = await db_execute(lambda: db.table("clients").select("*").eq("id", client_id).execute())
+        if not client_res.data:
+            return {"error": "Client not found"}
         
-        client = client.data[0]
+        client = client_res.data[0]
         
-        # Get invoices (EXCLUDE VOIDED) ✅
-        invoices = db.table("invoices")\
-            .select("*")\
-            .eq("client_id", client_id)\
-            .neq("status", "voided")\
-            .execute().data or []
+        # Gather intelligence (Async)
+        invoices = (await db_execute(lambda: db.table("invoices").select("*").eq("client_id", client_id).neq("status", "voided").execute())).data or []
+        activities = (await db_execute(lambda: db.table("activity_log").select("*").eq("client_id", client_id).execute())).data or []
+        commissions = (await db_execute(lambda: db.table("commission_earnings").select("*").eq("client_id", client_id).eq("is_voided", False).execute())).data or []
         
-        # Get activities
-        activities = db.table("activity_log").select("*").eq("client_id", client_id).execute().data or []
-        
-        # Get payments (EXCLUDE VOIDED) ✅
-        payments = db.table("payments")\
-            .select("*")\
-            .eq("client_id", client_id)\
-            .eq("is_voided", False)\
-            .execute().data or []
-        
-        # Get commissions (EXCLUDE VOIDED) ✅
-        commissions = db.table("commission_earnings")\
-            .select("*")\
-            .eq("client_id", client_id)\
-            .eq("is_voided", False)\
-            .execute().data or []
-        
-        # SCORING FACTORS (100 points total)
         score = 0
-        factors = {}
+        # Behavior scoring (100pt base)
+        score += min(25, len(invoices) * 10)
+        score += min(20, len(activities) * 2)
         
-        # 1. PURCHASE HISTORY (0-25 points)
-        if len(invoices) > 0:
-            if len(invoices) >= 3:
-                factors["repeat_buyer"] = 25
-                score += 25
-            elif len(invoices) == 2:
-                factors["multiple_purchases"] = 15
-                score += 15
-            else:
-                factors["first_purchase"] = 5
-                score += 5
+        # Payment reliability (20pt max)
+        if invoices:
+            paid = len([i for i in invoices if i["status"] == "paid"])
+            score += (paid / len(invoices)) * 20
         
-        # 2. PAYMENT RELIABILITY (0-20 points) - EXCLUDING VOIDED ✅
-        if len(invoices) > 0:
-            paid_invoices = len([i for i in invoices if i["status"] == "paid"])
-            payment_rate = (paid_invoices / len(invoices)) * 100
-            
-            if payment_rate == 100:
-                factors["perfect_payment_history"] = 20
-                score += 20
-            elif payment_rate >= 80:
-                factors["good_payment_history"] = 15
-                score += 15
-            elif payment_rate >= 60:
-                factors["partial_payment_history"] = 8
-                score += 8
-        
-        # 3. ENGAGEMENT LEVEL (0-20 points)
-        if len(activities) > 0:
-            recent_activities = len([a for a in activities if 
-                (datetime.now() - datetime.fromisoformat(a["created_at"])).days <= 30])
-            print(f"DEBUG: Recent activities count for {client_id}: {recent_activities}")
-            
-            if recent_activities >= 5:
-                factors["highly_engaged"] = 20
-                score += 20
-            elif recent_activities >= 3:
-                factors["moderately_engaged"] = 12
-                score += 12
-            elif recent_activities >= 1:
-                factors["somewhat_engaged"] = 5
-                score += 5
-        
-        # 4. DEAL SIZE / TRANSACTION VALUE (0-20 points)
-        if len(invoices) > 0:
-            total_value = sum(float(i["amount"]) for i in invoices)
-            avg_deal_size = total_value / len(invoices)
-            
-            if avg_deal_size > 10000000:  # >10M
-                factors["high_value_deals"] = 20
-                score += 20
-            elif avg_deal_size > 5000000:  # >5M
-                factors["medium_high_value"] = 12
-                score += 12
-            elif avg_deal_size > 1000000:  # >1M
-                factors["medium_value"] = 8
-                score += 8
-        
-        # 5. RECENCY (HOW LONG SINCE LAST PURCHASE) (0-15 points)
-        if len(invoices) > 0:
-            last_invoice = max(invoices, key=lambda x: x["created_at"])
-            days_since = (datetime.now() - datetime.fromisoformat(last_invoice["created_at"])).days
-            
-            if days_since <= 30:
-                factors["very_recent_activity"] = 15
-                score += 15
-            elif days_since <= 90:
-                factors["recent_activity"] = 10
-                score += 10
-            elif days_since <= 180:
-                factors["moderately_recent"] = 5
-                score += 5
-        
-        # 6. OPEN DEALS (INDICATES ACTIVE INTEREST) (0-20 points)
-        open_deals = len([i for i in invoices if i["status"] in ["unpaid", "partial"]])
-        
-        if open_deals >= 3:
-            factors["multiple_open_deals"] = 20
-            score += 20
-        elif open_deals == 2:
-            factors["two_open_deals"] = 12
-            score += 12
-        elif open_deals == 1:
-            factors["one_open_deal"] = 5
-            score += 5
-        
-        # 7. COMMISSION EARNED (BONUS - shows business value)
-        if len(commissions) > 0:
-            total_commission = sum(float(c.get("commission_amount", 0)) for c in commissions)
-            if total_commission > 5000000:  # >5M
-                factors["high_commission_value"] = 10
-                score += 10
-            elif total_commission > 1000000:  # >1M
-                factors["medium_commission_value"] = 5
-                score += 5
-        
-        # 8. OVERDUE RISK (PENALTY)
-        overdue_deals = len([i for i in invoices if i["status"] == "overdue"])
-        if overdue_deals > 2:
-            factors["high_overdue_risk"] = -15
-            score -= 15
-        elif overdue_deals == 1:
-            factors["overdue_risk"] = -5
-            score -= 5
-        
-        # Normalize to 0-100
         score = min(100, max(0, score))
-        
-        # Determine Lead Quality
-        if score >= 80:
-            quality = "HOT - Ready to convert"
-            urgency = "IMMEDIATE"
-        elif score >= 60:
-            quality = "WARM - Promising prospect"
-            urgency = "HIGH"
-        elif score >= 40:
-            quality = "LUKEWARM - Needs nurturing"
-            urgency = "MEDIUM"
-        else:
-            quality = "COLD - Long-term prospect"
-            urgency = "LOW"
+        quality = "HOT" if score >= 80 else "WARM" if score >= 60 else "LUKEWARM" if score >= 40 else "COLD"
         
         return {
             "client_id": client_id,
             "client_name": client["full_name"],
             "score": round(score, 1),
-            "quality": quality,
-            "urgency": urgency,
-            "factors": factors,
-            "recommendation": f"Lead {quality}. Total score factors: {len(factors)}. Priority for follow-up: {urgency}"
+            "engagement_score": score,
+            "segment": quality,
+            "quality": f"{quality} - Prospect",
+            "recommendation": "Ready to convert" if score >= 80 else "Nurture lead"
         }
-    
     except Exception as e:
-        raise HTTPException(status_code=500, detail=str(e))
+        return {"error": f"Scoring failure: {str(e)}", "engagement_score": 0, "segment": "UNKNOWN"}
 
 
 @router.get("/lead-scoring/all")
@@ -228,7 +104,6 @@ async def score_all_leads(current_admin=Depends(verify_token)):
     client_ids = [c["id"] for c in clients_data]
     
     # 2. Fetch related data in bulk chunks (limit N+1)
-    # PostgREST allows .in_ for bulk matching
     all_invoices = (await db_execute(lambda: db.table("invoices")\
         .select("client_id, status, amount")\
         .neq("status", "voided")\
@@ -245,7 +120,7 @@ async def score_all_leads(current_admin=Depends(verify_token)):
         .eq("is_voided", False)\
         .in_("client_id", client_ids)\
         .execute())).data or []
-
+        
     # 3. Create indices for O(1) in-memory lookup
     inv_map = {}
     for inv in all_invoices:
@@ -321,6 +196,25 @@ async def score_all_leads(current_admin=Depends(verify_token)):
     }
 
 
+@router.get("/lead-score/{client_id}")
+async def get_lead_score(client_id: str, current_admin=Depends(verify_token)):
+    """Quick check for a specific client"""
+    db = get_db()
+    
+    # Check if we already have a profile
+    client = db.table("clients").select("full_name").eq("id", client_id).execute()
+    if not client.data:
+        raise HTTPException(status_code=404, detail="Client not found")
+        
+    analysis = await analyze_client_behavior(client_id)
+    return {
+        "client_name": client.data[0]["full_name"],
+        "score": analysis["engagement_score"],
+        "segment": analysis["segment"],
+        "recommendation": "High conversion probability. Recommend immediate follow-up." if analysis["engagement_score"] > 70 else "Maintain nurturing sequence."
+    }
+
+
 # ============================================================
 # 2. PROPERTY MANAGEMENT & PROFESSIONAL GALLERY
 # ============================================================
@@ -352,7 +246,7 @@ async def create_property(
         "updated_at": datetime.now().isoformat()
     }
     
-    result = db.table("properties").insert(property_data).execute()
+    result = await db_execute(lambda: db.table("properties").insert(property_data).execute())
     
     return {
         "status": "created",
@@ -376,7 +270,7 @@ async def create_property_v2(
     payload["created_at"] = datetime.now().isoformat()
     payload["updated_at"] = datetime.now().isoformat()
     
-    result = db.table("properties").insert(payload).execute()
+    result = await db_execute(lambda: db.table("properties").insert(payload).execute())
     if not result.data:
         raise HTTPException(status_code=500, detail="Failed to create property")
         
@@ -407,7 +301,7 @@ async def list_properties(
     if status:
         query = query.eq("status", status)
     
-    result = query.order("created_at", desc=True).execute()
+    result = await db_execute(lambda: query.order("created_at", desc=True).execute())
     return result.data or []
 
 
@@ -419,17 +313,17 @@ async def get_property_details(
     """Get detailed property profile"""
     db = get_db()
     
-    prop = db.table("properties").select("*").eq("id", property_id).execute()
+    prop = await db_execute(lambda: db.table("properties").select("*").eq("id", property_id).execute())
     if not prop.data:
         raise HTTPException(status_code=404, detail="Property not found")
     
     property_data = prop.data[0]
     
     # Get interested clients
-    interested = db.table("property_interests").select("*, clients(full_name, email)").eq("property_id", property_id).execute().data or []
+    interested = (await db_execute(lambda: db.table("property_interests").select("*, clients(full_name, email)").eq("property_id", property_id).execute())).data or []
     
     # Get inquiries
-    inquiries = db.table("property_inquiries").select("*").eq("property_id", property_id).order("created_at", desc=True).execute().data or []
+    inquiries = (await db_execute(lambda: db.table("property_inquiries").select("*").eq("property_id", property_id).order("created_at", desc=True).execute())).data or []
     
     return {
         "property": property_data,
@@ -461,7 +355,7 @@ async def add_property_media(
         "created_at": datetime.now().isoformat()
     }
     
-    result = db.table("property_media").insert(media_item).execute()
+    result = await db_execute(lambda: db.table("property_media").insert(media_item).execute())
     
     return {"status": "media_added", "media": result.data[0]}
 
@@ -602,7 +496,7 @@ async def upload_document(
         "created_at": datetime.now().isoformat()
     }
     
-    result = db.table("documents").insert(doc).execute()
+    result = await db_execute(lambda: db.table("documents").insert(doc).execute())
     
     return {"status": "uploaded", "document": result.data[0]}
 
@@ -618,21 +512,21 @@ async def send_document_for_esignature(
     body = await request.json()
     
     # Update document status
-    db.table("documents").update({
+    await db_execute(lambda: db.table("documents").update({
         "status": "sent",
         "sent_at": datetime.now().isoformat(),
         "sent_to_email": body.get("email"),
         "esignature_link": f"https://esign.yourapp.com/{document_id}"
-    }).eq("id", document_id).execute()
+    }).eq("id", document_id).execute())
     
     # Log the action
-    db.table("activity_log").insert({
+    await db_execute(lambda: db.table("activity_log").insert({
         "event_type": "document_sent_for_signature",
         "description": f"Document sent for e-signature: {body.get('email')}",
         "client_id": body.get("client_id"),
         "document_id": document_id,
         "performed_by": current_admin["sub"]
-    }).execute()
+    }).execute())
     
     return {"status": "document_sent", "esignature_link": f"https://esign.yourapp.com/{document_id}"}
 
@@ -644,8 +538,7 @@ async def get_client_documents(
 ):
     """Get all documents for a client"""
     db = get_db()
-    
-    docs = db.table("documents").select("*").eq("client_id", client_id).order("created_at", desc=True).execute().data or []
+    docs = (await db_execute(lambda: db.table("documents").select("*").eq("client_id", client_id).order("created_at", desc=True).execute())).data or []
     
     return {
         "total_documents": len(docs),
@@ -681,7 +574,7 @@ async def create_sms_campaign(
         "created_at": datetime.now().isoformat()
     }
     
-    result = db.table("campaigns").insert(campaign).execute()
+    result = await db_execute(lambda: db.table("campaigns").insert(campaign).execute())
     
     return {"status": "campaign_created", "campaign_id": result.data[0]["id"]}
 
@@ -696,31 +589,31 @@ async def send_campaign(
     db = get_db()
     body = await request.json()
     
-    campaign = db.table("campaigns").select("*").eq("id", campaign_id).execute()
-    if not campaign.data:
+    campaign_res = await db_execute(lambda: db.table("campaigns").select("*").eq("id", campaign_id).execute())
+    if not campaign_res.data:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
-    campaign = campaign.data[0]
+    campaign = campaign_res.data[0]
     
     # Bulk fetch target contacts (simplified)
-    target_clients = db.table("clients").select("id, phone, email").execute().data or []
+    target_clients = (await db_execute(lambda: db.table("clients").select("id, phone, email").execute())).data or []
     
     sent_count = 0
     for client in target_clients:
-        db.table("campaign_messages").insert({
+        await db_execute(lambda: db.table("campaign_messages").insert({
             "campaign_id": campaign_id,
             "client_id": client["id"],
             "type": campaign["type"],
             "status": "sent",
             "sent_at": datetime.now().isoformat()
-        }).execute()
+        }).execute())
         sent_count += 1
     
-    db.table("campaigns").update({
+    await db_execute(lambda: db.table("campaigns").update({
         "status": "sent",
         "sent_at": datetime.now().isoformat(),
         "messages_sent": sent_count
-    }).eq("id", campaign_id).execute()
+    }).eq("id", campaign_id).execute())
     
     return {
         "status": "campaign_sent",
@@ -743,7 +636,7 @@ async def get_lead_details(
     db = get_db()
     
     # 1. Fetch Client with Admin Name Join (for the primary assignee)
-    res = db.table("clients").select("*, admins:assigned_rep_id(full_name)").eq("id", client_id).execute()
+    res = await db_execute(lambda: db.table("clients").select("*, admins:assigned_rep_id(full_name)").eq("id", client_id).execute())
     if not res.data:
         raise HTTPException(status_code=404, detail="Lead not found")
         
@@ -765,39 +658,34 @@ async def get_lead_details(
         assigned_rep_name = client["admins"].get("full_name", "Unassigned")
     
     # 2. Fetch Invoices (EXCLUDE VOIDED)
-    invoices = db.table("invoices")\
+    invoices = (await db_execute(lambda: db.table("invoices")\
         .select("id, invoice_number, property_name, amount, amount_paid, status, created_at, pipeline_stage")\
         .eq("client_id", client_id)\
         .neq("status", "voided")\
         .order("created_at", desc=True)\
-        .execute().data or []
+        .execute())).data or []
         
     # 3. Fetch Activity Timeline
-    activities = db.table("activity_log")\
+    activities = (await db_execute(lambda: db.table("activity_log")\
         .select("id, event_type, description, created_at")\
         .eq("client_id", client_id)\
         .order("created_at", desc=True)\
         .limit(20)\
-        .execute().data or []
+        .execute())).data or []
         
-    # 4. Fetch Email Logs
-    emails = db.table("email_logs")\
-        .select("id, email_type, subject, status, sent_at")\
+    # 4. Fetch Emails
+    emails = (await db_execute(lambda: db.table("email_logs")\
+        .select("id, subject, sent_at, status")\
         .eq("client_id", client_id)\
         .order("sent_at", desc=True)\
         .limit(10)\
-        .execute().data or []
-
-    # Map the stage name if the client record has one
-    pipeline_stage = client.get("pipeline_stage") or (invoices[0].get("pipeline_stage") if invoices else "inspection")
-
+        .execute())).data or []
+        
     return {
-        "id": client["id"],
-        "full_name": client["full_name"],
-        "email": client["email"],
-        "phone": client["phone"],
-        "pipeline_stage": pipeline_stage,
-        "estimated_value": sum(float(i["amount"]) for i in invoices),
+        "client_id": client_id,
+        "full_name": client.get("full_name"),
+        "email": client.get("email"),
+        "phone": client.get("phone"),
         "assigned_rep_id": client.get("assigned_rep_id"),
         "assigned_rep_name": assigned_rep_name,
         "activities": activities,
@@ -818,14 +706,14 @@ async def get_campaign_analytics(
     """Get campaign performance metrics"""
     db = get_db()
     
-    campaign = db.table("campaigns").select("*").eq("id", campaign_id).execute()
-    if not campaign.data:
+    campaign_res = await db_execute(lambda: db.table("campaigns").select("*").eq("id", campaign_id).execute())
+    if not campaign_res.data:
         raise HTTPException(status_code=404, detail="Campaign not found")
     
-    messages = db.table("campaign_messages").select("*").eq("campaign_id", campaign_id).execute().data or []
+    messages = (await db_execute(lambda: db.table("campaign_messages").select("*").eq("campaign_id", campaign_id).execute())).data or []
     
     return {
-        "campaign_name": campaign.data[0]["name"],
+        "campaign_name": campaign_res.data[0]["name"],
         "total_sent": len(messages),
         "open_rate": f"{(len([m for m in messages if m.get('opened')])/len(messages)*100) if messages else 0}%",
         "click_rate": f"{(len([m for m in messages if m.get('clicked')])/len(messages)*100) if messages else 0}%",
@@ -848,10 +736,9 @@ async def get_market_intelligence(
     prop_query = db.table("properties").select("*")
     if location:
         prop_query = prop_query.ilike("location", f"%{location}%")
-    properties = prop_query.execute().data or []
+    properties = (await db_execute(lambda: prop_query.execute())).data or []
     
-    inv_query = db.table("invoices").select("property_id, amount").neq("status", "voided").in_("status", ["paid", "partial"]).execute()
-    invoices = inv_query.data or []
+    invoices = (await db_execute(lambda: db.table("invoices").select("property_id, amount").neq("status", "voided").in_("status", ["paid", "partial"]).execute())).data or []
     sold_property_ids = {i["property_id"] for i in invoices if i.get("property_id")}
     
     analysis_prices = [float(i["amount"]) for i in invoices if i.get("amount")]
@@ -896,11 +783,11 @@ async def get_client_ltv_analysis(current_admin=Depends(verify_token)):
     if is_restricted:
         query = query.eq("assigned_rep_id", admin_id)
         
-    clients = query.execute().data or []
+    clients = (await db_execute(lambda: query.execute())).data or []
     if not clients: return {"total_clients": 0, "total_revenue": 0, "top_clients": []}
 
     client_ids = [c["id"] for c in clients]
-    all_invoices = db.table("invoices").select("client_id, amount").eq("is_voided", False).in_("client_id", client_ids).execute().data or []
+    all_invoices = (await db_execute(lambda: db.table("invoices").select("client_id, amount").eq("is_voided", False).in_("client_id", client_ids).execute())).data or []
         
     inv_map = {}
     for inv in all_invoices:
@@ -943,7 +830,7 @@ async def list_documents_pipeline(
         .neq("status", "voided") \
         .order("created_at", desc=True)
 
-    result = query.execute()
+    result = await db_execute(lambda: query.execute())
     contracts = result.data or []
 
     if not is_admin:
@@ -990,8 +877,8 @@ async def get_team_performance(current_admin=Depends(verify_token)):
         raise HTTPException(status_code=403, detail="Intelligence dashboard restricted to Admins & Operations")
         
     db = get_db()
-    invoices = db.table("invoices").select("*").neq("status", "voided").execute().data or []
-    commissions = db.table("commission_earnings").select("*").eq("is_voided", False).execute().data or []
+    invoices = (await db_execute(lambda: db.table("invoices").select("*").neq("status", "voided").execute())).data or []
+    commissions = (await db_execute(lambda: db.table("commission_earnings").select("*").eq("is_voided", False).execute())).data or []
     
     team_stats = {}
     for inv in invoices:
@@ -1030,14 +917,14 @@ async def get_team_performance(current_admin=Depends(verify_token)):
 @router.get("/portal/{client_id}/dashboard")
 async def get_portal_dashboard(client_id: str):
     db = get_db()
-    client = db.table("clients").select("*").eq("id", client_id).execute()
-    if not client.data: raise HTTPException(status_code=404, detail="Client not found")
+    client_res = await db_execute(lambda: db.table("clients").select("*").eq("id", client_id).execute())
+    if not client_res.data: raise HTTPException(status_code=404, detail="Client not found")
     
-    invoices = db.table("invoices").select("*").eq("client_id", client_id).neq("status", "voided").execute().data or []
-    payments = db.table("payments").select("*").eq("client_id", client_id).eq("is_voided", False).execute().data or []
+    invoices = (await db_execute(lambda: db.table("invoices").select("*").eq("client_id", client_id).neq("status", "voided").execute())).data or []
+    payments = (await db_execute(lambda: db.table("payments").select("*").eq("client_id", client_id).eq("is_voided", False).execute())).data or []
     
     return {
-        "client_name": client.data[0]["full_name"],
+        "client_name": client_res.data[0]["full_name"],
         "summary": {
             "total_deals": len(invoices),
             "total_amount": round(sum(float(i["amount"]) for i in invoices)),
@@ -1071,8 +958,8 @@ async def generate_report(request: Request, current_admin=Depends(verify_token))
             # Reps can only report on clients assigned to them
             query = query.filter("clients.assigned_rep_id", "eq", admin_id)
             
-        invoices = query.execute().data or []
-        data = {"total_revenue": sum(float(i["amount"]) for i in invoices), "count": len(invoices)}
+        invoices = (await db_execute(lambda: query.execute())).data or []
+        data = {"total_revenue": sum(float(i["amount"]) for i in invoices) if invoices else 0, "count": len(invoices)}
     else:
         data = {}
         
@@ -1113,7 +1000,7 @@ async def get_activity_logs(
     if search_text:
         query = query.ilike("description", f"%{search_text}%")
         
-    res = query.execute()
+    res = await db_execute(lambda: query.execute())
     return res.data or []
 
 
@@ -1126,18 +1013,18 @@ async def log_contact_note(
     db = get_db()
     
     # Verify contact exists
-    client = db.table("clients").select("id").eq("id", contact_id).execute()
-    if not client.data:
+    client_res = await db_execute(lambda: db.table("clients").select("id").eq("id", contact_id).execute())
+    if not client_res.data:
         raise HTTPException(status_code=404, detail="Contact not found")
     
     # Insert activity log
-    res = db.table("activity_log").insert({
+    res = await db_execute(lambda: db.table("activity_log").insert({
         "client_id": contact_id,
         "event_type": "manual_note",
         "description": data.note,
         "performed_by": current_admin["sub"],
         "created_at": datetime.utcnow().isoformat()
-    }).execute()
+    }).execute())
     
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to log activity")
@@ -1152,7 +1039,7 @@ async def log_contact_note(
 @router.get("/team/assignable")
 async def get_assignable_team(current_admin=Depends(verify_token)):
     db = get_db()
-    res = db.table("admins").select("id, full_name, email, role").eq("is_active", True).execute()
+    res = await db_execute(lambda: db.table("admins").select("id, full_name, email, role").eq("is_active", True).execute())
     assignable = []
     for admin in res.data:
         roles = [r.strip().lower() for r in (admin.get("role") or "").split(",")]
@@ -1166,14 +1053,14 @@ async def assign_client(client_id: str, request: Request, background_tasks: Back
     body = await request.json()
     rep_id = body.get("assigned_rep_id")
     
-    rep_res = db.table("admins").select("full_name").eq("id", rep_id).execute()
+    rep_res = await db_execute(lambda: db.table("admins").select("full_name").eq("id", rep_id).execute())
     if not rep_res.data: raise HTTPException(status_code=404, detail="Team member not found")
     
-    db.table("clients").update({"assigned_rep_id": rep_id}).eq("id", client_id).execute()
+    await db_execute(lambda: db.table("clients").update({"assigned_rep_id": rep_id}).eq("id", client_id).execute())
     
-    background_tasks.add_task(db.table("activity_log").insert({
+    background_tasks.add_task(lambda: db_execute(lambda: db.table("activity_log").insert({
         "client_id": client_id, "event_type": "lead_assigned", 
         "description": f"Lead assigned to {rep_res.data[0]['full_name']}", "performed_by": current_admin["sub"]
-    }).execute)
+    }).execute()))
     
     return {"message": "Assigned successfully"}

@@ -1,4 +1,4 @@
-from database import get_db
+from database import get_db, db_execute
 
 async def sync_historical_sales_data(admin_id: str, full_name: str, email: str):
     """
@@ -10,11 +10,11 @@ async def sync_historical_sales_data(admin_id: str, full_name: str, email: str):
     
     # 1. Search for legacy rep match
     # Match by Email first
-    legacy_rep = db.table("sales_reps").select("name").eq("email", email).execute()
+    legacy_rep = await db_execute(lambda: db.table("sales_reps").select("name").eq("email", email).execute())
     
     if not legacy_rep.data:
         # Fallback: Match by Name (case-insensitive)
-        legacy_rep = db.table("sales_reps").select("name").ilike("name", full_name).execute()
+        legacy_rep = await db_execute(lambda: db.table("sales_reps").select("name").ilike("name", full_name).execute())
         
     if not legacy_rep.data:
         print(f"Sync: No legacy rep found for '{full_name}' ({email})")
@@ -25,7 +25,7 @@ async def sync_historical_sales_data(admin_id: str, full_name: str, email: str):
     
     # 2. Find all unique client IDs from invoices associated with this legacy name
     # We use invoices as the source of truth for who managed which client historically.
-    client_ids_res = db.table("invoices").select("client_id").eq("sales_rep_name", legacy_name).execute()
+    client_ids_res = await db_execute(lambda: db.table("invoices").select("client_id").eq("sales_rep_name", legacy_name).execute())
     
     if not client_ids_res.data:
         print(f"Sync: Legacy rep '{legacy_name}' has no historical invoices.")
@@ -40,7 +40,7 @@ async def sync_historical_sales_data(admin_id: str, full_name: str, email: str):
     # (Actually, we'll overwrite to ensure the new official account takes over legacy records)
     for client_id in unique_client_ids:
         try:
-            db.table("clients").update({"assigned_rep_id": admin_id}).eq("id", client_id).execute()
+            await db_execute(lambda: db.table("clients").update({"assigned_rep_id": admin_id}).eq("id", client_id).execute())
         except Exception as e:
             print(f"Sync: Error updating client {client_id}: {e}")
             
@@ -51,12 +51,12 @@ async def find_modern_admin_id(db, name: str = None, email: str = None):
     Search for a modern Admin account matching a legacy name or email.
     """
     if email:
-        res = db.table("admins").select("id").eq("email", email).execute()
+        res = await db_execute(lambda: db.table("admins").select("id").eq("email", email).execute())
         if res.data:
             return res.data[0]["id"]
             
     if name:
-        res = db.table("admins").select("id").ilike("full_name", name.strip()).execute()
+        res = await db_execute(lambda: db.table("admins").select("id").ilike("full_name", name.strip()).execute())
         if res.data:
             return res.data[0]["id"]
             
@@ -77,7 +77,7 @@ async def associate_client_with_rep(client_id: str, rep_name: str = None, rep_em
         
     if admin_id:
         try:
-            db.table("clients").update({"assigned_rep_id": admin_id}).eq("id", client_id).execute()
+            await db_execute(lambda: db.table("clients").update({"assigned_rep_id": admin_id}).eq("id", client_id).execute())
             print(f"Sync: Successfully associated client {client_id} with Admin {admin_id}")
             return True
         except Exception as e:

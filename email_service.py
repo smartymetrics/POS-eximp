@@ -3,7 +3,7 @@ import os
 import base64
 import time
 from pdf_service import generate_invoice_pdf, generate_receipt_pdf, generate_statement_pdf, COMPANY
-from database import get_db
+from database import get_db, db_execute
 from utils import sanitize_client_address
 from datetime import datetime
 import logging
@@ -211,7 +211,7 @@ async def send_invoice_email(invoice: dict, client: dict, sent_by: str):
     
     try:
         client_sanitized = sanitize_client_address(client.copy())
-        pdf = generate_invoice_pdf(invoice)
+        pdf = await db_execute(lambda: generate_invoice_pdf(invoice))
         res = await async_resend({
             "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
             "to": [email_addr],
@@ -251,7 +251,7 @@ async def send_receipt_email(invoice: dict, client: dict, sent_by: str):
     
     try:
         client_sanitized = sanitize_client_address(client.copy())
-        pdf = generate_receipt_pdf(invoice)
+        pdf = await db_execute(lambda: generate_receipt_pdf(invoice))
         res = await async_resend({
             "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
             "to": [email_addr],
@@ -290,7 +290,7 @@ async def send_statement_email(invoices: list, client: dict, sent_by: str):
     
     try:
         client_sanitized = sanitize_client_address(client.copy())
-        pdf = generate_statement_pdf(invoices, client_sanitized)
+        pdf = await db_execute(lambda: generate_statement_pdf(invoices, client_sanitized))
         total_invoiced = sum(float(i["amount"]) for i in invoices)
         total_paid = sum(float(p["amount"]) for inv in invoices for p in (inv.get("payments") or []) if not p.get("is_voided"))
         balance = total_invoiced - total_paid
@@ -453,8 +453,8 @@ async def send_receipt_and_statement_email(invoice: dict, client: dict, invoices
     
     try:
         client_sanitized = sanitize_client_address(client.copy())
-        receipt_pdf = generate_receipt_pdf(invoice)
-        statement_pdf = generate_statement_pdf(invoices, client_sanitized)
+        receipt_pdf = await db_execute(lambda: generate_receipt_pdf(invoice))
+        statement_pdf = await db_execute(lambda: generate_statement_pdf(invoices, client_sanitized))
     
         # Combine receipt and statement content into a nice hybrid HTML or just use receipt HTML with a mention
         html = _receipt_html(invoice, client_sanitized).replace(
@@ -768,7 +768,7 @@ async def send_refund_receipt_email(invoice: dict, payment: dict, client: dict):
     
     try:
         client_sanitized = sanitize_client_address(client.copy())
-        pdf = generate_refund_receipt_pdf(payment, invoice, client_sanitized)
+        pdf = await db_execute(lambda: generate_refund_receipt_pdf(payment, invoice, client_sanitized))
         res = await async_resend({
             "from": f"Eximp & Cloves Finance <{FROM_EMAIL}>",
             "to": [email_addr],

@@ -6,7 +6,7 @@ from datetime import date, datetime
 from typing import Optional
 from PIL import Image
 from fastapi.encoders import jsonable_encoder
-from database import get_db, SUPABASE_URL
+from database import get_db, SUPABASE_URL, db_execute
 from email_service import send_admin_alert_email, send_welcome_email
 from marketing_logic import sync_client_to_marketing
 
@@ -55,12 +55,12 @@ class SubscriptionService:
         }
 
         # Check existing
-        client_res = db.table("clients").select("id").eq("email", email).execute()
+        client_res = await db_execute(lambda: db.table("clients").select("id").eq("email", email).execute())
         if client_res.data:
             client_id = client_res.data[0]["id"]
-            db.table("clients").update(jsonable_encoder(client_data)).eq("id", client_id).execute()
+            await db_execute(lambda: db.table("clients").update(jsonable_encoder(client_data)).eq("id", client_id).execute())
         else:
-            new_client = db.table("clients").insert(jsonable_encoder(client_data)).execute()
+            new_client = await db_execute(lambda: db.table("clients").insert(jsonable_encoder(client_data)).execute())
             client_id = new_client.data[0]["id"]
 
         # 2. Resolve Sales Rep for Commission Tracking
@@ -68,12 +68,12 @@ class SubscriptionService:
         final_sales_rep_name = None
         
         if final_sales_rep_id:
-            rep_res = db.table("sales_reps").select("name").eq("id", final_sales_rep_id).execute()
+            rep_res = await db_execute(lambda: db.table("sales_reps").select("name").eq("id", final_sales_rep_id).execute())
             if rep_res.data:
                 final_sales_rep_name = rep_res.data[0]["name"]
         elif data.get("sales_rep_name"):
             # Fallback to name search if ID not provided (manual entry)
-            rep_res = db.table("sales_reps").select("id, name").eq("name", data["sales_rep_name"]).execute()
+            rep_res = await db_execute(lambda: db.table("sales_reps").select("id, name").eq("name", data["sales_rep_name"]).execute())
             if rep_res.data:
                 final_sales_rep_id = rep_res.data[0]["id"]
                 final_sales_rep_name = rep_res.data[0]["name"]
@@ -81,7 +81,7 @@ class SubscriptionService:
                 final_sales_rep_name = data["sales_rep_name"]
 
         # 3. Generate Invoice Number
-        invoice_number = db.rpc("generate_invoice_number").execute().data
+        invoice_number = (await db_execute(lambda: db.rpc("generate_invoice_number").execute())).data
 
         # 4. Property Matching & Numeric Casting
         property_id = None
@@ -104,7 +104,7 @@ class SubscriptionService:
             target_size = float(size_match.group(1)) if size_match else None
 
             prop_query = db.table("properties").select("*").ilike("name", f"%{data['property_name']}%").eq("is_active", True)
-            prop_res = prop_query.execute()
+            prop_res = await db_execute(lambda: prop_query.execute())
             
             if prop_res.data:
                 # Find best match based on plot size if available
@@ -146,7 +146,7 @@ class SubscriptionService:
             "pipeline_stage": "inspection"
         }
         
-        inv_res = db.table("invoices").insert(jsonable_encoder(invoice_insert)).execute()
+        inv_res = await db_execute(lambda: db.table("invoices").insert(jsonable_encoder(invoice_insert)).execute())
         invoice_id = inv_res.data[0]["id"]
 
         # 6. Save raw subscription for audit/metadata
@@ -180,7 +180,7 @@ class SubscriptionService:
             if key in ALLOWED_SUB_COLUMNS and key not in subscription_record:
                 subscription_record[key] = value
 
-        sub_res = db.table("property_subscriptions").insert(jsonable_encoder(subscription_record)).execute()
+        sub_res = await db_execute(lambda: db.table("property_subscriptions").insert(jsonable_encoder(subscription_record)).execute())
         subscription_id = sub_res.data[0]["id"] if sub_res.data else None
 
         # 7. Create Pending Verification for Admin
@@ -195,18 +195,19 @@ class SubscriptionService:
                 "sales_rep_name": final_sales_rep_name,
                 "status": "pending"
             }
-            db.table("pending_verifications").insert(jsonable_encoder(verify_data)).execute()
+            await db_execute(lambda: db.table("pending_verifications").insert(jsonable_encoder(verify_data)).execute())
 
         # 8. Notifications & Marketing Sync
         try:
-            full_client = db.table("clients").select("*").eq("id", client_id).execute().data[0]
+            full_client_res = await db_execute(lambda: db.table("clients").select("*").eq("id", client_id).execute())
+            full_client = full_client_res.data[0]
             
             # --- INTELLIGENT ATTRIBUTION LOOK-BACK ---
             # If no campaign was provided by the form, try to find the last one from marketing_contacts
             current_mcid = data.get("marketing_campaign_id") or data.get("mcid")
             if not current_mcid or not str(current_mcid).strip():
                 current_mcid = None
-                mc_attr = db.table("marketing_contacts").select("last_campaign_id").eq("email", email).execute()
+                mc_attr = await db_execute(lambda: db.table("marketing_contacts").select("last_campaign_id").eq("email", email).execute())
                 if mc_attr.data and mc_attr.data[0].get("last_campaign_id"):
                     current_mcid = mc_attr.data[0]["last_campaign_id"]
             
@@ -216,7 +217,7 @@ class SubscriptionService:
             
             # Update invoice with attribution if found
             if current_mcid:
-                db.table("invoices").update({"marketing_campaign_id": current_mcid}).eq("id", invoice_id).execute()
+                await db_execute(lambda: db.table("invoices").update({"marketing_campaign_id": current_mcid}).eq("id", invoice_id).execute())
 
             await send_welcome_email(full_client, data.get("property_name"))
             
@@ -233,7 +234,7 @@ class SubscriptionService:
         }
 
     @staticmethod
-    def process_signature(base64_data: str, invoice_number: str) -> Optional[str]:
+    async def process_signature(base64_data: str, invoice_number: str) -> Optional[str]:
         """Converts base64 signature to PNG and uploads to Supabase Storage."""
         if not base64_data or not base64_data.startswith("data:"):
             return None
@@ -251,18 +252,18 @@ class SubscriptionService:
                 img_data = out_buf.getvalue()
 
             file_path = f"customer_signatures/sig_{invoice_number}.png"
-            db.storage.from_("signatures").upload(
+            await db_execute(lambda: db.storage.from_("signatures").upload(
                 path=file_path,
                 file=img_data,
                 file_options={"content-type": "image/png", "upsert": "true"}
-            )
+            ))
             return f"{SUPABASE_URL}/storage/v1/object/public/signatures/{file_path}"
         except Exception as e:
             print(f"Signature upload failed: {e}")
             return None
 
     @staticmethod
-    def process_base64_file(base64_data: str, invoice_number: str, file_type: str) -> Optional[str]:
+    async def process_base64_file(base64_data: str, invoice_number: str, file_type: str) -> Optional[str]:
         """Uploads base64 document (image or PDF) to Supabase Storage."""
         if not base64_data or not base64_data.startswith("data:"):
             return None
@@ -283,11 +284,11 @@ class SubscriptionService:
             if mime_type == "application/pdf":
                 # Upload PDF directly — skip PIL entirely
                 file_path = f"client_documents/{invoice_number}_{file_type}.pdf"
-                db.storage.from_("signatures").upload(
+                await db_execute(lambda: db.storage.from_("signatures").upload(
                     path=file_path,
                     file=raw_bytes,
                     file_options={"content-type": "application/pdf", "upsert": "true"}
-                )
+                ))
                 return f"{SUPABASE_URL}/storage/v1/object/public/signatures/{file_path}"
             else:
                 # It's an image — normalize to PNG via PIL
@@ -299,11 +300,11 @@ class SubscriptionService:
                     img_data = out_buf.getvalue()
 
                 file_path = f"client_documents/{invoice_number}_{file_type}.png"
-                db.storage.from_("signatures").upload(
+                await db_execute(lambda: db.storage.from_("signatures").upload(
                     path=file_path,
                     file=img_data,
                     file_options={"content-type": "image/png", "upsert": "true"}
-                )
+                ))
                 return f"{SUPABASE_URL}/storage/v1/object/public/signatures/{file_path}"
 
         except Exception as e:

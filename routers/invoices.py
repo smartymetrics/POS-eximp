@@ -55,10 +55,10 @@ async def list_invoices(
 @router.get("/{invoice_id}")
 async def get_invoice(invoice_id: str, current_admin=Depends(verify_token)):
     db = get_db()
-    result = db.table("invoices")\
+    result = await db_execute(lambda: db.table("invoices")\
         .select("*, clients(*), payments(*), email_logs(*, admins!sent_by(full_name))")\
         .eq("id", invoice_id)\
-        .execute()
+        .execute())
     if not result.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
@@ -83,7 +83,7 @@ async def create_invoice(
     db = get_db()
 
     # Generate invoice number via DB function
-    seq_result = db.rpc("generate_invoice_number").execute()
+    seq_result = await db_execute(lambda: db.rpc("generate_invoice_number").execute())
     invoice_number = seq_result.data
 
     # If property_id provided, snapshot the property details
@@ -92,7 +92,7 @@ async def create_invoice(
     plot_size = data.plot_size_sqm
 
     if data.property_id:
-        prop = db.table("properties").select("*").eq("id", data.property_id).execute()
+        prop = await db_execute(lambda: db.table("properties").select("*").eq("id", data.property_id).execute())
         if prop.data:
             p = prop.data[0]
             property_name = property_name or p["name"]
@@ -126,14 +126,14 @@ async def create_invoice(
         # Priority 2: Self-Healing fallback (Automatic Attribution)
         try:
             # Check if this client has a marketing contact with an attributed campaign
-            contact_res = db.table("marketing_contacts").select("last_campaign_id").eq("client_id", data.client_id).execute()
+            contact_res = await db_execute(lambda: db.table("marketing_contacts").select("last_campaign_id").eq("client_id", data.client_id).execute())
             if contact_res.data and contact_res.data[0].get("last_campaign_id"):
                 invoice_data["marketing_campaign_id"] = contact_res.data[0]["last_campaign_id"]
         except: pass
 
     # Use jsonable_encoder to handle Decimal/date types for Supabase
     encoded_data = jsonable_encoder(invoice_data)
-    result = db.table("invoices").insert(encoded_data).execute()
+    result = await db_execute(lambda: db.table("invoices").insert(encoded_data).execute())
 
     background_tasks.add_task(
         log_activity,
@@ -165,10 +165,10 @@ async def send_documents(
     db = get_db()
 
     # Fetch full invoice data
-    inv = db.table("invoices")\
+    inv = await db_execute(lambda: db.table("invoices")\
         .select("*, clients(*), payments(*)")\
         .eq("id", data.invoice_id)\
-        .execute()
+        .execute())
 
     if not inv.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
@@ -207,22 +207,22 @@ async def send_documents(
                     sent.append("refund_receipt")
             elif doc_type == "statement":
                 # Fetch all invoices for this client
-                all_inv = db.table("invoices")\
+                all_inv = await db_execute(lambda: db.table("invoices")\
                     .select("*, payments(*)")\
                     .eq("client_id", invoice["client_id"])\
                     .neq("status", "voided")\
                     .order("invoice_date")\
-                    .execute()
+                    .execute())
                 await send_statement_email(all_inv.data, client, current_admin["sub"])
                 sent.append("statement")
             elif doc_type == "contract":
                 # To send a contract, we check if there's an active or completed session
-                session_res = db.table("contract_signing_sessions")\
+                session_res = await db_execute(lambda: db.table("contract_signing_sessions")\
                     .select("*, witness_signatures(*)")\
                     .eq("invoice_id", invoice["id"])\
                     .order("created_at", desc=True)\
                     .limit(1)\
-                    .execute()
+                    .execute())
                 
                 if session_res.data:
                     session = session_res.data[0]
@@ -230,7 +230,7 @@ async def send_documents(
                         # Send the final executed contract
                         from pdf_service import generate_contract_pdf
                         from email_service import send_executed_contract_email
-                        pdf_content = generate_contract_pdf(invoice, client, session.get("witness_signatures", []), is_draft=False)
+                        pdf_content = await db_execute(lambda: generate_contract_pdf(invoice, client, session.get("witness_signatures", []), is_draft=False))
                         background_tasks.add_task(send_executed_contract_email, invoice, client, pdf_content)
                         sent.append("contract")
                     else:
@@ -255,7 +255,7 @@ async def send_documents(
     return {"message": f"Sent: {', '.join(sent)}", "sent": sent}
 
 
-def log_email_sends(db, invoice, client, sent_types, admin_id):
+async def log_email_sends(db, invoice, client, sent_types, admin_id):
     """Background task to record sent emails in the audit log."""
     try:
         logs = []
@@ -270,7 +270,7 @@ def log_email_sends(db, invoice, client, sent_types, admin_id):
                 "sent_by": admin_id
             })
         if logs:
-            db.table("email_logs").insert(logs).execute()
+            await db_execute(lambda: db.table("email_logs").insert(logs).execute())
     except Exception as e:
         import logging
         logging.getLogger(__name__).error(f"Error logging email sends: {e}")
@@ -292,7 +292,7 @@ async def void_invoice_receipts(
         raise HTTPException(status_code=403, detail="Only administrators can void receipts")
     
     # 1. Fetch invoice to get client_id and check existence
-    inv = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).single().execute()
+    inv = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).single().execute())
     if not inv.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
@@ -304,31 +304,31 @@ async def void_invoice_receipts(
     # In a real scenario, we might want to void specific payments, 
     # but the PRD says "Void Receipt" which usually refers to the collective status.
     # We'll void all non-voided payments for this invoice.
-    db.table("payments").update({
+    await db_execute(lambda: db.table("payments").update({
         "is_voided": True,
         "voided_at": datetime.utcnow().isoformat(),
         "voided_by": current_admin["sub"]
-    }).eq("invoice_id", invoice_id).eq("is_voided", False).execute()
+    }).eq("invoice_id", invoice_id).eq("is_voided", False).execute())
 
     # 2.2 Void any associated unpaid commission earnings
-    db.table("commission_earnings").update({
+    await db_execute(lambda: db.table("commission_earnings").update({
         "is_voided": True,
         "voided_at": datetime.utcnow().isoformat(),
         "voided_by": current_admin["sub"],
         "void_reason": f"Invoice {invoice_data.get('invoice_number', 'N/A')} voided"
-    }).eq("invoice_id", invoice_id).eq("is_paid", False).execute()
+    }).eq("invoice_id", invoice_id).eq("is_paid", False).execute())
 
     # 2.5 Mark invoice itself as voided
-    db.table("invoices").update({"status": "voided"}).eq("id", invoice_id).execute()
+    await db_execute(lambda: db.table("invoices").update({"status": "voided"}).eq("id", invoice_id).execute())
     
     # 3. Log the void action
-    db.table("void_log").insert({
+    await db_execute(lambda: db.table("void_log").insert({
         "invoice_id": invoice_id,
         "client_id": invoice_data["client_id"],
         "voided_by": current_admin["sub"],
         "reason": payload.reason,
         "notify_client": payload.notify_client
-    }).execute()
+    }).execute())
     
     # 4. Notify client if requested
     if payload.notify_client and client_email:
@@ -370,7 +370,7 @@ async def edit_invoice(
     role = current_admin.get("role")
     
     # Fetch existing invoice
-    inv_res = db.table("invoices").select("*").eq("id", invoice_id).execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("*").eq("id", invoice_id).execute())
     if not inv_res.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
@@ -408,17 +408,17 @@ async def edit_invoice(
         if not reason or len(reason) < 10:
              raise HTTPException(status_code=400, detail="A detailed reason (min 10 chars) is required for due date changes")
         
-        db.table("due_date_changes").insert({
+        await db_execute(lambda: db.table("due_date_changes").insert({
             "invoice_id": invoice_id,
             "old_date": invoice["due_date"],
             "new_date": update_data["due_date"],
             "reason": reason,
             "changed_by": current_admin["sub"]
-        }).execute()
+        }).execute())
 
     # Update database
-    db.table("invoices").update(jsonable_encoder(update_data)).eq("id", invoice_id).execute()
-    log_activity(
+    await db_execute(lambda: db.table("invoices").update(jsonable_encoder(update_data)).eq("id", invoice_id).execute())
+    await log_activity(
         "invoice_edited",
         f"Invoice {invoice['invoice_number']} updated by {role}",
         current_admin["sub"],
@@ -446,7 +446,7 @@ async def view_document_html(
 ):
     """Render a professional HTML view for terminal-free document viewing."""
     db = get_db()
-    inv = db.table("invoices").select("*, clients(*), payments(*)").eq("id", invoice_id).execute()
+    inv = await db_execute(lambda: db.table("invoices").select("*, clients(*), payments(*)").eq("id", invoice_id).execute())
     if not inv.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
     
@@ -464,10 +464,10 @@ async def view_document_html(
 @router.get("/{invoice_id}/pdf/{doc_type}")
 async def download_pdf(invoice_id: str, doc_type: str, current_admin=Depends(resolve_admin_token)):
     db = get_db()
-    inv = db.table("invoices")\
+    inv = await db_execute(lambda: db.table("invoices")\
         .select("*, clients(*), payments(*)")\
         .eq("id", invoice_id)\
-        .execute()
+        .execute())
     if not inv.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
 
@@ -475,34 +475,34 @@ async def download_pdf(invoice_id: str, doc_type: str, current_admin=Depends(res
 
     # Fallback for missing location data
     if not invoice.get("property_location") and invoice.get("property_name"):
-        prop_res = db.table("properties").select("location").ilike("name", f"%{invoice['property_name']}%").execute()
+        prop_res = await db_execute(lambda: db.table("properties").select("location").ilike("name", f"%{invoice['property_name']}%").execute())
         if prop_res.data:
             invoice["property_location"] = prop_res.data[0]["location"]
 
     # Look up sales rep phone from sales_reps table
     if not invoice.get("sales_rep_phone"):
         if invoice.get("sales_rep_id"):
-            rep_res = db.table("sales_reps").select("phone").eq("id", invoice["sales_rep_id"]).limit(1).execute()
+            rep_res = await db_execute(lambda: db.table("sales_reps").select("phone").eq("id", invoice["sales_rep_id"]).limit(1).execute())
             if rep_res.data:
                 invoice["sales_rep_phone"] = rep_res.data[0].get("phone")
         elif invoice.get("sales_rep_name"):
-            rep_res = db.table("sales_reps").select("phone").eq("name", invoice["sales_rep_name"]).limit(1).execute()
+            rep_res = await db_execute(lambda: db.table("sales_reps").select("phone").eq("name", invoice["sales_rep_name"]).limit(1).execute())
             if rep_res.data:
                 invoice["sales_rep_phone"] = rep_res.data[0].get("phone")
 
     if doc_type == "invoice":
-        pdf_bytes = generate_invoice_pdf(invoice)
+        pdf_bytes = await db_execute(lambda: generate_invoice_pdf(invoice))
         filename = f"Invoice_{invoice['invoice_number']}.pdf"
     elif doc_type == "receipt":
-        pdf_bytes = generate_receipt_pdf(invoice)
+        pdf_bytes = await db_execute(lambda: generate_receipt_pdf(invoice))
         filename = f"Receipt_{invoice['invoice_number']}.pdf"
     elif doc_type == "statement":
-        all_inv = db.table("invoices")\
+        all_inv = await db_execute(lambda: db.table("invoices")\
             .select("*, payments(*)")\
             .eq("client_id", invoice["client_id"])\
             .neq("status", "voided")\
             .order("invoice_date")\
-            .execute()
+            .execute())
         
         # Ensure property_location fallback for statement invoices too
         for ai in all_inv.data:
@@ -511,7 +511,7 @@ async def download_pdf(invoice_id: str, doc_type: str, current_admin=Depends(res
                 if pr.data:
                     ai["property_location"] = pr.data[0]["location"]
                     
-        pdf_bytes = generate_statement_pdf(all_inv.data, invoice["clients"])
+        pdf_bytes = await db_execute(lambda: generate_statement_pdf(all_inv.data, invoice["clients"]))
         filename = f"Statement_{invoice['clients']['full_name'].replace(' ', '_')}.pdf"
     else:
         raise HTTPException(status_code=400, detail="Invalid document type")

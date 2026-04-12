@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Request, Depends, UploadFile, File, Form
 from fastapi.responses import HTMLResponse, JSONResponse
 from fastapi.templating import Jinja2Templates
-from database import get_db, SUPABASE_URL
+from database import get_db, SUPABASE_URL, db_execute
 from subscription_service import SubscriptionService
 import uuid
 import os
@@ -22,17 +22,17 @@ async def get_subscription_form(request: Request, rep: str = None):
         try:
             # First, assume it's a unique ID (UUID)
             uuid_val = uuid.UUID(rep)
-            rep_res = db.table("sales_reps").select("*").eq("id", str(uuid_val)).eq("is_active", True).execute()
+            rep_res = await db_execute(lambda: db.table("sales_reps").select("*").eq("id", str(uuid_val)).eq("is_active", True).execute())
         except ValueError:
             # Fallback to name search for legacy links
             normalized_rep = rep.replace("_", " ").replace("-", " ")
-            rep_res = db.table("sales_reps").select("*").ilike("name", f"%{normalized_rep}%").eq("is_active", True).execute()
+            rep_res = await db_execute(lambda: db.table("sales_reps").select("*").ilike("name", f"%{normalized_rep}%").eq("is_active", True).execute())
             
         if rep_res.data:
             rep_data = rep_res.data[0]
             
     # List of active properties for the dropdown (Ensuring unique names)
-    prop_res = db.table("properties").select("name").eq("is_active", True).execute()
+    prop_res = await db_execute(lambda: db.table("properties").select("name").eq("is_active", True).execute())
     properties_list = sorted(list(set([p["name"] for p in prop_res.data if p.get("name")])))
     
     return templates.TemplateResponse("property_subscription.html", {
@@ -58,20 +58,20 @@ async def submit_subscription(
         signature_base64 = payload.get("signature_data")
         invoice_temp_num = f"TEMP_{uuid.uuid4().hex[:8]}"
         
-        final_sig_url = SubscriptionService.process_signature(signature_base64, invoice_temp_num) if signature_base64 else None
+        final_sig_url = await SubscriptionService.process_signature(signature_base64, invoice_temp_num) if signature_base64 else None
         
         # 2. Add signature URL to payload
         payload["signature_url"] = final_sig_url
         
         # 2.5 Process Generic Documents if Base64 forms were passed
         if payload.get("passport_photo_b64"):
-            payload["passport_photo_url"] = SubscriptionService.process_base64_file(payload.get("passport_photo_b64"), invoice_temp_num, "passport")
+            payload["passport_photo_url"] = await SubscriptionService.process_base64_file(payload.get("passport_photo_b64"), invoice_temp_num, "passport")
             
         if payload.get("nin_document_b64"):
-            payload["nin_document_url"] = SubscriptionService.process_base64_file(payload.get("nin_document_b64"), invoice_temp_num, "nin_id")
+            payload["nin_document_url"] = await SubscriptionService.process_base64_file(payload.get("nin_document_b64"), invoice_temp_num, "nin_id")
             
         if payload.get("payment_receipt_b64"):
-            payload["payment_receipt_url"] = SubscriptionService.process_base64_file(payload.get("payment_receipt_b64"), invoice_temp_num, "receipt")
+            payload["payment_receipt_url"] = await SubscriptionService.process_base64_file(payload.get("payment_receipt_b64"), invoice_temp_num, "receipt")
         
         # 3. Process the full land purchase workflow
         sales_rep_id = payload.get("sales_rep_id")
@@ -108,7 +108,7 @@ async def upload_subscription_file(
         
         # 3. Process and upload
         temp_invoice_num = f"UP_{uuid.uuid4().hex[:6]}"
-        url = SubscriptionService.process_base64_file(base64_data, temp_invoice_num, file_type)
+        url = await SubscriptionService.process_base64_file(base64_data, temp_invoice_num, file_type)
         
         if not url:
             raise Exception("File processing failed")

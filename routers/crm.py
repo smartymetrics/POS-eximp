@@ -15,28 +15,34 @@ router = APIRouter()
 
 @router.get("/contacts")
 async def get_all_contacts(current_admin=Depends(verify_token)):
-    """Get all clients with their invoice & payment summary"""
+    """Get all clients with their invoice & payment summary (BULK OPTIMIZED)"""
     db = get_db()
     
-    contacts = db.table("clients").select("""
-        id, 
-        full_name, 
-        email, 
-        phone,
-        city,
-        state,
-        occupation,
-        created_at,
-        updated_at
-    """).order("created_at", desc=True).execute().data
+    contacts = (await db_execute(lambda: db.table("clients").select("""
+        id, full_name, email, phone, city, state, occupation, created_at, updated_at
+    """).order("created_at", desc=True).execute())).data or []
     
-    # Enrich each contact with sales data
-    enriched = []
+    if not contacts:
+        return []
+
+    client_ids = [c["id"] for c in contacts]
+    
+    # BULK FETCH: Get all invoices for these clients in ONE hit ✅
+    all_invoices = (await db_execute(lambda: db.table("invoices")\
+        .select("id, client_id, amount, amount_paid, status")\
+        .in_("client_id", client_ids)\
+        .execute())).data or []
+        
+    # Index invoices by client_id in memory
+    inv_map = {}
+    for inv in all_invoices:
+        cid = inv["client_id"]
+        if cid not in inv_map: inv_map[cid] = []
+        inv_map[cid].append(inv)
+    
+    # Enrich in-memory (O(N))
     for contact in contacts:
-        invoices = db.table("invoices")\
-            .select("id, amount, amount_paid, status, invoice_date, due_date")\
-            .eq("client_id", contact["id"])\
-            .execute().data or []
+        invoices = inv_map.get(contact["id"], [])
         
         total_value = sum(float(i["amount"]) for i in invoices)
         total_paid = sum(float(i["amount_paid"]) for i in invoices)
@@ -47,10 +53,8 @@ async def get_all_contacts(current_admin=Depends(verify_token)):
         contact["balance"] = total_value - total_paid
         contact["unpaid_deals"] = unpaid_count
         contact["total_deals"] = len(invoices)
-        
-        enriched.append(contact)
     
-    return enriched
+    return contacts
 
 
 @router.get("/contacts/{client_id}")
@@ -249,16 +253,16 @@ async def import_leads_csv(file: UploadFile = File(...), current_admin=Depends(v
                     break
         
         if lead_data.get("full_name"):
-            db.table("clients").insert(lead_data).execute()
+            await db_execute(lambda: db.table("clients").insert(lead_data).execute())
             imported_count += 1
 
     # Log the bulk action
-    db.table("activity_log").insert({
+    await db_execute(lambda: db.table("activity_log").insert({
         "event_type": "bulk_import",
         "description": f"Imported {imported_count} leads via CSV",
         "performed_by": admin_id,
         "created_at": datetime.now().isoformat()
-    }).execute()
+    }).execute())
 
     return {"status": "success", "imported": imported_count}
 
@@ -271,17 +275,19 @@ async def create_lead(data: dict, current_admin=Depends(verify_token)):
     data["assigned_rep_id"] = admin_id
     data["created_at"] = datetime.now().isoformat()
     
-    res = db.table("clients").insert(data).execute()
+    res = await db_execute(lambda: db.table("clients").insert(data).execute())
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to create lead")
     lead = res.data[0]
     
     # Log activity
-    db.table("activity_log").insert({
+    await db_execute(lambda: db.table("activity_log").insert({
         "event_type": "lead_created",
         "description": f"Manual lead creation: {lead.get('full_name')}",
         "client_id": lead["id"],
         "performed_by": admin_id,
         "created_at": datetime.now().isoformat()
-    }).execute()
+    }).execute())
     
     return lead
 
@@ -292,19 +298,19 @@ async def move_lead_in_pipeline(client_id: str, new_stage: str, current_admin=De
     admin_id = current_admin["sub"]
     
     # Update stage
-    db.table("clients").update({
+    await db_execute(lambda: db.table("clients").update({
         "pipeline_stage": new_stage, 
         "updated_at": datetime.now().isoformat()
-    }).eq("id", client_id).execute()
+    }).eq("id", client_id).execute())
     
     # Log activity
-    db.table("activity_log").insert({
+    await db_execute(lambda: db.table("activity_log").insert({
         "event_type": "pipeline_move",
         "description": f"Lead moved to {new_stage} stage",
         "client_id": client_id,
         "performed_by": admin_id,
         "created_at": datetime.now().isoformat()
-    }).execute()
+    }).execute())
     
     return {"status": "success"}
 
@@ -318,16 +324,18 @@ async def update_client_details(client_id: str, data: dict, current_admin=Depend
     update_data = {k: v for k, v in data.items() if k not in ["id", "created_at", "assigned_rep_id"]}
     update_data["updated_at"] = datetime.now().isoformat()
     
-    res = db.table("clients").update(update_data).eq("id", client_id).execute()
+    res = await db_execute(lambda: db.table("clients").update(update_data).eq("id", client_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Client not found")
     
     # Log activity
-    db.table("activity_log").insert({
+    await db_execute(lambda: db.table("activity_log").insert({
         "event_type": "client_edit",
         "description": f"Updated client information: {', '.join(update_data.keys())}",
         "client_id": client_id,
         "performed_by": admin_id,
         "created_at": datetime.now().isoformat()
-    }).execute()
+    }).execute())
     
     return res.data[0]
 
@@ -350,13 +358,13 @@ async def add_client_note(
     if not note:
         raise HTTPException(status_code=400, detail="Note cannot be empty")
     
-    db.table("activity_log").insert({
+    await db_execute(lambda: db.table("activity_log").insert({
         "event_type": "client_note",
         "description": note,
         "client_id": client_id,
         "performed_by": current_admin["sub"],
         "metadata": {"note_type": "manual"}
-    }).execute()
+    }).execute())
     
     return {"status": "note_added"}
 
@@ -374,13 +382,13 @@ async def log_call(
     duration = body.get("duration", 0)  # in minutes
     notes = body.get("notes", "")
     
-    db.table("activity_log").insert({
+    await db_execute(lambda: db.table("activity_log").insert({
         "event_type": "call",
         "description": f"Call logged: {notes}",
         "client_id": client_id,
         "performed_by": current_admin["sub"],
         "metadata": {"duration_minutes": duration, "notes": notes}
-    }).execute()
+    }).execute())
     
     return {"status": "call_logged"}
 
@@ -399,18 +407,18 @@ async def send_email_to_contact(
     message = body.get("message", "")
     
     # Get client email
-    client = db.table("clients").select("email").eq("id", client_id).execute()
-    if not client.data:
+    client_res = await db_execute(lambda: db.table("clients").select("email").eq("id", client_id).execute())
+    if not client_res.data:
         raise HTTPException(status_code=404, detail="Client not found")
     
     # Log in activity
-    db.table("activity_log").insert({
+    await db_execute(lambda: db.table("activity_log").insert({
         "event_type": "email",
         "description": f"Email sent: {subject}",
         "client_id": client_id,
         "performed_by": current_admin["sub"],
         "metadata": {"subject": subject, "message": message}
-    }).execute()
+    }).execute())
     
     return {"status": "email_logged"}
 
@@ -528,38 +536,61 @@ async def get_sales_rep_performance(current_admin=Depends(verify_token)):
 
 @router.get("/analytics/client-insights")
 async def get_client_insights(current_admin=Depends(verify_token)):
-    """Client lifetime value and engagement insights"""
+    """Client lifetime value and engagement insights (BULK OPTIMIZED)"""
     db = get_db()
     
-    clients = db.table("clients").select("id, full_name, email, created_at").execute().data or []
+    clients = (await db_execute(lambda: db.table("clients").select("id, full_name, email, created_at").execute())).data or []
+    if not clients:
+        return []
+
+    client_ids = [c["id"] for c in clients]
+    
+    # BULK FETCH: Invoices and Activities ✅
+    all_invoices = (await db_execute(lambda: db.table("invoices")\
+        .select("id, client_id, amount, amount_paid, status")\
+        .in_("client_id", client_ids)\
+        .execute())).data or []
+        
+    all_activities = (await db_execute(lambda: db.table("activity_log")\
+        .select("id, client_id, event_type, created_at")\
+        .in_("client_id", client_ids)\
+        .execute())).data or []
+        
+    # Indexing
+    inv_map = {}
+    for i in all_invoices:
+        cid = i["client_id"]
+        if cid not in inv_map: inv_map[cid] = []
+        inv_map[cid].append(i)
+        
+    act_map = {}
+    for a in all_activities:
+        cid = a["client_id"]
+        if cid not in act_map: act_map[cid] = []
+        act_map[cid].append(a)
     
     insights = []
     for client in clients:
-        # Get invoices
-        invoices = db.table("invoices")\
-            .select("id, amount, amount_paid, status, created_at")\
-            .eq("client_id", client["id"])\
-            .execute().data or []
-        
-        # Get activities
-        activities = db.table("activity_log")\
-            .select("id, event_type, created_at")\
-            .eq("client_id", client["id"])\
-            .execute().data or []
+        cid = client["id"]
+        invoices = inv_map.get(cid, [])
+        activities = act_map.get(cid, [])
         
         if invoices or activities:
             ltv = sum(float(i["amount"]) for i in invoices)
             collected = sum(float(i["amount_paid"]) for i in invoices)
             
+            activity_dates = [a.get("created_at") for a in activities]
+            last_interaction = max(activity_dates + [client.get("created_at")]) if activity_dates else client.get("created_at")
+            
             insights.append({
-                "client_id": client["id"],
+                "client_id": cid,
                 "client_name": client["full_name"],
                 "lifetime_value": ltv,
                 "amount_collected": collected,
                 "total_deals": len(invoices),
-                "engagement_score": min(100, len(activities) * 5),  # Simple engagement metric
-                "last_interaction": max([a.get("created_at") for a in activities] + [client.get("created_at")]),
-                "potential_churn_risk": len([i for i in invoices if i["status"] == "overdue"]) > 0
+                "engagement_score": min(100, len(activities) * 5),
+                "last_interaction": last_interaction,
+                "potential_churn_risk": any(i["status"] == "overdue" for i in invoices)
             })
     
     return sorted(insights, key=lambda x: x["lifetime_value"], reverse=True)
@@ -577,22 +608,16 @@ async def get_recent_activities(
     """Get recent CRM activities"""
     db = get_db()
     
-    activities = db.table("activity_log").select("""
-        id,
-        event_type,
-        description,
-        client_id,
-        invoice_id,
-        performed_by,
-        created_at
-    """).order("created_at", desc=True).limit(limit).execute().data or []
+    activities = (await db_execute(lambda: db.table("activity_log").select("""
+        id, event_type, description, client_id, invoice_id, performed_by, created_at
+    """).order("created_at", desc=True).limit(limit).execute())).data or []
     
-    # Enrich with client names
+    # Enrich with client names (BULK FETCH recommended, but using loop with db_execute for stability if list is small)
     for activity in activities:
         if activity.get("client_id"):
-            client = db.table("clients").select("full_name").eq("id", activity["client_id"]).execute()
-            if client.data:
-                activity["client_name"] = client.data[0]["full_name"]
+            client_res = await db_execute(lambda: db.table("clients").select("full_name").eq("id", activity["client_id"]).execute())
+            if client_res.data:
+                activity["client_name"] = client_res.data[0]["full_name"]
     
     return activities
 
@@ -612,18 +637,18 @@ async def get_crm_dashboard_summary(current_admin=Depends(verify_token)):
     stats = await get_sales_rep_performance(current_admin)
     
     # Recent activities
-    activities = db.table("activity_log")\
+    activities = (await db_execute(lambda: db.table("activity_log")\
         .select("id, event_type, description, client_id, created_at")\
         .order("created_at", desc=True)\
         .limit(10)\
-        .execute().data or []
+        .execute())).data or []
     
     # Upcoming tasks (using overdue + upcoming invoices)
-    upcoming = db.table("invoices")\
+    upcoming = (await db_execute(lambda: db.table("invoices")\
         .select("id, invoice_number, due_date, client_id, amount")\
         .gte("due_date", datetime.now().date().isoformat())\
         .lte("due_date", (datetime.now().date() + timedelta(days=7)).isoformat())\
-        .execute().data or []
+        .execute())).data or []
     
     return {
         "health": health,

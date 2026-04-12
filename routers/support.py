@@ -101,13 +101,13 @@ async def create_ticket(data: SupportTicketCreate):
     }
     
     # Check if this email belongs to a VIP client to auto-escalate priority
-    client_res = db.table("clients").select("id").eq("email", data.contact_email).execute()
+    client_res = await db_execute(lambda: db.table("clients").select("id").eq("email", data.contact_email).execute())
     if client_res.data:
         client_id = client_res.data[0]["id"]
         ticket_payload["client_id"] = client_id
         
         # Calculate LTV
-        inv_res = db.table("invoices").select("amount").eq("client_id", client_id).eq("status", "paid").execute()
+        inv_res = await db_execute(lambda: db.table("invoices").select("amount").eq("client_id", client_id).eq("status", "paid").execute())
         if inv_res.data:
             total_ltv = sum(i["amount"] for i in inv_res.data)
             if total_ltv >= 10_000_000:
@@ -115,7 +115,7 @@ async def create_ticket(data: SupportTicketCreate):
                 if not ticket_payload["subject"].startswith("[VIP]"):
                     ticket_payload["subject"] = f"[VIP] {ticket_payload['subject']}"
     
-    res = db.table("support_tickets").insert(ticket_payload).execute()
+    res = await db_execute(lambda: db.table("support_tickets").insert(ticket_payload).execute())
     
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to create support ticket")
@@ -194,7 +194,7 @@ async def update_ticket(ticket_id: str, data: SupportTicketUpdate, current_admin
     update_dict = {k: v for k, v in data.dict().items() if v is not None}
     update_dict["updated_at"] = datetime.utcnow().isoformat()
     
-    res = db.table("support_tickets").update(update_dict).eq("id", ticket_id).execute()
+    res = await db_execute(lambda: db.table("support_tickets").update(update_dict).eq("id", ticket_id).execute())
     return res.data[0]
 
 @router.post("/tickets/{ticket_id}/respond")
@@ -210,20 +210,20 @@ async def respond_to_ticket(ticket_id: str, data: TicketResponseCreate, backgrou
         "created_at": datetime.utcnow().isoformat()
     }
     
-    res = db.table("ticket_responses").insert(response_payload).execute()
+    res = await db_execute(lambda: db.table("ticket_responses").insert(response_payload).execute())
     
     # Update ticket status and track last admin response
-    db.table("support_tickets").update({
+    await db_execute(lambda: db.table("support_tickets").update({
         "status": "resolved" if "resolved" in data.message.lower() else "pending", 
         "updated_at": datetime.utcnow().isoformat(),
         "last_admin_response_at": datetime.utcnow().isoformat(),
         "followup_sent_at": None # Reset nudge timer
-    }).eq("id", ticket_id).execute()
+    }).eq("id", ticket_id).execute())
 
     # Notify Client if NOT internal
     if not data.is_internal:
         from email_service import send_support_response_email
-        ticket_res = db.table("support_tickets").select("*").eq("id", ticket_id).execute()
+        ticket_res = await db_execute(lambda: db.table("support_tickets").select("*").eq("id", ticket_id).execute())
         if ticket_res.data:
             background_tasks.add_task(send_support_response_email, ticket_res.data[0], data.message)
     
@@ -232,10 +232,10 @@ async def respond_to_ticket(ticket_id: str, data: TicketResponseCreate, backgrou
 @router.post("/tickets/{ticket_id}/resolve")
 async def resolve_ticket(ticket_id: str, current_admin=Depends(verify_token)):
     db = get_db()
-    res = db.table("support_tickets").update({
+    res = await db_execute(lambda: db.table("support_tickets").update({
         "status": "resolved",
         "updated_at": datetime.utcnow().isoformat()
-    }).eq("id", ticket_id).execute()
+    }).eq("id", ticket_id).execute())
     
     # Create notification for audit (optional)
     await create_notification(
@@ -257,7 +257,7 @@ async def client_reply_to_ticket(ticket_id: str, data: TicketResponseCreate):
     db = get_db()
     
     # Verify ticket exists
-    ticket_res = db.table("support_tickets").select("subject, assigned_admin_id").eq("id", ticket_id).execute()
+    ticket_res = await db_execute(lambda: db.table("support_tickets").select("subject, assigned_admin_id").eq("id", ticket_id).execute())
     if not ticket_res.data:
         raise HTTPException(status_code=404, detail="Ticket not found")
     
@@ -271,21 +271,21 @@ async def client_reply_to_ticket(ticket_id: str, data: TicketResponseCreate):
         "created_at": datetime.utcnow().isoformat()
     }
     
-    res = db.table("ticket_responses").insert(response_payload).execute()
+    res = await db_execute(lambda: db.table("ticket_responses").insert(response_payload).execute())
     
     # Re-open ticket and clear admin response tracking
-    db.table("support_tickets").update({
+    await db_execute(lambda: db.table("support_tickets").update({
         "status": "open",
         "updated_at": datetime.utcnow().isoformat(),
         "last_admin_response_at": None,
         "client_typing_at": None
-    }).eq("id", ticket_id).execute()
+    }).eq("id", ticket_id).execute())
     
     # TRIGGER NOTIFICATION
     assigned_to = ticket.get("assigned_admin_id")
     if not assigned_to:
         # If no one assigned, notify all super admins? For now, we'll try to find any admin.
-        first_admin = db.table("admins").select("id").limit(1).execute()
+        first_admin = await db_execute(lambda: db.table("admins").select("id").limit(1).execute())
         assigned_to = first_admin.data[0]["id"] if first_admin.data else None
 
     if assigned_to:
@@ -308,26 +308,26 @@ async def get_portal_ticket(ticket_id: str):
     db = get_db()
     
     # Fetch ticket
-    res = db.table("support_tickets").select("*, clients(full_name, email)").eq("id", ticket_id).execute()
+    res = await db_execute(lambda: db.table("support_tickets").select("*, clients(full_name, email)").eq("id", ticket_id).execute())
     if not res.data:
         raise HTTPException(status_code=404, detail="Ticket not found")
         
     ticket = res.data[0]
     
     # Fetch only PUBLIC responses
-    resp_res = db.table("ticket_responses")\
+    resp_res = await db_execute(lambda: db.table("ticket_responses")\
         .select("*")\
         .eq("ticket_id", ticket_id)\
         .eq("is_internal", False)\
         .order("created_at", desc=False)\
-        .execute()
+        .execute())
     
     ticket["ticket_responses"] = resp_res.data
     
     # Manually join admin names (limited info)
     admin_ids = list(set(r["admin_id"] for r in ticket["ticket_responses"] if r.get("admin_id")))
     if admin_ids:
-        admins_res = db.table("admins").select("id, full_name").in_("id", admin_ids).execute()
+        admins_res = await db_execute(lambda: db.table("admins").select("id, full_name").in_("id", admin_ids).execute())
         admin_map = {a["id"]: a["full_name"] for a in admins_res.data}
         for r in ticket["ticket_responses"]:
             if r.get("admin_id"):
@@ -339,7 +339,7 @@ async def get_portal_ticket(ticket_id: str):
 async def get_support_stats(current_admin=Depends(verify_token)):
     """Stats for the CRM Support Dashboard cards."""
     db = get_db()
-    res = db.table("support_tickets").select("status").execute()
+    res = await db_execute(lambda: db.table("support_tickets").select("status").execute())
     tickets = res.data or []
     
     stats = {
@@ -360,7 +360,7 @@ async def update_typing_status(ticket_id: str, is_typing: bool, is_admin: bool =
         # If is_typing is true, set to now, else set to null
         val = datetime.utcnow().isoformat() if is_typing else None
         
-        db.table("support_tickets").update({field: val}).eq("id", ticket_id).execute()
+        await db_execute(lambda: db.table("support_tickets").update({field: val}).eq("id", ticket_id).execute())
         return {"status": "ok"}
     except Exception as e:
         print(f"Error updating typing status: {e}")
@@ -628,7 +628,7 @@ async def get_chat_room(room_id: str, token: str = None, current_admin=Depends(v
     msgs = await db_execute(lambda: db.table("chat_messages").select("*").eq("room_id", room_id).order("created_at", desc=False).limit(100).execute())
     
     return {
-        "room": room.data[0],
+        "room": room,
         "participants": parts.data,
         "messages": msgs.data
     }
@@ -719,7 +719,7 @@ async def upload_chat_file(room_id: str, request: Request, file: UploadFile = Fi
     
     # Using personal access token or admin key for storage if needed, 
     # but here we assume the supabase client has permissions
-    storage_res = db.storage.from_("chat-media").upload(file_path, file_content)
+    storage_res = await db_execute(lambda: db.storage.from_("chat-media").upload(file_path, file_content))
     file_url = db.storage.from_("chat-media").get_public_url(file_path)
 
     # 2. Insert message

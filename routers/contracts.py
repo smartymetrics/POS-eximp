@@ -1,7 +1,7 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, Header, Query, File, UploadFile
 from fastapi.responses import StreamingResponse
 from fastapi.security import HTTPAuthorizationCredentials
-from database import get_db, SUPABASE_URL
+from database import get_db, db_execute, SUPABASE_URL
 from models import (
     CompanySignatureUpload, ExtendSigningLink, WitnessSignatureSubmit, 
     ClientContractSignatureSubmit, WitnessRemovalRequest, CustomContractHTMLUpdate, 
@@ -106,7 +106,7 @@ def _delete_witness_signature_from_storage(db, signature_url: str):
 async def _create_contract_session(invoice_id: str, current_admin: dict, background_tasks: BackgroundTasks):
     db = get_db()
 
-    inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute())
     if not inv_res.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
     invoice = inv_res.data[0]
@@ -114,12 +114,12 @@ async def _create_contract_session(invoice_id: str, current_admin: dict, backgro
     client = client_raw[0] if isinstance(client_raw, list) and client_raw else client_raw
     if not client: client = {}
 
-    existing = db.table("contract_signing_sessions")\
+    existing = await db_execute(lambda: db.table("contract_signing_sessions")\
         .select("id, token, status, expires_at")\
         .eq("invoice_id", invoice_id)\
         .neq("status", "expired")\
         .order("created_at", desc=True)\
-        .execute()
+        .execute())
 
     if existing.data:
         if any(s["status"] == "completed" for s in existing.data):
@@ -159,13 +159,13 @@ async def initiate_contract_signing(invoice_id: str, background_tasks: Backgroun
         raise HTTPException(status_code=403, detail="Unauthorized")
         
     # Check if company signatures are set
-    sig_res = db.table("company_signatures").select("id, role").eq("is_active", True).execute()
+    sig_res = await db_execute(lambda: db.table("company_signatures").select("id, role").eq("is_active", True).execute())
     roles_set = [s["role"] for s in sig_res.data]
     if "director" not in roles_set or "secretary" not in roles_set:
         raise HTTPException(status_code=400, detail="Company signatures (Director/Secretary) must be uploaded before initiating contracts.")
 
     # 1. Fetch Invoice
-    inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute())
     if not inv_res.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
     invoice = inv_res.data[0]
@@ -174,7 +174,7 @@ async def initiate_contract_signing(invoice_id: str, background_tasks: Backgroun
     if not client: client = {}
     
     # 2. Prevent duplicate active sessions
-    existing = db.table("contract_signing_sessions").select("id, status").eq("invoice_id", invoice_id).neq("status", "expired").execute()
+    existing = await db_execute(lambda: db.table("contract_signing_sessions").select("id, status").eq("invoice_id", invoice_id).neq("status", "expired").execute())
     if existing.data:
         # If it's already completed, don't restart
         if any(s["status"] == "completed" for s in existing.data):
@@ -211,7 +211,7 @@ async def initiate_contract_signing(invoice_id: str, background_tasks: Backgroun
     )
     
     # Log to email_logs
-    db.table("email_logs").insert({
+    await db_execute(lambda: db.table("email_logs").insert({
         "client_id": invoice["client_id"],
         "invoice_id": invoice_id,
         "email_type": "contract",
@@ -219,19 +219,19 @@ async def initiate_contract_signing(invoice_id: str, background_tasks: Backgroun
         "subject": "Your Contract of Sale is Ready — Eximp & Cloves",
         "status": "sent",
         "sent_by": current_admin["sub"]
-    }).execute()
+    }).execute())
     
     return {"message": "Contract signing initiated", "token": token, "expires_at": expires_at}
 
 @router.get("/{invoice_id}/status")
 async def get_contract_status(invoice_id: str, current_admin=Depends(verify_token)):
     db = get_db()
-    res = db.table("contract_signing_sessions")\
+    res = await db_execute(lambda: db.table("contract_signing_sessions")\
         .select("*, witness_signatures(*)")\
         .eq("invoice_id", invoice_id)\
         .order("created_at", desc=True)\
         .limit(1)\
-        .execute()
+        .execute())
     
     if not res.data:
          return {"status": "not_started", "client_signed": False}
@@ -239,7 +239,7 @@ async def get_contract_status(invoice_id: str, current_admin=Depends(verify_toke
     session = res.data[0]
     
     # Check if client has signed (look at invoice)
-    inv_res = db.table("invoices").select("contract_signature_url").eq("id", invoice_id).execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("contract_signature_url").eq("id", invoice_id).execute())
     client_signed = False
     if inv_res.data:
         inv = inv_res.data[0]
@@ -265,14 +265,14 @@ async def extend_signing_session(invoice_id: str, current_admin=Depends(verify_t
         raise HTTPException(status_code=403, detail="Unauthorized")
     
     db = get_db()
-    res = db.table("contract_signing_sessions").select("id, expires_at").eq("invoice_id", invoice_id).neq("status", "expired").order("created_at", desc=True).limit(1).execute()
+    res = await db_execute(lambda: db.table("contract_signing_sessions").select("id, expires_at").eq("invoice_id", invoice_id).neq("status", "expired").order("created_at", desc=True).limit(1).execute())
     if not res.data:
         raise HTTPException(status_code=404, detail="No active session found to extend")
     
     current_expiry = datetime.fromisoformat(res.data[0]["expires_at"].replace('Z', '+00:00'))
     new_expiry = current_expiry + timedelta(hours=48)
     
-    db.table("contract_signing_sessions").update({"expires_at": new_expiry.isoformat()}).eq("id", res.data[0]["id"]).execute()
+    await db_execute(lambda: db.table("contract_signing_sessions").update({"expires_at": new_expiry.isoformat()}).eq("id", res.data[0]["id"]).execute())
     
     await log_activity(
         "contract_extended",
@@ -291,12 +291,12 @@ async def get_contract_html_draft(invoice_id: str, current_admin=Depends(resolve
     db = get_db()
     
     # 1. Fetch Invoice
-    inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute())
     if not inv_res.data: raise HTTPException(status_code=404, detail="Invoice not found")
     invoice = inv_res.data[0]
     
     # 2. Fetch Session & Witnesses
-    session_res = db.table("contract_signing_sessions").select("*, witness_signatures(*)").eq("invoice_id", invoice_id).order("created_at", desc=True).limit(1).execute()
+    session_res = await db_execute(lambda: db.table("contract_signing_sessions").select("*, witness_signatures(*)").eq("invoice_id", invoice_id).order("created_at", desc=True).limit(1).execute())
     witnesses = session_res.data[0].get("witness_signatures", []) if session_res.data else []
     
     # 3. Render full contract (Draft mode, Browser-friendly URLs)
@@ -315,7 +315,7 @@ async def create_contract_session(invoice_id: str, background_tasks: BackgroundT
     if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
-    sig_res = get_db().table("company_signatures").select("id, role").eq("is_active", True).execute()
+    sig_res = await db_execute(lambda: get_db().table("company_signatures").select("id, role").eq("is_active", True).execute())
     roles_set = [s["role"] for s in sig_res.data]
     if "director" not in roles_set or "secretary" not in roles_set:
         raise HTTPException(status_code=400, detail="Company signatures (Director/Secretary) must be uploaded before initiating contracts.")
@@ -329,12 +329,12 @@ async def resend_contract_link(invoice_id: str, background_tasks: BackgroundTask
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     db = get_db()
-    session_res = db.table("contract_signing_sessions")\
+    session_res = await db_execute(lambda: db.table("contract_signing_sessions")\
         .select("*, invoices(*, clients(*))")\
         .eq("invoice_id", invoice_id)\
         .order("created_at", desc=True)\
         .limit(1)\
-        .execute()
+        .execute())
 
     if not session_res.data:
         raise HTTPException(status_code=404, detail="No active signing session found")
@@ -353,7 +353,7 @@ async def resend_contract_link(invoice_id: str, background_tasks: BackgroundTask
     background_tasks.add_task(send_signing_link_email, invoice, client, session["token"], expires_at)
 
     # Log to email_logs
-    db.table("email_logs").insert({
+    await db_execute(lambda: db.table("email_logs").insert({
         "client_id": invoice["client_id"],
         "invoice_id": invoice_id,
         "email_type": "contract",
@@ -361,7 +361,7 @@ async def resend_contract_link(invoice_id: str, background_tasks: BackgroundTask
         "subject": "Your Contract of Sale — Eximp & Cloves",
         "status": "sent",
         "sent_by": current_admin["sub"]
-    }).execute()
+    }).execute())
 
     return {"message": "Signing link resent"}
 
@@ -371,7 +371,7 @@ async def execute_final_contract(invoice_id: str, payload: ExecuteContractReques
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     db = get_db()
-    inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute())
     if not inv_res.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
     invoice = inv_res.data[0]
@@ -393,7 +393,7 @@ async def execute_final_contract(invoice_id: str, payload: ExecuteContractReques
         raise HTTPException(status_code=400, detail="The external witness must sign before executing the contract")
 
     if session["status"] != "completed":
-        db.table("contract_signing_sessions").update({"status": "completed"}).eq("id", session["id"]).execute()
+        await db_execute(lambda: db.table("contract_signing_sessions").update({"status": "completed"}).eq("id", session["id"]).execute())
 
     from pdf_service import generate_contract_pdf, generate_audit_certificate_pdf
     # 1. Generate Main Contract
@@ -412,13 +412,13 @@ async def execute_final_contract(invoice_id: str, payload: ExecuteContractReques
         cert_content if payload.send_certificate else None
     )
 
-    db.table("contract_documents").insert({
+    await db_execute(lambda: db.table("contract_documents").insert({
         "invoice_id": invoice_id,
         "session_id": session["id"],
         "document_type": "executed",
         "generated_by": current_admin["sub"],
         "emailed_to": client.get("email")
-    }).execute()
+    }).execute())
 
     await log_activity(
         "contract_executed",
@@ -429,7 +429,7 @@ async def execute_final_contract(invoice_id: str, payload: ExecuteContractReques
     )
 
     # Log to email_logs
-    db.table("email_logs").insert({
+    await db_execute(lambda: db.table("email_logs").insert({
         "client_id": client.get("id"),
         "invoice_id": invoice_id,
         "email_type": "contract",
@@ -437,7 +437,7 @@ async def execute_final_contract(invoice_id: str, payload: ExecuteContractReques
         "subject": f"Execution Complete: Your Contract of Sale {invoice['invoice_number']}",
         "status": "sent",
         "sent_by": current_admin["sub"]
-    }).execute()
+    }).execute())
 
     return {"message": "Final contract executed and emailed"}
 
@@ -447,7 +447,7 @@ async def download_sealing_contract(invoice_id: str, current_admin=Depends(resol
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     db = get_db()
-    inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute())
     if not inv_res.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
     invoice = inv_res.data[0]
@@ -498,11 +498,11 @@ async def upload_sealed_contract(invoice_id: str, file: UploadFile = File(...), 
             file_options={"content-type": "application/pdf"}
         )
         
-        db.table("contract_documents").insert({
+        await db_execute(lambda: db.table("contract_documents").insert({
             "invoice_id": invoice_id,
             "document_type": "sealed_lawyer_copy",
             "generated_by": current_admin["sub"]
-        }).execute()
+        }).execute())
 
         await log_activity(
             "sealed_contract_uploaded",
@@ -521,7 +521,7 @@ async def send_sealed_contract(invoice_id: str, payload: SendSealedRequest, back
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     db = get_db()
-    inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute())
     if not inv_res.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
     invoice = inv_res.data[0]
@@ -564,7 +564,7 @@ async def send_sealed_contract(invoice_id: str, payload: SendSealedRequest, back
         client_id=client.get("id")
     )
 
-    db.table("email_logs").insert({
+    await db_execute(lambda: db.table("email_logs").insert({
         "client_id": client.get("id"),
         "invoice_id": invoice_id,
         "email_type": "contract",
@@ -572,7 +572,7 @@ async def send_sealed_contract(invoice_id: str, payload: SendSealedRequest, back
         "subject": f"Execution Complete: Your Contract of Sale {invoice['invoice_number']}",
         "status": "sent",
         "sent_by": current_admin["sub"]
-    }).execute()
+    }).execute())
 
     return {"message": "Sealed contract emailed successfully"}
 
@@ -582,14 +582,14 @@ async def resend_executed_contract(invoice_id: str, background_tasks: Background
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     db = get_db()
-    inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute())
     if not inv_res.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
     invoice = inv_res.data[0]
     client = invoice["clients"]
 
-    session_res = db.table("contract_signing_sessions")\
-        .select("*, witness_signatures(*)").eq("invoice_id", invoice_id).order("created_at", desc=True).limit(1).execute()
+    session_res = await db_execute(lambda: db.table("contract_signing_sessions")\
+        .select("*, witness_signatures(*)").eq("invoice_id", invoice_id).order("created_at", desc=True).limit(1).execute())
 
     if not session_res.data or session_res.data[0]["status"] != "completed":
         raise HTTPException(status_code=400, detail="The contract has not been executed yet")
@@ -609,12 +609,12 @@ async def get_executed_contract_pdf(invoice_id: str, current_admin=Depends(resol
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     db = get_db()
-    inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute())
     if not inv_res.data: raise HTTPException(status_code=404, detail="Invoice not found")
     invoice = inv_res.data[0]
     client = invoice["clients"]
 
-    session_res = db.table("contract_signing_sessions").select("*, witness_signatures(*)").eq("invoice_id", invoice_id).order("created_at", desc=True).limit(1).execute()
+    session_res = await db_execute(lambda: db.table("contract_signing_sessions").select("*, witness_signatures(*)").eq("invoice_id", invoice_id).order("created_at", desc=True).limit(1).execute())
     if not session_res.data or session_res.data[0]["status"] != "completed":
         raise HTTPException(status_code=400, detail="Contract not yet executed")
 
@@ -632,12 +632,12 @@ async def get_audit_certificate_pdf(invoice_id: str, current_admin=Depends(resol
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     db = get_db()
-    inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute())
     if not inv_res.data: raise HTTPException(status_code=404, detail="Invoice not found")
     invoice = inv_res.data[0]
     client = invoice["clients"]
 
-    session_res = db.table("contract_signing_sessions").select("*, witness_signatures(*)").eq("invoice_id", invoice_id).order("created_at", desc=True).limit(1).execute()
+    session_res = await db_execute(lambda: db.table("contract_signing_sessions").select("*, witness_signatures(*)").eq("invoice_id", invoice_id).order("created_at", desc=True).limit(1).execute())
     if not session_res.data or session_res.data[0]["status"] != "completed":
         raise HTTPException(status_code=400, detail="Contract not yet executed")
 
@@ -663,7 +663,7 @@ def _resolve_admin_token(token: str | None = None, authorization: str | None = H
 @router.get("/pdf/draft/{invoice_id}")
 async def get_draft_contract_pdf(invoice_id: str, token: str | None = None, current_admin=Depends(_resolve_admin_token)):
     db = get_db()
-    inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute())
     if not inv_res.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
     invoice = inv_res.data[0]
@@ -684,7 +684,7 @@ async def get_draft_contract_pdf(invoice_id: str, token: str | None = None, curr
 @router.get("/pdf/final/{invoice_id}")
 async def get_final_contract_pdf(invoice_id: str, token: str | None = None, current_admin=Depends(_resolve_admin_token)):
     db = get_db()
-    inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute())
     if not inv_res.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
     invoice = inv_res.data[0]
@@ -708,7 +708,7 @@ async def add_manual_witness(invoice_id: str, data: WitnessSignatureSubmit, back
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     db = get_db()
-    inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute())
     if not inv_res.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
     invoice = inv_res.data[0]
@@ -726,15 +726,16 @@ async def add_manual_witness(invoice_id: str, data: WitnessSignatureSubmit, back
     else:
         token = secrets.token_urlsafe(32)
         expires_at = datetime.now() + timedelta(hours=48)
-        session = db.table("contract_signing_sessions").insert({
+        res = await db_execute(lambda: db.table("contract_signing_sessions").insert({
             "invoice_id": invoice_id,
             "token": token,
             "expires_at": expires_at.isoformat(),
             "status": "pending",
             "created_by": current_admin["sub"]
-        }).execute().data[0]
+        }).execute())
+        session = res.data[0]
 
-    existing_res = db.table("witness_signatures").select("witness_number").eq("session_id", session["id"]).execute()
+    existing_res = await db_execute(lambda: db.table("witness_signatures").select("witness_number").eq("session_id", session["id"]).execute())
     signed_numbers = [r["witness_number"] for r in existing_res.data]
     if len(signed_numbers) >= 1:
         raise HTTPException(status_code=400, detail="The external witness has already been recorded for this session")
@@ -744,7 +745,7 @@ async def add_manual_witness(invoice_id: str, data: WitnessSignatureSubmit, back
     witness_num = data.witness_number if data.witness_number in [1, 2] and data.witness_number not in signed_numbers else (1 if 1 not in signed_numbers else 2)
     stored_signature = _upload_signature_to_storage(db, invoice_id, witness_num, data.signature_base64)
 
-    db.table("witness_signatures").insert({
+    await db_execute(lambda: db.table("witness_signatures").insert({
         "session_id": session["id"],
         "witness_number": witness_num,
         "full_name": data.full_name,
@@ -755,14 +756,15 @@ async def add_manual_witness(invoice_id: str, data: WitnessSignatureSubmit, back
         "signature_method": data.signature_method,
         "ip_address": "office",
         "user_agent": "manual-entry"
-    }).execute()
+    }).execute())
 
     # Do not auto-complete the session status; let the admin click the final 'Execute' button
     # new_status = "completed"
     # db.table("contract_signing_sessions").update({"status": new_status}).eq("id", session["id"]).execute()
     
     # Check if we have at least one witness (the goal is met for execution)
-    witnesses = db.table("witness_signatures").select("*").eq("session_id", session["id"]).order("witness_number").execute().data
+    witnesses_res = await db_execute(lambda: db.table("witness_signatures").select("*").eq("session_id", session["id"]).order("witness_number").execute())
+    witnesses = witnesses_res.data
     from email_service import send_admin_signing_alert
     background_tasks.add_task(send_admin_signing_alert, invoice, client, witnesses)
 
@@ -782,18 +784,18 @@ async def add_manual_client_signature(invoice_id: str, data: ClientContractSigna
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     db = get_db()
-    inv_res = db.table("invoices").select("id, invoice_number, client_id").eq("id", invoice_id).execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("id, invoice_number, client_id").eq("id", invoice_id).execute())
     if not inv_res.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
     invoice = inv_res.data[0]
 
     try:
         stored_signature = _upload_client_signature(db, invoice_id, data.signature_base64)
-        db.table("invoices").update({
+        await db_execute(lambda: db.table("invoices").update({
             "contract_signature_url": stored_signature,
             "contract_signature_method": data.signature_method,
             "contract_signed_at": datetime.now().isoformat()
-        }).eq("id", invoice_id).execute()
+        }).eq("id", invoice_id).execute())
 
         await log_activity(
             "manual_client_contract_signed",
@@ -816,7 +818,7 @@ async def remove_witness_signature(invoice_id: str, witness_id: str, data: Witne
         raise HTTPException(status_code=400, detail="Removal note is required")
 
     db = get_db()
-    inv_res = db.table("invoices").select("id").eq("id", invoice_id).execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("id").eq("id", invoice_id).execute())
     if not inv_res.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
 
@@ -845,12 +847,12 @@ async def remove_witness_signature(invoice_id: str, witness_id: str, data: Witne
 
     witness = witness_res.data[0]
     _delete_witness_signature_from_storage(db, witness.get("signature_base64", ""))
-    db.table("witness_signatures").delete().eq("id", witness_id).execute()
+    await db_execute(lambda: db.table("witness_signatures").delete().eq("id", witness_id).execute())
 
-    remaining_res = db.table("witness_signatures").select("id").eq("session_id", session["id"]).execute()
+    remaining_res = await db_execute(lambda: db.table("witness_signatures").select("id").eq("session_id", session["id"]).execute())
     new_status = "partial" if remaining_res.data else "pending"
     if session["status"] != new_status:
-        db.table("contract_signing_sessions").update({"status": new_status}).eq("id", session["id"]).execute()
+        await db_execute(lambda: db.table("contract_signing_sessions").update({"status": new_status}).eq("id", session["id"]).execute())
 
     await log_activity(
         "witness_removed",
@@ -867,7 +869,7 @@ async def list_company_signatures(current_admin=Depends(verify_token)):
     if not has_any_role(current_admin, "admin", "lawyer"):
         raise HTTPException(status_code=403, detail="Unauthorized")
     db = get_db()
-    res = db.table("company_signatures").select("*").eq("is_active", True).execute()
+    res = await db_execute(lambda: db.table("company_signatures").select("*").eq("is_active", True).execute())
     return res.data
 
 @router.post("/signatures")
@@ -929,7 +931,7 @@ async def upload_company_signature(data: CompanySignatureUpload, current_admin=D
             name_to_use = data.role.capitalize()
 
     # 3. Deactivate old ones of same role
-    db.table("company_signatures").update({"is_active": False}).eq("role", data.role).execute()
+    await db_execute(lambda: db.table("company_signatures").update({"is_active": False}).eq("role", data.role).execute())
     
     # 4. Insert new with URL
     insert_data = {
@@ -942,7 +944,7 @@ async def upload_company_signature(data: CompanySignatureUpload, current_admin=D
     if data.address: insert_data["address"] = data.address
     if data.occupation: insert_data["occupation"] = data.occupation
 
-    res = db.table("company_signatures").insert(insert_data).execute()
+    res = await db_execute(lambda: db.table("company_signatures").insert(insert_data).execute())
 
     
     await log_activity(
@@ -963,7 +965,7 @@ async def delete_company_signature(role: str, current_admin=Depends(verify_token
     db = get_db()
     
     # Actually we just deactivate them so they don't show in UI
-    db.table("company_signatures").update({"is_active": False}).eq("role", role).execute()
+    await db_execute(lambda: db.table("company_signatures").update({"is_active": False}).eq("role", role).execute())
     
     await log_activity(
         "signature_deleted",
@@ -999,7 +1001,7 @@ async def extend_contract_signing(invoice_id: str, background_tasks: BackgroundT
     db = get_db()
 
     # 1. Fetch invoice and client for the email
-    inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute())
     if not inv_res.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
     invoice = inv_res.data[0]
@@ -1047,7 +1049,7 @@ async def get_contract_html(invoice_id: str, current_admin=Depends(verify_token)
         raise HTTPException(status_code=403, detail="Unauthorized")
         
     db = get_db()
-    inv_res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute())
     if not inv_res.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
         
@@ -1098,12 +1100,12 @@ async def update_contract_html(invoice_id: str, payload: CustomContractHTMLUpdat
     db = get_db()
     
     # 1. Check if invoice exists
-    inv_res = db.table("invoices").select("id").eq("id", invoice_id).execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("id").eq("id", invoice_id).execute())
     if not inv_res.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
         
     # 2. Prevent editing if contract is already signed
-    session_res = db.table("contract_signing_sessions").select("status").eq("invoice_id", invoice_id).neq("status", "expired").execute()
+    session_res = await db_execute(lambda: db.table("contract_signing_sessions").select("status").eq("invoice_id", invoice_id).neq("status", "expired").execute())
     if session_res.data and session_res.data[0]["status"] == "completed":
         raise HTTPException(status_code=400, detail="Cannot edit contract wording after it has been fully executed")
         
@@ -1121,7 +1123,7 @@ async def update_contract_html(invoice_id: str, payload: CustomContractHTMLUpdat
     if payload.lawfirm_address is not None:
         update_data["custom_lawfirm_address"] = payload.lawfirm_address
 
-    db.table("invoices").update(update_data).eq("id", invoice_id).execute()
+    await db_execute(lambda: db.table("invoices").update(update_data).eq("id", invoice_id).execute())
     
     await log_activity(
         "contract_wording_updated",
@@ -1146,10 +1148,12 @@ async def get_legal_summary(current_admin=Depends(verify_token)):
     import asyncio
     
     def _count_invoices():
-        return db.table("invoices").select("id", count="exact").neq("status", "voided").execute().count or 0
+        res = db.table("invoices").select("id", count="exact").neq("status", "voided").execute()
+        return res.count or 0
 
     def _count_sessions():
-        rows = db.table("contract_signing_sessions").select("status").execute().data or []
+        res = db.table("contract_signing_sessions").select("status").execute()
+        rows = res.data or []
         active = sum(1 for r in rows if r["status"] != "completed")
         completed = sum(1 for r in rows if r["status"] == "completed")
         pending = sum(1 for r in rows if r["status"] == "pending")
@@ -1179,18 +1183,20 @@ async def get_execution_trends(current_admin=Depends(verify_token)):
         raise HTTPException(status_code=403, detail="Unauthorized")
 
     db = get_db()
-    execution_docs = db.table("contract_documents")\
+    execution_docs_res = await db_execute(lambda: db.table("contract_documents")\
         .select("id, created_at, session_id, contract_signing_sessions(created_at)")\
         .eq("document_type", "executed")\
         .order("created_at", desc=True)\
         .limit(200)\
-        .execute().data or []
+        .execute())
+    execution_docs = execution_docs_res.data or []
 
-    session_rows = db.table("contract_signing_sessions")\
+    session_rows_res = await db_execute(lambda: db.table("contract_signing_sessions")\
         .select("id, created_at")\
         .order("created_at", desc=True)\
         .limit(300)\
-        .execute().data or []
+        .execute())
+    session_rows = session_rows_res.data or []
 
     session_start = {}
     for row in session_rows:
@@ -1290,12 +1296,12 @@ async def list_archived_contracts(current_admin=Depends(verify_token)):
     
     db = get_db()
     # Slim select — only fields needed for the archive table display
-    result = db.table("contract_signing_sessions")\
+    result = await db_execute(lambda: db.table("contract_signing_sessions")\
         .select("id, invoice_id, created_at, updated_at, invoices(id, invoice_number, clients(full_name))")\
         .eq("status", "completed")\
         .order("created_at", desc=True)\
         .limit(50)\
-        .execute()
+        .execute())
         
     return result.data
 
@@ -1315,7 +1321,7 @@ async def list_all_contracts(include_voided: bool = Query(False), current_admin=
     if not include_voided:
         query = query.neq("status", "voided")
 
-    result = query.execute()
+    result = await db_execute(lambda: query.execute())
         
     contracts = result.data
     for c in contracts:
@@ -1382,7 +1388,7 @@ async def upload_custom_lawyer_seal(
         seal_url = f"{SUPABASE_URL}/storage/v1/object/public/signatures/{file_path}"
         
         # Update invoice
-        db.table("invoices").update({"custom_lawyer_seal_url": seal_url}).eq("id", invoice_id).execute()
+        await db_execute(lambda: db.table("invoices").update({"custom_lawyer_seal_url": seal_url}).eq("id", invoice_id).execute())
         
         return {"message": "Custom lawyer seal uploaded successfully", "seal_url": seal_url}
     except Exception as e:
@@ -1395,7 +1401,7 @@ from fastapi.responses import HTMLResponse
 @router.get("/{invoice_id}/html-preview/invoice", response_class=HTMLResponse)
 async def preview_invoice_html(invoice_id: str, current_admin=Depends(resolve_admin_token)):
     db = get_db()
-    res = db.table("invoices").select("*, clients(*), payments(*)").eq("id", invoice_id).execute()
+    res = await db_execute(lambda: db.table("invoices").select("*, clients(*), payments(*)").eq("id", invoice_id).execute())
     if not res.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
     invoice = res.data[0]
@@ -1407,7 +1413,7 @@ async def preview_invoice_html(invoice_id: str, current_admin=Depends(resolve_ad
 @router.get("/{invoice_id}/html-preview/receipt", response_class=HTMLResponse)
 async def preview_receipt_html(invoice_id: str, current_admin=Depends(resolve_admin_token)):
     db = get_db()
-    res = db.table("invoices").select("*, clients(*), payments(*)").eq("id", invoice_id).execute()
+    res = await db_execute(lambda: db.table("invoices").select("*, clients(*), payments(*)").eq("id", invoice_id).execute())
     if not res.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
     invoice = res.data[0]
@@ -1419,7 +1425,7 @@ async def preview_receipt_html(invoice_id: str, current_admin=Depends(resolve_ad
 @router.get("/{invoice_id}/html-preview/statement", response_class=HTMLResponse)
 async def preview_statement_html(invoice_id: str, current_admin=Depends(resolve_admin_token)):
     db = get_db()
-    res = db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute()
+    res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute())
     if not res.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
         
@@ -1430,7 +1436,7 @@ async def preview_statement_html(invoice_id: str, current_admin=Depends(resolve_
     client = res.data[0].get("clients")
     
     # Fetch all invoices for the client
-    inv_res = db.table("invoices").select("*, payments(*)").eq("client_id", client_id).order("invoice_date").execute()
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, payments(*)").eq("client_id", client_id).order("invoice_date").execute())
     invoices = inv_res.data
     
     from pdf_service import render_statement_html
@@ -1447,7 +1453,7 @@ async def list_authorities(current_admin=Depends(verify_token)):
         raise HTTPException(status_code=403, detail="Unauthorized")
     
     db = get_db()
-    res = db.table("company_signatures").select("*").order("created_at", desc=True).execute()
+    res = await db_execute(lambda: db.table("company_signatures").select("*").order("created_at", desc=True).execute())
     return res.data
 
 @router.post("/authorities")
@@ -1488,9 +1494,9 @@ async def upload_authority_signature(payload: CompanySignatureUpload, current_ad
         }
         
         # Deactivate old signatures of the same role
-        db.table("company_signatures").update({"is_active": False}).eq("role", payload.role).execute()
+        await db_execute(lambda: db.table("company_signatures").update({"is_active": False}).eq("role", payload.role).execute())
         
-        res = db.table("company_signatures").insert(new_sig).execute()
+        res = await db_execute(lambda: db.table("company_signatures").insert(new_sig).execute())
         
         await log_activity(
             "authority_signature_uploaded",
@@ -1509,7 +1515,7 @@ async def deactivate_authority_signature(sig_id: str, current_admin=Depends(veri
         raise HTTPException(status_code=403, detail="Unauthorized")
     
     db = get_db()
-    db.table("company_signatures").update({"is_active": False}).eq("id", sig_id).execute()
+    await db_execute(lambda: db.table("company_signatures").update({"is_active": False}).eq("id", sig_id).execute())
     
     await log_activity(
         "authority_signature_deactivated",
@@ -1535,11 +1541,11 @@ async def get_legal_activity(limit: int = 15, current_admin=Depends(verify_token
         "signature_updated", "signature_deactivated", "authority_signature_deactivated"
     ]
     
-    result = db.table("activity_log")\
+    result = await db_execute(lambda: db.table("activity_log")\
         .select("*, admins(full_name)")\
         .in_("event_type", legal_events)\
         .order("created_at", desc=True)\
         .limit(limit)\
-        .execute()
+        .execute())
         
     return result.data

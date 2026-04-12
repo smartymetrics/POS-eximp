@@ -1,5 +1,5 @@
 import logging
-from database import get_db
+from database import get_db, db_execute
 from datetime import datetime
 from marketing_sequencer_engine import auto_enroll_contact
 
@@ -21,10 +21,10 @@ async def sync_client_to_marketing(client_data: dict):
         # 1. Search by client_id first, then fallback to email (handles email changes safely)
         mc_res = None
         if client_id:
-            mc_res = db.table("marketing_contacts").select("*").eq("client_id", client_id).execute()
+            mc_res = await db_execute(lambda: db.table("marketing_contacts").select("*").eq("client_id", client_id).execute())
             
         if not mc_res or not mc_res.data:
-            mc_res = db.table("marketing_contacts").select("*").eq("email", email).execute()
+            mc_res = await db_execute(lambda: db.table("marketing_contacts").select("*").eq("email", email).execute())
         
         contact_id = None
         marketing_data = {
@@ -42,13 +42,13 @@ async def sync_client_to_marketing(client_data: dict):
         if mc_res.data:
             # Upgrade existing lead to client
             contact_id = mc_res.data[0]["id"]
-            db.table("marketing_contacts").update(marketing_data).eq("id", contact_id).execute()
+            await db_execute(lambda: db.table("marketing_contacts").update(marketing_data).eq("id", contact_id).execute())
             logger.info(f"Upgraded marketing contact {email} to CLIENT status.")
             # Enroll if not already in some sequences
             await auto_enroll_contact(contact_id, "client_created")
         else:
             # Create new marketing contact for this client
-            res = db.table("marketing_contacts").insert(marketing_data).execute()
+            res = await db_execute(lambda: db.table("marketing_contacts").insert(marketing_data).execute())
             if res.data:
                 contact_id = res.data[0]["id"]
                 logger.info(f"Created new marketing contact for client {email}.")
