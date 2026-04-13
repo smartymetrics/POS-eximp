@@ -76,9 +76,16 @@ def _get_image_as_base64(url):
 
 def get_company_logo_base64():
     import base64
+    import os
     try:
-        with open("logo.svg", "rb") as f:
-            return "data:image/svg+xml;base64," + base64.b64encode(f.read()).decode('utf-8')
+        # Prioritize PNG as requested for white background documents
+        if os.path.exists("logo.png"):
+            with open("logo.png", "rb") as f:
+                return "data:image/png;base64," + base64.b64encode(f.read()).decode('utf-8')
+        # Fallback to SVG if PNG doesn't exist
+        elif os.path.exists("logo.svg"):
+            with open("logo.svg", "rb") as f:
+                return "data:image/svg+xml;base64," + base64.b64encode(f.read()).decode('utf-8')
     except Exception:
         pass
     return ""
@@ -281,7 +288,7 @@ def render_invoice_html(invoice: dict) -> str:
             signature_mime = db_sig_url.split(";")[0].split(":")[-1]
 
     # 4. Build dynamic company context
-    comp_ctx = COMPANY.copy()
+    comp_ctx = get_company_context()
     comp_ctx["stamp_b64"] = f"data:image/png;base64,{stamp_b64}" if stamp_b64 else ""
     comp_ctx["seal_b64"] = f"data:image/png;base64,{seal_b64}" if seal_b64 else ""
 
@@ -351,7 +358,7 @@ def render_receipt_html(invoice: dict) -> str:
             signature_mime = db_sig_url.split(";")[0].split(":")[-1]
 
     # 4. Build dynamic company context
-    comp_ctx = COMPANY.copy()
+    comp_ctx = get_company_context()
     comp_ctx["stamp_b64"] = f"data:image/png;base64,{stamp_b64}" if stamp_b64 else ""
     comp_ctx["seal_b64"] = f"data:image/png;base64,{seal_b64}" if seal_b64 else ""
 
@@ -438,7 +445,7 @@ def render_statement_html(invoices: list, client: dict) -> str:
     seal_b64, _ = fetched.get("seal", (None, None))
 
     # 2. Build dynamic company context
-    comp_ctx = COMPANY.copy()
+    comp_ctx = get_company_context()
     comp_ctx["stamp_b64"] = f"data:image/png;base64,{stamp_b64}" if stamp_b64 else ""
     comp_ctx["seal_b64"] = f"data:image/png;base64,{seal_b64}" if seal_b64 else ""
 
@@ -510,7 +517,7 @@ def generate_refund_receipt_pdf(payment: dict, invoice: dict, client: dict = Non
             signature_mime = db_sig_url.split(";")[0].split(":")[-1]
 
     # 4. Build dynamic company context
-    comp_ctx = COMPANY.copy()
+    comp_ctx = get_company_context()
     comp_ctx["stamp_b64"] = f"data:image/png;base64,{stamp_b64}" if stamp_b64 else ""
     comp_ctx["seal_b64"] = f"data:image/png;base64,{seal_b64}" if seal_b64 else ""
 
@@ -666,7 +673,7 @@ def render_contract_html(invoice: dict, client: dict, witnesses: list = None, is
 
     # 5. Build context
 
-    company = COMPANY.copy()
+    company = get_company_context()
     if embed_images:
         company["stamp_b64"] = get_authorized_stamp_base64()
     else:
@@ -723,7 +730,7 @@ def render_audit_certificate_html(invoice: dict, client: dict, witnesses: list =
         invoice["contract_checksum"] = doc_hash
 
     return template.render(
-        company=COMPANY,
+        company=get_company_context(),
         invoice=invoice,
         client=client,
         witnesses=witnesses or [],
@@ -773,7 +780,7 @@ def get_default_contract_html_fragment(invoice: dict, client: dict) -> str:
         invoice_data["amount_in_words"] = naira_in_words(invoice_data.get("amount"))
 
     return template.render(
-        company=COMPANY,
+        company=get_company_context(),
         invoice=invoice_data,
         client=client_sanitized,
         format_currency=format_currency,
@@ -789,7 +796,7 @@ def get_default_cover_html_fragment(invoice: dict, client: dict) -> str:
     client_sanitized = sanitize_client_address(client.copy())
     
     return template.render(
-        company=COMPANY,
+        company=get_company_context(),
         invoice=invoice,
         client=client_sanitized
     )
