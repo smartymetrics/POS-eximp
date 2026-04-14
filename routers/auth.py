@@ -129,6 +129,8 @@ async def register(data: AdminCreate, background_tasks: BackgroundTasks, current
         "full_name": data.full_name, "email": data.email,
         "password_hash": password_hash, "role": data.role,
         "primary_role": data.primary_role,
+        "department": data.department,
+        "line_manager_id": data.line_manager_id,
         "is_active": True, "is_archived": False,
     }).execute()
     
@@ -263,6 +265,8 @@ async def update_admin_roles(admin_id: str, data: dict, current_admin=Depends(ve
 
     role = data.get("role", "").strip()
     primary_role = data.get("primary_role", "staff").strip()
+    department = data.get("department", "").strip() or None
+    line_manager_id = data.get("line_manager_id") or None
 
     if not role:
         raise HTTPException(status_code=400, detail="At least one role is required")
@@ -272,5 +276,11 @@ async def update_admin_roles(admin_id: str, data: dict, current_admin=Depends(ve
     if not target.data:
         raise HTTPException(status_code=404, detail="Account not found")
 
-    await db_execute(lambda: db.table("admins").update({"role": role, "primary_role": primary_role}).eq("id", admin_id).execute())
+    update_payload = {
+        "role": role, 
+        "primary_role": primary_role,
+        "department": department,
+        "line_manager_id": line_manager_id
+    }
+    await db_execute(lambda: db.table("admins").update(update_payload).eq("id", admin_id).execute())
     return {"message": f"Roles updated for {target.data[0]['full_name']}"}

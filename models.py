@@ -17,6 +17,8 @@ class AdminCreate(BaseModel):
     password: str
     role: str = "staff"
     primary_role: str = "staff"
+    department: Optional[str] = None
+    line_manager_id: Optional[str] = None
 
 
 class TokenResponse(BaseModel):

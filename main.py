@@ -36,7 +36,8 @@ from routers import (
     scheduling,
     notifications,
     ws_support,
-    subscriptions
+    subscriptions,
+    hr
 )
 from routers.auth import require_roles, resolve_admin_token
 from database import init_db
@@ -62,6 +63,7 @@ app.add_middleware(
 )
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
+app.mount("/hr", StaticFiles(directory="hrm-portal/dist", html=True), name="hr")
 templates = Jinja2Templates(directory="templates")
 
 app.include_router(auth.router, prefix="/auth", tags=["auth"])
@@ -96,6 +98,7 @@ app.include_router(scheduling.router, prefix="/api/scheduling", tags=["schedulin
 app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
 app.include_router(ws_support.router, prefix="/api", tags=["live-chat"])
 app.include_router(subscriptions.router, tags=["subscriptions"])
+app.include_router(hr.router, tags=["hr"])
 
 
 

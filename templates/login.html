@@ -261,18 +261,17 @@
         localStorage.setItem('admin', JSON.stringify(data.admin));
 
         
-        // Role-based redirection
+        // Redirection based on Primary Role (Default Interface)
+        const primary = (data.admin && data.admin.primary_role) ? data.admin.primary_role.toLowerCase() : '';
         const userRoles = (data.admin.role || '').toLowerCase().split(',').map(r => r.trim()).filter(Boolean);
-        const hasLegalRole = userRoles.includes('legal') || userRoles.includes('lawyer');
-        const onlyMarketing = userRoles.length === 1 && userRoles[0] === 'marketing';
-        const onlyLegal = userRoles.length === 1 && (userRoles[0] === 'legal' || userRoles[0] === 'lawyer');
-        const isSalesOrOps = userRoles.includes('sales') || userRoles.includes('operations');
-        
-        if (onlyMarketing || (data.admin && data.admin.primary_role === 'marketing' && !hasLegalRole)) {
+
+        if (primary === 'hr' || primary === 'hr_admin' || userRoles.includes('hr_admin')) {
+          window.location.href = '/hr';
+        } else if (primary === 'marketing' || (userRoles.length === 1 && userRoles[0] === 'marketing')) {
           window.location.href = '/marketing';
-        } else if (hasLegalRole || onlyLegal || (data.admin && data.admin.primary_role === 'legal')) {
+        } else if (primary === 'legal' || userRoles.includes('legal') || userRoles.includes('lawyer')) {
           window.location.href = '/legal';
-        } else if (isSalesOrOps) {
+        } else if (primary === 'sales' || primary === 'crm' || userRoles.includes('sales') || userRoles.includes('operations')) {
           window.location.href = '/crm';
         } else {
           window.location.href = '/dashboard';

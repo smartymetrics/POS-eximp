@@ -1325,6 +1325,17 @@
         My Profile
       </a>
 
+      <a class="nav-item" href="/hr" id="nav-hr-portal">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 12px; opacity: 0.7;">
+          <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
+          <circle cx="9" cy="7" r="4"></circle>
+          <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
+          <path d="M16 3.13a4 4 0 0 1 0 7.75"></path>
+        </svg>
+        HR & Personnel Portal
+      </a>
+
+
       <div class="nav-label" style="margin-top:8px;">Finance</div>
       <a class="nav-item" href="#" onclick="openNewInvoiceModal(event)">
         <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -3189,8 +3200,9 @@
           </div>
           <div class="form-group span2">
             <label class="form-label">Roles <span class="req">*</span></label>
-            <div style="display:grid; grid-template-columns:repeat(3, 1fr); gap:10px; padding:10px; background:#f8fafc; border-radius:6px; border:1px solid #e2e8f0;">
               <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="admin" style="accent-color:var(--gold);"> Admin</label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="hr_admin" style="accent-color:var(--gold);"> HR Admin</label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="line_manager" style="accent-color:var(--gold);"> Line Manager</label>
               <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="staff" checked style="accent-color:var(--gold);"> Staff</label>
               <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="lawyer" style="accent-color:var(--gold);"> Lawyer</label>
               <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="legal" style="accent-color:var(--gold);"> Legal</label>
@@ -3200,10 +3212,22 @@
               <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="super_admin" style="accent-color:var(--gold);"> Super Admin</label>
             </div>
           </div>
+          <div class="form-group">
+            <label class="form-label">Department</label>
+            <input type="text" class="form-control" id="am-department" placeholder="e.g. Operations, Legal">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Line Manager (Optional)</label>
+            <select class="form-control" id="am-manager-id">
+              <option value="">— Select Manager —</option>
+              <!-- Populate dynamically if possible, or leave as simple select -->
+            </select>
+          </div>
           <div class="form-group span2">
             <label class="form-label">Primary Role (Redirection After Login) <span class="req">*</span></label>
             <select class="form-control" id="am-primary-role">
               <option value="staff">Staff Dashboard (/dashboard)</option>
+              <option value="hr">HR Management (/hr)</option>
               <option value="legal">Legal Dashboard (/legal)</option>
               <option value="marketing">Marketing Dashboard (/marketing)</option>
               <option value="sales">Sales Dashboard (/crm)</option>
@@ -3250,6 +3274,8 @@
           <label class="form-label">Assigned Roles <span class="req">*</span></label>
           <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:12px; background:#f8fafc; border-radius:6px; border:1px solid #e2e8f0;">
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="admin" style="accent-color:var(--gold);"> Admin</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="hr_admin" style="accent-color:var(--gold);"> HR Admin</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="line_manager" style="accent-color:var(--gold);"> Line Manager</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="staff" style="accent-color:var(--gold);"> Staff</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="lawyer" style="accent-color:var(--gold);"> Lawyer</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="legal" style="accent-color:var(--gold);"> Legal</label>
@@ -3259,18 +3285,29 @@
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="super_admin" style="accent-color:var(--gold);"> Super Admin</label>
           </div>
         </div>
-        <div class="form-group">
-          <label class="form-label">Primary Role (Landing Page After Login) <span class="req">*</span></label>
-          <select class="form-control" id="er-primary-role">
-            <option value="staff">Staff Dashboard (/dashboard)</option>
-            <option value="legal">Legal Dashboard (/legal)</option>
-            <option value="marketing">Marketing Dashboard (/marketing)</option>
-            <option value="sales">Sales Dashboard (/crm)</option>
-            <option value="operations">Operations Dashboard (/crm)</option>
-            <option value="admin">Full Admin Dashboard (/dashboard)</option>
-          </select>
-          <div class="form-hint" style="margin-top:4px;">Determines which page this user lands on after logging in.</div>
-        </div>
+          <div class="form-group">
+            <label class="form-label">Primary Role (Landing Page After Login) <span class="req">*</span></label>
+            <select class="form-control" id="er-primary-role">
+              <option value="staff">Staff Dashboard (/dashboard)</option>
+              <option value="hr">HR Management (/hr)</option>
+              <option value="legal">Legal Dashboard (/legal)</option>
+              <option value="marketing">Marketing Dashboard (/marketing)</option>
+              <option value="sales">Sales Dashboard (/crm)</option>
+              <option value="operations">Operations Dashboard (/crm)</option>
+              <option value="admin">Full Admin Dashboard (/dashboard)</option>
+            </select>
+            <div class="form-hint" style="margin-top:4px;">Determines which page this user lands on after logging in.</div>
+          </div>
+          <div class="form-group">
+            <label class="form-label">Department</label>
+            <input type="text" class="form-control" id="er-department" placeholder="e.g. Operations, Legal">
+          </div>
+          <div class="form-group">
+            <label class="form-label">Line Manager (Optional)</label>
+            <select class="form-control" id="er-manager-id">
+              <option value="">— Select Manager —</option>
+            </select>
+          </div>
         <div class="form-actions">
           <button class="btn btn-ghost" onclick="closeModal('editRolesModal')">Cancel</button>
           <button class="btn btn-primary" onclick="submitEditRoles()">Save Roles</button>
@@ -5549,6 +5586,8 @@
     }
 
     // ── TEAM MANAGEMENT ───────────────────────
+    let allAdmins = [];
+
     function renderMemberRow(a, archived = false) {
       const initials = a.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
       const roleColors = {
@@ -5573,8 +5612,10 @@
       } else {
         const safeRoles = (a.role || 'staff').replace(/'/g, "\\'");
         const safePrimary = (a.primary_role || '').replace(/'/g, "\\'");
+        const safeDept = (a.department || '').replace(/'/g, "\\'");
+        const safeMgr = (a.line_manager_id || '').replace(/'/g, "\\'");
         actions = `
-      <button class="action-btn" style="color:#047857;border-color:#a7f3d0;" onclick="openEditRolesModal('${a.id}','${a.full_name.replace(/'/g, "\\'")}','${safeRoles}','${safePrimary}')">Edit Roles</button>
+      <button class="action-btn" style="color:#047857;border-color:#a7f3d0;" onclick="openEditRolesModal('${a.id}','${a.full_name.replace(/'/g, "\\'")}','${safeRoles}','${safePrimary}','${safeDept}','${safeMgr}')">Edit Roles</button>
       <button class="action-btn" style="color:#2980b9;border-color:#aed6f1;" onclick="openResetPasswordModal('${a.id}','${a.full_name}')">Reset PW</button>
       <button class="action-btn" onclick="${a.is_active ? `openDeactivateModal('${a.id}','${a.full_name.replace(/'/g, "\\'")}')` : `reactivateAdmin('${a.id}','${a.full_name.replace(/'/g, "\\'")}')`}">${a.is_active ? 'Deactivate' : 'Reactivate'}</button>
       <button class="action-btn" style="color:#636e72;border-color:#dfe6e9;" onclick="openArchiveModal('${a.id}','${a.full_name}')">Archive</button>`;
@@ -5609,6 +5650,7 @@
     async function loadTeam() {
       document.getElementById('teamTable').innerHTML = '<div class="loading"><span class="spinner"></span>Loading team...</div>';
       const data = await apiFetch('/auth/admins').then(r => r.json());
+      allAdmins = data;
 
       const active = data.filter(a => !a.is_archived);
       const archived = data.filter(a => a.is_archived);
@@ -5632,12 +5674,25 @@
     }
 
     function openAddAdminModal() {
-      ['am-name', 'am-email', 'am-password', 'am-password2'].forEach(id => document.getElementById(id).value = '');
+      ['am-name', 'am-email', 'am-password', 'am-password2', 'am-department'].forEach(id => {
+        const el = document.getElementById(id);
+        if(el) el.value = '';
+      });
       // Reset checkboxes
       document.querySelectorAll('input[name="am-roles-check"]').forEach(cb => {
         cb.checked = cb.value === 'staff';
       });
       document.getElementById('am-primary-role').value = 'staff';
+
+      // Populate Line Manager dropdown
+      const addMgrSel = document.getElementById('am-manager-id');
+      if (addMgrSel) {
+        addMgrSel.innerHTML = '<option value="">— Select Manager —</option>';
+        (allAdmins || []).forEach(a => {
+            addMgrSel.innerHTML += `<option value="${a.id}">${a.full_name}</option>`;
+        });
+      }
+
       openModal('addAdminModal');
     }
 
@@ -5655,6 +5710,9 @@
       });
       const role = rolesArr.join(',');
 
+      const department = document.getElementById('am-department').value.trim();
+      const line_manager_id = document.getElementById('am-manager-id').value || null;
+
       if (!name || !email || !pass) return toast('Please fill in all required fields', 'error');
       if (rolesArr.length === 0) return toast('Please select at least one role', 'error');
       if (pass !== pass2) return toast('Passwords do not match', 'error');
@@ -5665,7 +5723,7 @@
       try {
         const res = await apiFetch('/auth/register', {
           method: 'POST', 
-          body: JSON.stringify({ full_name: name, email, password: pass, role, primary_role })
+          body: JSON.stringify({ full_name: name, email, password: pass, role, primary_role, department, line_manager_id })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed to create account');
@@ -5675,50 +5733,6 @@
       } catch (e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
     }
 
-    function openEditRolesModal(adminId, adminName, currentRoles, primaryRole) {
-      document.getElementById('er-admin-id').value = adminId;
-      document.getElementById('er-name').textContent = adminName;
-
-      // Reset all checkboxes
-      document.querySelectorAll('input[name="er-role"]').forEach(cb => { cb.checked = false; });
-
-      // Check the roles this admin already has
-      const roles = (currentRoles || 'staff').split(',').map(r => r.trim());
-      roles.forEach(r => {
-        const cb = document.querySelector(`input[name="er-role"][value="${r}"]`);
-        if (cb) cb.checked = true;
-      });
-
-      // Set the primary role dropdown
-      const primarySel = document.getElementById('er-primary-role');
-      primarySel.value = primaryRole || roles[0] || 'staff';
-
-      openModal('editRolesModal');
-    }
-
-    async function submitEditRoles() {
-      const adminId = document.getElementById('er-admin-id').value;
-      const rolesArr = [];
-      document.querySelectorAll('input[name="er-role"]:checked').forEach(cb => rolesArr.push(cb.value));
-      if (rolesArr.length === 0) return toast('Please select at least one role', 'error');
-
-      const role = rolesArr.join(',');
-      const primary_role = document.getElementById('er-primary-role').value;
-
-      const btn = document.querySelector('#editRolesModal button.btn-primary');
-      const ogText = setLoading(btn, true, 'Saving...');
-      try {
-        const res = await apiFetch(`/auth/admins/${adminId}/roles`, {
-          method: 'PATCH',
-          body: JSON.stringify({ role, primary_role })
-        });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Failed to update roles');
-        toast(data.message, 'success');
-        closeModal('editRolesModal');
-        loadTeam();
-      } catch (e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
-    }
 
     function openDeactivateModal(adminId, adminName) {
       document.getElementById('deactivateAdminId').value = adminId;
@@ -5770,9 +5784,23 @@
       } catch (e) { toast(e.message, 'error'); } finally { setLoading(btn, false, ogText); }
     }
 
-    function openEditRolesModal(adminId, adminName, currentRoles, primaryRole) {
+    function openEditRolesModal(adminId, adminName, currentRoles, primaryRole, dept, mgrId) {
       document.getElementById('er-admin-id').value = adminId;
       document.getElementById('er-name').textContent = adminName;
+      document.getElementById('er-department').value = dept || '';
+      
+      // Populate Line Manager dropdown
+      const mgrSel = document.getElementById('er-manager-id');
+      const addMgrSel = document.getElementById('am-manager-id');
+      mgrSel.innerHTML = '<option value="">— Select Manager —</option>';
+      addMgrSel.innerHTML = '<option value="">— Select Manager —</option>';
+      (allAdmins || []).forEach(a => {
+        if(a.id !== adminId) {
+          mgrSel.innerHTML += `<option value="${a.id}">${a.full_name}</option>`;
+          addMgrSel.innerHTML += `<option value="${a.id}">${a.full_name}</option>`;
+        }
+      });
+      mgrSel.value = mgrId || '';
 
       // Reset all checkboxes first
       document.querySelectorAll('input[name="er-role"]').forEach(cb => { cb.checked = false; });
@@ -5787,7 +5815,6 @@
       // Set the primary role dropdown
       const primarySel = document.getElementById('er-primary-role');
       const resolvedPrimary = primaryRole || roles[0] || 'staff';
-      // If the value exists in dropdown, set it; otherwise fall back to 'staff'
       primarySel.value = resolvedPrimary;
       if (!primarySel.value) primarySel.value = 'staff';
 
@@ -5796,6 +5823,8 @@
 
     async function submitEditRoles() {
       const adminId = document.getElementById('er-admin-id').value;
+      const department = document.getElementById('er-department').value.trim();
+      const line_manager_id = document.getElementById('er-manager-id').value || null;
       const rolesArr = [];
       document.querySelectorAll('input[name="er-role"]:checked').forEach(cb => rolesArr.push(cb.value));
       if (rolesArr.length === 0) return toast('Please select at least one role', 'error');
@@ -5808,7 +5837,7 @@
       try {
         const res = await apiFetch(`/auth/admins/${adminId}/roles`, {
           method: 'PATCH',
-          body: JSON.stringify({ role, primary_role })
+          body: JSON.stringify({ role, primary_role, department, line_manager_id })
         });
         const data = await res.json();
         if (!res.ok) throw new Error(data.detail || 'Failed to update roles');
