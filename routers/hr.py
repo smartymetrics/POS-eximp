@@ -158,34 +158,52 @@ async def get_staff_profile(staff_id: str, current_admin: dict = Depends(verify_
 
 @router.patch("/profile/{staff_id}")
 async def update_staff_profile(staff_id: str, update: StaffProfileUpdate, current_admin: dict = Depends(verify_token)):
-    """Update detailed staff profile. HR Admin ONLY."""
+    """Update detailed staff profile. HR admins may edit all fields; staff may self-edit a restricted set."""
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles and "operations" not in user_roles:
-         raise HTTPException(status_code=403, detail="Only HR Admining can update profiles")
-         
+    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_self = current_admin.get("sub") == staff_id
+    if not (is_hr or is_self):
+         raise HTTPException(status_code=403, detail="Only HR or the profile owner can update this record")
+
     db = get_db()
-    
-    # 1. Update basic fields in admins table if any
+    update_data = update.dict(exclude_unset=True)
+
     admin_updates = {}
-    if update.department: admin_updates["department"] = update.department
-    if update.line_manager_id: admin_updates["line_manager_id"] = update.line_manager_id
-    if update.job_title: admin_updates["job_title"] = update.job_title
-    if update.exit_date is not None: admin_updates["is_active"] = False # Auto-deactivate if exit date set
-    
+    profile_updates = {}
+
+    if is_hr:
+        # HR can update administrative fields as well as profile data.
+        if update.department: admin_updates["department"] = update.department
+        if update.line_manager_id: admin_updates["line_manager_id"] = update.line_manager_id
+        if update.job_title: admin_updates["job_title"] = update.job_title
+        if update.exit_date is not None:
+            admin_updates["is_active"] = False  # Auto-deactivate if exit date set
+
+        profile_updates = update.dict(exclude={"department", "line_manager_id", "job_title"}, exclude_unset=True)
+    else:
+        # Staff members may update only personal profile fields.
+        allowed_self_fields = {"phone_number", "emergency_contact", "address", "bio"}
+        invalid_fields = set(update_data.keys()) - allowed_self_fields
+        if invalid_fields:
+            raise HTTPException(
+                status_code=403,
+                detail=f"Cannot edit administrative fields: {', '.join(sorted(invalid_fields))}"
+            )
+        profile_updates = update_data
+
     if admin_updates:
         await db_execute(lambda: db.table("admins").update(admin_updates).eq("id", staff_id).execute())
-        
-    # 2. Update staff_profiles table
-    profile_updates = update.dict(exclude={"department", "line_manager_id", "job_title"}, exclude_unset=True)
+
     if profile_updates:
-        # Check if profile exists
-        profile_exists = await db_execute(lambda: db.table("staff_profiles").select("id").eq("admin_id", staff_id).execute())
-        if profile_exists.data:
-            await db_execute(lambda: db.table("staff_profiles").update(profile_updates).eq("admin_id", staff_id).execute())
-        else:
-            profile_updates["admin_id"] = staff_id
-            await db_execute(lambda: db.table("staff_profiles").insert(profile_updates).execute())
-            
+        profile_updates = {k: v for k, v in profile_updates.items() if v is not None}
+        if profile_updates:
+            profile_exists = await db_execute(lambda: db.table("staff_profiles").select("id").eq("admin_id", staff_id).execute())
+            if profile_exists.data:
+                await db_execute(lambda: db.table("staff_profiles").update(profile_updates).eq("admin_id", staff_id).execute())
+            else:
+                profile_updates["admin_id"] = staff_id
+                await db_execute(lambda: db.table("staff_profiles").insert(profile_updates).execute())
+
     return {"message": "Profile updated successfully"}
 
 @router.get("/performance/{staff_id}")

@@ -1548,7 +1548,7 @@ function Payroll() {
 }
 
 // ─── MODULE: STAFF DIRECTORY ─────────────────────────────────────────────────
-function StaffDirectory() {
+function StaffDirectory({ authRole }) {
   const { dark } = useTheme(); const C = dark?DARK:LIGHT;
   const [tab, setTab] = useState("full");
   const [view, setView] = useState(null);
@@ -1558,6 +1558,23 @@ function StaffDirectory() {
   const [showAdd, setShowAdd] = useState(false);
   const [newStaff, setNewStaff] = useState({ full_name:"", email:"", role:"staff", primary_role:"staff", department:"", password:"" });
   const [saving, setSaving] = useState(false);
+  const [editMode, setEditMode] = useState(false);
+  const [draftView, setDraftView] = useState({});
+  const [editLoading, setEditLoading] = useState(false);
+
+  useEffect(() => {
+    if (!view) return;
+    const p = view.staff_profiles?.[0] || {};
+    setDraftView({
+      job_title: p.job_title || view.role || "",
+      department: view.department || "",
+      phone_number: p.phone_number || "",
+      emergency_contact: p.emergency_contact || "",
+      address: p.address || "",
+      bio: p.bio || ""
+    });
+    setEditMode(false);
+  }, [view]);
 
   const loadStaff = useCallback(() => {
     setLoading(true);
@@ -1599,7 +1616,7 @@ function StaffDirectory() {
     
     setSaving(true);
     try {
-      await apiFetch(`${API_BASE}/hr/staff/${view.id}/profile`, {
+      await apiFetch(`${API_BASE}/hr/profile/${view.id}`, {
         method: "PATCH",
         body: JSON.stringify({
           exit_date: date,
@@ -1613,6 +1630,43 @@ function StaffDirectory() {
       alert("Error: " + e.message);
     } finally {
       setSaving(false);
+    }
+  };
+
+  const saveStaffProfile = async () => {
+    if (!view) return;
+    setEditLoading(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/profile/${view.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          job_title: draftView.job_title,
+          department: draftView.department,
+          phone_number: draftView.phone_number,
+          emergency_contact: draftView.emergency_contact,
+          address: draftView.address,
+          bio: draftView.bio
+        })
+      });
+      setView(prev => ({
+        ...prev,
+        department: draftView.department,
+        staff_profiles: [{
+          ...prev.staff_profiles?.[0],
+          job_title: draftView.job_title,
+          phone_number: draftView.phone_number,
+          emergency_contact: draftView.emergency_contact,
+          address: draftView.address,
+          bio: draftView.bio
+        }]
+      }));
+      loadStaff();
+      setEditMode(false);
+      alert("Staff profile updated successfully.");
+    } catch (e) {
+      alert("Error saving profile: " + e.message);
+    } finally {
+      setEditLoading(false);
     }
   };
 
@@ -1721,19 +1775,68 @@ function StaffDirectory() {
             </div>
           </div>
           
+          {authRole === "hr" && (
+            <div style={{ display:"flex", gap:10, marginBottom:18 }}>
+              {editMode ? (
+                <>
+                  <button className="bg" onClick={() => setEditMode(false)} disabled={editLoading}>Cancel</button>
+                  <button className="bp" onClick={saveStaffProfile} disabled={editLoading}>{editLoading ? "Saving…" : "Save Profile"}</button>
+                </>
+              ) : (
+                <button className="bp" onClick={() => setEditMode(true)}>Edit Profile</button>
+              )}
+            </div>
+          )}
+
           <Tabs items={[["details","Personnel Identity"],["bank","Finances"],["assets","Assets"],["docs","Documents"]]} active={dtTab} setActive={setDtTab}/>
 
           {dtTab === "details" && (
             <div className="g2 fade" style={{ gap:10, marginBottom:18 }}>
               <Field label="Full Name" value={view.full_name}/>
               <Field label="Email Address" value={view.email}/>
-              <Field label="Phone" value={view.staff_profiles?.[0]?.phone_number}/>
-              <Field label="Emergency Contact" value={view.staff_profiles?.[0]?.emergency_contact}/>
-              <Field label="Address" value={view.staff_profiles?.[0]?.address}/>
-              <Field label="Gender" value={view.staff_profiles?.[0]?.gender}/>
-              <Field label="DOB" value={view.staff_profiles?.[0]?.dob}/>
-              <Field label="Nationality" value={view.staff_profiles?.[0]?.nationality}/>
-              <Field label="Marital Status" value={view.staff_profiles?.[0]?.marital_status}/>
+              {editMode ? (
+                <>
+                  <div>
+                    <Lbl>Job Title</Lbl>
+                    <input className="inp" value={draftView.job_title} onChange={e => setDraftView(d => ({ ...d, job_title: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Lbl>Department</Lbl>
+                    <input className="inp" value={draftView.department} onChange={e => setDraftView(d => ({ ...d, department: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Lbl>Phone</Lbl>
+                    <input className="inp" value={draftView.phone_number} onChange={e => setDraftView(d => ({ ...d, phone_number: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Lbl>Emergency Contact</Lbl>
+                    <input className="inp" value={draftView.emergency_contact} onChange={e => setDraftView(d => ({ ...d, emergency_contact: e.target.value }))} />
+                  </div>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <Lbl>Address</Lbl>
+                    <input className="inp" value={draftView.address} onChange={e => setDraftView(d => ({ ...d, address: e.target.value }))} />
+                  </div>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <Lbl>Bio</Lbl>
+                    <textarea className="inp" rows={5} value={draftView.bio} onChange={e => setDraftView(d => ({ ...d, bio: e.target.value }))} />
+                  </div>
+                  <Field label="Gender" value={view.staff_profiles?.[0]?.gender}/>
+                  <Field label="DOB" value={view.staff_profiles?.[0]?.dob}/>
+                  <Field label="Nationality" value={view.staff_profiles?.[0]?.nationality}/>
+                  <Field label="Marital Status" value={view.staff_profiles?.[0]?.marital_status}/>
+                </>
+              ) : (
+                <>
+                  <Field label="Phone" value={view.staff_profiles?.[0]?.phone_number}/>
+                  <Field label="Emergency Contact" value={view.staff_profiles?.[0]?.emergency_contact}/>
+                  <Field label="Address" value={view.staff_profiles?.[0]?.address}/>
+                  <Field label="Bio" value={view.staff_profiles?.[0]?.bio}/>
+                  <Field label="Gender" value={view.staff_profiles?.[0]?.gender}/>
+                  <Field label="DOB" value={view.staff_profiles?.[0]?.dob}/>
+                  <Field label="Nationality" value={view.staff_profiles?.[0]?.nationality}/>
+                  <Field label="Marital Status" value={view.staff_profiles?.[0]?.marital_status}/>
+                </>
+              )}
               {view.is_active === false && (
                 <>
                   <Field label="Exit Date" value={view.staff_profiles?.[0]?.exit_date}/>
@@ -1903,16 +2006,63 @@ function HRDashboard() {
 function MyProfile({ user }) {
   const { dark } = useTheme(); const C = dark?DARK:LIGHT;
   const [prof, setProf] = useState(null);
+  const [draft, setDraft] = useState({});
   const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
   const [tab, setTab] = useState("details");
+  const [editMode, setEditMode] = useState(false);
 
   useEffect(() => {
     setLoading(true);
     apiFetch(`${API_BASE}/hr/profile/${user.id}`)
-      .then(d => setProf(d))
+      .then(d => {
+        setProf(d);
+        const p = d.staff_profiles?.[0] || {};
+        setDraft({
+          phone_number: p.phone_number || "",
+          address: p.address || "",
+          emergency_contact: p.emergency_contact || "",
+          bio: p.bio || "",
+          bank_name: p.bank_name || "",
+          account_number: p.account_number || "",
+          account_name: p.account_name || ""
+        });
+      })
       .catch(e => console.error("Profile fetch error:", e))
       .finally(() => setLoading(false));
   }, [user.id]);
+
+  const saveProfile = async () => {
+    if (!prof) return;
+    setSaving(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/profile/${user.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          phone_number: draft.phone_number,
+          address: draft.address,
+          emergency_contact: draft.emergency_contact,
+          bio: draft.bio
+        })
+      });
+      setProf(prev => ({
+        ...prev,
+        staff_profiles: [{
+          ...prev.staff_profiles?.[0],
+          phone_number: draft.phone_number,
+          address: draft.address,
+          emergency_contact: draft.emergency_contact,
+          bio: draft.bio
+        }]
+      }));
+      setEditMode(false);
+      alert("Profile updated successfully.");
+    } catch (e) {
+      alert("Error updating profile: " + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
 
   if (loading) return <div style={{ padding:40, textAlign:"center", color:C.muted }}>Loading your profile…</div>;
   if (!prof)   return <div style={{ padding:40, textAlign:"center", color:"#F87171" }}>Could not load profile data.</div>;
@@ -1922,27 +2072,92 @@ function MyProfile({ user }) {
   return (
     <div className="fade" style={{ maxWidth:720 }}>
       <div className="gc" style={{ padding:30, marginBottom:18 }}>
-        <div style={{ display:"flex", gap:20, alignItems:"center", marginBottom:26 }}>
-          <Av av={prof.full_name?.split(" ").map(n=>n[0]).join("") || "??"} sz={70} gold/>
-          <div>
-            <div className="ho" style={{ fontSize:26 }}>{prof.full_name}</div>
-            <div style={{ fontSize:14, color:C.sub }}>{p.job_title || prof.role}</div>
-            <div style={{ fontSize:13, color:T.orange, fontWeight:800, marginTop:4 }}>{prof.department}</div>
+        <div style={{ display:"flex", gap:20, alignItems:"center", justifyContent:"space-between", marginBottom:26 }}>
+          <div style={{ display:"flex", gap:20, alignItems:"center" }}>
+            <Av av={prof.full_name?.split(" ").map(n=>n[0]).join("") || "??"} sz={70} gold/>
+            <div>
+              <div className="ho" style={{ fontSize:26 }}>{prof.full_name}</div>
+              <div style={{ fontSize:14, color:C.sub }}>{p.job_title || prof.role}</div>
+              <div style={{ fontSize:13, color:T.orange, fontWeight:800, marginTop:4 }}>{prof.department}</div>
+              {p.bio && <div style={{ marginTop:14, maxWidth:520, fontSize:13, lineHeight:1.6, color:C.sub }}>{p.bio}</div>}
+            </div>
+          </div>
+          <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+            {editMode ? (
+              <>
+                <button className="bg" onClick={() => setEditMode(false)} disabled={saving}>Cancel</button>
+                <button className="bp" onClick={saveProfile} disabled={saving}>{saving ? "Saving…" : "Save Profile"}</button>
+              </>
+            ) : (
+              <button className="bp" onClick={() => setEditMode(true)}>Edit Profile</button>
+            )}
           </div>
         </div>
-        
-        <Tabs items={[["details","Personnel Identity"],["bank","Finances"],["docs","My Documents"]]} active={tab} setActive={setTab}/>
+
+        <Tabs items={[["details","Personnel Identity"],["assets","My Assets"],["bank","Finances"],["docs","My Documents"]]} active={tab} setActive={setTab}/>
 
         {tab === "details" && (
           <div className="g2 fade" style={{ gap:12 }}>
             <Field label="Full Name" value={prof.full_name}/>
             <Field label="Email Address" value={prof.email}/>
-            <Field label="Phone" value={p.phone_number}/>
-            <Field label="Address" value={p.address}/>
-            <Field label="Gender" value={p.gender}/>
-            <Field label="DOB" value={p.dob}/>
-            <Field label="Nationality" value={p.nationality}/>
-            <Field label="Marital Status" value={p.marital_status}/>
+            {editMode ? (
+              <>
+                <div>
+                  <Lbl>Phone</Lbl>
+                  <input className="inp" value={draft.phone_number} onChange={e => setDraft(d => ({ ...d, phone_number: e.target.value }))} />
+                </div>
+                <div>
+                  <Lbl>Emergency Contact</Lbl>
+                  <input className="inp" value={draft.emergency_contact} onChange={e => setDraft(d => ({ ...d, emergency_contact: e.target.value }))} />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <Lbl>Address</Lbl>
+                  <input className="inp" value={draft.address} onChange={e => setDraft(d => ({ ...d, address: e.target.value }))} />
+                </div>
+                <div style={{ gridColumn: '1 / -1' }}>
+                  <Lbl>Bio</Lbl>
+                  <textarea className="inp" rows={5} value={draft.bio} onChange={e => setDraft(d => ({ ...d, bio: e.target.value }))} />
+                </div>
+                <Field label="Gender" value={p.gender}/>
+                <Field label="DOB" value={p.dob}/>
+                <Field label="Nationality" value={p.nationality}/>
+                <Field label="Marital Status" value={p.marital_status}/>
+              </>
+            ) : (
+              <>
+                <Field label="Phone" value={p.phone_number}/>
+                <Field label="Address" value={p.address}/>
+                <Field label="Emergency Contact" value={p.emergency_contact}/>
+                <Field label="Bio" value={p.bio}/>
+                <Field label="Gender" value={p.gender}/>
+                <Field label="DOB" value={p.dob}/>
+                <Field label="Nationality" value={p.nationality}/>
+                <Field label="Marital Status" value={p.marital_status}/>
+              </>
+            )}
+          </div>
+        )}
+
+        {tab === "assets" && (
+          <div className="fade">
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:12 }}>
+              <div className="ho" style={{ fontSize:13 }}>My Company Assets</div>
+            </div>
+            {p.staff_assets?.length > 0 ? (
+              <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+                {p.staff_assets.map((a,i) => (
+                  <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"12px 16px", background:C.surface, border:`1px solid ${C.border}`, borderRadius:12 }}>
+                    <div>
+                      <div style={{ fontSize:14, fontWeight:700 }}>{a.asset_name}</div>
+                      <div style={{ fontSize:12, color:C.muted }}>{a.serial_number || "No serial"} · Assigned {new Date(a.assigned_at).toLocaleDateString()}</div>
+                    </div>
+                    <span className="tg to" style={{ fontSize:10 }}>{a.condition || "Good"}</span>
+                  </div>
+                ))}
+              </div>
+            ) : (
+              <div style={{ padding:28, textAlign:"center", color:C.muted, border:`1px dashed ${C.border}`, borderRadius:12 }}>No assets have been assigned to you yet.</div>
+            )}
           </div>
         )}
 
@@ -2114,7 +2329,7 @@ function HRAdminPortal({ user, onLogout }) {
   return (
     <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="HR Administration" renderPage={p=>{
       if (p==="dashboard") return <HRDashboard/>;
-      if (p==="staff")     return <StaffDirectory/>;
+      if (p==="staff")     return <StaffDirectory authRole="hr"/>;
       if (p==="presence")  return <Presence/>;
       if (p==="perf")      return <Performance/>;
       if (p==="goals")     return <Goals/>;
@@ -2150,7 +2365,7 @@ function ManagerPortal({ user, onLogout }) {
 
   return (
     <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="Management Hub" renderPage={p=>{
-      if (p==="team")      return <StaffDirectory/>;
+      if (p==="team")      return <StaffDirectory authRole="manager"/>;
       if (p==="presence")  return <Presence/>;
       if (p==="perf")      return <Performance/>;
       if (p==="goals")     return <Goals/>;
