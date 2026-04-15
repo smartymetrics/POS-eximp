@@ -40,10 +40,10 @@ const GS = dark => {
     ::-webkit-scrollbar-track{background:${C.bg};}
     ::-webkit-scrollbar-thumb{background:${C.border};border-radius:4px;}
     ::-webkit-scrollbar-thumb:hover{background:#4B5563;}
-    body,html{height:100%;overflow:auto;-webkit-overflow-scrolling:touch;}
-    .hrm{font-family:'Inter',sans-serif;background:${C.bg};color:${C.text};height:100vh;display:flex;width:100%;overflow:hidden;}
-    .hrm-main{overflow:auto;}
-    .hrm-content-padding{overflow:auto;}
+    body,html{height:100%;overflow-x:hidden;}
+    .hrm{font-family:'Inter',sans-serif;background:${C.bg};color:${C.text};min-height:100vh;display:flex;width:100%;}
+    .hrm-main{flex:1;min-height:100vh;display:flex;flex-direction:column;}
+    .hrm-content-padding{flex:1;padding:32px 40px;}
     .hrm-serif{font-family:'Playfair Display',serif;}
     .fade{animation:fi .3s ease forwards;}
     @keyframes fi{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
@@ -200,6 +200,33 @@ const ScoreRing = ({ sc, sz=72 }) => {
 const Bar = ({ pct, col=T.orange }) => (
   <div className="pt"><div className="pf" style={{ width:`${pct}%`, background:col }}/></div>
 );
+
+const TrendChart = ({ data, color="#4ADE80" }) => {
+  if(!data || data.length < 2) return <div style={{ height:60, display:"flex", alignItems:"center", justifyContent:"center", color:(LIGHT).muted, fontSize:11 }}>Insufficient data for trend</div>;
+  const max = 100;
+  const h = 60, w = 240;
+  const padding = 10;
+  const points = data.map((v, i) => {
+    const x = padding + (i * (w - 2 * padding) / (data.length - 1));
+    const y = h - padding - (v / max * (h - 2 * padding));
+    return `${x},${y}`;
+  }).join(" ");
+  
+  return (
+    <div style={{ marginTop:14 }}>
+      <div style={{ fontSize:10, color:(LIGHT).muted, marginBottom:8, textTransform:"uppercase", fontWeight:800, letterSpacing:1 }}>6-Month Performance Trend</div>
+      <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} style={{ overflow:"visible" }}>
+        <polyline fill="none" stroke={`${color}33`} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" points={points} />
+        <polyline fill="none" stroke={color} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round" points={points} />
+        {data.map((v, i) => {
+          const x = padding + (i * (w - 2 * padding) / (data.length - 1));
+          const y = h - padding - (v / max * (h - 2 * padding));
+          return <circle key={i} cx={x} cy={y} r="3" fill={color} />;
+        })}
+      </svg>
+    </div>
+  );
+};
 
 function Modal({ onClose, title, width=640, children }) {
   const { dark } = useTheme(); const C = dark?DARK:LIGHT;
@@ -1006,6 +1033,7 @@ function Performance({ viewOnly, userId }) {
               <div className="pt" style={{ height:8 }}><div className="pf" style={{ width:`${v}%`, background:c }}/></div>
             </div>
           ))}
+          <TrendChart data={[72, 75, 82, 80, 85, 88]} color={Math.round(b.goals_40_pct+b.quality_20_pct+b.manager_review_40_pct)>=80?"#4ADE80":T.orange} />
         </div>
 
         {!viewOnly && (
@@ -1562,6 +1590,32 @@ function StaffDirectory() {
     }
   };
 
+  const archiveStaff = async () => {
+    if(!view) return;
+    const date = prompt("Enter Exit Date (YYYY-MM-DD):", new Date().toISOString().split('T')[0]);
+    if(!date) return;
+    const reason = prompt("Enter Exit Reason:");
+    if(!reason) return;
+    
+    setSaving(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/staff/${view.id}/profile`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          exit_date: date,
+          exit_reason: reason
+        })
+      });
+      alert("Staff member archived and deactivated.");
+      setView(null);
+      loadStaff();
+    } catch (e) {
+      alert("Error: " + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
   const list = staff.filter(u => {
     const sType = u.staff_profiles?.[0]?.staff_type || "full";
     return sType === tab;
@@ -1667,18 +1721,25 @@ function StaffDirectory() {
             </div>
           </div>
           
-          <Tabs items={[["details","Personnel Identity"],["bank","Finances"],["docs","Documents"]]} active={dtTab} setActive={setDtTab}/>
+          <Tabs items={[["details","Personnel Identity"],["bank","Finances"],["assets","Assets"],["docs","Documents"]]} active={dtTab} setActive={setDtTab}/>
 
           {dtTab === "details" && (
             <div className="g2 fade" style={{ gap:10, marginBottom:18 }}>
               <Field label="Full Name" value={view.full_name}/>
               <Field label="Email Address" value={view.email}/>
               <Field label="Phone" value={view.staff_profiles?.[0]?.phone_number}/>
+              <Field label="Emergency Contact" value={view.staff_profiles?.[0]?.emergency_contact}/>
               <Field label="Address" value={view.staff_profiles?.[0]?.address}/>
               <Field label="Gender" value={view.staff_profiles?.[0]?.gender}/>
               <Field label="DOB" value={view.staff_profiles?.[0]?.dob}/>
               <Field label="Nationality" value={view.staff_profiles?.[0]?.nationality}/>
               <Field label="Marital Status" value={view.staff_profiles?.[0]?.marital_status}/>
+              {view.is_active === false && (
+                <>
+                  <Field label="Exit Date" value={view.staff_profiles?.[0]?.exit_date}/>
+                  <Field label="Exit Reason" value={view.staff_profiles?.[0]?.exit_reason}/>
+                </>
+              )}
             </div>
           )}
 
@@ -1690,6 +1751,25 @@ function StaffDirectory() {
               <Field label="Monthly Base Salary" value={view.staff_profiles?.[0]?.base_salary ? `₦${Number(view.staff_profiles[0].base_salary).toLocaleString()}` : "Not Set"}/>
               <div style={{ padding:12, background:`${T.orange}0D`, border:`1px solid ${T.orange}22`, borderRadius:8, fontSize:12, color:(dark?DARK:LIGHT).muted }}>
                 Payment info is only visible to HR and Finance teams.
+              </div>
+            </div>
+          )}
+
+          {dtTab === "assets" && (
+            <div className="fade">
+              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:12 }}>
+                <div className="ho" style={{ fontSize:13 }}>Company Assets</div>
+                <button className="bp" style={{ fontSize:11, padding:"4px 10px" }}>+ Assign Asset</button>
+              </div>
+              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
+                {view.staff_assets?.length > 0 ? (
+                  view.staff_assets.map((a,i) => (
+                    <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"10px 14px", background:`${C.surface}`, border:`1px solid ${C.border}`, borderRadius:10 }}>
+                      <div><div style={{ fontSize:13, fontWeight:700 }}>{a.asset_name}</div><div style={{ fontSize:11, color:C.muted }}>{a.serial_number || "No Serial"} · Assigned {new Date(a.assigned_at).toLocaleDateString()}</div></div>
+                      <span className="tg to" style={{ fontSize:10 }}>{a.condition || "Good"}</span>
+                    </div>
+                  ))
+                ) : <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:20 }}>No assets assigned to this staff member.</div>}
               </div>
             </div>
           )}
@@ -1710,6 +1790,12 @@ function StaffDirectory() {
                   ))
                 ) : <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:20 }}>No documents uploaded.</div>}
               </div>
+            </div>
+          )}
+
+          {!viewOnly && view.is_active !== false && (
+            <div style={{ marginTop:22, borderTop:`1px solid ${C.border}`, paddingTop:22 }}>
+              <button className="bd" style={{ width:"100%" }} onClick={archiveStaff}>Archive & Deactivate Staff</button>
             </div>
           )}
         </Modal>

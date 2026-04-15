@@ -49,6 +49,15 @@ class StaffProfileUpdate(BaseModel):
     account_name: Optional[str] = None
     cv_url: Optional[str] = None
     base_salary: Optional[float] = None
+    exit_date: Optional[date] = None
+    exit_reason: Optional[str] = None
+
+class StaffAssetCreate(BaseModel):
+    staff_id: str
+    asset_name: str
+    serial_number: Optional[str] = None
+    condition: str = "Good"
+    assigned_at: date = date.today()
 
 class StaffQualificationCreate(BaseModel):
     staff_id: str
@@ -143,7 +152,7 @@ async def get_staff_profile(staff_id: str, current_admin: dict = Depends(verify_
         raise HTTPException(status_code=403, detail="Permission denied")
 
     # Fetch profile data
-    profile = await db_execute(lambda: db.table("admins").select("*, staff_profiles(*), staff_documents(*), staff_qualifications(*)").eq("id", staff_id).execute())
+    profile = await db_execute(lambda: db.table("admins").select("*, staff_profiles(*), staff_documents(*), staff_qualifications(*), staff_assets(*)").eq("id", staff_id).execute())
     
     return profile.data[0] if profile.data else None
 
@@ -161,6 +170,7 @@ async def update_staff_profile(staff_id: str, update: StaffProfileUpdate, curren
     if update.department: admin_updates["department"] = update.department
     if update.line_manager_id: admin_updates["line_manager_id"] = update.line_manager_id
     if update.job_title: admin_updates["job_title"] = update.job_title
+    if update.exit_date is not None: admin_updates["is_active"] = False # Auto-deactivate if exit date set
     
     if admin_updates:
         await db_execute(lambda: db.table("admins").update(admin_updates).eq("id", staff_id).execute())
@@ -284,6 +294,24 @@ async def upload_staff_document(doc: StaffDocumentCreate, current_admin: dict = 
         "title": doc.title,
         "file_url": doc.file_url,
         "uploaded_by": current_admin["sub"]
+    }).execute())
+    
+    return res.data[0]
+
+@router.post("/assets", status_code=status.HTTP_201_CREATED)
+async def assign_staff_asset(asset: StaffAssetCreate, current_admin: dict = Depends(verify_token)):
+    """Assign a company asset to a staff member. HR only."""
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+         raise HTTPException(status_code=403, detail="HR only")
+         
+    db = get_db()
+    res = await db_execute(lambda: db.table("staff_assets").insert({
+        "staff_id": asset.staff_id,
+        "asset_name": asset.asset_name,
+        "serial_number": asset.serial_number,
+        "condition": asset.condition,
+        "assigned_at": asset.assigned_at.isoformat()
     }).execute())
     
     return res.data[0]
@@ -633,43 +661,17 @@ async def get_dashboard_stats(current_admin: dict = Depends(verify_token)):
     is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
     if not is_hr:
          raise HTTPException(status_code=403, detail="Not authorized for HR Dashboard")
-         
-    # To optimize this further, we could use an RPC, but doing it in python 
-    # using db_execute sequentially is still better than 4 separate HTTP 
-    # requests competing for connections and event loop time.
-    
-    # We could also use asyncio.gather but let's stick to the db_execute pattern for safety
     db = get_db()
-
-    import asyncio
-    
-    # Run the queries concurrently in background threads
-    loop = asyncio.get_event_loop()
-    
-    def q_staff():
-        return db.table("admins").select("id, full_name, email, role, primary_role, department, is_active").execute()
-        
-    def q_leaves():
-        return db.table("leave_requests").select("*, admins!leave_requests_staff_id_fkey(full_name, department)").execute()
-        
-    def q_tasks():
-        return db.table("staff_tasks").select("*, admins!staff_tasks_assigned_to_fkey(full_name)").execute()
-        
-    def q_incidents():
-        return db.table("disciplinary_records").select("*, admins!disciplinary_records_staff_id_fkey(full_name, department)").execute()
-
-    results = await asyncio.gather(
-        loop.run_in_executor(None, q_staff),
-        loop.run_in_executor(None, q_leaves),
-        loop.run_in_executor(None, q_tasks),
-        loop.run_in_executor(None, q_incidents)
-    )
+    staff = await db_execute(lambda: db.table("admins").select("id, full_name, email, role, primary_role, department, is_active").execute())
+    leaves = await db_execute(lambda: db.table("leave_requests").select("*, admins!leave_requests_staff_id_fkey(full_name, department)").execute())
+    tasks = await db_execute(lambda: db.table("staff_tasks").select("*, admins!staff_tasks_assigned_to_fkey(full_name)").execute())
+    incidents = await db_execute(lambda: db.table("disciplinary_records").select("*, admins!disciplinary_records_staff_id_fkey(full_name, department)").execute())
 
     return {
-        "staff": results[0].data,
-        "leaves": results[1].data,
-        "tasks": results[2].data,
-        "incidents": results[3].data
+        "staff": staff.data,
+        "leaves": leaves.data,
+        "tasks": tasks.data,
+        "incidents": incidents.data
     }
 
 """
