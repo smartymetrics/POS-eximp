@@ -672,3 +672,184 @@ async def get_dashboard_stats(current_admin: dict = Depends(verify_token)):
         "incidents": results[3].data
     }
 
+"""
+Paste this block into routers/hr.py
+
+Place the Pydantic models near the top with your other models.
+Place the two route handlers alongside your other attendance routes.
+
+Requires: pip install httpx  (already likely installed)
+"""
+
+# ── ADD TO MODELS SECTION ────────────────────────────────────────────────────
+
+from fastapi import Request  # add to existing fastapi import
+
+class AttendanceCheckIn(BaseModel):
+    """Payload sent by the browser when a staff member checks in."""
+    latitude:          Optional[float] = None
+    longitude:         Optional[float] = None
+    location_accuracy: Optional[float] = None   # metres
+    location_status:   str = "unavailable"       # granted | denied | unavailable
+    device_type:       Optional[str] = None      # resolved by frontend from UA
+
+class AttendanceCheckOut(BaseModel):
+    """Payload sent on check-out."""
+    latitude:          Optional[float] = None
+    longitude:         Optional[float] = None
+    location_status:   str = "unavailable"
+    device_type:       Optional[str] = None
+
+
+# ── HELPER ───────────────────────────────────────────────────────────────────
+
+def _get_real_ip(request: Request) -> str:
+    """
+    Render sits behind a proxy so the real IP is in X-Forwarded-For.
+    We take the first (leftmost) address which is the original client.
+    Falls back to request.client.host for local dev.
+    """
+    forwarded = request.headers.get("x-forwarded-for")
+    if forwarded:
+        return forwarded.split(",")[0].strip()
+    return request.client.host if request.client else "unknown"
+
+
+# ── ROUTES ───────────────────────────────────────────────────────────────────
+
+@router.post("/presence/checkin", status_code=status.HTTP_201_CREATED)
+async def check_in(
+    payload: AttendanceCheckIn,
+    request: Request,
+    current_admin: dict = Depends(verify_token)
+):
+    """
+    Staff member checks in for the day.
+    Records: timestamp, GPS coords (if granted), IP, device type, raw UA.
+    One check-in per staff per calendar day is enforced by the DB UNIQUE
+    constraint on (staff_id, date).
+    """
+    db        = get_db()
+    staff_id  = current_admin["sub"]
+    today     = date.today().isoformat()
+    now       = datetime.utcnow().isoformat()
+    ip        = _get_real_ip(request)
+    ua        = request.headers.get("user-agent", "")
+
+    # Reject if already checked in today
+    existing = await db_execute(
+        lambda: db.table("attendance_records")
+                  .select("id, check_in")
+                  .eq("staff_id", staff_id)
+                  .eq("date", today)
+                  .execute()
+    )
+    if existing.data:
+        raise HTTPException(
+            status_code=409,
+            detail="Already checked in for today."
+        )
+
+    record = {
+        "staff_id":          staff_id,
+        "date":              today,
+        "check_in":          now,
+        "status":            "Present",
+        # location
+        "latitude":          payload.latitude,
+        "longitude":         payload.longitude,
+        "location_accuracy": payload.location_accuracy,
+        "location_status":   payload.location_status,
+        # device fingerprint
+        "ip_address":        ip,
+        "device_type":       payload.device_type,
+        "user_agent":        ua,
+    }
+
+    res = await db_execute(
+        lambda: db.table("attendance_records").insert(record).execute()
+    )
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to record check-in.")
+
+    return {
+        "message":    "Checked in successfully.",
+        "check_in":   now,
+        "ip_address": ip,
+        "location":   {
+            "latitude":  payload.latitude,
+            "longitude": payload.longitude,
+            "status":    payload.location_status,
+        },
+    }
+
+
+@router.patch("/presence/checkout")
+async def check_out(
+    payload: AttendanceCheckOut,
+    request: Request,
+    current_admin: dict = Depends(verify_token)
+):
+    """
+    Staff member checks out for the day.
+    Updates the existing today record with check-out time + location.
+    """
+    db       = get_db()
+    staff_id = current_admin["sub"]
+    today    = date.today().isoformat()
+    now      = datetime.utcnow().isoformat()
+    ip       = _get_real_ip(request)
+    ua       = request.headers.get("user-agent", "")
+
+    # Must have checked in first
+    existing = await db_execute(
+        lambda: db.table("attendance_records")
+                  .select("id, check_in, check_out")
+                  .eq("staff_id", staff_id)
+                  .eq("date", today)
+                  .execute()
+    )
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="No check-in found for today.")
+
+    rec = existing.data[0]
+    if rec.get("check_out"):
+        raise HTTPException(status_code=409, detail="Already checked out for today.")
+
+    updates = {
+        "check_out":              now,
+        "check_out_latitude":     payload.latitude,
+        "check_out_longitude":    payload.longitude,
+        "check_out_ip_address":   ip,
+        "check_out_device_type":  payload.device_type,
+        "check_out_user_agent":   ua,
+        "updated_at":             now,
+    }
+
+    await db_execute(
+        lambda: db.table("attendance_records")
+                  .update(updates)
+                  .eq("id", rec["id"])
+                  .execute()
+    )
+
+    return {"message": "Checked out successfully.", "check_out": now}
+
+
+@router.get("/presence/suspicious", tags=["HR Management"])
+async def get_suspicious_attendance(current_admin: dict = Depends(verify_token)):
+    """
+    HR-only: Returns attendance records where two different staff
+    shared the same IP on the same day — buddy-punch candidates.
+    Reads from the suspicious_attendance view created in the migration.
+    """
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only.")
+
+    db  = get_db()
+    res = await db_execute(
+        lambda: db.table("suspicious_attendance").select("*").execute()
+    )
+    return res.data
+
