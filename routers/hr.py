@@ -363,7 +363,19 @@ async def run_payroll(current_admin: dict = Depends(verify_token)):
     month_start = date(now.year, now.month, 1).isoformat()
     month_end = date(now.year, now.month, 28).isoformat() # Simplified month end
     
+    # 2. Fetch existing payroll records for this month in one go
+    existing = await db_execute(lambda: db.table("payroll_records")
+                                .select("staff_id")
+                                .eq("period_start", month_start)
+                                .execute())
+    existing_staff_ids = {r["staff_id"] for r in existing.data} if existing.data else set()
+
+    payroll_inserts = []
+    
     for s in staff_list:
+        if s["id"] in existing_staff_ids:
+            continue
+
         p = s.get("staff_profiles", [{}])[0] if s.get("staff_profiles") else {}
         base = float(p.get("base_salary") or 0)
         
@@ -371,25 +383,21 @@ async def run_payroll(current_admin: dict = Depends(verify_token)):
         tax = base * 0.1
         net = base - tax
         
-        # Check if already generated for this month
-        check = await db_execute(lambda: db.table("payroll_records")
-                                 .select("id")
-                                 .eq("staff_id", s["id"])
-                                 .eq("period_start", month_start)
-                                 .execute())
-        
-        if not check.data:
-            await db_execute(lambda: db.table("payroll_records").insert({
-                "staff_id": s["id"],
-                "period_start": month_start,
-                "period_end": month_end,
-                "gross_pay": base,
-                "tax": tax,
-                "net_pay": net,
-                "status": "pending",
-                "processed_by": current_admin["sub"]
-            }).execute())
-            records_created += 1
+        payroll_inserts.append({
+            "staff_id": s["id"],
+            "period_start": month_start,
+            "period_end": month_end,
+            "gross_pay": base,
+            "tax": tax,
+            "net_pay": net,
+            "status": "pending",
+            "processed_by": current_admin["sub"]
+        })
+
+    # Bulk insert if there are records to create
+    if payroll_inserts:
+        await db_execute(lambda: db.table("payroll_records").insert(payroll_inserts).execute())
+        records_created = len(payroll_inserts)
             
     return {"message": f"Payroll generation complete. {records_created} records created.", "count": records_created}
 
@@ -421,17 +429,28 @@ class LeaveStatusUpdate(BaseModel):
 async def update_leave_status(leave_id: str, update: LeaveStatusUpdate, current_admin: dict = Depends(verify_token)):
     """Approve or reject a leave request (HR or Line Manager only)."""
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles and "line_manager" not in user_roles:
-         raise HTTPException(status_code=403, detail="Not authorized")
-         
+    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    
     db = get_db()
+    
+    # Check if authorized (simplified: HR or Manager)
+    if not is_hr:
+         # Check if manager
+         req_check = await db_execute(lambda: db.table("leave_requests").select("*, admins(line_manager_id)").eq("id", leave_id).execute())
+         if not req_check.data or req_check.data[0]["admins"]["line_manager_id"] != current_admin["sub"]:
+              raise HTTPException(status_code=403, detail="Not authorized to approve this leave")
+
+    status = update.status
+    if status not in ["approved", "rejected"]:
+        raise HTTPException(status_code=400, detail="Invalid status")
+
     res = await db_execute(lambda: db.table("leave_requests").update({
-        "status": update.status
+        "status": status
     }).eq("id", leave_id).execute())
     
     if not res.data:
         raise HTTPException(status_code=404, detail="Leave request not found or update failed")
-    return {"message": f"Leave {update.status} successfully"}
+    return {"message": f"Leave {status} successfully"}
 
 
 @router.post("/performance/review", status_code=status.HTTP_201_CREATED)
@@ -490,28 +509,6 @@ async def get_all_goals(staff_id: Optional[str] = None, current_admin: dict = De
     res = await db_execute(lambda: query.execute())
     return res.data
 
-@router.patch("/leave/{leave_id}/status")
-async def update_leave_status(leave_id: int, status_update: dict, current_admin: dict = Depends(verify_token)):
-    """HR or Managers approve/reject a leave request."""
-    user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
-    
-    db = get_db()
-    
-    # Check if authorized (simplified: HR or Manager)
-    if not is_hr:
-         # Check if manager
-         req_check = await db_execute(lambda: db.table("leave_requests").select("*, admins(line_manager_id)").eq("id", leave_id).execute())
-         if not req_check.data or req_check.data[0]["admins"]["line_manager_id"] != current_admin["sub"]:
-              raise HTTPException(status_code=403, detail="Not authorized to approve this leave")
-
-    status = status_update.get("status")
-    if status not in ["approved", "rejected"]:
-        raise HTTPException(status_code=400, detail="Invalid status")
-
-    await db_execute(lambda: db.table("leave_requests").update({"status": status}).eq("id", leave_id).execute())
-    return {"message": f"Leave {status}"}
-
 class TaskCreate(BaseModel):
     assigned_to: str
     title: str
@@ -560,32 +557,14 @@ class GoalCreate(BaseModel):
 @router.get("/goals")
 async def get_hr_goals(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
     """Fetch goals/KPIs for HR (all) or Staff (own)."""
-    db = get_db()
-    user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
-    
-    query = db.table("staff_kpis").select("*, admins!staff_kpis_staff_id_fkey(full_name, department)")
-    if staff_id:
-        query = query.eq("staff_id", staff_id)
-    elif not is_hr:
-        query = query.eq("staff_id", current_admin["sub"])
-        
-    res = await db_execute(lambda: query.execute())
-    return res.data
+    # This was a duplicate of get_all_goals, we just alias to keep it compiling if anything points here
+    return await get_all_goals(staff_id, current_admin)
 
 @router.post("/goals", status_code=status.HTTP_201_CREATED)
 async def create_hr_goal(goal: GoalCreate, current_admin: dict = Depends(verify_token)):
     """Set a KPI goal for a staff member. HR or Manager only."""
-    db = get_db()
-    res = await db_execute(lambda: db.table("staff_kpis").insert({
-        "staff_id": goal.staff_id,
-        "kpi_name": goal.kpi_name,
-        "target_value": goal.target_value,
-        "unit": goal.unit,
-        "weight": goal.weight,
-        "month": goal.month.isoformat()
-    }).execute())
-    return res.data[0]
+    # This was a duplicate of set_staff_goal
+    return await set_staff_goal(goal, current_admin)
 
 class IncidentCreate(BaseModel):
     staff_id: str
@@ -645,4 +624,51 @@ async def get_payslips(staff_id: Optional[str] = None, current_admin: dict = Dep
         
     res = await db_execute(lambda: query.execute())
     return res.data
+
+@router.get("/dashboard/stats")
+async def get_dashboard_stats(current_admin: dict = Depends(verify_token)):
+    """Fetch all necessary data for the HR dashboard in a single optimized call."""
+    # This prevents the frontend from firing 4 overlapping queries 
+    user_roles = current_admin.get("role", "").split(",")
+    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    if not is_hr:
+         raise HTTPException(status_code=403, detail="Not authorized for HR Dashboard")
+         
+    # To optimize this further, we could use an RPC, but doing it in python 
+    # using db_execute sequentially is still better than 4 separate HTTP 
+    # requests competing for connections and event loop time.
+    
+    # We could also use asyncio.gather but let's stick to the db_execute pattern for safety
+    db = get_db()
+
+    import asyncio
+    
+    # Run the queries concurrently in background threads
+    loop = asyncio.get_event_loop()
+    
+    def q_staff():
+        return db.table("admins").select("id, full_name, email, role, primary_role, department, is_active").execute()
+        
+    def q_leaves():
+        return db.table("leave_requests").select("*, admins!leave_requests_staff_id_fkey(full_name, department)").execute()
+        
+    def q_tasks():
+        return db.table("staff_tasks").select("*, admins!staff_tasks_assigned_to_fkey(full_name)").execute()
+        
+    def q_incidents():
+        return db.table("disciplinary_records").select("*, admins!disciplinary_records_staff_id_fkey(full_name, department)").execute()
+
+    results = await asyncio.gather(
+        loop.run_in_executor(None, q_staff),
+        loop.run_in_executor(None, q_leaves),
+        loop.run_in_executor(None, q_tasks),
+        loop.run_in_executor(None, q_incidents)
+    )
+
+    return {
+        "staff": results[0].data,
+        "leaves": results[1].data,
+        "tasks": results[2].data,
+        "incidents": results[3].data
+    }
 

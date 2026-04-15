@@ -1,0 +1,564 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>HR Management System Manual | Eximp & Cloves</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    <style>
+        body { font-family: 'Inter', sans-serif; background-color: #0F1115; color: #E5E7EB; min-height: 100vh; }
+        .font-serif { font-family: 'Playfair Display', serif; }
+        .brand-gold { color: #C47D0A; }
+        .bg-brand-gold { background-color: #C47D0A; }
+
+        .sidebar {
+            width: 260px; height: 100vh; position: fixed; left: 0; top: 0; z-index: 50;
+            background-color: #111317; border-right: 1px solid rgba(255,255,255,0.05);
+            overflow-y: auto; scrollbar-width: thin; scrollbar-color: rgba(196,125,10,0.3) transparent;
+        }
+        .main-content { margin-left: 260px; padding: 32px 40px; max-width: 1000px; }
+
+        .card {
+            background: #1E2128; border: 1px solid #2D2F36; border-radius: 12px;
+            padding: 24px; transition: all 0.3s ease; margin-bottom: 20px;
+        }
+        .card:hover { border-color: #C47D0A33; }
+
+        .nav-link {
+            display: flex; align-items: center; padding: 12px 16px; border-radius: 10px;
+            color: #9CA3AF; transition: all 0.25s; cursor: pointer; margin-bottom: 4px;
+            border-left: 3px solid transparent; font-size: 14px; font-weight: 500; text-decoration: none;
+        }
+        .nav-link:hover { background: rgba(255,255,255,0.03); color: #E5E7EB; }
+        .nav-link.active { background: rgba(196,125,10,0.08); color: #C47D0A; border-left-color: #C47D0A; font-weight: 600; }
+        .nav-link svg { margin-right: 14px; width: 20px; height: 20px; opacity: 0.7; }
+        .nav-link.active svg { opacity: 1; }
+
+        .step-num {
+            display: inline-flex; align-items: center; justify-content: center;
+            width: 28px; height: 28px; border-radius: 50%; background: #C47D0A22;
+            color: #C47D0A; font-size: 13px; font-weight: 800; flex-shrink: 0; margin-right: 12px;
+        }
+        .step-row { display: flex; align-items: flex-start; margin-bottom: 16px; }
+        .step-text { font-size: 14px; line-height: 1.7; color: #D1D5DB; }
+        .step-text strong { color: #C47D0A; font-weight: 700; }
+
+        .role-badge {
+            display: inline-block; padding: 4px 14px; border-radius: 999px;
+            font-size: 11px; font-weight: 700; text-transform: uppercase; letter-spacing: 0.08em;
+        }
+        .role-hr { background: #C47D0A22; color: #C47D0A; }
+        .role-mgr { background: #60A5FA22; color: #60A5FA; }
+        .role-staff { background: #4ADE8022; color: #4ADE80; }
+
+        .kbd {
+            display: inline-block; padding: 2px 8px; background: #2D2F36; border: 1px solid #4B5563;
+            border-radius: 4px; font-size: 12px; font-family: monospace; color: #E5E7EB;
+        }
+        table.ref { width: 100%; border-collapse: collapse; margin: 16px 0; }
+        table.ref th {
+            text-align: left; padding: 12px 16px; font-size: 10px; color: #9CA3AF;
+            text-transform: uppercase; letter-spacing: 0.08em; border-bottom: 1px solid #2D2F36;
+            font-weight: 800; background: #1A1C20;
+        }
+        table.ref td { padding: 12px 16px; font-size: 13px; border-bottom: 1px solid #2D2F3644; }
+
+        .tip {
+            background: #C47D0A0D; border: 1px solid #C47D0A22; border-radius: 10px;
+            padding: 14px 18px; margin: 16px 0; font-size: 13px; color: #D1D5DB;
+        }
+        .tip::before { content: "💡 Tip: "; font-weight: 700; color: #C47D0A; }
+        .warn {
+            background: #F8717122; border: 1px solid #F8717133; border-radius: 10px;
+            padding: 14px 18px; margin: 16px 0; font-size: 13px; color: #FCA5A5;
+        }
+        .warn::before { content: "⚠️ Important: "; font-weight: 700; }
+
+        h2 { font-family: 'Playfair Display', serif; font-size: 28px; color: #E5E7EB; margin-bottom: 8px; }
+        h3 { font-size: 18px; color: #C47D0A; font-weight: 700; margin: 28px 0 12px; letter-spacing: 0.3px; }
+        h4 { font-size: 14px; color: #E5E7EB; font-weight: 700; margin: 20px 0 8px; text-transform: uppercase; letter-spacing: 0.06em; }
+        p { font-size: 14px; line-height: 1.7; color: #D1D5DB; margin-bottom: 12px; }
+        ul { padding-left: 20px; margin-bottom: 12px; }
+        li { font-size: 14px; line-height: 1.7; color: #D1D5DB; margin-bottom: 6px; }
+
+        ::-webkit-scrollbar { width: 6px; }
+        ::-webkit-scrollbar-track { background: #0F1115; }
+        ::-webkit-scrollbar-thumb { background: #2D2F36; border-radius: 4px; }
+
+        .hidden { display: none !important; }
+
+        /* Mobile */
+        .mobile-nav-overlay { display:none; position:fixed; inset:0; background:rgba(0,0,0,.55); backdrop-filter:blur(3px); z-index:130; }
+        .mobile-nav-overlay.open { display:block; }
+        .mobile-nav-drawer {
+            display:none; position:fixed; top:0; left:0; width:min(300px,88vw); height:100vh;
+            background:#121317; border-right:1px solid #2D2F36; z-index:140;
+            transform:translateX(-110%); transition:transform .28s cubic-bezier(.4,0,.2,1);
+            padding:28px 20px; overflow-y:auto; box-shadow:24px 0 60px rgba(0,0,0,.5);
+        }
+        .mobile-nav-drawer.open { transform:translateX(0); }
+        .mobile-top-bar { display:none; }
+        .mobile-nav-button { display:none; }
+
+        @media (max-width:1024px) {
+            .sidebar { display:none; }
+            .main-content { margin-left:0; padding:80px 20px 40px; width:100%; max-width:none; }
+            .mobile-nav-drawer { display:block; }
+            .mobile-nav-drawer.open { transform:translateX(0); }
+            .mobile-top-bar {
+                display:flex; position:fixed; top:0; left:0; right:0; height:64px;
+                background:#111317; border-bottom:1px solid rgba(255,255,255,0.05);
+                z-index:120; padding:0 20px; align-items:center; justify-content:space-between;
+                box-shadow:0 4px 20px rgba(0,0,0,.3);
+            }
+            .mobile-nav-button {
+                display:inline-flex; align-items:center; justify-content:center;
+                width:44px; height:44px; border-radius:14px; background:rgba(255,255,255,0.04);
+                border:1px solid rgba(255,255,255,0.08); color:#E5E7EB; cursor:pointer;
+            }
+        }
+    </style>
+</head>
+<body>
+
+    <!-- Mobile Nav -->
+    <div id="mobileNavOverlay" class="mobile-nav-overlay" onclick="closeMobileNav()"></div>
+    <header class="mobile-top-bar">
+        <h2 class="font-serif text-lg brand-gold" style="font-size:17px;">HR Manual</h2>
+        <button onclick="openMobileNav()" class="mobile-nav-button" aria-label="Open navigation">
+            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24" stroke="currentColor"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16"/></svg>
+        </button>
+    </header>
+    <div id="mobileNavDrawer" class="mobile-nav-drawer">
+        <div class="flex items-center justify-between mb-8">
+            <div>
+                <h2 class="font-serif text-xl brand-gold">HR Manual</h2>
+                <p class="text-xs text-gray-500 uppercase tracking-[0.25em]">Navigation</p>
+            </div>
+            <button onclick="closeMobileNav()" class="mobile-nav-button" aria-label="Close navigation">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-5 w-5" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M4.293 4.293a1 1 0 011.414 0L10 8.586l4.293-4.293a1 1 0 111.414 1.414L11.414 10l4.293 4.293a1 1 0 01-1.414 1.414L10 11.414l-4.293 4.293a1 1 0 01-1.414-1.414L8.586 10 4.293 5.707a1 1 0 010-1.414z" clip-rule="evenodd"/></svg>
+            </button>
+        </div>
+        <nav id="mobileNavLinks" class="space-y-1"></nav>
+    </div>
+
+    <!-- Desktop Sidebar -->
+    <div class="sidebar flex flex-col justify-between">
+        <div class="p-8">
+            <div class="flex items-center gap-3 mb-10">
+                <img src="/static/img/logo.svg" alt="Eximp & Cloves" class="h-10 w-auto" onerror="this.src='https://via.placeholder.com/40x40?text=EC'">
+                <div class="leading-tight">
+                    <h1 class="font-serif text-xl brand-gold">HR Manual</h1>
+                </div>
+            </div>
+            <nav id="sidebarNav"></nav>
+        </div>
+        <div class="p-8">
+            <div class="bg-[#2D2F36]/30 rounded-2xl p-4 border border-[#2D2F36]">
+                <div class="text-xs text-gray-500 mb-2">Quick Links</div>
+                <a href="/hr" class="nav-link" style="padding:8px 12px;font-size:12px;">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6"/></svg>
+                    Open HR Portal
+                </a>
+                <a href="/dashboard" class="nav-link" style="padding:8px 12px;font-size:12px;">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z"/></svg>
+                    Finance Dashboard
+                </a>
+            </div>
+        </div>
+    </div>
+
+    <!-- Main Content -->
+    <div class="main-content">
+
+        <!-- SECTION: Overview -->
+        <section id="sec-overview">
+            <h2>HR Management System — User Manual</h2>
+            <p style="color:#9CA3AF;margin-bottom:24px;">Eximp & Cloves Infrastructure Limited · April 2026</p>
+
+            <div class="card">
+                <h3 style="margin-top:0;">What is the HR Portal?</h3>
+                <p>The HR Management Portal is a centralised platform for managing staff records, tracking performance, processing payroll, managing tasks, and handling disciplinary actions — all within the existing Eximp & Cloves ERP system.</p>
+                <p>The portal operates with <strong>three distinct interfaces</strong> based on your role:</p>
+                <div style="display:flex;gap:12px;flex-wrap:wrap;margin:16px 0;">
+                    <span class="role-badge role-hr">HR Administration</span>
+                    <span class="role-badge role-mgr">Line Manager</span>
+                    <span class="role-badge role-staff">Staff Member</span>
+                </div>
+                <p>Each role sees a different set of navigation items and data. This manual covers all three.</p>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-top:0;">How to Access</h3>
+                <div class="step-row"><span class="step-num">1</span><div class="step-text">Navigate to <strong>app.eximps-cloves.com/hr</strong> in your browser.</div></div>
+                <div class="step-row"><span class="step-num">2</span><div class="step-text">If you are not logged in, you will be redirected to the <strong>Login</strong> page. Use your Eximp & Cloves email and password.</div></div>
+                <div class="step-row"><span class="step-num">3</span><div class="step-text">The system detects your role automatically and shows you the correct dashboard.</div></div>
+                <div class="tip">You can also access the HR Portal from the <strong>Legal Dashboard</strong> sidebar → "👥 HR & Personnel Portal" link at the bottom.</div>
+            </div>
+        </section>
+
+        <!-- SECTION: HR Admin -->
+        <section id="sec-hr-admin">
+            <h2>HR Administration Guide</h2>
+            <p style="color:#9CA3AF;margin-bottom:20px;"><span class="role-badge role-hr">HR Admin</span> — Full system access</p>
+
+            <div class="card">
+                <h3 style="margin-top:0;">HR Overview Dashboard</h3>
+                <p>The first screen you see. It provides a live snapshot of your workforce:</p>
+                <table class="ref">
+                    <thead><tr><th>Card</th><th>What it shows</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>Total Workforce</strong></td><td>Count of all active staff members in the system</td></tr>
+                        <tr><td><strong>Pending Leaves</strong></td><td>Leave requests awaiting your approval</td></tr>
+                        <tr><td><strong>Open Tasks</strong></td><td>Tasks assigned across all teams that are not yet completed</td></tr>
+                        <tr><td><strong>Critical Flags</strong></td><td>Serious or Critical disciplinary incidents requiring urgent action</td></tr>
+                    </tbody>
+                </table>
+                <p>Below the stat cards, you'll see the <strong>Latest Active Staff</strong> table and <strong>Administrative Alerts</strong> panel.</p>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-top:0;">Staff Directory</h3>
+                <p>This is your central registry of all staff. You can:</p>
+
+                <h4>View Staff</h4>
+                <p>Staff are displayed as cards showing name, avatar, department, role, employment type, email, and active status. Click any card to open the <strong>Detail Modal</strong>.</p>
+
+                <h4>Add New Staff</h4>
+                <div class="step-row"><span class="step-num">1</span><div class="step-text">Click the <strong>"+ Add Staff"</strong> button in the top right.</div></div>
+                <div class="step-row"><span class="step-num">2</span><div class="step-text">Fill in the <strong>Full Name</strong>, <strong>Email Address</strong>, and <strong>Default Password</strong> (min 8 characters).</div></div>
+                <div class="step-row"><span class="step-num">3</span><div class="step-text">Select the <strong>Department</strong> and <strong>Role</strong>.</div></div>
+                <div class="step-row"><span class="step-num">4</span><div class="step-text">Click <strong>"Create Staff Member"</strong> to save.</div></div>
+                <div class="tip">The new staff member can immediately log in with the credentials you set. Remind them to change their password.</div>
+
+                <h4>Staff Detail Modal — Three Tabs</h4>
+                <table class="ref">
+                    <thead><tr><th>Tab</th><th>Contents</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>Personnel Identity</strong></td><td>Full name, email, phone, address, gender, DOB, nationality, marital status</td></tr>
+                        <tr><td><strong>Finances</strong></td><td>Bank name, account number, account name, monthly base salary</td></tr>
+                        <tr><td><strong>Documents</strong></td><td>Uploaded staff documents (CV, contracts, certifications) with view/download links</td></tr>
+                    </tbody>
+                </table>
+
+                <h4>Filter Staff</h4>
+                <p>Use the tabs at the top to filter by employment type: <strong>All</strong>, <strong>Full-Time</strong>, <strong>Contract</strong>, or <strong>On-Site</strong>.</p>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-top:0;">Presence & Attendance</h3>
+                <p>Track daily attendance and manage leave requests.</p>
+
+                <h4>Attendance Tab</h4>
+                <p>Shows stat cards for Present, On Leave, Late, and Absent counts. Below is the daily log table with clock-in/out times.</p>
+
+                <h4>Leave Calendar</h4>
+                <p>View all approved, pending, and rejected leave requests. Filter by staff member.</p>
+
+                <h4>Approve/Reject Leave</h4>
+                <div class="step-row"><span class="step-num">1</span><div class="step-text">Go to <strong>Presence</strong> → <strong>Leaves</strong> tab.</div></div>
+                <div class="step-row"><span class="step-num">2</span><div class="step-text">Find a leave request with <strong>"Pending"</strong> status.</div></div>
+                <div class="step-row"><span class="step-num">3</span><div class="step-text">Click <strong>"Approve"</strong> or <strong>"Reject"</strong> next to the request.</div></div>
+                <div class="warn">Once a leave request is approved or rejected, it cannot be changed back to pending.</div>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-top:0;">Performance Management</h3>
+                <p>View and manage staff performance scores. Each score is a composite of four weighted metrics.</p>
+
+                <h4>Performance Scoring Breakdown</h4>
+                <table class="ref">
+                    <thead><tr><th>Metric</th><th>Weight</th><th>Source</th></tr></thead>
+                    <tbody>
+                        <tr><td>Goals Achieved</td><td><strong>40%</strong></td><td>Automated — actual vs. target from staff goals</td></tr>
+                        <tr><td>Work Quality</td><td><strong>20%</strong></td><td>Semi-automated — KYC, ticket resolution</td></tr>
+                        <tr><td>Teamwork & Communication</td><td><strong>20%</strong></td><td>Manual — manager scores 1–5</td></tr>
+                        <tr><td>Initiative & Growth</td><td><strong>20%</strong></td><td>Manual — manager scores 1–5</td></tr>
+                    </tbody>
+                </table>
+
+                <h4>Review a Staff Member</h4>
+                <div class="step-row"><span class="step-num">1</span><div class="step-text">Go to <strong>Performance</strong> tab. Click on a staff member's card.</div></div>
+                <div class="step-row"><span class="step-num">2</span><div class="step-text">View their score ring, breakdown bars (KPI Goals, Work Quality), and trend data.</div></div>
+                <div class="step-row"><span class="step-num">3</span><div class="step-text">Click <strong>"Submit Review"</strong> to enter qualitative scores (teamwork, leadership, attitude).</div></div>
+
+                <h4>Performance Ratings</h4>
+                <table class="ref">
+                    <thead><tr><th>Score Range</th><th>Rating</th><th>Colour</th></tr></thead>
+                    <tbody>
+                        <tr><td>80–100</td><td>Elite</td><td style="color:#4ADE80;">Green</td></tr>
+                        <tr><td>60–79</td><td>Stable</td><td style="color:#C47D0A;">Gold</td></tr>
+                        <tr><td>Below 60</td><td>Needs PIP</td><td style="color:#F87171;">Red</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-top:0;">Goal Management</h3>
+                <p>Set monthly targets for each staff member. Goals are role-specific.</p>
+
+                <h4>Create a New Goal</h4>
+                <div class="step-row"><span class="step-num">1</span><div class="step-text">Navigate to <strong>Goal Management</strong>.</div></div>
+                <div class="step-row"><span class="step-num">2</span><div class="step-text">Click <strong>"+ Set New Goal"</strong>.</div></div>
+                <div class="step-row"><span class="step-num">3</span><div class="step-text">Select the <strong>Staff Member</strong>, enter the <strong>KPI Name</strong> (e.g., "Deals Closed"), <strong>Target Value</strong>, <strong>Unit</strong>, <strong>Period</strong>, and <strong>Weight</strong>.</div></div>
+                <div class="step-row"><span class="step-num">4</span><div class="step-text">Click <strong>"Create Goal"</strong> to save.</div></div>
+                <div class="tip">Goals feed directly into the 40% "Goals Achieved" component of the performance score. Make sure targets are fair and documented.</div>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-top:0;">Payroll</h3>
+                <p>Process monthly payroll for all active staff or create individual manual payslips.</p>
+
+                <h4>Run Monthly Payroll</h4>
+                <div class="step-row"><span class="step-num">1</span><div class="step-text">Go to <strong>Payroll</strong> tab.</div></div>
+                <div class="step-row"><span class="step-num">2</span><div class="step-text">Click <strong>"Run Payroll"</strong>. The system will batch-process all active staff with a base salary set in their profile.</div></div>
+                <div class="step-row"><span class="step-num">3</span><div class="step-text">The payroll table will update with gross, tax, and net amounts for each employee.</div></div>
+                <div class="warn">Ensure all staff profiles have their base salary set under the Finances tab before running payroll.</div>
+
+                <h4>Manual Payslip</h4>
+                <div class="step-row"><span class="step-num">1</span><div class="step-text">Click <strong>"+ Manual Payslip"</strong> to create an ad-hoc payslip for bonuses, arrears, or adjustments.</div></div>
+                <div class="step-row"><span class="step-num">2</span><div class="step-text">Select the staff member, enter gross and tax amounts, add notes, and submit.</div></div>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-top:0;">Task Manager</h3>
+                <p>Assign and track tasks across the organisation.</p>
+                <h4>Create a Task</h4>
+                <div class="step-row"><span class="step-num">1</span><div class="step-text">Click <strong>"+ New Task"</strong>.</div></div>
+                <div class="step-row"><span class="step-num">2</span><div class="step-text">Enter the <strong>Title</strong>, <strong>Description</strong>, assign to a <strong>Staff Member</strong>, set <strong>Due Date</strong> and <strong>Priority</strong> (High/Medium/Low).</div></div>
+                <div class="step-row"><span class="step-num">3</span><div class="step-text">Submit. The task appears on both the HR dashboard and the assigned staff member's task list.</div></div>
+
+                <h4>Task Statuses</h4>
+                <table class="ref">
+                    <thead><tr><th>Status</th><th>Meaning</th></tr></thead>
+                    <tbody>
+                        <tr><td style="color:#C47D0A;">Pending</td><td>Task has been assigned but not started</td></tr>
+                        <tr><td style="color:#60A5FA;">In Progress</td><td>Staff member is actively working on it</td></tr>
+                        <tr><td style="color:#4ADE80;">Completed</td><td>Task is finished and verified</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-top:0;">Mismanagement & Disciplinary Flags</h3>
+                <p>Record and track disciplinary incidents with formal severity grading.</p>
+
+                <h4>Create a Flag</h4>
+                <div class="step-row"><span class="step-num">1</span><div class="step-text">Go to <strong>Mismanagement</strong> tab → click <strong>"+ New Flag"</strong>.</div></div>
+                <div class="step-row"><span class="step-num">2</span><div class="step-text">Select the <strong>Staff Member</strong>, choose a <strong>Severity</strong> level, and enter a detailed description.</div></div>
+                <div class="step-row"><span class="step-num">3</span><div class="step-text">Submit. The flag is recorded with your name, timestamp, and severity grade.</div></div>
+
+                <h4>Severity Levels</h4>
+                <table class="ref">
+                    <thead><tr><th>Level</th><th>Grade</th><th>Example</th></tr></thead>
+                    <tbody>
+                        <tr><td style="color:#60A5FA;">Minor</td><td>D</td><td>Late to work, minor protocol breach</td></tr>
+                        <tr><td style="color:#FBB040;">Moderate</td><td>C</td><td>Repeated lateness, missed deadlines</td></tr>
+                        <tr><td style="color:#C47D0A;">Serious</td><td>B</td><td>Client misconduct, insubordination</td></tr>
+                        <tr><td style="color:#F87171;">Critical</td><td>A</td><td>Fraud, gross misconduct, theft</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- SECTION: Line Manager -->
+        <section id="sec-manager">
+            <h2>Line Manager Guide</h2>
+            <p style="color:#9CA3AF;margin-bottom:20px;"><span class="role-badge role-mgr">Line Manager</span> — Team-level access</p>
+
+            <div class="card">
+                <h3 style="margin-top:0;">Your Dashboard</h3>
+                <p>As a Line Manager, your dashboard is centred around your <strong>direct reports</strong>. You will see:</p>
+                <ul>
+                    <li><strong>Direct Reports</strong> count — staff assigned to you</li>
+                    <li><strong>Active Tasks</strong> — open tasks across your team</li>
+                    <li><strong>Avg Team Score</strong> — mean performance score of your reports</li>
+                </ul>
+                <p>Below, each team member is shown as a card with their name, job title, and avatar.</p>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-top:0;">What You Can Do</h3>
+                <table class="ref">
+                    <thead><tr><th>Action</th><th>Where to find it</th></tr></thead>
+                    <tbody>
+                        <tr><td>View your team's profiles</td><td>My Team tab</td></tr>
+                        <tr><td>Review your team's attendance</td><td>Presence tab</td></tr>
+                        <tr><td>Review your team's performance</td><td>Team Performance tab</td></tr>
+                        <tr><td>Set goals for your team</td><td>Team Goals tab</td></tr>
+                        <tr><td>Assign tasks to your team</td><td>Task Manager tab</td></tr>
+                        <tr><td>Log disciplinary incidents</td><td>Incidents tab</td></tr>
+                        <tr><td>View your own profile</td><td>My Profile tab</td></tr>
+                        <tr><td>View your own performance</td><td>My Performance tab</td></tr>
+                    </tbody>
+                </table>
+                <div class="tip">You cannot view staff outside your direct reports, or access payroll, system-wide HR metrics, or the full staff directory.</div>
+            </div>
+        </section>
+
+        <!-- SECTION: Staff -->
+        <section id="sec-staff">
+            <h2>Staff Member Guide</h2>
+            <p style="color:#9CA3AF;margin-bottom:20px;"><span class="role-badge role-staff">Staff Member</span> — Self-service access</p>
+
+            <div class="card">
+                <h3 style="margin-top:0;">Your Dashboard</h3>
+                <p>Welcome to your personal dashboard. Here you can see:</p>
+                <ul>
+                    <li><strong>My Score</strong> — your current composite performance score (0–100)</li>
+                    <li><strong>My Tasks</strong> — total tasks assigned to you</li>
+                    <li><strong>Pending</strong> — tasks you haven't completed yet</li>
+                    <li><strong>Leave Left</strong> — your remaining annual leave balance</li>
+                </ul>
+                <p>The dashboard also shows your <strong>Active Tasks</strong> and <strong>Performance Summary</strong> with a visual score ring.</p>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-top:0;">Navigation Tabs</h3>
+                <table class="ref">
+                    <thead><tr><th>Tab</th><th>What you can do</th></tr></thead>
+                    <tbody>
+                        <tr><td><strong>My Profile</strong></td><td>View your personal details (read-only): name, email, phone, address, bank details, documents</td></tr>
+                        <tr><td><strong>My Performance</strong></td><td>View your performance score and breakdown. Understand how your score is calculated.</td></tr>
+                        <tr><td><strong>My Goals</strong></td><td>View the KPI targets set for you this period and track your progress.</td></tr>
+                        <tr><td><strong>My Tasks</strong></td><td>View tasks assigned to you, update their status as you work on them.</td></tr>
+                        <tr><td><strong>My Presence</strong></td><td>View your attendance record and leave history.</td></tr>
+                        <tr><td><strong>My Payslip</strong></td><td>View your payslip history: gross pay, deductions, and net pay.</td></tr>
+                        <tr><td><strong>My Flags</strong></td><td>View any disciplinary flags on your record.</td></tr>
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-top:0;">Request Leave</h3>
+                <div class="step-row"><span class="step-num">1</span><div class="step-text">Go to <strong>My Presence</strong> → Click <strong>"Request Leave"</strong>.</div></div>
+                <div class="step-row"><span class="step-num">2</span><div class="step-text">Select the <strong>Leave Type</strong> (Annual, Sick, Study, Maternity, Paternity, Compassionate).</div></div>
+                <div class="step-row"><span class="step-num">3</span><div class="step-text">Set the <strong>From</strong> and <strong>To</strong> dates. The system calculates the number of days automatically.</div></div>
+                <div class="step-row"><span class="step-num">4</span><div class="step-text">Add an optional <strong>Reason</strong> and click <strong>"Submit Request"</strong>.</div></div>
+                <div class="tip">Your request will appear as "Pending" until HR approves it. You'll see the updated status on your Presence page.</div>
+            </div>
+
+            <div class="card">
+                <h3 style="margin-top:0;">Understanding Your Performance Score</h3>
+                <p>Your score is calculated from objective data wherever possible:</p>
+                <ul>
+                    <li><strong>40% Goals Achieved</strong> — How well you met your monthly KPI targets. These targets are set by HR or your line manager.</li>
+                    <li><strong>20% Work Quality</strong> — Measured from KYC completion rates, ticket resolution, and other quality signals.</li>
+                    <li><strong>20% Teamwork</strong> — Rated by your line manager on a 1–5 scale during review cycles.</li>
+                    <li><strong>20% Initiative</strong> — Rated by your line manager on a 1–5 scale during review cycles.</li>
+                </ul>
+                <div class="tip">If you believe your score doesn't reflect your work, speak to your line manager — they can adjust qualitative scores and add context during reviews.</div>
+            </div>
+        </section>
+
+        <!-- SECTION: Mobile -->
+        <section id="sec-mobile">
+            <h2>Using on Mobile</h2>
+
+            <div class="card">
+                <h3 style="margin-top:0;">Mobile Navigation</h3>
+                <p>On phones and tablets (screens under 1024px), the sidebar is replaced by a <strong>slide-in drawer</strong>:</p>
+                <div class="step-row"><span class="step-num">1</span><div class="step-text">Tap the <strong>"Menu"</strong> button in the top-right corner of the header bar.</div></div>
+                <div class="step-row"><span class="step-num">2</span><div class="step-text">The navigation drawer slides in from the left. Tap any tab to navigate.</div></div>
+                <div class="step-row"><span class="step-num">3</span><div class="step-text">Tap outside the drawer or use the ✕ button to close it.</div></div>
+                <p>All stat cards, tables, and forms automatically reflow to fit your screen. Tables can be scrolled horizontally if they're wider than the screen.</p>
+            </div>
+        </section>
+
+        <!-- SECTION: FAQ -->
+        <section id="sec-faq">
+            <h2>Frequently Asked Questions</h2>
+
+            <div class="card">
+                <h4 style="margin-top:0;">Q: I can't see the HR portal, only my own dashboard?</h4>
+                <p>Your role determines what you see. If you're a regular staff member, you'll only see your personal tabs. Contact HR if you believe your role should be different.</p>
+            </div>
+            <div class="card">
+                <h4 style="margin-top:0;">Q: My performance score seems low — how is it calculated?</h4>
+                <p>60% of your score comes from objective data (goals achieved + work quality). 40% comes from your manager's review. Go to "My Performance" to see the breakdown, and speak to your manager if you need clarification.</p>
+            </div>
+            <div class="card">
+                <h4 style="margin-top:0;">Q: How do I reset a staff member's password?</h4>
+                <p>Currently, password resets are managed from the main admin system. Contact the IT administrator or use the "Forgot Password" flow on the login page.</p>
+            </div>
+            <div class="card">
+                <h4 style="margin-top:0;">Q: Can I edit my own profile?</h4>
+                <p>Staff members can <strong>view</strong> their profile but cannot edit it directly. All profile changes must be made by HR administrators to maintain data integrity.</p>
+            </div>
+            <div class="card">
+                <h4 style="margin-top:0;">Q: What happens when a staff member leaves?</h4>
+                <p>HR sets the staff member's status to inactive. Their profile, performance history, and documents are retained for a minimum of 5 years for compliance purposes.</p>
+            </div>
+        </section>
+
+        <!-- Footer -->
+        <div style="text-align:center;padding:48px 0 24px;border-top:1px solid #2D2F36;margin-top:40px;">
+            <p style="font-size:12px;color:#4B5563;">© 2026 Eximp & Cloves Infrastructure Limited. All rights reserved.</p>
+            <p style="font-size:11px;color:#4B5563;margin-top:4px;">
+                HR Management System Manual v1.0 · For questions contact the Product & Technology Team
+            </p>
+            <p style="font-size:11px;color:#4B5563;margin-top:4px;">
+                <a href="http://app.eximps-cloves.com/subscribe" style="color:#C47D0A;text-decoration:none;">Sales Subscription</a>
+            </p>
+        </div>
+    </div>
+
+    <script>
+        // Navigation sections
+        const sections = [
+            { id: 'sec-overview', label: 'Overview & Access', icon: 'M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6' },
+            { id: 'sec-hr-admin', label: 'HR Admin Guide', icon: 'M12 4.354a4 4 0 110 5.292M15 21H3v-1a6 6 0 0112 0v1zm0 0h6v-1a6 6 0 00-9-5.197M13 7a4 4 0 11-8 0 4 4 0 018 0z' },
+            { id: 'sec-manager', label: 'Manager Guide', icon: 'M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z' },
+            { id: 'sec-staff', label: 'Staff Guide', icon: 'M16 7a4 4 0 11-8 0 4 4 0 018 0zM12 14a7 7 0 00-7 7h14a7 7 0 00-7-7z' },
+            { id: 'sec-mobile', label: 'Mobile Usage', icon: 'M12 18h.01M8 21h8a2 2 0 002-2V5a2 2 0 00-2-2H8a2 2 0 00-2 2v14a2 2 0 002 2z' },
+            { id: 'sec-faq', label: 'FAQ', icon: 'M8.228 9c.549-1.165 2.03-2 3.772-2 2.21 0 4 1.343 4 3 0 1.4-1.278 2.575-3.006 2.907-.542.104-.994.54-.994 1.093m0 3h.01M21 12a9 9 0 11-18 0 9 9 0 0118 0z' },
+        ];
+
+        function buildNav(container, isMobile) {
+            container.innerHTML = '';
+            sections.forEach((s, i) => {
+                const a = document.createElement('a');
+                a.href = '#' + s.id;
+                a.className = 'nav-link' + (i === 0 ? ' active' : '');
+                a.dataset.section = s.id;
+                a.innerHTML = `<svg fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="${s.icon}"/></svg>${s.label}`;
+                a.onclick = function(e) {
+                    e.preventDefault();
+                    document.getElementById(s.id)?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+                    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+                    document.querySelectorAll(`[data-section="${s.id}"]`).forEach(l => l.classList.add('active'));
+                    if (isMobile) closeMobileNav();
+                };
+                container.appendChild(a);
+            });
+        }
+
+        buildNav(document.getElementById('sidebarNav'), false);
+        buildNav(document.getElementById('mobileNavLinks'), true);
+
+        // Scroll spy
+        const observer = new IntersectionObserver(entries => {
+            entries.forEach(entry => {
+                if (entry.isIntersecting) {
+                    document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+                    document.querySelectorAll(`[data-section="${entry.target.id}"]`).forEach(l => l.classList.add('active'));
+                }
+            });
+        }, { rootMargin: '-20% 0px -60% 0px' });
+        sections.forEach(s => {
+            const el = document.getElementById(s.id);
+            if (el) observer.observe(el);
+        });
+
+        function openMobileNav() {
+            document.getElementById('mobileNavDrawer')?.classList.add('open');
+            document.getElementById('mobileNavOverlay')?.classList.add('open');
+        }
+        function closeMobileNav() {
+            document.getElementById('mobileNavDrawer')?.classList.remove('open');
+            document.getElementById('mobileNavOverlay')?.classList.remove('open');
+        }
+    </script>
+</body>
+</html>

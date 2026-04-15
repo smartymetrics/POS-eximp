@@ -40,8 +40,10 @@ const GS = dark => {
     ::-webkit-scrollbar-track{background:${C.bg};}
     ::-webkit-scrollbar-thumb{background:${C.border};border-radius:4px;}
     ::-webkit-scrollbar-thumb:hover{background:#4B5563;}
-    body,html{height:100%;}
-    .hrm{font-family:'Inter',sans-serif;background:${C.bg};color:${C.text};height:100vh;overflow:hidden;display:flex;width:100%;}
+    body,html{height:100%;overflow:auto;-webkit-overflow-scrolling:touch;}
+    .hrm{font-family:'Inter',sans-serif;background:${C.bg};color:${C.text};height:100vh;display:flex;width:100%;overflow:hidden;}
+    .hrm-main{overflow:auto;}
+    .hrm-content-padding{overflow:auto;}
     .hrm-serif{font-family:'Playfair Display',serif;}
     .fade{animation:fi .3s ease forwards;}
     @keyframes fi{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
@@ -59,8 +61,8 @@ const GS = dark => {
     .nb:hover svg,.nb.on svg{opacity:1;}
     
     /* Buttons */
-    .bp{background:linear-gradient(135deg, ${G} 0%, #A66A08 100%);color:#fff;border:none;padding:10px 24px;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;transition:all .2s ease;letter-spacing:.5px;box-shadow:0 4px 12px ${G}33;text-transform:uppercase;}
-    .bp:hover{filter:brightness(1.1);transform:translateY(-2px);box-shadow:0 6px 18px ${G}44;}
+    .bp{background:${G};color:#fff;border:none;padding:10px 24px;border-radius:10px;font-weight:700;font-size:13px;cursor:pointer;font-family:inherit;transition:all .2s ease;letter-spacing:.5px;box-shadow:none;text-transform:uppercase;}
+    .bp:hover{filter:brightness(1.1);transform:translateY(-2px);box-shadow:none;}
     .bp:active{transform:translateY(0);}
     .bp:disabled{opacity:.6;cursor:not-allowed;transform:none;box-shadow:none;}
     .bg{background:transparent;border:1px solid ${C.border};color:${C.sub};padding:9px 20px;border-radius:10px;font-size:13px;cursor:pointer;font-family:inherit;transition:all .2s;font-weight:600;}
@@ -69,13 +71,13 @@ const GS = dark => {
     .bd:hover{background:#EF444422;transform:translateY(-1px);}
     
     /* Inputs */
-    .inp{background:${C.input};border:1px solid ${C.border};color:${C.text};padding:11px 16px;border-radius:10px;font-size:14px;outline:none;font-family:inherit;width:100%;transition:border-color .2s;}
-    .inp:focus{border-color:${G};box-shadow:0 0 0 3px ${G}20;}
-    select.inp option{background:${C.card};}
-    textarea.inp{resize:vertical;min-height:80px;}
+    .inp{background:#121417;border:1px solid #FFFFFF14;color:${C.text};padding:12px 18px;border-radius:12px;font-size:14px;outline:none;font-family:inherit;width:100%;transition:all .2s ease;}
+    .inp:focus{border-color:${G};background:#15181C;box-shadow:0 0 0 4px ${G}14;}
+    select.inp option{background:#1A1C20;color:#FFF;}
+    textarea.inp{resize:vertical;min-height:90px;}
     
     /* Tags */
-    .tg{display:inline-flex;align-items:center;padding:4px 12px;border-radius:9999px;font-size:11px;font-weight:700;letter-spacing:.05em;text-transform:uppercase;}
+    .tg{display:inline-flex;align-items:center;padding:5px 14px;border-radius:9999px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;}
     .to{background:${G}1A;color:${G};}
     .tg2{background:#10B98120;color:#10B981;}
     .tr{background:#EF444420;color:#EF4444;}
@@ -89,14 +91,16 @@ const GS = dark => {
     
     /* Tables */
     .ht{width:100%;border-collapse:collapse;}
-    .ht th{padding:12px 16px;font-size:11px;color:${C.muted};text-align:left;text-transform:uppercase;letter-spacing:1.2px;border-bottom:1px solid ${C.border};font-weight:700;background:${dark?"#1A1C20":C.surface};}
-    .ht td{padding:13px 16px;font-size:13px;border-bottom:1px solid ${C.border}44;}
-    .ht tr:hover td{background:${C.border}28;}
+    .ht th{padding:14px 18px;font-size:10px;color:${C.muted};text-align:left;text-transform:uppercase;letter-spacing:.08em;border-bottom:1px solid ${C.border};font-weight:800;background:${dark?"#1A1C20":C.surface};}
+    .ht td{padding:14px 18px;font-size:13px;border-bottom:1px solid ${C.border}44;}
+    .ht tr:hover td{background:${C.border}1A;}
     
     /* Modals */
-    .mb{position:fixed;inset:0;background:#000000AA;backdrop-filter:blur(8px);z-index:1000;display:flex;flex-direction:column;align-items:center;padding:20px;overflow-y:auto;}
-    .mo{background:${C.card};border:1px solid ${C.border};box-shadow:0 30px 90px rgba(0,0,0,.7);border-radius:24px;max-width:600px;width:100%;margin:auto;display:flex;flex-direction:column;max-height:calc(100vh - 40px);position:relative;animation:m-in .35s cubic-bezier(.2,1,.2,1);overflow:hidden;}
-    @keyframes m-in{from{opacity:0;transform:scale(0.95) translateY(20px);}to{opacity:1;transform:scale(1) translateY(0);}}
+    .mb{position:fixed;inset:0;background:#06080AEE;backdrop-filter:blur(12px);z-index:1000;display:grid;place-items:center;padding:24px;overflow-y:auto;}
+    .mo{background:${C.card};border:1px solid #FFFFFF10;box-shadow:0 40px 100px rgba(0,0,0,.8);border-radius:28px;max-width:640px;width:100%;max-height:92vh;display:flex;flex-direction:column;position:relative;animation:m-in .4s cubic-bezier(.2,1,.2,1);overflow:hidden;}
+    @keyframes m-in{from{opacity:0;transform:scale(0.96) translateY(30px);}to{opacity:1;transform:scale(1) translateY(0);}}
+    .fade{animation:fi .4s ease-out;}
+    @keyframes fi{from{opacity:0;}to{opacity:1;}}
     
     /* Tabs */
     .tab-bar{display:flex;gap:4px;background:${C.surface};padding:4px;border-radius:10px;width:fit-content;border:1px solid ${C.border};margin-bottom:22px;flex-wrap:wrap;}
@@ -107,8 +111,22 @@ const GS = dark => {
     /* Fields */
     .field{background:${G}0E;border:1px solid ${G}22;border-radius:10px;padding:12px 16px;}
     .fl{font-size:10px;color:${C.muted};text-transform:uppercase;letter-spacing:1.2px;font-weight:700;margin-bottom:4px;}
-    .fv{font-size:13px;color:${G};font-weight:700;}
-    .lbl{font-size:12px;color:${C.sub};margin-bottom:8px;font-weight:600;display:block;}
+    /* Fields */
+    .field{background:${G}0D;border:1px solid ${G}1A;border-radius:12px;padding:14px 18px;}
+    .fl{font-size:10px;color:${C.muted};text-transform:uppercase;letter-spacing:.08em;font-weight:800;margin-bottom:4px;}
+    .fv{font-size:14px;color:${G};font-weight:700;}
+    .lbl{font-size:10px;color:${C.muted};margin-bottom:8px;font-weight:800;display:block;text-transform:uppercase;letter-spacing:.06em;}
+    
+    /* Responsive grid utilities */
+    .g4{display:grid;grid-template-columns:repeat(4,1fr);gap:14px;}
+    .g3{display:grid;grid-template-columns:repeat(3,1fr);gap:16px;}
+    .g2{display:grid;grid-template-columns:1fr 1fr;gap:14px;}
+    .g2w{display:grid;grid-template-columns:1.3fr 1fr;gap:16px;}
+    .g1{display:grid;grid-template-columns:1fr;gap:14px;}
+    
+    /* Table scroll wrapper */
+    .tw{overflow-x:auto;-webkit-overflow-scrolling:touch;}
+    .tw .ht{min-width:580px;}
     
     /* Mobile top bar - hidden on desktop */
     .hrm-topbar-mobile{display:none;}
@@ -126,11 +144,22 @@ const GS = dark => {
       .hrm-topbar-mobile{display:flex;position:fixed;top:0;left:0;right:0;height:64px;background:${C.surface};border-bottom:1px solid ${C.border};z-index:500;padding:0 20px;align-items:center;justify-content:space-between;box-shadow:0 4px 20px rgba(0,0,0,.3);}
       .hrm-drawer{display:block;}
       .hrm-content-padding{padding:20px 16px;overflow:visible !important;}
+      .g4{grid-template-columns:repeat(2,1fr);}
+      .g3{grid-template-columns:repeat(2,1fr);}
+      .g2w{grid-template-columns:1fr;}
+      .mo{max-width:96vw;border-radius:20px;}
     }
     @media(max-width:640px){
       .hrm-content-padding{padding:14px;}
       .tab{padding:7px 12px;font-size:12px;}
+      .tab-bar{width:100%;}
       .gc{padding:14px;}
+      .g4{grid-template-columns:repeat(2,1fr);gap:10px;}
+      .g3{grid-template-columns:1fr;gap:12px;}
+      .g2{grid-template-columns:1fr;gap:12px;}
+      .g2w{grid-template-columns:1fr;gap:12px;}
+      .mo{max-width:100vw;margin:8px;border-radius:16px;max-height:96vh;}
+      .field{padding:10px 14px;}
     }
   `;
 };
@@ -172,16 +201,19 @@ const Bar = ({ pct, col=T.orange }) => (
   <div className="pt"><div className="pf" style={{ width:`${pct}%`, background:col }}/></div>
 );
 
-function Modal({ onClose, title, width=560, children }) {
+function Modal({ onClose, title, width=640, children }) {
   const { dark } = useTheme(); const C = dark?DARK:LIGHT;
   return (
     <div className="mb" onClick={onClose}>
       <div className="mo fade" style={{ maxWidth:width }} onClick={e=>e.stopPropagation()}>
-        <div style={{ flexShrink:0, display:"flex", justifyContent:"space-between", alignItems:"center", padding:"28px 32px 12px 32px" }}>
-          <div className="ho" style={{ fontSize:19 }}>{title}</div>
-          <button onClick={onClose} style={{ background:"none", border:"none", color:C.sub, fontSize:22, cursor:"pointer", padding:4 }}>✕</button>
+        <div style={{ flexShrink:0, display:"flex", justifyContent:"space-between", alignItems:"center", padding:"34px 40px 14px 40px" }}>
+          <div>
+            <div style={{ fontSize:10, color:T.orange, fontWeight:800, textTransform:"uppercase", letterSpacing:".1em", marginBottom:4 }}>Management System</div>
+            <div className="ho" style={{ fontSize:22 }}>{title}</div>
+          </div>
+          <button onClick={onClose} style={{ background:"#FFFFFF0A", border:"1px solid #FFFFFF10", color:C.text, width:36, height:36, borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", transition:"all .2s" }}>✕</button>
         </div>
-        <div style={{ flex:1, overflowY:"auto", padding:"0 32px 32px 32px" }}>
+        <div style={{ flex:1, overflowY:"auto", padding:"0 40px 40px 40px", scrollbarWidth:"none" }}>
           {children}
         </div>
       </div>
@@ -235,10 +267,9 @@ function Sidebar({ page, setPage, user, onLogout, items, roleLabel, onMenuOpen }
     <div className="hrm-sidebar" style={{ width:260, background:dark?"#111317":"#FFFFFF", borderRight:`1px solid ${C.border}`, display:"flex", flexDirection:"column", flexShrink:0, height:"100vh", position:"relative", zIndex:50 }}>
       <div style={{ padding:"28px 24px 20px" }}>
         <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:36 }}>
-          <div style={{ width:38, height:38, background:`linear-gradient(135deg,${G},#8B5500)`, borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", fontSize:17, fontWeight:700, color:"#fff", flexShrink:0 }}>E</div>
+          <img src="/static/img/logo.svg" alt="Eximp & Cloves" style={{ height: 40, width: "auto" }} onError={(e) => { e.target.onerror = null; e.target.src = "https://via.placeholder.com/40x40?text=EC"; }} />
           <div style={{ lineHeight:1.2 }}>
             <div style={{ fontSize:16, fontWeight:700, color:G, fontFamily:"'Playfair Display',serif" }}>HR Suite</div>
-            <div style={{ fontSize:10, color:C.muted, letterSpacing:"1.8px", fontWeight:700, textTransform:"uppercase" }}>Eximp & Cloves</div>
           </div>
         </div>
         <div style={{ fontSize:9, color:C.muted, letterSpacing:"2px", padding:"0 4px 8px", fontWeight:700, textTransform:"uppercase" }}>{roleLabel}</div>
@@ -323,11 +354,11 @@ function GoalForm({ onSave, staffList=[] }) {
         </select>
         {!f.uid && <div style={{ fontSize:11, color:(dark?DARK:LIGHT).muted, marginTop:4 }}>Select a staff member first to see role-relevant KPIs.</div>}
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+      <div className="g2" style={{ gap:12 }}>
         <div><Lbl>Target Value *</Lbl><input className="inp" type="number" placeholder="e.g. 8" value={f.target} onChange={e=>setF(x=>({...x,target:e.target.value}))}/></div>
         <div><Lbl>Unit</Lbl><input className="inp" placeholder="e.g. deals, %, sites" value={f.unit} onChange={e=>setF(x=>({...x,unit:e.target.value}))}/></div>
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+      <div className="g2" style={{ gap:12 }}>
         <div>
           <Lbl>Period</Lbl>
           <select className="inp" value={f.period} onChange={e=>setF(x=>({...x,period:e.target.value}))}>
@@ -373,7 +404,7 @@ function LeaveForm({ onSave, currentUserId }) {
           {["Annual Leave","Sick Leave","Study Leave","Maternity Leave","Paternity Leave","Compassionate Leave"].map(t=><option key={t}>{t}</option>)}
         </select>
       </div>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+      <div className="g2" style={{ gap:12 }}>
         <div><Lbl>From *</Lbl><input className="inp" type="date" value={f.from} onChange={e=>setF(x=>({...x,from:e.target.value}))}/></div>
         <div><Lbl>To *</Lbl><input className="inp" type="date" value={f.to} onChange={e=>setF(x=>({...x,to:e.target.value}))}/></div>
       </div>
@@ -445,7 +476,7 @@ function Goals({ viewOnly, userId }) {
           <div style={{ fontSize:13, color:C.muted }}>No goals on record for this period.</div>
         </div>
       ) : (
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:14 }}>
+        <div className="g2">
           {goals.map((g, i) => {
             const u = g.admins || {};
             const pct = g.target_value > 0 ? Math.min(Math.round((g.actual_value / g.target_value) * 100), 100) : 0;
@@ -545,7 +576,7 @@ function Presence({ currentUserId }) {
       {sub==="attendance" && (
         <>
           {!currentUserId && (
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:22 }}>
+            <div className="g4" style={{ marginBottom:22 }}>
               <StatCard label="Present"  value="5" col="#4ADE80"/>
               <StatCard label="On Leave" value="1" col={T.orange}/>
               <StatCard label="Late"     value="1" col="#FBB040"/>
@@ -777,7 +808,7 @@ function Performance({ viewOnly, userId }) {
       <div style={{ fontSize:13, color:C.sub, marginBottom:22 }}>Automated monthly scoring — computed from KPIs and manager reviews.</div>
 
       {!sel ? (
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
+        <div className="g3">
           {staff.map(u=>{
             const p = u.performance || { score:0, rating:"Pending", breakdown: { goals_40_pct:0, quality_20_pct:0, manager_review_40_pct:0 } };
             const sc = p.score || 0; 
@@ -895,7 +926,7 @@ function Tasks({ currentUser }) {
       ) : tasks.length === 0 ? (
         <div className="gc" style={{ padding:40, textAlign:"center", color:C.muted }}>No tasks found for this period.</div>
       ) : (
-        <div style={{ display:"grid", gridTemplateColumns:isStaff?"repeat(2,1fr)":"repeat(3,1fr)", gap:14 }}>
+        <div className={isStaff?"g2":"g3"} style={{ gap:14 }}>
           {tasks.map(t=>{
             const u = t.admins || {};
             const pc = pCol[t.priority] || T.orange;
@@ -924,7 +955,7 @@ function Tasks({ currentUser }) {
             <span className="tg" style={{ background:`${sCol[viewT.status]}22`, color:sCol[viewT.status], border:`1px solid ${sCol[viewT.status]}33` }}>{viewT.status}</span>
           </div>
           <div style={{ fontSize:13, color:(dark?DARK:LIGHT).sub, marginBottom:18, lineHeight:1.7 }}>{viewT.notes||"No description provided."}</div>
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:18 }}>
+          <div className="g2" style={{ gap:10, marginBottom:18 }}>
             <Field label="Staff Member" value={viewT.admins?.full_name}/>
             <Field label="Due Date" value={new Date(viewT.due_date).toLocaleDateString()}/>
             <Field label="Priority" value={viewT.priority}/>
@@ -956,7 +987,7 @@ function Tasks({ currentUser }) {
                 {staff.map(u=><option key={u.id} value={u.id}>{u.full_name} ({u.department})</option>)}
               </select>
             </div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <div className="g2" style={{ gap:12 }}>
               <div><Lbl>Due Date *</Lbl><input type="date" className="inp" value={nt.due} onChange={e=>setNt(n=>({...n,due:e.target.value}))}/></div>
               <div><Lbl>Priority</Lbl>
                 <select className="inp" value={nt.priority} onChange={e=>setNt(n=>({...n,priority:e.target.value}))}>
@@ -1056,7 +1087,7 @@ function Mismanagement({ viewOnly, userId, isManager }) {
           <div style={{ color:"#4ADE80", fontWeight:800 }}>No mismanagement flags on record</div>
         </div>
       ) : (
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(2,1fr)", gap:16 }}>
+        <div className="g2" style={{ gap:16 }}>
           {Object.entries(summary).map(([uid,data])=>{
             const u = data.flags[0]?.admins || {};
             const worst = Object.entries(sevOrd).find(([,v])=>v===data.max)?.[0] || "Minor";
@@ -1193,19 +1224,19 @@ function Payroll() {
 
       {showAdd && (
         <Modal onClose={()=>setShowAdd(false)} title="Manual Payroll Entry">
-          <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
-            <div><Lbl>Staff Member *</Lbl>
+          <div style={{ display:"flex", flexDirection:"column", gap:22 }}>
+            <div><Lbl>Personnel Identification *</Lbl>
               <select className="inp" value={nf.uid} onChange={e=>setNf(x=>({...x,uid:e.target.value}))}>
-                <option value="">— Select Staff —</option>
+                <option value="">— Select Staff Member —</option>
                 {staff.map(u=><option key={u.id} value={u.id}>{u.full_name} ({u.department})</option>)}
               </select>
             </div>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
-              <div><Lbl>Gross Pay (₦) *</Lbl><input type="number" className="inp" value={nf.gross} onChange={e=>setNf(x=>({...x,gross:e.target.value}))}/></div>
-              <div><Lbl>Deductions / Tax (₦)</Lbl><input type="number" className="inp" value={nf.tax} onChange={e=>setNf(x=>({...x,tax:e.target.value}))}/></div>
+            <div className="g2" style={{ gap:16 }}>
+              <div><Lbl>Gross Component (₦) *</Lbl><input type="number" className="inp" placeholder="0.00" value={nf.gross} onChange={e=>setNf(x=>({...x,gross:e.target.value}))}/></div>
+              <div><Lbl>Tax / Reductions (₦)</Lbl><input type="number" className="inp" placeholder="0.00" value={nf.tax} onChange={e=>setNf(x=>({...x,tax:e.target.value}))}/></div>
             </div>
-            <div><Lbl>Description / Notes</Lbl><textarea className="inp" placeholder="Bonus, Contractor fee, Reimbursement..." value={nf.notes} onChange={e=>setNf(x=>({...x,notes:e.target.value}))}/></div>
-            <button className="bp" onClick={addManual} style={{ padding:14 }}>Create Record</button>
+            <div><Lbl>Transaction Justification / Notes</Lbl><textarea className="inp" placeholder="E.g. Performance Bonus for Q1, Contractor retainer, Reimbursement of expenses..." value={nf.notes} onChange={e=>setNf(x=>({...x,notes:e.target.value}))}/></div>
+            <button className="bp" onClick={addManual} style={{ padding:16, fontSize:15 }}>Submit Payroll Record</button>
           </div>
         </Modal>
       )}
@@ -1307,7 +1338,7 @@ function StaffDirectory() {
       ) : list.length === 0 ? (
         <div className="gc" style={{ padding:48, textAlign:"center", color:C.muted }}>No {tab} staff found. Click + Add Staff to create one.</div>
       ) : (
-        <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16, marginBottom:22 }}>
+        <div className="g3" style={{ marginBottom:22 }}>
           {list.map(u => {
             const prof = u.staff_profiles?.[0] || {};
             const sc = u.performance?.score; 
@@ -1321,7 +1352,7 @@ function StaffDirectory() {
                     <div style={{ fontSize:11, color:T.orange, fontWeight:800, marginTop:2 }}>{u.department}</div>
                   </div>
                 </div>
-                <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:8, marginBottom:12 }}>
+                <div className="g2" style={{ gap:8, marginBottom:12 }}>
                   {[["Role",u.role?.replace("_"," ")],["Type",prof.staff_type||"full"],["Email",u.email?.split("@")[0]+"…"],["Status",u.is_active?"Active":"Inactive"]].map(([l,v])=>(
                     <div key={l} style={{ background:`${T.orange}0D`, borderRadius:8, padding:"8px 10px" }}>
                       <div style={{ fontSize:10, color:C.muted, textTransform:"uppercase", letterSpacing:"1px", fontWeight:800 }}>{l}</div>
@@ -1345,7 +1376,7 @@ function StaffDirectory() {
       {showAdd && (
         <Modal onClose={() => setShowAdd(false)} title="Add New Staff Member" width={580}>
           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+            <div className="g2" style={{ gap:12 }}>
               <div><Lbl>Full Name *</Lbl><input className="inp" placeholder="e.g. Adeola Balogun" value={newStaff.full_name} onChange={e=>setNewStaff(s=>({...s,full_name:e.target.value}))}/></div>
               <div><Lbl>Email Address *</Lbl><input className="inp" type="email" placeholder="adeola@eximps-cloves.com" value={newStaff.email} onChange={e=>setNewStaff(s=>({...s,email:e.target.value}))}/></div>
               <div><Lbl>Default Password *</Lbl><input className="inp" type="password" placeholder="Min 8 characters" value={newStaff.password} onChange={e=>setNewStaff(s=>({...s,password:e.target.value}))}/></div>
@@ -1395,7 +1426,7 @@ function StaffDirectory() {
           <Tabs items={[["details","Personnel Identity"],["bank","Finances"],["docs","Documents"]]} active={dtTab} setActive={setDtTab}/>
 
           {dtTab === "details" && (
-            <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:10, marginBottom:18 }} className="fade">
+            <div className="g2 fade" style={{ gap:10, marginBottom:18 }}>
               <Field label="Full Name" value={view.full_name}/>
               <Field label="Email Address" value={view.email}/>
               <Field label="Phone" value={view.staff_profiles?.[0]?.phone_number}/>
@@ -1408,7 +1439,7 @@ function StaffDirectory() {
           )}
 
           {dtTab === "bank" && (
-            <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:10, marginBottom:18 }} className="fade">
+            <div className="g1 fade" style={{ gap:10, marginBottom:18 }}>
               <Field label="Bank Name" value={view.staff_profiles?.[0]?.bank_name}/>
               <Field label="Account Number" value={view.staff_profiles?.[0]?.account_number}/>
               <Field label="Account Name" value={view.staff_profiles?.[0]?.account_name}/>
@@ -1451,14 +1482,15 @@ function HRDashboard() {
 
   useEffect(() => {
     setLoading(true);
-    Promise.all([
-      apiFetch(`${API_BASE}/hr/staff`),
-      apiFetch(`${API_BASE}/hr/presence/leaves`),
-      apiFetch(`${API_BASE}/hr/tasks`),
-      apiFetch(`${API_BASE}/hr/mismanagement`)
-    ]).then(([s, l, t, i]) => {
-      setData({ staff:s, leaves:l, tasks:t, incidents:i });
-    }).finally(() => setLoading(false));
+    apiFetch(`${API_BASE}/hr/dashboard/stats`)
+      .then(d => {
+        setData({ staff: d.staff, leaves: d.leaves, tasks: d.tasks, incidents: d.incidents });
+      })
+      .catch(e => {
+        console.error("Dashboard stats fetch error:", e);
+        // Fallback or handle error
+      })
+      .finally(() => setLoading(false));
   }, []);
 
   const total = data.staff.length;
@@ -1474,19 +1506,19 @@ function HRDashboard() {
       </div>
       {loading ? <div style={{ padding:40, textAlign:"center", color:C.muted }}>Loading workforce metrics…</div> : (
         <>
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:22 }}>
+          <div className="g4" style={{ marginBottom:22 }}>
             <StatCard label="Total Workforce" value={total} sub={`${total} Active Members`}/>
             <StatCard label="Pending Leaves" value={pendingLeaves} col={T.orange} sub="Awaiting approval"/>
             <StatCard label="Open Tasks" value={openTasks} col="#60A5FA" sub="Across all teams"/>
             <StatCard label="Critical Flags" value={seriousFlags} col="#F87171" sub="Urgent action needed"/>
           </div>
-          <div style={{ display:"grid", gridTemplateColumns:"1.3fr 1fr", gap:16, marginBottom:22 }}>
+          <div className="g2w" style={{ marginBottom:22 }}>
             <div className="gc" style={{ padding:22 }}>
               <div style={{ display:"flex", justifyContent:"space-between", marginBottom:14 }}>
                 <div className="ho" style={{ fontSize:14 }}>Latest Active Staff</div>
                 <span style={{ fontSize:11, color:C.muted }}>Recent Onboarding</span>
               </div>
-              <table className="ht">
+              <div className="tw"><table className="ht">
                 <thead><tr>{["Staff","Department","Role"].map(h=><th key={h}>{h}</th>)}</tr></thead>
                 <tbody>
                   {data.staff.slice(0,6).map(u => (
@@ -1497,7 +1529,7 @@ function HRDashboard() {
                     </tr>
                   ))}
                 </tbody>
-              </table>
+              </table></div>
             </div>
             <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
               <div className="gc" style={{ padding:22 }}>
@@ -1517,7 +1549,7 @@ function HRDashboard() {
           </div>
           <div className="gc" style={{ padding:22 }}>
             <div className="ho" style={{ fontSize:14, marginBottom:14 }}>Recent Open Tasks</div>
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:12 }}>
+            <div className="g4" style={{ gap:12 }}>
               {data.tasks.filter(t => t.status !== "completed").slice(0, 8).map(t => {
                 const sc = sCol[t.status] || T.orange;
                 const assignedTo = data.staff.find(u => u.id === t.staff_id);
@@ -1572,7 +1604,7 @@ function MyProfile({ user }) {
         <Tabs items={[["details","Personnel Identity"],["bank","Finances"],["docs","My Documents"]]} active={tab} setActive={setTab}/>
 
         {tab === "details" && (
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }} className="fade">
+          <div className="g2 fade" style={{ gap:12 }}>
             <Field label="Full Name" value={prof.full_name}/>
             <Field label="Email Address" value={prof.email}/>
             <Field label="Phone" value={p.phone_number}/>
@@ -1585,7 +1617,7 @@ function MyProfile({ user }) {
         )}
 
         {tab === "bank" && (
-          <div style={{ display:"grid", gridTemplateColumns:"1fr", gap:12 }} className="fade">
+          <div className="g1 fade" style={{ gap:12 }}>
             <Field label="Bank Name" value={p.bank_name}/>
             <Field label="Account Number" value={p.account_number}/>
             <Field label="Account Name" value={p.account_name}/>
@@ -1728,9 +1760,9 @@ function Portal({ user, onLogout, navItems, roleLabel, renderPage }) {
       <Sidebar page={page} setPage={setPage} user={user} onLogout={onLogout} items={navItems} roleLabel={roleLabel}/>
 
       {/* Main content */}
-      <div className="hrm-main" style={{ flex:1, overflow:"auto", display:"flex", flexDirection:"column", minWidth:0 }}>
+      <div className="hrm-main" style={{ flex:1, display:"flex", flexDirection:"column", minWidth:0 }}>
         <Topbar title={navItems.find(n=>n.id===page)?.label||""} user={user}/>
-        <div className="hrm-content-padding" style={{ flex:1, padding:28, overflow:"auto" }}>
+        <div className="hrm-content-padding" style={{ flex:1, padding:28 }}>
           {renderPage(page)}
         </div>
       </div>
@@ -1802,14 +1834,14 @@ function ManagerPortal({ user, onLogout }) {
           <div className="ho" style={{ fontSize:24, marginBottom:6 }}>Team Overview</div>
           <div style={{ fontSize:13, color:C.sub, marginBottom:22 }}>Performance and activity tracking for your direct reports.</div>
           
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:14, marginBottom:22 }}>
+          <div className="g3" style={{ marginBottom:22 }}>
             <StatCard label="Direct Reports" value={team.length}/>
             <StatCard label="Active Tasks" value="8" col="#60A5FA"/>
             <StatCard label="Avg Team Score" value="82/100" col="#4ADE80"/>
           </div>
 
           {loading ? <div style={{ padding:40, textAlign:"center", color:C.muted }}>Loading team data…</div> : (
-            <div style={{ display:"grid", gridTemplateColumns:"repeat(3,1fr)", gap:16 }}>
+            <div className="g3">
               {team.map(u => (
                 <div key={u.id} className="gc" style={{ padding:22 }}>
                   <div style={{ display:"flex", gap:14, alignItems:"center", marginBottom:14 }}>
@@ -1873,14 +1905,14 @@ function StaffPortal({ user, onLogout }) {
           <div className="ho" style={{ fontSize:24, marginBottom:4 }}>Welcome, {user.full_name?.split(" ")[0]} 👋</div>
           <div style={{ fontSize:13, color:C.sub, marginBottom:22 }}>{user.staff_profiles?.[0]?.job_title || user.role} · {user.department}</div>
           
-          <div style={{ display:"grid", gridTemplateColumns:"repeat(4,1fr)", gap:14, marginBottom:22 }}>
+          <div className="g4" style={{ marginBottom:22 }}>
             <StatCard label="My Score" value={sc != null ? `${sc}/100` : "—"} col={col}/>
             <StatCard label="My Tasks" value={tasks.length} col="#60A5FA"/>
             <StatCard label="Pending" value={pendingTasks.length} col={T.orange}/>
             <StatCard label="Leave Left" value="11d"/>
           </div>
 
-          <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:18 }}>
+          <div className="g2" style={{ gap:18 }}>
             <div className="gc" style={{ padding:22 }}>
               <div className="ho" style={{ fontSize:14, marginBottom:14 }}>My Active Tasks</div>
               {loading ? <div style={{ fontSize:13, color:C.muted }}>Loading...</div> : (
