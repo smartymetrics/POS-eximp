@@ -198,7 +198,7 @@ async def get_staff_profile(staff_id: str, current_admin: dict = Depends(verify_
         raise HTTPException(status_code=403, detail="Permission denied")
 
     # Fetch profile data
-    profile = await db_execute(lambda: db.table("admins").select("*, staff_profiles(*), staff_documents(*), staff_qualifications(*), staff_assets(*)").eq("id", staff_id).execute())
+    profile = await db_execute(lambda: db.table("admins").select("*, staff_profiles(*), staff_documents!staff_documents_staff_id_fkey(*), staff_qualifications(*), staff_assets(*)").eq("id", staff_id).execute())
     
     return profile.data[0] if profile.data else None
 
