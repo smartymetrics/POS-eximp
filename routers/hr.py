@@ -397,7 +397,7 @@ async def update_goal(goal_id: str, update: GoalUpdate, current_admin: dict = De
             update_data["month"] = str(update_data["month"])
 
     if "template_id" in update_data:
-    update_data["kpi_template_id"] = update_data.pop("template_id")
+        update_data["kpi_template_id"] = update_data.pop("template_id")
 
     if update_data.get("staff_id") and update_data.get("department"):
         raise HTTPException(status_code=400, detail="Provide either staff_id or department, not both")
