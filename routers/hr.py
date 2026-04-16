@@ -3,7 +3,7 @@ import os
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Optional
 from pydantic import BaseModel
-from datetime import date, datetime
+from datetime import date, datetime, timedelta
 from database import get_db, db_execute
 from routers.auth import verify_token
 
@@ -82,6 +82,7 @@ class StaffProfileUpdate(BaseModel):
     account_name: Optional[str] = None
     cv_url: Optional[str] = None
     base_salary: Optional[float] = None
+    leave_quota: Optional[int] = None
     exit_date: Optional[date] = None
     exit_reason: Optional[str] = None
 
@@ -141,7 +142,8 @@ async def run_hr_migration(current_admin: dict = Depends(verify_token)):
         "sql/hr_phase3_tasks.sql",
         "sql/hr_phase4_payroll.sql",
         "sql/hr_phase5_attendance.sql",
-        "sql/hr_phase6_geofence.sql"
+        "sql/hr_phase6_geofence.sql",
+        "sql/hr_phase7_profile_enrichment.sql"
     ]
     
     results = []
@@ -445,8 +447,34 @@ async def assign_staff_asset(asset: StaffAssetCreate, current_admin: dict = Depe
 async def request_leave(req: LeaveRequestCreate, current_admin: dict = Depends(verify_token)):
     """Staff submits a leave request."""
     db = get_db()
+    staff_id = current_admin["sub"]
+    
+    # 1. Fetch User's Leave Quota
+    profile_res = await db_execute(lambda: db.table("staff_profiles").select("leave_quota").eq("staff_id", staff_id).execute())
+    leave_quota = 20
+    if profile_res.data and profile_res.data[0].get("leave_quota") is not None:
+        leave_quota = profile_res.data[0]["leave_quota"]
+        
+    # 2. Fetch used approved days this year
+    current_year = date.today().year
+    leaves_res = await db_execute(lambda: db.table("leave_requests")
+        .select("days_count")
+        .eq("staff_id", staff_id)
+        .eq("status", "approved")
+        .gte("start_date", f"{current_year}-01-01")
+        .lte("start_date", f"{current_year}-12-31")
+        .execute())
+        
+    used_days = sum(l.get("days_count", 0) for l in leaves_res.data)
+    
+    if used_days + req.days_count > leave_quota:
+        raise HTTPException(
+            status_code=status.HTTP_400_BAD_REQUEST,
+            detail=f"Leave quota exceeded. You have {leave_quota - used_days} days remaining out of {leave_quota}."
+        )
+
     res = await db_execute(lambda: db.table("leave_requests").insert({
-        "staff_id": current_admin["sub"],
+        "staff_id": staff_id,
         "leave_type": req.leave_type,
         "start_date": req.start_date.isoformat(),
         "end_date": req.end_date.isoformat(),
@@ -468,7 +496,12 @@ async def get_pending_leave(staff_id: Optional[str] = None, current_admin: dict 
     query = db.table("leave_requests").select("*, admins!leave_requests_staff_id_fkey(full_name, department)")
     
     if not is_hr:
-        query = query.eq("staff_id", current_admin["sub"])
+        # Managers see their own + team. Staff see only own.
+        cur_id = current_admin["sub"]
+        if "line_manager" in user_roles:
+            query = query.or_(f"staff_id.eq.{cur_id},admins.line_manager_id.eq.{cur_id}")
+        else:
+            query = query.eq("staff_id", cur_id)
     elif staff_id:
         query = query.eq("staff_id", staff_id)
         
@@ -508,10 +541,188 @@ async def get_attendance(
     if staff_id:
         query = query.eq("staff_id", staff_id)
     elif not is_hr:
-        query = query.eq("staff_id", current_admin["sub"])
+        cur_id = current_admin["sub"]
+        if "line_manager" in user_roles:
+             # Match by staff_id or by line_manager_id of the linked admin
+             query = query.or_(f"staff_id.eq.{cur_id},admins.line_manager_id.eq.{cur_id}")
+        else:
+             query = query.eq("staff_id", cur_id)
         
     res = await db_execute(lambda: query.order("date", desc=True).order("check_in", desc=True).execute())
     return res.data
+
+@router.get("/presence/absences")
+async def get_absence_report(
+    staff_id: Optional[str] = None,
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_admin: dict = Depends(verify_token)
+):
+    """
+    Generate a full absenteeism report for a given staff member over a date range.
+    Returns every expected working day (Mon-Fri) with its status:
+    - present, late, on_leave, absent, weekend
+    """
+    from datetime import timedelta as td
+    user_roles = current_admin.get("role", "").split(",")
+    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    
+    # Staff can only see their own record
+    target_id = staff_id if (is_hr and staff_id) else current_admin["sub"]
+    
+    # Default: last 30 days
+    end_dt = date.fromisoformat(end_date) if end_date else date.today()
+    start_dt = date.fromisoformat(start_date) if start_date else end_dt - td(days=29)
+    
+    db = get_db()
+    
+    # Fetch attendance records for the period
+    att_res = await db_execute(
+        lambda: db.table("attendance_records")
+            .select("date, check_in, status, is_suspicious")
+            .eq("staff_id", target_id)
+            .gte("date", start_dt.isoformat())
+            .lte("date", end_dt.isoformat())
+            .execute()
+    )
+    
+    # Fetch approved leaves for the period
+    leave_res = await db_execute(
+        lambda: db.table("leave_requests")
+            .select("start_date, end_date, leave_type")
+            .eq("staff_id", target_id)
+            .eq("status", "approved")
+            .execute()
+    )
+    
+    # Build a lookup: date_str -> attendance record
+    att_map = {a["date"]: a for a in att_res.data}
+    
+    # Build a set of approved leave dates
+    leave_dates = set()
+    for l in leave_res.data:
+        s = date.fromisoformat(l["start_date"])
+        e = date.fromisoformat(l["end_date"])
+        cur = s
+        while cur <= e:
+            leave_dates.add(cur.isoformat())
+            cur += td(days=1)
+    
+    today = date.today()
+    
+    # Walk each day in range and categorize
+    days = []
+    cur = start_dt
+    while cur <= end_dt:
+        day_str = cur.isoformat()
+        day_name = cur.strftime("%A")
+        
+        if cur.weekday() >= 5:  # Saturday or Sunday
+            status = "weekend"
+        elif day_str in att_map:
+            att = att_map[day_str]
+            ci = att.get("check_in")
+            if ci:
+                time_part = (ci.split("T")[1] if "T" in ci else ci).split(".")[0]
+                status = "late" if time_part > "09:00:00" else "present"
+            else:
+                status = "present"
+        elif day_str in leave_dates:
+            status = "on_leave"
+        elif cur > today:
+            status = "future"
+        else:
+            status = "absent"
+        
+        days.append({
+            "date": day_str,
+            "day": day_name,
+            "status": status,
+            "check_in": att_map.get(day_str, {}).get("check_in"),
+            "is_suspicious": att_map.get(day_str, {}).get("is_suspicious", False)
+        })
+        cur += td(days=1)
+    
+    # Summary stats
+    working_days = [d for d in days if d["status"] not in ("weekend", "future")]
+    
+    return {
+        "staff_id": target_id,
+        "start_date": start_dt.isoformat(),
+        "end_date": end_dt.isoformat(),
+        "days": days,
+        "summary": {
+            "total_working_days": len(working_days),
+            "present": sum(1 for d in working_days if d["status"] == "present"),
+            "late": sum(1 for d in working_days if d["status"] == "late"),
+            "absent": sum(1 for d in working_days if d["status"] == "absent"),
+            "on_leave": sum(1 for d in working_days if d["status"] == "on_leave"),
+        }
+    }
+
+@router.get("/presence/global-absences")
+async def get_global_absences(
+    start_date: str,
+    end_date: str,
+    current_admin: dict = Depends(verify_token)
+):
+    """
+    Generate a company-wide absence log for a specific period.
+    Only active staff are included. Weekends are excluded.
+    """
+    user_roles = current_admin.get("role", "").split(",")
+    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    if not is_hr:
+         raise HTTPException(status_code=403, detail="Not authorized")
+
+    db = get_db()
+    s_dt = date.fromisoformat(start_date)
+    e_dt = date.fromisoformat(end_date)
+    today = date.today()
+    if e_dt > today: e_dt = today
+    
+    # 1. Fetch active staff
+    staff_res = await db_execute(lambda: db.table("admins").select("id, full_name, department").eq("is_active", True).execute())
+    staff_list = staff_res.data
+    
+    # 2. Fetch all attendance in range
+    att_res = await db_execute(lambda: db.table("attendance_records").select("staff_id, date").gte("date", start_date).lte("date", end_date).execute())
+    att_map = {(a["date"], a["staff_id"]) for a in att_res.data}
+    
+    # 3. Fetch all approved leaves
+    leave_res = await db_execute(lambda: db.table("leave_requests").select("staff_id, start_date, end_date").eq("status", "approved").execute())
+    
+    absences = []
+    curr = s_dt
+    while curr <= e_dt:
+        if curr.weekday() < 5: # Monday to Friday
+            d_str = curr.isoformat()
+            for s in staff_list:
+                sid = s["id"]
+                # Check attendance
+                if (d_str, sid) in att_map: continue
+                
+                # Check leave
+                on_leave = False
+                for l in leave_res.data:
+                    if l["staff_id"] == sid:
+                        l_start = date.fromisoformat(l["start_date"])
+                        l_end = date.fromisoformat(l["end_date"])
+                        if l_start <= curr <= l_end:
+                            on_leave = True
+                            break
+                if on_leave: continue
+                
+                # Verified absence
+                absences.append({
+                    "date": d_str,
+                    "staff_name": s["full_name"],
+                    "department": s["department"],
+                    "status": "Absent"
+                })
+        curr += timedelta(days=1)
+        
+    return sorted(absences, key=lambda x: (x["date"], x["staff_name"]), reverse=True)
 
 @router.post("/payroll/run")
 async def run_payroll(current_admin: dict = Depends(verify_token)):
@@ -845,22 +1056,122 @@ async def get_payslips(staff_id: Optional[str] = None, current_admin: dict = Dep
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(current_admin: dict = Depends(verify_token)):
     """Fetch all necessary data for the HR dashboard in a single optimized call."""
-    # This prevents the frontend from firing 4 overlapping queries 
     user_roles = current_admin.get("role", "").split(",")
     is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
     if not is_hr:
          raise HTTPException(status_code=403, detail="Not authorized for HR Dashboard")
+    
     db = get_db()
-    staff = await db_execute(lambda: db.table("admins").select("id, full_name, email, role, primary_role, department, is_active").execute())
-    leaves = await db_execute(lambda: db.table("leave_requests").select("*, admins!leave_requests_staff_id_fkey(full_name, department)").execute())
-    tasks = await db_execute(lambda: db.table("staff_tasks").select("*, admins!staff_tasks_assigned_to_fkey(full_name)").execute())
-    incidents = await db_execute(lambda: db.table("disciplinary_records").select("*, admins!disciplinary_records_staff_id_fkey(full_name, department)").execute())
+    today_str = date.today().isoformat()
+    
+    # 1. Fetch raw data
+    staff_res = await db_execute(lambda: db.table("admins").select("id, full_name, role, primary_role, department, is_active, is_archived, created_at, staff_profiles(dob, date_joined)").execute())
+    leaves_res = await db_execute(lambda: db.table("leave_requests").select("*, admins!leave_requests_staff_id_fkey(full_name, department)").execute())
+    tasks_res = await db_execute(lambda: db.table("staff_tasks").select("*, admins!staff_tasks_assigned_to_fkey(full_name)").execute())
+    incidents_res = await db_execute(lambda: db.table("disciplinary_records").select("*, admins!disciplinary_records_staff_id_fkey(full_name, department)").execute())
+    attendance_today = await db_execute(lambda: db.table("attendance_records").select("staff_id, check_in, is_suspicious").eq("date", today_str).execute())
+    
+    staff_data = staff_res.data
+    active_staff = [s for s in staff_data if s.get("is_active") and not s.get("is_archived")]
+    
+    # 2. Attendance Analytics
+    present_ids = {a["staff_id"] for a in attendance_today.data}
+    on_leave_ids = {l["staff_id"] for l in leaves_res.data if l["status"] == "approved" and l["start_date"] <= today_str <= l["end_date"]}
+    
+    late_count = 0
+    for a in attendance_today.data:
+        ci = a.get("check_in")
+        if ci:
+            # Threshold 09:00:00
+            time_part = ci.split("T")[1].split(".")[0] if "T" in ci else ""
+            if time_part and time_part > "09:00:00":
+                late_count += 1
+    
+    suspicious_today = sum(1 for a in attendance_today.data if a.get("is_suspicious"))
+    
+    absent_staff = [s for s in active_staff if s["id"] not in present_ids and s["id"] not in on_leave_ids]
+    
+    # 3. Department Distribution
+    dept_dist = {}
+    for s in active_staff:
+        d = s.get("department") or "Unassigned"
+        dept_dist[d] = dept_dist.get(d, 0) + 1
+    
+    # 4. Milestones
+    thirty_days_ago = (datetime.utcnow() - timedelta(days=30)).isoformat()
+    recent_staff = [s for s in staff_data if s.get("created_at") and s["created_at"] >= thirty_days_ago]
+    
+    today_dt = date.today()
+    upcoming_birthdays = []
+    upcoming_anniversaries = []
+    
+    for s in active_staff:
+        prof = s.get("staff_profiles")
+        if prof and len(prof) > 0:
+            p = prof[0]
+            # Check Birthdays (Next 14 days)
+            if p.get("dob"):
+                dob = date.fromisoformat(p["dob"])
+                # Handle leap years safely
+                try:
+                    this_year_bday = dob.replace(year=today_dt.year)
+                except ValueError:
+                    this_year_bday = dob.replace(year=today_dt.year, day=dob.day-1)
+                    
+                if this_year_bday < today_dt:
+                    try:
+                        this_year_bday = dob.replace(year=today_dt.year + 1)
+                    except ValueError:
+                        this_year_bday = dob.replace(year=today_dt.year + 1, day=dob.day-1)
+                
+                days_to_bday = (this_year_bday - today_dt).days
+                if days_to_bday <= 14:
+                    upcoming_birthdays.append({
+                        "id": s["id"], "full_name": s["full_name"], "department": s["department"], "date": p["dob"], "days_left": days_to_bday
+                    })
+                    
+            # Check Anniversaries (Next 30 days)
+            if p.get("date_joined"):
+                dj = date.fromisoformat(p["date_joined"])
+                try:
+                    this_year_anniv = dj.replace(year=today_dt.year)
+                except ValueError:
+                    this_year_anniv = dj.replace(year=today_dt.year, day=dj.day-1)
+                    
+                if this_year_anniv < today_dt:
+                    try:
+                        this_year_anniv = dj.replace(year=today_dt.year + 1)
+                    except ValueError:
+                        this_year_anniv = dj.replace(year=today_dt.year + 1, day=dj.day-1)
+                        
+                days_to_anniv = (this_year_anniv - today_dt).days
+                years_worked = this_year_anniv.year - dj.year
+                if days_to_anniv <= 30 and years_worked > 0:
+                    upcoming_anniversaries.append({
+                        "id": s["id"], "full_name": s["full_name"], "department": s["department"], "date": p["date_joined"], "days_left": days_to_anniv, "years": years_worked
+                    })
+
+    upcoming_birthdays.sort(key=lambda x: x["days_left"])
+    upcoming_anniversaries.sort(key=lambda x: x["days_left"])
 
     return {
-        "staff": staff.data,
-        "leaves": leaves.data,
-        "tasks": tasks.data,
-        "incidents": incidents.data
+        "staff": staff_data,
+        "leaves": leaves_res.data,
+        "tasks": tasks_res.data,
+        "incidents": incidents_res.data,
+        "analytics": {
+            "total_active": len(active_staff),
+            "present_today": len(present_ids),
+            "late_today": late_count,
+            "on_leave_today": len(on_leave_ids),
+            "absent_today": len(absent_staff),
+            "absent_names": [s["full_name"] for s in absent_staff],
+            "suspicious_today": suspicious_today,
+            "department_distribution": dept_dist,
+            "recent_milestones": recent_staff[:5],
+            "upcoming_birthdays": upcoming_birthdays,
+            "upcoming_anniversaries": upcoming_anniversaries
+        }
     }
 
 """

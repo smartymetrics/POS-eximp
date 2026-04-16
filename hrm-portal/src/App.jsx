@@ -800,6 +800,155 @@ function Goals({ viewOnly, userId, canManageKpiTemplates = false }) {
   );
 }
 
+// ─── MODULE: ABSENCE REPORT ──────────────────────────────────────────────────
+function AbsenceReport({ currentUserId, C, dark }) {
+  const [staff, setStaff] = useState([]);
+  const [selectedStaff, setSelectedStaff] = useState(currentUserId || "");
+  const [report, setReport] = useState(null);
+  const [loading, setLoading] = useState(false);
+  const now = new Date();
+  const firstOfMonth = new Date(now.getFullYear(), now.getMonth(), 1).toISOString().split("T")[0];
+  const [startDate, setStartDate] = useState(firstOfMonth);
+  const [endDate, setEndDate] = useState(now.toISOString().split("T")[0]);
+
+  // Load staff list for HR dropdown
+  useEffect(() => {
+    if (!currentUserId) {
+      apiFetch(`${API_BASE}/hr/staff`).then(d => setStaff(Array.isArray(d) ? d : [])).catch(()=>{});
+    }
+  }, [currentUserId]);
+
+  const loadReport = () => {
+    if (!selectedStaff) return;
+    setLoading(true);
+    const params = new URLSearchParams({ staff_id: selectedStaff, start_date: startDate, end_date: endDate });
+    apiFetch(`${API_BASE}/hr/presence/absences?${params}`)
+      .then(d => setReport(d))
+      .catch(e => alert("Failed to load report: " + e.message))
+      .finally(() => setLoading(false));
+  };
+
+  const statusProps = {
+    present:  { label: "Present",  bg: "#4ADE8022", color: "#4ADE80", border: "#4ADE8044" },
+    late:     { label: "Late",     bg: "#FBB04022", color: "#FBB040", border: "#FBB04044" },
+    absent:   { label: "Absent",   bg: "#F8717122", color: "#F87171", border: "#F8717144" },
+    on_leave: { label: "On Leave", bg: `${T.orange}22`, color: T.orange, border: `${T.orange}44` },
+    weekend:  { label: "Weekend",  bg: `${C.border}66`, color: C.muted, border: C.border },
+    future:   { label: "—",        bg: "transparent", color: C.muted, border: "transparent" },
+  };
+
+  return (
+    <div className="fade">
+      {/* Controls */}
+      <div className="gc" style={{ padding:20, marginBottom:18 }}>
+        <div style={{ display:"flex", flexWrap:"wrap", gap:12, alignItems:"flex-end" }}>
+          {!currentUserId && (
+            <div style={{ flex:1, minWidth:180 }}>
+              <div style={{ fontSize:11, color:C.muted, marginBottom:4 }}>Staff Member</div>
+              <select
+                value={selectedStaff}
+                onChange={e => setSelectedStaff(e.target.value)}
+                className="inp"
+                style={{ width:"100%" }}
+              >
+                <option value="">— Select Staff —</option>
+                {staff.map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.department || "General"})</option>)}
+              </select>
+            </div>
+          )}
+          <div>
+            <div style={{ fontSize:11, color:C.muted, marginBottom:4 }}>From</div>
+            <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="inp" style={{ padding:"6px 10px" }}/>
+          </div>
+          <div>
+            <div style={{ fontSize:11, color:C.muted, marginBottom:4 }}>To</div>
+            <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} className="inp" style={{ padding:"6px 10px" }}/>
+          </div>
+          <button className="bp" onClick={loadReport} disabled={!selectedStaff || loading} style={{ padding:"8px 20px" }}>
+            {loading ? "Loading…" : "Generate Report"}
+          </button>
+        </div>
+      </div>
+
+      {report && (
+        <>
+          {/* Summary cards */}
+          <div className="g4" style={{ marginBottom:18 }}>
+            {[
+              ["Working Days", report.summary.total_working_days, C.text],
+              ["Present",      report.summary.present,            "#4ADE80"],
+              ["Late",         report.summary.late,               "#FBB040"],
+              ["Absent",       report.summary.absent,             "#F87171"],
+            ].map(([label, value, col]) => (
+              <StatCard key={label} label={label} value={value} col={col}
+                sub={report.summary.total_working_days > 0
+                  ? `${Math.round(value/report.summary.total_working_days*100)}% of working days`
+                  : "—"}
+              />
+            ))}
+          </div>
+
+          {/* Absent days alert */}
+          {report.summary.absent > 0 && (
+            <div style={{ padding:"12px 16px", background:"#F8717111", border:"1px solid #F8717133", borderRadius:10, marginBottom:16, fontSize:13, color:"#F87171" }}>
+              ⚠️ <strong>{report.summary.absent} unexcused absence{report.summary.absent!==1?"s":""}</strong> detected in this period.
+            </div>
+          )}
+
+          {/* Day grid */}
+          <div className="gc" style={{ padding:20 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:16 }}>
+              <div className="ho" style={{ fontSize:15 }}>Day-by-Day Breakdown</div>
+              <div style={{ display:"flex", gap:10, flexWrap:"wrap" }}>
+                {Object.entries(statusProps).filter(([k])=>k!=="future").map(([key, p]) => (
+                  <div key={key} style={{ display:"flex", alignItems:"center", gap:5, fontSize:11 }}>
+                    <div style={{ width:10, height:10, borderRadius:2, background:p.color }}/>
+                    <span style={{ color:C.sub }}>{p.label}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+            <div style={{ display:"grid", gridTemplateColumns:"repeat(auto-fill, minmax(110px, 1fr))", gap:8 }}>
+              {report.days.map(d => {
+                const p = statusProps[d.status] || statusProps.future;
+                return (
+                  <div key={d.date} style={{
+                    padding:"10px 10px",
+                    background: p.bg,
+                    border: `1px solid ${p.border}`,
+                    borderRadius: 8,
+                    opacity: d.status === "weekend" ? 0.4 : 1
+                  }}>
+                    <div style={{ fontSize:10, color:C.muted, marginBottom:2 }}>{d.day.slice(0,3)}</div>
+                    <div style={{ fontSize:13, fontWeight:700, color:p.color, marginBottom:3 }}>
+                      {new Date(d.date).toLocaleDateString("en-GB", { day:"numeric", month:"short" })}
+                    </div>
+                    <div style={{ fontSize:9, color:d.status==="weekend"?C.muted:p.color, fontWeight:600, textTransform:"uppercase", letterSpacing:0.5 }}>
+                      {p.label}
+                    </div>
+                    {d.check_in && (
+                      <div style={{ fontSize:9, color:C.muted, marginTop:2 }}>
+                        {new Date(d.check_in).toLocaleTimeString([], {hour:"2-digit",minute:"2-digit"})}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          </div>
+        </>
+      )}
+      {!report && !loading && (
+        <div style={{ textAlign:"center", padding:60, color:C.muted }}>
+          <div style={{ fontSize:40, marginBottom:10 }}>📅</div>
+          <div style={{ fontSize:14, fontWeight:600, marginBottom:4 }}>Select a staff member to view their attendance history</div>
+          <div style={{ fontSize:12 }}>Each working day will be color-coded by status.</div>
+        </div>
+      )}
+    </div>
+  );
+}
+
 // ─── MODULE: PRESENCE ────────────────────────────────────────────────────────
 function Presence({ currentUserId, currentUser }) {
   const { dark } = useTheme(); const C = dark?DARK:LIGHT;
@@ -811,6 +960,18 @@ function Presence({ currentUserId, currentUser }) {
   const [reqs, setReqs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
+  const [globalAbsences, setGlobalAbsences] = useState([]);
+  const [loadingLog, setLoadingLog] = useState(false);
+  const [logStart, setLogStart] = useState(sevenDaysAgo.toISOString().split("T")[0]);
+  const [logEnd, setLogEnd] = useState(now.toISOString().split("T")[0]);
+
+  const loadGlobalAbsences = () => {
+    setLoadingLog(true);
+    apiFetch(`${API_BASE}/hr/presence/global-absences?start_date=${logStart}&end_date=${logEnd}`)
+      .then(d => setGlobalAbsences(d))
+      .catch(e => alert("Error: " + e.message))
+      .finally(() => setLoadingLog(false));
+  };
 
   useEffect(() => {
     setLoading(true);
@@ -855,22 +1016,44 @@ function Presence({ currentUserId, currentUser }) {
       <div className="ho" style={{ fontSize:22, marginBottom:4 }}>Presence</div>
       <div style={{ fontSize:13, color:(dark?DARK:LIGHT).sub, marginBottom:18 }}>Attendance tracking and leave management — one tab.</div>
 
-      <Tabs items={[["attendance","Attendance"],["leave","Leave Management"]]} active={sub} setActive={setSub}/>
+      <Tabs items={[["attendance","Attendance"],["leave","Leave Management"],["absences","Absenteeism Report"],["absence_log","Global Absence Log"]]} active={sub} setActive={setSub}/>
 
       {sub==="attendance" && (
         <>
           {!currentUserId && (
             <div className="g4" style={{ marginBottom:22 }}>
-              <StatCard label="Present"  value={attendance.filter(a=>a.status==="Present").length} col="#4ADE80"/>
-              <StatCard label="On Leave" value={attendance.filter(a=>a.status==="On Leave").length} col={T.orange}/>
-              <StatCard label="Late"     value={attendance.filter(a=>a.status==="Late").length} col="#FBB040"/>
-              <StatCard label="Absent"   value={attendance.filter(a=>a.status==="Absent").length} col="#F87171"/>
-            </div>
+            {[[
+              "Present",
+              attendance.filter(a=>a.status==="Present").length,
+              "#4ADE80",
+              `${attendance.length > 0 ? Math.round(attendance.filter(a=>a.status==="Present").length/attendance.length*100) : 0}% attendance rate`
+            ],[
+              "On Leave",
+              attendance.filter(a=>a.status==="On Leave").length,
+              T.orange,
+              "Approved absences"
+            ],[
+              "Late",
+              attendance.filter(a=>{ const ci=a.check_in; if(!ci) return false; const t=ci.split("T")[1]||ci; return t.slice(0,8)>"09:00:00"; }).length,
+              "#FBB040",
+              "Checked in after 09:00 AM"
+            ],[
+              "Suspicious",
+              attendance.filter(a=>a.is_suspicious).length,
+              "#F87171",
+              "Geofence or device flags"
+            ]].map(([label,value,col,sub])=>(
+              <StatCard key={label} label={label} value={value} col={col} sub={sub}/>
+            ))}
+          </div>
           )}
           {currentUser && <AttendanceCheckIn user={currentUser} />}
           <div className="gc" style={{ overflow:"hidden" }}>
             <div style={{ padding:"14px 20px", borderBottom:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between", alignItems:"center", gap:20 }}>
-              <div className="ho" style={{ fontSize:14, flex:1 }}>Attendance Records</div>
+              <div style={{ display:"flex", flexDirection:"column" }}>
+                <div className="ho" style={{ fontSize:15 }}>Attendance Records</div>
+                <div style={{ fontSize:11, color:C.muted, marginTop:2 }}>{attendance.length} record{attendance.length!==1?"s":""} in selected period</div>
+              </div>
               <div style={{ display:"flex", alignItems:"center", gap:8 }}>
                 <span style={{ fontSize:12, color:C.muted }}>From</span>
                 <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="inp" style={{ width:"auto", padding:"4px 8px", fontSize:12 }}/>
@@ -878,40 +1061,53 @@ function Presence({ currentUserId, currentUser }) {
                 <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} className="inp" style={{ width:"auto", padding:"4px 8px", fontSize:12 }}/>
               </div>
             </div>
+            {attendance.length === 0 ? (
+              <div style={{ padding:"40px 20px", textAlign:"center", color:C.muted }}>
+                <div style={{ fontSize:32, marginBottom:8 }}>📋</div>
+                <div style={{ fontSize:14, fontWeight:600, marginBottom:4 }}>No attendance records found</div>
+                <div style={{ fontSize:12 }}>No check-ins were recorded for this date range.</div>
+              </div>
+            ) : (
             <table className="ht">
-              <thead><tr>{["Date","Employee","Department","Security","Device Info","Check In","Check Out","Hours","Status"].map(h=><th key={h}>{h}</th>)}</tr></thead>
+              <thead><tr>{["Date","Employee","Dept","Security","Device","IP","Check In","Check Out","Hours","Status"].map(h=><th key={h}>{h}</th>)}</tr></thead>
               <tbody>
                 {attendance.map(a=>{
                   const u = a.admins || { full_name: "Unknown Staff", department: "General" };
                   const sc=statusColor[a.status]||C.sub;
+                  const ci = a.check_in;
+                  const isLate = ci && (ci.split("T")[1]||ci).slice(0,8) > "09:00:00";
                   return (
                     <tr key={a.id}>
                       <td style={{ fontSize:11, fontWeight:600 }}>{new Date(a.date).toLocaleDateString("en-GB", { day:"numeric", month:"short" })}</td>
-                      <td><div style={{ display:"flex", alignItems:"center", gap:10 }}><Av av={u.full_name?.split(" ").map(n=>n[0]).join("") || "??"} sz={28}/><span style={{ fontWeight:700 }}>{u.full_name}</span></div></td>
-                      <td style={{ color:C.sub }}>{u.department || "General"}</td>
+                      <td><div style={{ display:"flex", alignItems:"center", gap:8 }}><Av av={u.full_name?.split(" ").map(n=>n[0]).join("") || "??"} sz={26}/><span style={{ fontWeight:700, fontSize:13 }}>{u.full_name}</span></div></td>
+                      <td style={{ color:C.sub, fontSize:11 }}>{u.department || "General"}</td>
                       <td>
                         {a.is_suspicious ? (
                           <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
-                            <span className="tg" style={{ background:"#F8717122", color:"#F87171", border:"1px solid #F8717133", fontSize:10 }} title={a.suspicious_reason}>🚩 Suspicious</span>
-                            <div style={{ fontSize:9, color:"#F87171", opacity:0.8 }}>{a.distance_meters ? `${Math.round(a.distance_meters)}m away` : "No GPS"}</div>
+                            <span className="tg" style={{ background:"#F8717122", color:"#F87171", border:"1px solid #F8717133", fontSize:10 }} title={a.suspicious_reason}>🚩 Flagged</span>
+                            <div style={{ fontSize:9, color:"#F87171" }}>{a.distance_meters ? `${Math.round(a.distance_meters)}m away` : "No GPS"}</div>
                           </div>
                         ) : (
-                          <span className="tg" style={{ background:"#4ADE8022", color:"#4ADE80", border:"1px solid #4ADE8033", fontSize:10 }}>✓ Verified</span>
+                          <span className="tg" style={{ background:"#4ADE8022", color:"#4ADE80", border:"1px solid #4ADE8033", fontSize:10 }}>✓ OK</span>
                         )}
                       </td>
+                      <td style={{ fontSize:10, color:C.sub }} title={a.user_agent}>🖥️ {a.device_type || "—"}</td>
+                      <td style={{ fontSize:11, color:C.text, fontFamily:"monospace" }}>{a.ip_address || "—"}</td>
                       <td>
-                        <div style={{ fontSize:11, color:C.text, fontWeight:600 }}>{a.ip_address || "No IP"}</div>
-                        <div style={{ fontSize:10, color:C.muted, marginTop:2 }} title={a.user_agent}>🖥️ {a.device_type || "Unknown"}</div>
+                        <div style={{ fontSize:12, fontWeight:600, color: isLate ? "#FBB040" : C.text }}>
+                          {ci ? new Date(ci).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "—"}
+                        </div>
+                        {isLate && <div style={{ fontSize:9, color:"#FBB040" }}>Late</div>}
                       </td>
-                      <td>{a.check_in ? new Date(a.check_in).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "—"}</td>
-                      <td>{a.check_out ? new Date(a.check_out).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "—"}</td>
-                      <td style={{ color:T.orange, fontWeight:800 }}>{a.check_in && a.check_out ? (Math.abs(new Date(a.check_out) - new Date(a.check_in)) / 36e5).toFixed(1) + "h" : "—"}</td>
+                      <td style={{ fontSize:12, color:C.sub }}>{a.check_out ? new Date(a.check_out).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "—"}</td>
+                      <td style={{ color:T.orange, fontWeight:800, fontSize:12 }}>{ci && a.check_out ? (Math.abs(new Date(a.check_out) - new Date(ci)) / 36e5).toFixed(1) + "h" : "—"}</td>
                       <td><span className="tg" style={{ background:`${sc}22`, color:sc, border:`1px solid ${sc}33` }}>{a.status}</span></td>
                     </tr>
                   );
                 })}
               </tbody>
             </table>
+            )}
           </div>
         </>
       )}
@@ -952,6 +1148,63 @@ function Presence({ currentUserId, currentUser }) {
             </div>
           </div>
         </>
+      )}
+
+      {sub==="absences" && <AbsenceReport staff={[]} currentUserId={currentUserId} C={C} dark={dark}/>}
+
+      {sub==="absence_log" && (
+        <div className="fade">
+          <div className="gc" style={{ padding:"20px 24px", marginBottom:22 }}>
+            <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", flexWrap:"wrap", gap:20 }}>
+              <div style={{ display:"flex", gap:14 }}>
+                <div>
+                  <div style={{ fontSize:10, color:C.muted, marginBottom:6, fontWeight:800, textTransform:"uppercase" }}>Start Date</div>
+                  <input type="date" value={logStart} onChange={e=>setLogStart(e.target.value)} className="inp" style={{ width:180 }}/>
+                </div>
+                <div>
+                  <div style={{ fontSize:10, color:C.muted, marginBottom:6, fontWeight:800, textTransform:"uppercase" }}>End Date</div>
+                  <input type="date" value={logEnd} onChange={e=>setLogEnd(e.target.value)} className="inp" style={{ width:180 }}/>
+                </div>
+              </div>
+              <button 
+                className="bp" 
+                onClick={loadGlobalAbsences} 
+                disabled={loadingLog}
+                style={{ padding:"12px 30px" }}
+              >
+                {loadingLog ? "Calculating..." : "Generate Global Absence Report"}
+              </button>
+            </div>
+          </div>
+
+          <div className="gc" style={{ overflow:"hidden" }}>
+             <div style={{ padding:"16px 22px", borderBottom:`1px solid ${C.border}` }}>
+                <div className="ho" style={{ fontSize:15 }}>Global Absence Records</div>
+                <div style={{ fontSize:12, color:C.sub, marginTop:2 }}>Showing all missing man-days (excluding weekends & approved leaves)</div>
+             </div>
+             {globalAbsences.length === 0 && !loadingLog ? (
+               <div style={{ padding:60, textAlign:"center", color:C.muted }}>
+                  <div style={{ fontSize:40, marginBottom:10 }}>🔍</div>
+                  <div style={{ fontSize:14, fontWeight:600 }}>No absences recorded for this period</div>
+                  <div style={{ fontSize:12 }}>Or you haven't generated the report yet.</div>
+               </div>
+             ) : (
+               <table className="ht">
+                 <thead><tr>{["Date","Staff Name","Department","Status"].map(h=><th key={h}>{h}</th>)}</tr></thead>
+                 <tbody>
+                   {globalAbsences.map((a,i) => (
+                     <tr key={i}>
+                       <td style={{ fontWeight:700 }}>{new Date(a.date).toLocaleDateString("en-GB", { weekday:"short", day:"numeric", month:"short" })}</td>
+                       <td>{a.staff_name}</td>
+                       <td style={{ color:C.sub, fontSize:12 }}>{a.department}</td>
+                       <td><span className="tg tr" style={{ fontSize:10 }}>{a.status}</span></td>
+                     </tr>
+                   ))}
+                 </tbody>
+               </table>
+             )}
+          </div>
+        </div>
       )}
 
       {showForm && (
@@ -1825,6 +2078,67 @@ function Payroll() {
   );
 }
 
+// ─── HELPER: ORG CHART ───────────────────────────────────────────────────────
+function OrgChartView({ staff }) {
+  const { dark } = useTheme(); const C = dark?DARK:LIGHT;
+  
+  const tree = [];
+  const map = {};
+  
+  staff.forEach(s => {
+      if (s.is_active !== false && !s.is_archived) {
+          map[s.id] = { ...s, children: [] };
+      }
+  });
+
+  Object.values(map).forEach(s => {
+      if (s.line_manager_id && map[s.line_manager_id]) {
+          map[s.line_manager_id].children.push(s);
+      } else {
+          tree.push(s);
+      }
+  });
+
+  const renderNode = (node) => (
+      <div key={node.id} style={{ display:"flex", flexDirection:"column", alignItems:"center", padding:"0 10px" }}>
+          <div style={{ background:C.surface, border:`2px solid rgb(249, 115, 22)`, borderRadius:12, padding:"12px 18px", display:"flex", alignItems:"center", gap:12, minWidth:220, position:"relative", zIndex:2, boxShadow:"0 4px 12px rgba(0,0,0,0.1)" }}>
+              <Av av={node.full_name?.split(" ").map(n=>n[0]).join("") || "??"} sz={38}/>
+              <div>
+                  <div style={{ fontSize:13, fontWeight:800, color:C.text }}>{node.full_name}</div>
+                  <div style={{ fontSize:11, color:C.sub }}>{node.staff_profiles?.[0]?.job_title || node.role}</div>
+                  <div style={{ fontSize:10, color:"#F97316", fontWeight:700 }}>{node.department}</div>
+              </div>
+          </div>
+          {node.children.length > 0 && (
+              <div style={{ display:"flex", position:"relative", marginTop:20, paddingTop:20 }}>
+                  <div style={{ position:"absolute", top:0, left:"50%", width:2, height:20, background:`${C.border}`, transform:"translateX(-50%)" }} />
+                  {node.children.length > 1 && (
+                      <div style={{ position:"absolute", top:20, left:"50%", right:"50%", height:2, background:`${C.border}` }} />
+                  )}
+                  {node.children.map(child => (
+                      <div key={child.id} style={{ position:"relative", display:"flex", flexDirection:"column", alignItems:"center" }}>
+                          <div style={{ position:"absolute", top:-20, left:"50%", width:2, height:20, background:`${C.border}`, transform:"translateX(-50%)" }} />
+                          {renderNode(child)}
+                      </div>
+                  ))}
+              </div>
+          )}
+      </div>
+  );
+
+  return (
+      <div style={{ overflowX:"auto", padding:"40px 0", minHeight:500, display:"flex", justifyContent:"center" }}>
+          {tree.length > 0 ? (
+              <div style={{ display:"flex", gap:40 }}>
+                  {tree.map(root => renderNode(root))}
+              </div>
+          ) : (
+              <div style={{ color:C.muted, marginTop:40 }}>No org chart data available.</div>
+          )}
+      </div>
+  );
+}
+
 // ─── MODULE: STAFF DIRECTORY ─────────────────────────────────────────────────
 function StaffDirectory({ authRole }) {
   const { dark } = useTheme(); const C = dark?DARK:LIGHT;
@@ -1996,7 +2310,12 @@ function StaffDirectory({ authRole }) {
           phone_number: draftView.phone_number,
           emergency_contact: draftView.emergency_contact,
           address: draftView.address,
-          bio: draftView.bio
+          bio: draftView.bio,
+          dob: draftView.dob || null,
+          gender: draftView.gender,
+          nationality: draftView.nationality,
+          marital_status: draftView.marital_status,
+          leave_quota: draftView.leave_quota ? parseInt(draftView.leave_quota, 10) : 20
         })
       });
       setView(prev => ({
@@ -2011,7 +2330,12 @@ function StaffDirectory({ authRole }) {
           phone_number: draftView.phone_number,
           emergency_contact: draftView.emergency_contact,
           address: draftView.address,
-          bio: draftView.bio
+          bio: draftView.bio,
+          dob: draftView.dob,
+          gender: draftView.gender,
+          nationality: draftView.nationality,
+          marital_status: draftView.marital_status,
+          leave_quota: draftView.leave_quota
         }]
       }));
       loadStaff();
@@ -2053,9 +2377,11 @@ function StaffDirectory({ authRole }) {
         />
         <div style={{ fontSize:13, color:C.sub }}>{activeList.length} active · {archivedList.length} archived</div>
       </div>
-      <Tabs items={[["full","Full Staff"],["contractor","Contractors"],["onsite","Onsite / Labourers"]]} active={tab} setActive={setTab}/>
+      <Tabs items={[["full","Full Staff"],["contractor","Contractors"],["onsite","Onsite / Labourers"], ["org","Org Chart"]]} active={tab} setActive={setTab}/>
       {loading ? (
         <div style={{ padding:40, textAlign:"center", color:C.muted }}>Loading staff records…</div>
+      ) : tab === "org" ? (
+        <OrgChartView staff={staff} />
       ) : activeList.length === 0 ? (
         <div className="gc" style={{ padding:48, textAlign:"center", color:C.muted }}>No active {tab} staff found.</div>
       ) : (
@@ -2279,10 +2605,40 @@ function StaffDirectory({ authRole }) {
                     <Lbl>Bio</Lbl>
                     <textarea className="inp" rows={5} value={draftView.bio} onChange={e => setDraftView(d => ({ ...d, bio: e.target.value }))} />
                   </div>
-                  <Field label="Gender" value={view.staff_profiles?.[0]?.gender}/>
-                  <Field label="DOB" value={view.staff_profiles?.[0]?.dob}/>
-                  <Field label="Nationality" value={view.staff_profiles?.[0]?.nationality}/>
-                  <Field label="Marital Status" value={view.staff_profiles?.[0]?.marital_status}/>
+                  <div>
+                    <Lbl>Gender</Lbl>
+                    <select className="inp" value={draftView.gender || ""} onChange={e => setDraftView(d => ({ ...d, gender: e.target.value }))}>
+                      <option value="">— Select —</option>
+                      <option value="Male">Male</option>
+                      <option value="Female">Female</option>
+                      <option value="Other">Other</option>
+                    </select>
+                  </div>
+                  <div>
+                     <Lbl>Date of Birth</Lbl>
+                     <input type="date" className="inp" value={draftView.dob || ""} onChange={e => setDraftView(d => ({ ...d, dob: e.target.value }))} />
+                  </div>
+                  <div>
+                     <Lbl>Nationality</Lbl>
+                     <input className="inp" value={draftView.nationality || ""} onChange={e => setDraftView(d => ({ ...d, nationality: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Lbl>Marital Status</Lbl>
+                    <select className="inp" value={draftView.marital_status || ""} onChange={e => setDraftView(d => ({ ...d, marital_status: e.target.value }))}>
+                      <option value="">— Select —</option>
+                      <option value="Single">Single</option>
+                      <option value="Married">Married</option>
+                      <option value="Divorced">Divorced</option>
+                      <option value="Widowed">Widowed</option>
+                    </select>
+                  </div>
+                  <div style={{ gridColumn: '1 / -1', background: '#F8717111', border: '1px solid #F8717133', padding: '12px 16px', borderRadius: 10 }}>
+                     <Lbl>Annual Leave Quota (Days)</Lbl>
+                     <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+                        <input type="number" min={0} className="inp" value={draftView.leave_quota} onChange={e => setDraftView(d => ({ ...d, leave_quota: e.target.value }))} style={{ width: 100 }} />
+                        <span style={{ fontSize: 12, color: C.muted }}>days per year</span>
+                     </div>
+                  </div>
                 </>
               ) : (
                 <>
@@ -2294,6 +2650,7 @@ function StaffDirectory({ authRole }) {
                   <Field label="DOB" value={view.staff_profiles?.[0]?.dob}/>
                   <Field label="Nationality" value={view.staff_profiles?.[0]?.nationality}/>
                   <Field label="Marital Status" value={view.staff_profiles?.[0]?.marital_status}/>
+                  <Field label="Leave Quota" value={view.staff_profiles?.[0]?.leave_quota ? `${view.staff_profiles?.[0]?.leave_quota} days/yr` : '20 days/yr'}/>
                 </>
               )}
               {view.is_active === false && (
@@ -2376,19 +2733,19 @@ function HRDashboard() {
     setLoading(true);
     apiFetch(`${API_BASE}/hr/dashboard/stats`)
       .then(d => {
-        setData({ staff: d.staff, leaves: d.leaves, tasks: d.tasks, incidents: d.incidents });
+        setData(d);
       })
       .catch(e => {
         console.error("Dashboard stats fetch error:", e);
-        // Fallback or handle error
       })
       .finally(() => setLoading(false));
   }, []);
 
-  const total = data.staff.length;
-  const pendingLeaves = data.leaves.filter(l => l.status === "pending").length;
-  const openTasks = data.tasks.filter(t => t.status !== "completed").length;
-  const seriousFlags = data.incidents.filter(i => i.severity === "Critical" || i.severity === "Serious").length;
+  const a = data.analytics || {};
+  const total = a.total_active || 0;
+  const pendingLeaves = data.leaves?.filter(l => l.status === "pending").length || 0;
+  const openTasks = data.tasks?.filter(t => t.status !== "completed").length || 0;
+  const seriousFlags = data.incidents?.filter(i => i.severity === "Critical" || i.severity === "Serious").length || 0;
 
   return (
     <div className="fade">
@@ -2398,13 +2755,55 @@ function HRDashboard() {
       </div>
       {loading ? <div style={{ padding:40, textAlign:"center", color:C.muted }}>Loading workforce metrics…</div> : (
         <>
-          <div className="g4" style={{ marginBottom:22 }}>
-            <StatCard label="Total Workforce" value={total} sub={`${total} Active Members`}/>
-            <StatCard label="Pending Leaves" value={pendingLeaves} col={T.orange} sub="Awaiting approval"/>
-            <StatCard label="Open Tasks" value={openTasks} col="#60A5FA" sub="Across all teams"/>
-            <StatCard label="Critical Flags" value={seriousFlags} col="#F87171" sub="Urgent action needed"/>
+          {/* Row 1 — Live Today */}
+          <div className="g4" style={{ marginBottom:14 }}>
+            <StatCard label="Total Workforce" value={total} sub="Active Staff Members"/>
+            <StatCard label="Present Today" value={a.present_today || 0} col="#4ADE80" sub={`${a.late_today || 0} checked in late`}/>
+            <StatCard label="Absent Today" value={a.absent_today || 0} col="#F87171" sub={a.absent_names?.length > 0 ? "Action required" : "All accounted for"}/>
+            <StatCard label="Suspicious" value={a.suspicious_today || 0} col="#FBB040" sub="Geofence violations"/>
           </div>
+          {/* Row 2 — Ops Overview */}
+          <div className="g4" style={{ marginBottom:22 }}>
+            <StatCard label="On Leave" value={a.on_leave_today || 0} col="#60A5FA" sub="Approved leave today"/>
+            <StatCard label="Pending Leaves" value={pendingLeaves} col={T.orange} sub="Awaiting approval"/>
+            <StatCard label="Open Tasks" value={openTasks} col="#A78BFA" sub="Across all teams"/>
+            <StatCard label="Critical Flags" value={seriousFlags} col="#F87171" sub="Disciplinary — urgent"/>
+          </div>
+
           <div className="g2w" style={{ marginBottom:22 }}>
+            <div style={{ display:"flex", flexDirection:"column", gap:22 }}>
+              <div className="gc" style={{ padding:22 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:18 }}>
+                  <div className="ho" style={{ fontSize:16 }}>Workforce by Department</div>
+                </div>
+                {Object.entries(a.department_distribution || {}).map(([dept, count]) => (
+                  <div key={dept} style={{ marginBottom:14 }}>
+                    <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:5 }}>
+                      <span style={{ fontWeight:600, color:C.text }}>{dept}</span>
+                      <span style={{ color:C.sub }}>{count} ({Math.round(count/total*100)}%)</span>
+                    </div>
+                    <div style={{ height:6, background:`${C.border}`, borderRadius:3, overflow:"hidden" }}>
+                      <div style={{ height:"100%", width:`${(count/total)*100}%`, background:T.orange }} />
+                    </div>
+                  </div>
+                ))}
+              </div>
+
+              <div className="gc" style={{ padding:22 }}>
+                 <div className="ho" style={{ fontSize:15, marginBottom:16 }}>Absence Log</div>
+                 {a.absent_names?.length > 0 ? (
+                   <div style={{ display:"flex", flexWrap:"wrap", gap:8 }}>
+                     {a.absent_names.map(name => (
+                       <div key={name} style={{ padding:"6px 12px", background:`${C.border}44`, borderRadius:20, fontSize:12, border:`1px solid ${C.border}` }}>
+                         👤 {name}
+                       </div>
+                     ))}
+                   </div>
+                 ) : (
+                   <div style={{ fontSize:13, color:"#4ADE80", textAlign:"center", padding:10 }}>✅ Everyone has checked in!</div>
+                 )}
+              </div>
+            </div>
             <div className="gc" style={{ padding:22 }}>
               <div style={{ display:"flex", justifyContent:"space-between", marginBottom:14 }}>
                 <div className="ho" style={{ fontSize:14 }}>Latest Active Staff</div>
@@ -2413,7 +2812,7 @@ function HRDashboard() {
               <div className="tw"><table className="ht">
                 <thead><tr>{["Staff","Department","Role"].map(h=><th key={h}>{h}</th>)}</tr></thead>
                 <tbody>
-                  {data.staff.slice(0,6).map(u => (
+                  {data.staff?.slice(0,5).map(u => (
                     <tr key={u.id}>
                       <td><div style={{ display:"flex", alignItems:"center", gap:10 }}><Av av={u.full_name?.split(" ").map(n=>n[0]).join("") || "??"} sz={24}/><span style={{ fontWeight:700 }}>{u.full_name}</span></div></td>
                       <td style={{ color:C.sub }}>{u.department}</td>
@@ -2454,12 +2853,161 @@ function HRDashboard() {
                   </div>
                 ))}
               </div>
+
+              <div className="gc" style={{ padding:22 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:14 }}>
+                  <div className="ho" style={{ fontSize:14 }}>Recent Milestones</div>
+                  <span style={{ fontSize:11, color:C.muted }}>Last 30 Days</span>
+                </div>
+                {a.recent_milestones?.length > 0 ? (
+                  a.recent_milestones.map(m => (
+                    <div key={m.id} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+                      <Av av={m.full_name?.split(" ").map(n=>n[0]).join("")} sz={24}/>
+                      <div style={{ flex:1 }}>
+                         <div style={{ fontSize:12, fontWeight:600 }}>{m.full_name}</div>
+                         <div style={{ fontSize:10, color:C.sub }}>Joined {new Date(m.created_at).toLocaleDateString()}</div>
+                      </div>
+                      <span className="tg" style={{ fontSize:8, background:"#4ADE8011", color:"#4ADE80", border:"1px solid #4ADE8022" }}>NEW HIRE</span>
+                    </div>
+                  ))
+                ) : (
+                  <div style={{ fontSize:11, color:C.muted, textAlign:"center", padding:10 }}>No recent onboarding.</div>
+                )}
+              </div>
+
+              {a.upcoming_birthdays?.length > 0 && (
+                <div className="gc" style={{ padding:22, marginTop:22 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:14 }}>
+                    <div className="ho" style={{ fontSize:14 }}>Upcoming Birthdays 🎂</div>
+                    <span style={{ fontSize:11, color:C.muted }}>Next 14 Days</span>
+                  </div>
+                  {a.upcoming_birthdays.map((b, i) => (
+                    <div key={i} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+                      <Av av={b.full_name?.split(" ").map(n=>n[0]).join("")} sz={28} />
+                      <div style={{ flex:1 }}>
+                         <div style={{ fontSize:12, fontWeight:700 }}>{b.full_name}</div>
+                         <div style={{ fontSize:10, color:C.sub }}>{new Date(b.date).toLocaleDateString('en-GB', { day:'numeric', month:'short' })}</div>
+                      </div>
+                      <span className="tg" style={{ fontSize:9, background:"#FBB04022", color:"#FBB040", border:"1px solid #FBB04044" }}>
+                         {b.days_left === 0 ? "TODAY!" : `in ${b.days_left}d`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
+
+              {a.upcoming_anniversaries?.length > 0 && (
+                <div className="gc" style={{ padding:22, marginTop:22 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:14 }}>
+                    <div className="ho" style={{ fontSize:14 }}>Work Anniversaries 🎊</div>
+                    <span style={{ fontSize:11, color:C.muted }}>Next 30 Days</span>
+                  </div>
+                  {a.upcoming_anniversaries.map((anniv, i) => (
+                    <div key={i} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+                      <Av av={anniv.full_name?.split(" ").map(n=>n[0]).join("")} sz={28} gold/>
+                      <div style={{ flex:1 }}>
+                         <div style={{ fontSize:12, fontWeight:700 }}>{anniv.full_name}</div>
+                         <div style={{ fontSize:10, color:C.sub }}>{anniv.years} years on {new Date(anniv.date).toLocaleDateString('en-GB', { day:'numeric', month:'short' })}</div>
+                      </div>
+                      <span className="tg" style={{ fontSize:9, background:"#60A5FA22", color:"#60A5FA", border:"1px solid #60A5FA44" }}>
+                         {anniv.days_left === 0 ? "TODAY!" : `in ${anniv.days_left}d`}
+                      </span>
+                    </div>
+                  ))}
+                </div>
+              )}
             </div>
           </div>
+
+          {/* Staff on Leave — full panel */}
+          <div className="g2" style={{ marginBottom:22 }}>
+            {/* On Leave Today */}
+            <div className="gc" style={{ padding:22 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+                <div className="ho" style={{ fontSize:15 }}>Staff on Leave Today</div>
+                <span className="tg" style={{ background:`${T.orange}22`, color:T.orange, border:`1px solid ${T.orange}33`, fontSize:10 }}>
+                  {a.on_leave_today || 0} Staff
+                </span>
+              </div>
+              {data.leaves?.filter(l => {
+                const today = new Date().toISOString().split("T")[0];
+                return l.status === "approved" && l.start_date <= today && l.end_date >= today;
+              }).length > 0 ? (
+                data.leaves.filter(l => {
+                  const today = new Date().toISOString().split("T")[0];
+                  return l.status === "approved" && l.start_date <= today && l.end_date >= today;
+                }).map(l => {
+                  const u = l.admins || {};
+                  const returnDate = new Date(l.end_date);
+                  returnDate.setDate(returnDate.getDate() + 1);
+                  return (
+                    <div key={l.id} style={{ display:"flex", alignItems:"center", gap:12, padding:"12px 14px", background:`${T.orange}08`, border:`1px solid ${T.orange}22`, borderRadius:10, marginBottom:8 }}>
+                      <Av av={u.full_name?.split(" ").map(n=>n[0]).join("") || "??"} sz={34}/>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontWeight:700, fontSize:13 }}>{u.full_name}</div>
+                        <div style={{ fontSize:11, color:C.sub, marginTop:2 }}>
+                          {l.leave_type} · Returns {returnDate.toLocaleDateString("en-GB", { day:"numeric", month:"short" })}
+                        </div>
+                      </div>
+                      <div style={{ textAlign:"right" }}>
+                        <div style={{ fontSize:11, fontWeight:700, color:T.orange }}>{l.days_count}d</div>
+                        <div style={{ fontSize:9, color:C.muted }}>leave</div>
+                      </div>
+                    </div>
+                  );
+                })
+              ) : (
+                <div style={{ textAlign:"center", padding:"20px 0", color:C.muted }}>
+                  <div style={{ fontSize:24, marginBottom:6 }}>🏢</div>
+                  <div style={{ fontSize:12 }}>All staff are in today!</div>
+                </div>
+              )}
+            </div>
+
+            {/* Upcoming Leaves This Week */}
+            <div className="gc" style={{ padding:22 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+                <div className="ho" style={{ fontSize:15 }}>Upcoming Leaves</div>
+                <span style={{ fontSize:11, color:C.muted }}>Next 7 Days</span>
+              </div>
+              {data.leaves?.filter(l => {
+                if (l.status !== "approved") return false;
+                const today = new Date(); today.setHours(0,0,0,0);
+                const nextWeek = new Date(today); nextWeek.setDate(today.getDate() + 7);
+                const start = new Date(l.start_date);
+                return start > today && start <= nextWeek;
+              }).slice(0,5).length > 0 ? (
+                data.leaves.filter(l => {
+                  if (l.status !== "approved") return false;
+                  const today = new Date(); today.setHours(0,0,0,0);
+                  const nextWeek = new Date(today); nextWeek.setDate(today.getDate() + 7);
+                  const start = new Date(l.start_date);
+                  return start > today && start <= nextWeek;
+                }).slice(0,5).map(l => {
+                  const u = l.admins || {};
+                  return (
+                    <div key={l.id} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+                      <Av av={u.full_name?.split(" ").map(n=>n[0]).join("") || "??"} sz={28}/>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:13, fontWeight:600 }}>{u.full_name}</div>
+                        <div style={{ fontSize:11, color:C.sub }}>
+                          {l.leave_type} · {new Date(l.start_date).toLocaleDateString("en-GB", {day:"numeric", month:"short"})} → {new Date(l.end_date).toLocaleDateString("en-GB", {day:"numeric", month:"short"})}
+                        </div>
+                      </div>
+                      <span style={{ fontSize:11, fontWeight:700, color:"#60A5FA" }}>{l.days_count}d</span>
+                    </div>
+                  );
+                })
+              ) : (
+                <div style={{ textAlign:"center", padding:"20px 0", color:C.muted, fontSize:12 }}>No approved leaves in the next 7 days.</div>
+              )}
+            </div>
+          </div>
+
           <div className="gc" style={{ padding:22 }}>
             <div className="ho" style={{ fontSize:14, marginBottom:14 }}>Recent Open Tasks</div>
             <div className="g4" style={{ gap:12 }}>
-              {data.tasks.filter(t => t.status !== "completed").slice(0, 8).map(t => {
+              {(data.tasks || []).filter(t => t.status !== "completed").slice(0, 8).map(t => {
                 const sc = sCol[t.status] || T.orange;
                 const assignedTo = data.staff.find(u => u.id === t.staff_id);
                 return (
@@ -2501,7 +3049,11 @@ function MyProfile({ user }) {
           bio: p.bio || "",
           bank_name: p.bank_name || "",
           account_number: p.account_number || "",
-          account_name: p.account_name || ""
+          account_name: p.account_name || "",
+          dob: p.dob || "",
+          gender: p.gender || "",
+          nationality: p.nationality || "",
+          marital_status: p.marital_status || ""
         });
       })
       .catch(e => console.error("Profile fetch error:", e))
@@ -2518,7 +3070,11 @@ function MyProfile({ user }) {
           phone_number: draft.phone_number,
           address: draft.address,
           emergency_contact: draft.emergency_contact,
-          bio: draft.bio
+          bio: draft.bio,
+          dob: draft.dob || null,
+          gender: draft.gender,
+          nationality: draft.nationality,
+          marital_status: draft.marital_status
         })
       });
       setProf(prev => ({
@@ -2528,7 +3084,11 @@ function MyProfile({ user }) {
           phone_number: draft.phone_number,
           address: draft.address,
           emergency_contact: draft.emergency_contact,
-          bio: draft.bio
+          bio: draft.bio,
+          dob: draft.dob,
+          gender: draft.gender,
+          nationality: draft.nationality,
+          marital_status: draft.marital_status
         }]
       }));
       setEditMode(false);
@@ -2594,10 +3154,33 @@ function MyProfile({ user }) {
                   <Lbl>Bio</Lbl>
                   <textarea className="inp" rows={5} value={draft.bio} onChange={e => setDraft(d => ({ ...d, bio: e.target.value }))} />
                 </div>
-                <Field label="Gender" value={p.gender}/>
-                <Field label="DOB" value={p.dob}/>
-                <Field label="Nationality" value={p.nationality}/>
-                <Field label="Marital Status" value={p.marital_status}/>
+                <div>
+                  <Lbl>Gender</Lbl>
+                  <select className="inp" value={draft.gender || ""} onChange={e => setDraft(d => ({ ...d, gender: e.target.value }))}>
+                    <option value="">— Select —</option>
+                    <option value="Male">Male</option>
+                    <option value="Female">Female</option>
+                    <option value="Other">Other</option>
+                  </select>
+                </div>
+                <div>
+                   <Lbl>Date of Birth</Lbl>
+                   <input type="date" className="inp" value={draft.dob || ""} onChange={e => setDraft(d => ({ ...d, dob: e.target.value }))} />
+                </div>
+                <div>
+                   <Lbl>Nationality</Lbl>
+                   <input className="inp" value={draft.nationality || ""} onChange={e => setDraft(d => ({ ...d, nationality: e.target.value }))} />
+                </div>
+                <div>
+                  <Lbl>Marital Status</Lbl>
+                  <select className="inp" value={draft.marital_status || ""} onChange={e => setDraft(d => ({ ...d, marital_status: e.target.value }))}>
+                    <option value="">— Select —</option>
+                    <option value="Single">Single</option>
+                    <option value="Married">Married</option>
+                    <option value="Divorced">Divorced</option>
+                    <option value="Widowed">Widowed</option>
+                  </select>
+                </div>
               </>
             ) : (
               <>
@@ -2806,7 +3389,7 @@ function HRAdminPortal({ user, onLogout }) {
     <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="HR Administration" renderPage={p=>{
       if (p==="dashboard") return <HRDashboard/>;
       if (p==="staff")     return <StaffDirectory authRole="hr"/>;
-      if (p==="presence")  return <Presence/>;
+      if (p==="presence")  return <Presence currentUserId={user.id} currentUser={user}/>;
       if (p==="perf")      return <Performance/>;
       if (p==="goals")     return <Goals canManageKpiTemplates />;
       if (p==="payroll")   return <Payroll/>;
@@ -2842,7 +3425,7 @@ function ManagerPortal({ user, onLogout }) {
   return (
     <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="Management Hub" renderPage={p=>{
       if (p==="team")      return <StaffDirectory authRole="manager"/>;
-      if (p==="presence")  return <Presence/>;
+      if (p==="presence")  return <Presence currentUserId={user.id} currentUser={user}/>;
       if (p==="perf")      return <Performance/>;
       if (p==="goals")     return <Goals/>;
       if (p==="tasks")     return <Tasks currentUser={user}/>;
