@@ -1111,45 +1111,51 @@ async def get_dashboard_stats(current_admin: dict = Depends(verify_token)):
             p = prof[0]
             # Check Birthdays (Next 14 days)
             if p.get("dob"):
-                dob = date.fromisoformat(p["dob"])
-                # Handle leap years safely
                 try:
-                    this_year_bday = dob.replace(year=today_dt.year)
-                except ValueError:
-                    this_year_bday = dob.replace(year=today_dt.year, day=dob.day-1)
-                    
-                if this_year_bday < today_dt:
+                    dob = date.fromisoformat(p["dob"])
+                    # Handle leap years safely
                     try:
-                        this_year_bday = dob.replace(year=today_dt.year + 1)
+                        this_year_bday = dob.replace(year=today_dt.year)
                     except ValueError:
-                        this_year_bday = dob.replace(year=today_dt.year + 1, day=dob.day-1)
-                
-                days_to_bday = (this_year_bday - today_dt).days
-                if days_to_bday <= 14:
-                    upcoming_birthdays.append({
-                        "id": s["id"], "full_name": s["full_name"], "department": s["department"], "date": p["dob"], "days_left": days_to_bday
-                    })
+                        this_year_bday = dob.replace(year=today_dt.year, day=dob.day-1)
+                        
+                    if this_year_bday < today_dt:
+                        try:
+                            this_year_bday = dob.replace(year=today_dt.year + 1)
+                        except ValueError:
+                            this_year_bday = dob.replace(year=today_dt.year + 1, day=dob.day-1)
+                    
+                    days_to_bday = (this_year_bday - today_dt).days
+                    if days_to_bday <= 14:
+                        upcoming_birthdays.append({
+                            "id": s["id"], "full_name": s["full_name"], "department": s["department"], "date": p["dob"], "days_left": days_to_bday
+                        })
+                except:
+                    pass
                     
             # Check Anniversaries (Next 30 days)
             if p.get("date_joined"):
-                dj = date.fromisoformat(p["date_joined"])
                 try:
-                    this_year_anniv = dj.replace(year=today_dt.year)
-                except ValueError:
-                    this_year_anniv = dj.replace(year=today_dt.year, day=dj.day-1)
-                    
-                if this_year_anniv < today_dt:
+                    dj = date.fromisoformat(p["date_joined"])
                     try:
-                        this_year_anniv = dj.replace(year=today_dt.year + 1)
+                        this_year_anniv = dj.replace(year=today_dt.year)
                     except ValueError:
-                        this_year_anniv = dj.replace(year=today_dt.year + 1, day=dj.day-1)
+                        this_year_anniv = dj.replace(year=today_dt.year, day=dj.day-1)
                         
-                days_to_anniv = (this_year_anniv - today_dt).days
-                years_worked = this_year_anniv.year - dj.year
-                if days_to_anniv <= 30 and years_worked > 0:
-                    upcoming_anniversaries.append({
-                        "id": s["id"], "full_name": s["full_name"], "department": s["department"], "date": p["date_joined"], "days_left": days_to_anniv, "years": years_worked
-                    })
+                    if this_year_anniv < today_dt:
+                        try:
+                            this_year_anniv = dj.replace(year=today_dt.year + 1)
+                        except ValueError:
+                            this_year_anniv = dj.replace(year=today_dt.year + 1, day=dj.day-1)
+                            
+                    days_to_anniv = (this_year_anniv - today_dt).days
+                    years_worked = this_year_anniv.year - dj.year
+                    if days_to_anniv <= 30 and years_worked > 0:
+                        upcoming_anniversaries.append({
+                            "id": s["id"], "full_name": s["full_name"], "department": s["department"], "date": p["date_joined"], "days_left": days_to_anniv, "years": years_worked
+                        })
+                except:
+                    pass
 
     upcoming_birthdays.sort(key=lambda x: x["days_left"])
     upcoming_anniversaries.sort(key=lambda x: x["days_left"])

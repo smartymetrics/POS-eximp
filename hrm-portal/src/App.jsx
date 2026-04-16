@@ -160,6 +160,11 @@ const GS = dark => {
       .g2w{grid-template-columns:1fr;gap:12px;}
       .mo{max-width:100vw;margin:8px;border-radius:16px;max-height:96vh;}
       .field{padding:10px 14px;}
+      .tw .ht{min-width:850px;}
+    }
+    @media(max-width:480px){
+      .g4{grid-template-columns:1fr;}
+      .hrm-content-padding{padding:12px;}
     }
   `;
 };
@@ -2057,21 +2062,23 @@ function Payroll() {
           <div style={{ padding:"14px 20px", borderBottom:`1px solid ${C.border}` }}>
             <div className="ho" style={{ fontSize:14 }}>Payroll Records</div>
           </div>
-          <table className="ht">
-            <thead><tr>{["Staff Member","Period","Gross Pay","Net Pay","Status",""].map(h=><th key={h}>{h}</th>)}</tr></thead>
-            <tbody>
-              {payroll.map(p => (
-                <tr key={p.id}>
-                  <td><div style={{ display:"flex", alignItems:"center", gap:10 }}><Av av={p.admins?.full_name?.split(" ").map(n=>n[0]).join("") || "??"} sz={26}/><span style={{ fontWeight:800 }}>{p.admins?.full_name}</span></div></td>
-                  <td style={{ color:C.sub }}>{p.period_start ? new Date(p.period_start).toLocaleDateString(undefined, {month:'long',year:'numeric'}) : "—"}</td>
-                  <td style={{ fontWeight:700 }}>{fmt(p.gross_pay)}</td>
-                  <td style={{ color:T.orange, fontWeight:800, fontSize:14 }}>{fmt(p.net_pay)}</td>
-                  <td><span className={`tg ${p.status==="paid"?"tg2":"ty"}`}>{p.status}</span></td>
-                  <td><button className="bg" style={{ fontSize:11, padding:"5px 12px" }}>Payslip</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
+          <div className="tw">
+            <table className="ht">
+              <thead><tr>{["Staff Member","Period","Gross Pay","Net Pay","Status",""].map(h=><th key={h}>{h}</th>)}</tr></thead>
+              <tbody>
+                {payroll.map(p => (
+                  <tr key={p.id}>
+                    <td><div style={{ display:"flex", alignItems:"center", gap:10 }}><Av av={p.admins?.full_name?.split(" ").map(n=>n[0]).join("") || "??"} sz={26}/><span style={{ fontWeight:800 }}>{p.admins?.full_name}</span></div></td>
+                    <td style={{ color:C.sub }}>{p.period_start ? new Date(p.period_start).toLocaleDateString(undefined, {month:'long',year:'numeric'}) : "—"}</td>
+                    <td style={{ fontWeight:700 }}>{fmt(p.gross_pay)}</td>
+                    <td style={{ color:T.orange, fontWeight:800, fontSize:14 }}>{fmt(p.net_pay)}</td>
+                    <td><span className={`tg ${p.status==="paid"?"tg2":"ty"}`}>{p.status}</span></td>
+                    <td><button className="bg" style={{ fontSize:11, padding:"5px 12px" }}>Payslip</button></td>
+                  </tr>
+                ))}
+              </tbody>
+            </table>
+          </div>
         </div>
       )}
     </div>
@@ -2803,25 +2810,27 @@ function HRDashboard() {
                    <div style={{ fontSize:13, color:"#4ADE80", textAlign:"center", padding:10 }}>✅ Everyone has checked in!</div>
                  )}
               </div>
-            </div>
-            <div className="gc" style={{ padding:22 }}>
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:14 }}>
-                <div className="ho" style={{ fontSize:14 }}>Latest Active Staff</div>
-                <span style={{ fontSize:11, color:C.muted }}>Recent Onboarding</span>
+
+              <div className="gc" style={{ padding:22 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:14 }}>
+                  <div className="ho" style={{ fontSize:14 }}>Latest Active Staff</div>
+                  <span style={{ fontSize:11, color:C.muted }}>Recent Onboarding</span>
+                </div>
+                <div className="tw"><table className="ht">
+                  <thead><tr>{["Staff","Department","Role"].map(h=><th key={h}>{h}</th>)}</tr></thead>
+                  <tbody>
+                    {data.staff?.slice(0,5).map(u => (
+                      <tr key={u.id}>
+                        <td><div style={{ display:"flex", alignItems:"center", gap:10 }}><Av av={u.full_name?.split(" ").map(n=>n[0]).join("") || "??"} sz={24}/><span style={{ fontWeight:700 }}>{u.full_name}</span></div></td>
+                        <td style={{ color:C.sub }}>{u.department}</td>
+                        <td><span className="tg to" style={{ fontSize:9 }}>{u.role?.toUpperCase()}</span></td>
+                      </tr>
+                    ))}
+                  </tbody>
+                </table></div>
               </div>
-              <div className="tw"><table className="ht">
-                <thead><tr>{["Staff","Department","Role"].map(h=><th key={h}>{h}</th>)}</tr></thead>
-                <tbody>
-                  {data.staff?.slice(0,5).map(u => (
-                    <tr key={u.id}>
-                      <td><div style={{ display:"flex", alignItems:"center", gap:10 }}><Av av={u.full_name?.split(" ").map(n=>n[0]).join("") || "??"} sz={24}/><span style={{ fontWeight:700 }}>{u.full_name}</span></div></td>
-                      <td style={{ color:C.sub }}>{u.department}</td>
-                      <td><span className="tg to" style={{ fontSize:9 }}>{u.role?.toUpperCase()}</span></td>
-                    </tr>
-                  ))}
-                </tbody>
-              </table></div>
             </div>
+
             <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
               <div className="gc" style={{ padding:22 }}>
                 <div className="ho" style={{ fontSize:14, marginBottom:16 }}>Administrative Alerts</div>
@@ -2875,47 +2884,47 @@ function HRDashboard() {
                 )}
               </div>
 
-              {a.upcoming_birthdays?.length > 0 && (
-                <div className="gc" style={{ padding:22, marginTop:22 }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:14 }}>
-                    <div className="ho" style={{ fontSize:14 }}>Upcoming Birthdays 🎂</div>
-                    <span style={{ fontSize:11, color:C.muted }}>Next 14 Days</span>
-                  </div>
-                  {a.upcoming_birthdays.map((b, i) => (
-                    <div key={i} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
-                      <Av av={b.full_name?.split(" ").map(n=>n[0]).join("")} sz={28} />
-                      <div style={{ flex:1 }}>
-                         <div style={{ fontSize:12, fontWeight:700 }}>{b.full_name}</div>
-                         <div style={{ fontSize:10, color:C.sub }}>{new Date(b.date).toLocaleDateString('en-GB', { day:'numeric', month:'short' })}</div>
-                      </div>
-                      <span className="tg" style={{ fontSize:9, background:"#FBB04022", color:"#FBB040", border:"1px solid #FBB04044" }}>
-                         {b.days_left === 0 ? "TODAY!" : `in ${b.days_left}d`}
-                      </span>
-                    </div>
-                  ))}
+              <div className="gc" style={{ padding:22, marginTop:22 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:14 }}>
+                  <div className="ho" style={{ fontSize:14 }}>Upcoming Birthdays 🎂</div>
+                  <span style={{ fontSize:11, color:C.muted }}>Next 14 Days</span>
                 </div>
-              )}
+                {a.upcoming_birthdays?.length > 0 ? a.upcoming_birthdays.map((b, i) => (
+                  <div key={i} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+                    <Av av={b.full_name?.split(" ").map(n=>n[0]).join("")} sz={28} />
+                    <div style={{ flex:1 }}>
+                       <div style={{ fontSize:12, fontWeight:700 }}>{b.full_name}</div>
+                       <div style={{ fontSize:10, color:C.sub }}>{new Date(b.date).toLocaleDateString('en-GB', { day:'numeric', month:'short' })}</div>
+                    </div>
+                    <span className="tg" style={{ fontSize:9, background:"#FBB04022", color:"#FBB040", border:"1px solid #FBB04044" }}>
+                       {b.days_left === 0 ? "TODAY!" : `in ${b.days_left}d`}
+                    </span>
+                  </div>
+                )) : (
+                  <div style={{ fontSize:11, color:C.muted, textAlign:"center", padding:10 }}>No birthdays in the next 14 days.</div>
+                )}
+              </div>
 
-              {a.upcoming_anniversaries?.length > 0 && (
-                <div className="gc" style={{ padding:22, marginTop:22 }}>
-                  <div style={{ display:"flex", justifyContent:"space-between", marginBottom:14 }}>
-                    <div className="ho" style={{ fontSize:14 }}>Work Anniversaries 🎊</div>
-                    <span style={{ fontSize:11, color:C.muted }}>Next 30 Days</span>
-                  </div>
-                  {a.upcoming_anniversaries.map((anniv, i) => (
-                    <div key={i} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
-                      <Av av={anniv.full_name?.split(" ").map(n=>n[0]).join("")} sz={28} gold/>
-                      <div style={{ flex:1 }}>
-                         <div style={{ fontSize:12, fontWeight:700 }}>{anniv.full_name}</div>
-                         <div style={{ fontSize:10, color:C.sub }}>{anniv.years} years on {new Date(anniv.date).toLocaleDateString('en-GB', { day:'numeric', month:'short' })}</div>
-                      </div>
-                      <span className="tg" style={{ fontSize:9, background:"#60A5FA22", color:"#60A5FA", border:"1px solid #60A5FA44" }}>
-                         {anniv.days_left === 0 ? "TODAY!" : `in ${anniv.days_left}d`}
-                      </span>
-                    </div>
-                  ))}
+              <div className="gc" style={{ padding:22, marginTop:22 }}>
+                <div style={{ display:"flex", justifyContent:"space-between", marginBottom:14 }}>
+                  <div className="ho" style={{ fontSize:14 }}>Work Anniversaries 🎊</div>
+                  <span style={{ fontSize:11, color:C.muted }}>Next 30 Days</span>
                 </div>
-              )}
+                {a.upcoming_anniversaries?.length > 0 ? a.upcoming_anniversaries.map((anniv, i) => (
+                  <div key={i} style={{ display:"flex", alignItems:"center", gap:10, marginBottom:10 }}>
+                    <Av av={anniv.full_name?.split(" ").map(n=>n[0]).join("")} sz={28} gold/>
+                    <div style={{ flex:1 }}>
+                       <div style={{ fontSize:12, fontWeight:700 }}>{anniv.full_name}</div>
+                       <div style={{ fontSize:10, color:C.sub }}>{anniv.years} years on {new Date(anniv.date).toLocaleDateString('en-GB', { day:'numeric', month:'short' })}</div>
+                    </div>
+                    <span className="tg" style={{ fontSize:9, background:"#60A5FA22", color:"#60A5FA", border:"1px solid #60A5FA44" }}>
+                       {anniv.days_left === 0 ? "TODAY!" : `in ${anniv.days_left}d`}
+                    </span>
+                  </div>
+                )) : (
+                  <div style={{ fontSize:11, color:C.muted, textAlign:"center", padding:10 }}>No anniversaries in the next 30 days.</div>
+                )}
+              </div>
             </div>
           </div>
 
@@ -3389,7 +3398,7 @@ function HRAdminPortal({ user, onLogout }) {
     <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="HR Administration" renderPage={p=>{
       if (p==="dashboard") return <HRDashboard/>;
       if (p==="staff")     return <StaffDirectory authRole="hr"/>;
-      if (p==="presence")  return <Presence currentUserId={user.id} currentUser={user}/>;
+      if (p==="presence")  return <Presence currentUser={user}/>;
       if (p==="perf")      return <Performance/>;
       if (p==="goals")     return <Goals canManageKpiTemplates />;
       if (p==="payroll")   return <Payroll/>;
@@ -3425,7 +3434,7 @@ function ManagerPortal({ user, onLogout }) {
   return (
     <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="Management Hub" renderPage={p=>{
       if (p==="team")      return <StaffDirectory authRole="manager"/>;
-      if (p==="presence")  return <Presence currentUserId={user.id} currentUser={user}/>;
+      if (p==="presence")  return <Presence currentUser={user}/>;
       if (p==="perf")      return <Performance/>;
       if (p==="goals")     return <Goals/>;
       if (p==="tasks")     return <Tasks currentUser={user}/>;
