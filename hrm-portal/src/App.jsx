@@ -345,41 +345,110 @@ function Topbar({ title, user }) {
 
 
 // ─── GOAL FORM MODAL CONTENT ─────────────────────────────────────────────────
-function GoalForm({ onSave, staffList=[] }) {
+function GoalForm({ onSave, staffList=[], templates=[], initialGoal=null }) {
   const { dark } = useTheme(); const C = dark?DARK:LIGHT;
-  const [f, setF] = useState({ uid:"", kpi:"", target:"", unit:"", period:"Apr 2026", status:"Draft" });
-  const kpiMap = {
-    "Sales & Acquisitions":["Deals Closed","Collection Rate (%)","Lead Follow-ups","KYC Completion Rate (%)","Inspection-to-Contract Rate (%)"],
-    "Property Management": ["Client Satisfaction Score","Listing Turnaround (days)","Lease Renewals","Property Valuations Completed"],
-    "Construction":        ["Site Inspections Done","Safety Compliance Score (%)","Tasks Completed On Time","Defect Rate (%)"],
-    "Marketing":           ["Campaigns Sent","Email Open Rate (%)","New Leads Added","Lead Engagement Score","A/B Test Adoption (%)"],
-    "Legal & Compliance":  ["Contracts Drafted","Compliance Audits Passed","Escalated Disputes Resolved"],
-    "Human Resources":     ["Team Target Achievement (%)","Onboarding Completed","Policy Reviews Done"],
-  };
+  const defaultForm = { uid:"", department:"", template_id:"", kpi:"", target:"", unit:"", period:"Apr 2026", status:"Draft" };
+  const [f, setF] = useState(defaultForm);
+  const departmentAlias = { Sales: "Sales & Acquisitions", HR: "Human Resources" };
+
+  useEffect(() => {
+    if (!initialGoal) {
+      setF(defaultForm);
+      return;
+    }
+    setF({
+      uid: initialGoal.staff_id || "",
+      department: initialGoal.department || "",
+      template_id: initialGoal.kpi_template_id || "",
+      kpi: initialGoal.kpi_name || "",
+      target: initialGoal.target_value != null ? String(initialGoal.target_value) : "",
+      unit: initialGoal.unit || "",
+      period: initialGoal.month ? new Date(initialGoal.month).toLocaleDateString(undefined, { month:'short', year:'numeric' }) : "Apr 2026",
+      status: initialGoal.status || "Draft"
+    });
+  }, [initialGoal]);
+
   const selUser = staffList.find(u => u.id === f.uid);
-  const kpis = selUser ? (kpiMap[selUser.department]||["Custom KPI 1","Custom KPI 2"]) : [];
+  const departmentKey = selUser ? (departmentAlias[selUser.department] || selUser.department) : f.department;
+  const suggestedTemplates = departmentKey ? templates.filter(t => t.department === departmentKey && t.is_active) : [];
+  const hasSuggestedKpis = suggestedTemplates.length > 0;
+  const departments = Array.from(new Set([
+    ...staffList.map(u => departmentAlias[u.department] || u.department).filter(Boolean),
+    ...templates.map(t => t.department).filter(Boolean)
+  ])).sort();
 
   const save = () => {
-    if (!f.uid||!f.kpi||!f.target) return;
-    onSave({ ...f, target:parseFloat(f.target), actual:0 });
+    if ((!f.uid && !f.department) || !f.kpi || !f.target) return;
+    onSave({ ...f, department: departmentKey || f.department, target:parseFloat(f.target), actual:0 });
   };
 
   return (
     <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-      <div>
-        <Lbl>Staff Member *</Lbl>
-        <select className="inp" value={f.uid} onChange={e=>setF(x=>({...x,uid:e.target.value,kpi:""}))}>
-          <option value="">— Select Staff Member —</option>
-          {staffList.filter(u=>u.role!=="hr_admin").map(u=><option key={u.id} value={u.id}>{u.full_name} ({u.department})</option>)}
-        </select>
+      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+        <div>
+          <Lbl>Staff Member</Lbl>
+          <select className="inp" value={f.uid} onChange={e=>{
+            const staffId = e.target.value;
+            const staff = staffList.find(u => u.id === staffId);
+            setF(x => ({
+              ...x,
+              uid: staffId,
+              department: staff ? (departmentAlias[staff.department] || staff.department) : "",
+              template_id:"",
+              kpi:""
+            }));
+          }}>
+            <option value="">— No staff selected —</option>
+            {staffList.filter(u=>u.role!=="hr_admin").map(u=><option key={u.id} value={u.id}>{u.full_name} ({u.department})</option>)}
+          </select>
+        </div>
+        <div>
+          <Lbl>Department</Lbl>
+          <select className="inp" value={f.department} onChange={e=>{
+            setF(x => ({ ...x, department: e.target.value, uid:"", template_id:"", kpi:"" }));
+          }} disabled={!!f.uid}>
+            <option value="">— Select Department —</option>
+            {departments.map(d=><option key={d} value={d}>{d}</option>)}
+          </select>
+        </div>
       </div>
       <div>
         <Lbl>KPI / Goal Type *</Lbl>
-        <select className="inp" value={f.kpi} onChange={e=>setF(x=>({...x,kpi:e.target.value}))} disabled={!f.uid}>
-          <option value="">— Select KPI for this role —</option>
-          {kpis.map(k=><option key={k}>{k}</option>)}
-        </select>
-        {!f.uid && <div style={{ fontSize:11, color:(dark?DARK:LIGHT).muted, marginTop:4 }}>Select a staff member first to see role-relevant KPIs.</div>}
+        {hasSuggestedKpis ? (
+          <>
+            <select className="inp" value={f.template_id} onChange={e=>{
+              const template = suggestedTemplates.find(t => t.id === e.target.value);
+              if (e.target.value === "") {
+                setF(x => ({ ...x, template_id:"", kpi:"" }));
+              } else {
+                setF(x => ({ ...x, template_id: e.target.value, kpi: template ? template.name : x.kpi }));
+              }
+            }} disabled={!departmentKey}>
+              <option value="">— Select KPI for this department —</option>
+              {suggestedTemplates.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
+            </select>
+            <input
+              className="inp"
+              type="text"
+              placeholder={departmentKey ? "KPI name (select a template or type a custom name)" : "Select staff or department first"}
+              value={f.kpi}
+              onChange={e=>setF(x=>({...x,kpi:e.target.value, template_id: ""}))}
+              disabled={!departmentKey}
+              style={{ marginTop:12 }}
+            />
+          </>
+        ) : (
+          <input
+            className="inp"
+            type="text"
+            placeholder={departmentKey ? "Enter a custom KPI goal name" : "Select staff or department first"}
+            value={f.kpi}
+            onChange={e=>setF(x=>({...x,kpi:e.target.value}))}
+            disabled={!departmentKey}
+          />
+        )}
+        {!departmentKey && <div style={{ fontSize:11, color:(dark?DARK:LIGHT).muted, marginTop:4 }}>Select a staff member or department first to see relevant KPIs.</div>}
+        {departmentKey && !hasSuggestedKpis && <div style={{ fontSize:11, color:(dark?DARK:LIGHT).muted, marginTop:4 }}>This department has no active KPI templates. Enter a custom KPI name.</div>}
       </div>
       <div className="g2" style={{ gap:12 }}>
         <div><Lbl>Target Value *</Lbl><input className="inp" type="number" placeholder="e.g. 8" value={f.target} onChange={e=>setF(x=>({...x,target:e.target.value}))}/></div>
@@ -400,7 +469,116 @@ function GoalForm({ onSave, staffList=[] }) {
           </select>
         </div>
       </div>
-      <button className="bp" onClick={save} style={{ padding:12 }}>Save Goal</button>
+      <button className="bp" onClick={save} style={{ padding:12 }}>{initialGoal ? "Update Goal" : "Save Goal"}</button>
+    </div>
+  );
+}
+
+function KpiTemplateManager({ templates=[], onSave, onUpdate, onClose }) {
+  const { dark } = useTheme(); const C = dark?DARK:LIGHT;
+  const [editId, setEditId] = useState("");
+  const [form, setForm] = useState({ name:"", department:"", category:"", description:"", is_active:true });
+  const [saving, setSaving] = useState(false);
+
+  const beginEdit = (template) => {
+    setEditId(template.id);
+    setForm({
+      name: template.name,
+      department: template.department,
+      category: template.category || "",
+      description: template.description || "",
+      is_active: template.is_active
+    });
+  };
+
+  const resetForm = () => {
+    setEditId("");
+    setForm({ name:"", department:"", category:"", description:"", is_active:true });
+  };
+
+  const handleSave = async () => {
+    if (!form.name || !form.department) {
+      alert("Please enter both a KPI name and department.");
+      return;
+    }
+    setSaving(true);
+    try {
+      if (editId) {
+        await onUpdate(editId, form);
+      } else {
+        await onSave(form);
+      }
+      resetForm();
+    } catch (e) {
+      alert("Error saving KPI template: " + e.message);
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  return (
+    <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", gap:10 }}>
+        <div>
+          <div className="ho" style={{ fontSize:22 }}>KPI Library</div>
+          <div style={{ fontSize:13, color:C.sub, marginTop:4 }}>Create and manage reusable KPI templates for the goal form.</div>
+        </div>
+        <button className="bg" onClick={onClose}>Close</button>
+      </div>
+
+      <div className="gc" style={{ padding:20 }}>
+        <div className="g2" style={{ gap:14, marginBottom:14 }}>
+          <div>
+            <Lbl>Name *</Lbl>
+            <input className="inp" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="e.g. Deals Closed" />
+          </div>
+          <div>
+            <Lbl>Department *</Lbl>
+            <input className="inp" value={form.department} onChange={e=>setForm(f=>({...f,department:e.target.value}))} placeholder="e.g. Sales & Acquisitions" />
+          </div>
+        </div>
+        <div className="g2" style={{ gap:14, marginBottom:14 }}>
+          <div>
+            <Lbl>Category</Lbl>
+            <input className="inp" value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))} placeholder="e.g. Sales" />
+          </div>
+          <div>
+            <Lbl>Status</Lbl>
+            <select className="inp" value={String(form.is_active)} onChange={e=>setForm(f=>({...f,is_active:e.target.value === "true"}))}>
+              <option value="true">Active</option>
+              <option value="false">Inactive</option>
+            </select>
+          </div>
+        </div>
+        <div>
+          <Lbl>Description</Lbl>
+          <textarea className="inp" value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} placeholder="Optional description for the KPI template." />
+        </div>
+        <div style={{ display:"flex", gap:10, marginTop:14 }}>
+          <button className="bp" onClick={handleSave} disabled={saving} style={{ padding:12 }}>{editId ? "Save Changes" : "Create Template"}</button>
+          {editId && <button className="bg" onClick={resetForm} style={{ padding:12 }}>New Template</button>}
+        </div>
+      </div>
+
+      <div className="gc" style={{ padding:20 }}>
+        <div style={{ fontSize:14, fontWeight:700, marginBottom:12 }}>Existing KPI Templates</div>
+        <div className="tw">
+          <table className="ht">
+            <thead><tr><th>Name</th><th>Department</th><th>Category</th><th>Status</th><th></th></tr></thead>
+            <tbody>
+              {templates.map((t) => (
+                <tr key={t.id}>
+                  <td>{t.name}</td>
+                  <td>{t.department}</td>
+                  <td>{t.category || "—"}</td>
+                  <td>{t.is_active ? "Active" : "Inactive"}</td>
+                  <td><button className="bg" onClick={()=>beginEdit(t)}>Edit</button></td>
+                </tr>
+              ))}
+            </tbody>
+          </table>
+        </div>
+      </div>
     </div>
   );
 }
@@ -442,47 +620,101 @@ function LeaveForm({ onSave, currentUserId }) {
 }
 
 
-function Goals({ viewOnly, userId }) {
+function Goals({ viewOnly, userId, canManageKpiTemplates = false }) {
   const { dark } = useTheme(); const C = dark?DARK:LIGHT;
   const [goals, setGoals] = useState([]);
   const [staff, setStaff] = useState([]);
+  const [templates, setTemplates] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
+  const [showTemplateManager, setShowTemplateManager] = useState(false);
+  const [editingGoal, setEditingGoal] = useState(null);
 
   useEffect(() => {
     setLoading(true);
     const params = viewOnly ? `?staff_id=${userId}` : "";
     Promise.all([
       apiFetch(`${API_BASE}/hr/goals${params}`),
+      apiFetch(`${API_BASE}/hr/kpi-templates?active=true`),
       !viewOnly ? apiFetch(`${API_BASE}/hr/staff`) : Promise.resolve([])
-    ]).then(([g, s]) => {
+    ]).then(([g, t, s]) => {
       setGoals(g);
+      setTemplates(t);
       setStaff(s);
     }).finally(() => setLoading(false));
   }, [viewOnly, userId]);
 
   const refresh = () => {
     const params = viewOnly ? `?staff_id=${userId}` : "";
-    apiFetch(`${API_BASE}/hr/goals${params}`).then(setGoals);
+    Promise.all([
+      apiFetch(`${API_BASE}/hr/goals${params}`),
+      apiFetch(`${API_BASE}/hr/kpi-templates?active=true`)
+    ]).then(([g, t]) => {
+      setGoals(g);
+      setTemplates(t);
+    });
   };
 
   const saveGoal = async (g) => {
     try {
-      await apiFetch(`${API_BASE}/hr/goals`, {
-        method: "POST",
-        body: JSON.stringify({
-          staff_id: g.uid,
-          kpi_name: g.kpi,
-          target_value: g.target,
-          unit: g.unit,
-          weight: 1.0, // Default weight
-          month: new Date().toISOString().split('T')[0]
-        })
-      });
+      const month = g.period ? new Date(`${g.period} 1`).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+      const payload = {
+        kpi_name: g.kpi,
+        target_value: g.target,
+        unit: g.unit,
+        template_id: g.template_id || null,
+        weight: 1.0, // Default weight
+        status: g.status || "Draft",
+        month
+      };
+      if (g.uid) {
+        payload.staff_id = g.uid;
+      } else if (g.department) {
+        payload.department = g.department;
+      }
+
+      if (editingGoal) {
+        await apiFetch(`${API_BASE}/hr/goals/${editingGoal.id}`, {
+          method: "PATCH",
+          body: JSON.stringify(payload)
+        });
+        setEditingGoal(null);
+      } else {
+        await apiFetch(`${API_BASE}/hr/goals`, {
+          method: "POST",
+          body: JSON.stringify(payload)
+        });
+      }
       setShowNew(false);
       refresh();
     } catch (e) {
       alert("Error: " + e.message);
+    }
+  };
+
+  const saveTemplate = async (template) => {
+    try {
+      await apiFetch(`${API_BASE}/hr/kpi-templates`, {
+        method: "POST",
+        body: JSON.stringify(template)
+      });
+      setShowTemplateManager(false);
+      refresh();
+    } catch (e) {
+      alert("Error saving template: " + e.message);
+    }
+  };
+
+  const updateTemplate = async (id, template) => {
+    try {
+      await apiFetch(`${API_BASE}/hr/kpi-templates/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify(template)
+      });
+      setShowTemplateManager(false);
+      refresh();
+    } catch (e) {
+      alert("Error updating template: " + e.message);
     }
   };
 
@@ -493,7 +725,10 @@ function Goals({ viewOnly, userId }) {
           <div className="ho" style={{ fontSize:22 }}>{viewOnly?"My Goals":"Goal Management"}</div>
           <div style={{ fontSize:13, color:C.sub, marginTop:4 }}>Monthly targets per staff member. These feed directly into performance scores.</div>
         </div>
-        {!viewOnly && <button className="bp" onClick={()=>setShowNew(true)}>+ Set KPI Goal</button>}
+        <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+          {canManageKpiTemplates && <button className="bg" onClick={()=>setShowTemplateManager(true)}>Manage KPI Library</button>}
+          {!viewOnly && <button className="bp" onClick={() => { setEditingGoal(null); setShowNew(true); }}>+ Set KPI Goal</button>}
+        </div>
       </div>
 
       {loading ? (
@@ -522,7 +757,14 @@ function Goals({ viewOnly, userId }) {
                     <div style={{ fontSize:15, fontWeight:800, color:T.orange }}>{g.kpi_name}</div>
                     <div style={{ fontSize:12, color:C.muted }}>{new Date(g.month).toLocaleDateString(undefined, {month:'long', year:'numeric'})}</div>
                   </div>
-                  <span className={`tg tg2`}>Active</span>
+                  <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+                    {!viewOnly && g.status === "Draft" && (
+                      <button className="bg" onClick={() => { setEditingGoal(g); setShowNew(true); }}>Edit</button>
+                    )}
+                    <span className={`tg tg2`} style={{ background: g.status === "Published" ? "#4ADE80" : g.status === "In Review" ? "#FBBF24" : "#93C5FD" }}>
+                      {g.status || "Draft"}
+                    </span>
+                  </div>
                 </div>
                 <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:8 }}>
                   <span style={{ fontSize:13, color:C.sub }}>Target: <b style={{ color:C.text }}>{g.target_value} {g.unit}</b></span>
@@ -539,8 +781,19 @@ function Goals({ viewOnly, userId }) {
       )}
 
       {showNew && (
-        <Modal onClose={()=>setShowNew(false)} title="Set New Goal">
-          <GoalForm staffList={staff} onSave={saveGoal}/>
+        <Modal onClose={() => { setShowNew(false); setEditingGoal(null); }} title={editingGoal ? "Edit Goal" : "Set New Goal"}>
+          <GoalForm staffList={staff} templates={templates} initialGoal={editingGoal} onSave={saveGoal}/>
+        </Modal>
+      )}
+
+      {showTemplateManager && (
+        <Modal onClose={()=>setShowTemplateManager(false)} title="Manage KPI Library">
+          <KpiTemplateManager
+            templates={templates}
+            onSave={saveTemplate}
+            onUpdate={updateTemplate}
+            onClose={()=>setShowTemplateManager(false)}
+          />
         </Modal>
       )}
     </div>
@@ -551,6 +804,10 @@ function Goals({ viewOnly, userId }) {
 function Presence({ currentUserId, currentUser }) {
   const { dark } = useTheme(); const C = dark?DARK:LIGHT;
   const [sub, setSub]   = useState("attendance");
+  const now = new Date();
+  const sevenDaysAgo = new Date(); sevenDaysAgo.setDate(now.getDate() - 7);
+  const [startDate, setStartDate] = useState(sevenDaysAgo.toISOString().split("T")[0]);
+  const [endDate, setEndDate] = useState(now.toISOString().split("T")[0]);
   const [reqs, setReqs] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showForm, setShowForm] = useState(false);
@@ -559,18 +816,18 @@ function Presence({ currentUserId, currentUser }) {
     setLoading(true);
     Promise.all([
       apiFetch(`${API_BASE}/hr/presence/leaves`),
-      apiFetch(`${API_BASE}/hr/presence/attendance`)
+      apiFetch(`${API_BASE}/hr/presence/attendance?start_date=${startDate}&end_date=${endDate}`)
     ]).then(([l, a]) => {
       setReqs(l);
       setAttendance(a);
     }).finally(() => setLoading(false));
-  }, []);
+  }, [startDate, endDate]);
 
   const [attendance, setAttendance] = useState([]);
 
   const refresh = () => Promise.all([
     apiFetch(`${API_BASE}/hr/leave/pending`),
-    apiFetch(`${API_BASE}/hr/presence/attendance`)
+    apiFetch(`${API_BASE}/hr/presence/attendance?start_date=${startDate}&end_date=${endDate}`)
   ]).then(([l, a]) => { setReqs(l); setAttendance(a); });
 
   const updateLeave = async (id, status) => {
@@ -604,30 +861,51 @@ function Presence({ currentUserId, currentUser }) {
         <>
           {!currentUserId && (
             <div className="g4" style={{ marginBottom:22 }}>
-              <StatCard label="Present"  value="5" col="#4ADE80"/>
-              <StatCard label="On Leave" value="1" col={T.orange}/>
-              <StatCard label="Late"     value="1" col="#FBB040"/>
-              <StatCard label="Absent"   value="0" col="#F87171"/>
+              <StatCard label="Present"  value={attendance.filter(a=>a.status==="Present").length} col="#4ADE80"/>
+              <StatCard label="On Leave" value={attendance.filter(a=>a.status==="On Leave").length} col={T.orange}/>
+              <StatCard label="Late"     value={attendance.filter(a=>a.status==="Late").length} col="#FBB040"/>
+              <StatCard label="Absent"   value={attendance.filter(a=>a.status==="Absent").length} col="#F87171"/>
             </div>
           )}
           {currentUser && <AttendanceCheckIn user={currentUser} />}
           <div className="gc" style={{ overflow:"hidden" }}>
-            <div style={{ padding:"14px 20px", borderBottom:`1px solid ${C.border}` }}>
-              <div className="ho" style={{ fontSize:14 }}>Monday, April 13, 2026</div>
+            <div style={{ padding:"14px 20px", borderBottom:`1px solid ${C.border}`, display:"flex", justifyContent:"space-between", alignItems:"center", gap:20 }}>
+              <div className="ho" style={{ fontSize:14, flex:1 }}>Attendance Records</div>
+              <div style={{ display:"flex", alignItems:"center", gap:8 }}>
+                <span style={{ fontSize:12, color:C.muted }}>From</span>
+                <input type="date" value={startDate} onChange={e=>setStartDate(e.target.value)} className="inp" style={{ width:"auto", padding:"4px 8px", fontSize:12 }}/>
+                <span style={{ fontSize:12, color:C.muted }}>To</span>
+                <input type="date" value={endDate} onChange={e=>setEndDate(e.target.value)} className="inp" style={{ width:"auto", padding:"4px 8px", fontSize:12 }}/>
+              </div>
             </div>
             <table className="ht">
-              <thead><tr>{["Employee","Department","Check In","Check Out","Hours","Status"].map(h=><th key={h}>{h}</th>)}</tr></thead>
+              <thead><tr>{["Date","Employee","Department","Security","Device Info","Check In","Check Out","Hours","Status"].map(h=><th key={h}>{h}</th>)}</tr></thead>
               <tbody>
                 {attendance.map(a=>{
-                  const u = { name: "Staff Member", avatar: "??" }; // Placeholder for mockup
+                  const u = a.admins || { full_name: "Unknown Staff", department: "General" };
                   const sc=statusColor[a.status]||C.sub;
                   return (
-                    <tr key={a.uid}>
-                      <td><div style={{ display:"flex", alignItems:"center", gap:10 }}><Av av={u?.avatar} sz={28}/><span style={{ fontWeight:700 }}>{u?.name}</span></div></td>
-                      <td style={{ color:C.sub }}>Property Mgmt</td>
-                      <td>{a.checkIn}</td>
-                      <td>{a.checkOut}</td>
-                      <td style={{ color:T.orange, fontWeight:800 }}>{a.hours}</td>
+                    <tr key={a.id}>
+                      <td style={{ fontSize:11, fontWeight:600 }}>{new Date(a.date).toLocaleDateString("en-GB", { day:"numeric", month:"short" })}</td>
+                      <td><div style={{ display:"flex", alignItems:"center", gap:10 }}><Av av={u.full_name?.split(" ").map(n=>n[0]).join("") || "??"} sz={28}/><span style={{ fontWeight:700 }}>{u.full_name}</span></div></td>
+                      <td style={{ color:C.sub }}>{u.department || "General"}</td>
+                      <td>
+                        {a.is_suspicious ? (
+                          <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+                            <span className="tg" style={{ background:"#F8717122", color:"#F87171", border:"1px solid #F8717133", fontSize:10 }} title={a.suspicious_reason}>🚩 Suspicious</span>
+                            <div style={{ fontSize:9, color:"#F87171", opacity:0.8 }}>{a.distance_meters ? `${Math.round(a.distance_meters)}m away` : "No GPS"}</div>
+                          </div>
+                        ) : (
+                          <span className="tg" style={{ background:"#4ADE8022", color:"#4ADE80", border:"1px solid #4ADE8033", fontSize:10 }}>✓ Verified</span>
+                        )}
+                      </td>
+                      <td>
+                        <div style={{ fontSize:11, color:C.text, fontWeight:600 }}>{a.ip_address || "No IP"}</div>
+                        <div style={{ fontSize:10, color:C.muted, marginTop:2 }} title={a.user_agent}>🖥️ {a.device_type || "Unknown"}</div>
+                      </td>
+                      <td>{a.check_in ? new Date(a.check_in).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "—"}</td>
+                      <td>{a.check_out ? new Date(a.check_out).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "—"}</td>
+                      <td style={{ color:T.orange, fontWeight:800 }}>{a.check_in && a.check_out ? (Math.abs(new Date(a.check_out) - new Date(a.check_in)) / 36e5).toFixed(1) + "h" : "—"}</td>
                       <td><span className="tg" style={{ background:`${sc}22`, color:sc, border:`1px solid ${sc}33` }}>{a.status}</span></td>
                     </tr>
                   );
@@ -1550,17 +1828,49 @@ function Payroll() {
 // ─── MODULE: STAFF DIRECTORY ─────────────────────────────────────────────────
 function StaffDirectory({ authRole }) {
   const { dark } = useTheme(); const C = dark?DARK:LIGHT;
+  const viewOnly = authRole !== "hr";
   const [tab, setTab] = useState("full");
   const [view, setView] = useState(null);
   const [dtTab, setDtTab] = useState("details");
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
-  const [newStaff, setNewStaff] = useState({ full_name:"", email:"", role:"staff", primary_role:"staff", department:"", password:"" });
+  const [newStaff, setNewStaff] = useState({ full_name:"", email:"", password:"", confirm_password:"", roles:["staff"], primary_role:"staff", staff_type:"full", department:"", line_manager_id:null });
   const [saving, setSaving] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [draftView, setDraftView] = useState({});
   const [editLoading, setEditLoading] = useState(false);
+  const [search, setSearch] = useState("");
+
+  const isValidEmail = (email) => /^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(email.trim());
+
+  const toggleNewStaffRole = (roleValue) => {
+    setNewStaff(s => {
+      const roles = s.roles.includes(roleValue)
+        ? s.roles.filter(r => r !== roleValue)
+        : [...s.roles, roleValue];
+      return { ...s, roles };
+    });
+  };
+
+  const getStaffNameById = (staffId) => {
+    if (!staffId) return "—";
+    const found = staff.find(s => s.id === staffId);
+    return found ? found.full_name : "—";
+  };
+
+  const matchesStaffSearch = (member) => {
+    const query = search.trim().toLowerCase();
+    if (!query) return true;
+    const values = [
+      member.full_name,
+      member.email,
+      member.department,
+      member.role,
+      member.staff_profiles?.[0]?.staff_type
+    ].map(v => (v || "").toString().toLowerCase());
+    return values.some(v => v.includes(query));
+  };
 
   useEffect(() => {
     if (!view) return;
@@ -1568,6 +1878,9 @@ function StaffDirectory({ authRole }) {
     setDraftView({
       job_title: p.job_title || view.role || "",
       department: view.department || "",
+      line_manager_id: view.line_manager_id || "",
+      roles: view.role ? view.role.split(",") : ["staff"],
+      primary_role: view.primary_role || "staff",
       phone_number: p.phone_number || "",
       emergency_contact: p.emergency_contact || "",
       address: p.address || "",
@@ -1587,18 +1900,41 @@ function StaffDirectory({ authRole }) {
   useEffect(() => { loadStaff(); }, [loadStaff]);
 
   const handleAddStaff = async () => {
-    if (!newStaff.full_name || !newStaff.email || !newStaff.password) {
-      alert("Full name, email, and password are required.");
+    if (!newStaff.full_name.trim() || !newStaff.email.trim() || !newStaff.password.trim() || !newStaff.confirm_password.trim()) {
+      alert("Full name, email, password, and password confirmation are required.");
+      return;
+    }
+    if (!isValidEmail(newStaff.email)) {
+      alert("Please enter a valid email address.");
+      return;
+    }
+    if (newStaff.password !== newStaff.confirm_password) {
+      alert("Passwords do not match.");
+      return;
+    }
+    if (newStaff.password.length < 8) {
+      alert("Password must be at least 8 characters.");
       return;
     }
     setSaving(true);
     try {
-      await apiFetch(`${API_BASE}/register`, {
+      const payload = {
+        full_name: newStaff.full_name.trim(),
+        email: newStaff.email.trim(),
+        password: newStaff.password,
+        role: newStaff.roles?.length ? newStaff.roles.join(",") : "staff",
+        primary_role: newStaff.primary_role || "staff",
+        staff_type: newStaff.staff_type || "full",
+        department: newStaff.department?.trim() || null,
+        line_manager_id: newStaff.line_manager_id || null
+      };
+
+      await apiFetch(`/auth/register`, {
         method: "POST",
-        body: JSON.stringify(newStaff)
+        body: JSON.stringify(payload)
       });
       setShowAdd(false);
-      setNewStaff({ full_name:"", email:"", role:"staff", primary_role:"staff", department:"", password:"" });
+      setNewStaff({ full_name:"", email:"", password:"", confirm_password:"", roles:["staff"], primary_role:"staff", staff_type:"full", department:"", line_manager_id:null });
       loadStaff();
     } catch (e) {
       alert("Error: " + e.message);
@@ -1637,11 +1973,26 @@ function StaffDirectory({ authRole }) {
     if (!view) return;
     setEditLoading(true);
     try {
+      const rolePayload = {
+        role: draftView.roles?.join(",") || view.role,
+        primary_role: draftView.primary_role || view.primary_role || "staff",
+        department: draftView.department?.trim() || null,
+        line_manager_id: draftView.line_manager_id || null
+      };
+
+      if (rolePayload.role !== view.role || rolePayload.primary_role !== view.primary_role || rolePayload.department !== view.department || (view.line_manager_id || "") !== (draftView.line_manager_id || "")) {
+        await apiFetch(`/auth/admins/${view.id}/roles`, {
+          method: "PATCH",
+          body: JSON.stringify(rolePayload)
+        });
+      }
+
       await apiFetch(`${API_BASE}/hr/profile/${view.id}`, {
         method: "PATCH",
         body: JSON.stringify({
           job_title: draftView.job_title,
           department: draftView.department,
+          line_manager_id: draftView.line_manager_id || null,
           phone_number: draftView.phone_number,
           emergency_contact: draftView.emergency_contact,
           address: draftView.address,
@@ -1650,7 +2001,10 @@ function StaffDirectory({ authRole }) {
       });
       setView(prev => ({
         ...prev,
-        department: draftView.department,
+        role: rolePayload.role,
+        primary_role: rolePayload.primary_role,
+        department: rolePayload.department,
+        line_manager_id: rolePayload.line_manager_id,
         staff_profiles: [{
           ...prev.staff_profiles?.[0],
           job_title: draftView.job_title,
@@ -1670,9 +2024,14 @@ function StaffDirectory({ authRole }) {
     }
   };
 
-  const list = staff.filter(u => {
+  const activeList = staff.filter(u => {
     const sType = u.staff_profiles?.[0]?.staff_type || "full";
-    return sType === tab;
+    return sType === tab && u.is_active !== false && !u.is_archived && matchesStaffSearch(u);
+  });
+
+  const archivedList = staff.filter(u => {
+    const sType = u.staff_profiles?.[0]?.staff_type || "full";
+    return sType === tab && (u.is_active === false || u.is_archived) && matchesStaffSearch(u);
   });
 
   return (
@@ -1684,14 +2043,24 @@ function StaffDirectory({ authRole }) {
         </div>
         <button className="bp" onClick={() => setShowAdd(true)}>+ Add Staff</button>
       </div>
+      <div style={{ display:"flex", gap:12, alignItems:"center", marginBottom:16, flexWrap:"wrap" }}>
+        <input
+          className="inp"
+          style={{ flex:1, minWidth:260 }}
+          placeholder="Search staff by name, email, department, role"
+          value={search}
+          onChange={e => setSearch(e.target.value)}
+        />
+        <div style={{ fontSize:13, color:C.sub }}>{activeList.length} active · {archivedList.length} archived</div>
+      </div>
       <Tabs items={[["full","Full Staff"],["contractor","Contractors"],["onsite","Onsite / Labourers"]]} active={tab} setActive={setTab}/>
       {loading ? (
         <div style={{ padding:40, textAlign:"center", color:C.muted }}>Loading staff records…</div>
-      ) : list.length === 0 ? (
-        <div className="gc" style={{ padding:48, textAlign:"center", color:C.muted }}>No {tab} staff found. Click + Add Staff to create one.</div>
+      ) : activeList.length === 0 ? (
+        <div className="gc" style={{ padding:48, textAlign:"center", color:C.muted }}>No active {tab} staff found.</div>
       ) : (
         <div className="g3" style={{ marginBottom:22 }}>
-          {list.map(u => {
+          {activeList.map(u => {
             const prof = u.staff_profiles?.[0] || {};
             const sc = u.performance?.score; 
             return (
@@ -1724,6 +2093,47 @@ function StaffDirectory({ authRole }) {
         </div>
       )}
 
+      {archivedList.length > 0 && (
+        <div style={{ marginTop:24 }}>
+          <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:12 }}>
+            <div style={{ fontSize:18, fontWeight:800 }}>Archived / Deactivated Staff</div>
+            <div style={{ fontSize:13, color:C.sub }}>{archivedList.length} record{archivedList.length === 1 ? '' : 's'}</div>
+          </div>
+          <div className="g3" style={{ marginBottom:22 }}>
+            {archivedList.map(u => {
+              const prof = u.staff_profiles?.[0] || {};
+              const sc = u.performance?.score;
+              return (
+                <div key={u.id} className="gc" style={{ padding:20, cursor:"pointer", opacity:0.88 }} onClick={()=>setView(u)}>
+                  <div style={{ display:"flex", gap:14, alignItems:"center", marginBottom:14 }}>
+                    <Av av={u.full_name?.split(" ").map(n=>n[0]).join("") || "??"} sz={44}/>
+                    <div>
+                      <div style={{ fontSize:14, fontWeight:800, color:C.text }}>{u.full_name}</div>
+                      <div style={{ fontSize:12, color:C.sub }}>{prof.job_title || u.role}</div>
+                      <div style={{ fontSize:11, color:T.orange, fontWeight:800, marginTop:2 }}>{u.department}</div>
+                    </div>
+                  </div>
+                  <div className="g2" style={{ gap:8, marginBottom:12 }}>
+                    {[['Role',u.role?.replace(/,/g,' , ')],['Type',prof.staff_type||"full"],['Email',u.email?.split("@")[0]+"…"],['Status','Archived']].map(([l,v])=>(
+                      <div key={l} style={{ background:`${T.orange}0D`, borderRadius:8, padding:"8px 10px" }}>
+                        <div style={{ fontSize:10, color:C.muted, textTransform:"uppercase", letterSpacing:"1px", fontWeight:800 }}>{l}</div>
+                        <div style={{ fontSize:12, color:T.orange, fontWeight:700, marginTop:2, textTransform:"capitalize" }}>{v}</div>
+                      </div>
+                    ))}
+                  </div>
+                  {sc != null ? (
+                    <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                      <span className={`tg ${sc>=80?"tg2":sc>=60?"to":"tr"}`}>{sc>=80?"Excellent":sc>=60?"Good":"Fair"}</span>
+                      <span style={{ fontSize:20, fontWeight:800, color:sc>=80?"#4ADE80":T.orange }}>{sc}/100</span>
+                    </div>
+                  ) : <span className="tg tm">No score yet</span>}
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
       {/* ADD STAFF MODAL */}
       {showAdd && (
         <Modal onClose={() => setShowAdd(false)} title="Add New Staff Member" width={580}>
@@ -1732,15 +2142,17 @@ function StaffDirectory({ authRole }) {
               <div><Lbl>Full Name *</Lbl><input className="inp" placeholder="e.g. Adeola Balogun" value={newStaff.full_name} onChange={e=>setNewStaff(s=>({...s,full_name:e.target.value}))}/></div>
               <div><Lbl>Email Address *</Lbl><input className="inp" type="email" placeholder="adeola@eximps-cloves.com" value={newStaff.email} onChange={e=>setNewStaff(s=>({...s,email:e.target.value}))}/></div>
               <div><Lbl>Default Password *</Lbl><input className="inp" type="password" placeholder="Min 8 characters" value={newStaff.password} onChange={e=>setNewStaff(s=>({...s,password:e.target.value}))}/></div>
-              <div><Lbl>Department</Lbl><input className="inp" placeholder="e.g. Sales & Acquisitions" value={newStaff.department} onChange={e=>setNewStaff(s=>({...s,department:e.target.value}))}/></div>
-              <div><Lbl>System Role</Lbl>
-                <select className="inp" value={newStaff.role} onChange={e=>setNewStaff(s=>({...s,role:e.target.value}))}>
-                  <option value="staff">Staff</option>
-                  <option value="sales_rep">Sales Rep</option>
-                  <option value="admin">Admin</option>
-                  <option value="lawyer">Lawyer</option>
-                  <option value="line_manager">Line Manager</option>
-                </select>
+              <div><Lbl>Confirm Password *</Lbl><input className="inp" type="password" placeholder="Repeat password" value={newStaff.confirm_password} onChange={e=>setNewStaff(s=>({...s,confirm_password:e.target.value}))}/></div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <Lbl>System Roles *</Lbl>
+                <div style={{ display:"flex", flexWrap:"wrap", gap:10, marginTop:6 }}>
+                  {['staff','sales_rep','admin','lawyer','line_manager'].map(role => (
+                    <label key={role} style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'8px 12px', border:`1px solid ${C.border}`, borderRadius:10, cursor:'pointer' }}>
+                      <input type="checkbox" checked={newStaff.roles.includes(role)} onChange={() => toggleNewStaffRole(role)} />
+                      {role.replace('_',' ')}
+                    </label>
+                  ))}
+                </div>
               </div>
               <div><Lbl>Primary Role</Lbl>
                 <select className="inp" value={newStaff.primary_role} onChange={e=>setNewStaff(s=>({...s,primary_role:e.target.value}))}>
@@ -1750,6 +2162,21 @@ function StaffDirectory({ authRole }) {
                   <option value="finance">Finance</option>
                   <option value="legal">Legal</option>
                   <option value="operations">Operations</option>
+                </select>
+              </div>
+              <div><Lbl>Staff Type</Lbl>
+                <select className="inp" value={newStaff.staff_type} onChange={e=>setNewStaff(s=>({...s,staff_type:e.target.value}))}>
+                  <option value="full">Full Staff</option>
+                  <option value="contractor">Contractor</option>
+                  <option value="onsite">Onsite / Labourer</option>
+                </select>
+              </div>
+              <div><Lbl>Department</Lbl><input className="inp" placeholder="e.g. Sales & Acquisitions" value={newStaff.department} onChange={e=>setNewStaff(s=>({...s,department:e.target.value}))}/></div>
+              <div style={{ gridColumn: '1 / -1' }}>
+                <Lbl>Line Manager</Lbl>
+                <select className="inp" value={newStaff.line_manager_id || ""} onChange={e => setNewStaff(s=>({...s,line_manager_id: e.target.value || null}))}>
+                  <option value="">— Select Line Manager —</option>
+                  {staff.filter(s => s.id).map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
                 </select>
               </div>
             </div>
@@ -1794,6 +2221,9 @@ function StaffDirectory({ authRole }) {
             <div className="g2 fade" style={{ gap:10, marginBottom:18 }}>
               <Field label="Full Name" value={view.full_name}/>
               <Field label="Email Address" value={view.email}/>
+              <Field label="Role" value={view.role?.replace(/,/g,' , ')}/>
+              <Field label="Primary Role" value={view.primary_role}/>
+              <Field label="Line Manager" value={getStaffNameById(view.line_manager_id)}/>
               {editMode ? (
                 <>
                   <div>
@@ -1811,6 +2241,35 @@ function StaffDirectory({ authRole }) {
                   <div>
                     <Lbl>Emergency Contact</Lbl>
                     <input className="inp" value={draftView.emergency_contact} onChange={e => setDraftView(d => ({ ...d, emergency_contact: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Lbl>System Roles</Lbl>
+                    <div style={{ display:'flex', flexWrap:'wrap', gap:10, marginTop:6 }}>
+                      {['staff','sales_rep','admin','lawyer','line_manager'].map(role => (
+                        <label key={role} style={{ display:'inline-flex', alignItems:'center', gap:6, padding:'8px 12px', border:`1px solid ${C.border}`, borderRadius:10, cursor:'pointer' }}>
+                          <input type="checkbox" checked={draftView.roles?.includes(role)} onChange={() => setDraftView(d => ({ ...d, roles: d.roles?.includes(role) ? d.roles.filter(r => r !== role) : [...(d.roles || []), role] }))} />
+                          {role.replace('_',' ')}
+                        </label>
+                      ))}
+                    </div>
+                  </div>
+                  <div>
+                    <Lbl>Primary Role</Lbl>
+                    <select className="inp" value={draftView.primary_role} onChange={e => setDraftView(d => ({ ...d, primary_role: e.target.value }))}>
+                      <option value="staff">Staff</option>
+                      <option value="hr">HR</option>
+                      <option value="sales">Sales</option>
+                      <option value="finance">Finance</option>
+                      <option value="legal">Legal</option>
+                      <option value="operations">Operations</option>
+                    </select>
+                  </div>
+                  <div style={{ gridColumn: '1 / -1' }}>
+                    <Lbl>Line Manager</Lbl>
+                    <select className="inp" value={draftView.line_manager_id || ""} onChange={e => setDraftView(d => ({ ...d, line_manager_id: e.target.value || "" }))}>
+                      <option value="">— Select Line Manager —</option>
+                      {staff.filter(s => s.id && s.id !== view.id).map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+                    </select>
                   </div>
                   <div style={{ gridColumn: '1 / -1' }}>
                     <Lbl>Address</Lbl>
@@ -1970,10 +2429,27 @@ function HRDashboard() {
                 {[
                   [`${pendingLeaves} Leave Requests Pending`, T.orange],
                   [`${seriousFlags} Serious Disciplinary Cases`, "#F87171"],
-                  ["Payroll Processing Due", "#4ADE80"]
+                  ["Payroll Processing Due", "#4ADE80"],
+                  [
+                    <button 
+                      onClick={async () => {
+                        if(!confirm("This will apply all pending database migrations. Proceed?")) return;
+                        try {
+                          const res = await apiFetch(`${API_BASE}/hr/migrate`, { method: "POST" });
+                          alert(res.message);
+                          window.location.reload();
+                        } catch(e) { alert("Migration failed: " + e.message); }
+                      }} 
+                      className="bp" 
+                      style={{ fontSize:10, padding:"6px 12px", marginTop:4 }}
+                    >
+                      🚀 Run System Update (Fix DB)
+                    </button>, 
+                    "#60A5FA"
+                  ]
                 ].map(([l,c],i)=>(
                   <div key={i} style={{ display:"flex", gap:12, alignItems:"center", marginBottom:12, padding:"12px 14px", background:`${c}0D`, border:`1px solid ${c}22`, borderRadius:10 }}>
-                    <div style={{ width:8, height:8, borderRadius:"50%", background:c }}/>
+                    {typeof l === 'string' && <div style={{ width:8, height:8, borderRadius:"50%", background:c }}/>}
                     <span style={{ fontSize:13, color:C.text }}>{l}</span>
                   </div>
                 ))}
@@ -2271,8 +2747,8 @@ function DrawerNav({ items, page, setPage, user, onLogout, roleLabel, onClose })
   );
 }
 
-function Portal({ user, onLogout, navItems, roleLabel, renderPage }) {
-  const [page, setPage] = useState(navItems[0].id);
+function Portal({ user, onLogout, navItems, roleLabel, renderPage, initialPage }) {
+  const [page, setPage] = useState(initialPage || navItems[0].id);
   const [drawerOpen, setDrawerOpen] = useState(false);
   const { dark } = useTheme(); const C = dark?DARK:LIGHT;
 
@@ -2332,7 +2808,7 @@ function HRAdminPortal({ user, onLogout }) {
       if (p==="staff")     return <StaffDirectory authRole="hr"/>;
       if (p==="presence")  return <Presence/>;
       if (p==="perf")      return <Performance/>;
-      if (p==="goals")     return <Goals/>;
+      if (p==="goals")     return <Goals canManageKpiTemplates />;
       if (p==="payroll")   return <Payroll/>;
       if (p==="tasks")     return <Tasks currentUser={user}/>;
       if (p==="mismanage") return <Mismanagement/>;
@@ -2435,8 +2911,11 @@ function StaffPortal({ user, onLogout }) {
   const col = sc != null ? (sc >= 80 ? "#4ADE80" : sc >= 60 ? T.orange : "#F87171") : T.orange;
   const pendingTasks = tasks.filter(t => t.status !== "completed");
 
+  const staffType = user.staff_type || user.staff_profiles?.[0]?.staff_type || "full";
+  const startPage = (staffType === "contractor" || staffType === "onsite") ? "profile" : "dashboard";
+
   return (
-    <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="Team Member Portal" renderPage={pg=>{
+    <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="Team Member Portal" initialPage={startPage} renderPage={pg=>{
       if (pg==="profile")   return <MyProfile user={user}/>;
       if (pg==="perf")      return <Performance viewOnly userId={user.id}/>;
       if (pg==="goals")     return <Goals viewOnly userId={user.id}/>;
@@ -2506,6 +2985,32 @@ function StaffPortal({ user, onLogout }) {
   );
 }
 
+const isHrAdminUser = (user) => {
+  if (!user) return false;
+  const rawRole = user.role;
+  const primaryRole = user.primary_role;
+  const roles = Array.isArray(rawRole)
+    ? rawRole
+    : typeof rawRole === "string"
+      ? rawRole.split(",").map(r => r.trim())
+      : [];
+  return roles.includes("admin")
+    || roles.includes("hr")
+    || roles.includes("hr_admin")
+    || primaryRole === "hr";
+};
+
+const isLineManagerUser = (user) => {
+  if (!user) return false;
+  const rawRole = user.role;
+  const roles = Array.isArray(rawRole)
+    ? rawRole
+    : typeof rawRole === "string"
+      ? rawRole.split(",").map(r => r.trim())
+      : [];
+  return roles.includes("line_manager");
+};
+
 // ─── ROOT ────────────────────────────────────────────────────────────────────
 export default function App() {
   const [dark, setDark] = useState(true);
@@ -2542,13 +3047,13 @@ export default function App() {
     <ThemeCtx.Provider value={{ dark, toggle }}>
       <style>{GS(dark)}</style>
       <div className="fade">
-        {(user.role === "admin" || user.primary_role === "hr" || user.role?.includes("hr_admin")) && (
+        {isHrAdminUser(user) && (
           <HRAdminPortal user={user} onLogout={logout} />
         )}
-        {user.role?.includes("line_manager") && (
+        {isLineManagerUser(user) && (
           <ManagerPortal user={user} onLogout={logout} />
         )}
-        {!(user.role === "admin" || user.primary_role === "hr" || user.role?.includes("hr_admin") || user.role?.includes("line_manager")) && (
+        {(!isHrAdminUser(user) && !isLineManagerUser(user)) && (
           <StaffPortal user={user} onLogout={logout} />
         )}
       </div>

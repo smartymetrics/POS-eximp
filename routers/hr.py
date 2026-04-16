@@ -1,3 +1,5 @@
+import math
+import os
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Optional
 from pydantic import BaseModel
@@ -16,10 +18,41 @@ class GoalBase(BaseModel):
     target_value: float
     unit: str
     weight: float
+    status: str = "Draft"
 
 class GoalCreate(GoalBase):
-    staff_id: str
+    staff_id: Optional[str] = None
+    department: Optional[str] = None
     month: date
+    template_id: Optional[str] = None
+
+class GoalUpdate(BaseModel):
+    kpi_name: Optional[str] = None
+    target_value: Optional[float] = None
+    unit: Optional[str] = None
+    weight: Optional[float] = None
+    status: Optional[str] = None
+    month: Optional[date] = None
+    template_id: Optional[str] = None
+    staff_id: Optional[str] = None
+    department: Optional[str] = None
+
+class KPITemplateBase(BaseModel):
+    name: str
+    department: str
+    category: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = True
+
+class KPITemplateCreate(KPITemplateBase):
+    pass
+
+class KPITemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    department: Optional[str] = None
+    category: Optional[str] = None
+    description: Optional[str] = None
+    is_active: Optional[bool] = None
 
 class PerformanceReviewBase(BaseModel):
     quality_score: float # 0-100 (20%)
@@ -102,14 +135,25 @@ async def run_hr_migration(current_admin: dict = Depends(verify_token)):
          raise HTTPException(status_code=403, detail="Admin only")
          
     db = get_db()
-    sql_path = "sql/hr_management_phase2.sql"
+    phases = [
+        "sql/hr_management_migration.sql",
+        "sql/hr_management_phase2.sql",
+        "sql/hr_phase3_tasks.sql",
+        "sql/hr_phase4_payroll.sql",
+        "sql/hr_phase5_attendance.sql",
+        "sql/hr_phase6_geofence.sql"
+    ]
+    
+    results = []
     try:
-        with open(sql_path, "r") as f:
-            sql = f.read()
+        for sql_path in phases:
+            with open(sql_path, "r") as f:
+                sql = f.read()
+            # Try to use exec_sql RPC if it exists
+            res = await db_execute(lambda: db.rpc("exec_sql", {"sql_body": sql}).execute())
+            results.append(f"{sql_path}: Success")
         
-        # Try to use exec_sql RPC if it exists
-        res = await db_execute(lambda: db.rpc("exec_sql", {"sql_body": sql}).execute())
-        return {"message": "Migration applied successfully", "success": True, "details": str(res.data)}
+        return {"message": "All HR migration phases applied successfully", "success": True, "details": ", ".join(results)}
     except Exception as e:
         return {"message": f"Migration failed: {e}", "success": False, "details": "Try running the SQL manually in Supabase SQL Editor."}
 
@@ -195,6 +239,11 @@ async def update_staff_profile(staff_id: str, update: StaffProfileUpdate, curren
         await db_execute(lambda: db.table("admins").update(admin_updates).eq("id", staff_id).execute())
 
     if profile_updates:
+        # Convert date objects to strings for JSON serialization
+        for k, v in profile_updates.items():
+            if isinstance(v, (date, datetime)):
+                profile_updates[k] = v.isoformat()
+
         profile_updates = {k: v for k, v in profile_updates.items() if v is not None}
         if profile_updates:
             profile_exists = await db_execute(lambda: db.table("staff_profiles").select("id").eq("admin_id", staff_id).execute())
@@ -271,31 +320,89 @@ async def get_performance_score(staff_id: str, current_admin: dict = Depends(ver
 
 @router.post("/goals", status_code=status.HTTP_201_CREATED)
 async def set_staff_goal(goal: GoalCreate, current_admin: dict = Depends(verify_token)):
-    """Line Manager (own team) or HR sets a specific KPI goal for a staff member."""
+    """HR or manager sets a KPI goal for a staff member or a department."""
     user_email = current_admin["email"]
     user_roles = current_admin.get("role", "").split(",")
     is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
     
+    if not goal.staff_id and not goal.department:
+        raise HTTPException(status_code=400, detail="Either staff_id or department is required")
+    if goal.staff_id and goal.department:
+        raise HTTPException(status_code=400, detail="Provide either staff_id or department, not both")
+
     db = get_db()
-    
-    # Auth check: is it own team?
-    if not is_hr:
-        staff_res = await db_execute(lambda: db.table("admins").select("line_manager_id").eq("id", goal.staff_id).execute())
-        mgr_res = await db_execute(lambda: db.table("admins").select("id").eq("email", user_email).execute())
-        if not (staff_res.data and mgr_res.data and staff_res.data[0]["line_manager_id"] == mgr_res.data[0]["id"]):
-            raise HTTPException(status_code=403, detail="You can only set goals for your direct reports")
-            
-    res = await db_execute(lambda: db.table("staff_goals").insert({
-        "staff_id": goal.staff_id,
+
+    if goal.staff_id:
+        # Auth check: is it own team for non-HR users?
+        if not is_hr:
+            staff_res = await db_execute(lambda: db.table("admins").select("line_manager_id").eq("id", goal.staff_id).execute())
+            mgr_res = await db_execute(lambda: db.table("admins").select("id").eq("email", user_email).execute())
+            if not (staff_res.data and mgr_res.data and staff_res.data[0]["line_manager_id"] == mgr_res.data[0]["id"]):
+                raise HTTPException(status_code=403, detail="You can only set goals for your direct reports")
+    else:
+        # Only HR may set department-level goals.
+        if not is_hr:
+            raise HTTPException(status_code=403, detail="Only HR can set department goals")
+
+    goal_data = {
         "kpi_name": goal.kpi_name,
         "target_value": goal.target_value,
         "unit": goal.unit,
-        "weight": goal.weight,
-        "month": goal.month.isoformat()
-    }).execute())
+        "weight": goal.weight,        "status": goal.status,        "month": goal.month.isoformat(),
+        "department": goal.department or None,
+        "staff_id": goal.staff_id or None
+    }
+    if getattr(goal, "template_id", None):
+        goal_data["kpi_template_id"] = goal.template_id
+
+    res = await db_execute(lambda: db.table("staff_goals").insert(goal_data).execute())
     
     if not res.data:
         raise HTTPException(status_code=400, detail="Failed to create goal")
+    return res.data[0]
+
+@router.patch("/goals/{goal_id}")
+async def update_goal(goal_id: str, update: GoalUpdate, current_admin: dict = Depends(verify_token)):
+    """Update an existing KPI goal when it is still editable."""
+    user_email = current_admin["email"]
+    user_roles = current_admin.get("role", "").split(",")
+    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+
+    db = get_db()
+    existing = await db_execute(lambda: db.table("staff_goals").select("*").eq("id", goal_id).execute())
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Goal not found")
+
+    goal_record = existing.data[0]
+    if goal_record.get("status") == "Published" and not is_hr:
+        raise HTTPException(status_code=403, detail="Locked goals can only be updated by HR")
+
+    if not is_hr:
+        # Managers may only update goals for their direct reports
+        staff_res = await db_execute(lambda: db.table("admins").select("line_manager_id").eq("id", goal_record.get("staff_id")).execute())
+        mgr_res = await db_execute(lambda: db.table("admins").select("id").eq("email", user_email).execute())
+        if not (staff_res.data and mgr_res.data and staff_res.data[0]["line_manager_id"] == mgr_res.data[0]["id"]):
+            raise HTTPException(status_code=403, detail="You can only update goals for your direct reports")
+
+    update_data = update.dict(exclude_unset=True)
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No changes provided")
+
+    if update_data.get("month") is not None:
+        if isinstance(update_data["month"], date):
+            update_data["month"] = update_data["month"].isoformat()
+        else:
+            update_data["month"] = str(update_data["month"])
+
+    if update_data.get("template_id") is not None:
+        update_data["kpi_template_id"] = update_data.pop("template_id")
+
+    if update_data.get("staff_id") and update_data.get("department"):
+        raise HTTPException(status_code=400, detail="Provide either staff_id or department, not both")
+
+    res = await db_execute(lambda: db.table("staff_goals").update(update_data).eq("id", goal_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=400, detail="Failed to update goal")
     return res.data[0]
 
 @router.post("/documents", status_code=status.HTTP_201_CREATED)
@@ -374,21 +481,36 @@ async def get_presence_leaves(staff_id: Optional[str] = None, current_admin: dic
     return await get_pending_leave(staff_id, current_admin)
 
 @router.get("/presence/attendance")
-async def get_attendance(staff_id: Optional[str] = None, date: Optional[str] = None, current_admin: dict = Depends(verify_token)):
-    """Fetch attendance records. HR sees all. Staff see own."""
+async def get_attendance(
+    staff_id: Optional[str] = None, 
+    date: Optional[str] = None, 
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_admin: dict = Depends(verify_token)
+):
+    """Fetch attendance records. HR sees all. Staff see own. Supports single date or date range."""
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
     is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
     
     query = db.table("attendance_records").select("*, admins(full_name, department)")
-    if date:
+    
+    # Range filtering takes precedence
+    if start_date and end_date:
+        query = query.gte("date", start_date).lte("date", end_date)
+    elif date:
         query = query.eq("date", date)
+    elif not staff_id:
+        # Default to today if no date or specific staff history requested
+        from datetime import date as dt
+        query = query.eq("date", dt.today().isoformat())
+
     if staff_id:
         query = query.eq("staff_id", staff_id)
     elif not is_hr:
         query = query.eq("staff_id", current_admin["sub"])
         
-    res = await db_execute(lambda: query.execute())
+    res = await db_execute(lambda: query.order("date", desc=True).order("check_in", desc=True).execute())
     return res.data
 
 @router.post("/payroll/run")
@@ -599,6 +721,7 @@ class GoalCreate(BaseModel):
     unit: str = "%"
     weight: float = 1.0
     month: date
+    template_id: Optional[str] = None
 
 @router.get("/goals")
 async def get_hr_goals(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
@@ -611,6 +734,54 @@ async def create_hr_goal(goal: GoalCreate, current_admin: dict = Depends(verify_
     """Set a KPI goal for a staff member. HR or Manager only."""
     # This was a duplicate of set_staff_goal
     return await set_staff_goal(goal, current_admin)
+
+@router.get("/kpi-templates")
+async def list_kpi_templates(department: Optional[str] = None, active: Optional[bool] = True, current_admin: dict = Depends(verify_token)):
+    """Fetch KPI template entries for the Goal Library."""
+    db = get_db()
+    query = db.table("kpi_templates").select("*")
+    if department:
+        query = query.eq("department", department)
+    if active is not None:
+        query = query.eq("is_active", active)
+    res = await db_execute(lambda: query.order("department").execute())
+    return res.data
+
+@router.post("/kpi-templates", status_code=status.HTTP_201_CREATED)
+async def create_kpi_template(template: KPITemplateCreate, current_admin: dict = Depends(verify_token)):
+    """Create a new KPI template. HR only."""
+    user_roles = current_admin.get("role", "").split(",")
+    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    if not is_hr:
+        raise HTTPException(status_code=403, detail="Admin only")
+    db = get_db()
+    res = await db_execute(lambda: db.table("kpi_templates").insert({
+        "name": template.name,
+        "department": template.department,
+        "category": template.category,
+        "description": template.description,
+        "is_active": template.is_active,
+        "created_by": current_admin["sub"]
+    }).execute())
+    if not res.data:
+        raise HTTPException(status_code=400, detail="Failed to create KPI template")
+    return res.data[0]
+
+@router.patch("/kpi-templates/{template_id}")
+async def update_kpi_template(template_id: str, template: KPITemplateUpdate, current_admin: dict = Depends(verify_token)):
+    """Update an existing KPI template. HR only."""
+    user_roles = current_admin.get("role", "").split(",")
+    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    if not is_hr:
+        raise HTTPException(status_code=403, detail="Admin only")
+    update_data = template.dict(exclude_unset=True)
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No changes provided")
+    db = get_db()
+    res = await db_execute(lambda: db.table("kpi_templates").update(update_data).eq("id", template_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="KPI template not found")
+    return res.data[0]
 
 class IncidentCreate(BaseModel):
     staff_id: str
@@ -737,6 +908,22 @@ def _get_real_ip(request: Request) -> str:
 
 # ── ROUTES ───────────────────────────────────────────────────────────────────
 
+def calculate_distance(lat1, lon1, lat2, lon2):
+    """Haversine formula to calculate distance between two points on Earth in meters."""
+    if None in [float(x) if x is not None else None for x in [lat1, lon1, lat2, lon2]]:
+        return None
+    try:
+        lat1, lon1, lat2, lon2 = map(float, [lat1, lon1, lat2, lon2])
+        R = 6371000 # Earth radius in meters
+        phi1, phi2 = math.radians(lat1), math.radians(lat2)
+        dphi = math.radians(lat2 - lat1)
+        dlambda = math.radians(lon2 - lon1)
+        a = math.sin(dphi / 2)**2 + math.cos(phi1) * math.cos(phi2) * math.sin(dlambda / 2)**2
+        c = 2 * math.atan2(math.sqrt(a), math.sqrt(1 - a))
+        return R * c
+    except:
+        return None
+
 @router.post("/presence/checkin", status_code=status.HTTP_201_CREATED)
 async def check_in(
     payload: AttendanceCheckIn,
@@ -770,11 +957,37 @@ async def check_in(
             detail="Already checked in for today."
         )
 
+    # Geofence & Anti-Cheating Logic
+    office_lat = os.getenv("OFFICE_LAT", "6.525737")
+    office_lon = os.getenv("OFFICE_LON", "3.372357")
+    threshold  = float(os.getenv("GEOFENCE_RADIUS_METERS", "200"))
+    
+    distance = None
+    is_suspicious = False
+    reasons = []
+
+    if payload.latitude and payload.longitude:
+        distance = calculate_distance(payload.latitude, payload.longitude, office_lat, office_lon)
+        if distance and distance > threshold:
+            is_suspicious = True
+            reasons.append(f"Location Outside Geofence ({int(distance)}m away)")
+    else:
+        is_suspicious = True
+        reasons.append("GPS Coordinates Missing")
+
+    # Simple device check: if it's a mobile device without GPS, that's often suspicious
+    if payload.device_type == "Mobile" and not payload.latitude:
+         is_suspicious = True
+         reasons.append("Mobile check-in without GPS")
+
     record = {
         "staff_id":          staff_id,
         "date":              today,
         "check_in":          now,
         "status":            "Present",
+        "is_suspicious":     is_suspicious,
+        "suspicious_reason": ". ".join(reasons) if reasons else None,
+        "distance_meters":   distance,
         # location
         "latitude":          payload.latitude,
         "longitude":         payload.longitude,

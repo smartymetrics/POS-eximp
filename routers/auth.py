@@ -92,15 +92,26 @@ async def login(data: AdminLogin):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if admin.get("is_archived"):
         raise HTTPException(status_code=403, detail="This account has been archived")
-    token = create_token({"sub": admin["id"], "email": admin["email"], "role": admin["role"], "primary_role": admin.get("primary_role", "staff")})
+    # Fetch staff type from profiles
+    profile_res = await db_execute(lambda: db.table("staff_profiles").select("staff_type").eq("admin_id", admin["id"]).execute())
+    staff_type = profile_res.data[0]["staff_type"] if profile_res.data else "full"
+
+    token = create_token({
+        "sub": admin["id"], 
+        "email": admin["email"], 
+        "role": admin.get("role") or "staff", 
+        "primary_role": admin.get("primary_role", "staff"),
+        "staff_type": staff_type
+    })
     return {
         "access_token": token,
         "admin": {
             "id": admin["id"], 
             "name": admin["full_name"], 
             "email": admin["email"], 
-            "role": admin["role"],
-            "primary_role": admin.get("primary_role", "staff")
+            "role": admin.get("role") or "staff",
+            "primary_role": admin.get("primary_role", "staff"),
+            "staff_type": staff_type
         }
     }
 
@@ -116,8 +127,8 @@ async def me(current_admin=Depends(verify_token)):
 # CREATE TEAM MEMBER (admin only)
 @router.post("/register")
 async def register(data: AdminCreate, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
-    if not has_any_role(current_admin, "admin", "super_admin"):
-        raise HTTPException(status_code=403, detail="Only admins can create accounts")
+    if not has_any_role(current_admin, "admin", "super_admin", "hr_admin"):
+        raise HTTPException(status_code=403, detail="Only admins or HR admins can create accounts")
     db = get_db()
     existing = await db_execute(lambda: db.table("admins").select("id").eq("email", data.email).execute())
     if existing.data:
@@ -127,7 +138,7 @@ async def register(data: AdminCreate, background_tasks: BackgroundTasks, current
     # Use transactional insert (simulated via Supabase execute)
     result = db.table("admins").insert({
         "full_name": data.full_name, "email": data.email,
-        "password_hash": password_hash, "role": data.role,
+        "password_hash": password_hash, "role": (data.role or "staff").strip(),
         "primary_role": data.primary_role,
         "department": data.department,
         "line_manager_id": data.line_manager_id,
@@ -139,6 +150,9 @@ async def register(data: AdminCreate, background_tasks: BackgroundTasks, current
         
     new_admin_id = result.data[0]["id"]
     
+    if data.staff_type:
+        await db_execute(lambda: db.table("staff_profiles").insert({"admin_id": new_admin_id, "staff_type": data.staff_type}).execute())
+    
     # TRIGGER SEAMLESS DATA MATCHING
     # We do this for anyone with sales or admin roles who might manage historical leads
     background_tasks.add_task(sync_historical_sales_data, new_admin_id, data.full_name, data.email)
@@ -146,10 +160,10 @@ async def register(data: AdminCreate, background_tasks: BackgroundTasks, current
     return {"message": "Account created successfully", "id": new_admin_id}
 
 
-# LIST ALL TEAM MEMBERS (admin only)
+# LIST ALL TEAM MEMBERS (admin/HR admin only)
 @router.get("/admins")
 async def list_admins(current_admin=Depends(verify_token)):
-    if not has_any_role(current_admin, "admin", "super_admin"):
+    if not has_any_role(current_admin, "admin", "super_admin", "hr_admin"):
         raise HTTPException(status_code=403, detail="Admins only")
     db = get_db()
     result = await db_execute(lambda: db.table("admins").select("id, full_name, email, role, primary_role, is_active, is_archived, created_at").order("created_at").execute())
@@ -197,10 +211,10 @@ async def change_password(data: ChangePasswordRequest, current_admin=Depends(ver
     return {"message": "Password changed successfully"}
 
 
-# RESET ANOTHER USER'S PASSWORD (admin only)
+# RESET ANOTHER USER'S PASSWORD (admin/HR admin only)
 @router.patch("/admins/{admin_id}/reset-password")
 async def reset_password(admin_id: str, data: ResetPasswordRequest, current_admin=Depends(verify_token)):
-    if not has_any_role(current_admin, "admin", "super_admin"):
+    if not has_any_role(current_admin, "admin", "super_admin", "hr_admin"):
         raise HTTPException(status_code=403, detail="Admins only")
     if len(data.new_password) < 8:
         raise HTTPException(status_code=400, detail="Password must be at least 8 characters")
@@ -213,10 +227,10 @@ async def reset_password(admin_id: str, data: ResetPasswordRequest, current_admi
     return {"message": f"Password reset for {target.data[0]['full_name']}"}
 
 
-# DEACTIVATE (admin only)
+# DEACTIVATE (admin/HR admin only)
 @router.patch("/admins/{admin_id}/deactivate")
 async def deactivate_admin(admin_id: str, current_admin=Depends(verify_token)):
-    if not has_any_role(current_admin, "admin", "super_admin"):
+    if not has_any_role(current_admin, "admin", "super_admin", "hr_admin"):
         raise HTTPException(status_code=403, detail="Admins only")
     if current_admin.get("sub") == admin_id:
         raise HTTPException(status_code=400, detail="You cannot deactivate your own account")
@@ -227,10 +241,10 @@ async def deactivate_admin(admin_id: str, current_admin=Depends(verify_token)):
     return {"message": "Account deactivated"}
 
 
-# REACTIVATE (admin only)
+# REACTIVATE (admin/HR admin only)
 @router.patch("/admins/{admin_id}/reactivate")
 async def reactivate_admin(admin_id: str, current_admin=Depends(verify_token)):
-    if not has_any_role(current_admin, "admin", "super_admin"):
+    if not has_any_role(current_admin, "admin", "super_admin", "hr_admin"):
         raise HTTPException(status_code=403, detail="Admins only")
     db = get_db()
     result = await db_execute(lambda: db.table("admins").update({"is_active": True, "is_archived": False}).eq("id", admin_id).execute())
@@ -239,10 +253,10 @@ async def reactivate_admin(admin_id: str, current_admin=Depends(verify_token)):
     return {"message": "Account reactivated"}
 
 
-# ARCHIVE (admin only)
+# ARCHIVE (admin/HR admin only)
 @router.patch("/admins/{admin_id}/archive")
 async def archive_admin(admin_id: str, current_admin=Depends(verify_token)):
-    if not has_any_role(current_admin, "admin", "super_admin"):
+    if not has_any_role(current_admin, "admin", "super_admin", "hr_admin"):
         raise HTTPException(status_code=403, detail="Admins only")
     if current_admin.get("sub") == admin_id:
         raise HTTPException(status_code=400, detail="You cannot archive your own account")

@@ -35,13 +35,32 @@ CREATE TABLE IF NOT EXISTS staff_profiles (
 CREATE TABLE IF NOT EXISTS staff_goals (
     id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
     staff_id UUID REFERENCES admins(id) ON DELETE CASCADE,
+    department VARCHAR(100),
     kpi_name VARCHAR(255) NOT NULL,
+    kpi_template_id UUID REFERENCES kpi_templates(id),
     target_value NUMERIC DEFAULT 0,
     actual_value NUMERIC DEFAULT 0,
     unit VARCHAR(50),
     weight NUMERIC DEFAULT 1, -- For scoring (total weights should equal 100 or 1.0)
+    status VARCHAR(50) DEFAULT 'Draft',
     month DATE NOT NULL,
     created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE staff_goals ADD COLUMN IF NOT EXISTS department VARCHAR(100);
+ALTER TABLE staff_goals ADD COLUMN IF NOT EXISTS status VARCHAR(50) DEFAULT 'Draft';
+
+-- 3b. KPI Templates (Managed KPI library)
+CREATE TABLE IF NOT EXISTS kpi_templates (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    name VARCHAR(255) NOT NULL,
+    department VARCHAR(100) NOT NULL,
+    category VARCHAR(100),
+    description TEXT,
+    is_active BOOLEAN DEFAULT TRUE,
+    created_by UUID REFERENCES admins(id),
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
 );
 
 -- 4. Performance Reviews (Qualitative scoring)

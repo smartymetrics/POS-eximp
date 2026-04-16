@@ -264,8 +264,10 @@
         // Redirection based on Primary Role (Default Interface)
         const primary = (data.admin && data.admin.primary_role) ? data.admin.primary_role.toLowerCase() : '';
         const userRoles = (data.admin.role || '').toLowerCase().split(',').map(r => r.trim()).filter(Boolean);
+        const staffType = (data.admin && data.admin.staff_type) ? data.admin.staff_type.toLowerCase() : 'full';
 
-        if (primary === 'hr' || primary === 'hr_admin' || userRoles.includes('hr_admin')) {
+        // Contractors and Labourers go to HR portal
+        if (primary === 'hr' || primary === 'hr_admin' || userRoles.includes('hr_admin') || staffType === 'contractor' || staffType === 'onsite') {
           window.location.href = '/hr';
         } else if (primary === 'marketing' || (userRoles.length === 1 && userRoles[0] === 'marketing')) {
           window.location.href = '/marketing';

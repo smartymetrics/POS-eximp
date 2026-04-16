@@ -22,7 +22,20 @@ export async function apiFetch(endpoint, options = {}) {
 
   if (!response.ok) {
     const error = await response.json().catch(() => ({ detail: "Unknown error" }));
-    throw new Error(error.detail || "API Request failed");
+    let message = "API Request failed";
+
+    if (Array.isArray(error.detail)) {
+      message = error.detail
+        .map(err => typeof err === "string" ? err : err.msg || JSON.stringify(err))
+        .filter(Boolean)
+        .join("; ");
+    } else if (typeof error.detail === "object" && error.detail !== null) {
+      message = error.detail.detail || JSON.stringify(error.detail);
+    } else if (error.detail) {
+      message = error.detail;
+    }
+
+    throw new Error(message);
   }
 
   return response.json();
