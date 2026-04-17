@@ -269,8 +269,7 @@ async def extend_signing_session(invoice_id: str, current_admin=Depends(verify_t
     if not res.data:
         raise HTTPException(status_code=404, detail="No active session found to extend")
     
-    current_expiry = datetime.fromisoformat(res.data[0]["expires_at"].replace('Z', '+00:00'))
-    new_expiry = current_expiry + timedelta(hours=48)
+    new_expiry = datetime.now(timezone.utc) + timedelta(hours=48)
     
     await db_execute(lambda: db.table("contract_signing_sessions").update({"expires_at": new_expiry.isoformat()}).eq("id", res.data[0]["id"]).execute())
     

@@ -53,7 +53,10 @@ async def create_contact(data: ContactCreate, current_admin=Depends(verify_token
     if check.data:
         raise HTTPException(status_code=400, detail="Contact with this email already exists.")
     
-    result = await db_execute(lambda: db.table("marketing_contacts").insert(data.dict()).execute())
+    insert_data = data.dict()
+    insert_data["created_by"] = current_admin["sub"]
+    
+    result = await db_execute(lambda: db.table("marketing_contacts").insert(insert_data).execute())
     
     await log_activity(
         "marketing_contact_created",

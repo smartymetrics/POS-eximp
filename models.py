@@ -590,4 +590,66 @@ class ChatInviteRequest(BaseModel):
 
 class ChatMessageRequest(BaseModel):
     message: str
-    message_type: str = "text"
+    message_type: str = "text" # "text" or "file" (though file has its own endpoint)
+
+
+# ─── HRM & PERFORMANCE ───────────────────────────────────────
+class KPITemplateCreate(BaseModel):
+    name: str
+    department: str
+    category: Optional[str] = "General"
+    description: Optional[str] = None
+    measurement_source: str = "manual"
+    default_unit: str = "count"
+    is_active: bool = True
+
+class KPITemplateUpdate(BaseModel):
+    name: Optional[str] = None
+    department: Optional[str] = None
+    category: Optional[str] = None
+    description: Optional[str] = None
+    measurement_source: Optional[str] = None
+    default_unit: Optional[str] = None
+    is_active: Optional[bool] = None
+
+class PerformanceReviewCreate(BaseModel):
+    staff_id: str
+    review_period: date
+    quality_score: int
+    teamwork_score: int
+    leadership_score: int
+    attitude_score: int
+    comments: Optional[str] = None
+
+# ─── HR SUITE MODIFICATIONS ──────────────────────────────────
+class LeaveRequestCreate(BaseModel):
+    leave_type: str # Annual, Sick, Study
+    start_date: date
+    end_date: date
+    days_count: int
+    reason: Optional[str] = None
+    proof_url: Optional[str] = None
+
+class LeaveRequestUpdate(BaseModel):
+    status: str # pending, approved, rejected
+    approver_notes: Optional[str] = None
+
+class StaffDocumentCreate(BaseModel):
+    staff_id: str
+    doc_type: str # CV, Contract, ID, Passport, Certificate
+    title: str
+    file_url: str
+
+class StaffQualificationCreate(BaseModel):
+    staff_id: str
+    type: str # Education, Certification, Skill
+    title: str
+    institution: Optional[str] = None
+    year: Optional[int] = None
+
+class IncidentCreate(BaseModel):
+    staff_id: str
+    incident_type: str
+    severity: str # Minor, Moderate, Serious, Critical
+    notes: Optional[str] = None
+    incident_date: Optional[date] = None

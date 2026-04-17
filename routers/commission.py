@@ -19,7 +19,7 @@ async def get_default_rate(current_admin=Depends(verify_token)):
 
 @router.patch("/default-rate")
 async def update_default_rate(payload: DefaultRateUpdate, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
-    if current_admin.get("role") != "admin":
+    if current_admin.get("role") not in ["admin", "super_admin", "hr", "operations"] and current_admin.get("primary_role") != "hr":
         raise HTTPException(status_code=403, detail="Not authorized")
         
     db = get_db()
@@ -54,7 +54,7 @@ async def get_rep_rates(rep_id: str, current_admin=Depends(verify_token)):
 
 @router.post("/rates")
 async def set_rep_rate(payload: CommissionRateCreate, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
-    if current_admin.get("role") != "admin":
+    if current_admin.get("role") not in ["admin", "super_admin", "hr", "operations"] and current_admin.get("primary_role") != "hr":
         raise HTTPException(status_code=403, detail="Not authorized")
         
     db = get_db()
@@ -86,13 +86,17 @@ async def set_rep_rate(payload: CommissionRateCreate, background_tasks: Backgrou
     return new_rate.data[0]
 
 @router.get("/earnings")
-async def list_earnings(rep_id: Optional[str] = None, is_paid: Optional[bool] = None, current_admin=Depends(verify_token)):
+async def list_earnings(rep_id: Optional[str] = None, is_paid: Optional[bool] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, current_admin=Depends(verify_token)):
     db = get_db()
     query = db.table("commission_earnings").select("*, sales_reps(name), clients(full_name), invoices(invoice_number)").eq("is_voided", False).order("created_at", desc=True)
     if rep_id:
         query = query.eq("sales_rep_id", rep_id)
     if is_paid is not None:
         query = query.eq("is_paid", is_paid)
+    if start_date:
+        query = query.gte("created_at", f"{start_date}T00:00:00")
+    if end_date:
+        query = query.lte("created_at", f"{end_date}T23:59:59")
     res = await db_execute(lambda: query.execute())
     return res.data
 
@@ -104,7 +108,7 @@ async def rep_earnings(rep_id: str, current_admin=Depends(verify_token)):
 
 @router.patch("/earnings/{id}/adjust")
 async def adjust_earnings(id: str, payload: CommissionAdjustment, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
-    if current_admin.get("role") != "admin":
+    if current_admin.get("role") not in ["admin", "super_admin", "hr", "operations"] and current_admin.get("primary_role") != "hr":
         raise HTTPException(status_code=403, detail="Not authorized")
         
     db = get_db()
@@ -168,7 +172,7 @@ async def detailed_owed(rep_id: str, current_admin=Depends(verify_token)):
 
 @router.post("/payout")
 async def mark_payout(payload: CommissionPayout, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
-    if current_admin.get("role") != "admin":
+    if current_admin.get("role") not in ["admin", "super_admin", "hr", "operations"] and current_admin.get("primary_role") != "hr":
         raise HTTPException(status_code=403, detail="Not authorized")
         
     db = get_db()
@@ -253,11 +257,15 @@ async def mark_payout(payload: CommissionPayout, background_tasks: BackgroundTas
 
 
 @router.get("/payouts")
-async def list_payouts(rep_id: Optional[str] = None, current_admin=Depends(verify_token)):
+async def list_payouts(rep_id: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, current_admin=Depends(verify_token)):
     db = get_db()
     query = db.table("payout_batches").select("*, sales_reps(name), admins:paid_by(full_name)").order("paid_at", desc=True)
     if rep_id:
         query = query.eq("sales_rep_id", rep_id)
+    if start_date:
+        query = query.gte("paid_at", f"{start_date}T00:00:00")
+    if end_date:
+        query = query.lte("paid_at", f"{end_date}T23:59:59")
     res = await db_execute(lambda: query.execute())
     return res.data
 
@@ -268,9 +276,55 @@ async def rep_payouts(rep_id: str, current_admin=Depends(verify_token)):
     return res.data
 
 
+@router.get("/my")
+async def my_commissions(start_date: Optional[str] = None, end_date: Optional[str] = None, current_admin=Depends(verify_token)):
+    db = get_db()
+    email = current_admin.get("email")
+    
+    # 1. Find the Sales Rep linked to this staff member
+    rep_res = await db_execute(lambda: db.table("sales_reps").select("id, name").eq("email", email).execute())
+    
+    # Fallback to phone number if we can find it in staff profiles
+    if not rep_res.data:
+        profile = await db_execute(lambda: db.table("staff_profiles").select("phone_number").eq("admin_id", current_admin["sub"]).execute())
+        if profile.data and profile.data[0].get("phone_number"):
+            phone = profile.data[0]["phone_number"]
+            # Try matching exactly as stored or by stripping chars if necessary (keeping it simple first)
+            rep_res = await db_execute(lambda: db.table("sales_reps").select("id, name").eq("phone", phone).execute())
+
+    if not rep_res.data:
+        # Fallback to name if user requests it? For now, we return empty if no unique match found
+        return {"rep_id": None, "earnings": [], "payouts": [], "owed": 0}
+
+    rep_id = rep_res.data[0]["id"]
+    
+    # 2. Fetch Earnings
+    e_query = db.table("commission_earnings").select("*, clients(full_name), invoices(invoice_number)").eq("sales_rep_id", rep_id).eq("is_voided", False).order("created_at", desc=True)
+    if start_date: e_query = e_query.gte("created_at", f"{start_date}T00:00:00")
+    if end_date: e_query = e_query.lte("created_at", f"{end_date}T23:59:59")
+    earnings = await db_execute(lambda: e_query.execute())
+
+    # 3. Fetch Payouts
+    p_query = db.table("payout_batches").select("*").eq("sales_rep_id", rep_id).order("paid_at", desc=True)
+    if start_date: p_query = p_query.gte("paid_at", f"{start_date}T00:00:00")
+    if end_date: p_query = p_query.lte("paid_at", f"{end_date}T23:59:59")
+    payouts = await db_execute(lambda: p_query.execute())
+
+    # 4. Calc current balance (ignoring date filters for balance)
+    owed_res = await db_execute(lambda: db.table("commission_earnings").select("final_amount, amount_paid").eq("sales_rep_id", rep_id).eq("is_paid", False).eq("is_voided", False).execute())
+    total_owed = sum(float(e["final_amount"]) - float(e.get("amount_paid") or 0) for e in owed_res.data)
+
+    return {
+        "rep_id": rep_id,
+        "rep_name": rep_res.data[0]["name"],
+        "earnings": earnings.data,
+        "payouts": payouts.data,
+        "total_owed": total_owed
+    }
+
 @router.post("/earnings/{id}/void")
 async def void_earning(id: str, payload: CommissionVoidRequest, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
-    if current_admin.get("role") != "admin":
+    if current_admin.get("role") not in ["admin", "super_admin", "hr", "operations"] and current_admin.get("primary_role") != "hr":
         raise HTTPException(status_code=403, detail="Not authorized")
         
     db = get_db()

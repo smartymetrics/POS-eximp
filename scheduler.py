@@ -1,10 +1,11 @@
 import logging
+from typing import Optional, List
 from apscheduler.schedulers.asyncio import AsyncIOScheduler
 from apscheduler.triggers.cron import CronTrigger
 from database import supabase, db_execute, try_claim_job
 from report_service import ReportService
 from email_service import send_report_email
-from datetime import datetime, timedelta
+from datetime import datetime, timedelta, date
 import asyncio
 import io
 import base64
@@ -12,6 +13,7 @@ from marketing_scheduler import setup_marketing_scheduler
 from marketing_sequencer_engine import process_active_sequences, process_segment_triggers
 from marketing_ltv_engine import refresh_marketing_ltv_stats
 from email_service import send_appointment_reminder_email, send_followup_nudge_email
+import math
 
 # Setup logging
 logging.basicConfig(level=logging.INFO)
@@ -317,12 +319,189 @@ async def start_scheduler():
         replace_existing=True,
     )
 
+    # 8. Goal Achievement Auto-Detection (Nightly at 1 AM)
+    scheduler.add_job(
+        sync_goal_actuals,
+        CronTrigger(hour=1, minute=0),
+        id="goal_sync",
+        replace_existing=True,
+    )
+
     scheduler.start()
     logger.info("Background scheduler started")
 
     # Initial sync as a non-blocking task to speed up server boot
     asyncio.create_task(sync_schedules_from_db())
 
+
+async def sync_goal_actuals(month_str: Optional[str] = None):
+    """
+    Core engine for HRM Goal Achievement Auto-Detection.
+    Calculates actual values for all automated KPIs.
+    """
+    job_key = f"goal_sync_{datetime.now().strftime('%Y-%m-%d')}"
+    if not await try_claim_job(job_key, threshold_mins=60):
+        return
+
+    try:
+        # 1. Determine period (Current month if not provided)
+        now = datetime.now()
+        p_start = date(now.year, now.month, 1)
+        if month_str:
+            p_start = date.fromisoformat(month_str).replace(day=1)
+        
+        p_end = (p_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+        period_start_str = p_start.isoformat()
+        period_end_str = p_end.isoformat()
+
+        # 2. Fetch all published/active automated goals for this month
+        res = await db_execute(lambda: supabase.table("staff_goals")
+            .select("*, admins(id, full_name, line_manager_id)")
+            .eq("month", period_start_str)
+            .neq("measurement_source", "manual")
+            .execute())
+        
+        goals = res.data or []
+        logger.info(f"Syncing {len(goals)} automated goals for {period_start_str}")
+
+        for goal in goals:
+            actual_value = 0
+            source = goal.get("measurement_source")
+            staff_id = goal.get("staff_id")
+            target = float(goal.get("target_value") or 1)
+
+            # 3. Source-specific calculations
+            if source == "mkt_leads_added":
+                # Combine marketing_contacts and clients (avoiding duplicates)
+                q = f"""
+                SELECT count(distinct email) FROM (
+                    SELECT email, created_by as sid, created_at FROM marketing_contacts 
+                    UNION 
+                    SELECT email, added_by as sid, created_at FROM clients
+                ) c 
+                WHERE sid = '{staff_id}' AND created_at >= '{period_start_str}' AND created_at <= '{period_end_str}'
+                """
+                sql_res = await db_execute(lambda: supabase.rpc("exec_sql", {"sql_body": q}).execute())
+                actual_value = sql_res.data[0]['count'] if sql_res.data and 'count' in sql_res.data[0] else 0
+
+            elif source == "mkt_lead_conversion":
+                # % of marketing_contacts that converted to client
+                q = f"SELECT (count(case when contact_type='client' then 1 end) * 100.0 / nullif(count(*), 0)) as rate FROM marketing_contacts WHERE created_by = '{staff_id}' AND created_at >= '{period_start_str}' AND created_at <= '{period_end_str}'"
+                sql_res = await db_execute(lambda: supabase.rpc("exec_sql", {"sql_body": q}).execute())
+                actual_value = sql_res.data[0]['rate'] if sql_res.data and 'rate' in sql_res.data[0] else 0
+
+            elif source == "mkt_campaigns_sent":
+                q = f"SELECT count(*) FROM email_campaigns WHERE created_by = '{staff_id}' AND status = 'sent' AND sent_at >= '{period_start_str}' AND sent_at <= '{period_end_str}'"
+                sql_res = await db_execute(lambda: supabase.rpc("exec_sql", {"sql_body": q}).execute())
+                actual_value = sql_res.data[0]['count'] if sql_res.data and 'count' in sql_res.data[0] else 0
+
+            elif source == "mkt_open_rate":
+                q = f"""
+                SELECT (count(case when opened_at is not null then 1 end) * 100.0 / nullif(count(*), 0)) as rate 
+                FROM campaign_recipients cr
+                JOIN email_campaigns ec ON cr.campaign_id = ec.id
+                WHERE ec.created_by = '{staff_id}' AND ec.sent_at >= '{period_start_str}' AND ec.sent_at <= '{period_end_str}'
+                """
+                sql_res = await db_execute(lambda: supabase.rpc("exec_sql", {"sql_body": q}).execute())
+                actual_value = sql_res.data[0]['rate'] if sql_res.data and 'rate' in sql_res.data[0] else 0
+
+            elif source == "sales_deals_closed":
+                q = await db_execute(lambda: supabase.table("invoices")
+                    .select("id", count="exact")
+                    .eq("created_by", staff_id)
+                    .eq("pipeline_stage", "closed")
+                    .gte("invoice_date", period_start_str)
+                    .lte("invoice_date", period_end_str)
+                    .execute())
+                actual_value = q.count
+
+            elif source == "sales_revenue":
+                # Only counting amount_paid in this period
+                q = f"SELECT sum(amount) as total FROM payments WHERE recorded_by = '{staff_id}' AND is_voided = false AND payment_date >= '{period_start_str}' AND payment_date <= '{period_end_str}'"
+                sql_res = await db_execute(lambda: supabase.rpc("exec_sql", {"sql_body": q}).execute())
+                actual_value = sql_res.data[0]['total'] if sql_res.data and 'total' in sql_res.data[0] and sql_res.data[0]['total'] else 0
+
+            elif source == "sales_collection_rate":
+                # Payments / Invoices created by this staff in this period
+                q = f"""
+                WITH invs AS (SELECT sum(amount) as total_inv FROM invoices WHERE created_by = '{staff_id}' AND invoice_date >= '{period_start_str}' AND invoice_date <= '{period_end_str}'),
+                     pays AS (SELECT sum(amount) as total_pay FROM payments WHERE recorded_by = '{staff_id}' AND is_voided = false AND payment_date >= '{period_start_str}' AND payment_date <= '{period_end_str}')
+                SELECT (COALESCE(pays.total_pay, 0) * 100.0 / NULLIF(invs.total_inv, 0)) as rate FROM invs, pays
+                """
+                sql_res = await db_execute(lambda: supabase.rpc("exec_sql", {"sql_body": q}).execute())
+                actual_value = sql_res.data[0]['rate'] if sql_res.data and 'rate' in sql_res.data[0] else 0
+
+            elif source == "ops_appointments":
+                q = await db_execute(lambda: supabase.table("appointments")
+                    .select("id", count="exact")
+                    .eq("created_by", staff_id)
+                    .eq("status", "completed")
+                    .gte("scheduled_at", period_start_str)
+                    .lte("scheduled_at", period_end_str)
+                    .execute())
+                actual_value = q.count
+
+            elif source == "admin_ticket_esc":
+                # Lower is better? We'll just count them for now.
+                q = await db_execute(lambda: supabase.table("support_tickets")
+                    .select("id", count="exact")
+                    .eq("assigned_admin_id", staff_id)
+                    .eq("status", "pending") # Assuming pending is escalation state or similar
+                    .gte("created_at", period_start_str)
+                    .lte("created_at", period_end_str)
+                    .execute())
+                actual_value = q.count
+
+            elif source == "admin_verify_time":
+                # Avg hours to verify an invoice
+                q = f"""
+                SELECT EXTRACT(EPOCH FROM (AVG(reviewed_at - created_at))) / 3600 as avg_hrs 
+                FROM pending_verifications 
+                WHERE reviewed_by = '{staff_id}' AND status = 'confirmed' AND reviewed_at >= '{period_start_str}' AND reviewed_at <= '{period_end_str}'
+                """
+                sql_res = await db_execute(lambda: supabase.rpc("exec_sql", {"sql_body": q}).execute())
+                actual_value = sql_res.data[0]['avg_hrs'] if sql_res.data and 'avg_hrs' in sql_res.data[0] else 0
+
+            elif source == "team_achievement":
+                # For Managers: % of direct reports who hit 100% of their month's goals
+                q = f"""
+                WITH team_avg AS (
+                    SELECT staff_id, AVG((actual_value / nullif(target_value, 0)) * 100) as ach
+                    FROM staff_goals
+                    WHERE month = '{period_start_str}'
+                    GROUP BY staff_id
+                )
+                SELECT (COUNT(CASE WHEN ach >= 100 THEN 1 END) * 100.0 / NULLIF(COUNT(*), 0)) as rate
+                FROM admins a
+                JOIN team_avg t ON t.staff_id = a.id
+                WHERE a.line_manager_id = '{staff_id}' AND a.is_active = true
+                """
+                sql_res = await db_execute(lambda: supabase.rpc("exec_sql", {"sql_body": q}).execute())
+                actual_value = sql_res.data[0]['rate'] if sql_res.data and 'rate' in sql_res.data[0] else 0
+
+            # 4. Update the goal record
+            ach_pct = (actual_value / target) * 100
+            
+            # Application of "Sticky Achievement" from goal_achievement_system.md
+            # If current achievement is 100%+, status is 'Achieved'. 
+            # We don't overwrite 'Achieved' with a lower value later in the same month (Sticky rule)
+            prev_status = goal.get("achievement_status")
+            new_status = "Achieved" if ach_pct >= 100 else "On Track" if ach_pct >= 80 else "Behind" if ach_pct < 50 else "Fair"
+            
+            if prev_status == "Achieved" and ach_pct < 100:
+                # Keep it achieved if it was already hit this month
+                new_status = "Achieved"
+
+            await db_execute(lambda: supabase.table("staff_goals").update({
+                "actual_value": round(actual_value, 2),
+                "achievement_pct": round(min(ach_pct, 120), 1), # Cap at 120% per doc
+                "achievement_status": new_status,
+                "last_synced_at": datetime.now().isoformat()
+            }).eq("id", goal["id"]).execute())
+
+        logger.info(f"Goal sync complete for {len(goals)} goals.")
+    except Exception as e:
+        logger.error(f"Error in sync_goal_actuals: {e}")
 
 async def stop_scheduler():
     if scheduler.running:

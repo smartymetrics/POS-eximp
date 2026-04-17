@@ -59,18 +59,15 @@ This system resolves all of the above.
 
 Goals are classified into two families: **quantitative** (auto-synced from ERP data) and **qualitative** (manually updated by the staff member or manager). Each goal type is defined in a `kpi_templates` record with a `measurement_source` field.
 
-### 3.1 Quantitative Goal Types
-
-These are automatically measured. The system queries existing ERP tables to derive the actual value.
-
 | Goal Type | `measurement_source` | Unit | ERP Source Table | Description |
 |---|---|---|---|---|
-| Sales revenue | `sales_revenue` | NGN (₦) | `invoices` | Total value of paid invoices where `sales_rep_name` matches the staff member |
-| Deals closed | `deals_closed` | Count | `invoices` | Number of invoices reaching `pipeline_stage = 'closed'` in the period |
-| Clients acquired | `clients_acquired` | Count | `clients` | Number of new client records linked to the staff member in the period |
-| Payments collected | `payments_collected` | NGN (₦) | `payments` | Total payment amounts recorded by the staff member |
-| Properties inspected | `properties_inspected` | Count | `invoices` | Number of invoices reaching `pipeline_stage = 'inspection'` or beyond |
-| Contracts signed | `contracts_signed` | Count | `invoices` | Number of invoices where `contract_signed_at` is not null in the period |
+| **Marketing Leads** | `mkt_leads_added` | Count | `marketing_contacts` + `clients` | Combined new leads added by staff via Marketing or CRM dashboards |
+| **Lead Conversion** | `mkt_lead_conversion` | % | `marketing_contacts` | % of leads successfully converted to clients |
+| **Properties Inspected** | `ops_appointments` | Count | `appointments` | Completed inspections coordinated by staff members |
+| **Team Achievement**| `team_achievement` | % | `staff_goals` | (Manager KPI) % of direct reports hitting 100% of their month's goals |
+| **Sales Revenue** | `sales_revenue` | NGN | `invoices` | Total value of paid invoices for assigned Reps |
+| **Collection Rate** | `sales_collection_rate`| % | `payments` vs `invoices` | Ratio of collections vs total amount due for Rep's clients |
+| **Lead Response Time**| `lead_response_time` | Hours | `activity_log` | (Marketing) Avg hours from lead entry to first staff interaction |
 
 ### 3.2 Qualitative Goal Types
 
@@ -167,6 +164,10 @@ ALTER TABLE kpi_templates
       'payments_collected',
       'properties_inspected',
       'contracts_signed',
+      'leads_generated',
+      'lead_conversion_pct',
+      'lead_response_time',
+      'lead_activity',
       'manual'
     )),
   ADD COLUMN IF NOT EXISTS default_unit VARCHAR(50) DEFAULT 'count',
@@ -298,7 +299,61 @@ WHERE sales_rep_name = :rep_name
   AND contract_signed_at <= :period_end;
 ```
 
-### 6.6 Department-Level Goals
+### 6.6 `leads_generated`
+
+```sql
+SELECT COUNT(*) AS actual_value
+FROM clients
+WHERE assigned_rep_id = :staff_id
+  AND created_at >= :period_start
+  AND created_at <= :period_end;
+```
+
+### 6.7 `lead_conversion_pct`
+
+```sql
+SELECT 
+  CASE 
+    WHEN COUNT(*) = 0 THEN 0 
+    ELSE (COUNT(CASE WHEN pipeline_stage = 'closed' THEN 1 END) * 100.0 / COUNT(*))
+  END AS actual_value
+FROM clients
+WHERE assigned_rep_id = :staff_id
+  AND created_at >= :period_start
+  AND created_at <= :period_end;
+```
+
+### 6.8 `lead_response_time` (Avg Hours)
+
+```sql
+WITH lead_first_activity AS (
+  SELECT 
+    c.id, 
+    c.created_at, 
+    MIN(a.created_at) as first_act
+  FROM clients c
+  JOIN activity_log a ON a.client_id = c.id
+  WHERE c.assigned_rep_id = :staff_id
+    AND c.created_at >= :period_start
+    AND c.created_at <= :period_end
+  GROUP BY c.id, c.created_at
+)
+SELECT COALESCE(AVG(EXTRACT(EPOCH FROM (first_act - created_at))/3600), 0) as actual_value
+FROM lead_first_activity;
+```
+
+### 6.9 `lead_activity`
+
+```sql
+SELECT COUNT(*) AS actual_value
+FROM activity_log a
+JOIN clients c ON c.id = a.client_id
+WHERE c.assigned_rep_id = :staff_id
+  AND a.created_at >= :period_start
+  AND a.created_at <= :period_end;
+```
+
+### 6.10 Department-Level Goals
 
 When `staff_id` is null and `department` is set, the sync engine aggregates across all staff in that department:
 
@@ -393,6 +448,14 @@ async def _sync_single_goal(db, goal: dict):
         actual = await _fetch_payments_collected(db, staff_id, period_start, period_end)
     elif source == "contracts_signed":
         actual = await _fetch_contracts_signed(db, staff_id, department, period_start, period_end)
+    elif source == "leads_generated":
+        actual = await _fetch_leads_generated(db, staff_id, period_start, period_end)
+    elif source == "lead_conversion_pct":
+        actual = await _fetch_lead_conversion_pct(db, staff_id, period_start, period_end)
+    elif source == "lead_response_time":
+        actual = await _fetch_lead_response_time(db, staff_id, period_start, period_end)
+    elif source == "lead_activity":
+        actual = await _fetch_lead_activity(db, staff_id, period_start, period_end)
     else:
         return  # Unknown source — skip
 
@@ -499,6 +562,54 @@ async def _fetch_contracts_signed(db, staff_id, department, period_start, period
             .execute()
     )
     return float(len(res.data or []))
+
+
+async def _fetch_leads_generated(db, staff_id, period_start, period_end) -> float:
+    if not staff_id: return 0.0
+    res = await db_execute(lambda: db.table("clients").select("id", count="exact").eq("assigned_rep_id", staff_id).gte("created_at", period_start).lte("created_at", period_end).execute())
+    return float(res.count or 0)
+
+
+async def _fetch_lead_conversion_pct(db, staff_id, period_start, period_end) -> float:
+    if not staff_id: return 0.0
+    res = await db_execute(lambda: db.table("clients").select("id, pipeline_stage").eq("assigned_rep_id", staff_id).gte("created_at", period_start).lte("created_at", period_end).execute())
+    data = res.data or []
+    if not data: return 0.0
+    closed = len([l for l in data if l["pipeline_stage"] == "closed"])
+    return (closed / len(data)) * 100.0
+
+
+async def _fetch_lead_response_time(db, staff_id, period_start, period_end) -> float:
+    """Calculates average hours from lead creation to first activity log."""
+    # Note: Complex join logic usually better served by a custom RPC in Supabase
+    # For now, we perform a simplified fetch-and-compute
+    if not staff_id: return 0.0
+    leads = await db_execute(lambda: db.table("clients").select("id, created_at").eq("assigned_rep_id", staff_id).gte("created_at", period_start).lte("created_at", period_end).execute())
+    if not leads.data: return 0.0
+    
+    total_hours = 0.0
+    counted_leads = 0
+    for lead in leads.data:
+        acts = await db_execute(lambda: db.table("activity_log").select("created_at").eq("client_id", lead["id"]).order("created_at").limit(1).execute())
+        if acts.data:
+            dt_lead = datetime.fromisoformat(lead["created_at"].replace("Z", "+00:00"))
+            dt_act = datetime.fromisoformat(acts.data[0]["created_at"].replace("Z", "+00:00"))
+            diff = (dt_act - dt_lead).total_seconds() / 3600
+            total_hours += diff
+            counted_leads += 1
+    
+    return total_hours / counted_leads if counted_leads > 0 else 0.0
+
+
+async def _fetch_lead_activity(db, staff_id, period_start, period_end) -> float:
+    if not staff_id: return 0.0
+    # Join activity_log with clients to filter by assigned_rep_id
+    res = await db_execute(lambda: db.rpc("count_rep_activities", {
+        "rep_id": staff_id, 
+        "start_time": period_start, 
+        "end_time": period_end
+    }).execute())
+    return float(res.data or 0)
 
 
 async def _get_rep_name(db, staff_id, department) -> str | None:

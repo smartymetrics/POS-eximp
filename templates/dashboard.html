@@ -6383,7 +6383,7 @@
       openModal('contractStatusModal');
 
       try {
-        const res = await apiFetch(`/api/contracts/session/${invoiceId}`);
+        const res = await apiFetch(`/api/contracts/${invoiceId}/status`);
         const data = await res.json();
         document.getElementById('contract-loading').style.display = 'none';
         document.getElementById('contract-content').style.display = 'block';

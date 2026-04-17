@@ -4,6 +4,40 @@ import { apiFetch, API_BASE } from "./api";
 const ThemeCtx = createContext({ dark: true, toggle: () => {} });
 const useTheme = () => useContext(ThemeCtx);
 
+function SecurityManager() {
+  const [data, setData] = useState({ current:"", new:"", confirm:"" });
+  const [loading, setLoading] = useState(false);
+
+  const update = async () => {
+    if (!data.current || !data.new || !data.confirm) return alert("Fill all fields");
+    if (data.new !== data.confirm) return alert("New passwords do not match");
+    if (data.new.length < 8) return alert("Password must be at least 8 characters");
+
+    setLoading(true);
+    try {
+      await apiFetch(`${API_BASE}/auth/me/password`, {
+        method: "PATCH",
+        body: JSON.stringify({ current_password: data.current, new_password: data.new })
+      });
+      alert("Password updated successfully");
+      setData({ current:"", new:"", confirm:"" });
+    } catch (e) { alert(e.message); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div className="fade" style={{ maxWidth:400 }}>
+      <div className="ho" style={{ fontSize:15, marginBottom:20, fontWeight:800, textTransform:"uppercase", letterSpacing:1 }}>Security & Password</div>
+      <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+        <div><Lbl>Current Password</Lbl> <input className="inp" type="password" value={data.current} onChange={e=>setData({...data, current:e.target.value})} /></div>
+        <div><Lbl>New Password</Lbl> <input className="inp" type="password" value={data.new} onChange={e=>setData({...data, new:e.target.value})} /></div>
+        <div><Lbl>Confirm New Password</Lbl> <input className="inp" type="password" value={data.confirm} onChange={e=>setData({...data, confirm:e.target.value})} /></div>
+        <button className="bp" style={{ marginTop:10 }} onClick={update} disabled={loading}>{loading?"Updating...":"Update Password"}</button>
+      </div>
+    </div>
+  );
+}
+
 // ─── DESIGN TOKENS ──────────────────────────────────────────────────────────────
 const T = {
   gold:     "#C47D0A",
@@ -46,7 +80,8 @@ const GS = dark => {
     .hrm-content-padding{flex:1;padding:32px 40px;}
     .hrm-serif{font-family:'Playfair Display',serif;}
     .fade{animation:fi .3s ease forwards;}
-    @keyframes fi{from{opacity:0;transform:translateY(8px);}to{opacity:1;transform:none;}}
+    .fade-in{animation:fi .5s cubic-bezier(.2,1,.2,1) forwards; opacity:0;}
+    @keyframes fi{from{opacity:0;transform:translateY(12px);}to{opacity:1;transform:none;}}
     
     /* Cards */
     .gc{background:${C.card};border:1px solid ${C.border};border-radius:12px;padding:16px;transition:all .3s ease;}
@@ -98,6 +133,8 @@ const GS = dark => {
     /* Modals */
     .mb{position:fixed;inset:0;background:#06080AEE;backdrop-filter:blur(12px);z-index:1000;display:grid;place-items:center;padding:24px;overflow-y:auto;}
     .mo{background:${C.card};border:1px solid #FFFFFF10;box-shadow:0 40px 100px rgba(0,0,0,.8);border-radius:28px;max-width:640px;width:100%;max-height:92vh;display:flex;flex-direction:column;position:relative;animation:m-in .4s cubic-bezier(.2,1,.2,1);overflow:hidden;}
+    .mh{padding:34px 40px 14px 40px;}
+    .mc{padding:0 40px 40px 40px;}
     @keyframes m-in{from{opacity:0;transform:scale(0.96) translateY(30px);}to{opacity:1;transform:scale(1) translateY(0);}}
     .fade{animation:fi .4s ease-out;}
     @keyframes fi{from{opacity:0;}to{opacity:1;}}
@@ -158,7 +195,10 @@ const GS = dark => {
       .g3{grid-template-columns:1fr;gap:12px;}
       .g2{grid-template-columns:1fr;gap:12px;}
       .g2w{grid-template-columns:1fr;gap:12px;}
-      .mo{max-width:100vw;margin:8px;border-radius:16px;max-height:96vh;}
+      .mb{padding:12px;}
+      .mo{max-width:100vw;max-height:98vh;border-radius:16px;}
+      .mh{padding:24px 20px 14px 20px;}
+      .mc{padding:0 20px 24px 20px;}
       .field{padding:10px 14px;}
       .tw .ht{min-width:850px;}
     }
@@ -238,14 +278,14 @@ function Modal({ onClose, title, width=640, children }) {
   return (
     <div className="mb" onClick={onClose}>
       <div className="mo fade" style={{ maxWidth:width }} onClick={e=>e.stopPropagation()}>
-        <div style={{ flexShrink:0, display:"flex", justifyContent:"space-between", alignItems:"center", padding:"34px 40px 14px 40px" }}>
+        <div className="mh" style={{ flexShrink:0, display:"flex", justifyContent:"space-between", alignItems:"center" }}>
           <div>
             <div style={{ fontSize:10, color:T.orange, fontWeight:800, textTransform:"uppercase", letterSpacing:".1em", marginBottom:4 }}>Management System</div>
             <div className="ho" style={{ fontSize:22 }}>{title}</div>
           </div>
           <button onClick={onClose} style={{ background:"#FFFFFF0A", border:"1px solid #FFFFFF10", color:C.text, width:36, height:36, borderRadius:10, display:"flex", alignItems:"center", justifyContent:"center", cursor:"pointer", transition:"all .2s" }}>✕</button>
         </div>
-        <div style={{ flex:1, overflowY:"auto", padding:"0 40px 40px 40px", scrollbarWidth:"none" }}>
+        <div className="mc" style={{ flex:1, overflowY:"auto", scrollbarWidth:"none" }}>
           {children}
         </div>
       </div>
@@ -296,15 +336,15 @@ function Sidebar({ page, setPage, user, onLogout, items, roleLabel, onMenuOpen }
   const { dark, toggle } = useTheme(); const C = dark?DARK:LIGHT;
   const G = T.gold;
   return (
-    <div className="hrm-sidebar" style={{ width:260, background:dark?"#111317":"#FFFFFF", borderRight:`1px solid ${C.border}`, display:"flex", flexDirection:"column", flexShrink:0, height:"100vh", position:"relative", zIndex:50 }}>
-      <div style={{ padding:"28px 24px 20px" }}>
-        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:36 }}>
+    <div className="hrm-sidebar" style={{ width:260, background:dark?"#111317":"#FFFFFF", borderRight:`1px solid ${C.border}`, display:"flex", flexDirection:"column", flexShrink:0, height:"100vh", position:"sticky", top:0, zIndex:50, overflow:"hidden" }}>
+      <div style={{ padding:"28px 24px 20px", flex:1, overflowY:"auto", display:"flex", flexDirection:"column" }}>
+        <div style={{ display:"flex", alignItems:"center", gap:12, marginBottom:36, flexShrink:0 }}>
           <img src="/static/img/logo.svg" alt="Eximp & Cloves" style={{ height: 40, width: "auto" }} onError={(e) => { e.target.onerror = null; e.target.src = "https://via.placeholder.com/40x40?text=EC"; }} />
           <div style={{ lineHeight:1.2 }}>
             <div style={{ fontSize:16, fontWeight:700, color:G, fontFamily:"'Playfair Display',serif" }}>HR Suite</div>
           </div>
         </div>
-        <div style={{ fontSize:9, color:C.muted, letterSpacing:"2px", padding:"0 4px 8px", fontWeight:700, textTransform:"uppercase" }}>{roleLabel}</div>
+        <div style={{ fontSize:9, color:C.muted, letterSpacing:"2px", padding:"0 4px 8px", fontWeight:700, textTransform:"uppercase", flexShrink:0 }}>{roleLabel}</div>
         <nav style={{ display:"flex", flexDirection:"column", gap:2 }}>
           {items.map(n => (
             <button key={n.id} className={`nb ${page===n.id?"on":""}`} onClick={()=>setPage(n.id)}>
@@ -352,15 +392,20 @@ function Topbar({ title, user }) {
 // ─── GOAL FORM MODAL CONTENT ─────────────────────────────────────────────────
 function GoalForm({ onSave, staffList=[], templates=[], initialGoal=null }) {
   const { dark } = useTheme(); const C = dark?DARK:LIGHT;
-  const defaultForm = { uid:"", department:"", template_id:"", kpi:"", target:"", unit:"", period:"Apr 2026", status:"Draft" };
+  const defaultForm = { uid:"", department:"", template_id:"", kpi:"", target:"", unit:"", period: new Date().toLocaleDateString(undefined, { month:'short', year:'numeric' }), status:"Published" };
   const [f, setF] = useState(defaultForm);
   const departmentAlias = { Sales: "Sales & Acquisitions", HR: "Human Resources" };
+
+  const [selectedTemplate, setSelectedTemplate] = useState(null);
 
   useEffect(() => {
     if (!initialGoal) {
       setF(defaultForm);
+      setSelectedTemplate(null);
       return;
     }
+    const t = templates.find(temp => temp.id === initialGoal.kpi_template_id);
+    setSelectedTemplate(t);
     setF({
       uid: initialGoal.staff_id || "",
       department: initialGoal.department || "",
@@ -368,15 +413,16 @@ function GoalForm({ onSave, staffList=[], templates=[], initialGoal=null }) {
       kpi: initialGoal.kpi_name || "",
       target: initialGoal.target_value != null ? String(initialGoal.target_value) : "",
       unit: initialGoal.unit || "",
-      period: initialGoal.month ? new Date(initialGoal.month).toLocaleDateString(undefined, { month:'short', year:'numeric' }) : "Apr 2026",
-      status: initialGoal.status || "Draft"
+      period: initialGoal.month ? new Date(initialGoal.month).toLocaleDateString(undefined, { month:'short', year:'numeric' }) : defaultForm.period,
+      status: initialGoal.status || "Published"
     });
-  }, [initialGoal]);
+  }, [initialGoal, templates]);
 
   const selUser = staffList.find(u => u.id === f.uid);
   const departmentKey = selUser ? (departmentAlias[selUser.department] || selUser.department) : f.department;
   const suggestedTemplates = departmentKey ? templates.filter(t => t.department === departmentKey && t.is_active) : [];
   const hasSuggestedKpis = suggestedTemplates.length > 0;
+  
   const departments = Array.from(new Set([
     ...staffList.map(u => departmentAlias[u.department] || u.department).filter(Boolean),
     ...templates.map(t => t.department).filter(Boolean)
@@ -388,10 +434,10 @@ function GoalForm({ onSave, staffList=[], templates=[], initialGoal=null }) {
   };
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
-      <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:14 }}>
+    <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
+      <div className="g2" style={{ gap:16 }}>
         <div>
-          <Lbl>Staff Member</Lbl>
+          <Lbl>Assign to Staff Member</Lbl>
           <select className="inp" value={f.uid} onChange={e=>{
             const staffId = e.target.value;
             const staff = staffList.find(u => u.id === staffId);
@@ -402,79 +448,111 @@ function GoalForm({ onSave, staffList=[], templates=[], initialGoal=null }) {
               template_id:"",
               kpi:""
             }));
+            setSelectedTemplate(null);
           }}>
-            <option value="">— No staff selected —</option>
+            <option value="">— No individual selected —</option>
             {staffList.filter(u=>u.role!=="hr_admin").map(u=><option key={u.id} value={u.id}>{u.full_name} ({u.department})</option>)}
           </select>
         </div>
         <div>
-          <Lbl>Department</Lbl>
+          <Lbl>Or Assign to Department</Lbl>
           <select className="inp" value={f.department} onChange={e=>{
             setF(x => ({ ...x, department: e.target.value, uid:"", template_id:"", kpi:"" }));
+            setSelectedTemplate(null);
           }} disabled={!!f.uid}>
             <option value="">— Select Department —</option>
             {departments.map(d=><option key={d} value={d}>{d}</option>)}
           </select>
         </div>
       </div>
-      <div>
-        <Lbl>KPI / Goal Type *</Lbl>
+
+      <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 18 }}>
+        <Lbl>KPI Configuration / Library Selection *</Lbl>
         {hasSuggestedKpis ? (
-          <>
+          <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
             <select className="inp" value={f.template_id} onChange={e=>{
               const template = suggestedTemplates.find(t => t.id === e.target.value);
+              setSelectedTemplate(template);
               if (e.target.value === "") {
-                setF(x => ({ ...x, template_id:"", kpi:"" }));
+                setF(x => ({ ...x, template_id:"", kpi:"", unit:"" }));
               } else {
-                setF(x => ({ ...x, template_id: e.target.value, kpi: template ? template.name : x.kpi }));
+                setF(x => ({ 
+                  ...x, 
+                  template_id: e.target.value, 
+                  kpi: template ? template.name : x.kpi,
+                  unit: template ? template.default_unit : x.unit
+                }));
               }
             }} disabled={!departmentKey}>
-              <option value="">— Select KPI for this department —</option>
+              <option value="">— Select from KPI Library —</option>
               {suggestedTemplates.map(t=><option key={t.id} value={t.id}>{t.name}</option>)}
             </select>
-            <input
-              className="inp"
-              type="text"
-              placeholder={departmentKey ? "KPI name (select a template or type a custom name)" : "Select staff or department first"}
-              value={f.kpi}
-              onChange={e=>setF(x=>({...x,kpi:e.target.value, template_id: ""}))}
-              disabled={!departmentKey}
-              style={{ marginTop:12 }}
-            />
-          </>
+            <div style={{ fontSize:11, color:C.muted }}>
+              {selectedTemplate ? (
+                <div style={{ background: `${T.orange}08`, padding: 10, borderRadius: 8, border: `1px dashed ${T.orange}33` }}>
+                  <div style={{ fontWeight: 800, color: T.orange, marginBottom: 4 }}>
+                    {selectedTemplate.measurement_source === "manual" ? "✍️ Manual Metric" : "🤖 Automated Metric"}
+                  </div>
+                  <div style={{ lineHeight: 1.4 }}>{selectedTemplate.description || "No description provided."}</div>
+                  {selectedTemplate.measurement_source !== "manual" && (
+                    <div style={{ marginTop: 6, fontSize: 10, opacity: 0.8 }}>
+                      Synced from: <b style={{ textTransform: "uppercase" }}>{selectedTemplate.measurement_source.replace(/_/g, " ")}</b>
+                    </div>
+                  )}
+                </div>
+              ) : "Select a template from the library for automated tracking, or type a custom goal below."}
+            </div>
+          </div>
         ) : (
-          <input
-            className="inp"
-            type="text"
-            placeholder={departmentKey ? "Enter a custom KPI goal name" : "Select staff or department first"}
-            value={f.kpi}
-            onChange={e=>setF(x=>({...x,kpi:e.target.value}))}
-            disabled={!departmentKey}
-          />
+          <div style={{ fontSize: 12, color: C.muted }}>No library templates available for {departmentKey || "this selection"}. Creating custom KPI.</div>
         )}
-        {!departmentKey && <div style={{ fontSize:11, color:(dark?DARK:LIGHT).muted, marginTop:4 }}>Select a staff member or department first to see relevant KPIs.</div>}
-        {departmentKey && !hasSuggestedKpis && <div style={{ fontSize:11, color:(dark?DARK:LIGHT).muted, marginTop:4 }}>This department has no active KPI templates. Enter a custom KPI name.</div>}
+
+        <input
+          className="inp"
+          type="text"
+          placeholder="Custom KPI / Goal Name"
+          value={f.kpi}
+          onChange={e=>{
+             setF(x=>({...x, kpi:e.target.value}));
+             if (f.template_id) { setF(x => ({...x, template_id: ""})); setSelectedTemplate(null); }
+          }}
+          disabled={!departmentKey}
+          style={{ marginTop:12 }}
+        />
       </div>
-      <div className="g2" style={{ gap:12 }}>
-        <div><Lbl>Target Value *</Lbl><input className="inp" type="number" placeholder="e.g. 8" value={f.target} onChange={e=>setF(x=>({...x,target:e.target.value}))}/></div>
-        <div><Lbl>Unit</Lbl><input className="inp" placeholder="e.g. deals, %, sites" value={f.unit} onChange={e=>setF(x=>({...x,unit:e.target.value}))}/></div>
-      </div>
-      <div className="g2" style={{ gap:12 }}>
+
+      <div className="g2" style={{ gap:16 }}>
         <div>
-          <Lbl>Period</Lbl>
+          <Lbl>Monthly Target *</Lbl>
+          <div style={{ position: "relative" }}>
+             <input className="inp" type="number" placeholder="0" value={f.target} onChange={e=>setF(x=>({...x,target:e.target.value}))} style={{ paddingRight: 60 }}/>
+             <div style={{ position: "absolute", right: 12, top: "50%", transform: "translateY(-50%)", fontSize: 12, fontWeight: 800, color: T.orange }}>{f.unit || "unit"}</div>
+          </div>
+        </div>
+        <div><Lbl>Unit Label</Lbl><input className="inp" placeholder="e.g. deals, %, lead" value={f.unit} onChange={e=>setF(x=>({...x,unit:e.target.value}))}/></div>
+      </div>
+
+      <div className="g2" style={{ gap:16 }}>
+        <div>
+          <Lbl>Performance Period</Lbl>
           <select className="inp" value={f.period} onChange={e=>setF(x=>({...x,period:e.target.value}))}>
-            {["Apr 2026","May 2026","Jun 2026","Jul 2026","Aug 2026"].map(p=><option key={p}>{p}</option>)}
+            {["Apr 2026","May 2026","Jun 2026","Jul 2026","Aug 2026","Sep 2026"].map(p=><option key={p}>{p}</option>)}
           </select>
         </div>
         <div>
-          <Lbl>Status</Lbl>
+          <Lbl>Publication Status</Lbl>
           <select className="inp" value={f.status} onChange={e=>setF(x=>({...x,status:e.target.value}))}>
-            <option value="Draft">Draft — editable</option>
-            <option value="Published">Published — locked</option>
+            <option value="Published">Published — Visible to Staff</option>
+            <option value="Draft">Draft — Hidden from Staff</option>
           </select>
         </div>
       </div>
-      <button className="bp" onClick={save} style={{ padding:12 }}>{initialGoal ? "Update Goal" : "Save Goal"}</button>
+
+      <div style={{ marginTop: 8 }}>
+        <button className="bp" onClick={save} style={{ width: "100%", padding: 14, fontSize: 15 }}>
+          {initialGoal ? "Update Goal Instance" : "Create & Activate Goal"}
+        </button>
+      </div>
     </div>
   );
 }
@@ -482,8 +560,27 @@ function GoalForm({ onSave, staffList=[], templates=[], initialGoal=null }) {
 function KpiTemplateManager({ templates=[], onSave, onUpdate, onClose }) {
   const { dark } = useTheme(); const C = dark?DARK:LIGHT;
   const [editId, setEditId] = useState("");
-  const [form, setForm] = useState({ name:"", department:"", category:"", description:"", is_active:true });
+  const [form, setForm] = useState({ name:"", department:"", category:"", description:"", is_active:true, measurement_source:"manual", default_unit:"count" });
   const [saving, setSaving] = useState(false);
+
+  // Deduplicate templates by name and department for the display list
+  const uniqueTemplates = Array.from(
+    templates.reduce((map, obj) => {
+      const key = `${obj.name}-${obj.department}`;
+      if (!map.has(key)) map.set(key, obj);
+      return map;
+    }, new Map()).values()
+  );
+
+  const sources = [
+    { id: "manual", label: "✍️ Manual Entry", desc: "Manager must update the actual value manually." },
+    { id: "mkt_leads_added", label: "🤖 Leads Generated (CRM)", desc: "Counts distinct contacts added to CRM/Marketing by the staff." },
+    { id: "mkt_lead_conversion", label: "📈 Lead Conversion (%)", desc: "Percentage of leads converted to paying clients." },
+    { id: "sales_revenue", label: "💰 Sales Revenue (Paid)", desc: "Total sum of payments recorded by this staff." },
+    { id: "sales_deals_closed", label: "🤝 Deals Closed", desc: "Count of invoices marked as 'Closed' by this staff." },
+    { id: "ops_appointments", label: "🗓️ Appts Completed", desc: "Count of appointments successfully completed." },
+    { id: "admin_ticket_esc", label: "🎫 Support Efficiency", desc: "Count of pending vs resolved tickets." }
+  ];
 
   const beginEdit = (template) => {
     setEditId(template.id);
@@ -492,13 +589,15 @@ function KpiTemplateManager({ templates=[], onSave, onUpdate, onClose }) {
       department: template.department,
       category: template.category || "",
       description: template.description || "",
-      is_active: template.is_active
+      is_active: template.is_active,
+      measurement_source: template.measurement_source || "manual",
+      default_unit: template.default_unit || "count"
     });
   };
 
   const resetForm = () => {
     setEditId("");
-    setForm({ name:"", department:"", category:"", description:"", is_active:true });
+    setForm({ name:"", department:"", category:"", description:"", is_active:true, measurement_source:"manual", default_unit:"count" });
   };
 
   const handleSave = async () => {
@@ -522,67 +621,84 @@ function KpiTemplateManager({ templates=[], onSave, onUpdate, onClose }) {
   };
 
   return (
-    <div style={{ display:"flex", flexDirection:"column", gap:18 }}>
-      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", gap:10 }}>
-        <div>
-          <div className="ho" style={{ fontSize:22 }}>KPI Library</div>
-          <div style={{ fontSize:13, color:C.sub, marginTop:4 }}>Create and manage reusable KPI templates for the goal form.</div>
+    <div style={{ display:"flex", flexDirection: "column", height: "min(650px, 75vh)" }}>
+      {/* Container for responsive layout */}
+      <style>{`
+        .kpi-mgr-layout { display: flex; gap: 24px; height: 100%; flex-direction: row; overflow: hidden; }
+        .kpi-mgr-sidebar { width: 280px; border-right: 1px solid ${C.border}; display: flex; flex-direction: column; overflow: hidden; }
+        .kpi-mgr-content { flex: 1; display: flex; flex-direction: column; gap: 20px; overflow-y: auto; padding-right: 10px; }
+        @media (max-width: 640px) {
+          .kpi-mgr-layout { flex-direction: column; overflow: auto; }
+          .kpi-mgr-sidebar { width: 100%; border-right: none; border-bottom: 1px solid ${C.border}; height: 280px; padding-bottom: 14px; margin-bottom: 14px; flex: none; }
+          .kpi-mgr-content { padding-right: 0; overflow: visible; }
+        }
+      `}</style>
+      <div className="kpi-mgr-layout">
+      {/* Sidebar List */}
+      <div className="kpi-mgr-sidebar">
+        <div style={{ padding: "0 10px 10px", fontSize: 13, fontWeight: 700, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>Library Definitions ({uniqueTemplates.length})</div>
+        <div style={{ flex: 1, overflowY: "auto", display: "flex", flexDirection: "column", gap: 8, paddingRight: 10 }}>
+          {uniqueTemplates.map(t => (
+            <div key={t.id} onClick={() => beginEdit(t)} style={{ 
+              padding: 12, borderRadius: 10, cursor: "pointer", 
+              background: editId === t.id ? `${T.orange}11` : "transparent",
+              border: `1px solid ${editId === t.id ? `${T.orange}33` : "transparent"}`,
+              transition: "all 0.2s"
+            }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: editId === t.id ? T.orange : C.text }}>{t.name}</div>
+              <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>{t.department} · {t.measurement_source === "manual" ? "Manual" : "Auto"}</div>
+            </div>
+          ))}
+          {uniqueTemplates.length === 0 && <div style={{ fontSize: 12, color: C.muted, padding: 20, textAlign: "center" }}>No templates found.</div>}
         </div>
-        <button className="bg" onClick={onClose}>Close</button>
+        <button className="bg" onClick={resetForm} style={{ marginTop: 14, width: "100%", flexShrink: 0 }}>+ Define New KPI</button>
       </div>
 
-      <div className="gc" style={{ padding:20 }}>
-        <div className="g2" style={{ gap:14, marginBottom:14 }}>
-          <div>
-            <Lbl>Name *</Lbl>
-            <input className="inp" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="e.g. Deals Closed" />
-          </div>
-          <div>
-            <Lbl>Department *</Lbl>
-            <input className="inp" value={form.department} onChange={e=>setForm(f=>({...f,department:e.target.value}))} placeholder="e.g. Sales & Acquisitions" />
-          </div>
+      {/* Editor Content */}
+      <div className="kpi-mgr-content">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div className="ho" style={{ fontSize: 18 }}>{editId ? "Edit Definition" : "New Library Definition"}</div>
+          <span className="tg" style={{ background: form.is_active ? "#4ADE8022" : "#94A3B822", color: form.is_active ? "#4ADE80" : "#94A3B8" }}>
+             {form.is_active ? "Active" : "Archived"}
+          </span>
         </div>
-        <div className="g2" style={{ gap:14, marginBottom:14 }}>
-          <div>
-            <Lbl>Category</Lbl>
-            <input className="inp" value={form.category} onChange={e=>setForm(f=>({...f,category:e.target.value}))} placeholder="e.g. Sales" />
-          </div>
-          <div>
-            <Lbl>Status</Lbl>
-            <select className="inp" value={String(form.is_active)} onChange={e=>setForm(f=>({...f,is_active:e.target.value === "true"}))}>
-              <option value="true">Active</option>
-              <option value="false">Inactive</option>
+
+        <div className="g2" style={{ gap: 16 }}>
+          <div><Lbl>KPI Name *</Lbl><input className="inp" value={form.name} onChange={e=>setForm(f=>({...f,name:e.target.value}))} placeholder="e.g. Sales Revenue" /></div>
+          <div><Lbl>Target Department *</Lbl>
+            <select className="inp" value={form.department} onChange={e=>setForm(f=>({...f,department:e.target.value}))}>
+              <option value="">— Select —</option>
+              {["General", "Sales & Acquisitions", "Human Resources", "Operations", "Finance", "Legal"].map(d => <option key={d}>{d}</option>)}
             </select>
           </div>
         </div>
-        <div>
-          <Lbl>Description</Lbl>
-          <textarea className="inp" value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} placeholder="Optional description for the KPI template." />
+
+        <div className="g2" style={{ gap: 16 }}>
+          <div><Lbl>Measurement Source</Lbl>
+            <select className="inp" value={form.measurement_source} onChange={e=>setForm(f=>({...f,measurement_source:e.target.value}))}>
+              {sources.map(s => <option key={s.id} value={s.id}>{s.label}</option>)}
+            </select>
+          </div>
+          <div><Lbl>Default Unit</Lbl><input className="inp" value={form.default_unit} onChange={e=>setForm(f=>({...f,default_unit:e.target.value}))} placeholder="e.g. leads, NGN, %" /></div>
         </div>
-        <div style={{ display:"flex", gap:10, marginTop:14 }}>
-          <button className="bp" onClick={handleSave} disabled={saving} style={{ padding:12 }}>{editId ? "Save Changes" : "Create Template"}</button>
-          {editId && <button className="bg" onClick={resetForm} style={{ padding:12 }}>New Template</button>}
+
+        <div style={{ padding: 14, background: dark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)", borderRadius: 10, border: `1px solid ${C.border}` }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 4 }}>
+             <div style={{ fontSize: 16 }}>{sources.find(s=>s.id === form.measurement_source)?.label?.split(" ")[0] || "✍️"}</div>
+             <div style={{ fontSize: 12, fontWeight: 800, color: C.text }}>{sources.find(s=>s.id === form.measurement_source)?.label?.split(" ").slice(1).join(" ") || "Manual Entry"}</div>
+          </div>
+          <div style={{ fontSize: 12, color: C.sub }}>{sources.find(s=>s.id === form.measurement_source)?.desc || "Manager must update the actual value manually."}</div>
+        </div>
+
+        <div><Lbl>Library Guidance / Description</Lbl><textarea className="inp" rows={3} value={form.description} onChange={e=>setForm(f=>({...f,description:e.target.value}))} placeholder="Instructions for managers..." /></div>
+
+        <div style={{ display: "flex", gap: 12, marginTop: "auto", borderTop: `1px solid ${C.border}`, paddingTop: 20 }}>
+          <button className="bp" onClick={handleSave} disabled={saving} style={{ flex: 1, padding: 14 }}>
+            {saving ? "Saving..." : editId ? "Update Definition" : "Save to Library"}
+          </button>
+          <button className="bg" style={{ padding: 14 }} onClick={onClose}>Cancel</button>
         </div>
       </div>
-
-      <div className="gc" style={{ padding:20 }}>
-        <div style={{ fontSize:14, fontWeight:700, marginBottom:12 }}>Existing KPI Templates</div>
-        <div className="tw">
-          <table className="ht">
-            <thead><tr><th>Name</th><th>Department</th><th>Category</th><th>Status</th><th></th></tr></thead>
-            <tbody>
-              {templates.map((t) => (
-                <tr key={t.id}>
-                  <td>{t.name}</td>
-                  <td>{t.department}</td>
-                  <td>{t.category || "—"}</td>
-                  <td>{t.is_active ? "Active" : "Inactive"}</td>
-                  <td><button className="bg" onClick={()=>beginEdit(t)}>Edit</button></td>
-                </tr>
-              ))}
-            </tbody>
-          </table>
-        </div>
       </div>
     </div>
   );
@@ -634,6 +750,7 @@ function Goals({ viewOnly, userId, canManageKpiTemplates = false }) {
   const [showNew, setShowNew] = useState(false);
   const [showTemplateManager, setShowTemplateManager] = useState(false);
   const [editingGoal, setEditingGoal] = useState(null);
+  const [syncing, setSyncing] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -658,6 +775,19 @@ function Goals({ viewOnly, userId, canManageKpiTemplates = false }) {
       setGoals(g);
       setTemplates(t);
     });
+  };
+
+  const handleSync = async () => {
+    setSyncing(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/goals/sync`, { method: "POST" });
+      setTimeout(refresh, 2000); // Give background worker a head start
+      alert("Performance sync triggered. Data will update in a moment.");
+    } catch (e) {
+      alert("Sync failed: " + e.message);
+    } finally {
+      setSyncing(false);
+    }
   };
 
   const saveGoal = async (g) => {
@@ -731,6 +861,11 @@ function Goals({ viewOnly, userId, canManageKpiTemplates = false }) {
           <div style={{ fontSize:13, color:C.sub, marginTop:4 }}>Monthly targets per staff member. These feed directly into performance scores.</div>
         </div>
         <div style={{ display:"flex", gap:10, alignItems:"center" }}>
+          {!viewOnly && (
+            <button className="bg" onClick={handleSync} disabled={syncing} style={{ display:"flex", alignItems:"center", gap:8 }}>
+              {syncing ? "Syncing..." : "🔄 Sync Performance"}
+            </button>
+          )}
           {canManageKpiTemplates && <button className="bg" onClick={()=>setShowTemplateManager(true)}>Manage KPI Library</button>}
           {!viewOnly && <button className="bp" onClick={() => { setEditingGoal(null); setShowNew(true); }}>+ Set KPI Goal</button>}
         </div>
@@ -743,42 +878,134 @@ function Goals({ viewOnly, userId, canManageKpiTemplates = false }) {
           <div style={{ fontSize:13, color:C.muted }}>No goals on record for this period.</div>
         </div>
       ) : (
-        <div className="g2">
+        <div style={{ 
+          display: "grid", 
+          gridTemplateColumns: "repeat(auto-fill, minmax(360px, 1fr))", 
+          gap: 24 
+        }}>
           {goals.map((g, i) => {
             const u = g.admins || {};
-            const pct = g.target_value > 0 ? Math.min(Math.round((g.actual_value / g.target_value) * 100), 100) : 0;
-            const hit = g.actual_value >= g.target_value;
+            const pct = g.achievement_pct || (g.target_value > 0 ? Math.min(Math.round((g.actual_value / g.target_value) * 100), 120) : 0);
+            const status = g.achievement_status || (pct >= 100 ? "Achieved" : "On Track");
+            const isAuto = g.measurement_source && g.measurement_source !== "manual";
+            
+            const statusStyle = {
+              "Achieved": { bg: "#10B98115", col: "#10B981", icon: "💎", grad: "linear-gradient(90deg, #10B981, #34D399)" },
+              "At Risk":  { bg: "#F8717115", col: "#F87171", icon: "🧨", grad: "linear-gradient(90deg, #F87171, #FCA5A5)" },
+              "Behind":   { bg: "#F8717115", col: "#F87171", icon: "🧨", grad: "linear-gradient(90deg, #F87171, #FCA5A5)" },
+              "On Track": { bg: "#3B82F615", col: "#3B82F6", icon: "🚀", grad: "linear-gradient(90deg, #3B82F6, #60A5FA)" },
+              "Fair":     { bg: "#F59E0B15", col: "#F59E0B", icon: "⚖️", grad: "linear-gradient(90deg, #F59E0B, #FBBF24)" }
+            }[status] || { bg: "#FFFFFF05", col: "#9CA3AF", icon: "•", grad: "linear-gradient(90deg, #9CA3AF, #D1D5DB)" };
+
             return (
-              <div key={i} className="gc" style={{ padding:22 }}>
-                {!viewOnly && (
-                  <div style={{ display:"flex", gap:10, alignItems:"center", marginBottom:14 }}>
-                    <Av av={u.full_name?.split(" ").map(n=>n[0]).join("") || "??"} sz={26}/>
-                    <div style={{ fontSize:13, fontWeight:800, color:C.text }}>{u.full_name}</div>
-                    <div style={{ fontSize:11, color:C.muted, marginLeft:4 }}>{u.department}</div>
+              <div key={i} className="gc fade-in" style={{ 
+                padding: 26, 
+                borderRadius: 20,
+                position: "relative",
+                overflow: "hidden",
+                border: `1px solid ${dark ? "rgba(255,255,255,0.08)" : "rgba(0,0,0,0.05)"}`,
+                background: dark ? "rgba(25, 25, 35, 0.4)" : "rgba(255, 255, 255, 0.7)",
+                backdropFilter: "blur(12px)",
+                boxShadow: dark ? "0 10px 30px rgba(0,0,0,0.3)" : "0 10px 30px rgba(0,0,0,0.03)",
+                transition: "transform 0.2s ease, box-shadow 0.2s ease",
+                cursor: "default"
+              }}>
+                {/* Visual Accent */}
+                <div style={{ 
+                  position: "absolute", 
+                  top: 0, 
+                  left: 0, 
+                  width: "4px", 
+                  height: "100%", 
+                  background: isAuto ? T.orange : statusStyle.col,
+                  opacity: 0.8
+                }}/>
+
+                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:20 }}>
+                  <div style={{ display:"flex", alignItems:"center", gap:12 }}>
+                    <Av av={u.full_name?.split(" ").map(n=>n[0]).join("") || "??"} sz={34} style={{ border: `2px solid ${statusStyle.col}33` }}/>
+                    <div>
+                      <div style={{ fontSize:14, fontWeight:800, color:C.text }}>{u.full_name}</div>
+                      <div style={{ fontSize:11, color:C.muted, textTransform: "uppercase", letterSpacing: 0.5 }}>{u.department}</div>
+                    </div>
+                  </div>
+                  <div style={{ display:"flex", gap:8, alignItems:"center" }}>
+                    <span className="tg" style={{ 
+                      background: statusStyle.bg, 
+                      color: statusStyle.col, 
+                      padding: "6px 12px", 
+                      fontSize: 11, 
+                      fontWeight: 700,
+                      borderRadius: 100,
+                      border: `1px solid ${statusStyle.col}33`,
+                      display: "flex",
+                      alignItems: "center",
+                      gap: 6
+                    }}>
+                      <span>{statusStyle.icon}</span> {status.toUpperCase()}
+                    </span>
+                    {!viewOnly && g.status === "Draft" && (
+                      <button className="bg" onClick={() => { setEditingGoal(g); setShowNew(true); }} style={{ padding: "6px 10px", borderRadius: 8, fontSize: 11 }}>Edit</button>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ marginBottom: 20 }}>
+                  <div style={{ fontSize:18, fontWeight:900, color:C.text, marginBottom: 4 }}>{g.kpi_name}</div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 6, fontSize:12, color:C.muted }}>
+                    <span>📅 {new Date(g.month).toLocaleDateString(undefined, {month:'long', year:'numeric'})}</span>
+                    <span style={{ opacity: 0.3 }}>|</span>
+                    {isAuto ? (
+                      <span style={{ color: T.orange, fontWeight: 700, display: "flex", alignItems: "center", gap: 4 }}>
+                        <span style={{ fontSize: 14 }}>🤖</span> Automated
+                      </span>
+                    ) : (
+                      <span>✍️ Manual Entry</span>
+                    )}
+                  </div>
+                </div>
+
+                <div style={{ background: dark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)", borderRadius: 16, padding: 18, marginBottom: 20 }}>
+                  <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:12 }}>
+                    <div style={{ display: "flex", flexDirection: "column" }}>
+                      <span style={{ fontSize:11, color:C.muted, textTransform: "uppercase", fontWeight: 700, marginBottom: 2 }}>Current Actual</span>
+                      <span style={{ fontSize:26, fontWeight:900, color:statusStyle.col }}>{g.actual_value || 0} <span style={{ fontSize: 14, fontWeight: 500, color: C.muted }}>{g.unit}</span></span>
+                    </div>
+                    <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end" }}>
+                      <span style={{ fontSize:11, color:C.muted, textTransform: "uppercase", fontWeight: 700, marginBottom: 2 }}>Target</span>
+                      <span style={{ fontSize:18, fontWeight:800, color:C.text }}>{g.target_value} <span style={{ fontSize: 12, fontWeight: 500, color: C.muted }}>{g.unit}</span></span>
+                    </div>
+                  </div>
+                  
+                  <div style={{ height: 10, background: dark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)", borderRadius: 10, overflow: "hidden", position: "relative" }}>
+                    <div style={{ 
+                      height: "100%", 
+                      width: `${Math.min(pct, 100)}%`, 
+                      background: statusStyle.grad,
+                      borderRadius: 10,
+                      transition: "width 1s cubic-bezier(0.4, 0, 0.2, 1)",
+                      boxShadow: `0 0 15px ${statusStyle.col}44`
+                    }}/>
+                  </div>
+                  
+                  <div style={{ display:"flex", justifyContent:"space-between", marginTop:10 }}>
+                    <div style={{ fontSize:12, color:statusStyle.col, fontWeight:800 }}>
+                      {pct}% COMPLETE
+                    </div>
+                    <div style={{ fontSize:11, color:C.muted }}>
+                      {status === "Achieved" ? "Goal Satisfied" : `${Math.max(0, g.target_value - (g.actual_value || 0))} ${g.unit} to go`}
+                    </div>
+                  </div>
+                </div>
+
+                {isAuto && (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", opacity: 0.7 }}>
+                     <div style={{ fontSize:11, color:C.muted }}>
+                        Last Updated: <b>{g.last_synced_at ? new Date(g.last_synced_at).toLocaleTimeString([], {hour:'2-digit', minute:'2-digit'}) : "Waiting for sync..."}</b>
+                     </div>
+                     <span style={{ fontSize: 12 }}>⚡</span>
                   </div>
                 )}
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-start", marginBottom:10 }}>
-                  <div>
-                    <div style={{ fontSize:15, fontWeight:800, color:T.orange }}>{g.kpi_name}</div>
-                    <div style={{ fontSize:12, color:C.muted }}>{new Date(g.month).toLocaleDateString(undefined, {month:'long', year:'numeric'})}</div>
-                  </div>
-                  <div style={{ display:"flex", gap:10, alignItems:"center" }}>
-                    {!viewOnly && g.status === "Draft" && (
-                      <button className="bg" onClick={() => { setEditingGoal(g); setShowNew(true); }}>Edit</button>
-                    )}
-                    <span className={`tg tg2`} style={{ background: g.status === "Published" ? "#4ADE80" : g.status === "In Review" ? "#FBBF24" : "#93C5FD" }}>
-                      {g.status || "Draft"}
-                    </span>
-                  </div>
-                </div>
-                <div style={{ display:"flex", justifyContent:"space-between", alignItems:"baseline", marginBottom:8 }}>
-                  <span style={{ fontSize:13, color:C.sub }}>Target: <b style={{ color:C.text }}>{g.target_value} {g.unit}</b></span>
-                  <span style={{ fontSize:18, fontWeight:800, color:hit?"#4ADE80":"#F87171" }}>{g.actual_value || 0} {g.unit}</span>
-                </div>
-                <Bar pct={pct} col={hit?"#4ADE80":T.orange}/>
-                <div style={{ fontSize:11, color:hit?"#4ADE80":"#F87171", marginTop:6, fontWeight:700 }}>
-                  {hit?`✓ Target met (${pct}%)`:`${pct}% achieved — ${g.target_value-(g.actual_value||0)} ${g.unit} remaining`}
-                </div>
               </div>
             );
           })}
@@ -1073,45 +1300,49 @@ function Presence({ currentUserId, currentUser }) {
                 <div style={{ fontSize:12 }}>No check-ins were recorded for this date range.</div>
               </div>
             ) : (
-            <table className="ht">
-              <thead><tr>{["Date","Employee","Dept","Security","Device","IP","Check In","Check Out","Hours","Status"].map(h=><th key={h}>{h}</th>)}</tr></thead>
-              <tbody>
-                {attendance.map(a=>{
-                  const u = a.admins || { full_name: "Unknown Staff", department: "General" };
-                  const sc=statusColor[a.status]||C.sub;
-                  const ci = a.check_in;
-                  const isLate = ci && (ci.split("T")[1]||ci).slice(0,8) > "09:00:00";
-                  return (
-                    <tr key={a.id}>
-                      <td style={{ fontSize:11, fontWeight:600 }}>{new Date(a.date).toLocaleDateString("en-GB", { day:"numeric", month:"short" })}</td>
-                      <td><div style={{ display:"flex", alignItems:"center", gap:8 }}><Av av={u.full_name?.split(" ").map(n=>n[0]).join("") || "??"} sz={26}/><span style={{ fontWeight:700, fontSize:13 }}>{u.full_name}</span></div></td>
-                      <td style={{ color:C.sub, fontSize:11 }}>{u.department || "General"}</td>
-                      <td>
-                        {a.is_suspicious ? (
-                          <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
-                            <span className="tg" style={{ background:"#F8717122", color:"#F87171", border:"1px solid #F8717133", fontSize:10 }} title={a.suspicious_reason}>🚩 Flagged</span>
-                            <div style={{ fontSize:9, color:"#F87171" }}>{a.distance_meters ? `${Math.round(a.distance_meters)}m away` : "No GPS"}</div>
+            <div className="tw">
+              <table className="ht">
+                <thead><tr>{["Date","Employee","Dept","Security","Device","IP","Check In","Check Out","Hours","Status"].map(h=><th key={h}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {attendance.map(a=>{
+                    const u = a.admins || { full_name: "Unknown Staff", department: "General" };
+                    const sc=statusColor[a.status]||C.sub;
+                    const ci = a.check_in;
+                    const isLate = ci && (ci.split("T")[1]||ci).slice(0,8) > "09:00:00";
+                    return (
+                      <tr key={a.id}>
+                        <td style={{ fontSize:11, fontWeight:600 }}>{new Date(a.date).toLocaleDateString("en-GB", { day:"numeric", month:"short" })}</td>
+                        <td><div style={{ display:"flex", alignItems:"center", gap:8 }}><Av av={u.full_name?.split(" ").map(n=>n[0]).join("") || "??"} sz={26}/><span style={{ fontWeight:700, fontSize:13 }}>{u.full_name}</span></div></td>
+                        <td style={{ color:C.sub, fontSize:11 }}>{u.department || "General"}</td>
+                        <td>
+                          {a.is_remote ? (
+                            <span className="tg" style={{ background: `${T.orange}22`, color: T.orange, border: `1px solid ${T.orange}33`, fontSize: 10 }}>🏠 Remote</span>
+                          ) : a.is_suspicious ? (
+                            <div style={{ display:"flex", flexDirection:"column", gap:2 }}>
+                              <span className="tg" style={{ background:"#F8717122", color:"#F87171", border:"1px solid #F8717133", fontSize:10 }} title={a.suspicious_reason}>🚩 Flagged</span>
+                              <div style={{ fontSize:9, color:"#F87171", maxWidth: 120, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }} title={a.suspicious_reason}>{a.distance_meters ? `${Math.round(a.distance_meters)}m away` : "No GPS"}</div>
+                            </div>
+                          ) : (
+                            <span className="tg" style={{ background:"#4ADE8022", color:"#4ADE80", border:"1px solid #4ADE8033", fontSize:10 }}>✓ OK</span>
+                          )}
+                        </td>
+                        <td style={{ fontSize:10, color:C.sub }} title={a.user_agent}>🖥️ {a.device_type || "—"}</td>
+                        <td style={{ fontSize:11, color:C.text, fontFamily:"monospace" }}>{a.ip_address || "—"}</td>
+                        <td>
+                          <div style={{ fontSize:12, fontWeight:600, color: isLate ? "#FBB040" : C.text }}>
+                            {ci ? new Date(ci).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "—"}
                           </div>
-                        ) : (
-                          <span className="tg" style={{ background:"#4ADE8022", color:"#4ADE80", border:"1px solid #4ADE8033", fontSize:10 }}>✓ OK</span>
-                        )}
-                      </td>
-                      <td style={{ fontSize:10, color:C.sub }} title={a.user_agent}>🖥️ {a.device_type || "—"}</td>
-                      <td style={{ fontSize:11, color:C.text, fontFamily:"monospace" }}>{a.ip_address || "—"}</td>
-                      <td>
-                        <div style={{ fontSize:12, fontWeight:600, color: isLate ? "#FBB040" : C.text }}>
-                          {ci ? new Date(ci).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "—"}
-                        </div>
-                        {isLate && <div style={{ fontSize:9, color:"#FBB040" }}>Late</div>}
-                      </td>
-                      <td style={{ fontSize:12, color:C.sub }}>{a.check_out ? new Date(a.check_out).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "—"}</td>
-                      <td style={{ color:T.orange, fontWeight:800, fontSize:12 }}>{ci && a.check_out ? (Math.abs(new Date(a.check_out) - new Date(ci)) / 36e5).toFixed(1) + "h" : "—"}</td>
-                      <td><span className="tg" style={{ background:`${sc}22`, color:sc, border:`1px solid ${sc}33` }}>{a.status}</span></td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
+                          {isLate && <div style={{ fontSize:9, color:"#FBB040" }}>Late</div>}
+                        </td>
+                        <td style={{ fontSize:12, color:C.sub }}>{a.check_out ? new Date(a.check_out).toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'}) : "—"}</td>
+                        <td style={{ color:T.orange, fontWeight:800, fontSize:12 }}>{ci && a.check_out ? (Math.abs(new Date(a.check_out) - new Date(ci)) / 36e5).toFixed(1) + "h" : "—"}</td>
+                        <td><span className="tg" style={{ background:`${sc}22`, color:sc, border:`1px solid ${sc}33` }}>{a.status}</span></td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
             )}
           </div>
         </>
@@ -1246,6 +1477,7 @@ function AttendanceCheckIn({ user }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
 
   const [todayRecord, setTodayRecord]   = useState(null);
+  const [isRemote,    setRemote]        = useState(false);
   const [loading,     setLoading]       = useState(true);
   const [actionLoading, setActionLoad]  = useState(false);
   const [error,       setError]         = useState(null);
@@ -1311,6 +1543,7 @@ function AttendanceCheckIn({ user }) {
           location_accuracy: loc.accuracy,
           location_status:   loc.status,
           device_type:       detectDevice(),
+          is_remote:         isRemote,
         }),
       });
       setSuccess(`Checked in at ${new Date().toLocaleTimeString()}${loc.status === "granted" ? " · Location recorded ✓" : " · Location unavailable (IP recorded)"}`);
@@ -1335,6 +1568,7 @@ function AttendanceCheckIn({ user }) {
           longitude:       loc.longitude,
           location_status: loc.status,
           device_type:     detectDevice(),
+          is_remote:       todayRecord?.is_remote || isRemote,
         }),
       });
       setSuccess(`Checked out at ${new Date().toLocaleTimeString()}`);
@@ -1428,10 +1662,12 @@ function AttendanceCheckIn({ user }) {
               {todayRecord.device_type && (
                 <><span style={{ color: C.muted }}>Device</span><span>{todayRecord.device_type}</span></>
               )}
-              {todayRecord.latitude && (
+              {!todayRecord.is_remote && todayRecord.latitude && (
                 <><span style={{ color: C.muted }}>Coordinates</span><span>{todayRecord.latitude.toFixed(5)}, {todayRecord.longitude.toFixed(5)}</span></>
               )}
-              {todayRecord.location_status && (
+              {todayRecord.is_remote ? (
+                <><span style={{ color: C.muted }}>Work Mode</span><span style={{ color: T.orange, fontWeight: 700 }}>🏠 Remote Working</span></>
+              ) : todayRecord.location_status && (
                 <><span style={{ color: C.muted }}>Location</span>
                 <span style={{ color: { granted: "#4ADE80", denied: "#F87171", unavailable: "#94A3B8" }[todayRecord.location_status] }}>
                   {todayRecord.location_status}
@@ -1440,11 +1676,17 @@ function AttendanceCheckIn({ user }) {
             </div>
           )}
 
-          <div style={{ display: "flex", gap: 10 }}>
+          <div style={{ display: "flex", gap: 10, alignItems: "center", flexWrap: "wrap" }}>
+            {!checkedIn && (
+              <label style={{ display: "flex", alignItems: "center", gap: 8, fontSize: 13, cursor: "pointer", background: dark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.03)", padding: "10px 14px", borderRadius: 8, marginRight: "auto" }}>
+                <input type="checkbox" checked={isRemote} onChange={e => setRemote(e.target.checked)} style={{ width: 16, height: 16, accentColor: T.orange }}/>
+                <span style={{ fontWeight: isRemote ? 700 : 500, color: isRemote ? T.orange : C.text }}>🏠 Working Remotely</span>
+              </label>
+            )}
             {!checkedIn && (
               <button
                 className="bp"
-                style={{ flex: 1, padding: "11px 0", fontSize: 14, fontWeight: 700 }}
+                style={{ flex: 1, padding: "11px 0", fontSize: 14, fontWeight: 700, minWidth: 140 }}
                 onClick={handleCheckIn}
                 disabled={actionLoading}
               >
@@ -1825,7 +2067,7 @@ function Mismanagement({ viewOnly, userId, isManager }) {
     setLoading(true);
     const params = viewOnly ? `?staff_id=${userId}` : "";
     Promise.all([
-      apiFetch(`${API_BASE}/hr/mismanagement${params}`),
+      apiFetch(`${API_BASE}/hr/incidents${params}`),
       !viewOnly ? apiFetch(`${API_BASE}/hr/staff`) : Promise.resolve([])
     ]).then(([i, s]) => {
       setIncidents(i);
@@ -1835,13 +2077,13 @@ function Mismanagement({ viewOnly, userId, isManager }) {
 
   const refresh = () => {
     const params = viewOnly ? `?staff_id=${userId}` : "";
-    apiFetch(`${API_BASE}/hr/mismanagement${params}`).then(setIncidents);
+    apiFetch(`${API_BASE}/hr/incidents${params}`).then(setIncidents);
   };
 
   const add = async () => {
     if(!f.uid || !f.type) return;
     try {
-      await apiFetch(`${API_BASE}/hr/mismanagement`, {
+      await apiFetch(`${API_BASE}/hr/incidents`, {
         method: "POST",
         body: JSON.stringify({
           staff_id: f.uid,
@@ -1956,7 +2198,7 @@ function Mismanagement({ viewOnly, userId, isManager }) {
 // ─── MODULE: PAYROLL ──────────────────────────────────────────────────────────
 function Payroll() {
   const { dark } = useTheme(); const C = dark?DARK:LIGHT;
-  const [tab, setTab] = useState("full");
+  const [tab, setTab] = useState("payslips");
   const [payroll, setPayroll] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
@@ -2024,13 +2266,30 @@ function Payroll() {
           <div className="ho" style={{ fontSize:22 }}>Payroll Management</div>
           <div style={{ fontSize:13, color:C.sub, marginTop:4 }}>Full Staff & Contractors: monthly · Onsite/Labourers: weekly</div>
         </div>
-        <div style={{ display:"flex", gap:12 }}>
-          <button className="bg" onClick={()=>setShowAdd(true)}>+ Add Entry</button>
-          <button className="bp" onClick={handleRunPayroll}>Run Payroll</button>
-        </div>
+        {tab === "payslips" && (
+          <div style={{ display:"flex", gap:12 }}>
+            <button className="bg" onClick={()=>setShowAdd(true)}>+ Add Entry</button>
+            <button className="bp" onClick={handleRunPayroll}>Run Payroll</button>
+          </div>
+        )}
       </div>
 
-      {showAdd && (
+      <div className="tab-bar">
+        <button className={`tab ${tab==="payslips"?"on":"off"}`} onClick={()=>setTab("payslips")}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ display:"inline", marginRight:6, verticalAlign:"middle" }}><rect x="3" y="3" width="18" height="18" rx="2"/><line x1="3" y1="9" x2="21" y2="9"/><line x1="9" y1="21" x2="9" y2="9"/></svg>
+          Staff Payslips
+        </button>
+        <button className={`tab ${tab==="commissions"?"on":"off"}`} onClick={()=>setTab("commissions")}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ display:"inline", marginRight:6, verticalAlign:"middle" }}><circle cx="12" cy="12" r="10"/><path d="M12 6v6l4 2"/></svg>
+          Sales Commissions
+        </button>
+      </div>
+
+      {tab === "commissions" ? (
+        <AgentCommissions />
+      ) : (
+        <>
+          {showAdd && (
         <Modal onClose={()=>setShowAdd(false)} title="Manual Payroll Entry">
           <div style={{ display:"flex", flexDirection:"column", gap:22 }}>
             <div><Lbl>Personnel Identification *</Lbl>
@@ -2080,6 +2339,1096 @@ function Payroll() {
             </table>
           </div>
         </div>
+      )}
+      </>
+      )}
+    </div>
+  );
+}
+
+// ─── MODULE: AGENT COMMISSIONS ──────────────────────────────────────────────
+function AgentCommissions() {
+  const { dark } = useTheme(); const C = dark?DARK:LIGHT;
+  const [owed, setOwed]           = useState([]);
+  const [payouts, setPayouts]     = useState([]);
+  const [earnings, setEarnings]   = useState([]);
+  const [reps, setReps]           = useState([]);
+  const [staff, setStaff]         = useState([]);
+  const [loading, setLoading]     = useState(true);
+  const [cTab, setCTab]           = useState("owed");
+
+  // Global Rate
+  const [showRateModal, setShowRateModal]   = useState(false);
+  const [defaultRate, setDefaultRate]       = useState("");
+  const [savingRate, setSavingRate]         = useState(false);
+
+  // Per-Rep Rate
+  const [showRepRateModal, setShowRepRateModal] = useState(false);
+  const [repRateTarget, setRepRateTarget]       = useState(null);
+  const [repRateEstate, setRepRateEstate]       = useState("");
+  const [repRateVal, setRepRateVal]             = useState("");
+  const [repRateDate, setRepRateDate]           = useState(new Date().toISOString().split("T")[0]);
+  const [savingRepRate, setSavingRepRate]       = useState(false);
+
+  // Payout
+  const [showPayoutModal, setShowPayoutModal]   = useState(false);
+  const [selectedRep, setSelectedRep]           = useState("");
+  const [repEarnings, setRepEarnings]           = useState([]);
+  const [earningsLoading, setEarningsLoading]   = useState(false);
+  const [selectedEarnings, setSelectedEarnings] = useState({});
+  const [payoutAmount, setPayoutAmount]         = useState("");
+  const [payoutNotes, setPayoutNotes]           = useState("");
+  const [payoutRef, setPayoutRef]               = useState("");
+  const [submitting, setSubmitting]             = useState(false);
+
+  const fmt = n => n != null ? `\u20a6${Number(n).toLocaleString()}` : "—";
+
+  const findStaffForRep = rep => {
+    // 1. Exact Email Match
+    if (rep.email) {
+      const match = staff.find(s => s.email && s.email.toLowerCase() === rep.email.toLowerCase());
+      if (match) return match;
+    }
+    // 2. Exact Phone Match (digits only)
+    if (rep.phone) {
+      const rP = rep.phone.replace(/\D/g, '');
+      if (rP.length >= 7) {
+        const match = staff.find(s => {
+          const sP = (s.phone_number || '').replace(/\D/g, '');
+          return sP && sP === rP;
+        });
+        if (match) return match;
+      }
+    }
+    // 3. Fallback: Name Match
+    const repFirst = (rep.name || '').trim().toLowerCase();
+    return staff.find(s => (s.full_name || '').toLowerCase().includes(repFirst) && repFirst.length > 1);
+  };
+
+  const loadDashboard = async () => {
+    setLoading(true);
+    try {
+      const [o, p, e, r, s] = await Promise.all([
+        apiFetch(`${API_BASE}/commission/owed`),
+        apiFetch(`${API_BASE}/commission/payouts`),
+        apiFetch(`${API_BASE}/commission/earnings`),
+        apiFetch(`${API_BASE}/sales-reps`),
+        apiFetch(`${API_BASE}/hr/staff`)
+      ]);
+      setOwed(Array.isArray(o) ? o : []);
+      setPayouts(Array.isArray(p) ? p : []);
+      setEarnings(Array.isArray(e) ? e : []);
+      setReps(Array.isArray(r) ? r : []);
+      setStaff(Array.isArray(s) ? s : []);
+    } catch(err) { console.error("Commission load error:", err); }
+    finally { setLoading(false); }
+  };
+  useEffect(() => { loadDashboard(); }, []);
+
+  // Global Rate
+  const openRateModal = async () => {
+    setShowRateModal(true);
+    try {
+      const d = await apiFetch(`${API_BASE}/commission/default-rate`);
+      setDefaultRate(d.rate || "5.0");
+    } catch(e) { setDefaultRate("5.0"); }
+  };
+  const saveDefaultRate = async () => {
+    setSavingRate(true);
+    try {
+      await apiFetch(`${API_BASE}/commission/default-rate`, {
+        method: "PATCH",
+        body: JSON.stringify({ rate: parseFloat(defaultRate), reason: "Updated via HR Portal" })
+      });
+      setShowRateModal(false);
+    } catch(e) { alert("Failed: " + e.message); }
+    finally { setSavingRate(false); }
+  };
+
+  // Per-Rep Rate
+  const openRepRate = (rep) => {
+    setRepRateTarget(rep);
+    setRepRateEstate(""); setRepRateVal("");
+    setRepRateDate(new Date().toISOString().split("T")[0]);
+    setShowRepRateModal(true);
+  };
+  const saveRepRate = async () => {
+    if (!repRateEstate || !repRateVal) return alert("Estate and rate required.");
+    setSavingRepRate(true);
+    try {
+      await apiFetch(`${API_BASE}/commission/rates`, {
+        method: "POST",
+        body: JSON.stringify({
+          sales_rep_id: repRateTarget.id,
+          estate_name: repRateEstate,
+          rate: parseFloat(repRateVal),
+          effective_from: repRateDate,
+          reason: "Set via HR Portal"
+        })
+      });
+      setShowRepRateModal(false);
+    } catch(e) { alert("Failed: " + e.message); }
+    finally { setSavingRepRate(false); }
+  };
+
+  // Payout
+  const handleRepSelect = async (repId) => {
+    setSelectedRep(repId); setRepEarnings([]); setSelectedEarnings({}); setPayoutAmount("");
+    if (!repId) return;
+    setEarningsLoading(true);
+    try {
+      const data = await apiFetch(`${API_BASE}/commission/owed/${repId}`);
+      setRepEarnings(data);
+      const sels = {}; let total = 0;
+      data.forEach(e => { sels[e.id] = true; total += (parseFloat(e.final_amount) - (parseFloat(e.amount_paid)||0)); });
+      setSelectedEarnings(sels); setPayoutAmount(total.toFixed(2));
+    } catch(err) { console.error(err); }
+    finally { setEarningsLoading(false); }
+  };
+  const toggleEarning = id => {
+    const next = { ...selectedEarnings, [id]: !selectedEarnings[id] };
+    setSelectedEarnings(next);
+    let total = 0;
+    repEarnings.forEach(e => { if (next[e.id]) total += (parseFloat(e.final_amount) - (parseFloat(e.amount_paid)||0)); });
+    setPayoutAmount(total.toFixed(2));
+  };
+  const submitPayout = async () => {
+    if (!selectedRep || parseFloat(payoutAmount) <= 0) return alert("Select rep and valid amount.");
+    const earningIds = Object.keys(selectedEarnings).filter(k => selectedEarnings[k]);
+    if (!earningIds.length) return alert("Select at least one commission record.");
+    setSubmitting(true);
+    try {
+      await apiFetch(`${API_BASE}/commission/payout`, {
+        method: "POST",
+        body: JSON.stringify({ sales_rep_id: selectedRep, earning_ids: earningIds, reference: payoutRef, notes: payoutNotes, total_amount: parseFloat(payoutAmount) })
+      });
+      setShowPayoutModal(false); setSelectedRep(""); setPayoutNotes(""); setPayoutRef(""); setPayoutAmount("");
+      loadDashboard();
+    } catch(err) { alert("Payout error: " + err.message); }
+    finally { setSubmitting(false); }
+  };
+
+  if (loading) return <div style={{ padding:40, textAlign:"center", color:C.muted }}>Loading commissions...</div>;
+
+  const totalOwed = owed.reduce((a, o) => a + o.total, 0);
+  const totalPaid = payouts.reduce((a, p) => a + parseFloat(p.total_amount||0), 0);
+
+  return (
+    <div>
+      {/* Toolbar */}
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:20, flexWrap:"wrap", gap:10 }}>
+        <button className="bg" onClick={openRateModal} style={{ display:"flex", alignItems:"center", gap:6, fontSize:12 }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3"/><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.6 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.6a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z"/></svg>
+          Global Rate
+        </button>
+        <button className="bp" onClick={() => { setSelectedRep(""); setRepEarnings([]); setPayoutAmount(""); setShowPayoutModal(true); }} style={{ display:"flex", alignItems:"center", gap:6, padding:"10px 18px" }}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5"><line x1="12" y1="5" x2="12" y2="19"/><line x1="5" y1="12" x2="19" y2="12"/></svg>
+          New Payout
+        </button>
+      </div>
+
+      {/* Summary cards */}
+      <div className="g3" style={{ marginBottom:24, gap:16 }}>
+        <div className="gc" style={{ padding:18, textAlign:"center" }}>
+          <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:"1px", marginBottom:8 }}>Total Owed</div>
+          <div style={{ fontSize:22, fontWeight:800, color:T.gold }}>{fmt(totalOwed)}</div>
+          <div style={{ fontSize:10, color:C.sub, marginTop:4 }}>{owed.length} rep{owed.length!==1?"s":""} pending</div>
+        </div>
+        <div className="gc" style={{ padding:18, textAlign:"center" }}>
+          <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:"1px", marginBottom:8 }}>Total Disbursed</div>
+          <div style={{ fontSize:22, fontWeight:800, color:"#10B981" }}>{fmt(totalPaid)}</div>
+          <div style={{ fontSize:10, color:C.sub, marginTop:4 }}>{payouts.length} payout batch{payouts.length!==1?"es":""}</div>
+        </div>
+        <div className="gc" style={{ padding:18, textAlign:"center" }}>
+          <div style={{ fontSize:11, color:C.muted, textTransform:"uppercase", letterSpacing:"1px", marginBottom:8 }}>Active Agents</div>
+          <div style={{ fontSize:22, fontWeight:800, color:"#60A5FA" }}>{reps.length}</div>
+          <div style={{ fontSize:10, color:C.sub, marginTop:4 }}>{earnings.length} earnings records</div>
+        </div>
+      </div>
+
+      {/* Inner tabs */}
+      <div className="tab-bar" style={{ marginBottom:20 }}>
+        <button className={`tab ${cTab==="owed"?"on":"off"}`} onClick={() => setCTab("owed")}>Pending Owed</button>
+        <button className={`tab ${cTab==="payouts"?"on":"off"}`} onClick={() => setCTab("payouts")}>Payout History</button>
+        <button className={`tab ${cTab==="earnings"?"on":"off"}`} onClick={() => setCTab("earnings")}>All Earnings</button>
+      </div>
+
+      {/* Pending Owed */}
+      {cTab === "owed" && (
+        <div className="gc" style={{ overflow:"hidden" }}>
+          {owed.length === 0 ? (
+            <div style={{ padding:40, textAlign:"center", color:C.muted }}>
+              <div style={{ fontSize:28, marginBottom:10 }}>&#10003;</div>
+              <div style={{ fontWeight:700, marginBottom:6 }}>All Caught Up</div>
+              <div style={{ fontSize:12 }}>No pending commissions owed across all reps.</div>
+            </div>
+          ) : owed.map(o => {
+            const rep = reps.find(r => r.id === o.rep_id);
+            const linked = rep ? findStaffForRep(rep) : null;
+            return (
+              <div key={o.rep_id} style={{ display:"flex", borderBottom:`1px solid ${C.border}`, padding:16, alignItems:"center", gap:14 }}>
+                <Av av={(o.name||"?").substring(0,2).toUpperCase()} sz={40}/>
+                <div style={{ flex:1 }}>
+                  <div style={{ fontWeight:700, marginBottom:2 }}>{o.name}</div>
+                  <div style={{ fontSize:11, color:C.sub }}>
+                    {o.count} deal{o.count>1?"s":""}{o.partially_paid ? " · Partially collected" : ""}
+                    {linked && <span style={{ marginLeft:8, color:T.gold, fontWeight:700 }}>· Staff: {linked.full_name}</span>}
+                  </div>
+                </div>
+                <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                  <div style={{ textAlign:"right" }}>
+                    <div style={{ fontWeight:800, color:T.gold, fontSize:15 }}>{fmt(o.total)}</div>
+                    <div style={{ fontSize:10, textTransform:"uppercase", color:C.sub }}>Owed</div>
+                  </div>
+                  <button className="bg" style={{ fontSize:10, padding:"5px 10px", whiteSpace:"nowrap" }} onClick={() => openRepRate({ id: o.rep_id, name: o.name })}>Set Rate</button>
+                </div>
+              </div>
+            );
+          })}
+        </div>
+      )}
+
+      {/* Payout History */}
+      {cTab === "payouts" && (
+        <div className="gc" style={{ overflow:"hidden" }}>
+          {payouts.length === 0 ? (
+            <div style={{ padding:40, textAlign:"center", color:C.muted }}>
+              <div style={{ fontSize:28, marginBottom:10 }}>&#128179;</div>
+              <div style={{ fontWeight:700, marginBottom:6 }}>No Payouts Yet</div>
+              <div style={{ fontSize:12 }}>Use "New Payout" to process commission payouts.</div>
+            </div>
+          ) : (
+            <div className="tw">
+              <table className="ht">
+                <thead><tr>{["Rep","Date","Amount","Reference","Processed By"].map(h=><th key={h}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {payouts.map(p => {
+                    const rep = reps.find(r => r.id === p.sales_rep_id);
+                    const linked = rep ? findStaffForRep(rep) : null;
+                    return (
+                      <tr key={p.id}>
+                        <td>
+                          <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                            <Av av={(p.sales_reps?.name||"?").substring(0,2).toUpperCase()} sz={28}/>
+                            <div>
+                              <div style={{ fontWeight:700 }}>{p.sales_reps?.name||"Unknown"}</div>
+                              {linked && <div style={{ fontSize:10, color:T.gold }}>HR Staff ✓</div>}
+                            </div>
+                          </div>
+                        </td>
+                        <td style={{ color:C.sub, fontSize:12 }}>{new Date(p.paid_at).toLocaleDateString(undefined,{day:"2-digit",month:"short",year:"numeric"})}</td>
+                        <td style={{ fontWeight:800, color:"#10B981" }}>{fmt(p.total_amount)}</td>
+                        <td style={{ fontSize:12, color:C.sub }}>{p.reference||"—"}</td>
+                        <td style={{ fontSize:12, color:C.sub }}>{p.admins?.full_name||"—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* All Earnings */}
+      {cTab === "earnings" && (
+        <div className="gc" style={{ overflow:"hidden" }}>
+          {earnings.length === 0 ? (
+            <div style={{ padding:40, textAlign:"center", color:C.muted }}>
+              <div style={{ fontSize:12 }}>No commission earnings found. Commissions are auto-generated when invoices are paid for clients linked to a sales rep.</div>
+            </div>
+          ) : (
+            <div className="tw">
+              <table className="ht">
+                <thead><tr>{["Rep","Client","Invoice","Commission","Status","Collected"].map(h=><th key={h}>{h}</th>)}</tr></thead>
+                <tbody>
+                  {earnings.map(e => {
+                    const isPaid = e.is_paid;
+                    const amtPaid = parseFloat(e.amount_paid||0);
+                    return (
+                      <tr key={e.id}>
+                        <td style={{ fontWeight:700 }}>{e.sales_reps?.name||"—"}</td>
+                        <td style={{ fontSize:12 }}>{e.clients?.full_name||"—"}</td>
+                        <td style={{ fontSize:11, color:C.sub }}>{e.invoices?.invoice_number||"—"}</td>
+                        <td style={{ fontWeight:700 }}>{fmt(e.final_amount)}</td>
+                        <td><span className={`tg ${isPaid?"tg2":amtPaid>0?"ty":"tr"}`}>{isPaid?"Paid":amtPaid>0?"Partial":"Unpaid"}</span></td>
+                        <td style={{ fontSize:12 }}>{isPaid ? fmt(e.amount_paid) : amtPaid>0 ? `${fmt(amtPaid)} of ${fmt(e.final_amount)}` : "—"}</td>
+                      </tr>
+                    );
+                  })}
+                </tbody>
+              </table>
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* MODAL: Global Rate */}
+      {showRateModal && (
+        <Modal onClose={() => setShowRateModal(false)} title="Global Default Commission Rate">
+          <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+            <div style={{ background:C.base, border:`1px solid ${C.border}`, borderRadius:8, padding:14, fontSize:12, color:C.sub, lineHeight:1.6 }}>
+              This rate applies to all reps without a custom estate rate. Changes do not affect already-generated earnings.
+            </div>
+            <div><Lbl>Default Rate (%)</Lbl>
+              <input type="number" className="inp" step="0.1" min="0" max="100" value={defaultRate} onChange={e => setDefaultRate(e.target.value)} placeholder="5.0"/></div>
+            <button className="bp" onClick={saveDefaultRate} disabled={savingRate} style={{ padding:14 }}>
+              {savingRate ? "Saving..." : "Save Global Rate"}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* MODAL: Per-Rep Rate */}
+      {showRepRateModal && repRateTarget && (
+        <Modal onClose={() => setShowRepRateModal(false)} title={`Custom Rate — ${repRateTarget.name}`}>
+          <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+            <div style={{ background:C.base, border:`1px solid ${C.border}`, borderRadius:8, padding:14, fontSize:12, color:C.sub, lineHeight:1.6 }}>
+              Set a custom commission rate for a specific estate. This overrides the global default for this agent on that estate only.
+            </div>
+            <div><Lbl>Estate Name *</Lbl>
+              <input type="text" className="inp" placeholder="e.g. Cloves Estate Phase 2" value={repRateEstate} onChange={e => setRepRateEstate(e.target.value)}/></div>
+            <div className="g2" style={{ gap:12 }}>
+              <div><Lbl>Rate (%) *</Lbl>
+                <input type="number" className="inp" step="0.1" min="0" max="100" placeholder="5.0" value={repRateVal} onChange={e => setRepRateVal(e.target.value)}/></div>
+              <div><Lbl>Effective From</Lbl>
+                <input type="date" className="inp" value={repRateDate} onChange={e => setRepRateDate(e.target.value)}/></div>
+            </div>
+            <button className="bp" onClick={saveRepRate} disabled={savingRepRate} style={{ padding:14 }}>
+              {savingRepRate ? "Saving..." : "Save Custom Rate"}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* MODAL: Payout */}
+      {showPayoutModal && (
+        <Modal onClose={() => setShowPayoutModal(false)} title="Process Commission Payout">
+          <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+            <div><Lbl>Select Sales Rep *</Lbl>
+              <select className="inp" value={selectedRep} onChange={e => handleRepSelect(e.target.value)}>
+                <option value="">— Choose a Rep —</option>
+                {reps.map(r => {
+                  const linked = findStaffForRep(r);
+                  return <option key={r.id} value={r.id}>{r.name}{r.last_name?" "+r.last_name:""}{linked?" (HR Staff)":""}</option>;
+                })}
+              </select></div>
+            {earningsLoading && <div style={{ fontSize:12, color:C.sub, textAlign:"center", padding:8 }}>Loading unpaid commissions...</div>}
+            {!earningsLoading && selectedRep && repEarnings.length===0 && (
+              <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:12, background:C.base, borderRadius:8 }}>No unpaid commissions for this rep.</div>
+            )}
+            {repEarnings.length > 0 && (
+              <div style={{ border:`1px solid ${C.border}`, borderRadius:8, padding:10, maxHeight:220, overflowY:"auto" }}>
+                <div style={{ fontSize:11, fontWeight:700, marginBottom:8, color:C.muted, textTransform:"uppercase", letterSpacing:"0.5px" }}>Select earnings to include:</div>
+                {repEarnings.map(e => {
+                  const bal = parseFloat(e.final_amount) - (parseFloat(e.amount_paid)||0);
+                  const isPartial = parseFloat(e.amount_paid||0) > 0;
+                  return (
+                    <div key={e.id} style={{ display:"flex", alignItems:"center", gap:10, padding:10, background:C.base, borderRadius:6, marginBottom:6, cursor:"pointer" }} onClick={() => toggleEarning(e.id)}>
+                      <input type="checkbox" checked={!!selectedEarnings[e.id]} onChange={() => toggleEarning(e.id)} style={{ accentColor:T.gold, width:15, height:15 }}/>
+                      <div style={{ flex:1 }}>
+                        <div style={{ fontSize:12, fontWeight:700 }}>{e.clients?.full_name||"Unknown"}</div>
+                        <div style={{ fontSize:10, color:C.sub }}>Inv: {e.invoices?.invoice_number||"—"}{isPartial?` · ${fmt(parseFloat(e.amount_paid||0))} paid`:""}</div>
+                      </div>
+                      <div style={{ fontWeight:800, color:"#10B981", fontSize:13 }}>{fmt(bal)}</div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+            <div className="g2" style={{ gap:12 }}>
+              <div><Lbl>Amount to Pay (\u20a6) *</Lbl>
+                <input type="number" className="inp" placeholder="0.00" value={payoutAmount} onChange={e => setPayoutAmount(e.target.value)}/></div>
+              <div><Lbl>Reference (Optional)</Lbl>
+                <input type="text" className="inp" placeholder="TXN-12345" value={payoutRef} onChange={e => setPayoutRef(e.target.value)}/></div>
+            </div>
+            <div><Lbl>Notes</Lbl>
+              <input type="text" className="inp" placeholder="e.g. April 2026 commissions" value={payoutNotes} onChange={e => setPayoutNotes(e.target.value)}/></div>
+            <button className="bp" onClick={submitPayout} disabled={submitting} style={{ padding:16, fontSize:14 }}>
+              {submitting ? "Processing..." : "Confirm & Process Payout"}
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+
+// ─── MODULE: STAFF PAYROLL & COMMISSIONS ──────────────────────────────────────
+function StaffPayroll({ user }) {
+  const { dark } = useTheme(); const C = dark?DARK:LIGHT;
+  const [tab, setTab] = useState("payslips");
+  const [data, setData] = useState({ payslips: [], commissions: null });
+  const [loading, setLoading] = useState(true);
+  const [dates, setDates] = useState({
+    start: new Date(new Date().getFullYear(), new Date().getMonth() - 2, 1).toISOString().split('T')[0],
+    end: new Date().toISOString().split('T')[0]
+  });
+
+  const fmt = n => n != null ? `₦${Number(n).toLocaleString()}` : "—";
+
+  const loadData = async () => {
+    setLoading(true);
+    try {
+      const [p, c] = await Promise.all([
+        apiFetch(`${API_BASE}/hr/payroll/payslips?staff_id=${user.id}`),
+        apiFetch(`${API_BASE}/commission/my?start_date=${dates.start}&end_date=${dates.end}`)
+      ]);
+      setData({ payslips: p, commissions: c });
+    } catch (e) { console.error("Staff Payroll Load error:", e); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { loadData(); }, [dates.start, dates.end]);
+
+  const totalEarnedFiltered = data.commissions?.earnings?.reduce((a, b) => a + parseFloat(b.final_amount), 0) || 0;
+  const totalPaidFiltered = data.commissions?.payouts?.reduce((a, b) => a + parseFloat(b.total_amount), 0) || 0;
+
+  return (
+    <div className="fade">
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:22 }}>
+        <div>
+          <div className="ho" style={{ fontSize:22 }}>My Payroll & Commissions</div>
+          <div style={{ fontSize:13, color:C.sub, marginTop:4 }}>View your monthly payslips and sales commission earnings</div>
+        </div>
+        <div style={{ display:"flex", alignItems:"center", gap:10, background:C.base, padding:"4px 12px", borderRadius:8, border:`1px solid ${C.border}` }}>
+          <div style={{ fontSize:11, color:C.sub, fontWeight:700 }}>FILTER:</div>
+          <input type="date" className="inp" style={{ padding:"4px 8px", fontSize:11, width:130, border:"none", background:"transparent" }} value={dates.start} onChange={e=>setDates(d=>({...d, start:e.target.value}))}/>
+          <div style={{ fontSize:11, color:C.sub }}>to</div>
+          <input type="date" className="inp" style={{ padding:"4px 8px", fontSize:11, width:130, border:"none", background:"transparent" }} value={dates.end} onChange={e=>setDates(d=>({...d, end:e.target.value}))}/>
+        </div>
+      </div>
+
+      <div className="tab-bar" style={{ marginBottom:20 }}>
+        <button className={`tab ${tab==="payslips"?"on":"off"}`} onClick={()=>setTab("payslips")}>My Payslips</button>
+        <button className={`tab ${tab==="commissions"?"on":"off"}`} onClick={()=>setTab("commissions")}>My Commissions</button>
+      </div>
+
+      {loading ? <div style={{ padding:40, textAlign:"center", color:C.muted }}>Loading data...</div> : (
+        tab === "payslips" ? (
+          <div className="gc" style={{ overflow:"hidden" }}>
+             {data.payslips.length === 0 ? (
+               <div style={{ padding:40, textAlign:"center", color:C.muted }}>No payslips found for this period.</div>
+             ) : (
+               <div className="tw">
+                 <table className="ht">
+                   <thead><tr>{['Period', 'Gross Pay', 'Net Pay', 'Status', ''].map(h=><th key={h}>{h}</th>)}</tr></thead>
+                   <tbody>
+                     {data.payslips.map(p => (
+                       <tr key={p.id}>
+                         <td style={{ fontWeight:700 }}>{new Date(p.period_start).toLocaleDateString(undefined, {month:'long',year:'numeric'})}</td>
+                         <td>{fmt(p.gross_pay)}</td>
+                         <td style={{ color:T.orange, fontWeight:800 }}>{fmt(p.net_pay)}</td>
+                         <td><span className={`tg ${p.status==="paid"?"tg2":"ty"}`}>{p.status}</span></td>
+                         <td><button className="bg" style={{ fontSize:10, padding:"4px 10px" }}>View PDF</button></td>
+                       </tr>
+                     ))}
+                   </tbody>
+                 </table>
+               </div>
+             )}
+          </div>
+        ) : (
+          <div>
+            {!data.commissions || !data.commissions.rep_id ? (
+              <div className="gc" style={{ padding:40, textAlign:"center", color:C.muted }}>
+                <div style={{ fontSize:28, marginBottom:10 }}>🔍</div>
+                <div style={{ fontWeight:700 }}>No Sales Rep Profile Linked</div>
+                <div style={{ fontSize:13, maxWidth:400, margin:"8px auto" }}>We couldn't find a Sales Rep record matching your email or phone number. Contact HR to link your accounts.</div>
+              </div>
+            ) : (
+              <div>
+                 <div className="g3" style={{ marginBottom:20, gap:16 }}>
+                    <div className="gc" style={{ padding:18, textAlign:"center" }}>
+                       <div style={{ fontSize:10, color:C.sub, textTransform:"uppercase", letterSpacing:"1px", marginBottom:8 }}>Total Owed (Now)</div>
+                       <div style={{ fontSize:22, fontWeight:800, color:T.gold }}>{fmt(data.commissions.total_owed)}</div>
+                    </div>
+                    <div className="gc" style={{ padding:18, textAlign:"center" }}>
+                       <div style={{ fontSize:10, color:C.sub, textTransform:"uppercase", letterSpacing:"1px", marginBottom:8 }}>Filtered Earning</div>
+                       <div style={{ fontSize:22, fontWeight:800, color:"#10B981" }}>{fmt(totalEarnedFiltered)}</div>
+                    </div>
+                    <div className="gc" style={{ padding:18, textAlign:"center" }}>
+                       <div style={{ fontSize:10, color:C.sub, textTransform:"uppercase", letterSpacing:"1px", marginBottom:8 }}>Payouts (Period)</div>
+                       <div style={{ fontSize:22, fontWeight:800, color:"#60A5FA" }}>{fmt(totalPaidFiltered)}</div>
+                    </div>
+                 </div>
+
+                 <div className="gc" style={{ overflow:"hidden" }}>
+                   <div style={{ padding:"14px 20px", borderBottom:`1px solid ${C.border}` }}>
+                     <div className="ho" style={{ fontSize:14 }}>Earnings Ledger</div>
+                   </div>
+                   <div className="tw">
+                     <table className="ht">
+                       <thead><tr>{['Date', 'Client Info', 'Invoice', 'Amount', 'Status'].map(h=><th key={h}>{h}</th>)}</tr></thead>
+                       <tbody>
+                         {data.commissions.earnings.map(e => (
+                           <tr key={e.id}>
+                             <td style={{ fontSize:12, color:C.sub }}>{new Date(e.created_at).toLocaleDateString()}</td>
+                             <td>
+                               <div style={{ fontWeight:700 }}>{e.clients?.full_name || "—"}</div>
+                               <div style={{ fontSize:10, color:C.muted }}>Estate: {e.estate_name}</div>
+                             </td>
+                             <td style={{ fontSize:11, color:C.sub }}>{e.invoices?.invoice_number || "—"}</td>
+                             <td style={{ fontWeight:800, color:T.gold }}>{fmt(e.final_amount)}</td>
+                             <td><span className={`tg ${e.is_paid?"tg2":parseFloat(e.amount_paid||0)>0?"ty":"tr"}`}>{e.is_paid?"Paid":parseFloat(e.amount_paid||0)>0?"Partial":"Unpaid"}</span></td>
+                           </tr>
+                         ))}
+                         {data.commissions.earnings.length === 0 && <tr><td colSpan="5" style={{ textAlign:"center", padding:30, color:C.muted }}>No earnings records found for this date range.</td></tr>}
+                       </tbody>
+                     </table>
+                   </div>
+                 </div>
+
+                 {data.commissions.payouts.length > 0 && (
+                   <div className="gc" style={{ marginTop:24, overflow:"hidden" }}>
+                     <div style={{ padding:"14px 20px", borderBottom:`1px solid ${C.border}` }}><div className="ho" style={{ fontSize:14 }}>Recent Payouts</div></div>
+                     <div className="tw">
+                       <table className="ht">
+                         <thead><tr>{['Paid Date', 'Payout Amount', 'Reference', 'Notes'].map(h=><th key={h}>{h}</th>)}</tr></thead>
+                         <tbody>
+                           {data.commissions.payouts.map(p => (
+                             <tr key={p.id}>
+                               <td style={{ fontSize:12, color:C.sub }}>{new Date(p.paid_at).toLocaleDateString(undefined, {day:'2-digit',month:'short',year:'numeric'})}</td>
+                               <td style={{ fontWeight:800, color:"#10B981" }}>{fmt(p.total_amount)}</td>
+                               <td style={{ fontSize:11, color:C.sub }}>{p.reference || "—"}</td>
+                               <td style={{ fontSize:11, color:C.muted }}>{p.notes || "—"}</td>
+                             </tr>
+                           ))}
+                         </tbody>
+                       </table>
+                     </div>
+                   </div>
+                 )}
+              </div>
+            )}
+          </div>
+        )
+      )}
+    </div>
+  );
+}
+
+
+// ─── MODULE: LEAVE MANAGEMENT ────────────────────────────────────────────────
+function LeaveManagement({ user }) {
+  const { dark } = useTheme(); const C = dark?DARK:LIGHT;
+  const [requests, setRequests] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showNew, setShowNew] = useState(false);
+  const [f, setF] = useState({ type: "Annual", start: "", end: "", reason: "" });
+  const [file, setFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
+  const isHR = user.role?.includes("admin") || user.role?.includes("hr") || user.role?.includes("operations") || user.primary_role === "hr";
+
+  useEffect(() => {
+    setLoading(true);
+    const params = isHR ? "" : `?staff_id=${user.id}`;
+    apiFetch(`${API_BASE}/hr/leave-requests${params}`)
+      .then(setRequests)
+      .finally(() => setLoading(false));
+  }, [isHR, user.id]);
+
+  const submit = async () => {
+    if (!f.start || !f.end) return;
+    setUploading(true);
+    try {
+      let proofUrl = null;
+      if (file) {
+        const formData = new FormData();
+        formData.append("file", file);
+        const upRes = await fetch(`${API_BASE}/hr/upload`, {
+          method: "POST",
+          headers: { "Authorization": `Bearer ${localStorage.getItem("ec_token")}` },
+          body: formData
+        });
+        if (!upRes.ok) throw new Error("File upload failed");
+        const upData = await upRes.json();
+        proofUrl = upData.url;
+      }
+
+      const days = Math.ceil((new Date(f.end) - new Date(f.start)) / (1000 * 60 * 60 * 24)) + 1;
+      await apiFetch(`${API_BASE}/hr/leave-requests`, {
+        method: "POST",
+        body: JSON.stringify({
+          leave_type: f.type,
+          start_date: f.start,
+          end_date: f.end,
+          days_count: days,
+          reason: f.reason,
+          proof_url: proofUrl
+        })
+      });
+      setShowNew(false);
+      setFile(null);
+      apiFetch(`${API_BASE}/hr/leave-requests${isHR ? "" : `?staff_id=${user.id}`}`).then(setRequests);
+    } catch (e) { alert(e.message); }
+    finally { setUploading(false); }
+  };
+
+  const updateStatus = async (id, status) => {
+    try {
+      await apiFetch(`${API_BASE}/hr/leave-requests/${id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status })
+      });
+      apiFetch(`${API_BASE}/hr/leave-requests${isHR ? "" : `?staff_id=${user.id}`}`).then(setRequests);
+    } catch (e) { alert(e.message); }
+  };
+
+  return (
+    <div className="fade">
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"flex-end", marginBottom:22 }}>
+        <div>
+          <div className="ho" style={{ fontSize:22 }}>Leave Management</div>
+          <div style={{ fontSize:13, color:C.sub, marginTop:4 }}>Request time off and track your remaining leave quota.</div>
+        </div>
+        <button className="bp" onClick={() => setShowNew(true)}>Request Leave</button>
+      </div>
+
+      {loading ? (
+        <div style={{ padding:40, textAlign:"center", color:C.muted }}>Loading leave data…</div>
+      ) : (
+        <div className="gc tw">
+          <table className="ht">
+            <thead>
+              <tr>{["Staff","Type","Period","Days","Status",""].map(h=><th key={h}>{h}</th>)}</tr>
+            </thead>
+            <tbody>
+              {requests.map(r => (
+                <tr key={r.id}>
+                  <td><div style={{ fontWeight:700 }}>{r.staff?.full_name || "You"}</div></td>
+                  <td>{r.leave_type}</td>
+                  <td style={{ fontSize:12, color:C.sub }}>{new Date(r.start_date).toLocaleDateString()} — {new Date(r.end_date).toLocaleDateString()}</td>
+                  <td style={{ fontWeight:800, color:T.orange }}>{r.days_count}d</td>
+                  <td>
+                    <div style={{ display:"flex", alignItems:"center", gap:10 }}>
+                      <span className={`tg ${r.status==="approved"?"tg2":r.status==="pending"?"ty":"tr"}`}>{r.status}</span>
+                      {r.proof_url && (
+                        <a href={r.proof_url} target="_blank" rel="noreferrer" title="View Proof" style={{ display:"flex", color:T.orange }}>
+                          <svg style={{ width:16, height:16 }} viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21.44 11.05a19.19 19.19 0 0 0-18.88 0 2 2 0 0 0 0 3.9 19.19 19.19 0 0 0 18.88 0 2 2 0 0 0 0-3.9z"/><circle cx="12" cy="13" r="3"/></svg>
+                        </a>
+                      )}
+                    </div>
+                  </td>
+                  <td>
+                    {isHR && r.status === "pending" && (
+                      <div style={{ display:"flex", gap:6 }}>
+                        <button className="bp" style={{ fontSize:10, padding:"4px 10px" }} onClick={()=>updateStatus(r.id, "approved")}>Approve</button>
+                        <button className="bd" style={{ fontSize:10, padding:"4px 10px" }} onClick={()=>updateStatus(r.id, "rejected")}>Reject</button>
+                      </div>
+                    )}
+                  </td>
+                </tr>
+              ))}
+              {requests.length === 0 && <tr><td colSpan="6" style={{ textAlign:"center", padding:20, color:C.muted }}>No leave records found.</td></tr>}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {showNew && (
+        <Modal onClose={()=>setShowNew(false)} title="New Leave Request">
+          <div style={{ display:"flex", flexDirection:"column", gap:16 }}>
+            <div><Lbl>Leave Type</Lbl>
+              <select className="inp" value={f.type} onChange={e=>setF(x=>({...x,type:e.target.value}))}>
+                <option>Annual</option><option>Sick</option><option>Study</option><option>Compassionate</option>
+              </select>
+            </div>
+            <div className="g2">
+              <div><Lbl>Start Date</Lbl><input type="date" className="inp" value={f.start} onChange={e=>setF(x=>({...x,start:e.target.value}))}/></div>
+              <div><Lbl>End Date</Lbl><input type="date" className="inp" value={f.end} onChange={e=>setF(x=>({...x,end:e.target.value}))}/></div>
+            </div>
+            <div><Lbl>Reason (Optional)</Lbl><textarea className="inp" value={f.reason} onChange={e=>setF(x=>({...x,reason:e.target.value}))}/></div>
+            <div>
+              <Lbl>Attachment (Optional Proof)</Lbl>
+              <input type="file" className="inp" style={{ padding:8 }} onChange={e=>setFile(e.target.files[0])} />
+              {file && <div style={{ fontSize:10, color:T.orange, marginTop:4 }}>File attached: {file.name}</div>}
+            </div>
+            <button className="bp" style={{ padding:14 }} onClick={submit} disabled={uploading}>
+              {uploading ? "Processing..." : "Submit Request"}
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── MODULE: ADMINISTRATION / ANALYTICS ──────────────────────────────────────
+function Administration() {
+  const { dark } = useTheme(); const C = dark?DARK:LIGHT;
+  const [stats, setStats] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/hr/analytics/headcount`).then(setStats).finally(()=>setLoading(false));
+  }, []);
+
+  if (loading) return <div style={{ padding:40, textAlign:"center", color:C.muted }}>Loading analytics…</div>;
+
+  return (
+    <div className="fade">
+      <div className="ho" style={{ fontSize:22, marginBottom:6 }}>Personnel Administration</div>
+      <div style={{ fontSize:13, color:C.sub, marginBottom:24 }}>Organization-wide reporting, demographics, and headcount trends.</div>
+
+      <div className="g3" style={{ marginBottom:22 }}>
+        <StatCard label="Total Headcount" value={stats?.total_active || 0} />
+        <StatCard label="Departments" value={Object.keys(stats?.by_department || {}).length} col="#60A5FA" />
+        <StatCard label="On Leave Today" value="2" col={T.orange} />
+      </div>
+
+      <div className="g2" style={{ gap:24 }}>
+        <div className="gc" style={{ padding:22 }}>
+          <div className="ho" style={{ fontSize:14, marginBottom:16 }}>Headcount by Department</div>
+          {Object.entries(stats?.by_department || {}).map(([d,v]) => (
+            <div key={d} style={{ marginBottom:14 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:6 }}>
+                <span style={{ color:C.text }}>{d}</span>
+                <span style={{ fontWeight:800 }}>{v} staff</span>
+              </div>
+              <Bar pct={(v / stats.total_active) * 100} />
+            </div>
+          ))}
+        </div>
+        <div className="gc" style={{ padding:22 }}>
+          <div className="ho" style={{ fontSize:14, marginBottom:16 }}>Role Distribution</div>
+           {Object.entries(stats?.by_role || {}).map(([r,v]) => (
+            <div key={r} style={{ marginBottom:14 }}>
+              <div style={{ display:"flex", justifyContent:"space-between", fontSize:12, marginBottom:6 }}>
+                <span style={{ color:C.text, textTransform:"capitalize" }}>{r.replace('_',' ')}</span>
+                <span style={{ fontWeight:800 }}>{v}</span>
+              </div>
+              <Bar pct={(v / stats.total_active) * 100} />
+            </div>
+          ))}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── HELPER: DOCUMENTS & QUALIFICATIONS ──────────────────────────────────────
+function DocumentsManager({ staffId, isHR }) {
+  const { dark } = useTheme(); const C = dark?DARK:LIGHT;
+  const [docs, setDocs] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [f, setF] = useState({ type: "Contract", title: "" });
+  const [file, setFile] = useState(null);
+  const [uploading, setUploading] = useState(false);
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/hr/staff/${staffId}/documents`).then(setDocs).finally(()=>setLoading(false));
+  }, [staffId]);
+
+  const add = async () => {
+    if (!f.title || !file) return;
+    setUploading(true);
+    try {
+      // 1. Upload to Supabase
+      const formData = new FormData();
+      formData.append("file", file);
+      const upRes = await fetch(`${API_BASE}/hr/upload`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${localStorage.getItem("ec_token")}` },
+        body: formData
+      });
+      if (!upRes.ok) throw new Error("File upload failed");
+      const upData = await upRes.json();
+      
+      // 2. Save metadata
+      await apiFetch(`${API_BASE}/hr/documents`, {
+        method: "POST",
+        body: JSON.stringify({
+          staff_id: staffId,
+          doc_type: f.type,
+          title: f.title,
+          file_url: upData.url
+        })
+      });
+      setShowAdd(false);
+      setFile(null);
+      apiFetch(`${API_BASE}/hr/staff/${staffId}/documents`).then(setDocs);
+    } catch (e) { alert(e.message); }
+    finally { setUploading(false); }
+  };
+
+  const remove = async (id) => {
+    if (!confirm("Are you sure you want to delete this document?")) return;
+    try {
+      await apiFetch(`${API_BASE}/hr/documents/${id}`, { method: "DELETE" });
+      apiFetch(`${API_BASE}/hr/staff/${staffId}/documents`).then(setDocs);
+    } catch (e) { alert(e.message); }
+  };
+
+  const availableTypes = ["Contract", "CV", "Government ID", "Passport", "Certificate"];
+  const typesToUse = isHR ? availableTypes : availableTypes.filter(t => !docs.some(d => d.doc_type === t));
+
+  return (
+    <div className="fade">
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+        <div style={{ fontSize:12, fontWeight:800, color:C.muted }}>OFFICIAL DOCUMENTS ({docs.length})</div>
+        {(isHR || typesToUse.length > 0) && <button className="bg" style={{ fontSize:10, padding:"4px 10px" }} onClick={()=>setShowAdd(true)}>+ Add Document</button>}
+      </div>
+      <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+        {docs.map(d => (
+          <div key={d.id} className="field" style={{ display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+            <div>
+              <div style={{ fontSize:13, fontWeight:700 }}>{d.title}</div>
+              <div style={{ fontSize:10, color:C.sub }}>{d.doc_type} · Added {new Date(d.created_at).toLocaleDateString()}</div>
+            </div>
+            <div style={{ display: "flex", gap: 8 }}>
+              <a href={d.file_url} target="_blank" rel="noreferrer" className="bg" style={{ fontSize:10, padding:"4px 12px", textDecoration:"none" }}>View File</a>
+              {isHR && <button className="br" style={{ fontSize:10, padding:"4px 10px" }} onClick={() => remove(d.id)}>Delete</button>}
+            </div>
+          </div>
+        ))}
+        {docs.length === 0 && <div style={{ textAlign:"center", padding:20, color:C.muted, fontSize:12, border:`1px dashed ${C.border}`, borderRadius:10 }}>No documents uploaded.</div>}
+      </div>
+
+      {showAdd && (
+        <Modal onClose={()=>setShowAdd(false)} title="Link Document">
+           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+              <div><Lbl>Document Type</Lbl>
+                <select className="inp" value={f.type} onChange={e=>setF(x=>({...x,type:e.target.value}))}>
+                  {typesToUse.map(t => <option key={t}>{t}</option>)}
+                </select>
+              </div>
+              <div><Lbl>Document Title</Lbl><input className="inp" placeholder="e.g. Signed Employment Contract" value={f.title} onChange={e=>setF(x=>({...x,title:e.target.value}))}/></div>
+              <div>
+                <Lbl>Select File</Lbl>
+                <input type="file" className="inp" style={{ padding:8 }} onChange={e=>setFile(e.target.files[0])} />
+                {file && <div style={{ fontSize:10, color:T.orange, marginTop:4 }}>File: {file.name}</div>}
+              </div>
+              <button className="bp" onClick={add} disabled={uploading}>
+                {uploading ? "Uploading..." : "Upload & Save Document"}
+              </button>
+           </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function QualificationsManager({ staffId, isHR }) {
+  const { dark } = useTheme(); const C = dark?DARK:LIGHT;
+  const [quals, setQuals] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAdd, setShowAdd] = useState(false);
+  const [f, setF] = useState({ type: "Education", title: "", inst: "", year: new Date().getFullYear() });
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/hr/staff/${staffId}/qualifications`).then(setQuals).finally(()=>setLoading(false));
+  }, [staffId]);
+
+  const add = async () => {
+    if (!f.title) return;
+    try {
+      await apiFetch(`${API_BASE}/hr/staff/${staffId}/qualifications`, {
+        method: "POST",
+        body: JSON.stringify({
+          type: f.type,
+          title: f.title,
+          institution: f.inst,
+          year: parseInt(f.year)
+        })
+      });
+      setShowAdd(false);
+      apiFetch(`${API_BASE}/hr/staff/${staffId}/qualifications`).then(setQuals);
+    } catch (e) { alert(e.message); }
+  };
+
+  return (
+    <div className="fade">
+      <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", marginBottom:16 }}>
+        <div style={{ fontSize:12, fontWeight:800, color:C.muted }}>QUALIFICATIONS & SKILLS ({quals.length})</div>
+        {isHR && <button className="bg" style={{ fontSize:10, padding:"4px 10px" }} onClick={()=>setShowAdd(true)}>+ Add New</button>}
+      </div>
+      <div className="g2">
+        {quals.map(q => (
+          <div key={q.id} className="field">
+            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:4 }}>
+              <span className="tg" style={{ fontSize:8, padding:"3px 8px" }}>{q.type}</span>
+              <span style={{ fontSize:11, color:C.muted, fontWeight:800 }}>{q.year}</span>
+            </div>
+            <div style={{ fontSize:14, fontWeight:800, color:C.text }}>{q.title}</div>
+            <div style={{ fontSize:11, color:C.sub }}>{q.institution}</div>
+          </div>
+        ))}
+      </div>
+      {quals.length === 0 && <div style={{ textAlign:"center", padding:20, color:C.muted, fontSize:12 }}>No records provided.</div>}
+
+      {showAdd && (
+        <Modal onClose={()=>setShowAdd(false)} title="Add Record">
+           <div style={{ display:"flex", flexDirection:"column", gap:14 }}>
+              <div><Lbl>Record Type</Lbl>
+                <select className="inp" value={f.type} onChange={e=>setF(x=>({...x,type:e.target.value}))}>
+                  <option>Education</option><option>Certification</option><option>Skill</option>
+                </select>
+              </div>
+              <div><Lbl>Title / Subject</Lbl><input className="inp" placeholder="e.g. B.Sc. Architecture" value={f.title} onChange={e=>setF(x=>({...x,title:e.target.value}))}/></div>
+              <div><Lbl>Institution / Provider</Lbl><input className="inp" placeholder="e.g. University of Lagos" value={f.inst} onChange={e=>setF(x=>({...x,inst:e.target.value}))}/></div>
+              <div><Lbl>Year Completed</Lbl><input type="number" className="inp" value={f.year} onChange={e=>setF(x=>({...x,year:e.target.value}))}/></div>
+              <button className="bp" onClick={add}>Save Record</button>
+           </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function PerformanceManager({ staffId, isHR, authRole }) {
+  const { dark } = useTheme(); const C = dark?DARK:LIGHT;
+  const [data, setData] = useState(null);
+  const [history, setHistory] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showReview, setShowReview] = useState(false);
+  const [review, setReview] = useState({ quality_score:80, teamwork_score:4, leadership_score:4, attitude_score:4, comments:"", review_period: new Date().toISOString().split('T')[0] });
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [p, h] = await Promise.all([
+        apiFetch(`${API_BASE}/hr/staff/${staffId}/performance`),
+        apiFetch(`${API_BASE}/hr/staff/${staffId}/performance/history`)
+      ]);
+      setData(p);
+      setHistory(h);
+      if (p.review) setReview(p.review);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, [staffId]);
+
+  const saveReview = async () => {
+    try {
+      await apiFetch(`${API_BASE}/hr/staff/${staffId}/performance/review`, {
+        method: "POST",
+        body: JSON.stringify(review)
+      });
+      setShowReview(false);
+      load();
+    } catch (e) { alert(e.message); }
+  };
+
+  if (loading) return <div style={{ padding:40, textAlign:"center", color:C.muted }}>Computing performance index...</div>;
+  if (!data) return <div style={{ padding:40, textAlign:"center", color:C.muted }}>No performance data found.</div>;
+
+  const sc = data.score;
+  const b = data.breakdown;
+
+  // Simple SVG Line Chart for trends
+  const renderTrend = () => {
+    if (!history.length) return null;
+    const padding = 20;
+    const w = 560;
+    const h = 100;
+    const pts = history.map((d, i) => ({
+      x: padding + (i * ((w - 2 * padding) / (history.length - 1))),
+      y: h - padding - (d.score * ((h - 2 * padding) / 100))
+    }));
+    const d = `M ${pts.map(p => `${p.x},${p.y}`).join(" L ")}`;
+    
+    return (
+      <div style={{ marginTop:24, background:C.base, borderRadius:12, padding:20, border:`1px solid ${C.border}` }}>
+        <div style={{ fontSize:11, fontWeight:800, color:C.muted, marginBottom:16, textTransform:"uppercase" }}>6-MONTH PERFORMANCE TREND</div>
+        <svg width="100%" height={h} viewBox={`0 0 ${w} ${h}`} preserveAspectRatio="none">
+           {/* Grid lines */}
+           {[0, 50, 100].map(v => {
+             const y = h - padding - (v * ((h - 2 * padding) / 100));
+             return <line key={v} x1={padding} y1={y} x2={w-padding} y2={y} stroke={C.border} strokeWidth="1" strokeDasharray="4 4" />;
+           })}
+           <path d={d} fill="none" stroke={T.orange} strokeWidth="3" strokeLinecap="round" strokeLinejoin="round" />
+           {pts.map((p, i) => (
+             <g key={i}>
+                <circle cx={p.x} cy={p.y} r="4" fill={history[i].score >= 70 ? "#4ADE80" : T.orange} stroke={C.base} strokeWidth="2" />
+                <text x={p.x} y={h-4} textAnchor="middle" fontSize="9" fill={C.muted}>{history[i].month.split(" ")[0]}</text>
+                <text x={p.x} y={p.y - 8} textAnchor="middle" fontSize="10" fontWeight="800" fill={C.text}>{Math.round(history[i].score)}</text>
+             </g>
+           ))}
+        </svg>
+      </div>
+    );
+  };
+
+  return (
+    <div className="fade">
+      <div style={{ display:"flex", gap:24, alignItems:"center", marginBottom:24 }}>
+         <div style={{ position:"relative", width:100, height:100 }}>
+            <svg width="100" height="100">
+               <circle cx="50" cy="50" r="45" fill="none" stroke={C.border} strokeWidth="8" />
+               <circle cx="50" cy="50" r="45" fill="none" stroke={sc >= 70 ? "#4ADE80" : sc >= 50 ? T.orange : "#F87171"} strokeWidth="8" 
+                 strokeDasharray={2 * Math.PI * 45} strokeDashoffset={2 * Math.PI * 45 * (1 - sc / 100)} 
+                 strokeLinecap="round" style={{ transition:"all 1s ease", transform:"rotate(-90deg)", transformOrigin:"50% 50%" }} />
+            </svg>
+            <div style={{ position:"absolute", top:0, left:0, bottom:0, right:0, display:"flex", flexDirection:"column", justifyContent:"center", alignItems:"center" }}>
+               <div style={{ fontSize:22, fontWeight:900, color:C.text }}>{Math.round(sc)}</div>
+               <div style={{ fontSize:9, color:C.muted, fontWeight:800 }}>INDEX</div>
+            </div>
+         </div>
+         <div style={{ flex:1 }}>
+            <div style={{ fontSize:15, fontWeight:800 }}>Performance Rating: <span style={{ color: sc >= 80 ? "#4ADE80" : sc >= 60 ? T.orange : "#F87171" }}>{sc >= 80 ? "Excellent" : sc >= 70 ? "Very Good" : sc >= 50 ? "Fair" : "Needs Improvement"}</span></div>
+            <div style={{ fontSize:12, color:C.sub, marginTop:4 }}>Comprehensive score based on goals achievement (40%), quality of work (20%), and manager reviews (40%).</div>
+            {(authRole === "hr" || authRole === "line_manager") && (
+              <button className="bp" style={{ fontSize:11, padding:"6px 14px", marginTop:12 }} onClick={()=>setShowReview(true)}>Update Manager Review</button>
+            )}
+         </div>
+      </div>
+
+      <div className="g4" style={{ gap:12 }}>
+         {[
+           ["Monthly Goals", b.goals, "40%", "tg2"],
+           ["Work Quality", b.quality, "20%", "to"],
+           ["Teamwork", b.teamwork, "20%", "tm"],
+           ["Initiative", b.initiative, "20%", "tm"]
+         ].map(([lbl, val, wt, cl]) => (
+           <div key={lbl} className="gc" style={{ padding:16, textAlign:"center" }}>
+              <div style={{ fontSize:9, color:C.muted, textTransform:"uppercase", letterSpacing:"1px", fontWeight:800, marginBottom:8 }}>{lbl} ({wt})</div>
+              <div style={{ fontSize:20, fontWeight:900, color:C.text }}>{Math.round(val)}</div>
+              <div style={{ height:4, background:C.border, borderRadius:2, margin:"8px auto 0", width:"60%", overflow:"hidden" }}>
+                 <div style={{ height:"100%", width:`${val}%`, background:val >= 70 ? "#4ADE80" : val >= 50 ? T.orange : "#F87171" }} />
+              </div>
+           </div>
+         ))}
+      </div>
+
+      {renderTrend()}
+
+      <div style={{ marginTop:24 }}>
+         <div style={{ fontSize:12, fontWeight:800, color:C.muted, marginBottom:12 }}>ACTIVE MONTHLY GOALS</div>
+         <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
+            {data.goals?.map(g => (
+              <div key={g.id} className="gc" style={{ padding:"14px 18px", display:"flex", justifyContent:"space-between", alignItems:"center" }}>
+                 <div>
+                    <div style={{ fontSize:14, fontWeight:700 }}>{g.kpi_name}</div>
+                    <div style={{ fontSize:11, color:C.sub }}>Target: {g.target_value} {g.unit} · Weight: {g.weight}%</div>
+                 </div>
+                 <div style={{ textAlign:"right" }}>
+                    <div style={{ fontSize:16, fontWeight:900, color:g.achievement_pct >= 90 ? "#4ADE80" : T.orange }}>{Math.round(g.achievement_pct)}%</div>
+                    <div style={{ fontSize:10, color:C.muted }}>Achievement</div>
+                 </div>
+              </div>
+            ))}
+            {(!data.goals || data.goals.length === 0) && <div style={{ textAlign:"center", padding:20, color:C.muted, fontSize:12 }}>No goals set for this period.</div>}
+         </div>
+      </div>
+
+      {showReview && (
+        <Modal onClose={()=>setShowReview(false)} title="Submit Performance Review" width={480}>
+           <div style={{ display:"flex", flexDirection:"column", gap:16, paddingBottom:10 }}>
+              <div style={{ display:"grid", gridTemplateColumns:"1fr 1fr", gap:12 }}>
+                 <div><Lbl>Quality Score (0-100)</Lbl><input type="number" className="inp" value={review.quality_score} onChange={e=>setReview(r=>({...r, quality_score:e.target.value}))}/></div>
+                 <div><Lbl>Teamwork (1-5)</Lbl><input type="number" min="1" max="5" className="inp" value={review.teamwork_score} onChange={e=>setReview(r=>({...r, teamwork_score:e.target.value}))}/></div>
+                 <div><Lbl>Initiative (1-5)</Lbl><input type="number" min="1" max="5" className="inp" value={review.leadership_score} onChange={e=>setReview(r=>({...r, leadership_score:e.target.value}))}/></div>
+                 <div><Lbl>Period</Lbl><input type="date" className="inp" value={review.review_period} onChange={e=>setReview(r=>({...r, review_period:e.target.value}))}/></div>
+              </div>
+              <div><Lbl>Comments</Lbl><textarea className="inp" rows={4} value={review.comments} onChange={e=>setReview(r=>({...r, comments:e.target.value}))}/></div>
+              <button className="bp" style={{ padding:12 }} onClick={saveReview}>Submit Review</button>
+           </div>
+        </Modal>
       )}
     </div>
   );
@@ -2197,6 +3546,8 @@ function StaffDirectory({ authRole }) {
     if (!view) return;
     const p = view.staff_profiles?.[0] || {};
     setDraftView({
+      full_name: view.full_name || "",
+      email: view.email || "",
       job_title: p.job_title || view.role || "",
       department: view.department || "",
       line_manager_id: view.line_manager_id || "",
@@ -2311,6 +3662,8 @@ function StaffDirectory({ authRole }) {
       await apiFetch(`${API_BASE}/hr/profile/${view.id}`, {
         method: "PATCH",
         body: JSON.stringify({
+          full_name: draftView.full_name,
+          email: draftView.email,
           job_title: draftView.job_title,
           department: draftView.department,
           line_manager_id: draftView.line_manager_id || null,
@@ -2327,6 +3680,8 @@ function StaffDirectory({ authRole }) {
       });
       setView(prev => ({
         ...prev,
+        full_name: draftView.full_name,
+        email: draftView.email,
         role: rolePayload.role,
         primary_role: rolePayload.primary_role,
         department: rolePayload.department,
@@ -2384,13 +3739,49 @@ function StaffDirectory({ authRole }) {
         />
         <div style={{ fontSize:13, color:C.sub }}>{activeList.length} active · {archivedList.length} archived</div>
       </div>
-      <Tabs items={[["full","Full Staff"],["contractor","Contractors"],["onsite","Onsite / Labourers"], ["org","Org Chart"]]} active={tab} setActive={setTab}/>
+      <Tabs items={[["full","Full Staff"],["contractor","Contractors"],["onsite","Onsite / Labourers"], ["perf", "Performance Index"], ["org","Org Chart"]]} active={tab} setActive={setTab}/>
       {loading ? (
         <div style={{ padding:40, textAlign:"center", color:C.muted }}>Loading staff records…</div>
       ) : tab === "org" ? (
         <OrgChartView staff={staff} />
       ) : activeList.length === 0 ? (
         <div className="gc" style={{ padding:48, textAlign:"center", color:C.muted }}>No active {tab} staff found.</div>
+      ) : tab === "perf" ? (
+        <div style={{ display:"flex", flexDirection:"column", gap:14, marginBottom:22 }}>
+           <div style={{ display:"flex", justifyContent:"space-between", alignItems:"center", padding:"0 4px" }}>
+              <div style={{ fontSize:14, fontWeight:800, color:C.muted }}>INDEXED PERFORMANCE LEADERBOARD (CURRENT MONTH)</div>
+              <div style={{ display:"flex", gap:10 }}>
+                 <div style={{ fontSize:11, color:C.muted }}>Sorting: High to Low</div>
+              </div>
+           </div>
+           {activeList.sort((a,b) => (b.performance?.score || 0) - (a.performance?.score || 0)).map(u => {
+              const sc = u.performance?.score || 0;
+              const b = u.performance?.breakdown || {};
+              return (
+                <div key={u.id} className="gc fade" style={{ padding:"16px 20px", display:"flex", alignItems:"center", gap:20, cursor:"pointer" }} onClick={()=>setView(u)}>
+                   <div style={{ width:16, fontSize:12, fontWeight:900, color:C.muted }}>#{activeList.indexOf(u) + 1}</div>
+                   <Av av={u.full_name?.split(" ").map(n=>n[0]).join("")} sz={42} />
+                   <div style={{ flex:1 }}>
+                      <div style={{ fontSize:15, fontWeight:800 }}>{u.full_name}</div>
+                      <div style={{ fontSize:11, color:C.sub }}>{u.department} · {u.role?.replace(/,/g, " | ")}</div>
+                   </div>
+                   <div style={{ display:"flex", gap:30 }}>
+                      {[["GOALS", b.goals], ["QUALITY", b.quality], ["SOFT SKILLS", (b.teamwork + b.initiative)/2]].map(([lbl, val]) => (
+                        <div key={lbl} style={{ textAlign:"center", minWidth:60 }}>
+                           <div style={{ fontSize:9, color:C.muted, fontWeight:800, marginBottom:4 }}>{lbl}</div>
+                           <div style={{ fontSize:13, fontWeight:800 }}>{Math.round(val || 0)}%</div>
+                           <div style={{ height:3, width:24, background:val >= 70 ? "#4ADE80" : T.orange, borderRadius:2, margin:"4px auto 0" }} />
+                        </div>
+                      ))}
+                   </div>
+                   <div style={{ width:80, textAlign:"right" }}>
+                      <div style={{ fontSize:22, fontWeight:900, color:sc >= 70 ? "#4ADE80" : T.orange }}>{Math.round(sc)}</div>
+                      <div style={{ fontSize:9, color:C.muted, fontWeight:800 }}>OVERALL</div>
+                   </div>
+                </div>
+              );
+           })}
+        </div>
       ) : (
         <div className="g3" style={{ marginBottom:22 }}>
           {activeList.map(u => {
@@ -2548,17 +3939,37 @@ function StaffDirectory({ authRole }) {
             </div>
           )}
 
-          <Tabs items={[["details","Personnel Identity"],["bank","Finances"],["assets","Assets"],["docs","Documents"]]} active={dtTab} setActive={setDtTab}/>
+          <Tabs items={[
+            ["details", "Personnel Identity"],
+            ["performance", "Performance"],
+            ["quals", "Qualifications"],
+            ["bank", "Finances"],
+            ["assets", "Assets"],
+            ["docs", "Documents"],
+            ["security", "Security"]
+          ]} active={dtTab} setActive={setDtTab}/>
 
           {dtTab === "details" && (
             <div className="g2 fade" style={{ gap:10, marginBottom:18 }}>
-              <Field label="Full Name" value={view.full_name}/>
-              <Field label="Email Address" value={view.email}/>
-              <Field label="Role" value={view.role?.replace(/,/g,' , ')}/>
-              <Field label="Primary Role" value={view.primary_role}/>
-              <Field label="Line Manager" value={getStaffNameById(view.line_manager_id)}/>
+              {!editMode && (
+                <>
+                  <Field label="Full Name" value={view.full_name}/>
+                  <Field label="Email Address" value={view.email}/>
+                  <Field label="Role" value={view.role?.replace(/,/g,' , ')}/>
+                  <Field label="Primary Role" value={view.primary_role}/>
+                  <Field label="Line Manager" value={getStaffNameById(view.line_manager_id)}/>
+                </>
+              )}
               {editMode ? (
                 <>
+                  <div>
+                    <Lbl>Full Name</Lbl>
+                    <input className="inp" value={draftView.full_name} onChange={e => setDraftView(d => ({ ...d, full_name: e.target.value }))} />
+                  </div>
+                  <div>
+                    <Lbl>Email Address</Lbl>
+                    <input className="inp" value={draftView.email} onChange={e => setDraftView(d => ({ ...d, email: e.target.value }))} />
+                  </div>
                   <div>
                     <Lbl>Job Title</Lbl>
                     <input className="inp" value={draftView.job_title} onChange={e => setDraftView(d => ({ ...d, job_title: e.target.value }))} />
@@ -2669,6 +4080,47 @@ function StaffDirectory({ authRole }) {
             </div>
           )}
 
+          {dtTab === "security" && (
+            <div className="fade" style={{ maxWidth: 450 }}>
+              {/* ... security override fields ... */}
+              <div className="ho" style={{ fontSize: 13, marginBottom: 14, color: T.orange, fontWeight: 800 }}>ADMIN SECURITY OVERRIDE</div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                <div className="gc" style={{ padding: 20 }}>
+                  <Lbl>Reset Password</Lbl>
+                  <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                    <input id="admin-pass-reset" className="inp" type="password" placeholder="New password (min 8 chars)" style={{ flex: 1 }} />
+                    <button className="bp" onClick={async () => {
+                      const pass = document.getElementById("admin-pass-reset").value;
+                      if (!pass || pass.length < 8) return alert("Password must be at least 8 characters");
+                      if (!confirm(`Are you sure you want to FORCE reset ${view.full_name}'s password?`)) return;
+                      try {
+                        await apiFetch(`/auth/admins/${view.id}/reset-password`, {
+                          method: "PATCH",
+                          body: JSON.stringify({ new_password: pass })
+                        });
+                        alert("Password successfully updated");
+                        document.getElementById("admin-pass-reset").value = "";
+                      } catch (e) { alert(e.message); }
+                    }}>Reset Now</button>
+                  </div>
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>
+                    Note: The staff member will use this password for their next login. They are not automatically notified.
+                  </div>
+                </div>
+
+                <div style={{ display: "flex", gap: 10 }}>
+                   <button className="br" style={{ flex: 1, padding: 12, fontSize: 13 }} onClick={archiveStaff}>
+                      Archive / Deactivate Employee
+                   </button>
+                </div>
+              </div>
+            </div>
+          )}
+
+          {dtTab === "performance" && <PerformanceManager staffId={view.id} isHR={authRole === "hr"} authRole={authRole} />}
+
+          {dtTab === "quals" && <QualificationsManager staffId={view.id} isHR={authRole === "hr"} />}
+
           {dtTab === "bank" && (
             <div className="g1 fade" style={{ gap:10, marginBottom:18 }}>
               <Field label="Bank Name" value={view.staff_profiles?.[0]?.bank_name}/>
@@ -2700,24 +4152,7 @@ function StaffDirectory({ authRole }) {
             </div>
           )}
 
-          {dtTab === "docs" && (
-            <div className="fade">
-              <div style={{ display:"flex", justifyContent:"space-between", marginBottom:12 }}>
-                <div className="ho" style={{ fontSize:13 }}>Staff Documents</div>
-                <button className="bp" style={{ fontSize:11, padding:"4px 10px" }}>+ Upload</button>
-              </div>
-              <div style={{ display:"flex", flexDirection:"column", gap:8 }}>
-                {view.staff_documents?.length > 0 ? (
-                  view.staff_documents.map((d,i) => (
-                    <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"10px 14px", background:`${C.surface}`, border:`1px solid ${C.border}`, borderRadius:10 }}>
-                      <div><div style={{ fontSize:13, fontWeight:700 }}>{d.title}</div><div style={{ fontSize:11, color:C.muted }}>{d.doc_type}</div></div>
-                      <a href={d.file_url} target="_blank" className="bg" style={{ fontSize:11, textDecoration:"none" }}>View</a>
-                    </div>
-                  ))
-                ) : <div style={{ fontSize:12, color:C.muted, textAlign:"center", padding:20 }}>No documents uploaded.</div>}
-              </div>
-            </div>
-          )}
+          {dtTab === "docs" && <DocumentsManager staffId={view.id} isHR={authRole === "hr"} />}
 
           {!viewOnly && view.is_active !== false && (
             <div style={{ marginTop:22, borderTop:`1px solid ${C.border}`, paddingTop:22 }}>
@@ -3052,6 +4487,7 @@ function MyProfile({ user }) {
         setProf(d);
         const p = d.staff_profiles?.[0] || {};
         setDraft({
+          full_name: d.full_name || "",
           phone_number: p.phone_number || "",
           address: p.address || "",
           emergency_contact: p.emergency_contact || "",
@@ -3073,6 +4509,15 @@ function MyProfile({ user }) {
     if (!prof) return;
     setSaving(true);
     try {
+      // 1. Update Name (Auth API)
+      if (draft.full_name && draft.full_name !== prof.full_name) {
+        await apiFetch(`${API_BASE}/auth/me/profile`, {
+          method: "PATCH",
+          body: JSON.stringify({ full_name: draft.full_name })
+        });
+      }
+
+      // 2. Update Detailed Profile (HR API)
       await apiFetch(`${API_BASE}/hr/profile/${user.id}`, {
         method: "PATCH",
         body: JSON.stringify({
@@ -3088,6 +4533,7 @@ function MyProfile({ user }) {
       });
       setProf(prev => ({
         ...prev,
+        full_name: draft.full_name,
         staff_profiles: [{
           ...prev.staff_profiles?.[0],
           phone_number: draft.phone_number,
@@ -3139,11 +4585,25 @@ function MyProfile({ user }) {
           </div>
         </div>
 
-        <Tabs items={[["details","Personnel Identity"],["assets","My Assets"],["bank","Finances"],["docs","My Documents"]]} active={tab} setActive={setTab}/>
+        <Tabs items={[
+          ["details", "Personnel Identity"],
+          ["quals", "Qualifications"],
+          ["assets", "My Assets"],
+          ["bank", "Finances"],
+          ["docs", "My Documents"],
+          ["security", "Security"]
+        ]} active={tab} setActive={setTab}/>
 
         {tab === "details" && (
           <div className="g2 fade" style={{ gap:12 }}>
-            <Field label="Full Name" value={prof.full_name}/>
+            {editMode ? (
+              <div>
+                <Lbl>Full Name</Lbl>
+                <input className="inp" value={draft.full_name || prof.full_name} onChange={e => setDraft(d => ({ ...d, full_name: e.target.value }))} />
+              </div>
+            ) : (
+              <Field label="Full Name" value={prof.full_name}/>
+            )}
             <Field label="Email Address" value={prof.email}/>
             {editMode ? (
               <>
@@ -3206,6 +4666,10 @@ function MyProfile({ user }) {
           </div>
         )}
 
+        {tab === "security" && <SecurityManager />}
+
+        {tab === "quals" && <QualificationsManager staffId={user.id} isHR={false} />}
+
         {tab === "assets" && (
           <div className="fade">
             <div style={{ display:"flex", justifyContent:"space-between", marginBottom:12 }}>
@@ -3240,22 +4704,7 @@ function MyProfile({ user }) {
           </div>
         )}
 
-        {tab === "docs" && (
-          <div className="fade">
-            <div style={{ display:"flex", justifyContent:"space-between", marginBottom:14 }}>
-              <div className="ho" style={{ fontSize:14 }}>My Uploaded Documents</div>
-              <button className="bp" style={{ fontSize:12, padding:"6px 14px" }}>+ Upload Document</button>
-            </div>
-            <div style={{ display:"flex", flexDirection:"column", gap:10 }}>
-              {prof.staff_documents?.length > 0 ? prof.staff_documents.map((d,i)=>(
-                <div key={i} style={{ display:"flex", justifyContent:"space-between", padding:"12px 16px", background:C.surface, border:`1px solid ${C.border}`, borderRadius:12 }}>
-                   <div><div style={{ fontSize:14, fontWeight:700 }}>{d.title}</div><div style={{ fontSize:12, color:C.muted }}>{d.doc_type} · Uploaded {new Date(d.created_at).toLocaleDateString()}</div></div>
-                   <a href={d.file_url} target="_blank" className="bg" style={{ alignSelf:"center", textDecoration:"none" }}>View</a>
-                </div>
-              )) : <div style={{ padding:30, textAlign:"center", color:C.muted, border:`1px dashed ${C.border}`, borderRadius:12 }}>No documents found. Please upload your CV and ID.</div>}
-            </div>
-          </div>
-        )}
+        {tab === "docs" && <DocumentsManager staffId={user.id} isHR={false} />}
       </div>
     </div>
   );
@@ -3387,23 +4836,29 @@ function HRAdminPortal({ user, onLogout }) {
   const nav = [
     { id:"dashboard", icon:"dashboard", label:"HR Overview"        },
     { id:"staff",     icon:"staff",     label:"Staff Directory"  },
+    { id:"leave",     icon:"presence",  label:"Leave Management" },
+    { id:"admin",     icon:"dashboard", label:"Workforce Stats"  },
     { id:"presence",  icon:"presence",  label:"Presence"         },
     { id:"perf",      icon:"perf",      label:"Performance"      },
     { id:"goals",     icon:"goal",      label:"Goal Management"  },
     { id:"payroll",   icon:"payroll",   label:"Payroll"          },
     { id:"tasks",     icon:"tasks",     label:"Task Manager"     },
     { id:"mismanage", icon:"mis",       label:"Mismanagement"    },
+    { id:"myprofile", icon:"profile",   label:"My Profile"      },
   ];
   return (
     <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="HR Administration" renderPage={p=>{
       if (p==="dashboard") return <HRDashboard/>;
       if (p==="staff")     return <StaffDirectory authRole="hr"/>;
+      if (p==="leave")     return <LeaveManagement user={user} />;
+      if (p==="admin")     return <Administration />;
       if (p==="presence")  return <Presence currentUser={user}/>;
       if (p==="perf")      return <Performance/>;
       if (p==="goals")     return <Goals canManageKpiTemplates />;
       if (p==="payroll")   return <Payroll/>;
       if (p==="tasks")     return <Tasks currentUser={user}/>;
       if (p==="mismanage") return <Mismanagement/>;
+      if (p==="myprofile") return <MyProfile user={user}/>;
     }}/>
   );
 }
@@ -3412,6 +4867,7 @@ function ManagerPortal({ user, onLogout }) {
   const nav = [
     { id:"dashboard", icon:"dashboard", label:"Team Dashboard"  },
     { id:"team",      icon:"staff",     label:"My Team"         },
+    { id:"leave",     icon:"presence",  label:"Leave Approval"  },
     { id:"presence",  icon:"presence",  label:"Presence"        },
     { id:"perf",      icon:"perf",      label:"Team Performance"},
     { id:"goals",     icon:"goal",      label:"Team Goals"      },
@@ -3434,6 +4890,7 @@ function ManagerPortal({ user, onLogout }) {
   return (
     <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="Management Hub" renderPage={p=>{
       if (p==="team")      return <StaffDirectory authRole="manager"/>;
+      if (p==="leave")     return <LeaveManagement user={user} />;
       if (p==="presence")  return <Presence currentUser={user}/>;
       if (p==="perf")      return <Performance/>;
       if (p==="goals")     return <Goals/>;
@@ -3476,11 +4933,12 @@ function StaffPortal({ user, onLogout }) {
   const nav = [
     { id:"dashboard",  icon:"dashboard", label:"My Dashboard"   },
     { id:"profile",    icon:"profile",   label:"My Profile"     },
+    { id:"leave",      icon:"presence",  label:"My Leave"       },
     { id:"perf",       icon:"perf",      label:"My Performance" },
     { id:"goals",      icon:"goal",      label:"My Goals"       },
     { id:"tasks",      icon:"tasks",     label:"My Tasks"       },
     { id:"presence",   icon:"presence",  label:"My Presence"    },
-    { id:"payslip",    icon:"payslip",   label:"My Payslip"     },
+    { id:"payroll",    icon:"payslip",   label:"My Payroll"     },
     { id:"mismanage",  icon:"mis",       label:"My Flags"       },
   ];
   const { dark } = useTheme(); const C = dark?DARK:LIGHT;
@@ -3509,11 +4967,12 @@ function StaffPortal({ user, onLogout }) {
   return (
     <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="Team Member Portal" initialPage={startPage} renderPage={pg=>{
       if (pg==="profile")   return <MyProfile user={user}/>;
+      if (pg==="leave")     return <LeaveManagement user={user} />;
       if (pg==="perf")      return <Performance viewOnly userId={user.id}/>;
       if (pg==="goals")     return <Goals viewOnly userId={user.id}/>;
       if (pg==="tasks")     return <Tasks currentUser={user}/>;
       if (pg==="presence")  return <Presence currentUserId={user.id} currentUser={user}/>;
-      if (pg==="payslip")   return <MyPayslip user={user}/>;
+      if (pg==="payroll")   return <StaffPayroll user={user}/>;
       if (pg==="mismanage") return <Mismanagement viewOnly userId={user.id}/>;
       
       return (

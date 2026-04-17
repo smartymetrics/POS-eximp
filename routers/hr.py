@@ -6,6 +6,11 @@ from pydantic import BaseModel
 from datetime import date, datetime, timedelta
 from database import get_db, db_execute
 from routers.auth import verify_token
+from models import (
+    KPITemplateCreate, KPITemplateUpdate, PerformanceReviewCreate,
+    LeaveRequestCreate, LeaveRequestUpdate, StaffDocumentCreate, 
+    StaffQualificationCreate, IncidentCreate
+)
 
 router = APIRouter(prefix="/api/hr", tags=["HR Management"])
 
@@ -66,6 +71,8 @@ class PerformanceReviewCreate(PerformanceReviewBase):
     review_period: date
 
 class StaffProfileUpdate(BaseModel):
+    full_name: Optional[str] = None
+    email: Optional[str] = None
     job_title: Optional[str] = None
     department: Optional[str] = None
     line_manager_id: Optional[str] = None
@@ -163,13 +170,49 @@ async def run_hr_migration(current_admin: dict = Depends(verify_token)):
 async def get_staff_list(current_admin: dict = Depends(verify_token)):
     """Fetch staff members with their HR profiles and performance summaries."""
     db = get_db()
+    today = date.today()
+    month_start = date(today.year, today.month, 1).isoformat()
     
-    # Query admins joined with staff_profiles
+    # 1. Fetch admins joined with staff_profiles
     res = await db_execute(lambda: db.table("admins").select(
         "id, full_name, email, role, primary_role, department, line_manager_id, created_at, is_active, staff_profiles(*)"
     ).execute())
+    staff_data = res.data
     
-    return res.data
+    # 2. Fetch all goals for current month
+    goals_res = await db_execute(lambda: db.table("staff_goals")
+        .select("staff_id, achievement_pct")
+        .gte("month", month_start)
+        .execute())
+    
+    # 3. Fetch latest reviews for everyone
+    # For performance, we'll get simple latest review per staff if possible, 
+    # or just fetch recent ones and map.
+    rev_res = await db_execute(lambda: db.table("performance_reviews")
+        .select("staff_id, quality_score, teamwork_score, leadership_score, review_period")
+        .order("review_period", desc=True)
+        .execute())
+        
+    # Organize data for mapping
+    goals_map = {}
+    for g in goals_res.data:
+        sid = g["staff_id"]
+        if sid not in goals_map: goals_map[sid] = []
+        goals_map[sid].append(g)
+        
+    rev_map = {}
+    for r in rev_res.data:
+        sid = r["staff_id"]
+        if sid not in rev_map: rev_map[sid] = r # Latest because of order
+        
+    # Enrich staff data
+    for s in staff_data:
+        sid = s["id"]
+        s_goals = goals_map.get(sid, [])
+        s_rev = [rev_map[sid]] if sid in rev_map else []
+        s["performance"] = compute_composite_score(s_goals, s_rev)
+        
+    return staff_data
 
 @router.get("/profile/{staff_id}")
 async def get_staff_profile(staff_id: str, current_admin: dict = Depends(verify_token)):
@@ -198,7 +241,7 @@ async def get_staff_profile(staff_id: str, current_admin: dict = Depends(verify_
         raise HTTPException(status_code=403, detail="Permission denied")
 
     # Fetch profile data
-    profile = await db_execute(lambda: db.table("admins").select("*, staff_profiles(*), staff_documents!staff_documents_staff_id_fkey(*), staff_qualifications(*), staff_assets(*)").eq("id", staff_id).execute())
+    profile = await db_execute(lambda: db.table("admins").select("*, staff_profiles(*), staff_documents!staff_documents_staff_id_fkey(*), staff_qualifications(*)").eq("id", staff_id).execute())
     
     return profile.data[0] if profile.data else None
 
@@ -219,13 +262,14 @@ async def update_staff_profile(staff_id: str, update: StaffProfileUpdate, curren
 
     if is_hr:
         # HR can update administrative fields as well as profile data.
+        if update.full_name: admin_updates["full_name"] = update.full_name
+        if update.email: admin_updates["email"] = update.email
         if update.department: admin_updates["department"] = update.department
         if update.line_manager_id: admin_updates["line_manager_id"] = update.line_manager_id
-        if update.job_title: admin_updates["job_title"] = update.job_title
         if update.exit_date is not None:
             admin_updates["is_active"] = False  # Auto-deactivate if exit date set
 
-        profile_updates = update.dict(exclude={"department", "line_manager_id", "job_title"}, exclude_unset=True)
+        profile_updates = update.dict(exclude={"full_name", "email", "department", "line_manager_id"}, exclude_unset=True)
     else:
         # Staff members may update only personal profile fields.
         allowed_self_fields = {"phone_number", "emergency_contact", "address", "bio"}
@@ -407,6 +451,20 @@ async def update_goal(goal_id: str, update: GoalUpdate, current_admin: dict = De
         raise HTTPException(status_code=400, detail="Failed to update goal")
     return res.data[0]
 
+@router.post("/goals/sync")
+async def trigger_goal_sync(month: Optional[str] = None, current_admin: dict = Depends(verify_token)):
+    """Manually trigger the background sync for goal achievement actuals."""
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+         raise HTTPException(status_code=403, detail="HR Admin only")
+         
+    from scheduler import sync_goal_actuals
+    # Run as a background task to avoid timeout
+    import asyncio
+    asyncio.create_task(sync_goal_actuals(month))
+    
+    return {"message": "Goal sync triggered successfully"}
+
 @router.post("/documents", status_code=status.HTTP_201_CREATED)
 async def upload_staff_document(doc: StaffDocumentCreate, current_admin: dict = Depends(verify_token)):
     """Log an uploaded document. HR Admin only."""
@@ -480,6 +538,7 @@ async def request_leave(req: LeaveRequestCreate, current_admin: dict = Depends(v
         "end_date": req.end_date.isoformat(),
         "days_count": req.days_count,
         "reason": req.reason,
+        "proof_url": req.proof_url,
         "status": "pending"
     }).execute())
     
@@ -971,6 +1030,8 @@ async def create_kpi_template(template: KPITemplateCreate, current_admin: dict =
         "department": template.department,
         "category": template.category,
         "description": template.description,
+        "measurement_source": template.measurement_source,
+        "default_unit": template.default_unit,
         "is_active": template.is_active,
         "created_by": current_admin["sub"]
     }).execute())
@@ -993,6 +1054,60 @@ async def update_kpi_template(template_id: str, template: KPITemplateUpdate, cur
     if not res.data:
         raise HTTPException(status_code=404, detail="KPI template not found")
     return res.data[0]
+
+@router.delete("/kpi-templates/{template_id}")
+async def delete_kpi_template(template_id: str, current_admin: dict = Depends(verify_token)):
+    """Delete a KPI template. HR only."""
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="Admin only")
+    db = get_db()
+    
+    # Check if in use
+    in_use = await db_execute(lambda: db.table("staff_goals").select("id").eq("template_id", template_id).limit(1).execute())
+    if in_use.data:
+        raise HTTPException(status_code=400, detail="Cannot delete template currently in use by staff goals.")
+        
+    await db_execute(lambda: db.table("kpi_templates").delete().eq("id", template_id).execute())
+    return {"message": "KPI template deleted"}
+
+# ─── PERFORMANCE REVIEWS ──────────────────────────────────────────────────────
+
+@router.post("/performance/review", tags=["Performance"])
+async def create_performance_review(review: PerformanceReviewCreate, current_admin: dict = Depends(verify_token)):
+    """Log a formal performance review. HR/Admin only (reviewers)."""
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin", "operations"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="Reviewer access only.")
+    
+    db = get_db()
+    data = review.dict()
+    data["reviewer_id"] = current_admin["sub"]
+    data["created_at"] = datetime.utcnow().isoformat()
+    
+    res = await db_execute(lambda: db.table("performance_reviews").insert(data).execute())
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to log review.")
+    return res.data[0]
+
+@router.get("/performance/reviews", tags=["Performance"])
+async def get_performance_reviews(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
+    """Fetch performance reviews. HR sees all. Staff sees own."""
+    db = get_db()
+    user_roles = current_admin.get("role", "").split(",")
+    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    
+    query = db.table("performance_reviews").select("*, reviewer:admins!performance_reviews_reviewer_id_fkey(full_name), staff:admins!performance_reviews_staff_id_fkey(full_name)")
+    
+    if staff_id:
+        if not is_hr and staff_id != current_admin["sub"]:
+            raise HTTPException(status_code=403, detail="You can only view your own reviews.")
+        query = query.eq("staff_id", staff_id)
+    elif not is_hr:
+        query = query.eq("staff_id", current_admin["sub"])
+        
+    res = await db_execute(lambda: query.order("review_date", desc=True).execute())
+    return res.data
 
 class IncidentCreate(BaseModel):
     staff_id: str
@@ -1200,6 +1315,7 @@ class AttendanceCheckIn(BaseModel):
     location_accuracy: Optional[float] = None   # metres
     location_status:   str = "unavailable"       # granted | denied | unavailable
     device_type:       Optional[str] = None      # resolved by frontend from UA
+    is_remote:         bool = False              # remote work flag
 
 class AttendanceCheckOut(BaseModel):
     """Payload sent on check-out."""
@@ -1207,6 +1323,7 @@ class AttendanceCheckOut(BaseModel):
     longitude:         Optional[float] = None
     location_status:   str = "unavailable"
     device_type:       Optional[str] = None
+    is_remote:         bool = False
 
 
 # ── HELPER ───────────────────────────────────────────────────────────────────
@@ -1285,15 +1402,16 @@ async def check_in(
 
     if payload.latitude and payload.longitude:
         distance = calculate_distance(payload.latitude, payload.longitude, office_lat, office_lon)
-        if distance and distance > threshold:
+        if not payload.is_remote and distance and distance > threshold:
             is_suspicious = True
             reasons.append(f"Location Outside Geofence ({int(distance)}m away)")
     else:
-        is_suspicious = True
-        reasons.append("GPS Coordinates Missing")
+        if not payload.is_remote:
+            is_suspicious = True
+            reasons.append("GPS Coordinates Missing")
 
     # Simple device check: if it's a mobile device without GPS, that's often suspicious
-    if payload.device_type == "Mobile" and not payload.latitude:
+    if payload.device_type == "Mobile" and not payload.latitude and not payload.is_remote:
          is_suspicious = True
          reasons.append("Mobile check-in without GPS")
 
@@ -1305,6 +1423,7 @@ async def check_in(
         "is_suspicious":     is_suspicious,
         "suspicious_reason": ". ".join(reasons) if reasons else None,
         "distance_meters":   distance,
+        "is_remote":         payload.is_remote,
         # location
         "latitude":          payload.latitude,
         "longitude":         payload.longitude,
@@ -1366,6 +1485,26 @@ async def check_out(
     if rec.get("check_out"):
         raise HTTPException(status_code=409, detail="Already checked out for today.")
 
+    # Geofence check for checkout
+    office_lat = os.getenv("OFFICE_LAT", "6.525737")
+    office_lon = os.getenv("OFFICE_LON", "3.372357")
+    threshold  = float(os.getenv("GEOFENCE_RADIUS_METERS", "200"))
+    
+    distance = None
+    is_suspicious = rec.get("is_suspicious", False)
+    existing_reason = rec.get("suspicious_reason", "")
+    reasons = [existing_reason] if existing_reason else []
+
+    if payload.latitude and payload.longitude:
+        distance = calculate_distance(payload.latitude, payload.longitude, office_lat, office_lon)
+        if not payload.is_remote and distance and distance > threshold:
+            is_suspicious = True
+            reasons.append(f"Check-Out Outside Geofence ({int(distance)}m away)")
+    else:
+        if not payload.is_remote:
+            is_suspicious = True
+            reasons.append("Check-Out GPS Coordinates Missing")
+
     updates = {
         "check_out":              now,
         "check_out_latitude":     payload.latitude,
@@ -1373,6 +1512,8 @@ async def check_out(
         "check_out_ip_address":   ip,
         "check_out_device_type":  payload.device_type,
         "check_out_user_agent":   ua,
+        "is_suspicious":          is_suspicious,
+        "suspicious_reason":      ". ".join(reasons) if reasons else None,
         "updated_at":             now,
     }
 
@@ -1402,4 +1543,364 @@ async def get_suspicious_attendance(current_admin: dict = Depends(verify_token))
         lambda: db.table("suspicious_attendance").select("*").execute()
     )
     return res.data
+
+@router.post("/debug/seed-kpis", tags=["HR Management"])
+async def seed_kpi_library(current_admin: dict = Depends(verify_token)):
+    """Temporary endpoint to seed professional KPI templates."""
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="Admin access required.")
+        
+    db = get_db()
+    templates = [
+        {"name": "Lead Generation", "department": "Sales & Acquisitions", "category": "Marketing", "measurement_source": "mkt_leads_added", "default_unit": "leads", "is_active": True, "description": "Counts distinct Marketing Contacts and Clients added to CRM by the staff."},
+        {"name": "Lead Conversion Rate", "department": "Sales & Acquisitions", "category": "Sales", "measurement_source": "mkt_lead_conversion", "default_unit": "%", "is_active": True, "description": "Percentage of leads converted to registered clients."},
+        {"name": "Sales Revenue (Paid)", "department": "Finance", "category": "Revenue", "measurement_source": "sales_revenue", "default_unit": "NGN", "is_active": True, "description": "Total actual revenue collected from payments attributed to staff."},
+        {"name": "Deals Closed", "department": "Sales & Acquisitions", "category": "Sales", "measurement_source": "sales_deals_closed", "default_unit": "deals", "is_active": True, "description": "Number of deal invoices marked as completed/closed."},
+        {"name": "Client Appointments", "department": "Operations", "category": "Activity", "measurement_source": "ops_appointments", "default_unit": "appts", "is_active": True, "description": "Count of successfully completed client appointments."},
+        {"name": "Support Efficiency", "department": "Human Resources", "category": "Service", "measurement_source": "admin_ticket_esc", "default_unit": "tickets", "is_active": True, "description": "Effectiveness in resolving assigned internal support tickets."}
+    ]
+    
+    results = []
+    for t in templates:
+        # Check if exists by name AND department
+        exists = await db_execute(lambda: db.table("kpi_templates").select("id").eq("name", t["name"]).eq("department", t["department"]).execute())
+        if not exists.data:
+            res = await db_execute(lambda: db.table("kpi_templates").insert(t).execute())
+            results.append(t["name"])
+            
+    return {"message": "KPI Library Seeded", "added": results}
+
+# ─── LEAVE MANAGEMENT ─────────────────────────────────────────────────────────
+
+@router.post("/leave-requests", tags=["HR Suite"])
+async def request_leave(req: LeaveRequestCreate, current_admin: dict = Depends(verify_token)):
+    """Submit a new leave request."""
+    db = get_db()
+    data = req.dict()
+    data["staff_id"] = current_admin["sub"]
+    data["status"] = "pending"
+    data["created_at"] = datetime.utcnow().isoformat()
+    # Ensure proof_url is present (req.dict() already has it if it's in the model)
+    
+    res = await db_execute(lambda: db.table("leave_requests").insert(data).execute())
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to submit leave request.")
+    return res.data[0]
+
+@router.get("/leave-requests", tags=["HR Suite"])
+async def get_leave_requests(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
+    """Fetch leave requests. HR sees all. Staff see own."""
+    db = get_db()
+    user_roles = current_admin.get("role", "").split(",")
+    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    
+    query = db.table("leave_requests").select("*, staff:admins!leave_requests_staff_id_fkey(full_name, department)")
+    
+    if staff_id:
+        if not is_hr and staff_id != current_admin["sub"]:
+            raise HTTPException(status_code=403, detail="Access denied.")
+        query = query.eq("staff_id", staff_id)
+    elif not is_hr:
+        query = query.eq("staff_id", current_admin["sub"])
+        
+    res = await db_execute(lambda: query.order("created_at", desc=True).execute())
+    return res.data
+
+@router.patch("/leave-requests/{req_id}", tags=["HR Suite"])
+async def update_leave_status(req_id: str, up: LeaveRequestUpdate, current_admin: dict = Depends(verify_token)):
+    """Approve or reject a leave request. HR only."""
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin", "operations"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="Admin only.")
+    
+    db = get_db()
+    # 1. Fetch current request to know days_count and staff_id
+    req_res = await db_execute(lambda: db.table("leave_requests").select("*").eq("id", req_id).execute())
+    if not req_res.data:
+        raise HTTPException(status_code=404, detail="Request not found.")
+    req = req_res.data[0]
+    
+    # 2. Update status
+    res = await db_execute(lambda: db.table("leave_requests").update({
+        "status": up.status,
+        "approver_id": current_admin["sub"]
+    }).eq("id", req_id).execute())
+    
+    # 3. If approved, deduct from staff_profiles quota
+    if up.status == "approved" and req["status"] != "approved":
+        await db_execute(lambda: db.rpc("deduct_leave_quota", {
+            "p_staff_id": req["staff_id"],
+            "p_days": req["days_count"]
+        }).execute())
+        
+    return res.data[0]
+
+# ─── DOCUMENTS & QUALIFICATIONS ──────────────────────────────────────────────
+
+@router.post("/documents", tags=["HR Suite"])
+async def upload_staff_document(doc: StaffDocumentCreate, current_admin: dict = Depends(verify_token)):
+    """Link an uploaded document to a staff profile. HR can upload anything; Staff can only self-upload uniquely per type."""
+    user_id = current_admin["sub"]
+    user_roles = current_admin.get("role", "").split(",")
+    is_hr = any(r in ["admin", "hr_admin"] for r in user_roles)
+    is_self = doc.staff_id == user_id
+    
+    if not (is_hr or is_self):
+        raise HTTPException(status_code=403, detail="Permission denied. You can only upload for yourself or if you are HR.")
+    
+    db = get_db()
+    
+    # Duplicate check for non-HR
+    if not is_hr:
+        existing = await db_execute(lambda: db.table("staff_documents").select("id").eq("staff_id", doc.staff_id).eq("doc_type", doc.doc_type).execute())
+        if existing.data:
+            raise HTTPException(status_code=403, detail=f"You have already uploaded a document of type '{doc.doc_type}'. Please contact HR to update it.")
+    
+    db = get_db()
+    data = doc.dict()
+    data["uploaded_by"] = current_admin["sub"]
+    data["created_at"] = datetime.utcnow().isoformat()
+    
+    res = await db_execute(lambda: db.table("staff_documents").insert(data).execute())
+    return res.data[0]
+
+@router.delete("/documents/{doc_id}", tags=["HR Suite"])
+async def delete_staff_document(doc_id: str, current_admin: dict = Depends(verify_token)):
+    """HR-only: Delete a staff document."""
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only.")
+    
+    db = get_db()
+    await db_execute(lambda: db.table("staff_documents").delete().eq("id", doc_id).execute())
+    return {"message": "Document deleted successfully"}
+
+@router.get("/staff/{staff_id}/documents", tags=["HR Suite"])
+async def get_staff_documents(staff_id: str, current_admin: dict = Depends(verify_token)):
+    """Fetch documents for a specific staff member."""
+    db = get_db()
+    res = await db_execute(lambda: db.table("staff_documents").select("*").eq("staff_id", staff_id).execute())
+    return res.data
+
+@router.post("/staff/{staff_id}/qualifications", tags=["HR Suite"])
+async def add_qualification(staff_id: str, q: StaffQualificationCreate, current_admin: dict = Depends(verify_token)):
+    """Add education or certification to a profile."""
+    db = get_db()
+    data = q.dict()
+    data["staff_id"] = staff_id
+    res = await db_execute(lambda: db.table("staff_qualifications").insert(data).execute())
+    return res.data[0]
+
+@router.get("/staff/{staff_id}/qualifications", tags=["HR Suite"])
+async def get_qualifications(staff_id: str):
+    db = get_db()
+    res = await db_execute(lambda: db.table("staff_qualifications").select("*").eq("staff_id", staff_id).execute())
+    return res.data
+
+# ─── HR ANALYTICS ────────────────────────────────────────────────────────────
+
+@router.get("/analytics/headcount", tags=["HR Suite"])
+async def get_headcount_stats(current_admin: dict = Depends(verify_token)):
+    """Fetch high-level headcount stats."""
+    db = get_db()
+    res = await db_execute(lambda: db.table("admins").select("department, role, is_active").execute())
+    
+    active_staff = [s for s in res.data if s["is_active"]]
+    stats = {
+        "total_active": len(active_staff),
+        "by_department": {},
+        "by_role": {}
+    }
+    
+    for s in active_staff:
+        dept = s.get("department") or "Unassigned"
+        role = s.get("role") or "Staff"
+        stats["by_department"][dept] = stats["by_department"].get(dept, 0) + 1
+        stats["by_role"][role] = stats["by_role"].get(role, 0) + 1
+        
+    return stats
+
+# ─── PERFORMANCE MANAGEMENT ──────────────────────────────────────────────────
+
+def compute_composite_score(goals: List[dict], reviews: List[dict]) -> dict:
+    """
+    Computes a composite performance score based on the PRD framework:
+    - Monthly Goals (40%)
+    - Work Quality (20%)
+    - Teamwork / Initiative (20% + 20%)
+    Returns a breakdown of components and the final score (0-100).
+    """
+    # 1. Goal Achievement (40%)
+    goal_avg = 0
+    if goals:
+        goal_avg = sum(g.get("achievement_pct", 0) for g in goals) / len(goals)
+    
+    # 2. Qualitative Components (From latest review)
+    # PRD uses 1-5 scale for soft skills, 0-100 for quality.
+    quality = 0
+    teamwork = 0
+    initiative = 0
+    
+    if reviews:
+        latest = reviews[0] # Assumes ordered by date desc
+        quality = float(latest.get("quality_score", 0))
+        teamwork = (float(latest.get("teamwork_score", 0)) / 5) * 100
+        initiative = (float(latest.get("leadership_score", 0)) / 5) * 100
+        
+    final_score = (goal_avg * 0.4) + (quality * 0.2) + (teamwork * 0.2) + (initiative * 0.2)
+    
+    return {
+        "score": round(final_score, 1),
+        "breakdown": {
+            "goals": round(goal_avg, 1),
+            "quality": round(quality, 1),
+            "teamwork": round(teamwork, 1),
+            "initiative": round(initiative, 1)
+        }
+    }
+
+@router.post("/staff/{staff_id}/performance/review", tags=["HR Suite"])
+async def create_performance_review(staff_id: str, rev: PerformanceReviewCreate, current_admin: dict = Depends(verify_token)):
+    """Managers or HR submit a qualitative performance review."""
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin", "line_manager"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="Managerial access only.")
+        
+    db = get_db()
+    data = rev.dict()
+    data["staff_id"] = staff_id
+    data["reviewer_id"] = current_admin["sub"]
+    data["review_period"] = rev.review_period.isoformat()
+    data["created_at"] = datetime.utcnow().isoformat()
+    
+    res = await db_execute(lambda: db.table("performance_reviews").insert(data).execute())
+    return res.data[0]
+
+@router.get("/staff/{staff_id}/performance", tags=["HR Suite"])
+async def get_staff_performance(staff_id: str, current_admin: dict = Depends(verify_token)):
+    """Fetch current month's performance score and breakdown."""
+    db = get_db()
+    today = date.today()
+    month_start = date(today.year, today.month, 1).isoformat()
+    
+    # Fetch goals for current month
+    goals_res = await db_execute(lambda: db.table("staff_goals")
+        .select("*")
+        .eq("staff_id", staff_id)
+        .gte("month", month_start)
+        .execute())
+        
+    # Fetch latest review
+    rev_res = await db_execute(lambda: db.table("performance_reviews")
+        .select("*")
+        .eq("staff_id", staff_id)
+        .order("review_period", desc=True)
+        .limit(1)
+        .execute())
+        
+    summary = compute_composite_score(goals_res.data, rev_res.data)
+    return {
+        **summary,
+        "goals": goals_res.data,
+        "review": rev_res.data[0] if rev_res.data else None
+    }
+
+@router.get("/staff/{staff_id}/performance/history", tags=["HR Suite"])
+async def get_performance_history(staff_id: str, current_admin: dict = Depends(verify_token)):
+    """Generate a 6-month historical trend of performance scores."""
+    db = get_db()
+    today = date.today()
+    history = []
+    
+    # We'll compute for the last 6 months
+    for i in range(6):
+        m_date = today - timedelta(days=i*30)
+        m_start = date(m_date.year, m_date.month, 1)
+        m_end = (m_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+        
+        # 1. Fetch goals
+        g_res = await db_execute(lambda: db.table("staff_goals")
+            .select("achievement_pct")
+            .eq("staff_id", staff_id)
+            .gte("month", m_start.isoformat())
+            .lte("month", m_end.isoformat())
+            .execute())
+            
+        # 2. Fetch review within this period or most recent prior
+        r_res = await db_execute(lambda: db.table("performance_reviews")
+            .select("*")
+            .eq("staff_id", staff_id)
+            .lte("review_period", m_end.isoformat())
+            .order("review_period", desc=True)
+            .limit(1)
+            .execute())
+            
+        scoring = compute_composite_score(g_res.data, r_res.data)
+        history.append({
+            "month": m_start.strftime("%b %Y"),
+            "score": scoring["score"]
+        })
+        
+    return history[::-1] # Chronological order
+
+# ─── DISCIPLINARY / INCIDENT LOG ──────────────────────────────────────────────
+
+@router.post("/incidents", tags=["HR Suite"])
+async def log_incident(inc: IncidentCreate, current_admin: dict = Depends(verify_token)):
+    """Log a management/disciplinary incident."""
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin", "line_manager"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="Managerial access only.")
+        
+    db = get_db()
+    data = inc.dict()
+    data["created_at"] = datetime.utcnow().isoformat()
+    # We could also track who logged it
+    
+    res = await db_execute(lambda: db.table("staff_incidents").insert(data).execute())
+    return res.data[0]
+
+@router.get("/incidents", tags=["HR Suite"])
+async def get_all_incidents(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
+    """Fetch incidents. HR sees all. Staff see own."""
+    db = get_db()
+    user_roles = current_admin.get("role", "").split(",")
+    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    
+    query = db.table("staff_incidents").select("*, staff:admins!staff_incidents_staff_id_fkey(full_name, department)")
+    
+    if staff_id:
+        if not is_hr and staff_id != current_admin["sub"]:
+            raise HTTPException(status_code=403, detail="Access denied.")
+        query = query.eq("staff_id", staff_id)
+    elif not is_hr:
+        query = query.eq("staff_id", current_admin["sub"])
+        
+    res = await db_execute(lambda: query.order("created_at", desc=True).execute())
+    return res.data
+
+@router.post("/upload", tags=["HR Suite"])
+async def upload_hr_file(request: Request, current_admin=Depends(verify_token)):
+    """Upload a file to hr-documents bucket."""
+    try:
+        form = await request.form()
+        file = next((v for v in form.values() if hasattr(v, "filename") and v.filename), None)
+        if not file: raise HTTPException(status_code=400, detail="No file found")
+
+        file_bytes = await file.read()
+        db = get_db()
+        from database import SUPABASE_URL
+        import uuid
+
+        ext = file.filename.split('.')[-1] if '.' in file.filename else ''
+        filename = f"{uuid.uuid4()}.{ext}"
+        
+        # Upload to hr-documents bucket
+        db.storage.from_("hr-documents").upload(path=filename, file=file_bytes, file_options={"content-type": file.content_type})
+        file_url = f"{SUPABASE_URL}/storage/v1/object/public/hr-documents/{filename}"
+        
+        return {"url": file_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=str(e))
 
