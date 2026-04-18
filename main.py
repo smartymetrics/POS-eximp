@@ -35,9 +35,10 @@ from routers import (
     revenue_intelligence,
     scheduling,
     notifications,
-    ws_support,
     subscriptions,
-    hr
+    hr,
+    hr_legal,
+    ws_support
 )
 from routers.auth import require_roles, resolve_admin_token
 from database import init_db
@@ -99,6 +100,7 @@ app.include_router(notifications.router, prefix="/api/notifications", tags=["not
 app.include_router(ws_support.router, prefix="/api", tags=["live-chat"])
 app.include_router(subscriptions.router, tags=["subscriptions"])
 app.include_router(hr.router, tags=["hr"])
+app.include_router(hr_legal.router, prefix="/api/hr-legal", tags=["hr-legal"])
 
 
 
@@ -181,6 +183,11 @@ async def legal_dashboard_page(request: Request):
 @app.get("/legal/editor", response_class=HTMLResponse)
 async def legal_editor_page(request: Request, id: str):
     return templates.TemplateResponse("legal_editor.html", {"request": request, "invoice_id": id})
+
+
+@app.get("/legal/advanced-editor", response_class=HTMLResponse)
+async def legal_advanced_editor_page(request: Request, id: str = None):
+    return templates.TemplateResponse("personnel_editor.html", {"request": request, "matter_id": id})
 
 
 @app.get("/legal/manual", response_class=HTMLResponse)

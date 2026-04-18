@@ -1,0 +1,430 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Personnel Studio | Eximp &amp; Cloves</title>
+  <link
+    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap"
+    rel="stylesheet">
+  <link href="https://unpkg.com/grapesjs/dist/css/grapes.min.css" rel="stylesheet">
+  <script src="https://unpkg.com/grapesjs"></script>
+  <script src="https://unpkg.com/grapesjs-preset-newsletter"></script>
+  <script src="https://cdn.tailwindcss.com"></script>
+  <script>
+    tailwind.config = {
+      theme: {
+        extend: {
+          colors: {
+            brand: {
+              gold: '#C47D0A',
+              dark: '#111111',
+              card: '#1A1A1A'
+            }
+          }
+        }
+      }
+    }
+  </script>
+  <style>
+    *,
+    *::before,
+    *::after {
+      box-sizing: border-box;
+    }
+
+    body,
+    html {
+      height: 100%;
+      margin: 0;
+      overflow: hidden;
+      background: #111;
+      font-family: 'Inter', sans-serif;
+    }
+
+    #gjs {
+      border: none;
+      height: calc(100vh - 60px) !important;
+    }
+
+    .editor-top-bar {
+      min-height: 60px;
+      background: #1A1A1A;
+      color: white;
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      padding: 10px 20px;
+      border-bottom: 2px solid #C47D0A;
+      position: relative;
+      z-index: 9999;
+      flex-wrap: wrap;
+      gap: 12px;
+    }
+
+    .brand-logo {
+      color: #C47D0A;
+      font-weight: 700;
+      font-size: 1.1rem;
+      letter-spacing: 0.05em;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+    }
+
+    .top-actions {
+      display: flex;
+      align-items: center;
+      gap: 8px;
+    }
+
+    .btn {
+      background: #C47D0A;
+      color: white;
+      border: none;
+      padding: 8px 16px;
+      border-radius: 5px;
+      cursor: pointer;
+      font-weight: 600;
+      font-size: 0.85rem;
+      transition: 0.2s;
+      white-space: nowrap;
+    }
+
+    .btn:hover {
+      background: #A66908;
+    }
+
+    .btn-outline {
+      background: transparent;
+      border: 1.5px solid #C47D0A;
+      color: #C47D0A;
+    }
+
+    .btn-gray {
+      background: #333;
+      border: 1px solid #444;
+      color: #ccc;
+    }
+
+    /* ── MODALS ── */
+    .modal-overlay {
+      position: fixed;
+      inset: 0;
+      background: rgba(0, 0, 0, 0.85);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      z-index: 99999;
+    }
+
+    .modal-overlay.hidden {
+      display: none;
+    }
+
+    .modal-box {
+      background: #1a1a1a;
+      border-radius: 14px;
+      width: 90vw;
+      max-width: 600px;
+      max-height: 88vh;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+      border: 1px solid #333;
+    }
+
+    .modal-header {
+      padding: 24px 28px 16px;
+      border-bottom: 1px solid #2a2a2a;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+    }
+
+    .modal-header h2 {
+      color: white;
+      font-family: 'Playfair Display', serif;
+      font-size: 1.5rem;
+      margin: 0;
+    }
+
+    .modal-close {
+      background: none;
+      border: none;
+      color: #666;
+      font-size: 1.5rem;
+      cursor: pointer;
+    }
+
+    .modal-body {
+      overflow-y: auto;
+      padding: 24px 28px;
+      flex: 1;
+    }
+
+    .tag-item {
+      background: #222;
+      border: 1px solid #333;
+      padding: 12px;
+      border-radius: 8px;
+      display: flex;
+      justify-content: space-between;
+      align-items: center;
+      margin-bottom: 10px;
+    }
+
+    .tag-code {
+      color: #C47D0A;
+      font-family: monospace;
+      font-weight: 700;
+    }
+
+    .copy-btn {
+      background: #333;
+      color: #C47D0A;
+      border: 1px solid #C47D0A;
+      padding: 4px 10px;
+      border-radius: 4px;
+      font-size: 0.75rem;
+      cursor: pointer;
+    }
+
+    /* GrapesJS Customization */
+    .gjs-pn-panel {
+      background: #1a1a1a !important;
+    }
+  </style>
+</head>
+
+<body>
+
+  <!-- TOP BAR -->
+  <div class="editor-top-bar">
+    <div class="brand-logo">
+      <img src="/static/logo.svg" alt="Eximp & Cloves" style="height: 32px;" onerror="this.style.display='none'">
+      <span>Personnel Studio</span>
+    </div>
+    <div class="top-actions">
+      <div class="flex items-center gap-2">
+        <span class="text-xs text-gray-500 uppercase font-bold shrink-0">Case Title:</span>
+        <input type="text" id="case-title"
+          class="bg-[#222] border border-[#333] text-sm px-3 py-1.5 rounded w-[260px] outline-none focus:border-brand-gold text-white"
+          placeholder="e.g. Offer Letter - John Doe">
+      </div>
+      <div class="flex items-center gap-2">
+        <button class="btn btn-gray" onclick="openTags()">🏷️ Smart Tags</button>
+        <button class="btn btn-gray" onclick="openClauses()">📋 Clause Library</button>
+        <button class="btn btn-outline" id="manage-collaborators">👥 Permissions</button>
+        <button class="btn" id="save-draft">💾 Save Draft</button>
+        <button class="btn btn-gray" onclick="window.history.back()">← Back</button>
+      </div>
+    </div>
+  </div>
+
+  <!-- CANVAS -->
+  <div id="gjs"></div>
+
+  <!-- SMART TAGS MODAL -->
+  <div id="tags-modal" class="modal-overlay hidden">
+    <div class="modal-box">
+      <div class="modal-header">
+        <div>
+          <h2>Smart Intelligence Tags</h2>
+          <p class="text-gray-500 text-xs mt-1">Copy and paste these into your draft to auto-populate data.</p>
+        </div>
+        <button class="modal-close" onclick="closeTags()">✕</button>
+      </div>
+      <div class="modal-body">
+        <div class="space-y-2">
+          <div class="text-xs font-bold text-brand-gold uppercase tracking-widest mb-2">Personnel Metadata</div>
+          <div class="tag-item">
+            <div>
+              <div class="tag-code">{{full_name}}</div>
+              <div class="text-[10px] text-gray-500">Staff full name</div>
+            </div>
+            <button class="copy-btn" onclick="copyTag('{{full_name}}')">Copy</button>
+          </div>
+          <div class="tag-item">
+            <div>
+              <div class="tag-code">{{monthly_salary}}</div>
+              <div class="text-[10px] text-gray-500">Net monthly pay</div>
+            </div>
+            <button class="copy-btn" onclick="copyTag('{{monthly_salary}}')">Copy</button>
+          </div>
+          <div class="tag-item">
+            <div>
+              <div class="tag-code">{{job_title}}</div>
+              <div class="text-[10px] text-gray-500">Designation</div>
+            </div>
+            <button class="copy-btn" onclick="copyTag('{{job_title}}')">Copy</button>
+          </div>
+          <hr class="border-gray-800 my-4">
+          <div class="text-xs font-bold text-blue-400 uppercase tracking-widest mb-2">Real Estate Context</div>
+          <div class="tag-item">
+            <div>
+              <div class="tag-code">{{property_name}}</div>
+              <div class="text-[10px] text-gray-500">Land or Estate Name</div>
+            </div>
+            <button class="copy-btn" onclick="copyTag('{{property_name}}')">Copy</button>
+          </div>
+          <div class="tag-item">
+            <div>
+              <div class="tag-code">{{plot_size}}</div>
+              <div class="text-[10px] text-gray-500">Dimensions in sqm</div>
+            </div>
+            <button class="copy-btn" onclick="copyTag('{{plot_size}}')">Copy</button>
+          </div>
+        </div>
+      </div>
+    </div>
+  </div>
+
+  <script>
+    const editor = grapesjs.init({
+      container: '#gjs',
+      fromElement: true,
+      height: '100%',
+      storageManager: false,
+      plugins: ['gjs-preset-newsletter'],
+      pluginsOpts: {
+        'gjs-preset-newsletter': {
+          modalTitleImport: 'Import Template',
+        }
+      }
+    });
+
+    // ── CUSTOM BLOCKS (Real Estate/Legal Focused) ──
+    const bm = editor.BlockManager;
+
+    bm.add('letterhead-classic', {
+      label: 'Standard Letterhead',
+      category: 'Header & Footer',
+      content: `
+        <table width="100%" cellpadding="0" cellspacing="0" style="border-bottom: 3px solid #C47D0A; padding-bottom: 20px; font-family: 'Inter', sans-serif;">
+          <tr>
+            <td width="30%" align="left">
+               <img src="https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/marketing/logo_dark.svg" style="height: 60px;">
+            </td>
+            <td width="70%" align="right" style="color: #666; font-size: 10px; line-height: 1.5;">
+              <strong>EXIMP & CLOVES INFRASTRUCTURE LIMITED</strong><br>
+              57B, Isaac John Street, Yaba, Lagos<br>
+              www.eximps-cloves.com | legal@eximps-cloves.com
+            </td>
+          </tr>
+        </table>
+      `
+    });
+
+    bm.add('legal-clause', {
+      label: 'Legal Section',
+      category: 'Components',
+      content: `
+        <div style="padding: 20px 0; font-family: 'Inter', sans-serif;">
+            <h3 style="font-size: 14px; color: #111; text-transform: uppercase; margin-bottom: 10px;">1. TITLE OF SECTION</h3>
+            <p style="font-size: 13px; color: #444; line-height: 1.6;">
+              This is a standard legal clause placeholder. You can double click to edit the text or drag in specific clauses from the library.
+            </p>
+        </div>
+      `
+    });
+
+    bm.add('signatory-block', {
+      label: 'Signing Zone',
+      category: 'Components',
+      content: `
+        <table width="100%" style="margin-top: 40px; font-family: 'Inter', sans-serif;">
+          <tr>
+            <td width="45%" style="border-top: 1px solid #111; padding-top: 10px;">
+              <div style="font-size: 12px; font-weight: bold;">FOR: EXIMP & CLOVES INFRASTRUCTURE</div>
+              <div style="font-size: 10px; margin-top: 5px; color: #666;">AUTHORISED SIGNATORY</div>
+            </td>
+            <td width="10%"></td>
+            <td width="45%" style="border-top: 1px solid #111; padding-top: 10px;">
+              <div style="font-size: 12px; font-weight: bold;">AGREED BY: {{full_name}}</div>
+              <div style="font-size: 10px; margin-top: 5px; color: #666;">RECEIVING PARTY</div>
+            </td>
+          </tr>
+        </table>
+      `
+    });
+
+    // ── DATA SYNC ──
+    const urlParams = new URLSearchParams(window.location.search);
+    const matterId = urlParams.get('id');
+    const API_BASE = '/api/hr-legal';
+
+    async function loadMatter() {
+      if (!matterId) return;
+      try {
+        const res = await fetch(`${API_BASE}/matters/${matterId}`, {
+          headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+        });
+        const data = await res.json();
+        const matter = data.matter;
+        
+        document.getElementById('case-title').value = matter.title;
+        
+        if (matter.content_html) {
+          editor.setComponents(matter.content_html);
+        }
+        if (matter.content_css) {
+          editor.setStyle(matter.content_css);
+        }
+      } catch (err) { console.error('Load error:', err); }
+    }
+
+    async function saveDraft() {
+        const btn = document.getElementById('save-draft');
+        const title = document.getElementById('case-title').value;
+        const html = editor.getHtml();
+        const css = editor.getCss();
+
+        btn.innerText = 'Saving...';
+        btn.disabled = true;
+
+        try {
+            const res = await fetch(`${API_BASE}/matters/${matterId}/save`, {
+                method: 'PATCH',
+                headers: {
+                    'Content-Type': 'application/json',
+                    'Authorization': `Bearer ${localStorage.getItem('ec_token')}`
+                },
+                body: JSON.stringify({ title, html, css })
+            });
+
+            if (res.ok) {
+                btn.innerText = 'Saved ✓';
+                setTimeout(() => {
+                    btn.innerText = 'Save Draft';
+                    btn.disabled = false;
+                }, 2000);
+            } else {
+                alert('Save failed');
+                btn.innerText = 'Save Draft';
+                btn.disabled = false;
+            }
+        } catch (err) { 
+            alert('Connection error'); 
+            btn.innerText = 'Save Draft';
+            btn.disabled = false;
+        }
+    }
+
+    document.getElementById('save-draft').addEventListener('click', saveDraft);
+
+    // Initial Load
+    loadMatter();
+
+    // ── MODAL LOGIC ──
+    function openTags() { document.getElementById('tags-modal').classList.remove('hidden'); }
+    function closeTags() { document.getElementById('tags-modal').classList.add('hidden'); }
+    function copyTag(tag) {
+      navigator.clipboard.writeText(tag);
+      alert('Tag copied: ' + tag);
+    }
+  </script>
+</body>
+
+</html>

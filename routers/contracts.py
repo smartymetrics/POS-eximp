@@ -1548,3 +1548,37 @@ async def get_legal_activity(limit: int = 15, current_admin=Depends(verify_token
         .execute())
         
     return result.data
+    await db_execute(lambda: db.table("company_signatures").update({"is_active": False}).eq("id", sig_id).execute())
+    
+    await log_activity(
+        "authority_signature_deactivated",
+        f"Authority signature {sig_id} deactivated",
+        current_admin["sub"]
+    )
+    return {"message": "Signature deactivated"}
+
+@router.get("/activity")
+async def get_legal_activity(limit: int = 15, current_admin=Depends(verify_token)):
+    """Fetch recent contract-related activity logs for the dashboard."""
+    if not has_any_role(current_admin, "admin", "lawyer", "legal"):
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    db = get_db()
+    # Filter for contract-related events
+    legal_events = [
+        "contract_created", "contract_signed", "contract_executed", 
+        "witness_signed", "witness_added", "contract_extended", 
+        "lawyer_seal_uploaded", "authority_signature_uploaded",
+        "client_signed_contract", "manual_client_contract_signed",
+        "contract_initiated", "contract_wording_updated", "witness_removed",
+        "signature_updated", "signature_deactivated", "authority_signature_deactivated"
+    ]
+    
+    result = await db_execute(lambda: db.table("activity_log")\
+        .select("*, admins(full_name)")\
+        .in_("event_type", legal_events)\
+        .order("created_at", desc=True)\
+        .limit(limit)\
+        .execute())
+        
+    return result.data

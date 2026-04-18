@@ -593,6 +593,20 @@
                     </svg>
                     Legal Dashboard
                 </div>
+                <!-- Personnel Matters Integration -->
+                <div class="nav-link" onclick="switchTab('personnel-matters')">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    </svg>
+                    Personnel Matters
+                </div>
+                <!-- External Legal Integration -->
+                <div class="nav-link" onclick="switchTab('external-legal')">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    </svg>
+                    External Legal
+                </div>
                 <div class="nav-link" onclick="switchTab('execution-portal')">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -657,7 +671,8 @@
                     </div>
                 </div>
                 <button onclick="window.location.href='/hr'"
-                    class="w-full py-2 text-xs font-bold text-gray-400 hover:text-brand-gold transition mb-2">👥 HR & Personnel Portal</button>
+                    class="w-full py-2 text-xs font-bold text-gray-400 hover:text-brand-gold transition mb-2">👥 HR &
+                    Personnel Portal</button>
                 <button onclick="logout()"
                     class="w-full py-2 text-xs font-bold text-gray-400 hover:text-white transition">Sign Out</button>
             </div>
@@ -930,6 +945,60 @@
             </div>
         </section>
 
+        <!-- Tab: Personnel Matters -->
+        <section id="tab-personnel-matters" class="tab-content hidden">
+            <header class="flex items-center justify-between mb-12">
+                <div>
+                    <h2 class="font-serif text-4xl mb-2">Personnel Matters</h2>
+                    <p class="text-gray-500">Legal agreements and offer letters for Eximp & Cloves staff.</p>
+                </div>
+                <button onclick="openInitiateModal('Staff')" class="bg-brand-gold text-white px-8 py-3 rounded-xl font-bold hover:brightness-110 transition shadow-lg shadow-brand-gold/20">+ Initiate Personnel Matter</button>
+            </header>
+            <div class="card overflow-hidden !p-0">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="bg-[#1A1C20] border-b border-[#2D2F36]">
+                            <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Matter ID</th>
+                            <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Employee</th>
+                            <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Status</th>
+                            <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Drafter</th>
+                            <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="personnelTableBody">
+                        <tr><td colspan="5" class="p-12 text-center text-gray-500 italic">Connecting to Personnel Vault...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
+        <!-- Tab: External Legal -->
+        <section id="tab-external-legal" class="tab-content hidden">
+            <header class="flex items-center justify-between mb-12">
+                <div>
+                    <h2 class="font-serif text-4xl mb-2">External Legal</h2>
+                    <p class="text-gray-500">Commercial agreements, Land Deeds, and Vendor contracts.</p>
+                </div>
+                <button onclick="openInitiateModal('External')" class="bg-brand-gold text-white px-8 py-3 rounded-xl font-bold hover:brightness-110 transition shadow-lg shadow-brand-gold/20">+ New External Case</button>
+            </header>
+            <div class="card overflow-hidden !p-0">
+                <table class="w-full text-left">
+                    <thead>
+                        <tr class="bg-[#1A1C20] border-b border-[#2D2F36]">
+                            <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Matter ID</th>
+                            <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Party</th>
+                            <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Type</th>
+                            <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Status</th>
+                            <th class="px-6 py-4 text-xs font-bold text-gray-500 uppercase">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="externalTableBody">
+                        <tr><td colspan="5" class="p-12 text-center text-gray-500 italic">Loading external matters...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </section>
+
         <!-- Tab: Legal Archive -->
         <section id="tab-archive" class="tab-content hidden">
             <header class="mb-12">
@@ -1076,46 +1145,92 @@
         </div>
     </div>
 
+    <!-- Initiation Modal -->
+    <div id="initiateModal" class="fixed inset-0 z-[150] flex items-center justify-center bg-black/90 backdrop-blur-sm hidden">
+        <div class="card w-full max-w-lg border-brand-gold shadow-[0_0_50px_rgba(196,125,10,0.3)]">
+            <div class="flex justify-between items-center mb-8">
+                <div>
+                    <h3 class="font-serif text-2xl text-white">Initiate Legal Matter</h3>
+                    <p class="text-gray-500 text-xs mt-1">Starting a high-fidelity drafting session.</p>
+                </div>
+                <button onclick="closeInitiateModal()" class="text-gray-500 hover:text-white transition">✕</button>
+            </div>
+            <div class="space-y-6">
+                <div>
+                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Matter Category</label>
+                    <select id="initiate-category" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-brand-gold">
+                        <option value="Staff" class="bg-[#111]">Personnel (Staff & HR)</option>
+                        <option value="External" class="bg-[#111]">External (Land & Construction)</option>
+                    </select>
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Subject / Title</label>
+                    <input type="text" id="initiate-title" placeholder="e.g. Employment Contract - John Doe" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-brand-gold text-sm">
+                </div>
+                <div id="party-fields">
+                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Party Name / Employee Name</label>
+                    <input type="text" id="initiate-party-name" placeholder="Full Legal Name" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-brand-gold text-sm">
+                </div>
+                <div>
+                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Party Email</label>
+                    <input type="email" id="initiate-party-email" placeholder="email@example.com" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-brand-gold text-sm">
+                </div>
+            </div>
+            <div class="flex gap-4 mt-10">
+                <button onclick="closeInitiateModal()" class="flex-1 py-3 bg-white/5 rounded-xl font-bold hover:bg-white/10 transition text-sm">Discard</button>
+                <button onclick="submitInitiate()" class="flex-1 py-3 bg-brand-gold text-white rounded-xl font-bold hover:brightness-110 transition shadow-lg text-sm">Start Drafting Session</button>
+            </div>
+        </div>
     <!-- Execution Modal -->
     <div id="executionModal" class="fixed inset-0 z-[120] flex items-center justify-center bg-black/90 backdrop-blur-sm hidden">
-        <div class="card w-full max-w-2xl bg-[#1E2128] shadow-[0_0_50px_rgba(196,125,10,0.2)] rounded-2xl border border-brand-gold max-h-[90vh] overflow-y-auto !p-0">
+        <div
+            class="card w-full max-w-2xl bg-[#1E2128] shadow-[0_0_50px_rgba(196,125,10,0.2)] rounded-2xl border border-brand-gold max-h-[90vh] overflow-y-auto !p-0">
             <div class="sticky top-0 bg-[#1E2128] p-6 border-b border-[#2D2F36] z-10 flex justify-between items-center">
                 <div>
                     <h3 class="font-serif text-2xl text-white">Seal & Execute</h3>
                     <p class="text-gray-400 text-sm">Choose your preferred execution method.</p>
                 </div>
-                <button onclick="closeExecutionModal()" class="text-gray-500 hover:text-white transition w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/5">✕</button>
+                <button onclick="closeExecutionModal()"
+                    class="text-gray-500 hover:text-white transition w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/5">✕</button>
             </div>
-            
+
             <div class="p-6 space-y-8">
                 <!-- Option 1: Digital Sealing -->
                 <div class="p-6 bg-white/5 border border-white/10 rounded-2xl">
                     <h4 class="text-brand-gold font-bold mb-2">Option 1: Digital Execution</h4>
-                    <p class="text-xs text-gray-400 mb-4 tracking-wide leading-relaxed">Automatically append the firm's digital seal and signatures from the vault. This is the fastest method.</p>
-                    
+                    <p class="text-xs text-gray-400 mb-4 tracking-wide leading-relaxed">Automatically append the firm's
+                        digital seal and signatures from the vault. This is the fastest method.</p>
+
                     <div class="space-y-4 mb-6">
-                        <label class="flex items-center justify-between p-4 bg-black/20 rounded-xl cursor-pointer hover:bg-black/30 transition">
+                        <label
+                            class="flex items-center justify-between p-4 bg-black/20 rounded-xl cursor-pointer hover:bg-black/30 transition">
                             <p class="text-sm font-bold">Include Audit Certificate</p>
                             <input type="checkbox" id="sendCertToggle" checked class="w-5 h-5 accent-brand-gold">
                         </label>
                         <div class="p-4 bg-black/20 rounded-xl">
                             <p class="text-sm font-bold text-gray-300 mb-2">Override Global Seal (Optional)</p>
-                            <p class="text-[10px] text-gray-500 mb-3 tracking-wide">Upload a specific seal to override the global firm vault seal for this contract only.</p>
-                            <input type="file" id="customSealFile" accept="image/*" class="w-full bg-black/40 border border-white/5 rounded-lg px-3 py-2 text-xs text-gray-300 focus:outline-none">
+                            <p class="text-[10px] text-gray-500 mb-3 tracking-wide">Upload a specific seal to override
+                                the global firm vault seal for this contract only.</p>
+                            <input type="file" id="customSealFile" accept="image/*"
+                                class="w-full bg-black/40 border border-white/5 rounded-lg px-3 py-2 text-xs text-gray-300 focus:outline-none">
                         </div>
                     </div>
-                    
-                    <button id="confirmExecuteBtn" onclick="executeContract()" class="w-full py-3 bg-brand-gold text-white rounded-xl font-bold shadow-[0_4px_15px_rgba(196,125,10,0.3)] hover:brightness-110 transition text-sm">
+
+                    <button id="confirmExecuteBtn" onclick="executeContract()"
+                        class="w-full py-3 bg-brand-gold text-white rounded-xl font-bold shadow-[0_4px_15px_rgba(196,125,10,0.3)] hover:brightness-110 transition text-sm">
                         DIGITALLY EXECUTE & SEND
                     </button>
                 </div>
 
                 <!-- Option 2: External Sealing (Wet Signature/External Software) -->
                 <div class="p-6 bg-white/5 border border-brand-gold/30 rounded-2xl relative overflow-hidden">
-                    <div class="absolute top-0 right-0 bg-brand-gold text-black text-[9px] font-bold px-3 py-1 rounded-bl-lg uppercase tracking-widest">New Workflow</div>
+                    <div
+                        class="absolute top-0 right-0 bg-brand-gold text-black text-[9px] font-bold px-3 py-1 rounded-bl-lg uppercase tracking-widest">
+                        New Workflow</div>
                     <h4 class="text-white font-bold mb-2">Option 2: External Sealing Workflow</h4>
-                    <p class="text-xs text-gray-400 mb-6 tracking-wide leading-relaxed">Download a clean copy, seal it externally (e.g., wet seal or specialized software), and upload the finalized version.</p>
-                    
+                    <p class="text-xs text-gray-400 mb-6 tracking-wide leading-relaxed">Download a clean copy, seal it
+                        externally (e.g., wet seal or specialized software), and upload the finalized version.</p>
+
                     <div class="space-y-4 relative z-10">
                         <!-- Step 1: Download -->
                         <div class="flex items-center justify-between p-4 bg-black/40 rounded-xl border border-white/5">
@@ -1123,9 +1238,10 @@
                                 <p class="text-sm font-bold text-gray-200">1. Clean PDF</p>
                                 <p class="text-[10px] text-gray-500">Download without 'Draft' watermark.</p>
                             </div>
-                            <button onclick="downloadSealingPDF()" class="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold transition">Download</button>
+                            <button onclick="downloadSealingPDF()"
+                                class="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold transition">Download</button>
                         </div>
-                        
+
                         <!-- Step 2: Upload -->
                         <div class="p-4 bg-black/40 rounded-xl border border-white/5">
                             <div class="flex items-center justify-between mb-3">
@@ -1133,21 +1249,27 @@
                                     <p class="text-sm font-bold text-brand-gold">2. Upload Sealed Copy</p>
                                     <p class="text-[10px] text-gray-500">Upload the externally sealed PDF.</p>
                                 </div>
-                                <span id="sealedUploadStatus" class="hidden text-[10px] font-bold bg-green-900/50 text-green-400 px-2 py-1 rounded">ATTACHED ✓</span>
+                                <span id="sealedUploadStatus"
+                                    class="hidden text-[10px] font-bold bg-green-900/50 text-green-400 px-2 py-1 rounded">ATTACHED
+                                    ✓</span>
                             </div>
                             <div class="flex gap-2">
-                                <input type="file" id="sealedPdfFile" accept="application/pdf" class="flex-1 bg-white/5 border border-white/5 rounded-lg px-3 py-2 text-xs text-gray-300 focus:outline-none">
-                                <button id="uploadSealedBtn" onclick="uploadSealedPDF()" class="px-4 py-2 bg-brand-gold/20 hover:bg-brand-gold/40 text-brand-gold rounded-lg text-xs font-bold transition whitespace-nowrap">Upload</button>
+                                <input type="file" id="sealedPdfFile" accept="application/pdf"
+                                    class="flex-1 bg-white/5 border border-white/5 rounded-lg px-3 py-2 text-xs text-gray-300 focus:outline-none">
+                                <button id="uploadSealedBtn" onclick="uploadSealedPDF()"
+                                    class="px-4 py-2 bg-brand-gold/20 hover:bg-brand-gold/40 text-brand-gold rounded-lg text-xs font-bold transition whitespace-nowrap">Upload</button>
                             </div>
                         </div>
 
                         <!-- Step 3: Send -->
-                         <div class="flex items-center justify-between p-4 bg-black/40 rounded-xl border border-white/5">
+                        <div class="flex items-center justify-between p-4 bg-black/40 rounded-xl border border-white/5">
                             <div>
                                 <p class="text-sm font-bold text-gray-200">3. Finalize</p>
                                 <p class="text-[10px] text-gray-500">Email sealed PDF + certificate.</p>
                             </div>
-                            <button id="sendSealedBtn" onclick="sendSealedPDF()" disabled class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition disabled:opacity-30 disabled:cursor-not-allowed">Finalize & Send</button>
+                            <button id="sendSealedBtn" onclick="sendSealedPDF()" disabled
+                                class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition disabled:opacity-30 disabled:cursor-not-allowed">Finalize
+                                & Send</button>
                         </div>
                     </div>
                 </div>
@@ -1161,6 +1283,7 @@
         let velocityChart = null;
         let allContracts = [];
         const API_BASE = '/api/contracts';
+        const HR_LEGAL_API = '/api/hr-legal';
 
         // --- MOBILE NAV ---
         function openMobileNav() {
@@ -1191,8 +1314,57 @@
                 fetchExecutionTrends();
             }
             if (tabId === 'execution-portal') fetchContracts();
+            if (tabId === 'personnel-matters') fetchPersonnelMatters();
+            if (tabId === 'external-legal') fetchExternalLegal();
             if (tabId === 'signature-vault') loadAuthorities();
             if (tabId === 'archive') fetchArchive();
+        }
+
+        async function fetchPersonnelMatters() {
+            try {
+                const res = await fetch(`${HR_LEGAL_API}/matters?category=Staff`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                });
+                const data = await res.json();
+                renderMatterTable(data, 'personnelTableBody');
+            } catch (err) { console.error('Personnel fetch error:', err); }
+        }
+
+        async function fetchExternalLegal() {
+            try {
+                const res = await fetch(`${HR_LEGAL_API}/matters?category=External`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                });
+                const data = await res.json();
+                renderMatterTable(data, 'externalTableBody');
+            } catch (err) { console.error('External fetch error:', err); }
+        }
+
+        function renderMatterTable(data, tableId) {
+            const body = document.getElementById(tableId);
+            if (!data || data.length === 0) {
+                body.innerHTML = '<tr><td colspan="5" class="p-12 text-center text-gray-500 italic">No matters found. Click "Initiate" to start.</td></tr>';
+                return;
+            }
+            body.innerHTML = data.map(m => `
+                <tr class="border-b border-[#2D2F36] hover:bg-white/5 transition group">
+                    <td class="px-6 py-4 text-xs font-mono text-brand-gold">${m.id.split('-')[0]}...</td>
+                    <td class="px-6 py-4">
+                        <p class="text-sm font-bold text-white">${m.external_party_name || m.title}</p>
+                        <p class="text-[10px] text-gray-500">${m.category}</p>
+                    </td>
+                    <td class="px-6 py-4">
+                        <span class="status-badge ${m.status === 'Executed' ? 'status-completed' : 'status-pending'}">${m.status}</span>
+                    </td>
+                    <td class="px-6 py-4 text-xs text-gray-400">Admin</td>
+                    <td class="px-6 py-4">
+                        <div class="flex gap-2">
+                            <button onclick="window.location.href='/legal/advanced-editor?id=${m.id}'" class="p-2 bg-brand-gold/10 text-brand-gold rounded hover:bg-brand-gold/20" title="Open Editor">✏️</button>
+                            <button class="p-2 bg-white/5 text-gray-400 rounded hover:bg-white/10" title="View Audit">📜</button>
+                        </div>
+                    </td>
+                </tr>
+            `).join('');
         }
 
         async function fetchSummary() {
@@ -1921,7 +2093,7 @@
             document.getElementById('customSealFile').value = '';
             document.getElementById('sealedPdfFile').value = '';
             document.getElementById('sealedUploadStatus').classList.add('hidden');
-            
+
             const sendBtn = document.getElementById('sendSealedBtn');
             sendBtn.disabled = true;
             sendBtn.classList.add('opacity-30', 'cursor-not-allowed');
@@ -2019,7 +2191,7 @@
             const btn = document.getElementById('sendSealedBtn');
             btn.innerText = 'Sending...';
             btn.disabled = true;
-            
+
             const sendCert = document.getElementById('sendCertToggle').checked;
 
             try {
@@ -2155,6 +2327,51 @@
             fetchExecutionTrends();
             setInterval(fetchActivity, 60000);
         };
+
+        // --- INITIATION LOGIC ---
+        function openInitiateModal(category) {
+            if (category) {
+                document.getElementById('initiate-category').value = category;
+            }
+            document.getElementById('initiateModal').classList.remove('hidden');
+        }
+
+        function closeInitiateModal() {
+            document.getElementById('initiateModal').classList.add('hidden');
+        }
+
+        async function submitInitiate() {
+            const category = document.getElementById('initiate-category').value;
+            const title = document.getElementById('initiate-title').value;
+            const partyName = document.getElementById('initiate-party-name').value;
+            const partyEmail = document.getElementById('initiate-party-email').value;
+
+            if (!title || !partyName) return alert('Subject and Party Name are required');
+
+            try {
+                const res = await fetch(`${HR_LEGAL_API}/initiate`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('ec_token')}`
+                    },
+                    body: JSON.stringify({
+                        category,
+                        title,
+                        external_party_name: partyName,
+                        external_party_email: partyEmail
+                    })
+                });
+
+                if (res.ok) {
+                    const matter = await res.json();
+                    window.location.href = `/legal/advanced-editor?id=${matter.id}`;
+                } else {
+                    const err = await res.json();
+                    alert(err.detail || 'Failed to initiate matter');
+                }
+            } catch (err) { alert('Connection error'); }
+        }
     </script>
 
     <!-- Mobile Bottom Tab Bar (only visible on small screens) -->
