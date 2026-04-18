@@ -9,7 +9,7 @@ CREATE TABLE IF NOT EXISTS legal_matters (
     category TEXT NOT NULL DEFAULT 'General', -- 'Staff', 'Land', 'Construction', 'External'
     status TEXT NOT NULL DEFAULT 'Draft', -- 'Draft', 'Internal Review', 'Pending Signature', 'Executed', 'Archive'
     drafter_id UUID REFERENCES public.admins(id),
-    staff_id UUID REFERENCES public.staff_profiles(id), -- Optional: Link if it's a personnel matter
+    staff_id UUID REFERENCES public.admins(id), -- Changed to reference admins(id) for consistency
     external_party_name TEXT, -- For Land/Construction
     external_party_email TEXT,
     priority TEXT DEFAULT 'Normal', -- 'Low', 'Normal', 'Critical'
@@ -84,6 +84,10 @@ ALTER TABLE public.staff_profiles ADD COLUMN IF NOT EXISTS archived_legal_docs J
 ALTER TABLE legal_matters ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT 'Normal';
 ALTER TABLE legal_matters ADD COLUMN IF NOT EXISTS hr_memo TEXT;
 ALTER TABLE legal_matters ADD COLUMN IF NOT EXISTS legal_memo TEXT;
+
+-- 9. Fix Staff ID Foreign Key (Mismatch fix)
+ALTER TABLE legal_matters DROP CONSTRAINT IF EXISTS legal_matters_staff_id_fkey;
+ALTER TABLE legal_matters ADD CONSTRAINT legal_matters_staff_id_fkey FOREIGN KEY (staff_id) REFERENCES public.admins(id);
 
 -- ==========================================
 -- PRE-LOAD GOLD STANDARD CLAUSES
