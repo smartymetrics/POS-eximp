@@ -57,17 +57,14 @@
         const API_BASE = '/api/hr-legal';
         const matterId = new URLSearchParams(window.location.search).get('id');
 
-        const CustomOrderedList = OrderedList.extend({
+        const LegalOrderedList = OrderedList.extend({
             name: 'orderedList',
             addAttributes() {
                 return {
-                    listStyleType: {
-                        default: 'decimal',
-                        parseHTML: el => el.style.listStyleType || el.getAttribute('data-list-type') || 'decimal',
-                        renderHTML: attrs => ({ 
-                            'data-list-type': attrs.listStyleType, 
-                            style: `list-style-type: ${attrs.listStyleType}` 
-                        })
+                    type: {
+                        default: '1',
+                        parseHTML: el => el.getAttribute('type') || '1',
+                        renderHTML: attrs => ({ type: attrs.type })
                     }
                 };
             },
@@ -88,7 +85,7 @@
                 }),
                 ListItem,
                 BulletList,
-                CustomOrderedList,
+                LegalOrderedList,
                 TextAlign.configure({ types: ['heading', 'paragraph'] }),
                 FontFamily,
                 Color,
@@ -119,13 +116,14 @@
         // Expose globally
         window.editor = editor;
         window.exec = (cmd) => editor.chain().focus()[cmd]().run();
-        window.setListType = (type) => {
+        window.setListType = (style) => {
+            const typeMap = { 'decimal': '1', 'lower-alpha': 'a', 'lower-roman': 'i' };
+            const type = typeMap[style] || '1';
+            
             if (!editor.isActive('orderedList')) {
-                // Not in a list, create one first
                 editor.chain().focus().toggleOrderedList().run();
             }
-            // Now apply the style attribute
-            editor.chain().focus().updateAttributes('orderedList', { listStyleType: type }).run();
+            editor.chain().focus().updateAttributes('orderedList', { type }).run();
         };
 
         window.updateWordCount = function() {
@@ -906,9 +904,9 @@
             padding-left: 3rem; 
             margin: 6pt 0 10pt;
         }
-        ol[data-list-type="lower-alpha"] { list-style-type: lower-alpha !important; }
-        ol[data-list-type="lower-roman"] { list-style-type: lower-roman !important; }
-        ol[data-list-type="decimal"] { list-style-type: decimal !important; }
+        ol[type="a"] { list-style-type: lower-alpha !important; }
+        ol[type="i"] { list-style-type: lower-roman !important; }
+        ol[type="1"] { list-style-type: decimal !important; }
         .ProseMirror li { 
             margin-bottom: 3pt; 
             display: list-item;
