@@ -12,6 +12,9 @@ CREATE TABLE IF NOT EXISTS legal_matters (
     staff_id UUID REFERENCES public.staff_profiles(id), -- Optional: Link if it's a personnel matter
     external_party_name TEXT, -- For Land/Construction
     external_party_email TEXT,
+    priority TEXT DEFAULT 'Normal', -- 'Low', 'Normal', 'Critical'
+    hr_memo TEXT, -- Internal notes from HR to Legal
+    legal_memo TEXT, -- Internal response/status from Legal to HR
     content_html TEXT, -- High-fidelity GrapesJS HTML
     content_css TEXT,  -- High-fidelity GrapesJS CSS
     meta_data JSONB DEFAULT '{}', -- Variable data (Plot size, salary, etc.)
@@ -76,6 +79,11 @@ CREATE TABLE IF NOT EXISTS legal_attachments (
 
 -- 7. Add Archival and Manual Upload Field to Staff Profiles
 ALTER TABLE public.staff_profiles ADD COLUMN IF NOT EXISTS archived_legal_docs JSONB DEFAULT '[]';
+
+-- 8. Ensure Legal Matters has communication columns (for existing tables)
+ALTER TABLE legal_matters ADD COLUMN IF NOT EXISTS priority TEXT DEFAULT 'Normal';
+ALTER TABLE legal_matters ADD COLUMN IF NOT EXISTS hr_memo TEXT;
+ALTER TABLE legal_matters ADD COLUMN IF NOT EXISTS legal_memo TEXT;
 
 -- ==========================================
 -- PRE-LOAD GOLD STANDARD CLAUSES

@@ -1168,8 +1168,10 @@
                     <input type="text" id="initiate-title" placeholder="e.g. Employment Contract - John Doe" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-brand-gold text-sm">
                 </div>
                 <div id="party-fields">
-                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Party Name / Employee Name</label>
-                    <input type="text" id="initiate-party-name" placeholder="Full Legal Name" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-brand-gold text-sm">
+                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Search Staff or Enter External Name</label>
+                    <input type="text" id="initiate-party-name" list="staff-search-results" oninput="handleStaffSearch(this.value)" placeholder="Start typing name, email or department..." class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-brand-gold text-sm">
+                    <datalist id="staff-search-results"></datalist>
+                    <input type="hidden" id="initiate-staff-id" value="">
                 </div>
                 <div>
                     <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Party Email</label>
@@ -2317,6 +2319,35 @@
             window.location.href = '/login';
         }
 
+        let hrStaff = [];
+        async function fetchHRStaff() {
+            try {
+                const res = await fetch('/api/hr/staff', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                });
+                if (res.ok) {
+                    hrStaff = await res.json();
+                    const dl = document.getElementById('staff-search-results');
+                    if (dl) {
+                        dl.innerHTML = hrStaff.map(s => 
+                            `<option value="${s.full_name}">${s.email} | ${s.department || 'No Dept'} | ${s.primary_role || ''}</option>`
+                        ).join('');
+                    }
+                }
+            } catch (err) { console.error('Failed to fetch HR directory'); }
+        }
+
+        function handleStaffSearch(val) {
+            const found = hrStaff.find(s => s.full_name === val);
+            if (found) {
+                document.getElementById('initiate-party-email').value = found.email;
+                document.getElementById('initiate-staff-id').value = found.id;
+            } else {
+                // If they changed it or it's external, clear the ID
+                document.getElementById('initiate-staff-id').value = '';
+            }
+        }
+
         window.onload = () => {
             checkAuth();
             fetchSummary();
@@ -2325,6 +2356,7 @@
             fetchArchive();
             fetchActivity();
             fetchExecutionTrends();
+            fetchHRStaff();
             setInterval(fetchActivity, 60000);
         };
 
@@ -2345,11 +2377,12 @@
             const title = document.getElementById('initiate-title').value;
             const partyName = document.getElementById('initiate-party-name').value;
             const partyEmail = document.getElementById('initiate-party-email').value;
+            const staffId = document.getElementById('initiate-staff-id').value;
 
             if (!title || !partyName) return alert('Subject and Party Name are required');
 
             try {
-                const res = await fetch(`${HR_LEGAL_API}/initiate`, {
+                const res = await fetch(`${HR_LEGAL_API}/matters`, {
                     method: 'POST',
                     headers: {
                         'Content-Type': 'application/json',
@@ -2358,8 +2391,10 @@
                     body: JSON.stringify({
                         category,
                         title,
-                        external_party_name: partyName,
-                        external_party_email: partyEmail
+                        staff_id: staffId || null,
+                        external_party_name: staffId ? null : partyName,
+                        external_party_email: partyEmail,
+                        priority: 'Normal'
                     })
                 });
 

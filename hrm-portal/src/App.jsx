@@ -3212,43 +3212,57 @@ function DocumentsManager({ staffId, isHR }) {
   );
 }
 
-function LegalManager({ staffId, staffName, isHR }) {
+function LegalManager({ staffId: initialStaffId, staffName: initialStaffName, isHR }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [matters, setMatters] = useState([]);
+  const [staffList, setStaffList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showInitiate, setShowInitiate] = useState(false);
-  const [initForm, setInitForm] = useState({ title: "", type: "Personnel", priority: "Normal", notes: "" });
+  const [initForm, setInitForm] = useState({ title: "", type: "Personnel", priority: "Normal", notes: "", staff_id: initialStaffId, external_name: "", external_email: "", isExternal: false });
   const [submitting, setSubmitting] = useState(false);
 
   const load = async () => {
     setLoading(true);
     try {
-      // Fetch matters linked to this staff member
-      const data = await apiFetch(`${API_BASE}/hr-legal/staff/${staffId}/matters`);
+      // If we have a specific staffId, fetch their matters. Otherwise fetch all (global mode).
+      const url = initialStaffId 
+        ? `${API_BASE}/hr-legal/staff/${initialStaffId}/matters`
+        : `${API_BASE}/hr-legal/matters`;
+      const data = await apiFetch(url);
       setMatters(data);
+
+      if (isHR) {
+        const staff = await apiFetch(`${API_BASE}/hr/staff`);
+        setStaffList(staff);
+      }
     } catch (e) { console.error("Legal load error:", e); }
     finally { setLoading(false); }
   };
 
-  useEffect(() => { load(); }, [staffId]);
+  useEffect(() => { load(); }, [initialStaffId]);
 
   const initiate = async () => {
     if (!initForm.title) return alert("Title is required");
+    if (!initForm.isExternal && !initForm.staff_id) return alert("Please select a staff member or toggle External Candidate");
+    if (initForm.isExternal && (!initForm.external_name || !initForm.external_email)) return alert("Candidate name and email are required");
+
     setSubmitting(true);
     try {
       await apiFetch(`${API_BASE}/hr-legal/matters`, {
         method: "POST",
         body: JSON.stringify({
-          staff_id: staffId,
+          staff_id: initForm.isExternal ? null : initForm.staff_id,
           title: initForm.title,
           category: initForm.type,
           priority: initForm.priority,
           hr_memo: initForm.notes,
+          external_party_name: initForm.isExternal ? initForm.external_name : null,
+          external_party_email: initForm.isExternal ? initForm.external_email : null,
           status: "Draft"
         })
       });
       setShowInitiate(false);
-      setInitForm({ title: "", type: "Personnel", priority: "Normal", notes: "" });
+      setInitForm({ title: "", type: "Personnel", priority: "Normal", notes: "", staff_id: initialStaffId, external_name: "", external_email: "", isExternal: false });
       load();
     } catch (e) { alert(e.message); }
     finally { setSubmitting(false); }
@@ -3261,6 +3275,9 @@ function LegalManager({ staffId, staffName, isHR }) {
     if (s === "Voided") return "#EF4444";
     return T.orange;
   };
+
+  const selectedStaff = staffList.find(s => s.id === initForm.staff_id);
+  const displayTitle = initForm.isExternal ? initForm.external_name : (initialStaffName || selectedStaff?.full_name || "New Matter");
 
   return (
     <div className="fade">
@@ -3285,6 +3302,7 @@ function LegalManager({ staffId, staffName, isHR }) {
                   </span>
                 </div>
                 <div style={{ fontSize: 10, color: C.sub }}>
+                  {initialStaffId ? "" : `Staff: ${m.staff_id ? (staffList.find(s => s.id === m.staff_id)?.full_name || m.staff_id) : (m.external_party_name || "External")} · `}
                   Category: {m.category} · Priority: {m.priority} · Initiated: {new Date(m.created_at).toLocaleDateString()}
                 </div>
                 {m.legal_memo && (
@@ -3305,7 +3323,7 @@ function LegalManager({ staffId, staffName, isHR }) {
           {matters.length === 0 && (
             <div style={{ textAlign: "center", padding: 30, color: C.muted, border: `1px dashed ${C.border}`, borderRadius: 12 }}>
               <div style={{ fontSize: 24, marginBottom: 8 }}>⚖️</div>
-              <div style={{ fontSize: 12 }}>No legal matters found for this staff member.</div>
+              <div style={{ fontSize: 12 }}>No legal matters found.</div>
               {isHR && <div style={{ fontSize: 10, marginTop: 4 }}>Legal can draft contracts like Employment Agreements or NDAs here.</div>}
             </div>
           )}
@@ -3313,11 +3331,38 @@ function LegalManager({ staffId, staffName, isHR }) {
       )}
 
       {showInitiate && (
-        <Modal onClose={() => setShowInitiate(false)} title={`Initiate Legal Matter - ${staffName}`}>
+        <Modal onClose={() => setShowInitiate(false)} title={`Initiate Legal Matter - ${displayTitle}`}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div><Lbl>Matter Title *</Lbl>
               <input className="inp" placeholder="e.g. New Employment Contract 2026" value={initForm.title} onChange={e => setInitForm({ ...initForm, title: e.target.value })} />
             </div>
+
+            {!initialStaffId && (
+              <div style={{ background: `${C.border}33`, padding: 12, borderRadius: 10 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                  <Lbl>Target Party</Lbl>
+                  <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 10, cursor: "pointer" }}>
+                    <input type="checkbox" checked={initForm.isExternal} onChange={e => setInitForm({ ...initForm, isExternal: e.target.checked })} />
+                    External Candidate (Offer Letter)
+                  </label>
+                </div>
+                
+                {initForm.isExternal ? (
+                  <div className="g2">
+                    <input className="inp" placeholder="Full Name" value={initForm.external_name} onChange={e => setInitForm({ ...initForm, external_name: e.target.value })} />
+                    <input className="inp" placeholder="Email Address" value={initForm.external_email} onChange={e => setInitForm({ ...initForm, external_email: e.target.value })} />
+                  </div>
+                ) : (
+                  <select className="inp" value={initForm.staff_id || ""} onChange={e => setInitForm({ ...initForm, staff_id: e.target.value })}>
+                    <option value="">-- Select Staff Member --</option>
+                    {staffList.map(s => (
+                      <option key={s.id} value={s.id}>{s.full_name} ({s.department || "No Dept"})</option>
+                    ))}
+                  </select>
+                )}
+              </div>
+            )}
+
             <div className="g2" style={{ gap: 12 }}>
               <div><Lbl>Category</Lbl>
                 <select className="inp" value={initForm.type} onChange={e => setInitForm({ ...initForm, type: e.target.value })}>
@@ -4997,7 +5042,7 @@ function HRAdminPortal({ user, onLogout }) {
       if (p === "payroll") return <Payroll />;
       if (p === "tasks") return <Tasks currentUser={user} />;
       if (p === "mismanage") return <Mismanagement />;
-      if (p === "legal_vault") return <LegalManager staffId={user.id} staffName={user.full_name} isHR={true} />; 
+      if (p === "legal_vault") return <LegalManager staffId={null} staffName={null} isHR={true} />; 
       if (p === "myprofile") return <MyProfile user={user} />;
     }} />
   );

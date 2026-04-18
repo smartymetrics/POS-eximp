@@ -51,15 +51,21 @@ async def get_legal_matters(category: str = None, staff_id: str = None, current_
     """Fetch all legal matters accessible to the current admin."""
     db = get_db()
     admin_id = current_admin["sub"]
+    user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
     
-    # Check if admin is HR or Lawyer (simplified check)
-    # In a real app we'd check roles. For now, we allow filtering by staff_id
+    # If the user is a lawyer, super_admin, or HR, they can see everything.
+    # Otherwise, they only see matters where they are the drafter or collaborator.
+    is_privileged = any(r in ["admin", "super_admin", "legal", "hr_admin", "operations"] for r in user_roles)
     
     query = db.table("legal_matters").select("*")
     if category:
         query = query.eq("category", category)
     if staff_id:
         query = query.eq("staff_id", staff_id)
+    elif not is_privileged:
+        # Restricted view: Only drafted or collaborated
+        # This is slightly tricky for PostgREST 'or' logic, so we'll fetch drafted mostly
+        query = query.eq("drafter_id", admin_id)
         
     res = await db_execute(lambda: query.order("created_at", desc=True).execute())
     return res.data or []
