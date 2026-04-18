@@ -1,0 +1,12 @@
+{
+  "name": "pos-eximp-cloves",
+  "version": "1.0.0",
+  "description": "Eximp & Cloves Portal",
+  "scripts": {
+    "build-css": "tailwindcss -i ./static/src/input.css -o ./static/dist/output.css --watch",
+    "build-css-prod": "tailwindcss -i ./static/src/input.css -o ./static/dist/output.css --minify"
+  },
+  "devDependencies": {
+    "tailwindcss": "^3.4.0"
+  }
+}

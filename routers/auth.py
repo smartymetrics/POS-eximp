@@ -16,7 +16,7 @@ security = HTTPBearer()
 
 SECRET_KEY = os.getenv("JWT_SECRET", "eximp-cloves-secret-key-change-in-production")
 ALGORITHM = "HS256"
-ACCESS_TOKEN_EXPIRE_HOURS = 12
+ACCESS_TOKEN_EXPIRE_HOURS = 24
 
 
 def create_token(data: dict) -> str:

@@ -16,7 +16,9 @@ export async function apiFetch(endpoint, options = {}) {
 
   if (response.status === 401) {
     localStorage.removeItem("ec_token");
-    window.location.reload();
+    localStorage.removeItem("admin");
+    alert("Your session has expired. Please log in again.");
+    window.location.href = "/login";
     return;
   }
 

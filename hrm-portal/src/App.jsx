@@ -3220,6 +3220,8 @@ function LegalManager({ staffId: initialStaffId, staffName: initialStaffName, is
   const [showInitiate, setShowInitiate] = useState(false);
   const [initForm, setInitForm] = useState({ title: "", type: "Personnel", priority: "Normal", notes: "", staff_id: initialStaffId, external_name: "", external_email: "", isExternal: false });
   const [submitting, setSubmitting] = useState(false);
+  const [dispatchState, setDispatchState] = useState({});
+  const [dispatchMsg, setDispatchMsg] = useState({});
 
   const load = async () => {
     setLoading(true);
@@ -3311,11 +3313,101 @@ function LegalManager({ staffId: initialStaffId, staffName: initialStaffName, is
                   </div>
                 )}
               </div>
-              <div style={{ marginLeft: 16 }}>
+              <div style={{ marginLeft: 16, display: "flex", gap: 8, alignItems: "center", flexDirection: "column", minWidth: 150 }}>
                 {m.status === "Executed" ? (
                   <button className="bg" style={{ fontSize: 10, padding: "5px 12px" }}>Download Contract</button>
+                ) : m.status !== "Legal Signing" ? (
+                  <>
+                    <div style={{ fontSize: 10, color: C.muted, fontStyle: "italic" }}>{m.status === "Review" ? "Awaiting Legal Review" : "In Progress"}</div>
+                    {isHR && (
+                      <>
+                        {dispatchState[m.id] === 'confirming' ? (
+                          <div style={{ display: "flex", flexDirection: "column", gap: 4, background: `${T.orange}18`, border: `1px solid ${T.orange}40`, borderRadius: 6, padding: "6px 10px", fontSize: 10 }}>
+                            <div style={{ color: T.orange, fontWeight: 700, marginBottom: 2 }}>Send signing link to {m.external_party_name || 'staff member'}?</div>
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <button
+                                style={{ background: T.orange, color: '#fff', border: 'none', borderRadius: 4, padding: '3px 10px', fontSize: 10, fontWeight: 700, cursor: 'pointer' }}
+                                onClick={async () => {
+                                  setDispatchState(s => ({ ...s, [m.id]: 'sending' }));
+                                  try {
+                                    const res = await apiFetch(`${API_BASE}/hr-legal/matters/${m.id}/dispatch-signature`, { method: 'POST' });
+                                    setDispatchState(s => ({ ...s, [m.id]: 'done' }));
+                                    setDispatchMsg(s => ({ ...s, [m.id]: res.message || 'Dispatched!' }));
+                                    setTimeout(() => { setDispatchState(s => ({ ...s, [m.id]: undefined })); load(); }, 4000);
+                                  } catch(err) {
+                                    setDispatchState(s => ({ ...s, [m.id]: 'error' }));
+                                    setDispatchMsg(s => ({ ...s, [m.id]: err.message }));
+                                    setTimeout(() => setDispatchState(s => ({ ...s, [m.id]: undefined })), 5000);
+                                  }
+                                }}
+                              >✓ Confirm</button>
+                              <button
+                                style={{ background: 'transparent', color: C.muted, border: `1px solid ${C.border}`, borderRadius: 4, padding: '3px 10px', fontSize: 10, cursor: 'pointer' }}
+                                onClick={() => setDispatchState(s => ({ ...s, [m.id]: undefined }))}
+                              >✕ Cancel</button>
+                            </div>
+                          </div>
+                        ) : dispatchState[m.id] === 'sending' ? (
+                          <div style={{ fontSize: 10, color: T.orange, fontWeight: 700 }}>✈️ Sending...</div>
+                        ) : dispatchState[m.id] === 'done' ? (
+                          <div style={{ fontSize: 10, color: '#10B981', fontWeight: 700 }}>✅ {dispatchMsg[m.id]}</div>
+                        ) : dispatchState[m.id] === 'error' ? (
+                          <div style={{ fontSize: 10, color: '#EF4444', fontWeight: 700 }}>✗ {dispatchMsg[m.id]}</div>
+                        ) : (
+                          <button
+                            className="bp"
+                            style={{ fontSize: 10, padding: "5px 12px", background: "#C47D0A", color: "#fff", border: "none" }}
+                            onClick={() => setDispatchState(s => ({ ...s, [m.id]: 'confirming' }))}
+                          >
+                            ✈️ Dispatch to Signer
+                          </button>
+                        )}
+                      </>
+                    )}
+                  </>
                 ) : (
-                  <div style={{ fontSize: 10, color: C.muted, fontStyle: "italic" }}>{m.status === "Review" ? "Awaiting Legal Review" : "In Progress"}</div>
+                  <div style={{ display: "flex", flexDirection: "column", gap: 6, alignItems: "center" }}>
+                    <div style={{ fontSize: 10, color: T.orange, fontWeight: "bold", border: `1px solid ${T.orange}40`, padding: "4px 8px", borderRadius: 4 }}>Pending Signature</div>
+                    {isHR && (
+                      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 4 }}>
+                        {dispatchState[m.id] === 'resending' ? (
+                          <div style={{ fontSize: 9, color: T.orange }}>🔄 Resending...</div>
+                        ) : dispatchState[m.id] === 'resent_done' ? (
+                          <div style={{ fontSize: 9, color: '#10B981' }}>✅ {dispatchMsg[m.id] || 'Resent!'}</div>
+                        ) : (
+                          <button
+                            style={{ 
+                              background: 'transparent', 
+                              color: C.muted, 
+                              border: `1px solid ${C.border}`, 
+                              borderRadius: 4, 
+                              padding: '2px 8px', 
+                              fontSize: 9, 
+                              cursor: 'pointer',
+                              display: 'flex',
+                              alignItems: 'center',
+                              gap: 4
+                            }}
+                            onClick={async () => {
+                              setDispatchState(s => ({ ...s, [m.id]: 'resending' }));
+                              try {
+                                const res = await apiFetch(`${API_BASE}/hr-legal/matters/${m.id}/resend-signature`, { method: 'POST' });
+                                setDispatchState(s => ({ ...s, [m.id]: 'resent_done' }));
+                                setDispatchMsg(s => ({ ...s, [m.id]: res.message }));
+                                setTimeout(() => setDispatchState(s => ({ ...s, [m.id]: undefined })), 4000);
+                              } catch(err) {
+                                setDispatchState(s => ({ ...s, [m.id]: 'error' }));
+                                setDispatchMsg(s => ({ ...s, [m.id]: err.message }));
+                                setTimeout(() => setDispatchState(s => ({ ...s, [m.id]: undefined })), 5000);
+                              }
+                            }}
+                          >
+                            🔄 Resend Link
+                          </button>
+                        )}
+                      </div>
+                    )}
+                  </div>
                 )}
               </div>
             </div>

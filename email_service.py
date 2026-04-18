@@ -1586,3 +1586,53 @@ async def send_chat_invitation_email(email_addr: str, name: str, inviter: str, j
     except Exception as e:
         logger.error(f"Error sending chat invitation to {email_addr}: {e}")
         return None
+
+def _staff_signing_html(staff_name: str, doc_title: str, signing_url: str) -> str:
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border-radius: 8px; border: 1px solid #ddd; overflow: hidden;">
+      <div style="background: #1A1A1A; padding: 24px; text-align: center;">
+        <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">
+      </div>
+      <div style="background: #F5A623; padding: 12px 24px; text-align: center;">
+        <h2 style="color: #1A1A1A; margin: 0; font-size: 18px;">Action Required: Signature Requested</h2>
+      </div>
+      <div style="padding: 32px 24px; background: #fff;">
+        <p style="color: #333; font-size: 16px;">Dear <strong>{staff_name}</strong>,</p>
+        <p style="color: #555; line-height: 1.5;">You have been requested to review and digitally sign the following legal document:</p>
+        
+        <div style="margin: 20px 0; padding: 16px; background-color: #f9f9f9; border-left: 4px solid #F5A623; font-weight: bold; color: #1a1a1a;">
+            {doc_title}
+        </div>
+        
+        <div style="text-align: center; margin: 35px 0;">
+          <a href="{signing_url}" style="background-color: #C47D0A; color: #ffffff; padding: 14px 28px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 16px; display: inline-block;">Review & Sign Document</a>
+        </div>
+        
+        <p style="color: #555; font-size: 13px; line-height: 1.5;">For security purposes, this unique link is generated specifically for you and is protected. Your digital signature, IP address, and an exact timestamp will be recorded for compliance.</p>
+        
+        <hr style="border-color: #eee; margin: 30px 0;">
+        <p style="color: #999; font-size: 12px; margin: 0; text-align: center;">
+          Eximp & Cloves Infrastructure Limited | RC 8311800<br>
+          57B, Isaac John Street, Yaba, Lagos<br>
+          <a href="https://www.eximps-cloves.com" style="color: #999; text-decoration: none;">www.eximps-cloves.com</a>
+        </p>
+      </div>
+    </div>"""
+
+async def send_staff_signing_request_email(staff_name: str, email_addr: str, doc_title: str, signing_url: str):
+    logger.info(f"Attempting to send signing request to {email_addr} for '{doc_title}'")
+    try:
+        res = await async_resend({
+            "from": f"Eximp & Cloves Personnel <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "reply_to": "hr@eximps-cloves.com",
+            "subject": f"Action Required: Signature Requested - {doc_title}",
+            "html": _staff_signing_html(staff_name, doc_title, signing_url)
+        })
+        logger.info(f"Resend API Response for {email_addr}: {res}")
+        return res
+    except Exception as e:
+        logger.error(f"FATAL: Error sending signing request email to {email_addr}: {str(e)}")
+        import traceback
+        logger.error(traceback.format_exc())
+        return None

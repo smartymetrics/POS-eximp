@@ -1,430 +1,1262 @@
 <!DOCTYPE html>
 <html lang="en">
-
 <head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Personnel Studio | Eximp &amp; Cloves</title>
-  <link
-    href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap"
-    rel="stylesheet">
-  <link href="https://unpkg.com/grapesjs/dist/css/grapes.min.css" rel="stylesheet">
-  <script src="https://unpkg.com/grapesjs"></script>
-  <script src="https://unpkg.com/grapesjs-preset-newsletter"></script>
-  <script src="https://cdn.tailwindcss.com"></script>
-  <script>
-    tailwind.config = {
-      theme: {
-        extend: {
-          colors: {
-            brand: {
-              gold: '#C47D0A',
-              dark: '#111111',
-              card: '#1A1A1A'
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Personnel Word Studio | Eximp & Cloves</title>
+    
+    <!-- UI STACK -->
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Times+New+Roman&family=Inter:wght@400;500;600;700;900&family=Tinos:wght@400;700&display=swap">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link rel="stylesheet" href="/static/dist/output.css">
+    
+    <!-- TIPTAP EDITOR -->
+    <script type="module">
+        import { Editor, Node } from 'https://esm.sh/@tiptap/core@2.4.0';
+        import { StarterKit } from 'https://esm.sh/@tiptap/starter-kit@2.4.0';
+        import { Bold } from 'https://esm.sh/@tiptap/extension-bold@2.4.0';
+        import { OrderedList } from 'https://esm.sh/@tiptap/extension-ordered-list@2.4.0';
+        import { BulletList } from 'https://esm.sh/@tiptap/extension-bullet-list@2.4.0';
+        import { ListItem } from 'https://esm.sh/@tiptap/extension-list-item@2.4.0';
+        import { TextAlign } from 'https://esm.sh/@tiptap/extension-text-align@2.4.0';
+        import { FontFamily } from 'https://esm.sh/@tiptap/extension-font-family@2.4.0';
+        import { Color } from 'https://esm.sh/@tiptap/extension-color@2.4.0';
+        import { Highlight } from 'https://esm.sh/@tiptap/extension-highlight@2.4.0';
+        import { Table } from 'https://esm.sh/@tiptap/extension-table@2.4.0';
+        import { TableRow } from 'https://esm.sh/@tiptap/extension-table-row@2.4.0';
+        import { TableCell } from 'https://esm.sh/@tiptap/extension-table-cell@2.4.0';
+        import { TableHeader } from 'https://esm.sh/@tiptap/extension-table-header@2.4.0';
+        import { Subscript } from 'https://esm.sh/@tiptap/extension-subscript@2.4.0';
+        import { Superscript } from 'https://esm.sh/@tiptap/extension-superscript@2.4.0';
+        import { Underline } from 'https://esm.sh/@tiptap/extension-underline@2.4.0';
+
+        // ── CUSTOM PAGE BREAK NODE ──
+        const PageBreak = Node.create({
+            name: 'pageBreak',
+            group: 'block',
+            atom: true,
+            selectable: true,
+            draggable: false,
+            parseHTML() { return [{ tag: 'div[data-page-break]' }]; },
+            renderHTML() {
+                return ['div', { 'data-page-break': 'true', class: 'editor-page-break', contenteditable: 'false' }, [
+                    ['div', { class: 'editor-page-break-gap' }],
+                    ['span', { class: 'editor-page-break-label' }, '— Page Break —'],
+                    ['div', { class: 'editor-page-break-gap' }]
+                ]];
+            },
+            addCommands() {
+                return {
+                    insertPageBreak: () => ({ commands }) => {
+                        return commands.insertContent({ type: this.name });
+                    }
+                };
             }
-          }
+        });
+
+        const API_BASE = '/api/hr-legal';
+        const matterId = new URLSearchParams(window.location.search).get('id');
+
+        const CustomOrderedList = OrderedList.extend({
+            addAttributes() {
+                return {
+                    listStyleType: {
+                        default: 'decimal',
+                        parseHTML: el => el.style.listStyleType || 'decimal',
+                        renderHTML: attrs => {
+                            return { style: `list-style-type: ${attrs.listStyleType || 'decimal'}` };
+                        }
+                    }
+                };
+            }
+        });
+
+        const editor = new Editor({
+            element: document.querySelector('#editor'),
+            autofocus: 'end',
+            extensions: [
+                StarterKit.configure({ 
+                    bold: false, 
+                    orderedList: false, 
+                    bulletList: false,
+                    history: true 
+                }),
+                Bold,
+                CustomOrderedList,
+                BulletList,
+                ListItem,
+                TextAlign.configure({ types: ['heading', 'paragraph'] }),
+                FontFamily,
+                Color,
+                Highlight.configure({ multicolor: true }),
+                Table.configure({ resizable: true }),
+                TableRow,
+                TableCell,
+                TableHeader,
+                Subscript,
+                Superscript,
+                Underline,
+                PageBreak,
+            ],
+            content: '<p>Loading...</p>',
+            onSelectionUpdate: ({ editor }) => {
+                const marks = ['bold', 'italic', 'underline', 'strike'];
+                marks.forEach(m => {
+                    const btn = document.querySelector(`[data-cmd*="${m}" i]`);
+                    if (btn) btn.classList.toggle('active', editor.isActive(m));
+                });
+                window.updateWordCount();
+            },
+            onUpdate: () => {
+                window.updateWordCount();
+            }
+        });
+
+        // Expose globally
+        window.editor = editor;
+
+        window.updateWordCount = function() {
+            const text = editor.getText();
+            const words = text.trim().split(/\s+/).filter(w => w.length > 0).length;
+            const chars = text.length;
+            const charNoSpaces = text.replace(/\s/g, '').length;
+            document.getElementById('word-count').innerText = `Words: ${words} | Chars: ${chars}`;
+        };
+
+        window.loadMatter = async function() {
+            if (!matterId) return;
+            try {
+                const res = await fetch(`${API_BASE}/matters/${matterId}`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                });
+                const data = await res.json();
+                document.getElementById('document-title').value = data.matter.title || '';
+                if (data.matter.content_html) {
+                    editor.commands.setContent(data.matter.content_html);
+                } else {
+                    editor.commands.setContent(`
+                        <p style="text-align: right"><strong>15TH APRIL 2026</strong></p>
+                        <p>Dear <strong>{{full_name}}</strong>,</p>
+                        <p>We are pleased to offer you the position of <strong>{{job_title}}</strong>...</p>
+                    `);
+                }
+                window.updateWordCount();
+                document.getElementById('document-modified').innerText = '✓ Loaded';
+                setTimeout(() => {
+                    document.getElementById('document-modified').innerText = '•';
+                }, 2000);
+            } catch (err) { 
+                document.getElementById('document-status').innerText = 'Error loading document';
+            }
+        };
+
+        window.saveDraft = async function() {
+            const status = document.getElementById('save-status');
+            status.innerText = 'Saving...';
+            try {
+                await fetch(`${API_BASE}/matters/${matterId}/save`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('ec_token')}`
+                    },
+                    body: JSON.stringify({
+                        title: document.getElementById('document-title').value,
+                        html: editor.getHTML(),
+                        css: ''
+                    })
+                });
+                status.innerText = `✓ Saved at ${new Date().toLocaleTimeString()}`;
+                setTimeout(() => {
+                    status.innerText = '💾 Save Draft';
+                    window.updateWordCount();
+                }, 3000);
+            } catch (err) { status.innerText = '✗ Save Failed'; }
+        };
+
+        document.querySelectorAll('[data-cmd]').forEach(btn => {
+            btn.onclick = () => {
+                const cmd = btn.dataset.cmd;
+                console.log('Tiptap CMD:', cmd);
+                editor.chain().focus()[cmd]().run();
+            };
+        });
+
+        document.querySelectorAll('[data-align]').forEach(btn => {
+            btn.onclick = () => editor.chain().focus().setTextAlign(btn.dataset.align).run();
+        });
+
+        window.toggleLock = function() {
+            const h = document.getElementById('letterhead-editable');
+            const locked = h.getAttribute('contenteditable') === 'false';
+            h.setAttribute('contenteditable', locked ? 'true' : 'false');
+            document.getElementById('btn-lock').innerText = locked ? '🔒 Lock Header' : '🔓 Unlock Header';
+        };
+
+        // Professional formatting commands
+        window.undo = function() { editor.chain().focus().undo().run(); };
+        window.redo = function() { editor.chain().focus().redo().run(); };
+        window.toggleStrikethrough = function() { editor.chain().focus().toggleStrike().run(); };
+        window.toggleSubscript = function() { editor.chain().focus().toggleSubscript().run(); };
+        window.toggleSuperscript = function() { editor.chain().focus().toggleSuperscript().run(); };
+        window.setLineHeight = function(height) { 
+            const el = document.querySelector('.ProseMirror');
+            if(el) el.style.lineHeight = height;
+        };
+
+        // FIND & REPLACE
+        window.openFindReplace = function() {
+            const find = prompt('Find text:');
+            if (!find) return;
+            const replace = prompt('Replace with (leave empty to just find):');
+            const text = editor.getText();
+            const regex = new RegExp(find, 'gi');
+            if (replace !== null) {
+                const updated = text.replace(regex, replace);
+                editor.commands.setContent(`<p>${updated}</p>`);
+                alert(`Replaced ${(text.match(regex) || []).length} occurrences`);
+            } else {
+                const count = (text.match(regex) || []).length;
+                alert(`Found ${count} occurrences`);
+            }
+        };
+
+        // HEADING STYLES
+        window.setHeading = function(level) {
+            if (level === 0) {
+                editor.chain().focus().setParagraph().run();
+            } else {
+                editor.chain().focus().toggleHeading({ level }).run();
+            }
+        };
+
+        // INSERT DATE
+        window.insertDate = function(format = 'long') {
+            const now = new Date();
+            let dateStr;
+            if (format === 'long') {
+                dateStr = now.toLocaleDateString('en-US', { year: 'numeric', month: 'long', day: 'numeric' });
+            } else if (format === 'short') {
+                dateStr = now.toLocaleDateString('en-US');
+            } else if (format === 'iso') {
+                dateStr = now.toISOString().split('T')[0];
+            }
+            editor.chain().focus().insertContent(dateStr).run();
+        };
+
+        // PAGE BREAK
+        window.insertPageBreak = function() {
+            editor.chain().focus().insertContent('<div style="page-break-after: always; display: flex; align-items: center; justify-content: center; min-height: 100vh; font-size: 11px; color: #999;">[Page Break]</div>').run();
+        };
+
+        // SIGNATURE BLOCK TEMPLATE
+        window.insertSignatureBlock = function() {
+            const sigBlock = `
+                <p style="margin-top: 60px;">&nbsp;</p>
+                <p>By signing below, the parties acknowledge and agree to the terms and conditions outlined in this document.</p>
+                <p>&nbsp;</p>
+                <table style="width: 100%; border-collapse: collapse;">
+                    <tr>
+                        <td style="border-bottom: 1px solid #000; padding: 30px 0 5px 0; width: 45%;"><strong>Employee/Signatory</strong></td>
+                        <td style="width: 10%;"></td>
+                        <td style="border-bottom: 1px solid #000; padding: 30px 0 5px 0; width: 45%;"><strong>Employer/Authorized Representative</strong></td>
+                    </tr>
+                    <tr>
+                        <td style="padding-top: 5px; font-size: 9pt;">Name (Print): ________________________</td>
+                        <td></td>
+                        <td style="padding-top: 5px; font-size: 9pt;">Name (Print): ________________________</td>
+                    </tr>
+                    <tr>
+                        <td style="padding-top: 10px; font-size: 9pt;">Date: ________________________</td>
+                        <td></td>
+                        <td style="padding-top: 10px; font-size: 9pt;">Date: ________________________</td>
+                    </tr>
+                </table>
+            `;
+            editor.chain().focus().insertContent(sigBlock).run();
+        };
+
+        // FULL SCREEN MODE
+        window.toggleFullScreen = function() {
+            const canvas = document.getElementById('canvas');
+            const ribbon = document.getElementById('ribbon');
+            const topBar = document.getElementById('top-bar');
+            
+            if (!document.fullscreenElement) {
+                document.documentElement.requestFullscreen().catch(err => {
+                    // Fallback: hide UI elements
+                    ribbon.style.display = 'none';
+                    topBar.style.display = 'none';
+                    canvas.style.top = '0';
+                    canvas.style.bottom = '0';
+                });
+            } else {
+                document.exitFullscreen();
+                ribbon.style.display = 'flex';
+                topBar.style.display = 'flex';
+                canvas.style.top = '100px';
+            }
+        };
+
+        // DIGITAL SIGNING INTEGRATION
+        window.prepareForSigning = async function() {
+            const title = document.getElementById('document-title').value;
+            if (!title) {
+                alert('Please give the document a title before signing.');
+                return;
+            }
+            
+            // Save draft first
+            await window.saveDraft();
+            
+            // Get document hash for integrity verification
+            const content = editor.getHTML();
+            const docHash = btoa(content).substring(0, 16); // Simple hash
+            // Dispatch signing request natively
+            const dispatchUrl = `/api/hr-legal/matters/${matterId}/dispatch-signature`;
+            
+            try {
+                const res = await fetch(dispatchUrl, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': `Bearer ${localStorage.getItem('token')}`
+                    }
+                });
+                
+                if (!res.ok) {
+                    const err = await res.json();
+                    alert(`Failed to dispatch document: ${err.detail || 'Unknown error'}`);
+                    return;
+                }
+                
+                const data = await res.json();
+                
+                // Notify user of successful email dispatch
+                alert(`✅ ${data.message || 'Signature link automatically dispatched to the staff member!'}`);
+                
+                // Reload editor to capture new document state
+                window.location.reload();
+            } catch (err) {
+                console.error("Preparation Error:", err);
+                alert("Error preparing document. Check console.");
+            }
+        };
+
+        // ZOOM CONTROLS
+        window.zoomIn = function() {
+            const page = document.querySelector('.a4-page');
+            const currentScale = parseFloat(page.style.transform?.match(/scale\(([^)]+)\)/) || [1, 1])[1];
+            const newScale = Math.min(currentScale + 0.1, 2);
+            page.style.transform = `scale(${newScale})`;
+            page.style.transformOrigin = 'top center';
+        };
+
+        window.zoomOut = function() {
+            const page = document.querySelector('.a4-page');
+            const currentScale = parseFloat(page.style.transform?.match(/scale\(([^)]+)\)/) || [1, 1])[1];
+            const newScale = Math.max(currentScale - 0.1, 0.5);
+            page.style.transform = `scale(${newScale})`;
+            page.style.transformOrigin = 'top center';
+        };
+
+        window.resetZoom = function() {
+            const page = document.querySelector('.a4-page');
+            page.style.transform = 'scale(1)';
+        };
+
+        // ── PHASE 1: TEMPLATE SYSTEM ──
+        window.loadTemplate = async function(templateName) {
+            const templateMap = {
+                'offer-letter': {
+                    name: 'Offer Letter',
+                    content: `<div class="letterhead" contenteditable="false" style="padding: 40px 60px; border-bottom: 2px solid var(--brand-gold);">
+                        <strong>EXIMP & CLOVES</strong><br>
+                        Web: https://eximps-cloves.com | Email: admin@eximps-cloves.com
+                    </div>
+                    <p style="margin-top: 40px; margin-bottom: 20px;"><strong>Offer of Employment</strong></p>
+                    <p>Dear {{STAFF_NAME}},</p>
+                    <p>We are pleased to extend to you an offer of employment for the position of <strong>{{ROLE}}</strong> in our {{DEPARTMENT}} department, effective {{COMMENCEMENT_DATE}}.</p>
+                    <p><strong>Position Details:</strong></p>
+                    <ul style="margin-left: 20px;">
+                        <li>Title: {{ROLE}}</li>
+                        <li>Department: {{DEPARTMENT}}</li>
+                        <li>Commencement Date: {{COMMENCEMENT_DATE}}</li>
+                        <li>Base Salary: {{SALARY}} per annum</li>
+                    </ul>
+                    <p style="margin-top: 20px;">By signing below, you acknowledge acceptance of this offer and agree to the terms and conditions outlined herein.</p>
+                    <p style="margin-top: 60px;"><strong>Sincerely,</strong></p>
+                    <p style="margin-top: 80px;">_____________________<br><span style="font-size: 9pt;">Authorized Signatory<br>Eximp & Cloves</span></p>
+                    <div style="page-break-after: always;"></div>`
+                },
+                'employment-contract': {
+                    name: 'Employment Contract',
+                    content: `<div class="letterhead" contenteditable="false" style="padding: 40px 60px; border-bottom: 2px solid var(--brand-gold);">
+                        <strong>EXIMP & CLOVES</strong><br>
+                        Web: https://eximps-cloves.com | Email: admin@eximps-cloves.com
+                    </div>
+                    <p style="margin-top: 40px; text-align: center;"><strong>EMPLOYMENT AGREEMENT</strong></p>
+                    <p><strong>This Employment Agreement</strong> ("Agreement") is entered into as of {{COMMENCEMENT_DATE}}, between Eximp & Cloves ("Company") and {{STAFF_NAME}} ("Employee").</p>
+                    <p><strong>1. POSITION</strong></p>
+                    <p>Employee is employed as {{ROLE}} in the {{DEPARTMENT}} department.</p>
+                    <p><strong>2. COMPENSATION</strong></p>
+                    <p>Employee shall receive an annual salary of {{SALARY}}, payable in accordance with Company payroll practices.</p>
+                    <p><strong>3. DUTIES AND RESPONSIBILITIES</strong></p>
+                    <p>Employee shall perform such duties and responsibilities as are customary and reasonable for the position.</p>
+                    <p><strong>4. CONFIDENTIALITY</strong></p>
+                    <p>Employee agrees to maintain strict confidentiality regarding all proprietary and sensitive Company information.</p>
+                    <p style="margin-top: 60px;"><strong>ACKNOWLEDGED AND AGREED:</strong></p>
+                    <p style="margin-top: 40px;">Employee: _____________________&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Company: _____________________<br>Date: _______________&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Date: _______________</p>`
+                },
+                'nda': {
+                    name: 'Non-Disclosure Agreement',
+                    content: `<div class="letterhead" contenteditable="false" style="padding: 40px 60px; border-bottom: 2px solid var(--brand-gold);">
+                        <strong>EXIMP & CLOVES</strong><br>
+                        Web: https://eximps-cloves.com | Email: admin@eximps-cloves.com
+                    </div>
+                    <p style="margin-top: 40px; text-align: center;"><strong>NON-DISCLOSURE AGREEMENT</strong></p>
+                    <p>This Non-Disclosure Agreement ("NDA") is entered into as of {{COMMENCEMENT_DATE}} by and between Eximp & Cloves ("Disclosing Party") and {{STAFF_NAME}} ("Receiving Party").</p>
+                    <p><strong>1. CONFIDENTIAL INFORMATION</strong></p>
+                    <p>"Confidential Information" means all non-public information related to the Company's business, including but not limited to trade secrets, business plans, financial information, and customer data.</p>
+                    <p><strong>2. OBLIGATIONS</strong></p>
+                    <p>Receiving Party agrees to: (a) maintain Confidential Information in strict confidence; (b) limit access to employees with a need to know; (c) not disclose Confidential Information to any third party without prior written consent.</p>
+                    <p><strong>3. TERM</strong></p>
+                    <p>This agreement shall remain in effect for a period of three (3) years from the date of execution.</p>
+                    <p><strong>4. REMEDIES</strong></p>
+                    <p>Receiving Party acknowledges that breach of this agreement may cause irreparable harm for which monetary damages are inadequate.</p>
+                    <p style="margin-top: 60px;"><strong>ACKNOWLEDGED AND AGREED:</strong></p>
+                    <p style="margin-top: 40px;">Receiving Party: _____________________<br>Date: _______________</p>`
+                },
+                'disciplinary': {
+                    name: 'Disciplinary Review',
+                    content: `<div class="letterhead" contenteditable="false" style="padding: 40px 60px; border-bottom: 2px solid var(--brand-gold);">
+                        <strong>EXIMP & CLOVES</strong><br>
+                        Web: https://eximps-cloves.com | Email: admin@eximps-cloves.com
+                    </div>
+                    <p style="margin-top: 40px;"><strong>FORMAL DISCIPLINARY NOTICE</strong></p>
+                    <p><strong>Employee:</strong> {{STAFF_NAME}}<br><strong>Position:</strong> {{ROLE}}<br><strong>Department:</strong> {{DEPARTMENT}}<br><strong>Date of Notice:</strong> {{COMMENCEMENT_DATE}}</p>
+                    <p><strong>REASON FOR DISCIPLINARY ACTION:</strong></p>
+                    <p>[Describe the performance issue or misconduct]</p>
+                    <p><strong>SPECIFIC INCIDENTS:</strong></p>
+                    <p>[Document dates, times, and details of incidents]</p>
+                    <p><strong>PERFORMANCE EXPECTATIONS:</strong></p>
+                    <p>[Clearly state expected improvements or compliance requirements]</p>
+                    <p><strong>CONSEQUENCES OF NON-COMPLIANCE:</strong></p>
+                    <p>Failure to meet these expectations may result in further disciplinary action, up to and including termination of employment.</p>
+                    <p style="margin-top: 40px;"><strong>ACKNOWLEDGMENT</strong></p>
+                    <p>I acknowledge receipt of this notice and understand the expectations outlined herein.</p>
+                    <p style="margin-top: 40px;">Employee: _____________________&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Manager: _____________________<br>Date: _______________&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;&nbsp;Date: _______________</p>`
+                }
+            };
+            
+            const template = templateMap[templateName];
+            if (!template) return alert('Template not found');
+            
+            // Clear editor and set new content
+            editor.commands.setContent(template.content);
+            
+            // Update document title
+            const staffId = new URLSearchParams(window.location.search).get('staff_id');
+            document.getElementById('document-title').value = template.name + (staffId ? ' - Staff ID: ' + staffId : '');
+            
+            // Close modal
+            closeModal('template-modal');
+            
+            // Save draft
+            setTimeout(() => window.saveDraft(), 500);
+        };
+
+        // ── PHASE 3: MEMO SYSTEM ──
+        window.loadMemos = async function() {
+            if (!matterId) return;
+            
+            try {
+                const res = await fetch(`${API_BASE}/matters/${matterId}/memos`, {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.ec_token }
+                });
+                
+                if (!res.ok) return console.error('Failed to load memos');
+                
+                const memos = await res.json();
+                const container = document.getElementById('memo-messages');
+                container.innerHTML = '';
+                
+                if (memos.length === 0) {
+                    container.innerHTML = '<div class="text-gray-500 text-xs p-3">No messages yet. Start the discussion!</div>';
+                    return;
+                }
+                
+                memos.forEach(memo => {
+                    const messageEl = document.createElement('div');
+                    messageEl.className = 'bg-white/5 p-3 rounded border border-white/10 text-xs';
+                    messageEl.innerHTML = `
+                        <div class="flex justify-between mb-1">
+                            <span class="font-bold text-brand-gold">${memo.author_name}</span>
+                            <span class="text-gray-500">${new Date(memo.created_at).toLocaleString()}</span>
+                        </div>
+                        <div class="text-gray-300">${memo.message_content}</div>
+                    `;
+                    container.appendChild(messageEl);
+                });
+            } catch(e) {
+                console.error('ERROR loading memos:', e);
+            }
+        };
+
+        window.sendMemo = async function() {
+            if (!matterId) return alert('No matter loaded');
+            
+            const input = document.getElementById('memo-input');
+            const message = input.value.trim();
+            if (!message) return;
+            
+            try {
+                const res = await fetch(`${API_BASE}/matters/${matterId}/memos`, {
+                    method: 'POST',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.ec_token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: message,
+                        type: 'note',
+                        is_internal: true
+                    })
+                });
+                
+                if (!res.ok) throw new Error('Failed to send memo');
+                
+                input.value = '';
+                window.loadMemos(); // Refresh memo list
+                document.getElementById('document-status').textContent = 'Memo added';
+            } catch(e) {
+                console.error('ERROR:', e);
+                alert('Failed to send memo');
+            }
+        };
+
+        // ── PHASE 6: WORKFLOW STATUS ──
+        window.updateMatterStatus = async function(newStatus) {
+            if (!matterId) return;
+            
+            try {
+                const res = await fetch(`${API_BASE}/matters/${matterId}`, {
+                    method: 'PATCH',
+                    headers: {
+                        'Authorization': 'Bearer ' + localStorage.ec_token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ status: newStatus })
+                });
+                
+                if (!res.ok) throw new Error('Failed to update status');
+                
+                // Update UI
+                document.querySelectorAll('.workflow-step').forEach(el => el.classList.remove('active'));
+                document.getElementById('status-' + newStatus.toLowerCase().replace(/ /g, '-')).classList.add('active');
+                document.getElementById('current-status').textContent = newStatus;
+                document.getElementById('document-status').textContent = 'Status updated to ' + newStatus;
+            } catch(e) {
+                console.error('ERROR:', e);
+            }
+        };
+
+        window.openModal = function(id) {
+            document.getElementById(id).classList.remove('hidden');
+            if(id==='tags-modal') window.renderTags();
+            if(id==='clauses-modal') window.renderClauses();
+            if(id==='memo-modal') window.loadMemos();
+        };
+
+        window.closeModal = function(id) { 
+            document.getElementById(id).classList.add('hidden'); 
+        };
+
+        window.renderTags = function() {
+            const tags = [
+                { c: '{{full_name}}', l: 'Full Name' },
+                { c: '{{job_title}}', l: 'Job Title' },
+                { c: '{{monthly_salary}}', l: 'Monthly Salary' },
+                { c: '{{commencement_date}}', l: 'Start Date' },
+                { c: '{{reporting_to}}', l: 'Reporting Line' },
+                { c: '{{today_date}}', l: "Today's Date" }
+            ];
+            document.getElementById('tag-grid').innerHTML = tags.map(t => `
+                <button onclick="window.insertTag('${t.c}')" class="p-3 bg-white/5 border border-white/10 rounded text-left hover:border-brand-gold transition group">
+                    <div class="text-[9px] text-gray-500 uppercase font-bold group-hover:text-gray-300 transition">${t.l}</div>
+                    <div class="text-xs text-brand-gold font-mono">${t.c}</div>
+                </button>
+            `).join('');
+        };
+
+        window.insertTag = function(c) { 
+            editor.chain().focus().insertContent(`<span class="merge-field">${c}</span>&nbsp;`).run(); 
+            window.closeModal('tags-modal'); 
+        };
+
+        window.renderClauses = function() {
+            const lib = [
+                { t: 'Confidentiality', c: '<h2>CONFIDENTIALITY AND NON-DISCLOSURE</h2><p>You agree to keep all confidential information strictly confidential during and after your employment.</p>' },
+                { t: 'Probation (3 Months)', c: '<h2>PROBATIONARY PERIOD</h2><p>You will be subject to a <strong>three (3) months probationary period</strong> during which your performance will be assessed.</p>' },
+                { t: 'Non-Compete (12 Months)', c: '<h2>NON-COMPETE</h2><p>For 12 months following termination, you agree not to solicit employees or clients of the Company.</p>' },
+                { t: 'AI Use Policy', c: '<h2>ARTIFICIAL INTELLIGENCE USE</h2><p>Any work produced using AI tools shall remain the exclusive property of the Company.</p>' },
+                { t: 'Acceptance Block', c: '<h2>ACCEPTANCE</h2><p>I, <span class="merge-field">{{full_name}}</span>, accept the terms and conditions of this employment offer.</p>' }
+            ];
+            document.getElementById('clause-list').innerHTML = lib.map(i => `
+                <div class="bg-white/5 p-4 rounded-xl border border-white/10 hover:border-brand-gold/40 transition">
+                    <h3 class="text-white font-bold text-xs mb-2">${i.t}</h3>
+                    <button onclick="window.insertClause('${i.c.replace(/'/g, '\\\'')}')" class="w-full py-2 bg-brand-gold/10 text-brand-gold text-[10px] font-bold uppercase rounded hover:bg-brand-gold hover:text-white transition">Insert to Paper</button>
+                </div>
+            `).join('');
+        };
+
+        window.insertClause = function(c) { 
+            editor.chain().focus().insertContent(c).run(); 
+            window.closeModal('clauses-modal'); 
+        };
+
+        window.applyTemplate = function(type) {
+            if(type === 'offer') {
+                editor.commands.setContent(`
+                    <p style="text-align: right"><strong>{{today_date}}</strong></p>
+                    <p>Dear <strong>{{full_name}}</strong>,</p>
+                    <p>We are pleased to offer you the mid-level professional position of <strong>{{job_title}}</strong>.</p>
+                    <h2>POSITION DETAILS</h2>
+                    <p><strong>Position:</strong> {{job_title}}<br>
+                    <strong>Reporting To:</strong> {{reporting_to}}<br>
+                    <strong>Commencement Date:</strong> {{commencement_date}}</p>
+                    <h2>COMPENSATION</h2>
+                    <p><strong>Base Salary: ₦{{monthly_salary}} per month</strong></p>
+                `);
+            }
+            window.closeModal('template-modal');
+        };
+
+        // Setup ribbon button handlers
+        document.querySelectorAll('[data-cmd]').forEach(btn => {
+            btn.onclick = () => editor.chain().focus()[btn.dataset.cmd]().run();
+        });
+
+        document.querySelectorAll('[data-align]').forEach(btn => {
+            btn.onclick = () => editor.chain().focus().setTextAlign(btn.dataset.align).run();
+        });
+
+        window.loadMatter();
+        setInterval(() => matterId && window.saveDraft(), 60000);
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            if (e.ctrlKey || e.metaKey) {
+                if (e.key === 's') {
+                    e.preventDefault();
+                    window.saveDraft();
+                }
+                if (e.key === 'k') {
+                    e.preventDefault();
+                    window.openModal('tags-modal');
+                }
+            }
+            // Tab/Shift+Tab in list context
+            if (e.key === 'Tab' && !e.ctrlKey && !e.metaKey) {
+                const { state } = editor;
+                const { $from } = state.selection;
+                const isInList = $from.node(-1)?.type?.name === 'listItem' || $from.node(-2)?.type?.name === 'listItem';
+                if (isInList) {
+                    e.preventDefault();
+                    if (e.shiftKey) {
+                        window.outdentList();
+                    } else {
+                        window.indentList();
+                    }
+                }
+            }
+        });
+
+        // ── LIST UTILITIES ──
+        window.setOrderedListType = function(listType) {
+            const { state, view } = editor;
+            const { $from } = state.selection;
+            
+            let listPos = null;
+            for (let d = $from.depth; d > 0; d--) {
+                if ($from.node(d).type.name === 'orderedList') {
+                    listPos = $from.before(d);
+                    break;
+                }
+            }
+
+            if (listPos !== null) {
+                // Already in a list, just update its type
+                const tr = state.tr.setNodeMarkup(listPos, null, { 
+                    ...state.doc.nodeAt(listPos)?.attrs, 
+                    listStyleType: listType 
+                });
+                view.dispatch(tr);
+            } else {
+                // Not in a list, create one and then set its type
+                editor.chain().focus().toggleOrderedList().run();
+                // Recursively call to set the type of the newly created list
+                setTimeout(() => window.setOrderedListType(listType), 10);
+            }
+            editor.view.focus();
+        };
+
+        window.indentList = function() {
+            editor.chain().focus().sinkListItem('listItem').run();
+        };
+
+        window.outdentList = function() {
+            editor.chain().focus().liftListItem('listItem').run();
+        };
+
+        // ── PAGE BREAK COMMAND ──
+        window.insertPageBreak = function() {
+            editor.chain().focus().insertPageBreak().run();
+        };
+
+        // ── AUTO-PAGINATION ENGINE ──
+        // A4 body content height = 1123px (page) - ~240px (letterhead+footer) = ~845px usable per page
+        // We watch the ProseMirror height and overlay page-boundary lines in the canvas
+        const PAGE_HEIGHT_PX = 1123; // full A4 at 96dpi
+        const LETTERHEAD_H   = 168;  // approx letterhead height
+        const FOOTER_H       = 40;   // footer
+        const BODY_PAD       = 56;   // 28px top + 28px bottom padding
+        const USABLE_H = PAGE_HEIGHT_PX - LETTERHEAD_H - FOOTER_H - BODY_PAD; // ~859px first page
+
+        function updatePageLines() {
+            const proseMirror = document.querySelector('.ProseMirror');
+            if (!proseMirror) return;
+            const totalH = proseMirror.scrollHeight;
+
+            // Remove old page line overlays
+            document.querySelectorAll('.page-boundary-line').forEach(el => el.remove());
+
+            // Grow the a4-page so all content is visible
+            const a4 = document.querySelector('.a4-page');
+            if (a4) {
+                const neededPageH = LETTERHEAD_H + BODY_PAD + totalH + FOOTER_H;
+                a4.style.minHeight = Math.max(PAGE_HEIGHT_PX, neededPageH) + 'px';
+            }
+
+            // Draw visual page-break lines every PAGE_HEIGHT_PX inside the document-body
+            const docBody = document.querySelector('.document-body');
+            if (!docBody) return;
+            const bodyRect = docBody.getBoundingClientRect();
+            const canvasEl = document.getElementById('canvas');
+            const canvasRect = canvasEl.getBoundingClientRect();
+            const scrollTop = canvasEl.scrollTop;
+
+            // Draw lines at each page boundary after the first
+            for (let page = 1; ; page++) {
+                // Y position relative to the document-body top
+                const lineY = (page === 1 ? USABLE_H : (USABLE_H + (page - 1) * PAGE_HEIGHT_PX));
+                if (lineY > totalH + 40) break;
+
+                const absY = (bodyRect.top - canvasRect.top) + scrollTop + lineY;
+
+                const line = document.createElement('div');
+                line.className = 'page-boundary-line';
+                line.style.cssText = `
+                    position: absolute;
+                    left: 0; right: 0;
+                    top: ${absY}px;
+                    height: 2px;
+                    pointer-events: none;
+                    z-index: 10;
+                    display: flex; align-items: center; justify-content: center;
+                `;
+                line.innerHTML = `<div class="page-boundary-inner"></div><span class="page-boundary-label">Page ${page + 1}</span><div class="page-boundary-inner"></div>`;
+                canvasEl.appendChild(line);
+                if (page > 50) break; // safety cap
+            }
         }
-      }
-    }
-  </script>
-  <style>
-    *,
-    *::before,
-    *::after {
-      box-sizing: border-box;
-    }
 
-    body,
-    html {
-      height: 100%;
-      margin: 0;
-      overflow: hidden;
-      background: #111;
-      font-family: 'Inter', sans-serif;
-    }
+        // Run on every editor update
+        editor.on('update', () => setTimeout(updatePageLines, 50));
+        editor.on('selectionUpdate', () => setTimeout(updatePageLines, 50));
+        window.addEventListener('resize', updatePageLines);
+        document.getElementById('canvas').addEventListener('scroll', updatePageLines);
+        setTimeout(updatePageLines, 800); // initial run after load
+    </script>
 
-    #gjs {
-      border: none;
-      height: calc(100vh - 60px) !important;
-    }
+    <style>
+        :root {
+            --brand-gold: #C47D0A;
+            --brand-gold-pale: #a96008;
+            --studio-bg: #2b2b2b;
+            --paper-white: #ffffff;
+        }
 
-    .editor-top-bar {
-      min-height: 60px;
-      background: #1A1A1A;
-      color: white;
-      display: flex;
-      align-items: center;
-      justify-content: space-between;
-      padding: 10px 20px;
-      border-bottom: 2px solid #C47D0A;
-      position: relative;
-      z-index: 9999;
-      flex-wrap: wrap;
-      gap: 12px;
-    }
+        body, html {
+            margin: 0; padding: 0; height: 100%;
+            background: #111;
+            font-family: 'Inter', sans-serif;
+            overflow: hidden;
+        }
 
-    .brand-logo {
-      color: #C47D0A;
-      font-weight: 700;
-      font-size: 1.1rem;
-      letter-spacing: 0.05em;
-      display: flex;
-      align-items: center;
-      gap: 10px;
-    }
+        /* ── THREE-ZONE STACK ── */
+        #top-bar { 
+            height: 56px; background: #1a1a1a; border-bottom: 3px solid var(--brand-gold);
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 0 20px; z-index: 100; position: fixed; top: 0; width: 100%;
+        }
 
-    .top-actions {
-      display: flex;
-      align-items: center;
-      gap: 8px;
-    }
+        #ribbon { 
+            height: 44px; background: #f3f3f3; border-bottom: 1px solid #ccc;
+            display: flex; align-items: center; gap: 3px; 
+            padding: 0 12px; z-index: 99; position: fixed; top: 56px; width: 100%;
+            overflow-x: auto;
+        }
 
-    .btn {
-      background: #C47D0A;
-      color: white;
-      border: none;
-      padding: 8px 16px;
-      border-radius: 5px;
-      cursor: pointer;
-      font-weight: 600;
-      font-size: 0.85rem;
-      transition: 0.2s;
-      white-space: nowrap;
-    }
+        #canvas { 
+            position: absolute; top: 100px; bottom: 60px; left: 0; right: 0;
+            overflow-y: auto; background: var(--studio-bg);
+            display: flex; flex-direction: column; align-items: center;
+            padding: 40px 0 40px; gap: 30px;
+        }
 
-    .btn:hover {
-      background: #A66908;
-    }
+        /* ── WORKFLOW STATUS INDICATOR ── */
+        .workflow-step {
+            color: #666;
+            padding: 0 8px;
+            transition: all 0.3s ease;
+            font-weight: 500;
+        }
 
-    .btn-outline {
-      background: transparent;
-      border: 1.5px solid #C47D0A;
-      color: #C47D0A;
-    }
+        .workflow-step.active {
+            color: var(--brand-gold);
+            text-shadow: 0 0 8px rgba(196, 125, 10, 0.5);
+        }
 
-    .btn-gray {
-      background: #333;
-      border: 1px solid #444;
-      color: #ccc;
-    }
+        /* ── A4 PAPER SIMULATION ── */
+        .a4-page {
+            width: 794px; /* 210mm at 96dpi */
+            min-height: 1123px; /* 297mm at 96dpi */
+            background: var(--paper-white);
+            box-shadow: 0 4px 24px rgba(0,0,0,0.55);
+            position: relative;
+            display: flex; flex-direction: column;
+            padding: 0;
+        }
 
-    /* ── MODALS ── */
-    .modal-overlay {
-      position: fixed;
-      inset: 0;
-      background: rgba(0, 0, 0, 0.85);
-      display: flex;
-      align-items: center;
-      justify-content: center;
-      z-index: 99999;
-    }
 
-    .modal-overlay.hidden {
-      display: none;
-    }
+        /* ── BRANDED COMPONENTS ── */
+        .letterhead { position: relative; padding: 0; user-select: none; }
+        
+        .header-bar-black { position: absolute; top: 0; left: 0; width: 60%; height: 40px; background: #000; border-bottom-right-radius: 40px; z-index: 1; }
+        .header-bar-gold { position: absolute; top: 0; right: 0; width: 40%; height: 30px; background: var(--brand-gold); z-index: 1; }
 
-    .modal-box {
-      background: #1a1a1a;
-      border-radius: 14px;
-      width: 90vw;
-      max-width: 600px;
-      max-height: 88vh;
-      overflow: hidden;
-      display: flex;
-      flex-direction: column;
-      border: 1px solid #333;
-    }
+        .letterhead-inner { 
+            display: flex; justify-content: space-between; align-items: center;
+            padding: 50px 60px 20px; position: relative; z-index: 2;
+        }
+        .letterhead-contact { 
+            border-left: 2px solid #000; padding: 4px 15px; font-size: 9pt; 
+            line-height: 1.5; color: #111; text-align: left; font-weight: 700;
+            font-variant-caps: all-small-caps;
+            letter-spacing: 0.05em;
+        }
+        .letterhead-divider { height: 2px; background: #eee; margin: 0 60px; }
 
-    .modal-header {
-      padding: 24px 28px 16px;
-      border-bottom: 1px solid #2a2a2a;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-    }
+        .page-footer { margin-top: auto; user-select: none; position: relative; }
+        .footer-bar-container { display: flex; height: 12px; }
+        .footer-black { flex: 1; background: #000; }
+        .footer-gold { flex: 1; background: var(--brand-gold); }
 
-    .modal-header h2 {
-      color: white;
-      font-family: 'Playfair Display', serif;
-      font-size: 1.5rem;
-      margin: 0;
-    }
+        /* ── EDITOR BODY ── */
+        .document-body { 
+            padding: 28px 72px; flex: 1; 
+            font-family: 'Tinos', serif; font-size: 11pt; 
+            line-height: 1.6; color: #000;
+            cursor: text;
+        }
+        .ProseMirror { 
+            outline: none; min-height: 800px; 
+            font-weight: 400 !important; /* Reset any inheritance */
+        }
+        .ProseMirror strong, .ProseMirror b { font-weight: bold !important; display: inline; }
+        .ProseMirror u { text-decoration: underline !important; }
+        .ProseMirror s, .ProseMirror del { text-decoration: line-through !important; }
+        .ProseMirror p { margin-bottom: 10pt; text-align: justify; font-weight: 400; }
+        .ProseMirror h2 { 
+            font-family: 'Inter', sans-serif; font-weight: 700; color: #111;
+            text-transform: uppercase; letter-spacing: 0.04em; margin: 20pt 0 8pt; font-size: 12pt;
+        }
 
-    .modal-close {
-      background: none;
-      border: none;
-      color: #666;
-      font-size: 1.5rem;
-      cursor: pointer;
-    }
+        /* ── LISTS ── */
+        .ProseMirror ul { 
+            list-style-type: disc;
+            padding-left: 3.5em; 
+            margin: 6pt 0 10pt;
+        }
+        .ProseMirror ol { 
+            list-style-type: decimal;
+            padding-left: 3.5em; 
+            margin: 6pt 0 10pt;
+        }
+        .ProseMirror li { 
+            margin-bottom: 3pt; 
+            display: list-item;
+        }
+        /* Nested list indentation */
+        .ProseMirror li > ul,
+        .ProseMirror li > ol {
+            margin: 3pt 0;
+            padding-left: 1.5em;
+        }
+        /* Respect custom list-style-type set via TipTap attrs on the <ol> */
+        .ProseMirror ol[style*="list-style-type"] { 
+            list-style-type: revert !important; 
+        }
 
-    .modal-body {
-      overflow-y: auto;
-      padding: 24px 28px;
-      flex: 1;
-    }
+        /* ── PAGE BREAK NODE ── */
+        .editor-page-break {
+            width: calc(100% + 144px);
+            margin: 30px -72px;
+            background: var(--studio-bg);
+            height: 60px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            border-top: 1px solid #ddd;
+            border-bottom: 1px solid #ddd;
+            box-shadow: inset 0 6px 15px rgba(0,0,0,0.15);
+            user-select: none;
+            cursor: default;
+        }
+        .editor-page-break-gap { flex: 1; height: 1.5px; opacity: 0.15; background: #666; }
+        .editor-page-break-label {
+            font-family: 'Inter', sans-serif;
+            font-size: 8pt;
+            color: #777;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.2em;
+            padding: 4px 18px;
+            background: #f0f0f0;
+            border: 1px solid #ccc;
+            border-radius: 4px;
+            margin: 0 20px;
+            white-space: nowrap;
+        }
+        .ProseMirror-selectednode .editor-page-break-label {
+            border-color: var(--brand-gold);
+            color: var(--brand-gold);
+            box-shadow: 0 0 10px rgba(196, 125, 10, 0.2);
+        }
 
-    .tag-item {
-      background: #222;
-      border: 1px solid #333;
-      padding: 12px;
-      border-radius: 8px;
-      display: flex;
-      justify-content: space-between;
-      align-items: center;
-      margin-bottom: 10px;
-    }
+        /* ── AUTOMATIC PAGE BOUNDARY LINES ── */
+        .page-boundary-line {
+            background: transparent;
+            opacity: 0.4;
+            pointer-events: none;
+        }
+        .page-boundary-inner {
+            flex: 1;
+            height: 1px;
+            background: repeating-linear-gradient(90deg, #bbb 0, #bbb 10px, transparent 10px, transparent 20px);
+        }
+        .page-boundary-label {
+            font-family: 'Inter', sans-serif;
+            font-size: 8px;
+            color: #999;
+            font-weight: 500;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            padding: 1px 6px;
+            background: #fff;
+            border: 1px solid #eee;
+            border-radius: 2px;
+            white-space: nowrap;
+            user-select: none;
+        }
 
-    .tag-code {
-      color: #C47D0A;
-      font-family: monospace;
-      font-weight: 700;
-    }
 
-    .copy-btn {
-      background: #333;
-      color: #C47D0A;
-      border: 1px solid #C47D0A;
-      padding: 4px 10px;
-      border-radius: 4px;
-      font-size: 0.75rem;
-      cursor: pointer;
-    }
 
-    /* GrapesJS Customization */
-    .gjs-pn-panel {
-      background: #1a1a1a !important;
-    }
-  </style>
+        .merge-field { 
+            background: #FFF3CD; border: 1px dashed var(--brand-gold); 
+            border-radius: 3px; padding: 0 4px; font-family: monospace; 
+            font-size: 9.5pt; color: #7A4E0A;
+        }
+
+        /* ── RIBBON UI ── */
+        .ribbon-divider { width: 1px; height: 24px; background: #ccc; margin: 0 4px; flex-shrink: 0; }
+        .ribbon-btn {
+            background: none; border: 1px solid transparent; border-radius: 3px;
+            padding: 4px 8px; cursor: pointer; font-size: 0.82rem; color: #333;
+            height: 32px; white-space: nowrap; transition: 0.15s;
+        }
+        .ribbon-btn:hover { background: #e0e0e0; border-color: #bbb; }
+        .ribbon-btn.active { background: #d0d8ff; border-color: #6677cc; }
+        .ribbon-select { 
+            border: 1px solid #ccc; border-radius: 3px; padding: 3px 6px; 
+            font-size: 0.82rem; height: 32px; background: white; outline: none;
+        }
+
+        /* ── MODALS ── */
+        .modal-overlay { 
+            position: fixed; inset: 0; background: rgba(0,0,0,0.8); 
+            backdrop-filter: blur(4px); z-index: 1000; display: flex; 
+            align-items: center; justify-content: center;
+        }
+        .modal-box { 
+            background: #111; border: 1px solid #333; width: 500px; 
+            border-radius: 12px; overflow: hidden;
+        }
+        .hidden { display: none; }
+    </style>
 </head>
-
 <body>
 
-  <!-- TOP BAR -->
-  <div class="editor-top-bar">
-    <div class="brand-logo">
-      <img src="/static/logo.svg" alt="Eximp & Cloves" style="height: 32px;" onerror="this.style.display='none'">
-      <span>Personnel Studio</span>
-    </div>
-    <div class="top-actions">
-      <div class="flex items-center gap-2">
-        <span class="text-xs text-gray-500 uppercase font-bold shrink-0">Case Title:</span>
-        <input type="text" id="case-title"
-          class="bg-[#222] border border-[#333] text-sm px-3 py-1.5 rounded w-[260px] outline-none focus:border-brand-gold text-white"
-          placeholder="e.g. Offer Letter - John Doe">
-      </div>
-      <div class="flex items-center gap-2">
-        <button class="btn btn-gray" onclick="openTags()">🏷️ Smart Tags</button>
-        <button class="btn btn-gray" onclick="openClauses()">📋 Clause Library</button>
-        <button class="btn btn-outline" id="manage-collaborators">👥 Permissions</button>
-        <button class="btn" id="save-draft">💾 Save Draft</button>
-        <button class="btn btn-gray" onclick="window.history.back()">← Back</button>
-      </div>
-    </div>
-  </div>
-
-  <!-- CANVAS -->
-  <div id="gjs"></div>
-
-  <!-- SMART TAGS MODAL -->
-  <div id="tags-modal" class="modal-overlay hidden">
-    <div class="modal-box">
-      <div class="modal-header">
-        <div>
-          <h2>Smart Intelligence Tags</h2>
-          <p class="text-gray-500 text-xs mt-1">Copy and paste these into your draft to auto-populate data.</p>
+    <!-- TOP BAR -->
+    <div id="top-bar">
+        <div class="flex items-center gap-4">
+            <img src="/static/img/logo_dark.svg" alt="" style="height:30px;">
+            <span class="text-brand-gold font-bold tracking-widest text-sm uppercase">Legal Laboratory</span>
+            <div class="w-[1px] h-6 bg-white/10"></div>
+            <input type="text" id="document-title" class="bg-white/5 border border-white/10 text-white rounded px-3 py-1 text-xs w-64 outline-none focus:border-brand-gold" placeholder="Document Title">
         </div>
-        <button class="modal-close" onclick="closeTags()">✕</button>
-      </div>
-      <div class="modal-body">
-        <div class="space-y-2">
-          <div class="text-xs font-bold text-brand-gold uppercase tracking-widest mb-2">Personnel Metadata</div>
-          <div class="tag-item">
-            <div>
-              <div class="tag-code">{{full_name}}</div>
-              <div class="text-[10px] text-gray-500">Staff full name</div>
-            </div>
-            <button class="copy-btn" onclick="copyTag('{{full_name}}')">Copy</button>
-          </div>
-          <div class="tag-item">
-            <div>
-              <div class="tag-code">{{monthly_salary}}</div>
-              <div class="text-[10px] text-gray-500">Net monthly pay</div>
-            </div>
-            <button class="copy-btn" onclick="copyTag('{{monthly_salary}}')">Copy</button>
-          </div>
-          <div class="tag-item">
-            <div>
-              <div class="tag-code">{{job_title}}</div>
-              <div class="text-[10px] text-gray-500">Designation</div>
-            </div>
-            <button class="copy-btn" onclick="copyTag('{{job_title}}')">Copy</button>
-          </div>
-          <hr class="border-gray-800 my-4">
-          <div class="text-xs font-bold text-blue-400 uppercase tracking-widest mb-2">Real Estate Context</div>
-          <div class="tag-item">
-            <div>
-              <div class="tag-code">{{property_name}}</div>
-              <div class="text-[10px] text-gray-500">Land or Estate Name</div>
-            </div>
-            <button class="copy-btn" onclick="copyTag('{{property_name}}')">Copy</button>
-          </div>
-          <div class="tag-item">
-            <div>
-              <div class="tag-code">{{plot_size}}</div>
-              <div class="text-[10px] text-gray-500">Dimensions in sqm</div>
-            </div>
-            <button class="copy-btn" onclick="copyTag('{{plot_size}}')">Copy</button>
-          </div>
+        <div class="flex items-center gap-3">
+            <button onclick="toggleLock()" id="btn-lock" class="bg-white/5 text-gray-400 border border-white/10 px-4 py-1.5 rounded text-[10px] font-bold uppercase hover:text-white transition">🔓 Unlock Header</button>
+            <button onclick="openModal('tags-modal')" class="bg-brand-gold text-white px-4 py-1.5 rounded text-[10px] font-bold uppercase hover:bg-brand-gold-pale transition">Smart Tags</button>
+            <button onclick="openModal('clauses-modal')" class="bg-white/5 text-gray-400 border border-white/10 px-4 py-1.5 rounded text-[10px] font-bold uppercase hover:text-white transition">Clauses</button>
+            <button onclick="openModal('template-modal')" class="bg-white/5 text-gray-400 border border-white/10 px-4 py-1.5 rounded text-[10px] font-bold uppercase hover:text-white transition" title="Load from template">📋 Templates</button>
+            <button onclick="openModal('memo-modal')" class="bg-white/5 text-gray-400 border border-white/10 px-4 py-1.5 rounded text-[10px] font-bold uppercase hover:text-white transition" title="HR-Legal discussion">💬 Memos</button>
+            <button onclick="openModal('help-modal')" class="bg-white/5 text-gray-400 border border-white/10 px-3 py-1.5 rounded text-[10px] font-bold hover:text-white transition" title="Keyboard shortcuts">?</button>
+            <button onclick="saveDraft()" id="save-btn" class="bg-brand-gold text-white px-6 py-1.5 rounded text-[10px] font-bold uppercase flex items-center gap-2">
+                <span id="save-status">💾 Save Draft</span>
+            </button>
+            <button onclick="window.prepareForSigning()" class="bg-green-600 text-white px-6 py-1.5 rounded text-[10px] font-bold uppercase flex items-center gap-2 hover:bg-green-700 transition" title="Initiate Digital Signing">
+                ✍ Digital Sign
+            </button>
+            <button onclick="window.history.back()" class="text-gray-500 hover:text-white transition text-xs">← Back</button>
         </div>
-      </div>
     </div>
-  </div>
 
-  <script>
-    const editor = grapesjs.init({
-      container: '#gjs',
-      fromElement: true,
-      height: '100%',
-      storageManager: false,
-      plugins: ['gjs-preset-newsletter'],
-      pluginsOpts: {
-        'gjs-preset-newsletter': {
-          modalTitleImport: 'Import Template',
-        }
-      }
-    });
-
-    // ── CUSTOM BLOCKS (Real Estate/Legal Focused) ──
-    const bm = editor.BlockManager;
-
-    bm.add('letterhead-classic', {
-      label: 'Standard Letterhead',
-      category: 'Header & Footer',
-      content: `
-        <table width="100%" cellpadding="0" cellspacing="0" style="border-bottom: 3px solid #C47D0A; padding-bottom: 20px; font-family: 'Inter', sans-serif;">
-          <tr>
-            <td width="30%" align="left">
-               <img src="https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/marketing/logo_dark.svg" style="height: 60px;">
-            </td>
-            <td width="70%" align="right" style="color: #666; font-size: 10px; line-height: 1.5;">
-              <strong>EXIMP & CLOVES INFRASTRUCTURE LIMITED</strong><br>
-              57B, Isaac John Street, Yaba, Lagos<br>
-              www.eximps-cloves.com | legal@eximps-cloves.com
-            </td>
-          </tr>
-        </table>
-      `
-    });
-
-    bm.add('legal-clause', {
-      label: 'Legal Section',
-      category: 'Components',
-      content: `
-        <div style="padding: 20px 0; font-family: 'Inter', sans-serif;">
-            <h3 style="font-size: 14px; color: #111; text-transform: uppercase; margin-bottom: 10px;">1. TITLE OF SECTION</h3>
-            <p style="font-size: 13px; color: #444; line-height: 1.6;">
-              This is a standard legal clause placeholder. You can double click to edit the text or drag in specific clauses from the library.
-            </p>
-        </div>
-      `
-    });
-
-    bm.add('signatory-block', {
-      label: 'Signing Zone',
-      category: 'Components',
-      content: `
-        <table width="100%" style="margin-top: 40px; font-family: 'Inter', sans-serif;">
-          <tr>
-            <td width="45%" style="border-top: 1px solid #111; padding-top: 10px;">
-              <div style="font-size: 12px; font-weight: bold;">FOR: EXIMP & CLOVES INFRASTRUCTURE</div>
-              <div style="font-size: 10px; margin-top: 5px; color: #666;">AUTHORISED SIGNATORY</div>
-            </td>
-            <td width="10%"></td>
-            <td width="45%" style="border-top: 1px solid #111; padding-top: 10px;">
-              <div style="font-size: 12px; font-weight: bold;">AGREED BY: {{full_name}}</div>
-              <div style="font-size: 10px; margin-top: 5px; color: #666;">RECEIVING PARTY</div>
-            </td>
-          </tr>
-        </table>
-      `
-    });
-
-    // ── DATA SYNC ──
-    const urlParams = new URLSearchParams(window.location.search);
-    const matterId = urlParams.get('id');
-    const API_BASE = '/api/hr-legal';
-
-    async function loadMatter() {
-      if (!matterId) return;
-      try {
-        const res = await fetch(`${API_BASE}/matters/${matterId}`, {
-          headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
-        });
-        const data = await res.json();
-        const matter = data.matter;
+    <!-- RIBBON -->
+    <div id="ribbon">
+        <button onclick="window.undo()" class="ribbon-btn" title="Undo (Ctrl+Z)">↶ Undo</button>
+        <button onclick="window.redo()" class="ribbon-btn" title="Redo (Ctrl+Y)">↷ Redo</button>
+        <div class="ribbon-divider"></div>
         
-        document.getElementById('case-title').value = matter.title;
+        <select id="heading-style" class="ribbon-select" onchange="window.setHeading(parseInt(this.value))">
+            <option value="0">Normal</option>
+            <option value="1">Heading 1</option>
+            <option value="2">Heading 2</option>
+            <option value="3">Heading 3</option>
+        </select>
         
-        if (matter.content_html) {
-          editor.setComponents(matter.content_html);
-        }
-        if (matter.content_css) {
-          editor.setStyle(matter.content_css);
-        }
-      } catch (err) { console.error('Load error:', err); }
-    }
+        <select id="font-family" class="ribbon-select">
+            <option value="'Tinos', serif">Times New Roman</option>
+            <option value="'Inter', sans-serif">Inter</option>
+            <option value="Arial, sans-serif">Arial</option>
+        </select>
+        <select id="font-size" class="ribbon-select">
+            <option value="11">11</option>
+            <option value="12">12</option>
+            <option value="14">14</option>
+            <option value="16">16</option>
+        </select>
+        <div class="ribbon-divider"></div>
+        
+        <button class="ribbon-btn" data-cmd="toggleBold"><b>B</b></button>
+        <button class="ribbon-btn" data-cmd="toggleItalic"><i>I</i></button>
+        <button class="ribbon-btn" data-cmd="toggleUnderline"><u>U</u></button>
+        <button class="ribbon-btn" data-cmd="toggleStrike" title="Strikethrough">S̶</button>
+        <div class="ribbon-divider"></div>
+        
+        <button onclick="window.toggleSuperscript()" class="ribbon-btn" title="Superscript">x<sup>²</sup></button>
+        <button onclick="window.toggleSubscript()" class="ribbon-btn" title="Subscript">x<sub>₂</sub></button>
+        <div class="ribbon-divider"></div>
+        
+        <button class="ribbon-btn" data-align="left">L</button>
+        <button class="ribbon-btn" data-align="center">C</button>
+        <button class="ribbon-btn" data-align="right">R</button>
+        <button class="ribbon-btn" data-align="justify">J</button>
+        <div class="ribbon-divider"></div>
+        
+        <button onclick="editor.chain().focus().toggleBulletList().run()" class="ribbon-btn" title="Bullet List">• List</button>
+        <button onclick="window.setOrderedListType('decimal')" class="ribbon-btn" title="Numbered List (1, 2, 3)">1. List</button>
+        <button onclick="window.setOrderedListType('lower-alpha')" class="ribbon-btn" title="Lettered List (a, b, c)">a. List</button>
+        <button onclick="window.setOrderedListType('lower-roman')" class="ribbon-btn" title="Roman Numeral List (i, ii, iii)">i. List</button>
+        <div class="ribbon-divider"></div>
+        <button onclick="window.indentList()" class="ribbon-btn" title="Indent (Tab)">→ Indent</button>
+        <button onclick="window.outdentList()" class="ribbon-btn" title="Outdent (Shift+Tab)">← Outdent</button>
 
-    async function saveDraft() {
-        const btn = document.getElementById('save-draft');
-        const title = document.getElementById('case-title').value;
-        const html = editor.getHtml();
-        const css = editor.getCss();
+        <button onclick="editor.chain().focus().setHorizontalRule().run()" class="ribbon-btn">── Line</button>
+        <button onclick="window.insertPageBreak()" class="ribbon-btn" title="Page Break">⊢⊣</button>
+        <div class="ribbon-divider"></div>
+        
+        <button onclick="window.openFindReplace()" class="ribbon-btn" title="Find & Replace">🔍 Find</button>
+        <div class="ribbon-divider"></div>
+        
+        <button class="ribbon-btn" onclick="window.insertDate('long')" title="Insert Date">📅 Today</button>
+        <button class="ribbon-btn" onclick="window.insertSignatureBlock()" title="Insert Signature Block">✍ Signature</button>
+        <div class="ribbon-divider"></div>
+        
+        <button onclick="window.zoomIn()" class="ribbon-btn" title="Zoom In">🔍+</button>
+        <button onclick="window.resetZoom()" class="ribbon-btn" title="Reset Zoom">⊙</button>
+        <button onclick="window.zoomOut()" class="ribbon-btn" title="Zoom Out">🔍−</button>
+        <div class="ribbon-divider"></div>
+        
+        <button onclick="window.toggleFullScreen()" class="ribbon-btn" title="Full Screen">⛶</button>
+        <button onclick="window.print()" class="ribbon-btn bg-brand-gold/10 text-brand-gold font-bold">🖨 Print</button>
+        <button onclick="window.prepareForSigning()" class="ribbon-btn bg-green-600/20 text-green-400 font-bold" title="Digital Sign">✍ Sign</button>
+    </div>
 
-        btn.innerText = 'Saving...';
-        btn.disabled = true;
+    <!-- CANVAS -->
+    <div id="canvas">
+        <div class="a4-page">
+            <!-- LETTERHEAD -->
+            <div class="letterhead" contenteditable="false">
+                <div class="header-bar-black"></div>
+                <div class="header-bar-gold"></div>
+                <div class="letterhead-inner">
+                    <img src="/static/img/logo_firm.png" style="height: 70px;">
+                    <div id="letterhead-editable" class="letterhead-contact" contenteditable="false">
+                        <div>phone: +234 912 6864 383</div>
+                        <div>web: <a href="https://eximps-cloves.com" target="_blank" class="text-brand-gold">https://eximps-cloves.com</a></div>
+                        <div>email: <a href="mailto:admin@eximps-cloves.com" class="text-brand-gold">admin@eximps-cloves.com</a></div>
+                    </div>
+                </div>
+                <div class="letterhead-divider"></div>
+            </div>
 
-        try {
-            const res = await fetch(`${API_BASE}/matters/${matterId}/save`, {
-                method: 'PATCH',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${localStorage.getItem('ec_token')}`
-                },
-                body: JSON.stringify({ title, html, css })
-            });
+            <!-- DOCUMENT BODY -->
+            <div class="document-body">
+                <div id="editor"></div>
+            </div>
 
-            if (res.ok) {
-                btn.innerText = 'Saved ✓';
-                setTimeout(() => {
-                    btn.innerText = 'Save Draft';
-                    btn.disabled = false;
-                }, 2000);
-            } else {
-                alert('Save failed');
-                btn.innerText = 'Save Draft';
-                btn.disabled = false;
-            }
-        } catch (err) { 
-            alert('Connection error'); 
-            btn.innerText = 'Save Draft';
-            btn.disabled = false;
-        }
-    }
+            <!-- FOOTER -->
+            <div class="page-footer" contenteditable="false">
+                <div class="footer-bar-container">
+                    <div class="footer-black"></div>
+                    <div class="footer-gold"></div>
+                </div>
+            </div>
+        </div>
+    </div>
 
-    document.getElementById('save-draft').addEventListener('click', saveDraft);
+    <!-- MODALS -->
+    <div id="template-modal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <div class="p-6 border-b border-white/5 flex justify-between items-center text-white">
+                <h2 class="font-bold uppercase tracking-widest text-sm">New from Template</h2>
+                <button onclick="closeModal('template-modal')">✕</button>
+            </div>
+            <div class="p-6 space-y-3">
+                <button onclick="applyTemplate('offer')" class="w-full p-4 bg-white/5 border border-white/10 rounded-xl text-left hover:border-brand-gold transition group">
+                    <h3 class="text-white font-bold group-hover:text-brand-gold transition">Standard Offer Letter</h3>
+                    <p class="text-[10px] text-gray-400 mt-1">Full professional offer with auto-tags.</p>
+                </button>
+            </div>
+        </div>
+    </div>
 
-    // Initial Load
-    loadMatter();
+    <!-- WORKFLOW STATUS INDICATOR -->
+    <div id="workflow-status" style="position: fixed; bottom: 32px; left: 0; right: 0; height: 28px; background: #0f0f0f; border-top: 1px solid #333; display: flex; justify-content: flex-start; align-items: center; padding: 0 20px; font-size: 10px; z-index: 49; gap: 30px;">
+        <div id="status-draft" class="workflow-step active" onclick="updateMatterStatus('Draft')" style="cursor: pointer;">📋 Draft</div>
+        <div id="status-progress" class="workflow-step" onclick="updateMatterStatus('In-Progress')" style="cursor: pointer;">⚙️ In-Progress</div>
+        <div id="status-signing" class="workflow-step" onclick="updateMatterStatus('Legal Signing')" style="cursor: pointer;">🔏 Signing</div>
+        <div id="status-executed" class="workflow-step" onclick="updateMatterStatus('Executed')" style="cursor: pointer;">✅ Executed</div>
+        <span style="color: #666; margin-left: auto;">Status: <span id="current-status" style="color: var(--brand-gold);">Draft</span></span>
+    </div>
 
-    // ── MODAL LOGIC ──
-    function openTags() { document.getElementById('tags-modal').classList.remove('hidden'); }
-    function closeTags() { document.getElementById('tags-modal').classList.add('hidden'); }
-    function copyTag(tag) {
-      navigator.clipboard.writeText(tag);
-      alert('Tag copied: ' + tag);
-    }
-  </script>
-</body>
+    <!-- STATUS BAR -->
+    <div id="status-bar" style="position: fixed; bottom: 0; left: 0; right: 0; height: 32px; background: #1a1a1a; border-top: 1px solid #333; display: flex; justify-content: space-between; align-items: center; padding: 0 20px; font-size: 11px; color: #888; z-index: 50;">
+        <div id="word-count">Words: 0 | Chars: 0</div>
+        <div style="display: flex; gap: 20px; align-items: center;">
+            <span id="document-status">Ready</span>
+            <span id="document-modified" style="color: #666;">•</span>
+        </div>
+    </div>
 
-</html>
+    <div id="tags-modal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <div class="p-6 border-b border-white/5 flex justify-between items-center text-white">
+                <h2 class="font-bold">Smart Tags</h2>
+                <button onclick="closeModal('tags-modal')">✕</button>
+            </div>
+            <div class="p-6 grid grid-cols-2 gap-3" id="tag-grid"></div>
+        </div>
+    </div>
+
+    <div id="clauses-modal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <div class="p-6 border-b border-white/5 flex justify-between items-center text-white">
+                <h2 class="font-bold uppercase tracking-widest text-sm">Clause Library</h2>
+                <button onclick="closeModal('clauses-modal')">✕</button>
+            </div>
+            <div class="p-6 space-y-3" id="clause-list"></div>
+        </div>
+    </div>
+
+    <div id="help-modal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <div class="p-6 border-b border-white/5 flex justify-between items-center text-white">
+                <h2 class="font-bold uppercase tracking-widest text-sm">Keyboard Shortcuts</h2>
+                <button onclick="closeModal('help-modal')">✕</button>
+            </div>
+            <div class="p-6 space-y-2 text-white text-xs" style="max-height: 400px; overflow-y: auto;">
+                <div class="grid grid-cols-2 gap-3">
+                    <div><kbd class="bg-white/10 px-2 py-1 rounded">Ctrl+B</kbd> <span class="text-gray-400">Bold</span></div>
+                    <div><kbd class="bg-white/10 px-2 py-1 rounded">Ctrl+I</kbd> <span class="text-gray-400">Italic</span></div>
+                    <div><kbd class="bg-white/10 px-2 py-1 rounded">Ctrl+U</kbd> <span class="text-gray-400">Underline</span></div>
+                    <div><kbd class="bg-white/10 px-2 py-1 rounded">Ctrl+Z</kbd> <span class="text-gray-400">Undo</span></div>
+                    <div><kbd class="bg-white/10 px-2 py-1 rounded">Ctrl+Shift+Z</kbd> <span class="text-gray-400">Redo</span></div>
+                    <div><kbd class="bg-white/10 px-2 py-1 rounded">Ctrl+K</kbd> <span class="text-gray-400">Smart Tags</span></div>
+                    <div><kbd class="bg-white/10 px-2 py-1 rounded">Ctrl+L</kbd> <span class="text-gray-400">Align Left</span></div>
+                    <div><kbd class="bg-white/10 px-2 py-1 rounded">Ctrl+E</kbd> <span class="text-gray-400">Align Center</span></div>
+                    <div><kbd class="bg-white/10 px-2 py-1 rounded">Ctrl+R</kbd> <span class="text-gray-400">Align Right</span></div>
+                    <div><kbd class="bg-white/10 px-2 py-1 rounded">Ctrl+J</kbd> <span class="text-gray-400">Justify</span></div>
+                    <div><kbd class="bg-white/10 px-2 py-1 rounded">Ctrl+S</kbd> <span class="text-gray-400">Save Draft</span></div>
+                    <div><kbd class="bg-white/10 px-2 py-1 rounded">Ctrl+P</kbd> <span class="text-gray-400">Print/PDF</span></div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- TEMPLATE MODAL -->
+    <div id="template-modal" class="modal-overlay hidden">
+        <div class="modal-box">
+            <div class="p-6 border-b border-white/5 flex justify-between items-center text-white">
+                <h2 class="font-bold uppercase tracking-widest text-sm">📄 Select Template</h2>
+                <button onclick="closeModal('template-modal')">✕</button>
+            </div>
+            <div id="template-list" class="p-6 space-y-3" style="max-height: 500px; overflow-y: auto;">
+                <button class="w-full text-left p-4 border border-white/10 rounded hover:border-brand-gold hover:bg-brand-gold/5 transition text-white" onclick="loadTemplate('offer-letter')">
+                    <div class="font-bold">📄 Offer Letter</div>
+                    <div class="text-xs text-gray-400">Pre-formatted employment offer matching company branding</div>
+                </button>
+                <button class="w-full text-left p-4 border border-white/10 rounded hover:border-brand-gold hover:bg-brand-gold/5 transition text-white" onclick="loadTemplate('employment-contract')">
+                    <div class="font-bold">📋 Employment Contract</div>
+                    <div class="text-xs text-gray-400">Full-time employment agreement with standard clauses</div>
+                </button>
+                <button class="w-full text-left p-4 border border-white/10 rounded hover:border-brand-gold hover:bg-brand-gold/5 transition text-white" onclick="loadTemplate('nda')">
+                    <div class="font-bold">🔒 Non-Disclosure Agreement</div>
+                    <div class="text-xs text-gray-400">Confidentiality & intellectual property protection</div>
+                </button>
+                <button class="w-full text-left p-4 border border-white/10 rounded hover:border-brand-gold hover:bg-brand-gold/5 transition text-white" onclick="loadTemplate('disciplinary')">
+                    <div class="font-bold">⚠️ Disciplinary Review</div>
+                    <div class="text-xs text-gray-400">Formal documentation of performance issues</div>
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MEMO THREAD MODAL -->
+    <div id="memo-modal" class="modal-overlay hidden">
+        <div class="modal-box" style="width: 600px;">
+            <div class="p-6 border-b border-white/5 flex justify-between items-center text-white">
+                <h2 class="font-bold uppercase tracking-widest text-sm">💬 Memo Thread</h2>
+                <button onclick="closeModal('memo-modal')">✕</button>
+            </div>
+            <div id="memo-messages" class="p-6 space-y-3 border-b border-white/5" style="max-height: 400px; overflow-y: auto;">
+                <!-- Messages appear here -->
+            </div>
+            <div class="p-6 bg-white/2.5 flex gap-2">
+                <textarea id="memo-input" class="flex-1 bg-white/5 border border-white/10 text-white rounded px-3 py-2 text-xs outline-none focus:border-brand-gold resize-none" placeholder="Add internal note..." rows="3"></textarea>
+                <button onclick="sendMemo()" class="bg-brand-gold text-white px-4 py-2 rounded text-xs font-bold hover:bg-brand-gold-pale transition">Send</button>
+            </div>
+        </div>
+    </div>
+

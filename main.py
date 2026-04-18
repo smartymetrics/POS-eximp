@@ -190,6 +190,12 @@ async def legal_advanced_editor_page(request: Request, id: str = None):
     return templates.TemplateResponse("personnel_editor.html", {"request": request, "matter_id": id})
 
 
+@app.get("/signing/{signing_token}", response_class=HTMLResponse)
+async def signing_page(request: Request, signing_token: str):
+    """Render the digital signing page."""
+    return templates.TemplateResponse("personnel_signing.html", {"request": request, "signing_token": signing_token})
+
+
 @app.get("/legal/manual", response_class=HTMLResponse)
 async def legal_manual_page(request: Request):
     return templates.TemplateResponse("legal_manual.html", {"request": request})

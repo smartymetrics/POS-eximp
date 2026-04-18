@@ -1,9 +1,11 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, UploadFile, File
+from fastapi.responses import Response
 from database import get_db, db_execute
 from routers.auth import verify_token
 from datetime import datetime
 import json
 import uuid
+import pdf_service
 
 router = APIRouter()
 
@@ -122,7 +124,7 @@ async def get_matter_details(matter_id: str, current_admin=Depends(verify_token)
     
     db = get_db()
     matter_res = await db_execute(lambda: db.table("legal_matters").select("*").eq("id", matter_id).execute())
-    collabs_res = await db_execute(lambda: db.table("legal_matter_collaborators").select("*, public_admins(full_name)").eq("matter_id", matter_id).execute())
+    collabs_res = await db_execute(lambda: db.table("legal_matter_collaborators").select("*, admins(full_name)").eq("matter_id", matter_id).execute())
     history_res = await db_execute(lambda: db.table("legal_matter_history").select("*").eq("matter_id", matter_id).order("created_at", desc=True).execute())
     
     return {
@@ -130,6 +132,56 @@ async def get_matter_details(matter_id: str, current_admin=Depends(verify_token)
         "collaborators": collabs_res.data or [],
         "history": history_res.data or []
     }
+
+@router.post("/matters/{matter_id}/collaborators")
+async def add_collaborator(matter_id: str, data: dict, current_admin=Depends(verify_token)):
+    """Add a new collaborator to a matter."""
+    admin_id = current_admin["sub"]
+    await check_matter_access(matter_id, admin_id, required_level="Edit")
+    
+    db = get_db()
+    collab_data = {
+        "matter_id": matter_id,
+        "admin_id": data.get("admin_id"),
+        "permission_level": data.get("permission_level", "Edit")
+    }
+    
+    res = await db_execute(lambda: db.table("legal_matter_collaborators").insert(collab_data).execute())
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to add collaborator")
+        
+    # Audit
+    await db_execute(lambda: db.table("legal_matter_history").insert({
+        "matter_id": matter_id,
+        "action": "Permission Granted",
+        "performed_by": admin_id,
+        "description": f"Granted {collab_data['permission_level']} access to admin {data.get('admin_id')}"
+    }).execute())
+    
+    return res.data[0]
+
+@router.delete("/matters/{matter_id}/collaborators/{target_admin_id}")
+async def remove_collaborator(matter_id: str, target_admin_id: str, current_admin=Depends(verify_token)):
+    """Remove a collaborator from a matter."""
+    admin_id = current_admin["sub"]
+    # Only drafter or admin should remove collaborators? Let's check access
+    await check_matter_access(matter_id, admin_id, required_level="Edit")
+    
+    db = get_db()
+    await db_execute(lambda: db.table("legal_matter_collaborators")\
+        .delete()\
+        .eq("matter_id", matter_id)\
+        .eq("admin_id", target_admin_id).execute())
+        
+    # Audit
+    await db_execute(lambda: db.table("legal_matter_history").insert({
+        "matter_id": matter_id,
+        "action": "Permission Revoked",
+        "performed_by": admin_id,
+        "description": f"Revoked access for admin {target_admin_id}"
+    }).execute())
+    
+    return {"status": "removed"}
 
 @router.patch("/matters/{matter_id}/save")
 async def save_matter_content(matter_id: str, data: dict, current_admin=Depends(verify_token)):
@@ -156,6 +208,59 @@ async def save_matter_content(matter_id: str, data: dict, current_admin=Depends(
     
     return {"status": "saved"}
 
+@router.patch("/matters/{matter_id}/settings")
+async def update_matter_settings(matter_id: str, data: dict, current_admin=Depends(verify_token)):
+    """Update matter-specific settings like 'requires_signing'."""
+    admin_id = current_admin["sub"]
+    await check_matter_access(matter_id, admin_id, required_level="Edit")
+    
+    db = get_db()
+    update_data = {}
+    if "requires_signing" in data:
+        update_data["requires_signing"] = data["requires_signing"]
+    
+    if not update_data:
+        return {"status": "no-change"}
+        
+    await db_execute(lambda: db.table("legal_matters").update(update_data).eq("id", matter_id).execute())
+    
+    # Audit logic
+    await db_execute(lambda: db.table("legal_matter_history").insert({
+        "matter_id": matter_id,
+        "action": "Settings Updated",
+        "performed_by": admin_id,
+        "description": f"Updated settings: {json.dumps(update_data)}"
+    }).execute())
+    
+    return {"status": "updated"}
+
+@router.post("/matters/{matter_id}/export")
+async def export_matter_pdf(matter_id: str, current_admin=Depends(verify_token)):
+    """Generate and return the PDF version of the document."""
+    admin_id = current_admin["sub"]
+    await check_matter_access(matter_id, admin_id)
+    
+    db = get_db()
+    # Get the latest content
+    matter_res = await db_execute(lambda: db.table("legal_matters").select("*").eq("id", matter_id).execute())
+    if not matter_res.data:
+        raise HTTPException(status_code=404, detail="Matter not found")
+        
+    matter = matter_res.data[0]
+    html = matter.get("content_html")
+    css = matter.get("content_css")
+    
+    # Generate PDF
+    pdf_bytes = pdf_service.generate_matter_pdf(matter_id, html, css)
+    
+    return Response(
+        content=pdf_bytes,
+        media_type="application/pdf",
+        headers={
+            "Content-Disposition": f"attachment; filename=Personnel_Matter_{matter_id}.pdf"
+        }
+    )
+
 @router.get("/clauses")
 async def get_clause_library(current_admin=Depends(verify_token)):
     """Fetch all reusable legal clauses."""
@@ -175,3 +280,636 @@ async def add_to_library(data: dict, current_admin=Depends(verify_token)):
     }
     res = await db_execute(lambda: db.table("legal_clause_library").insert(clause_data).execute())
     return res.data[0]
+
+# ──────────────────────────────────────────────────────────────────
+# PHASE 1: TEMPLATE SYSTEM
+# ──────────────────────────────────────────────────────────────────
+
+@router.get("/templates")
+async def get_template_library(category: str = None, current_admin=Depends(verify_token)):
+    """Fetch all available legal templates (filtered by category if provided)."""
+    db = get_db()
+    query = db.table("legal_templates").select("id, name, category, description, preview_html").eq("is_active", True)
+    if category:
+        query = query.eq("category", category)
+    res = await db_execute(lambda: query.execute())
+    return res.data or []
+
+@router.get("/templates/{template_id}")
+async def get_template_details(template_id: str, current_admin=Depends(verify_token)):
+    """Fetch template with all variables and content."""
+    db = get_db()
+    template_res = await db_execute(
+        lambda: db.table("legal_templates").select("*").eq("id", template_id).execute()
+    )
+    if not template_res.data:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    vars_res = await db_execute(
+        lambda: db.table("legal_template_variables").select("*").eq("template_id", template_id).execute()
+    )
+    
+    return {
+        "template": template_res.data[0],
+        "variables": vars_res.data or []
+    }
+
+@router.post("/templates")
+async def create_template(data: dict, current_admin=Depends(verify_token)):
+    """Create a new template (admin only)."""
+    user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
+    if not any(r in ["admin", "super_admin", "legal"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="Only admins can create templates")
+    
+    db = get_db()
+    template_data = {
+        "name": data.get("name"),
+        "category": data.get("category"),
+        "description": data.get("description"),
+        "default_content_html": data.get("content_html"),
+        "preview_html": data.get("preview_html"),
+        "created_by": current_admin["sub"]
+    }
+    
+    template_res = await db_execute(
+        lambda: db.table("legal_templates").insert(template_data).execute()
+    )
+    if not template_res.data:
+        raise HTTPException(status_code=500, detail="Failed to create template")
+    
+    template_id = template_res.data[0]["id"]
+    
+    # Insert variables if provided
+    if data.get("variables"):
+        variables_data = []
+        for var in data.get("variables", []):
+            variables_data.append({
+                "template_id": template_id,
+                "var_name": var.get("name"),
+                "var_label": var.get("label"),
+                "var_type": var.get("type", "text"),
+                "required": var.get("required", False),
+                "enum_values": var.get("enum_values"),
+                "placeholder": var.get("placeholder")
+            })
+        await db_execute(
+            lambda: db.table("legal_template_variables").insert(variables_data).execute()
+        )
+    
+    return template_res.data[0]
+
+@router.post("/matters/from-template/{template_id}")
+async def create_matter_from_template(template_id: str, data: dict, current_admin=Depends(verify_token)):
+    """Generate a new legal matter pre-populated from a template."""
+    db = get_db()
+    admin_id = current_admin["sub"]
+    
+    # Get template
+    template_res = await db_execute(
+        lambda: db.table("legal_templates").select("*").eq("id", template_id).execute()
+    )
+    if not template_res.data:
+        raise HTTPException(status_code=404, detail="Template not found")
+    
+    template = template_res.data[0]
+    
+    # Fetch staff data if staff_id provided (for variable substitution)
+    staff_data = {}
+    if data.get("staff_id"):
+        try:
+            staff_res = await db_execute(
+                lambda: db.table("staff").select("*").eq("id", data.get("staff_id")).execute()
+            )
+            if staff_res.data:
+                staff_data = staff_res.data[0]
+        except:
+            pass
+    
+    # Replace variables in template
+    content_html = template.get("default_content_html", "")
+    variables_used = {}
+    
+    if content_html and staff_data:
+        replacements = {
+            "{{STAFF_NAME}}": staff_data.get("full_name", ""),
+            "{{ROLE}}": staff_data.get("position_title", ""),
+            "{{DEPARTMENT}}": staff_data.get("department", ""),
+            "{{SALARY}}": str(staff_data.get("salary", "")),
+            "{{COMMENCEMENT_DATE}}": staff_data.get("start_date", ""),
+            "{{MANAGER_NAME}}": staff_data.get("manager_name", ""),
+        }
+        
+        for placeholder, value in replacements.items():
+            if placeholder in content_html:
+                content_html = content_html.replace(placeholder, value)
+                variables_used[placeholder.strip("{}")] = value
+    
+    # Create new matter from template
+    matter_data = {
+        "title": data.get("title") or f"{template['name']} - {staff_data.get('full_name', 'New')}",
+        "category": data.get("category", template.get("category")),
+        "drafter_id": admin_id,
+        "staff_id": data.get("staff_id"),
+        "content_html": content_html,
+        "template_used_id": template_id,
+        "variables_used": variables_used,
+        "status": data.get("status", "Draft"),
+        "requires_signing": data.get("requires_signing", True)
+    }
+    
+    res = await db_execute(lambda: db.table("legal_matters").insert(matter_data).execute())
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to create matter from template")
+    
+    matter = res.data[0]
+    
+    # Log audit
+    await db_execute(lambda: db.table("legal_matter_history").insert({
+        "matter_id": matter["id"],
+        "action": "Created from Template",
+        "performed_by": admin_id,
+        "description": f"Matter created using template '{template['name']}'"
+    }).execute())
+    
+    return matter
+
+# ──────────────────────────────────────────────────────────────────
+# PHASE 3: MEMO THREAD SYSTEM
+# ──────────────────────────────────────────────────────────────────
+
+@router.get("/matters/{matter_id}/memos")
+async def get_matter_memos(matter_id: str, current_admin=Depends(verify_token)):
+    """Fetch all memos for a legal matter."""
+    admin_id = current_admin["sub"]
+    await check_matter_access(matter_id, admin_id)
+    
+    db = get_db()
+    memos_res = await db_execute(
+        lambda: db.table("legal_matter_memos")\
+            .select("*")\
+            .eq("matter_id", matter_id)\
+            .order("created_at", desc=False)\
+            .execute()
+    )
+    return memos_res.data or []
+
+@router.post("/matters/{matter_id}/memos")
+async def add_matter_memo(matter_id: str, data: dict, current_admin=Depends(verify_token)):
+    """Add a memo/note to a legal matter."""
+    admin_id = current_admin["sub"]
+    await check_matter_access(matter_id, admin_id, required_level="Edit")
+    
+    db = get_db()
+    
+    # Get admin info
+    admin_res = await db_execute(
+        lambda: db.table("admins").select("full_name, role").eq("id", admin_id).execute()
+    )
+    admin_info = admin_res.data[0] if admin_res.data else {"full_name": "Unknown", "role": ""}
+    
+    memo_data = {
+        "matter_id": matter_id,
+        "author_id": admin_id,
+        "author_name": admin_info.get("full_name", "Unknown"),
+        "author_role": admin_info.get("role", ""),
+        "message_content": data.get("message"),
+        "message_type": data.get("type", "note"),
+        "is_internal": data.get("is_internal", True),
+        "metadata": data.get("metadata", {})
+    }
+    
+    res = await db_execute(lambda: db.table("legal_matter_memos").insert(memo_data).execute())
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to add memo")
+    
+    # Audit trail
+    await db_execute(lambda: db.table("legal_matter_history").insert({
+        "matter_id": matter_id,
+        "action": "Memo Added",
+        "performed_by": admin_id,
+        "description": f"{admin_info.get('full_name')} added internal note"
+    }).execute())
+    
+    return res.data[0]
+
+@router.patch("/matters/{matter_id}/memos/{memo_id}")
+async def update_memo(matter_id: str, memo_id: str, data: dict, current_admin=Depends(verify_token)):
+    """Update a memo (author only)."""
+    admin_id = current_admin["sub"]
+    db = get_db()
+    
+    # Verify ownership
+    memo_res = await db_execute(
+        lambda: db.table("legal_matter_memos").select("author_id").eq("id", memo_id).execute()
+    )
+    if not memo_res.data or memo_res.data[0]["author_id"] != admin_id:
+        raise HTTPException(status_code=403, detail="Can only edit your own memos")
+    
+    update_data = {
+        "message_content": data.get("message"),
+        "updated_at": datetime.now().isoformat()
+    }
+    
+    await db_execute(
+        lambda: db.table("legal_matter_memos").update(update_data).eq("id", memo_id).execute()
+    )
+    
+    return {"status": "updated"}
+
+# ──────────────────────────────────────────────────────────────────
+# PHASE 4: DIGITAL SIGNING WORKFLOW
+# ──────────────────────────────────────────────────────────────────
+
+def compute_document_hash(html_content: str) -> str:
+    """Generate a simple hash of document content for integrity verification."""
+    import hashlib
+    return hashlib.sha256(html_content.encode()).hexdigest()
+
+def generate_signing_token() -> str:
+    """Generate a unique signing token."""
+    import secrets
+    return secrets.token_urlsafe(32)
+
+@router.get("/matters/{matter_id}/prepare-signing")
+async def prepare_signing(
+    matter_id: str,
+    hash: str,
+    title: str,
+    current_admin=Depends(verify_token)
+):
+    """Prepare document for digital signing (verify integrity, create signing request)."""
+    admin_id = current_admin["sub"]
+    await check_matter_access(matter_id, admin_id, required_level="Edit")
+    
+    db = get_db()
+    
+    # Get the latest document
+    matter_res = await db_execute(
+        lambda: db.table("legal_matters").select("*").eq("id", matter_id).execute()
+    )
+    if not matter_res.data:
+        raise HTTPException(status_code=404, detail="Matter not found")
+    
+    matter = matter_res.data[0]
+    html_content = matter.get("content_html", "")
+    
+    # Verify document hash (first 16 chars for comparison)
+    current_hash = compute_document_hash(html_content)[:16]
+    if current_hash != hash[:16]:
+        raise HTTPException(status_code=400, detail="Document has been modified since draft save")
+    
+    # Generate signing token
+    signing_token = generate_signing_token()
+    
+    # Create signing request
+    signing_data = {
+        "matter_id": matter_id,
+        "signing_token": signing_token,
+        "status": "Pending",
+        "document_hash": current_hash,
+        "document_title": title,
+        "initiated_by": admin_id
+    }
+    
+    signing_res = await db_execute(
+        lambda: db.table("legal_signing_requests").insert(signing_data).execute()
+    )
+    if not signing_res.data:
+        raise HTTPException(status_code=500, detail="Failed to create signing request")
+    
+    # Update matter status
+    await db_execute(
+        lambda: db.table("legal_matters").update({
+            "status": "Legal Signing"
+        }).eq("id", matter_id).execute()
+    )
+    
+    # Audit log
+    await db_execute(lambda: db.table("legal_matter_history").insert({
+        "matter_id": matter_id,
+        "action": "Signing Initiated",
+        "performed_by": admin_id,
+        "description": f"Document '{title}' prepared for e-signature (token: {signing_token[:8]}...)"
+    }).execute())
+    
+    return {
+        "signing_token": signing_token,
+        "signing_url": f"/signing/{signing_token}",
+        "matter_id": matter_id,
+        "title": title,
+        "status": "Pending"
+    }
+
+@router.get("/signing/{signing_token}/details")
+async def get_signing_details(signing_token: str):
+    """Fetch signing request details (no auth required for signing page)."""
+    db = get_db()
+    
+    signing_res = await db_execute(
+        lambda: db.table("legal_signing_requests")\
+            .select("*, legal_matters(id, title, content_html, category, drafter_id, requires_signing)")\
+            .eq("signing_token", signing_token)\
+            .execute()
+    )
+    
+    if not signing_res.data:
+        raise HTTPException(status_code=404, detail="Signing request not found")
+    
+    signing_req = signing_res.data[0]
+    
+    # Check if expired
+    expiry = signing_req.get("expiry_at")
+    if expiry and datetime.fromisoformat(expiry) < datetime.now(datetime.timezone.utc):
+        raise HTTPException(status_code=410, detail="Signing link has expired")
+    
+    # Extract requires_signing from nested matter object
+    matter = signing_req.get("legal_matters", {}) or {}
+    requires_signing = matter.get("requires_signing", True) if isinstance(matter, dict) else True
+    
+    # Add to response
+    signing_req["requires_signing"] = requires_signing
+    
+    return signing_req
+
+@router.post("/signing/{signing_token}/submit")
+async def submit_signature(signing_token: str, data: dict):
+    """Submit signature data (completes signing workflow)."""
+    db = get_db()
+    
+    # Get signing request
+    signing_res = await db_execute(
+        lambda: db.table("legal_signing_requests").select("*").eq("signing_token", signing_token).execute()
+    )
+    
+    if not signing_res.data:
+        raise HTTPException(status_code=404, detail="Signing request not found")
+    
+    signing_req = signing_res.data[0]
+    matter_id = signing_req["matter_id"]
+    
+    # Check if already signed
+    if signing_req["status"] != "Pending":
+        raise HTTPException(status_code=400, detail="Signing request already processed")
+    
+    # Update signing request
+    await db_execute(
+        lambda: db.table("legal_signing_requests").update({
+            "status": "Signed",
+            "signed_at": datetime.now().isoformat(),
+            "signer_email": data.get("signer_email"),
+            "signer_name": data.get("signer_name"),
+            "signature_metadata": {
+                "signature_image": data.get("signature_image", ""),
+                "timestamp": datetime.now().isoformat(),
+                "ip_address": data.get("ip_address", ""),
+                "user_agent": data.get("user_agent", "")
+            }
+        }).eq("id", signing_req["id"]).execute()
+    )
+    
+    # Update matter status
+    matter_res = await db_execute(
+        lambda: db.table("legal_matters").select("staff_id").eq("id", matter_id).execute()
+    )
+    
+    if matter_res.data:
+        matter = matter_res.data[0]
+        update_data = {
+            "status": "Executed",
+            "signed_at": datetime.now().isoformat(),
+            "signed_by": data.get("signer_email"),
+            "signature_metadata": {
+                "signing_token": signing_token[:8],
+                "timestamp": datetime.now().isoformat()
+            }
+        }
+        
+        await db_execute(
+            lambda: db.table("legal_matters").update(update_data).eq("id", matter_id).execute()
+        )
+        
+        # Auto-link to HR Staff Profile if staff_id exists
+        if matter.get("staff_id"):
+            try:
+                await db_execute(
+                    lambda: db.table("staff_documents").insert({
+                        "staff_id": matter["staff_id"],
+                        "document_type": "Legal Contract - Executed",
+                        "document_link": f"/api/hr-legal/matters/{matter_id}/export",
+                        "uploaded_at": datetime.now().isoformat()
+                    }).execute()
+                )
+            except:
+                pass  # Document link may already exist
+    
+    # Audit trail
+    await db_execute(lambda: db.table("legal_matter_history").insert({
+        "matter_id": matter_id,
+        "action": "Document Executed",
+        "performed_by": None,
+        "description": f"Contract signed by {data.get('signer_name')} ({data.get('signer_email')})"
+    }).execute())
+    
+    return {
+        "status": "success",
+        "message": "Document signed successfully",
+        "matter_id": matter_id,
+        "redirect": f"/matters/{matter_id}"
+    }
+
+@router.post("/signing/{signing_token}/acknowledge")
+async def acknowledge_document(signing_token: str, data: dict):
+    """Acknowledge document receipt (for non-signing contracts)."""
+    db = get_db()
+    
+    # Get signing request
+    signing_res = await db_execute(
+        lambda: db.table("legal_signing_requests").select("*").eq("signing_token", signing_token).execute()
+    )
+    
+    if not signing_res.data:
+        raise HTTPException(status_code=404, detail="Signing request not found")
+    
+    signing_req = signing_res.data[0]
+    matter_id = signing_req["matter_id"]
+    
+    # Check if already processed
+    if signing_req["status"] != "Pending":
+        raise HTTPException(status_code=400, detail="Document already processed")
+    
+    # Update signing request to "Acknowledged" status
+    await db_execute(
+        lambda: db.table("legal_signing_requests").update({
+            "status": "Acknowledged",
+            "acknowledged_at": datetime.now().isoformat(),
+            "signature_metadata": {
+                "type": "acknowledgment",
+                "timestamp": data.get("timestamp"),
+                "user_agent": data.get("user_agent", "")
+            }
+        }).eq("id", signing_req["id"]).execute()
+    )
+    
+    # Update matter status to Executed
+    matter_res = await db_execute(
+        lambda: db.table("legal_matters").select("staff_id").eq("id", matter_id).execute()
+    )
+    
+    if matter_res.data:
+        matter = matter_res.data[0]
+        update_data = {
+            "status": "Executed",
+            "signed_at": datetime.now().isoformat(),
+            "signed_by": "acknowledged",
+            "signature_metadata": {
+                "type": "acknowledgment",
+                "acknowledged_at": datetime.now().isoformat()
+            }
+        }
+        
+        await db_execute(
+            lambda: db.table("legal_matters").update(update_data).eq("id", matter_id).execute()
+        )
+        
+        # Auto-link to HR Staff Profile if staff_id exists
+        if matter.get("staff_id"):
+            try:
+                await db_execute(
+                    lambda: db.table("staff_documents").insert({
+                        "staff_id": matter["staff_id"],
+                        "document_type": "Legal Contract - Acknowledged",
+                        "document_link": f"/api/hr-legal/matters/{matter_id}/export",
+                        "uploaded_at": datetime.now().isoformat()
+                    }).execute()
+                )
+            except:
+                pass  # Document link may already exist
+    
+    # Audit trail
+    await db_execute(lambda: db.table("legal_matter_history").insert({
+        "matter_id": matter_id,
+        "action": "Document Acknowledged",
+        "performed_by": None,
+        "description": "Contract acknowledged by recipient (no signature required)"
+    }).execute())
+    
+    return {
+        "status": "success",
+        "message": "Document acknowledged successfully",
+        "matter_id": matter_id,
+        "redirect": f"/matters/{matter_id}"
+    }
+
+@router.get("/matters/{matter_id}/signing-status")
+async def get_signing_status(matter_id: str, current_admin=Depends(verify_token)):
+    """Check current signing status of a matter."""
+    admin_id = current_admin["sub"]
+    await check_matter_access(matter_id, admin_id)
+    
+    db = get_db()
+    signing_res = await db_execute(
+        lambda: db.table("legal_signing_requests")\
+            .select("*")\
+            .eq("matter_id", matter_id)\
+            .order("created_at", desc=True)\
+            .limit(1)\
+            .execute()
+    )
+    
+    if not signing_res.data:
+        return {"status": "No signing request", "message": "Document has not been prepared for signing yet"}
+    
+    return signing_res.data[0]
+
+# ──────────────────────────────────────────────────────────────────
+# PHASE 5: HR PORTAL INTEGRATION
+# ──────────────────────────────────────────────────────────────────
+
+@router.post("/staff/{staff_id}/create-legal-case")
+async def create_legal_case_from_staff(staff_id: str, data: dict, current_admin=Depends(verify_token)):
+    """
+    HR Portal: Quick case creation for a staff member.
+    Creates a new legal matter with staff context pre-filled.
+    """
+    user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
+    if not any(r in ["admin", "super_admin", "hr_admin", "hr"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="Only HR admins can create legal cases")
+    
+    db = get_db()
+    admin_id = current_admin["sub"]
+    
+    # Verify staff exists
+    staff_res = await db_execute(
+        lambda: db.table("staff").select("id, full_name, position_title, department").eq("id", staff_id).execute()
+    )
+    if not staff_res.data:
+        raise HTTPException(status_code=404, detail="Staff member not found")
+    
+    staff = staff_res.data[0]
+    
+    # Create legal matter
+    matter_data = {
+        "title": data.get("title", f"Legal Case - {staff['full_name']}"),
+        "category": data.get("category", "Contract Request"),
+        "drafter_id": admin_id,
+        "staff_id": staff_id,
+        "hr_memo": data.get("hr_memo", ""),
+        "status": "Draft",
+        "requires_signing": data.get("requires_signing", True)
+    }
+    
+    matter_res = await db_execute(
+        lambda: db.table("legal_matters").insert(matter_data).execute()
+    )
+    if not matter_res.data:
+        raise HTTPException(status_code=500, detail="Failed to create legal case")
+    
+    matter = matter_res.data[0]
+    
+    # Log audit
+    await db_execute(lambda: db.table("legal_matter_history").insert({
+        "matter_id": matter["id"],
+        "action": "Case Created from HR Portal",
+        "performed_by": admin_id,
+        "description": f"Legal case created for staff member {staff['full_name']} from HR Portal"
+    }).execute())
+    
+    return {
+        "matter_id": matter["id"],
+        "staff_id": staff_id,
+        "staff_name": staff["full_name"],
+        "editor_url": f"/legal/advanced-editor?id={matter['id']}"
+    }
+
+@router.get("/case-categories")
+async def get_case_categories(current_admin=Depends(verify_token)):
+    """Fetch available legal case categories for HR portal."""
+    return {
+        "categories": [
+            {
+                "id": "Contract Request",
+                "name": "📄 Contract Request",
+                "description": "Employment offer or contract generation"
+            },
+            {
+                "id": "Disciplinary Review",
+                "name": "⚠️ Disciplinary Review",
+                "description": "Performance issues or conduct violations"
+            },
+            {
+                "id": "Legal Clearance",
+                "name": "✓ Legal Clearance",
+                "description": "Background check or compliance review"
+            },
+            {
+                "id": "Termination",
+                "name": "📋 Termination",
+                "description": "Separation agreement or exit documentation"
+            },
+            {
+                "id": "Other",
+                "name": "📝 Other",
+                "description": "Other legal matter"
+            }
+        ]
+    }

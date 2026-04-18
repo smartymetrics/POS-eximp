@@ -813,3 +813,111 @@ def get_default_execution_html_fragment(invoice: dict, client: dict) -> str:
             return f.read()
     except Exception:
         return "<p>Execution placeholder</p>"
+
+def generate_matter_pdf(matter_id: str, html_content: str, css_content: str) -> bytes:
+    """
+    Generates a professional PDF for a personnel matter.
+    Injects global CSS for multi-page headers/footers and branded frames.
+    """
+    # SVG Logo for Watermark (Base64)
+    logo_b64 = COMPANY.get("logo_b64", "")
+    
+    # Create the full HTML document with Print-specific styles
+    full_html = f"""
+    <html>
+    <head>
+        <style>
+            @page {{
+                size: A4;
+                margin: 0;
+                @bottom-left {{
+                    content: element(footer);
+                    width: 100%;
+                }}
+                background-image: url('data:image/png;base64,{logo_b64}');
+                background-repeat: no-repeat;
+                background-position: center;
+                background-size: 80% auto;
+                opacity: 0.05;
+            }}
+            body {{
+                margin: 0;
+                padding: 0;
+                font-family: 'Inter', sans-serif;
+            }}
+            /* Global Header Geometry (Top of First Page) */
+            .document-header {
+                height: 120px;
+                position: relative;
+                overflow: hidden;
+                border-bottom: 2px solid #000;
+                background: white;
+            }
+            .header-black-curve {
+                position: absolute;
+                top: 0;
+                left: 0;
+                width: 60%;
+                height: 40px;
+                background: #000;
+                border-bottom-right-radius: 40px;
+            }
+            .header-gold-bar {
+                position: absolute;
+                top: 0;
+                right: 0;
+                width: 40%;
+                height: 30px;
+                background: #C47D0A;
+            }
+            .header-branding {
+                position: absolute;
+                top: 50px;
+                left: 50px;
+                display: flex;
+                align-items: center;
+                gap: 60px;
+            }
+            .header-logo { height: 75px; }
+            .header-divider { width: 2px; height: 50px; background: #000; }
+            .header-contacts { 
+                font-size: 11px; font-weight: bold; line-height: 1.6; 
+                font-variant-caps: all-small-caps;
+                letter-spacing: 0.05em;
+            }
+            .header-contacts p { margin: 0; }
+            
+            .page-content {
+                padding: 30px 60px;
+                position: relative;
+            }
+            {css_content}
+        </style>
+    </head>
+    <body>
+        <div id="page-footer">
+            <div class="footer-black" style="float:left; width:50%; height:12px; background:#000;"></div>
+            <div class="footer-gold" style="float:left; width:50%; height:12px; background:#C47D0A;"></div>
+        </div>
+        
+        <div class="document-header">
+            <div class="header-black-curve"></div>
+            <div class="header-gold-bar"></div>
+            <div class="header-branding">
+                <img src="/static/img/logo_firm.png" class="header-logo">
+                <div class="header-divider"></div>
+                <div class="header-contacts">
+                    <p>phone: {COMPANY['phone']}</p>
+                    <p>web: <a href="https://eximps-cloves.com" style="color:#C47D0A; text-decoration:none;">https://eximps-cloves.com</a></p>
+                    <p>email: <a href="mailto:admin@eximps-cloves.com" style="color:#C47D0A; text-decoration:none;">admin@eximps-cloves.com</a></p>
+                </div>
+            </div>
+        </div>
+
+        <div class="page-content">
+            {html_content}
+        </div>
+    </body>
+    </html>
+    """
+    return _render_with_weasyprint(full_html)

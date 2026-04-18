@@ -1,0 +1,190 @@
+<!-- 
+    HR Portal: Legal Case Creation Component
+    Location: Embed this in the HR dashboard, staff profile page
+    Purpose: Allow HR admins to quickly create legal cases for staff members
+-->
+
+<div id="legal-case-widget" style="padding: 20px; background: linear-gradient(135deg, #1a1a1a 0%, #0f0f0f 100%); border: 1px solid #333; border-radius: 8px; max-width: 500px;">
+    <h3 style="font-size: 14px; font-weight: bold; text-transform: uppercase; letter-spacing: 1px; color: #C47D0A; margin-bottom: 15px;">
+        ⚖️ Create Legal Case
+    </h3>
+    
+    <p style="font-size: 12px; color: #999; margin-bottom: 15px;">
+        Initiate a legal matter for this staff member. The case will be routed to the Legal team.
+    </p>
+
+    <div style="display: flex; flex-direction: column; gap: 12px;">
+        <!-- Case Type Selection -->
+        <div>
+            <label style="display: block; font-size: 10px; font-weight: bold; text-transform: uppercase; color: #666; margin-bottom: 5px;">
+                Case Type
+            </label>
+            <select id="case-type" style="width: 100%; padding: 8px; background: #0f0f0f; border: 1px solid #333; border-radius: 4px; color: #fff; font-size: 12px;">
+                <option value="Contract Request">📄 Contract Request</option>
+                <option value="Disciplinary Review">⚠️ Disciplinary Review</option>
+                <option value="Legal Clearance">✓ Legal Clearance</option>
+                <option value="Termination">📋 Termination</option>
+                <option value="Other">📝 Other</option>
+            </select>
+        </div>
+
+        <!-- Case Title -->
+        <div>
+            <label style="display: block; font-size: 10px; font-weight: bold; text-transform: uppercase; color: #666; margin-bottom: 5px;">
+                Case Title
+            </label>
+            <input type="text" id="case-title" placeholder="e.g., Senior Developer Offer Letter" 
+                   style="width: 100%; padding: 8px; background: #0f0f0f; border: 1px solid #333; border-radius: 4px; color: #fff; font-size: 12px; box-sizing: border-box;">
+        </div>
+
+        <!-- HR Notes -->
+        <div>
+            <label style="display: block; font-size: 10px; font-weight: bold; text-transform: uppercase; color: #666; margin-bottom: 5px;">
+                HR Notes / Context
+            </label>
+            <textarea id="case-notes" placeholder="Any relevant context for the legal team..." rows="3"
+                      style="width: 100%; padding: 8px; background: #0f0f0f; border: 1px solid #333; border-radius: 4px; color: #fff; font-size: 12px; box-sizing: border-box; resize: none;"></textarea>
+        </div>
+
+        <!-- Requires Signing -->
+        <div style="display: flex; align-items: center; gap: 8px;">
+            <input type="checkbox" id="requires-signing" checked style="cursor: pointer;">
+            <label for="requires-signing" style="font-size: 11px; color: #999; cursor: pointer;">
+                Document requires digital signature
+            </label>
+        </div>
+
+        <!-- Action Buttons -->
+        <div style="display: flex; gap: 10px; margin-top: 10px;">
+            <button onclick="createLegalCase()" style="flex: 1; padding: 10px; background: #C47D0A; color: #000; border: none; border-radius: 4px; font-size: 12px; font-weight: bold; cursor: pointer; transition: all 0.3s ease;">
+                ⚖️ Create Legal Case
+            </button>
+            <button onclick="closeLegalCaseWidget()" style="flex: 1; padding: 10px; background: #333; color: #fff; border: none; border-radius: 4px; font-size: 12px; cursor: pointer; transition: all 0.3s ease;">
+                Cancel
+            </button>
+        </div>
+
+        <!-- Status Message -->
+        <div id="case-status-msg" style="display: none; padding: 10px; border-radius: 4px; font-size: 11px; text-align: center;"></div>
+    </div>
+</div>
+
+<script>
+    const API_BASE = '/api/hr-legal';
+    let currentStaffId = null;
+
+    // Initialize widget (call this when opening the staff profile)
+    window.openLegalCaseWidget = function(staffId) {
+        currentStaffId = staffId;
+        document.getElementById('legal-case-widget').style.display = 'block';
+        document.getElementById('case-title').value = '';
+        document.getElementById('case-notes').value = '';
+        document.getElementById('case-type').value = 'Contract Request';
+        document.getElementById('requires-signing').checked = true;
+        document.getElementById('case-status-msg').style.display = 'none';
+    };
+
+    window.closeLegalCaseWidget = function() {
+        document.getElementById('legal-case-widget').style.display = 'none';
+    };
+
+    window.createLegalCase = async function() {
+        if (!currentStaffId) {
+            showCaseStatus('No staff member selected', 'error');
+            return;
+        }
+
+        const title = document.getElementById('case-title').value.trim();
+        const caseType = document.getElementById('case-type').value;
+        const notes = document.getElementById('case-notes').value.trim();
+        const requiresSigning = document.getElementById('requires-signing').checked;
+
+        if (!title) {
+            showCaseStatus('Please enter a case title', 'error');
+            return;
+        }
+
+        try {
+            // Show loading state
+            showCaseStatus('Creating legal case...', 'info');
+
+            const res = await fetch(`${API_BASE}/staff/${currentStaffId}/create-legal-case`, {
+                method: 'POST',
+                headers: {
+                    'Authorization': `Bearer ${localStorage.ec_token}`,
+                    'Content-Type': 'application/json'
+                },
+                body: JSON.stringify({
+                    title: title,
+                    category: caseType,
+                    hr_memo: notes,
+                    requires_signing: requiresSigning
+                })
+            });
+
+            if (!res.ok) {
+                const error = await res.json();
+                throw new Error(error.detail || 'Failed to create legal case');
+            }
+
+            const result = await res.json();
+            showCaseStatus('✓ Legal case created successfully!', 'success');
+
+            // Clear form
+            document.getElementById('case-title').value = '';
+            document.getElementById('case-notes').value = '';
+
+            // Redirect to editor after short delay
+            setTimeout(() => {
+                window.location.href = result.editor_url;
+            }, 1500);
+        } catch (error) {
+            console.error('ERROR:', error);
+            showCaseStatus(`Error: ${error.message}`, 'error');
+        }
+    };
+
+    function showCaseStatus(message, type) {
+        const msgEl = document.getElementById('case-status-msg');
+        msgEl.textContent = message;
+        msgEl.style.display = 'block';
+
+        if (type === 'success') {
+            msgEl.style.background = 'rgba(16, 185, 129, 0.2)';
+            msgEl.style.color = '#10b981';
+            msgEl.style.border = '1px solid rgba(16, 185, 129, 0.5)';
+        } else if (type === 'error') {
+            msgEl.style.background = 'rgba(239, 68, 68, 0.2)';
+            msgEl.style.color = '#ef4444';
+            msgEl.style.border = '1px solid rgba(239, 68, 68, 0.5)';
+        } else {
+            msgEl.style.background = 'rgba(196, 125, 10, 0.2)';
+            msgEl.style.color = '#C47D0A';
+            msgEl.style.border = '1px solid rgba(196, 125, 10, 0.5)';
+        }
+    }
+</script>
+
+<!-- 
+    INTEGRATION INSTRUCTIONS:
+    
+    1. Add this widget to your HR Staff Profile page template (e.g., hr_portal.html)
+    
+    2. Add a button to trigger the widget:
+       <button onclick="openLegalCaseWidget(staffId)">
+           ⚖️ Create Legal Case
+       </button>
+    
+    3. Ensure localStorage.ec_token is set with the user's auth token
+    
+    4. The widget will create a legal case and redirect to the editor with:
+       - Case type pre-selected
+       - Staff member linked
+       - HR notes documented
+    
+    5. The legal team can then:
+       - Select a template
+       - Populate with staff data
+       - Add memo notes
+       - Send for signing
+-->
