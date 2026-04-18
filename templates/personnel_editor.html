@@ -58,16 +58,21 @@
         const matterId = new URLSearchParams(window.location.search).get('id');
 
         const CustomOrderedList = OrderedList.extend({
+            name: 'orderedList',
             addAttributes() {
                 return {
                     listStyleType: {
                         default: 'decimal',
-                        parseHTML: el => el.style.listStyleType || 'decimal',
-                        renderHTML: attrs => {
-                            return { style: `list-style-type: ${attrs.listStyleType || 'decimal'}` };
-                        }
+                        parseHTML: el => el.style.listStyleType || el.getAttribute('data-list-type') || 'decimal',
+                        renderHTML: attrs => ({ 
+                            'data-list-type': attrs.listStyleType, 
+                            style: `list-style-type: ${attrs.listStyleType}` 
+                        })
                     }
                 };
+            },
+            renderHTML({ HTMLAttributes }) {
+                return ['ol', HTMLAttributes, 0];
             }
         });
 
@@ -76,15 +81,14 @@
             autofocus: 'end',
             extensions: [
                 StarterKit.configure({ 
-                    bold: false, 
                     orderedList: false, 
                     bulletList: false,
+                    listItem: false,
                     history: true 
                 }),
-                Bold,
-                CustomOrderedList,
-                BulletList,
                 ListItem,
+                BulletList,
+                CustomOrderedList,
                 TextAlign.configure({ types: ['heading', 'paragraph'] }),
                 FontFamily,
                 Color,
@@ -114,6 +118,15 @@
 
         // Expose globally
         window.editor = editor;
+        window.exec = (cmd) => editor.chain().focus()[cmd]().run();
+        window.setListType = (type) => {
+            if (!editor.isActive('orderedList')) {
+                // Not in a list, create one first
+                editor.chain().focus().toggleOrderedList().run();
+            }
+            // Now apply the style attribute
+            editor.chain().focus().updateAttributes('orderedList', { listStyleType: type }).run();
+        };
 
         window.updateWordCount = function() {
             const text = editor.getText();
@@ -885,14 +898,17 @@
         /* ── LISTS ── */
         .ProseMirror ul { 
             list-style-type: disc;
-            padding-left: 3.5em; 
+            padding-left: 3rem; 
             margin: 6pt 0 10pt;
         }
         .ProseMirror ol { 
             list-style-type: decimal;
-            padding-left: 3.5em; 
+            padding-left: 3rem; 
             margin: 6pt 0 10pt;
         }
+        ol[data-list-type="lower-alpha"] { list-style-type: lower-alpha !important; }
+        ol[data-list-type="lower-roman"] { list-style-type: lower-roman !important; }
+        ol[data-list-type="decimal"] { list-style-type: decimal !important; }
         .ProseMirror li { 
             margin-bottom: 3pt; 
             display: list-item;
@@ -1058,10 +1074,10 @@
         </select>
         <div class="ribbon-divider"></div>
         
-        <button class="ribbon-btn" data-cmd="toggleBold"><b>B</b></button>
-        <button class="ribbon-btn" data-cmd="toggleItalic"><i>I</i></button>
-        <button class="ribbon-btn" data-cmd="toggleUnderline"><u>U</u></button>
-        <button class="ribbon-btn" data-cmd="toggleStrike" title="Strikethrough">S̶</button>
+        <button class="ribbon-btn" onclick="window.exec('toggleBold')" data-cmd="bold"><b>B</b></button>
+        <button class="ribbon-btn" onclick="window.exec('toggleItalic')" data-cmd="italic"><i>I</i></button>
+        <button class="ribbon-btn" onclick="window.exec('toggleUnderline')" data-cmd="underline"><u>U</u></button>
+        <button class="ribbon-btn" onclick="window.exec('toggleStrike')" data-cmd="strike" title="Strikethrough">S̶</button>
         <div class="ribbon-divider"></div>
         
         <button onclick="window.toggleSuperscript()" class="ribbon-btn" title="Superscript">x<sup>²</sup></button>
@@ -1074,10 +1090,10 @@
         <button class="ribbon-btn" data-align="justify">J</button>
         <div class="ribbon-divider"></div>
         
-        <button onclick="editor.chain().focus().toggleBulletList().run()" class="ribbon-btn" title="Bullet List">• List</button>
-        <button onclick="window.setOrderedListType('decimal')" class="ribbon-btn" title="Numbered List (1, 2, 3)">1. List</button>
-        <button onclick="window.setOrderedListType('lower-alpha')" class="ribbon-btn" title="Lettered List (a, b, c)">a. List</button>
-        <button onclick="window.setOrderedListType('lower-roman')" class="ribbon-btn" title="Roman Numeral List (i, ii, iii)">i. List</button>
+        <button onclick="window.exec('toggleBulletList')" class="ribbon-btn" title="Bullet List">• List</button>
+        <button onclick="window.setListType('decimal')" class="ribbon-btn" title="Numbered List (1, 2, 3)">1. List</button>
+        <button onclick="window.setListType('lower-alpha')" class="ribbon-btn" title="Lettered List (a, b, c)">a. List</button>
+        <button onclick="window.setListType('lower-roman')" class="ribbon-btn" title="Roman Numeral List (i, ii, iii)">i. List</button>
         <div class="ribbon-divider"></div>
         <button onclick="window.indentList()" class="ribbon-btn" title="Indent (Tab)">→ Indent</button>
         <button onclick="window.outdentList()" class="ribbon-btn" title="Outdent (Shift+Tab)">← Outdent</button>
