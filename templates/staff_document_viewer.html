@@ -3,84 +3,242 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Legal Document | Eximp & Cloves</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Times+New+Roman&family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <title>Legal Document | Eximp &amp; Cloves</title>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Tinos:ital,wght@0,400;0,700;1,400;1,700&display=swap" rel="stylesheet">
     <style>
+        :root {
+            --brand-gold: #C47D0A;
+        }
+
+        * { box-sizing: border-box; margin: 0; padding: 0; }
+
         body {
             font-family: 'Inter', sans-serif;
             background: #0F1115;
             color: #E5E7EB;
         }
-        .document-viewer {
-            font-family: 'Times New Roman', serif;
-            background: white;
-            color: #000;
-            margin: 20px auto;
-            max-width: 850px;
-            padding: 60px;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
-            line-height: 1.6;
-        }
-        .brand-gold { color: #C47D0A; }
+
+        /* ── TOP BAR ── */
         .top-bar {
             background: #1E2128;
             border-bottom: 1px solid #2D2F36;
-            padding: 16px 40px;
+            padding: 14px 32px;
             display: flex;
             justify-content: space-between;
             align-items: center;
             position: sticky;
             top: 0;
-            z-index: 10;
+            z-index: 100;
         }
+        .top-bar-left { display: flex; align-items: center; gap: 16px; }
+        .doc-label {
+            font-size: 11px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.15em;
+            color: var(--brand-gold);
+        }
+        #doc-title { color: #9CA3AF; font-size: 13px; }
+        .top-bar-right { display: flex; gap: 10px; }
+
         .btn {
-            padding: 8px 16px;
+            padding: 8px 18px;
             border-radius: 6px;
             border: 1px solid;
             cursor: pointer;
             font-weight: 600;
-            font-size: 12px;
+            font-size: 11px;
             text-transform: uppercase;
-            transition: all 0.3s;
+            letter-spacing: 0.08em;
+            transition: all 0.2s;
         }
-        .btn-primary { background: #C47D0A; color: white; border-color: #C47D0A; }
-        .btn-primary:hover { background: #B36B00; }
-        .btn-secondary { background: #2D2F36; color: #9CA3AF; border-color: #3F4249; }
-        .btn-secondary:hover { color: white; border-color: #C47D0A; }
+        .btn-primary { background: var(--brand-gold); color: white; border-color: var(--brand-gold); }
+        .btn-primary:hover { filter: brightness(1.1); }
+        .btn-secondary { background: transparent; color: #9CA3AF; border-color: #3F4249; }
+        .btn-secondary:hover { color: white; border-color: var(--brand-gold); }
+
+        /* ── CANVAS AREA ── */
+        #canvas-area {
+            padding: 40px 20px 80px;
+            display: flex;
+            justify-content: center;
+        }
+
+        /* ── A4 PAGE ── */
+        .a4-page {
+            width: 794px;
+            min-height: 1123px;
+            background: white;
+            box-shadow: 0 8px 40px rgba(0,0,0,0.5);
+            border-radius: 2px;
+            display: flex;
+            flex-direction: column;
+            position: relative;
+            overflow: hidden;
+        }
+
+        /* ── LETTERHEAD ── */
+        .letterhead {
+            position: relative;
+            padding: 0;
+            user-select: none;
+            flex-shrink: 0;
+        }
+        .header-bar-black {
+            position: absolute; top: 0; left: 0;
+            width: 60%; height: 40px;
+            background: #000;
+            border-bottom-right-radius: 40px;
+            z-index: 1;
+        }
+        .header-bar-gold {
+            position: absolute; top: 0; right: 0;
+            width: 40%; height: 30px;
+            background: var(--brand-gold);
+            z-index: 1;
+        }
+        .letterhead-inner {
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+            padding: 50px 60px 20px;
+            position: relative;
+            z-index: 2;
+        }
+        .letterhead-contact {
+            border-left: 2px solid #000;
+            padding: 4px 15px;
+            font-size: 9pt;
+            line-height: 1.7;
+            color: #111;
+            font-weight: 700;
+            font-variant: small-caps;
+            letter-spacing: 0.05em;
+        }
+        .letterhead-contact a { color: var(--brand-gold); text-decoration: none; }
+        .letterhead-divider { height: 2px; background: #eee; margin: 0 60px; }
+
+        /* ── DOCUMENT BODY ── */
+        .document-body {
+            padding: 28px 72px;
+            flex: 1;
+            font-family: 'Tinos', serif;
+            font-size: 11pt;
+            line-height: 1.6;
+            color: #000;
+        }
+
+        /* Rich-text content normalization */
+        .document-body h1 { font-size: 18pt; font-weight: 800; margin: 20pt 0 10pt; }
+        .document-body h2 { font-size: 14pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin: 16pt 0 8pt; }
+        .document-body h3 { font-size: 12pt; font-weight: 600; margin: 14pt 0 6pt; }
+        .document-body p { margin-bottom: 8pt; }
+        .document-body ul { margin: 8pt 0 8pt 24pt; list-style: disc; }
+        .document-body ol { margin: 8pt 0 8pt 24pt; }
+        .document-body table { width: 100%; border-collapse: collapse; margin: 12pt 0; }
+        .document-body table td, .document-body table th {
+            border: 1px solid #ccc; padding: 6pt 8pt; font-size: 10pt;
+        }
+        .document-body table th { background: #f5f5f5; font-weight: 700; }
+        .document-body hr { border: none; border-top: 1px solid #ccc; margin: 20pt 0; }
+        .document-body img { max-width: 100%; height: auto; }
+
+        /* ── FOOTER ── */
+        .page-footer { flex-shrink: 0; }
+        .footer-bar-container { display: flex; height: 12px; }
+        .footer-black { flex: 1; background: #000; }
+        .footer-gold { flex: 1; background: var(--brand-gold); }
+
+        /* ── LOADING / ERROR ── */
+        .state-overlay {
+            min-height: 400px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 16px;
+        }
+        .spinner {
+            width: 40px; height: 40px;
+            border: 3px solid #2D2F36;
+            border-top-color: var(--brand-gold);
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        @keyframes spin { to { transform: rotate(360deg); } }
+
+        .hidden { display: none; }
+
+        /* ── PRINT STYLES ── */
+        @media print {
+            body { background: white; }
+            .top-bar { display: none; }
+            #canvas-area { padding: 0; }
+            .a4-page {
+                box-shadow: none;
+                width: 100%;
+                min-height: auto;
+            }
+        }
     </style>
 </head>
 <body>
+
+    <!-- TOP BAR -->
     <div class="top-bar">
-        <div class="flex items-center gap-4">
-            <img src="/static/img/logo_dark.svg" alt="" style="height: 24px;">
-            <span class="text-brand-gold font-bold text-xs uppercase">Document Viewer</span>
-            <span id="doc-title" class="text-gray-400 text-sm">—</span>
+        <div class="top-bar-left">
+            <img src="/static/img/logo_dark.svg" alt="Eximp & Cloves" style="height: 26px;" onerror="this.style.display='none'">
+            <span class="doc-label">Document Viewer</span>
+            <span id="doc-title">—</span>
         </div>
-        <div class="flex items-center gap-3">
+        <div class="top-bar-right">
             <button onclick="downloadPDF()" class="btn btn-primary">⬇ Download PDF</button>
-            <button onclick="printDocument()" class="btn btn-secondary">🖨 Print</button>
+            <button onclick="window.print()" class="btn btn-secondary">🖨 Print</button>
             <button onclick="window.history.back()" class="btn btn-secondary">← Back</button>
         </div>
     </div>
 
     <!-- Loading State -->
-    <div id="loading" class="text-center py-20">
-        <div class="inline-block">
-            <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-gold"></div>
-            <p class="text-gray-400 mt-4 text-sm">Loading document...</p>
+    <div id="loading" class="state-overlay">
+        <div class="spinner"></div>
+        <p style="color: #6B7280; font-size: 13px;">Loading document…</p>
+    </div>
+
+    <!-- Document Canvas -->
+    <div id="canvas-area" class="hidden">
+        <div class="a4-page">
+            <!-- LETTERHEAD -->
+            <div class="letterhead">
+                <div class="header-bar-black"></div>
+                <div class="header-bar-gold"></div>
+                <div class="letterhead-inner">
+                    <img src="/static/img/logo_firm.png" style="height: 70px;" onerror="this.style.display='none'">
+                    <div class="letterhead-contact">
+                        <div>Phone: +234 912 6864 383</div>
+                        <div>Web: <a href="https://eximps-cloves.com" target="_blank">https://eximps-cloves.com</a></div>
+                        <div>Email: <a href="mailto:admin@eximps-cloves.com">admin@eximps-cloves.com</a></div>
+                    </div>
+                </div>
+                <div class="letterhead-divider"></div>
+            </div>
+
+            <!-- DOCUMENT BODY -->
+            <div class="document-body" id="content"></div>
+
+            <!-- FOOTER -->
+            <div class="page-footer">
+                <div class="footer-bar-container">
+                    <div class="footer-black"></div>
+                    <div class="footer-gold"></div>
+                </div>
+            </div>
         </div>
     </div>
 
-    <!-- Document Viewer -->
-    <div id="viewer" class="hidden">
-        <div id="content" class="document-viewer"></div>
-    </div>
-
     <!-- Error State -->
-    <div id="error" class="hidden text-center py-20">
-        <p class="text-red-400">⚠ Unable to load document. Access denied or document not found.</p>
-        <button onclick="window.history.back()" class="mt-6 btn btn-secondary">← Go Back</button>
+    <div id="error" class="state-overlay hidden">
+        <p style="color: #F87171; font-size: 14px;">⚠ Unable to load document. Access denied or document not found.</p>
+        <button onclick="window.history.back()" class="btn btn-secondary">← Go Back</button>
     </div>
 
     <script>
@@ -88,15 +246,17 @@
         const matterId = new URLSearchParams(window.location.search).get('id');
 
         async function loadDocument() {
-            const loadingEl = document.getElementById('loading');
-            const viewerEl = document.getElementById('viewer');
-            const errorEl = document.getElementById('error');
-            const contentEl = document.getElementById('content');
-            const titleEl = document.getElementById('doc-title');
+            const loadingEl  = document.getElementById('loading');
+            const canvasEl   = document.getElementById('canvas-area');
+            const errorEl    = document.getElementById('error');
+            const contentEl  = document.getElementById('content');
+            const titleEl    = document.getElementById('doc-title');
 
-            loadingEl.classList.remove('hidden');
-            viewerEl.classList.add('hidden');
-            errorEl.classList.add('hidden');
+            if (!matterId) {
+                loadingEl.classList.add('hidden');
+                errorEl.classList.remove('hidden');
+                return;
+            }
 
             try {
                 const res = await fetch(`${API_BASE}/staff/self/visible-matters/${matterId}`, {
@@ -106,11 +266,12 @@
                 if (!res.ok) throw new Error('Access denied');
                 const matter = await res.json();
 
-                titleEl.textContent = matter.title;
-                contentEl.innerHTML = matter.content_html || '<p>No content available.</p>';
+                titleEl.textContent = matter.title || 'Legal Document';
+                contentEl.innerHTML = matter.content_html || '<p style="color:#666;">No content available.</p>';
 
                 loadingEl.classList.add('hidden');
-                viewerEl.classList.remove('hidden');
+                canvasEl.classList.remove('hidden');
+
             } catch (err) {
                 console.error('Error loading document:', err);
                 loadingEl.classList.add('hidden');
@@ -119,12 +280,8 @@
         }
 
         function downloadPDF() {
-            // Trigger PDF export via API
-            window.location.href = `${API_BASE}/matters/${matterId}/export`;
-        }
-
-        function printDocument() {
-            window.print();
+            const token = localStorage.getItem('ec_token');
+            window.open(`${API_BASE}/matters/${matterId}/export?token=${token}`, '_blank');
         }
 
         document.addEventListener('DOMContentLoaded', loadDocument);

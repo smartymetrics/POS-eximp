@@ -3314,8 +3314,13 @@ function LegalManager({ staffId: initialStaffId, staffName: initialStaffName, is
                 )}
               </div>
               <div style={{ marginLeft: 16, display: "flex", gap: 8, alignItems: "center", flexDirection: "column", minWidth: 150 }}>
+                {isHR && (
+                  <a href={`/legal/view?id=${m.id}`} target="_blank" rel="noreferrer" className="bp" style={{ fontSize: 10, padding: "5px 12px", background: "#333", color: "#fff", textDecoration: "none", width: '100%', textAlign: 'center', boxSizing: 'border-box' }}>
+                    👁️ View Contract
+                  </a>
+                )}
                 {m.status === "Executed" ? (
-                  <button className="bg" style={{ fontSize: 10, padding: "5px 12px" }}>Download Contract</button>
+                  <a href={`/api/hr-legal/matters/${m.id}/export`} className="bg" style={{ fontSize: 10, padding: "5px 12px", textDecoration: "none", width: '100%', textAlign: 'center', boxSizing: 'border-box' }}>Download Contract</a>
                 ) : m.status !== "Legal Signing" ? (
                   <>
                     <div style={{ fontSize: 10, color: C.muted, fontStyle: "italic" }}>{m.status === "Review" ? "Awaiting Legal Review" : "In Progress"}</div>

@@ -14,7 +14,7 @@
 
     <!-- TIPTAP EDITOR -->
     <script type="module">
-        import { Editor, Node } from 'https://esm.sh/@tiptap/core@2.4.0';
+        import { Editor, Node, Extension } from 'https://esm.sh/@tiptap/core@2.4.0';
         import { StarterKit } from 'https://esm.sh/@tiptap/starter-kit@2.4.0';
         import { Bold } from 'https://esm.sh/@tiptap/extension-bold@2.4.0';
         import { Italic } from 'https://esm.sh/@tiptap/extension-italic@2.4.0';
@@ -36,19 +36,27 @@
         import { TextStyle } from 'https://esm.sh/@tiptap/extension-text-style@2.4.0';
 
         // ── CUSTOM FONT SIZE EXTENSION ──
-        const FontSize = TextStyle.extend({
+        const FontSize = Extension.create({
             name: 'fontSize',
-            addAttributes() {
-                return {
-                    fontSize: {
-                        default: null,
-                        parseHTML: element => element.style.fontSize?.replace('pt', ''),
-                        renderHTML: attributes => {
-                            if (!attributes.fontSize) return {};
-                            return { style: `font-size: ${attributes.fontSize}pt` };
+            addOptions() {
+                return { types: ['textStyle'] };
+            },
+            addGlobalAttributes() {
+                return [
+                    {
+                        types: this.options.types,
+                        attributes: {
+                            fontSize: {
+                                default: null,
+                                parseHTML: element => element.style.fontSize?.replace(/['"]+/g, '').replace('pt', ''),
+                                renderHTML: attributes => {
+                                    if (!attributes.fontSize) { return {}; }
+                                    return { style: `font-size: ${attributes.fontSize}pt` };
+                                },
+                            },
                         },
                     },
-                };
+                ];
             },
             addCommands() {
                 return {
@@ -239,11 +247,15 @@
                 window.currentVisibility = data.matter?.staff_visible || false;
                 window.updateVisibilityButton();
 
+                // Update Status with Recipient Name
+                const recipientName = data.matter.staff_id ? 'Internal Staff' : (data.matter.external_party_name || 'External Party');
+                document.getElementById('document-status').innerText = `Recipient: ${recipientName}`;
+
                 window.updateWordCount();
-                document.getElementById('document-modified').innerText = '✓ Loaded';
+                document.getElementById('document-modified').innerText = '✓ Document Ready';
                 setTimeout(() => {
                     document.getElementById('document-modified').innerText = '•';
-                }, 2000);
+                }, 4000);
 
                 // Focus editor after slight delay to ensure content is rendered
                 setTimeout(() => {
@@ -318,13 +330,13 @@
         window.updateVisibilityButton = function () {
             const btn = document.getElementById('btn-visibility');
             if (window.currentVisibility) {
-                btn.innerText = '👁 Visible to Staff';
-                btn.classList.remove('bg-white/5', 'text-gray-400');
-                btn.classList.add('bg-green-600/20', 'text-green-400', 'border-green-500');
+                btn.innerHTML = '👁️ Public';
+                btn.classList.remove('bg-white/5', 'text-gray-300');
+                btn.classList.add('bg-brand-gold/20', 'text-brand-gold', 'border-brand-gold');
             } else {
-                btn.innerText = '🔒 Confidential';
-                btn.classList.add('bg-white/5', 'text-gray-400');
-                btn.classList.remove('bg-green-600/20', 'text-green-400', 'border-green-500');
+                btn.innerHTML = '🔒 Private';
+                btn.classList.add('bg-white/5', 'text-gray-300');
+                btn.classList.remove('bg-brand-gold/20', 'text-brand-gold', 'border-brand-gold');
             }
         };
 
@@ -858,10 +870,106 @@
             if (id === 'tags-modal') window.renderTags();
             if (id === 'clauses-modal') window.renderClauses();
             if (id === 'memo-modal') window.loadMemos();
+            if (id === 'collaborate-modal') window.loadCollaborators();
         };
 
         window.closeModal = function (id) {
             document.getElementById(id).classList.add('hidden');
+        };
+
+        // ── COLLABORATION LOGIC ──
+        window.loadCollaborators = async function () {
+            if (!matterId) return;
+            const listEl = document.getElementById('collaborator-list');
+            const selectEl = document.getElementById('collab-admin-id');
+            try {
+                // Fetch potential candidates
+                const candRes = await fetch(`${API_BASE}/collaborator-candidates`, {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.ec_token }
+                });
+                if (candRes.ok) {
+                    const candidates = await candRes.json();
+                    selectEl.innerHTML = '<option value="">-- Select Administrator / Lawyer --</option>' + candidates.map(c => 
+                        `<option value="${c.id}">${c.full_name} (${c.role || 'Admin'})</option>`
+                    ).join('');
+                }
+
+                // Fetch current collaborators
+                const res = await fetch(`${API_BASE}/matters/${matterId}`, {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.ec_token }
+                });
+                const data = await res.json();
+                
+                if (!data.collaborators || data.collaborators.length === 0) {
+                    listEl.innerHTML = '<div class="p-6 text-center text-gray-500 text-sm">No collaborators added yet.</div>';
+                    return;
+                }
+
+                listEl.innerHTML = data.collaborators.map(c => `
+                    <div class="flex items-center justify-between p-4 border-b border-white/5 hover:bg-white/5 transition">
+                        <div>
+                            <div class="text-white font-bold text-sm">${c.admins?.full_name || 'Admin'}</div>
+                            <div class="text-xs text-gray-400">UUID: ${c.admin_id}</div>
+                        </div>
+                        <div class="flex items-center gap-3">
+                            <span class="text-xs px-2 py-1 rounded ${c.permission_level === 'Edit' ? 'bg-orange-500/20 text-orange-400' : 'bg-blue-500/20 text-blue-400'} border border-white/10">
+                                ${c.permission_level}
+                            </span>
+                            <button onclick="window.removeCollaborator('${c.admin_id}')" class="text-red-400 hover:text-red-300 transition" title="Remove">✕</button>
+                        </div>
+                    </div>
+                `).join('');
+                
+            } catch (e) {
+                listEl.innerHTML = '<div class="p-6 text-center text-red-500 text-sm">Failed to load collaborators.</div>';
+            }
+        };
+
+        window.addCollaborator = async function () {
+            if (!matterId) return;
+            const adminId = document.getElementById('collab-admin-id').value.trim();
+            const level = document.getElementById('collab-level').value;
+            
+            if (!adminId) return alert('Please enter an Admin UUID');
+
+            try {
+                const res = await fetch(`${API_BASE}/matters/${matterId}/collaborators`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': 'Bearer ' + localStorage.ec_token,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({ admin_id: adminId, permission_level: level })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || 'Failed to add collaborator');
+                }
+
+                document.getElementById('collab-admin-id').value = '';
+                window.loadCollaborators();
+                document.getElementById('document-status').textContent = 'Collaborator added';
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
+        };
+
+        window.removeCollaborator = async function (adminId) {
+            if (!matterId || !confirm('Remove this collaborator?')) return;
+            try {
+                const res = await fetch(`${API_BASE}/matters/${matterId}/collaborators/${adminId}`, {
+                    method: 'DELETE',
+                    headers: { 'Authorization': 'Bearer ' + localStorage.ec_token }
+                });
+
+                if (!res.ok) throw new Error('Failed to remove collaborator');
+
+                window.loadCollaborators();
+                document.getElementById('document-status').textContent = 'Collaborator removed';
+            } catch (e) {
+                alert('Error: ' + e.message);
+            }
         };
 
         window.renderTags = function () {
@@ -907,6 +1015,36 @@
             window.closeModal('clauses-modal');
         };
 
+        window.insertBranding = function (type) {
+            let content;
+            if (type === 'seal') {
+                content = `
+                <div class="branded-seal" contenteditable="false" style="
+                    display: inline-flex; flex-direction: column; align-items: center;
+                    border: 3px solid #C47D0A; border-radius: 50%;
+                    width: 120px; height: 120px; justify-content: center; gap: 4px;
+                    padding: 8px; margin: 20px auto; text-align: center;
+                    box-shadow: 0 0 0 2px #C47D0A inset;
+                ">
+                    <img src="/static/img/logo_firm.png" style="height: 48px; width: auto;" onerror="this.style.display='none'">
+                    <span style="font-size: 6pt; font-weight: 900; letter-spacing: 0.1em; color: #C47D0A; text-transform: uppercase; line-height: 1.2;">EXIMP &amp; CLOVES<br>SEAL</span>
+                </div>`;
+            } else {
+                content = `
+                <div class="branded-stamp" contenteditable="false" style="
+                    display: inline-block; border: 2px solid #C47D0A;
+                    padding: 8px 18px; margin: 16px 0; text-align: center;
+                    transform: rotate(-8deg); opacity: 0.85;
+                ">
+                    <div style="font-size: 8pt; font-weight: 900; letter-spacing: 0.15em; color: #C47D0A; text-transform: uppercase;">AUTHORIZED</div>
+                    <div style="font-size: 7pt; font-weight: 700; letter-spacing: 0.08em; color: #333; text-transform: uppercase;">Eximp &amp; Cloves Infrastructure Ltd.</div>
+                    <div style="font-size: 7pt; color: #888;">${new Date().toLocaleDateString('en-NG', {day:'2-digit', month:'short', year:'numeric'})}</div>
+                </div>`;
+            }
+            editor.chain().focus().insertContent(content).run();
+            document.getElementById('document-status').textContent = (type === 'seal' ? 'Seal' : 'Stamp') + ' inserted';
+        };
+
         window.applyTemplate = function (type) {
             if (type === 'offer') {
                 editor.commands.setContent(`
@@ -934,15 +1072,6 @@
         });
 
         window.loadMatter();
-        setInterval(() => {
-            if (!matterId) return;
-            const status = document.getElementById('save-status');
-            const prev = status.innerText;
-            status.innerText = '⏳ Auto-saving…';
-            window.saveDraft().finally(() => {
-                // saveDraft() already restores the label; this is a safety fallback
-            });
-        }, 60000);
 
         // Keyboard shortcuts
         document.addEventListener('keydown', (e) => {
@@ -1330,6 +1459,14 @@
             font-weight: 400;
         }
 
+        .ProseMirror h1 {
+            font-family: 'Inter', sans-serif;
+            font-weight: 800;
+            color: #111;
+            margin: 24pt 0 12pt;
+            font-size: 18pt;
+        }
+
         .ProseMirror h2 {
             font-family: 'Inter', sans-serif;
             font-weight: 700;
@@ -1337,6 +1474,14 @@
             text-transform: uppercase;
             letter-spacing: 0.04em;
             margin: 20pt 0 8pt;
+            font-size: 14pt;
+        }
+
+        .ProseMirror h3 {
+            font-family: 'Inter', sans-serif;
+            font-weight: 600;
+            color: #222;
+            margin: 16pt 0 6pt;
             font-size: 12pt;
         }
 
@@ -1466,6 +1611,19 @@
             color: #7A4E0A;
         }
 
+        .branded-tag {
+            color: var(--brand-gold);
+            font-weight: bold;
+            border: 1px dashed var(--brand-gold);
+            padding: 2px 6px;
+            border-radius: 4px;
+            background: rgba(196, 125, 10, 0.05);
+            font-family: 'Inter', sans-serif;
+            font-size: 10pt;
+            display: inline-block;
+            margin: 0 2px;
+        }
+
         /* ── RIBBON UI ── */
         .ribbon-divider {
             width: 1px;
@@ -1574,6 +1732,10 @@
                     class="text-gray-400 hover:text-brand-gold transition text-lg" title="Visibility Info">ⓘ</button>
                 <button onclick="window.openModal('help-modal')"
                     class="text-gray-400 hover:text-brand-gold transition text-lg" title="Keyboard Shortcuts">?</button>
+                <div class="w-[1px] h-6 bg-white/10 mx-2"></div>
+                <button onclick="window.openModal('collaborate-modal')"
+                    class="bg-blue-600/20 text-blue-400 border border-blue-500/30 px-3 py-2 rounded text-sm font-bold hover:bg-blue-600/40 hover:text-white transition"
+                    title="Manage Collaborators">👥 Collaborate</button>
                 <button onclick="window.saveDraft()" id="save-btn"
                     class="bg-brand-gold text-white px-4 py-2 rounded text-sm font-bold hover:bg-yellow-600 transition flex items-center gap-2"
                     title="Save Draft">
@@ -1616,6 +1778,9 @@
                 <option value="16">16</option>
                 <option value="18">18</option>
             </select>
+            <div class="ribbon-divider"></div>
+            <button onclick="window.insertBranding('seal')" class="ribbon-btn" title="Apply Company Seal">🔖 Seal</button>
+            <button onclick="window.insertBranding('stamp')" class="ribbon-btn" title="Apply Authorized Stamp">🖋️ Stamp</button>
             <div class="ribbon-divider"></div>
 
             <button class="ribbon-btn" data-cmd="toggleBold" title="Bold (Ctrl+B)"><b>B</b></button>
@@ -1868,6 +2033,32 @@
             <div class="p-6 bg-white/2.5 flex justify-end gap-2">
                 <button onclick="closeModal('visibility-info-modal')"
                     class="px-4 py-2 bg-white/5 border border-white/10 text-white rounded text-xs font-bold hover:border-brand-gold transition">Understood</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- COLLABORATION MODAL -->
+    <div id="collaborate-modal" class="modal-overlay hidden" style="z-index: 1000;">
+        <div class="modal-box" style="width: 500px;">
+            <div class="p-6 border-b border-white/5 flex justify-between items-center text-white">
+                <h2 class="font-bold uppercase tracking-widest text-sm">👥 Manage Collaborators</h2>
+                <button onclick="closeModal('collaborate-modal')">✕</button>
+            </div>
+            
+            <div class="p-4 border-b border-white/5 bg-white/5 flex gap-2">
+                <select id="collab-admin-id" class="flex-1 bg-black/50 border border-white/10 text-white rounded px-3 py-2 text-xs outline-none focus:border-brand-gold">
+                    <option value="">Select Collaborator...</option>
+                </select>
+                <select id="collab-level" class="bg-black/50 border border-white/10 text-white rounded px-3 py-2 text-xs outline-none focus:border-brand-gold">
+                    <option value="View">View Only</option>
+                    <option value="Edit">Can Edit</option>
+                </select>
+                <button onclick="window.addCollaborator()" class="bg-brand-gold text-white px-4 py-2 rounded text-xs font-bold hover:bg-brand-gold-pale transition">Add</button>
+            </div>
+
+            <div id="collaborator-list" class="p-0" style="max-height: 300px; overflow-y: auto;">
+                <!-- Collaborators rendered here -->
+                <div class="p-6 text-center text-gray-500 text-sm">Loading collaborators...</div>
             </div>
         </div>
     </div>

@@ -1,24 +1,28 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, UploadFile, File
 from fastapi.responses import Response
+import os
 from database import get_db, db_execute
-from routers.auth import verify_token
+from routers.auth import verify_token, resolve_admin_token
 from datetime import datetime
 import json
 import uuid
 import pdf_service
 
 router = APIRouter()
+APP_BASE_URL = os.getenv("APP_BASE_URL", "https://app.eximps-cloves.com")
 
 # ── HELPER: PERMISSION CHECK ──
-async def check_matter_access(matter_id: str, admin_id: str, required_level: str = "View"):
+async def check_matter_access(matter_id: str, current_admin: dict, required_level: str = "View"):
     """
     Verifies if an admin has access to a legal matter.
     Levels: 'View', 'Edit', 'Full' (Drafter has 'Full')
     """
     db = get_db()
+    admin_id = current_admin["sub"]
+    user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
     
     # 1. Is the admin the drafter or a super-admin?
-    matter_res = await db_execute(lambda: db.table("legal_matters").select("drafter_id").eq("id", matter_id).execute())
+    matter_res = await db_execute(lambda: db.table("legal_matters").select("drafter_id, category").eq("id", matter_id).execute())
     if not matter_res.data:
         raise HTTPException(status_code=404, detail="Legal matter not found")
     
@@ -27,6 +31,11 @@ async def check_matter_access(matter_id: str, admin_id: str, required_level: str
     # Check if admin is the drafter
     if str(matter.get("drafter_id")) == str(admin_id):
         return "Full"
+        
+    # Global 'View' bypass for HR and Legal on Personnel matters
+    if required_level == "View" and matter.get("category") == "Personnel":
+        if any(r in ["admin", "super_admin", "legal", "hr_admin", "hr"] for r in user_roles):
+            return "View"
         
     # Check roles for Super Admin
     # (Simplified for now - assuming we can fetch role if needed, but for now we check collaborators)
@@ -47,6 +56,19 @@ async def check_matter_access(matter_id: str, admin_id: str, required_level: str
     raise HTTPException(status_code=403, detail="You do not have permission to access this legal matter")
 
 # ── ENDPOINTS ──
+
+@router.get("/collaborator-candidates")
+async def get_collaborator_candidates(current_admin=Depends(verify_token)):
+    """Fetch potential collaborators (admins/lawyers)."""
+    db = get_db()
+    res = await db_execute(lambda: db.table("admins")\
+        .select("id, full_name, email, role")\
+        .eq("is_active", True)\
+        .execute())
+    return [
+       d for d in (res.data or []) 
+       if str(d.get("id")) != str(current_admin["sub"])
+    ]
 
 @router.get("/matters")
 async def get_legal_matters(category: str = None, staff_id: str = None, current_admin=Depends(verify_token)):
@@ -124,7 +146,7 @@ async def initiate_matter(data: dict, current_admin=Depends(verify_token)):
 async def get_matter_details(matter_id: str, current_admin=Depends(verify_token)):
     """Get full details including content and collaborators."""
     admin_id = current_admin["sub"]
-    await check_matter_access(matter_id, admin_id)
+    await check_matter_access(matter_id, current_admin)
     
     db = get_db()
     matter_res = await db_execute(lambda: db.table("legal_matters").select("*").eq("id", matter_id).execute())
@@ -141,7 +163,7 @@ async def get_matter_details(matter_id: str, current_admin=Depends(verify_token)
 async def add_collaborator(matter_id: str, data: dict, current_admin=Depends(verify_token)):
     """Add a new collaborator to a matter."""
     admin_id = current_admin["sub"]
-    await check_matter_access(matter_id, admin_id, required_level="Edit")
+    await check_matter_access(matter_id, current_admin, required_level="Edit")
     
     db = get_db()
     collab_data = {
@@ -169,7 +191,7 @@ async def remove_collaborator(matter_id: str, target_admin_id: str, current_admi
     """Remove a collaborator from a matter."""
     admin_id = current_admin["sub"]
     # Only drafter or admin should remove collaborators? Let's check access
-    await check_matter_access(matter_id, admin_id, required_level="Edit")
+    await check_matter_access(matter_id, current_admin, required_level="Edit")
     
     db = get_db()
     await db_execute(lambda: db.table("legal_matter_collaborators")\
@@ -191,7 +213,7 @@ async def remove_collaborator(matter_id: str, target_admin_id: str, current_admi
 async def save_matter_content(matter_id: str, data: dict, current_admin=Depends(verify_token)):
     """Save Tiptap editor content as HTML."""
     admin_id = current_admin["sub"]
-    await check_matter_access(matter_id, admin_id, required_level="Edit")
+    await check_matter_access(matter_id, current_admin, required_level="Edit")
     
     db = get_db()
     update_data = {
@@ -215,7 +237,7 @@ async def save_matter_content(matter_id: str, data: dict, current_admin=Depends(
 async def update_matter_settings(matter_id: str, data: dict, current_admin=Depends(verify_token)):
     """Update matter-specific settings like 'requires_signing'."""
     admin_id = current_admin["sub"]
-    await check_matter_access(matter_id, admin_id, required_level="Edit")
+    await check_matter_access(matter_id, current_admin, required_level="Edit")
     
     db = get_db()
     update_data = {}
@@ -241,7 +263,7 @@ async def update_matter_settings(matter_id: str, data: dict, current_admin=Depen
 async def export_matter_pdf(matter_id: str, current_admin=Depends(verify_token)):
     """Generate and return the PDF version of the document (Tiptap HTML)."""
     admin_id = current_admin["sub"]
-    await check_matter_access(matter_id, admin_id)
+    await check_matter_access(matter_id, current_admin)
     
     db = get_db()
     # Get the latest content
@@ -443,7 +465,7 @@ async def create_matter_from_template(template_id: str, data: dict, current_admi
 async def get_matter_memos(matter_id: str, current_admin=Depends(verify_token)):
     """Fetch all memos for a legal matter."""
     admin_id = current_admin["sub"]
-    await check_matter_access(matter_id, admin_id)
+    await check_matter_access(matter_id, current_admin)
     
     db = get_db()
     memos_res = await db_execute(
@@ -459,7 +481,7 @@ async def get_matter_memos(matter_id: str, current_admin=Depends(verify_token)):
 async def add_matter_memo(matter_id: str, data: dict, current_admin=Depends(verify_token)):
     """Add a memo/note to a legal matter."""
     admin_id = current_admin["sub"]
-    await check_matter_access(matter_id, admin_id, required_level="Edit")
+    await check_matter_access(matter_id, current_admin, required_level="Edit")
     
     db = get_db()
     
@@ -541,7 +563,7 @@ async def prepare_signing(
 ):
     """Prepare document for digital signing (verify integrity, create signing request)."""
     admin_id = current_admin["sub"]
-    await check_matter_access(matter_id, admin_id, required_level="Edit")
+    await check_matter_access(matter_id, current_admin, required_level="Edit")
     
     db = get_db()
     
@@ -601,6 +623,76 @@ async def prepare_signing(
         "title": title,
         "status": "Pending"
     }
+
+@router.post("/matters/{matter_id}/dispatch-signature")
+async def dispatch_signature(
+    matter_id: str,
+    current_admin=Depends(verify_token)
+):
+    """Sends the signing link to the recipient (Staff or External Party) associated with the matter."""
+    admin_id = current_admin["sub"]
+    db = get_db()
+    
+    # 1. Fetch Matter & Signing Request
+    matter_res = await db_execute(
+        lambda: db.table("legal_matters")\
+            .select("*, legal_signing_requests(*)")\
+            .eq("id", matter_id)\
+            .execute()
+    )
+    if not matter_res.data:
+        raise HTTPException(status_code=404, detail="Matter not found")
+    
+    matter = matter_res.data[0]
+    signing_reqs = [r for r in matter.get("legal_signing_requests", []) if r["status"] == "Pending"]
+    if not signing_reqs:
+        raise HTTPException(status_code=400, detail="No pending signing request found for this matter. Please 'Seal & Prepare' first.")
+    
+    signing_req = signing_reqs[0]
+    signing_token = signing_req["signing_token"]
+    
+    # 2. Identify Recipient (Staff lookup or External Party fields)
+    staff_id = matter.get("staff_id")
+    signer_name = None
+    signer_email = None
+    recipient_type = "Internal Staff"
+
+    if staff_id:
+        staff_res = await db_execute(lambda: db.table("staff").select("full_name, email").eq("id", staff_id).execute())
+        if staff_res.data:
+            staff = staff_res.data[0]
+            signer_name = staff.get("full_name")
+            signer_email = staff.get("email")
+    
+    if not signer_email:
+        # Fallback to external party details if staff lookup fails or staff_id is null
+        signer_name = matter.get("external_party_name")
+        signer_email = matter.get("external_party_email")
+        recipient_type = "External Party"
+
+    if not signer_email:
+        raise HTTPException(status_code=400, detail="No valid recipient found. Please update the matter with a staff member or external party email.")
+    
+    # 3. Dispatch Email
+    from email_service import send_staff_signing_request_email
+    signing_url = f"{APP_BASE_URL}/signing/{signing_token}"
+    
+    await send_staff_signing_request_email(
+        staff_name=signer_name or "Valued Partner",
+        email_addr=signer_email,
+        doc_title=matter.get("title", "Legal Document"),
+        signing_url=signing_url
+    )
+    
+    # 4. Audit Log
+    await db_execute(lambda: db.table("legal_matter_history").insert({
+        "matter_id": matter_id,
+        "action": "Signer Notification Sent",
+        "performed_by": admin_id,
+        "description": f"Signing link dispatched to {recipient_type}: {signer_email}"
+    }).execute())
+    
+    return {"status": "dispatched", "message": f"Signature link sent to {recipient_type}"}
 
 @router.get("/signing/{signing_token}/details")
 async def get_signing_details(signing_token: str):
@@ -669,19 +761,63 @@ async def submit_signature(signing_token: str, data: dict):
         }).eq("id", signing_req["id"]).execute()
     )
     
-    # Update matter status
+    # Update matter status + patch content_html with signature
     matter_res = await db_execute(
-        lambda: db.table("legal_matters").select("staff_id").eq("id", matter_id).execute()
+        lambda: db.table("legal_matters").select("staff_id, content_html").eq("id", matter_id).execute()
     )
     
     if matter_res.data:
         matter = matter_res.data[0]
+        signer_name  = data.get("signer_name", "Signatory")
+        signer_email = data.get("signer_email", "")
+        sig_image    = data.get("signature_image", "")
+        signed_at    = datetime.now().strftime("%d %B %Y, %H:%M")
+
+        # ── Build the executed signature block ──
+        sig_block = f"""
+<div style="margin-top: 60px; border-top: 2px solid #C47D0A; padding-top: 20px; font-family: 'Times New Roman', serif;">
+  <p style="font-size: 9pt; font-weight: 700; color: #C47D0A; text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 16px;">
+    ✓ Executed &amp; Digitally Signed
+  </p>
+  <table style="width: 100%; border-collapse: collapse;">
+    <tr>
+      <td style="width: 50%; padding-right: 40px; vertical-align: top;">
+        <p style="font-size: 8pt; font-weight: 700; color: #333; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px;">Employee / Signatory</p>
+        {"<img src='" + sig_image + "' style='max-width: 200px; max-height: 80px; border: 1px solid #eee; padding: 4px; display: block; margin-bottom: 6px;'>" if sig_image else "<div style='height: 60px; border-bottom: 1px solid #333; margin-bottom: 6px;'></div>"}
+        <p style="font-size: 9pt; font-weight: 700; margin: 0;">{signer_name}</p>
+        <p style="font-size: 8pt; color: #666; margin: 2px 0 0;">{signer_email}</p>
+        <p style="font-size: 8pt; color: #888; margin: 4px 0 0;">Date: {signed_at}</p>
+      </td>
+      <td style="width: 50%; padding-left: 40px; vertical-align: top; border-left: 1px solid #eee;">
+        <p style="font-size: 8pt; font-weight: 700; color: #333; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px;">Employer / Authorized Representative</p>
+        <div style="height: 60px; border-bottom: 1px solid #333; margin-bottom: 6px;">
+          <img src="{APP_BASE_URL}/static/img/logo_firm.png" style="height: 48px; width: auto; opacity: 0.7;" onerror="">
+        </div>
+        <p style="font-size: 9pt; font-weight: 700; margin: 0;">Eximp &amp; Cloves Infrastructure Limited</p>
+        <p style="font-size: 8pt; color: #888; margin: 4px 0 0;">Date: {signed_at}</p>
+      </td>
+    </tr>
+  </table>
+</div>"""
+
+        # ── Resolve placeholders in existing content_html ──
+        seal_html = """<div style="display:inline-flex;flex-direction:column;align-items:center;border:3px solid #C47D0A;border-radius:50%;width:110px;height:110px;justify-content:center;padding:8px;text-align:center;box-shadow:0 0 0 2px #C47D0A inset;"><img src="{base}/static/img/logo_firm.png" style="height:44px;width:auto;"><span style="font-size:6pt;font-weight:900;letter-spacing:0.1em;color:#C47D0A;text-transform:uppercase;line-height:1.2;">EXIMP &amp; CLOVES<br>SEAL</span></div>""".format(base=APP_BASE_URL)
+        stamp_html = f"""<div style="display:inline-block;border:2px solid #C47D0A;padding:8px 18px;text-align:center;transform:rotate(-8deg);opacity:0.85;"><div style="font-size:8pt;font-weight:900;letter-spacing:0.15em;color:#C47D0A;text-transform:uppercase;">AUTHORIZED</div><div style="font-size:7pt;font-weight:700;color:#333;text-transform:uppercase;">Eximp &amp; Cloves Infrastructure Ltd.</div><div style="font-size:7pt;color:#888;">{signed_at}</div></div>"""
+
+        raw_html = matter.get("content_html") or ""
+        raw_html = raw_html.replace("{{ seal }}", seal_html).replace("{{ stamp }}", stamp_html)
+        patched_html = raw_html + sig_block
+
         update_data = {
             "status": "Executed",
             "signed_at": datetime.now().isoformat(),
-            "signed_by": data.get("signer_email"),
+            "signed_by": signer_email,
+            "staff_visible": True,
+            "content_html": patched_html,
             "signature_metadata": {
                 "signing_token": signing_token[:8],
+                "signer_name": signer_name,
+                "signer_email": signer_email,
                 "timestamp": datetime.now().isoformat()
             }
         }
@@ -980,15 +1116,19 @@ async def get_staff_visible_matter(matter_id: str, current_admin=Depends(verify_
     Staff can ONLY view if staff_visible=true AND staff_id matches their ID.
     """
     admin_id = current_admin["sub"]
+    roles = current_admin.get("role", "").lower().split(",")
+    is_privileged = any(r.strip() in ["hr", "lawyer", "legal", "admin", "super_admin"] for r in roles)
+    
     db = get_db()
     
-    # Fetch matter with visibility check
-    matter_res = await db_execute(lambda: db.table("legal_matters")\
-        .select("id, title, category, status, created_at, content_html, requires_signing")\
-        .eq("id", matter_id)\
-        .eq("staff_id", admin_id)\
-        .eq("staff_visible", True)\
-        .execute())
+    # Fetch matter
+    query = db.table("legal_matters").select("id, title, category, status, created_at, content_html").eq("id", matter_id)
+    
+    if not is_privileged:
+        # Standard staff can only view if it's explicitly assigned to them and marked visible
+        query = query.eq("staff_id", admin_id).eq("staff_visible", True)
+        
+    matter_res = await db_execute(lambda: query.execute())
     
     if not matter_res.data:
         raise HTTPException(status_code=403, detail="You do not have permission to view this matter")
@@ -1004,3 +1144,160 @@ async def get_staff_visible_matter(matter_id: str, current_admin=Depends(verify_
     }).execute())
     
     return matter
+
+
+@router.get("/matters/{matter_id}/export")
+async def export_matter_pdf(matter_id: str, token: str = None, current_admin=Depends(resolve_admin_token)):
+    """
+    Generate a full-page PDF of a legal matter, including the company letterhead,
+    body content (with seals/stamps/signatures embedded), and branded footer.
+    Accepts a ?token= query param for direct browser download links.
+    """
+    admin_id = current_admin["sub"]
+    roles = current_admin.get("role", "").lower().split(",")
+    is_privileged = any(r.strip() in ["hr", "lawyer", "legal", "admin", "super_admin"] for r in roles)
+
+    db = get_db()
+    query = db.table("legal_matters").select("id, title, content_html, staff_id").eq("id", matter_id)
+    if not is_privileged:
+        query = query.eq("staff_id", admin_id).eq("staff_visible", True)
+
+    res = await db_execute(lambda: query.execute())
+    if not res.data:
+        raise HTTPException(status_code=403, detail="You do not have permission to access this document")
+
+    matter = res.data[0]
+    title = matter.get("title", "Legal Document")
+    body_html = matter.get("content_html", "<p>No content.</p>") or "<p>No content.</p>"
+
+    # Build full branded HTML document for WeasyPrint
+    full_html = f"""<!DOCTYPE html>
+<html>
+<head>
+<meta charset="UTF-8">
+<title>{title}</title>
+<style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Tinos:ital,wght@0,400;0,700;1,400;1,700&display=swap');
+  :root {{ --brand-gold: #C47D0A; }}
+  * {{ box-sizing: border-box; margin: 0; padding: 0; }}
+  @page {{
+    size: A4;
+    margin: 0;
+  }}
+  body {{
+    font-family: 'Tinos', 'Times New Roman', serif;
+    font-size: 11pt;
+    color: #000;
+    background: white;
+  }}
+  .page {{
+    width: 210mm;
+    min-height: 297mm;
+    display: flex;
+    flex-direction: column;
+    position: relative;
+  }}
+
+  /* ── LETTERHEAD ── */
+  .letterhead {{ position: relative; padding: 0; }}
+  .header-bar-black {{
+    position: absolute; top: 0; left: 0;
+    width: 60%; height: 40px;
+    background: #000;
+    border-bottom-right-radius: 40px;
+  }}
+  .header-bar-gold {{
+    position: absolute; top: 0; right: 0;
+    width: 40%; height: 30px;
+    background: var(--brand-gold);
+  }}
+  .letterhead-inner {{
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 50px 60px 20px;
+    position: relative;
+    z-index: 2;
+  }}
+  .logo-img {{ height: 70px; width: auto; }}
+  .letterhead-contact {{
+    border-left: 2px solid #000;
+    padding: 4px 15px;
+    font-size: 9pt;
+    line-height: 1.7;
+    color: #111;
+    font-weight: 700;
+    font-variant: small-caps;
+    letter-spacing: 0.05em;
+    font-family: 'Inter', sans-serif;
+  }}
+  .letterhead-contact a {{ color: var(--brand-gold); text-decoration: none; }}
+  .letterhead-divider {{ height: 2px; background: #eee; margin: 0 60px; }}
+
+  /* ── BODY ── */
+  .document-body {{
+    padding: 28px 72px;
+    flex: 1;
+    line-height: 1.6;
+  }}
+  .document-body h1 {{ font-size: 18pt; font-weight: 800; margin: 20pt 0 10pt; }}
+  .document-body h2 {{ font-size: 14pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin: 16pt 0 8pt; }}
+  .document-body h3 {{ font-size: 12pt; font-weight: 600; margin: 14pt 0 6pt; }}
+  .document-body p {{ margin-bottom: 8pt; }}
+  .document-body ul {{ margin: 8pt 0 8pt 24pt; list-style: disc; }}
+  .document-body ol {{ margin: 8pt 0 8pt 24pt; }}
+  .document-body table {{ width: 100%; border-collapse: collapse; margin: 12pt 0; }}
+  .document-body td, .document-body th {{ border: 1px solid #ccc; padding: 6pt 8pt; font-size: 10pt; }}
+  .document-body th {{ background: #f5f5f5; font-weight: 700; }}
+  .document-body hr {{ border: none; border-top: 1px solid #ccc; margin: 20pt 0; }}
+  .document-body img {{ max-width: 100%; height: auto; }}
+
+  /* ── FOOTER ── */
+  .page-footer {{ margin-top: auto; }}
+  .footer-bar-container {{ display: flex; height: 12px; }}
+  .footer-black {{ flex: 1; background: #000; }}
+  .footer-gold {{ flex: 1; background: var(--brand-gold); }}
+</style>
+</head>
+<body>
+<div class="page">
+  <div class="letterhead">
+    <div class="header-bar-black"></div>
+    <div class="header-bar-gold"></div>
+    <div class="letterhead-inner">
+      <img class="logo-img" src="{APP_BASE_URL}/static/img/logo_firm.png" alt="Eximp &amp; Cloves">
+      <div class="letterhead-contact">
+        <div>Phone: +234 912 6864 383</div>
+        <div>Web: <a href="https://eximps-cloves.com">https://eximps-cloves.com</a></div>
+        <div>Email: <a href="mailto:admin@eximps-cloves.com">admin@eximps-cloves.com</a></div>
+      </div>
+    </div>
+    <div class="letterhead-divider"></div>
+  </div>
+
+  <div class="document-body">
+    {body_html}
+  </div>
+
+  <div class="page-footer">
+    <div class="footer-bar-container">
+      <div class="footer-black"></div>
+      <div class="footer-gold"></div>
+    </div>
+  </div>
+</div>
+</body>
+</html>"""
+
+    try:
+        from weasyprint import HTML as WeasyprintHTML
+        import io
+        pdf_bytes = WeasyprintHTML(string=full_html, base_url=APP_BASE_URL).write_pdf()
+        safe_title = "".join(c for c in title if c.isalnum() or c in " _-").strip() or "document"
+        return Response(
+            content=pdf_bytes,
+            media_type="application/pdf",
+            headers={"Content-Disposition": f'attachment; filename="{safe_title}.pdf"'}
+        )
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")

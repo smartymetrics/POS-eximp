@@ -13,35 +13,92 @@
             --brand-gold: #C47D0A;
             --studio-bg: #2b2b2b;
             --paper-white: #ffffff;
+            --text-dark: #111;
         }
 
         body {
-            background: #111;
+            background: #0f1115;
             font-family: 'Inter', sans-serif;
             color: #fff;
+            margin: 0;
+            overflow-x: hidden;
         }
+
+        /* ── A4 PAPER STYLING ── */
+        .a4-page {
+            width: 210mm;
+            min-height: 297mm;
+            background: white;
+            margin: 0 auto;
+            padding: 20mm 15mm;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+            color: #000;
+            position: relative;
+            font-family: 'Times New Roman', serif;
+            font-size: 11.5pt;
+            line-height: 1.5;
+        }
+
+        .letterhead {
+            margin-bottom: 25mm;
+            border-bottom: 1.5pt solid var(--brand-gold);
+            padding-bottom: 10mm;
+            display: flex;
+            justify-content: space-between;
+            align-items: flex-end;
+        }
+
+        .letterhead img { height: 60pt; }
+
+        .letterhead-contact {
+            text-align: right;
+            font-family: 'Inter', sans-serif;
+            font-size: 8pt;
+            line-height: 1.4;
+            color: #444;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        .document-body {
+            font-family: 'Tinos', 'Times New Roman', serif;
+            font-size: 11.5pt;
+            line-height: 1.6;
+            color: #111;
+            text-align: justify;
+        }
+
+        .document-body h2 {
+            font-family: 'Inter', sans-serif;
+            font-size: 11pt;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 20pt;
+            margin-bottom: 8pt;
+            color: #000;
+            border-bottom: 1px solid #eee;
+        }
+
+        .document-body p { margin-bottom: 12pt; }
 
         .signing-container {
             display: grid;
-            grid-template-columns: 1fr 400px;
-            gap: 30px;
-            max-width: 1400px;
+            grid-template-columns: 1fr 420px;
+            gap: 40px;
+            max-width: 1600px;
             margin: 40px auto;
-            padding: 0 20px;
+            padding: 0 40px;
         }
 
-        .document-preview {
-            background: var(--paper-white);
-            border-radius: 8px;
-            overflow: hidden;
-            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
-        }
-
-        .document-iframe {
-            width: 100%;
-            height: 800px;
-            border: none;
-            display: block;
+        .preview-scroll-area {
+            height: 85vh;
+            overflow-y: auto;
+            background: #1e2128;
+            padding: 40px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            scrollbar-width: thin;
         }
 
         .signature-panel {
@@ -217,11 +274,18 @@
 
     <div class="signing-container">
         <!-- DOCUMENT PREVIEW -->
-        <div>
-            <div class="document-preview">
-                <div id="document-content"
-                    style="padding: 40px; color: #000; overflow-y: auto; max-height: 800px; font-size: 13px; line-height: 1.6;">
-                    Loading document...
+        <div class="preview-scroll-area">
+            <div class="a4-page">
+                <div class="letterhead">
+                    <img src="/static/img/logo_firm.png" alt="Eximp & Cloves">
+                    <div class="letterhead-contact" style="font-weight: 500;">
+                        128B AMADU BELLO WAY, VICTORIA ISLAND<br>
+                        LAGOS, NIGERIA<br>
+                        <span style="color: var(--brand-gold)">WWW.EXIMPS-CLOVES.COM</span>
+                    </div>
+                </div>
+                <div id="document-content" class="document-body">
+                    <div style="text-align: center; padding: 100px 0; color: #999;">Loading high-fidelity document content...</div>
                 </div>
             </div>
         </div>
@@ -474,11 +538,23 @@
                 if (!res.ok) throw new Error('Signing failed');
 
                 const result = await res.json();
-                showStatus('✓ Document signed successfully! Redirecting...', 'success');
+                showStatus('✓ Document signed successfully! Archiving to portal...', 'success');
+
+                // Update UI to success state
+                document.querySelector('.signature-panel').innerHTML = `
+                    <div style="text-align: center; padding: 40px 0;">
+                        <div style="font-size: 48px; margin-bottom: 20px;">✅</div>
+                        <h2 style="color: var(--brand-gold); font-weight: 900; text-transform: uppercase; margin-bottom: 10px;">Execution Complete</h2>
+                        <p style="font-size: 12px; color: #999; margin-bottom: 30px;">This document has been legally signed and archived to your staff profile.</p>
+                        
+                        <a href="/portal/documents?id=${result.matter_id}" class="btn btn-primary" style="display: block; text-decoration: none; margin-bottom: 12px; text-align: center;">View in My Dashboard</a>
+                        <a href="/api/hr-legal/matters/${result.matter_id}/export" class="btn btn-secondary" style="display: block; text-decoration: none; text-align: center;">Download PDF Copy</a>
+                    </div>
+                `;
 
                 setTimeout(() => {
-                    window.location.href = result.redirect || '/';
-                }, 2000);
+                    if (result.redirect) window.location.href = result.redirect;
+                }, 10000);
             } catch (e) {
                 console.error('ERROR:', e);
                 showStatus('Failed to submit signature. Please try again.', 'error');
