@@ -1636,3 +1636,122 @@ async def send_staff_signing_request_email(staff_name: str, email_addr: str, doc
         import traceback
         logger.error(traceback.format_exc())
         return None
+
+
+async def send_personnel_executed_email(
+    signer_name: str,
+    signer_email: str,
+    doc_title: str,
+    matter_id: str,
+    pdf_bytes: bytes,
+    audit_entries: list,
+    download_token: str
+):
+    """
+    Sent to the signer immediately after they execute a personnel document.
+    Attaches the signed PDF and includes a brief audit trail in the email body.
+    """
+    if not signer_email:
+        return
+
+    executed_date = datetime.now().strftime("%d %B %Y at %H:%M")
+    download_url = f"https://app.eximps-cloves.com/api/hr-legal/matters/{matter_id}/export?token={download_token}"
+
+    # Build audit rows
+    audit_rows = ""
+    for entry in audit_entries[:10]:  # cap at 10 events
+        action = entry.get("action", "—")
+        desc = entry.get("description", "")
+        ts = ""
+        try:
+            ts = datetime.fromisoformat(entry["created_at"]).strftime("%d %b %Y, %H:%M")
+        except Exception:
+            ts = entry.get("created_at", "")
+        audit_rows += f"""
+        <tr>
+          <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;font-size:12px;color:#555;">{ts}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;font-size:12px;font-weight:600;color:#333;">{action}</td>
+          <td style="padding:8px 12px;border-bottom:1px solid #f0f0f0;font-size:12px;color:#888;">{desc}</td>
+        </tr>"""
+
+    html = f"""
+    <div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:640px;margin:auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+      <!-- Header -->
+      <div style="background:#0F1115;padding:28px 36px;text-align:center;">
+        <img src="https://app.eximps-cloves.com/static/img/logo_dark.svg" alt="Eximp &amp; Cloves" style="height:36px;">
+        <p style="color:#C47D0A;font-size:11px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;margin:10px 0 0;">Legal Department</p>
+      </div>
+
+      <!-- Body -->
+      <div style="padding:36px;">
+        <div style="text-align:center;margin-bottom:28px;">
+          <div style="font-size:48px;">✅</div>
+          <h2 style="color:#16a34a;font-size:20px;font-weight:800;margin:8px 0;">Document Successfully Executed</h2>
+          <p style="color:#6b7280;font-size:13px;margin:0;">{executed_date}</p>
+        </div>
+
+        <p style="color:#374151;font-size:14px;line-height:1.7;">Dear <strong>{signer_name}</strong>,</p>
+        <p style="color:#374151;font-size:14px;line-height:1.7;">
+          This is to confirm that you have successfully signed the following document:
+        </p>
+
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:16px 20px;margin:20px 0;">
+          <p style="margin:0;font-size:13px;font-weight:700;color:#111;">📄 {doc_title}</p>
+          <p style="margin:6px 0 0;font-size:12px;color:#6b7280;">Eximp &amp; Cloves Infrastructure Limited</p>
+        </div>
+
+        <p style="color:#374151;font-size:14px;line-height:1.7;">
+          Your signed copy is attached to this email as a PDF. Please keep it in a safe place — it is a legally binding document.
+        </p>
+
+        <div style="text-align:center;margin:28px 0;">
+          <a href="{download_url}" style="background:#C47D0A;color:#fff;text-decoration:none;padding:14px 32px;border-radius:8px;font-weight:700;font-size:13px;display:inline-block;">
+            ⬇ Download Your Copy
+          </a>
+        </div>
+
+        <!-- Audit Trail -->
+        <div style="margin-top:32px;">
+          <p style="font-size:12px;font-weight:700;color:#6b7280;text-transform:uppercase;letter-spacing:0.1em;margin-bottom:12px;">Audit Trail</p>
+          <table style="width:100%;border-collapse:collapse;border:1px solid #e5e7eb;border-radius:8px;overflow:hidden;">
+            <thead>
+              <tr style="background:#f9fafb;">
+                <th style="padding:10px 12px;text-align:left;font-size:11px;color:#9ca3af;text-transform:uppercase;font-weight:700;border-bottom:1px solid #e5e7eb;">Time</th>
+                <th style="padding:10px 12px;text-align:left;font-size:11px;color:#9ca3af;text-transform:uppercase;font-weight:700;border-bottom:1px solid #e5e7eb;">Action</th>
+                <th style="padding:10px 12px;text-align:left;font-size:11px;color:#9ca3af;text-transform:uppercase;font-weight:700;border-bottom:1px solid #e5e7eb;">Details</th>
+              </tr>
+            </thead>
+            <tbody>{audit_rows}</tbody>
+          </table>
+        </div>
+
+        <p style="color:#9ca3af;font-size:12px;margin-top:32px;line-height:1.6;">
+          If you did not sign this document or believe this is an error, please contact us immediately at
+          <a href="mailto:legal@eximps-cloves.com" style="color:#C47D0A;text-decoration:none;">legal@eximps-cloves.com</a>
+        </p>
+      </div>
+
+      <div style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:16px 36px;text-align:center;">
+        <p style="color:#9ca3af;font-size:11px;margin:0;">Eximp &amp; Cloves Infrastructure Limited · <a href="https://eximps-cloves.com" style="color:#C47D0A;text-decoration:none;">eximps-cloves.com</a></p>
+      </div>
+    </div>"""
+
+    try:
+        attachments = []
+        if pdf_bytes:
+            attachments.append({
+                "content": base64.b64encode(pdf_bytes).decode(),
+                "filename": f"Executed_{doc_title.replace(' ', '_')}.pdf"
+            })
+        await async_resend({
+            "from": f"Eximp & Cloves Legal <{FROM_EMAIL}>",
+            "to": [signer_email],
+            "reply_to": "legal@eximps-cloves.com",
+            "subject": f"✅ Your Signed Document: {doc_title}",
+            "html": html,
+            "attachments": attachments
+        })
+        logger.info(f"Post-signing email sent to {signer_email} for matter {matter_id}")
+    except Exception as e:
+        logger.error(f"Error sending post-signing email to {signer_email}: {e}")
+

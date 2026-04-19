@@ -847,7 +847,77 @@ async def submit_signature(signing_token: str, data: dict):
         "performed_by": None,
         "description": f"Contract signed by {data.get('signer_name')} ({data.get('signer_email')})"
     }).execute())
-    
+
+    # ── Fire post-signing confirmation email (non-blocking) ──
+    try:
+        from email_service import send_personnel_executed_email
+        from weasyprint import HTML as WeasyprintHTML
+
+        # Fetch the final executed matter for email
+        exec_matter = await db_execute(
+            lambda: db.table("legal_matters").select("title, content_html").eq("id", matter_id).execute()
+        )
+        exec_audit = await db_execute(
+            lambda: db.table("legal_matter_history").select("*").eq("matter_id", matter_id).order("created_at", desc=False).execute()
+        )
+
+        doc_title = exec_matter.data[0].get("title", "Legal Document") if exec_matter.data else "Legal Document"
+        body_html = exec_matter.data[0].get("content_html", "") if exec_matter.data else ""
+        audit_entries = exec_audit.data or []
+
+        # Build full PDF
+        pdf_full_html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
+<style>
+  @page {{size:A4;margin:0;}}
+  body{{font-family:'Times New Roman',serif;font-size:11pt;color:#000;background:white;margin:0;}}
+  .page{{width:210mm;min-height:297mm;display:flex;flex-direction:column;}}
+  .letterhead{{position:relative;}}
+  .header-bar-black{{position:absolute;top:0;left:0;width:60%;height:40px;background:#000;border-bottom-right-radius:40px;}}
+  .header-bar-gold{{position:absolute;top:0;right:0;width:40%;height:30px;background:#C47D0A;}}
+  .letterhead-inner{{display:flex;justify-content:space-between;align-items:center;padding:50px 60px 20px;position:relative;z-index:2;}}
+  .lh-contact{{border-left:2px solid #000;padding:4px 15px;font-size:9pt;line-height:1.7;font-weight:700;font-variant:small-caps;}}
+  .lh-contact a{{color:#C47D0A;text-decoration:none;}}
+  .lh-divider{{height:2px;background:#eee;margin:0 60px;}}
+  .body{{padding:28px 72px;flex:1;line-height:1.6;}}
+  .body img{{max-width:100%;height:auto;}}
+  .footer{{margin-top:auto;}}
+  .footer-bars{{display:flex;height:12px;}}
+  .fb{{flex:1;background:#000;}}.fg{{flex:1;background:#C47D0A;}}
+</style></head>
+<body><div class="page">
+  <div class="letterhead">
+    <div class="header-bar-black"></div><div class="header-bar-gold"></div>
+    <div class="letterhead-inner">
+      <img src="{APP_BASE_URL}/static/img/logo_firm.png" style="height:70px;width:auto;">
+      <div class="lh-contact">
+        <div>Phone: +234 912 6864 383</div>
+        <div>Web: <a href="https://eximps-cloves.com">https://eximps-cloves.com</a></div>
+        <div>Email: <a href="mailto:admin@eximps-cloves.com">admin@eximps-cloves.com</a></div>
+      </div>
+    </div>
+    <div class="lh-divider"></div>
+  </div>
+  <div class="body">{body_html}</div>
+  <div class="footer"><div class="footer-bars"><div class="fb"></div><div class="fg"></div></div></div>
+</div></body></html>"""
+
+        pdf_bytes = WeasyprintHTML(string=pdf_full_html, base_url=APP_BASE_URL).write_pdf()
+        signer_email_addr = data.get("signer_email", "")
+        signer_name_str = data.get("signer_name", "Signatory")
+
+        await send_personnel_executed_email(
+            signer_name=signer_name_str,
+            signer_email=signer_email_addr,
+            doc_title=doc_title,
+            matter_id=matter_id,
+            pdf_bytes=pdf_bytes,
+            audit_entries=audit_entries,
+            download_token=signing_token   # signing_token is already known to the signer
+        )
+    except Exception as email_err:
+        import logging
+        logging.getLogger(__name__).error(f"Post-signing email failed (non-fatal): {email_err}")
+
     return {
         "status": "success",
         "message": "Document signed successfully",
@@ -1147,24 +1217,66 @@ async def get_staff_visible_matter(matter_id: str, current_admin=Depends(verify_
 
 
 @router.get("/matters/{matter_id}/export")
-async def export_matter_pdf(matter_id: str, token: str = None, current_admin=Depends(resolve_admin_token)):
+async def export_matter_pdf(matter_id: str, token: str = None, request: Request = None):
     """
-    Generate a full-page PDF of a legal matter, including the company letterhead,
-    body content (with seals/stamps/signatures embedded), and branded footer.
-    Accepts a ?token= query param for direct browser download links.
+    Generate a full-page PDF of a legal matter.
+    Accepts:
+      1. Authorization: Bearer <JWT>  — normal staff/admin access
+      2. ?token=<JWT>                 — JWT passed as query param (dashboard use)
+      3. ?token=<signing_token>       — raw UUID signing token (external signer download)
     """
-    admin_id = current_admin["sub"]
-    roles = current_admin.get("role", "").lower().split(",")
-    is_privileged = any(r.strip() in ["hr", "lawyer", "legal", "admin", "super_admin"] for r in roles)
-
     db = get_db()
-    query = db.table("legal_matters").select("id, title, content_html, staff_id").eq("id", matter_id)
-    if not is_privileged:
-        query = query.eq("staff_id", admin_id).eq("staff_visible", True)
+    matter_query = db.table("legal_matters").select("id, title, content_html, staff_id")
 
-    res = await db_execute(lambda: query.execute())
-    if not res.data:
-        raise HTTPException(status_code=403, detail="You do not have permission to access this document")
+    # ── Strategy 1: JWT via header or query param ──
+    current_admin = None
+    try:
+        from routers.auth import resolve_admin_token
+        from fastapi.security import HTTPAuthorizationCredentials
+        authorization = request.headers.get("authorization", "") if request else ""
+        if authorization:
+            scheme, creds = authorization.split()
+            if scheme.lower() == "bearer":
+                from routers.auth import verify_token
+                current_admin = verify_token(HTTPAuthorizationCredentials(scheme=scheme, credentials=creds))
+        if not current_admin and token:
+            import jwt as _jwt
+            import os as _os
+            SECRET_KEY = _os.getenv("JWT_SECRET", "eximp-cloves-secret-key-change-in-production")
+            try:
+                current_admin = _jwt.decode(token, SECRET_KEY, algorithms=["HS256"])
+            except Exception:
+                pass  # Not a JWT — might be a signing token, handled below
+    except Exception:
+        pass
+
+    if current_admin:
+        admin_id = current_admin.get("sub")
+        roles = current_admin.get("role", "").lower().split(",")
+        is_privileged = any(r.strip() in ["hr", "lawyer", "legal", "admin", "super_admin"] for r in roles)
+        query = matter_query.eq("id", matter_id)
+        if not is_privileged:
+            query = query.eq("staff_id", admin_id).eq("staff_visible", True)
+        res = await db_execute(lambda: query.execute())
+        if not res.data:
+            raise HTTPException(status_code=403, detail="You do not have permission to access this document")
+
+    # ── Strategy 2: Raw signing token (UUID) from external signer ──
+    elif token:
+        signing_res = await db_execute(
+            lambda: db.table("legal_signing_requests")
+            .select("matter_id, status")
+            .eq("signing_token", token)
+            .execute()
+        )
+        if not signing_res.data or signing_res.data[0].get("matter_id") != matter_id:
+            raise HTTPException(status_code=403, detail="Invalid or expired download token")
+        res = await db_execute(lambda: matter_query.eq("id", matter_id).execute())
+        if not res.data:
+            raise HTTPException(status_code=404, detail="Document not found")
+
+    else:
+        raise HTTPException(status_code=401, detail="Authentication required")
 
     matter = res.data[0]
     title = matter.get("title", "Legal Document")

@@ -545,10 +545,10 @@
                     <div style="text-align: center; padding: 40px 0;">
                         <div style="font-size: 48px; margin-bottom: 20px;">✅</div>
                         <h2 style="color: var(--brand-gold); font-weight: 900; text-transform: uppercase; margin-bottom: 10px;">Execution Complete</h2>
-                        <p style="font-size: 12px; color: #999; margin-bottom: 30px;">This document has been legally signed and archived to your staff profile.</p>
+                        <p style="font-size: 12px; color: #999; margin-bottom: 8px;">This document has been legally signed and archived.</p>
+                        <p style="font-size: 12px; color: #bbb; margin-bottom: 30px;">A copy of your signed document and the full audit trail have been sent to your email address.</p>
                         
-                        <a href="/portal/documents?id=${result.matter_id}" class="btn btn-primary" style="display: block; text-decoration: none; margin-bottom: 12px; text-align: center;">View in My Dashboard</a>
-                        <a href="/api/hr-legal/matters/${result.matter_id}/export" class="btn btn-secondary" style="display: block; text-decoration: none; text-align: center;">Download PDF Copy</a>
+                        <a href="/api/hr-legal/matters/${result.matter_id}/export?token=${signingToken}" target="_blank" class="btn btn-primary" style="display: block; text-decoration: none; margin-bottom: 12px; text-align: center;">⬇ Download Signed PDF</a>
                     </div>
                 `;
 
