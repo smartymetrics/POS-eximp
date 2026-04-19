@@ -1,9 +1,12 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Digital Document Signing</title>
+    <title>Digital Document Signing | Eximp & Cloves</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap">
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         :root {
@@ -31,7 +34,7 @@
             background: var(--paper-white);
             border-radius: 8px;
             overflow: hidden;
-            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+            box-shadow: 0 10px 40px rgba(0, 0, 0, 0.3);
         }
 
         .document-iframe {
@@ -152,21 +155,21 @@
         }
 
         .status-success {
-            background: #10b981/20;
+            background: rgba(16, 185, 129, 0.12);
             color: #10b981;
-            border: 1px solid #10b981/50;
+            border: 1px solid rgba(16, 185, 129, 0.4);
         }
 
         .status-error {
-            background: #ef4444/20;
+            background: rgba(239, 68, 68, 0.12);
             color: #ef4444;
-            border: 1px solid #ef4444/50;
+            border: 1px solid rgba(239, 68, 68, 0.4);
         }
 
         .status-info {
-            background: var(--brand-gold)/20;
+            background: rgba(196, 125, 10, 0.12);
             color: var(--brand-gold);
-            border: 1px solid var(--brand-gold)/50;
+            border: 1px solid rgba(196, 125, 10, 0.4);
         }
 
         .document-meta {
@@ -194,335 +197,346 @@
         }
     </style>
 </head>
+
 <body>
 
-<div style="padding: 20px 0; border-bottom: 1px solid #333;">
-    <div style="max-width: 1400px; margin: 0 auto; padding: 0 20px;">
-        <h1 style="font-size: 24px; font-weight: bold; margin-bottom: 5px;">
-            ✍️ Digital Document Signing
-        </h1>
-        <p style="color: #999; font-size: 13px;">Review the document and provide your digital signature to execute</p>
-    </div>
-</div>
-
-<div class="signing-container">
-    <!-- DOCUMENT PREVIEW -->
-    <div>
-        <div class="document-preview">
-            <div id="document-content" style="padding: 40px; color: #000; overflow-y: auto; max-height: 800px; font-size: 13px; line-height: 1.6;">
-                Loading document...
-            </div>
+    <div
+        style="background:#1a1a1a; border-bottom:3px solid var(--brand-gold); padding:0 24px; height:60px; display:flex; align-items:center; justify-content:space-between; position:sticky; top:0; z-index:50;">
+        <div style="display:flex; align-items:center; gap:14px;">
+            <img src="/static/img/logo_dark.svg" alt="Eximp & Cloves" style="height:32px;">
+            <div style="width:1px; height:24px; background:rgba(255,255,255,0.1);"></div>
+            <span
+                style="color:var(--brand-gold); font-weight:700; font-size:13px; text-transform:uppercase; letter-spacing:0.08em;">Legal
+                Signing</span>
+        </div>
+        <div style="display:flex; align-items:center; gap:8px;">
+            <span style="font-size:11px; color:#666;">Secured &amp; Encrypted</span>
+            <span style="font-size:18px;">🔏</span>
         </div>
     </div>
 
-    <!-- SIGNATURE PANEL -->
-    <div>
-        <div id="status-message" style="display: none; margin-bottom: 15px;" class="status-message"></div>
-
-        <div class="signature-panel">
-            <div class="panel-title">📋 Signature Details</div>
-
-            <div class="document-meta">
-                <div class="meta-item">
-                    <span class="meta-label">Document:</span>
-                    <span class="meta-value" id="doc-title">Loading...</span>
-                </div>
-                <div class="meta-item">
-                    <span class="meta-label">Prepared:</span>
-                    <span class="meta-value" id="doc-date">--</span>
-                </div>
-                <div class="meta-item">
-                    <span class="meta-label">Status:</span>
-                    <span class="meta-value" id="doc-status">Pending Signature</span>
+    <div class="signing-container">
+        <!-- DOCUMENT PREVIEW -->
+        <div>
+            <div class="document-preview">
+                <div id="document-content"
+                    style="padding: 40px; color: #000; overflow-y: auto; max-height: 800px; font-size: 13px; line-height: 1.6;">
+                    Loading document...
                 </div>
             </div>
+        </div>
 
-            <div class="form-group">
-                <label>Full Name *</label>
-                <input type="text" id="signer-name" placeholder="Enter your full name">
-            </div>
+        <!-- SIGNATURE PANEL -->
+        <div>
+            <div id="status-message" style="display: none; margin-bottom: 15px;" class="status-message"></div>
 
-            <div class="form-group">
-                <label>Email Address *</label>
-                <input type="email" id="signer-email" placeholder="your.email@example.com">
-            </div>
+            <div class="signature-panel">
+                <div class="panel-title">📋 Signature Details</div>
 
-            <div style="background: #0f0f0f; border: 1px solid #333; border-radius: 4px; padding: 12px; margin-bottom: 15px;">
-                <label style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 12px; color: #ccc;">
-                    <input type="checkbox" id="confirm-read" style="width: 16px; height: 16px; cursor: pointer;">
-                    <span>I have read and fully understand this contract</span>
-                </label>
-            </div>
+                <div class="document-meta">
+                    <div class="meta-item">
+                        <span class="meta-label">Document:</span>
+                        <span class="meta-value" id="doc-title">Loading...</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Prepared:</span>
+                        <span class="meta-value" id="doc-date">--</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Status:</span>
+                        <span class="meta-value" id="doc-status">Pending Signature</span>
+                    </div>
+                </div>
 
-            <div id="signature-section" style="display: none;">
                 <div class="form-group">
-                    <label>Digital Signature Pad</label>
-                    <canvas id="signature-canvas"></canvas>
+                    <label>Full Name *</label>
+                    <input type="text" id="signer-name" placeholder="Enter your full name">
                 </div>
 
-                <div class="canvas-controls">
-                    <button class="btn btn-secondary" onclick="clearSignature()">Clear Signature</button>
+                <div class="form-group">
+                    <label>Email Address *</label>
+                    <input type="email" id="signer-email" placeholder="your.email@example.com">
                 </div>
 
-                <button class="btn btn-success" onclick="submitSignature()" style="width: 100%;">
-                    ✓ Sign & Execute Document
-                </button>
+                <div
+                    style="background: #0f0f0f; border: 1px solid #333; border-radius: 4px; padding: 12px; margin-bottom: 15px;">
+                    <label
+                        style="display: flex; align-items: center; gap: 10px; cursor: pointer; font-size: 12px; color: #ccc;">
+                        <input type="checkbox" id="confirm-read" style="width: 16px; height: 16px; cursor: pointer;">
+                        <span>I have read and fully understand this contract</span>
+                    </label>
+                </div>
 
-                <p style="font-size: 10px; color: #666; text-align: center; margin-top: 10px;">
-                    By signing, you confirm that you have read and agree to the terms of this document.
-                </p>
-            </div>
+                <div id="signature-section" style="display: none;">
+                    <div class="form-group">
+                        <label>Digital Signature Pad</label>
+                        <canvas id="signature-canvas"></canvas>
+                    </div>
 
-            <div id="acknowledgment-section" style="display: none;">
-                <button class="btn btn-success" onclick="submitAcknowledgment()" style="width: 100%;">
-                    ✓ Acknowledge & Complete
-                </button>
-                <p style="font-size: 10px; color: #666; text-align: center; margin-top: 10px;">
-                    By acknowledging, you confirm that you have reviewed this document.
-                </p>
+                    <div class="canvas-controls">
+                        <button class="btn btn-secondary" onclick="clearSignature()">Clear Signature</button>
+                    </div>
+
+                    <button class="btn btn-success" onclick="submitSignature()" style="width: 100%;">
+                        ✓ Sign & Execute Document
+                    </button>
+
+                    <p style="font-size: 10px; color: #666; text-align: center; margin-top: 10px;">
+                        By signing, you confirm that you have read and agree to the terms of this document.
+                    </p>
+                </div>
+
+                <div id="acknowledgment-section" style="display: none;">
+                    <button class="btn btn-success" onclick="submitAcknowledgment()" style="width: 100%;">
+                        ✓ Acknowledge & Complete
+                    </button>
+                    <p style="font-size: 10px; color: #666; text-align: center; margin-top: 10px;">
+                        By acknowledging, you confirm that you have reviewed this document.
+                    </p>
+                </div>
             </div>
         </div>
     </div>
-</div>
 
-<script>
-    const API_BASE = '/api/hr-legal';
-    let canvas, ctx, isDrawing = false;
-    let signingToken = null;
-    let documentHTML = '';
-    let requiresSigning = true; // Default: will be set from API response
+    <script>
+        const API_BASE = '/api/hr-legal';
+        let canvas, ctx, isDrawing = false;
+        let signingToken = null;
+        let documentHTML = '';
+        let requiresSigning = true; // Default: will be set from API response
 
-    // ── INITIALIZATION ──
-    async function init() {
-        // Get signing token from URL
-        const path = window.location.pathname;
-        signingToken = path.split('/').pop();
-        
-        if (!signingToken) {
-            showStatus('Invalid signing link', 'error');
-            return;
-        }
+        // ── INITIALIZATION ──
+        async function init() {
+            // Get signing token from URL
+            const path = window.location.pathname;
+            signingToken = path.split('/').pop();
 
-        // Load signing details
-        await loadSigningDetails();
-        
-        // Setup canvas
-        setupCanvas();
-    }
-
-    // ── LOAD SIGNING DETAILS ──
-    async function loadSigningDetails() {
-        try {
-            const res = await fetch(`${API_BASE}/signing/${signingToken}/details`);
-            
-            if (!res.ok) {
-                if (res.status === 410) {
-                    showStatus('Signing link has expired', 'error');
-                } else {
-                    showStatus('Document not found', 'error');
-                }
+            if (!signingToken) {
+                showStatus('Invalid signing link', 'error');
                 return;
             }
 
-            const signingReq = await res.json();
-            const matter = signingReq.legal_matters || {};
-            
-            // Check if signing is required
-            requiresSigning = signingReq.requires_signing !== false; // Default true if not specified
-            
-            // Show appropriate section based on signing requirement
-            document.getElementById('confirm-read').addEventListener('change', updateSigningUI);
-            updateSigningUI();
-            
-            // Populate document info
-            document.getElementById('doc-title').textContent = signingReq.document_title || 'Untitled Document';
-            document.getElementById('doc-date').textContent = new Date(signingReq.initiated_at).toLocaleDateString();
-            document.getElementById('document-status').textContent = signingReq.status;
-            
-            // Display document content
-            if (matter.content_html) {
-                documentHTML = matter.content_html;
-                document.getElementById('document-content').innerHTML = documentHTML;
-            }
-        } catch (e) {
-            console.error('ERROR:', e);
-            showStatus('Failed to load document', 'error');
-        }
-    }
+            // Load signing details
+            await loadSigningDetails();
 
-    // ── CANVAS SETUP ──
-    function setupCanvas() {
-        canvas = document.getElementById('signature-canvas');
-        ctx = canvas.getContext('2d');
-        
-        // Set canvas resolution
-        const rect = canvas.getBoundingClientRect();
-        canvas.width = rect.width;
-        canvas.height = rect.height;
-        
-        // Fill with background
-        ctx.fillStyle = '#0f0f0f';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-        
-        // Event listeners
-        canvas.addEventListener('mousedown', startDrawing);
-        canvas.addEventListener('mousemove', draw);
-        canvas.addEventListener('mouseup', stopDrawing);
-        canvas.addEventListener('mouseout', stopDrawing);
-        
-        // Touch support
-        canvas.addEventListener('touchstart', handleTouch);
-        canvas.addEventListener('touchmove', handleTouch);
-        canvas.addEventListener('touchend', stopDrawing);
-    }
-
-    function startDrawing(e) {
-        isDrawing = true;
-        const rect = canvas.getBoundingClientRect();
-        ctx.beginPath();
-        ctx.moveTo(e.clientX - rect.left, e.clientY - rect.top);
-    }
-
-    function draw(e) {
-        if (!isDrawing) return;
-        const rect = canvas.getBoundingClientRect();
-        ctx.lineTo(e.clientX - rect.left, e.clientY - rect.top);
-        ctx.strokeStyle = '#C47D0A';
-        ctx.lineWidth = 2;
-        ctx.lineCap = 'round';
-        ctx.lineJoin = 'round';
-        ctx.stroke();
-    }
-
-    function stopDrawing() {
-        isDrawing = false;
-        ctx.closePath();
-    }
-
-    function handleTouch(e) {
-        e.preventDefault();
-        const touch = e.touches[0];
-        const mouseEvent = new MouseEvent(e.type === 'touchstart' ? 'mousedown' : 'mousemove', {
-            clientX: touch.clientX,
-            clientY: touch.clientY
-        });
-        canvas.dispatchEvent(mouseEvent);
-    }
-
-    function clearSignature() {
-        ctx.fillStyle = '#0f0f0f';
-        ctx.fillRect(0, 0, canvas.width, canvas.height);
-    }
-
-    // ── SUBMIT SIGNATURE ──
-    async function submitSignature() {
-        const signerName = document.getElementById('signer-name').value.trim();
-        const signerEmail = document.getElementById('signer-email').value.trim();
-        
-        if (!signerName || !signerEmail) {
-            showStatus('Please enter your name and email address', 'error');
-            return;
-        }
-        
-        if (!isCanvasEmpty()) {
-            showStatus('Please provide a signature', 'error');
-            return;
+            // Setup canvas
+            setupCanvas();
         }
 
-        // Get signature image
-        const signatureImage = canvas.toDataURL('image/png');
-        
-        try {
-            const res = await fetch(`${API_BASE}/signing/${signingToken}/submit`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    signer_name: signerName,
-                    signer_email: signerEmail,
-                    signature_image: signatureImage,
-                    timestamp: new Date().toISOString(),
-                    user_agent: navigator.userAgent
-                })
-            });
+        // ── LOAD SIGNING DETAILS ──
+        async function loadSigningDetails() {
+            try {
+                const res = await fetch(`${API_BASE}/signing/${signingToken}/details`);
 
-            if (!res.ok) throw new Error('Signing failed');
+                if (!res.ok) {
+                    if (res.status === 410) {
+                        showStatus('Signing link has expired', 'error');
+                    } else {
+                        showStatus('Document not found', 'error');
+                    }
+                    return;
+                }
 
-            const result = await res.json();
-            showStatus('✓ Document signed successfully! Redirecting...', 'success');
-            
-            setTimeout(() => {
-                window.location.href = result.redirect || '/';
-            }, 2000);
-        } catch (e) {
-            console.error('ERROR:', e);
-            showStatus('Failed to submit signature. Please try again.', 'error');
-        }
-    }
+                const signingReq = await res.json();
+                const matter = signingReq.legal_matters || {};
 
-    function isCanvasEmpty() {
-        const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
-        const data = imageData.data;
-        
-        // Check if there's any non-background color
-        for (let i = 0; i < data.length; i += 4) {
-            if (data[i] === 196 || data[i + 1] === 125 || data[i + 2] === 10) { // Brand gold or any drawing
-                return true;
+                // Check if signing is required
+                requiresSigning = signingReq.requires_signing !== false; // Default true if not specified
+
+                // Show appropriate section based on signing requirement
+                document.getElementById('confirm-read').addEventListener('change', updateSigningUI);
+                updateSigningUI();
+
+                // Populate document info
+                document.getElementById('doc-title').textContent = signingReq.document_title || 'Untitled Document';
+                document.getElementById('doc-date').textContent = new Date(signingReq.initiated_at).toLocaleDateString();
+                document.getElementById('doc-status').textContent = signingReq.status;
+
+                // Display document content
+                if (matter.content_html) {
+                    documentHTML = matter.content_html;
+                    document.getElementById('document-content').innerHTML = documentHTML;
+                }
+            } catch (e) {
+                console.error('ERROR:', e);
+                showStatus('Failed to load document', 'error');
             }
         }
-        return false;
-    }
 
-    // ── UPDATE SIGNING UI ──
-    function updateSigningUI() {
-        const isConfirmed = document.getElementById('confirm-read').checked;
-        
-        if (requiresSigning) {
-            // Show signature section when checkbox is checked
-            document.getElementById('signature-section').style.display = isConfirmed ? 'block' : 'none';
-            document.getElementById('acknowledgment-section').style.display = 'none';
-        } else {
-            // Show acknowledgment section when checkbox is checked (no signature needed)
-            document.getElementById('signature-section').style.display = 'none';
-            document.getElementById('acknowledgment-section').style.display = isConfirmed ? 'block' : 'none';
-        }
-    }
+        // ── CANVAS SETUP ──
+        function setupCanvas() {
+            canvas = document.getElementById('signature-canvas');
+            ctx = canvas.getContext('2d');
 
-    // ── SUBMIT ACKNOWLEDGMENT (NO SIGNATURE) ──
-    async function submitAcknowledgment() {
-        try {
-            const res = await fetch(`${API_BASE}/signing/${signingToken}/acknowledge`, {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    timestamp: new Date().toISOString(),
-                    user_agent: navigator.userAgent
-                })
+            function resizeCanvas() {
+                // Preserve existing drawing across resize
+                const dataURL = canvas.width > 0 ? canvas.toDataURL() : null;
+                const rect = canvas.getBoundingClientRect();
+                canvas.width = rect.width * window.devicePixelRatio;
+                canvas.height = rect.height * window.devicePixelRatio;
+                ctx.scale(window.devicePixelRatio, window.devicePixelRatio);
+                ctx.fillStyle = '#0f0f0f';
+                ctx.fillRect(0, 0, rect.width, rect.height);
+                if (dataURL) {
+                    const img = new Image();
+                    img.onload = () => ctx.drawImage(img, 0, 0, rect.width, rect.height);
+                    img.src = dataURL;
+                }
+                ctx.strokeStyle = '#C47D0A';
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+            }
+
+            resizeCanvas();
+            new ResizeObserver(resizeCanvas).observe(canvas);
+
+            // Pointer Events API — handles mouse, touch, and stylus uniformly
+            canvas.addEventListener('pointerdown', e => {
+                canvas.setPointerCapture(e.pointerId);
+                isDrawing = true;
+                const { x, y } = canvasPoint(e);
+                ctx.beginPath();
+                ctx.moveTo(x, y);
             });
 
-            if (!res.ok) throw new Error('Acknowledgment failed');
+            canvas.addEventListener('pointermove', e => {
+                if (!isDrawing) return;
+                const { x, y } = canvasPoint(e);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            });
 
-            const result = await res.json();
-            showStatus('✓ Document acknowledged! Redirecting...', 'success');
-            
-            setTimeout(() => {
-                window.location.href = result.redirect || '/';
-            }, 2000);
-        } catch (e) {
-            console.error('ERROR:', e);
-            showStatus('Failed to acknowledge document. Please try again.', 'error');
+            canvas.addEventListener('pointerup', stopDrawing);
+            canvas.addEventListener('pointercancel', stopDrawing);
         }
-    }
 
-    function showStatus(message, type) {
-        const statusEl = document.getElementById('status-message');
-        statusEl.textContent = message;
-        statusEl.className = `status-message status-${type}`;
-        statusEl.style.display = 'block';
-    }
+        function canvasPoint(e) {
+            const rect = canvas.getBoundingClientRect();
+            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        }
 
-    // ── START ──
-    init();
-</script>
+        function stopDrawing() {
+            if (!isDrawing) return;
+            isDrawing = false;
+            ctx.closePath();
+        }
+
+        function clearSignature() {
+            const rect = canvas.getBoundingClientRect();
+            ctx.fillStyle = '#0f0f0f';
+            ctx.fillRect(0, 0, rect.width, rect.height);
+        }
+
+        // Returns true when the canvas contains a drawn signature
+        function hasSignature() {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                // Look for any pixel that's notably lighter than the dark background (#0f0f0f = 15,15,15)
+                if (data[i] > 30 || data[i + 1] > 30 || data[i + 2] > 30) {
+                    return true;
+                }
+            }
+            return false;
+        }
+        // ── SUBMIT SIGNATURE ──
+        async function submitSignature() {
+            const signerName = document.getElementById('signer-name').value.trim();
+            const signerEmail = document.getElementById('signer-email').value.trim();
+
+            if (!signerName || !signerEmail) {
+                showStatus('Please enter your name and email address', 'error');
+                return;
+            }
+
+            if (!hasSignature()) {
+                showStatus('Please draw your signature in the pad above', 'error');
+                return;
+            }
+
+            // Get signature image
+            const signatureImage = canvas.toDataURL('image/png');
+
+            try {
+                const res = await fetch(`${API_BASE}/signing/${signingToken}/submit`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        signer_name: signerName,
+                        signer_email: signerEmail,
+                        signature_image: signatureImage,
+                        timestamp: new Date().toISOString(),
+                        user_agent: navigator.userAgent
+                    })
+                });
+
+                if (!res.ok) throw new Error('Signing failed');
+
+                const result = await res.json();
+                showStatus('✓ Document signed successfully! Redirecting...', 'success');
+
+                setTimeout(() => {
+                    window.location.href = result.redirect || '/';
+                }, 2000);
+            } catch (e) {
+                console.error('ERROR:', e);
+                showStatus('Failed to submit signature. Please try again.', 'error');
+            }
+        }
+
+        // ── UPDATE SIGNING UI ──
+        function updateSigningUI() {
+            const isConfirmed = document.getElementById('confirm-read').checked;
+
+            if (requiresSigning) {
+                // Show signature section when checkbox is checked
+                document.getElementById('signature-section').style.display = isConfirmed ? 'block' : 'none';
+                document.getElementById('acknowledgment-section').style.display = 'none';
+            } else {
+                // Show acknowledgment section when checkbox is checked (no signature needed)
+                document.getElementById('signature-section').style.display = 'none';
+                document.getElementById('acknowledgment-section').style.display = isConfirmed ? 'block' : 'none';
+            }
+        }
+
+        // ── SUBMIT ACKNOWLEDGMENT (NO SIGNATURE) ──
+        async function submitAcknowledgment() {
+            try {
+                const res = await fetch(`${API_BASE}/signing/${signingToken}/acknowledge`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        timestamp: new Date().toISOString(),
+                        user_agent: navigator.userAgent
+                    })
+                });
+
+                if (!res.ok) throw new Error('Acknowledgment failed');
+
+                const result = await res.json();
+                showStatus('✓ Document acknowledged! Redirecting...', 'success');
+
+                setTimeout(() => {
+                    window.location.href = result.redirect || '/';
+                }, 2000);
+            } catch (e) {
+                console.error('ERROR:', e);
+                showStatus('Failed to acknowledge document. Please try again.', 'error');
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('status-message');
+            statusEl.textContent = message;
+            statusEl.className = `status-message status-${type}`;
+            statusEl.style.display = 'block';
+        }
+
+        // ── START ──
+        init();
+    </script>
 
 </body>
+
 </html>

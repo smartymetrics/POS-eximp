@@ -1091,9 +1091,10 @@
         async function loadContractData() {
             try {
                 // Parallel fetch for invoice and contract content
+                const cacheBuster = `?_=${Date.now()}`;
                 const [invRes, contractRes] = await Promise.all([
-                    fetch(`/api/invoices/${invoiceId}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` } }),
-                    fetch(`/api/contracts/${invoiceId}/default-html`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` } })
+                    fetch(`/api/invoices/${invoiceId}${cacheBuster}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` } }),
+                    fetch(`/api/contracts/${invoiceId}/default-html${cacheBuster}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` } })
                 ]);
 
                 if (invRes.status === 401 && typeof logout === 'function') return logout();
@@ -1371,7 +1372,11 @@
             // 5. Load new state from buffer instantly
             currentTab = tab;
             if (editorEl) {
-                editorEl.innerHTML = contractBuffer[fieldMap[tab]] || '';
+                // To prevent jumping to end, only update if content actually changed
+                const newContent = contractBuffer[fieldMap[tab]] || '';
+                if (editorEl.innerHTML !== newContent) {
+                    editorEl.innerHTML = newContent;
+                }
             }
 
             // Scroll editor to top

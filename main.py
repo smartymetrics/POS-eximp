@@ -196,6 +196,18 @@ async def signing_page(request: Request, signing_token: str):
     return templates.TemplateResponse("personnel_signing.html", {"request": request, "signing_token": signing_token})
 
 
+@app.get("/legal/my-matters", response_class=HTMLResponse)
+async def staff_legal_portal(request: Request):
+    """Staff HR Portal: View assigned legal matters marked visible."""
+    return templates.TemplateResponse("staff_legal_portal.html", {"request": request})
+
+
+@app.get("/legal/view", response_class=HTMLResponse)
+async def staff_document_viewer(request: Request, id: str):
+    """Staff HR Portal: View a specific legal document."""
+    return templates.TemplateResponse("staff_document_viewer.html", {"request": request, "matter_id": id})
+
+
 @app.get("/legal/manual", response_class=HTMLResponse)
 async def legal_manual_page(request: Request):
     return templates.TemplateResponse("legal_manual.html", {"request": request})

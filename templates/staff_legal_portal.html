@@ -1,0 +1,168 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>My Legal Matters | Eximp & Cloves HR Portal</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <style>
+        body {
+            font-family: 'Inter', sans-serif;
+            background: linear-gradient(135deg, #0F1115 0%, #1a1f2e 100%);
+            min-height: 100vh;
+        }
+        .brand-gold { color: #C47D0A; }
+        .bg-brand-gold { background-color: #C47D0A; }
+        .card { 
+            background: rgba(30, 33, 40, 0.8);
+            border: 1px solid rgba(196, 125, 10, 0.2);
+            backdrop-filter: blur(10px);
+        }
+        .card:hover {
+            border-color: #C47D0A;
+            box-shadow: 0 0 20px rgba(196, 125, 10, 0.15);
+        }
+        .status-badge {
+            display: inline-block;
+            padding: 4px 12px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+        }
+        .status-draft { background: rgba(96, 125, 139, 0.2); color: #90CAF9; }
+        .status-review { background: rgba(255, 152, 0, 0.2); color: #FFB74D; }
+        .status-signing { background: rgba(76, 175, 80, 0.2); color: #81C784; }
+        .status-executed { background: rgba(76, 175, 80, 0.2); color: #81C784; }
+    </style>
+</head>
+<body>
+    <div class="max-w-6xl mx-auto px-6 py-12">
+        <!-- Header -->
+        <div class="mb-12">
+            <div class="flex items-center gap-4 mb-4">
+                <img src="/static/img/logo_dark.svg" alt="Eximp & Cloves" style="height: 40px;">
+                <div>
+                    <h1 class="text-3xl font-bold text-white">My Legal Matters</h1>
+                    <p class="text-gray-400 text-sm mt-1">Personnel documents & agreements</p>
+                </div>
+            </div>
+        </div>
+
+        <!-- Loading State -->
+        <div id="loading" class="text-center py-12">
+            <div class="inline-block">
+                <div class="animate-spin rounded-full h-12 w-12 border-b-2 border-brand-gold"></div>
+                <p class="text-gray-400 mt-4">Loading your legal matters...</p>
+            </div>
+        </div>
+
+        <!-- Matters List -->
+        <div id="matters-container" class="hidden space-y-4">
+            <!-- Will be populated by JavaScript -->
+        </div>
+
+        <!-- Empty State -->
+        <div id="empty-state" class="hidden text-center py-16">
+            <div class="inline-block mb-4 text-6xl">📋</div>
+            <h2 class="text-xl font-bold text-white mb-2">No Legal Matters Yet</h2>
+            <p class="text-gray-400">You haven't been assigned any legal documents at this time.</p>
+        </div>
+
+        <!-- Error State -->
+        <div id="error-state" class="hidden">
+            <div class="card rounded-lg p-6 border-red-500/50 bg-red-500/10">
+                <p class="text-red-400">⚠ Error loading legal matters. Please try again.</p>
+                <button onclick="loadMatters()" class="mt-4 px-4 py-2 bg-brand-gold text-white rounded font-bold text-sm hover:bg-yellow-600 transition">
+                    Retry
+                </button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        const API_BASE = '/api/hr-legal';
+
+        async function loadMatters() {
+            const loadingEl = document.getElementById('loading');
+            const containerEl = document.getElementById('matters-container');
+            const emptyEl = document.getElementById('empty-state');
+            const errorEl = document.getElementById('error-state');
+
+            loadingEl.classList.remove('hidden');
+            containerEl.classList.add('hidden');
+            emptyEl.classList.add('hidden');
+            errorEl.classList.add('hidden');
+
+            try {
+                const res = await fetch(`${API_BASE}/staff/self/visible-matters`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                });
+
+                if (!res.ok) throw new Error('Failed to load matters');
+                const data = await res.json();
+
+                loadingEl.classList.add('hidden');
+
+                if (!data.matters || data.matters.length === 0) {
+                    emptyEl.classList.remove('hidden');
+                    return;
+                }
+
+                containerEl.innerHTML = data.matters.map(matter => `
+                    <div class="card rounded-lg p-6 transition cursor-pointer hover:shadow-lg" onclick="viewMatter('${matter.id}')">
+                        <div class="flex items-start justify-between mb-3">
+                            <div>
+                                <h3 class="text-white font-bold text-lg">${escapeHtml(matter.title)}</h3>
+                                <p class="text-gray-400 text-sm">${escapeHtml(matter.category)}</p>
+                            </div>
+                            <span class="status-badge status-${matter.status.toLowerCase().replace(' ', '-')}">
+                                ${matter.status}
+                            </span>
+                        </div>
+                        <p class="text-gray-400 text-xs mb-4">
+                            📅 ${new Date(matter.created_at).toLocaleDateString('en-NG')}
+                        </p>
+                        <div class="flex gap-2">
+                            <button onclick="event.stopPropagation(); viewMatter('${matter.id}')" class="flex-1 px-4 py-2 bg-brand-gold text-white rounded font-bold text-sm hover:bg-yellow-600 transition">
+                                📄 View Document
+                            </button>
+                            ${matter.requires_signing ? `
+                                <button onclick="event.stopPropagation(); acknowledgeMatter('${matter.id}')" class="flex-1 px-4 py-2 bg-green-600 text-white rounded font-bold text-sm hover:bg-green-700 transition">
+                                    ✓ Sign / Acknowledge
+                                </button>
+                            ` : ''}
+                        </div>
+                    </div>
+                `).join('');
+
+                containerEl.classList.remove('hidden');
+            } catch (err) {
+                console.error('Error loading matters:', err);
+                loadingEl.classList.add('hidden');
+                errorEl.classList.remove('hidden');
+            }
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        function viewMatter(matterId) {
+            // Open matter in a modal or new tab
+            window.open(`/legal/view?id=${matterId}`, '_blank');
+        }
+
+        function acknowledgeMatter(matterId) {
+            // Redirect to signing page
+            window.location.href = `/legal/sign?matter_id=${matterId}`;
+        }
+
+        // Load on page load
+        document.addEventListener('DOMContentLoaded', loadMatters);
+    </script>
+</body>
+</html>

@@ -1057,7 +1057,7 @@ async def get_contract_html(invoice_id: str, current_admin=Depends(verify_token)
     from pdf_service import get_default_contract_html_fragment, get_default_cover_html_fragment, get_default_execution_html_fragment
     
     # Body
-    if invoice.get("custom_contract_html"):
+    if invoice.get("custom_contract_html") is not None:
         html_content = invoice["custom_contract_html"]
         is_custom = True
     else:
@@ -1065,7 +1065,7 @@ async def get_contract_html(invoice_id: str, current_admin=Depends(verify_token)
         is_custom = False
 
     # Cover
-    if invoice.get("custom_cover_html"):
+    if invoice.get("custom_cover_html") is not None:
         cover_html = invoice["custom_cover_html"]
         is_custom_cover = True
     else:
@@ -1073,7 +1073,7 @@ async def get_contract_html(invoice_id: str, current_admin=Depends(verify_token)
         is_custom_cover = False
 
     # Execution
-    if invoice.get("custom_execution_html"):
+    if invoice.get("custom_execution_html") is not None:
         execution_html = invoice["custom_execution_html"]
         is_custom_execution = True
     else:

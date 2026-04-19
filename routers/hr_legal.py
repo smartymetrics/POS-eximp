@@ -74,7 +74,11 @@ async def get_legal_matters(category: str = None, staff_id: str = None, current_
 
 @router.get("/staff/{staff_id}/matters")
 async def get_staff_matters(staff_id: str, current_admin=Depends(verify_token)):
-    """Convenience endpoint for HR portal to fetch matters for a specific employee."""
+    """HR Portal: Fetch all matters for a specific employee (HR/Legal only)."""
+    user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
+    if not any(r in ["admin", "super_admin", "hr_admin", "hr", "legal"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="Only HR and Legal staff can view staff matters")
+    
     db = get_db()
     res = await db_execute(lambda: db.table("legal_matters")\
         .select("*")\
@@ -185,14 +189,13 @@ async def remove_collaborator(matter_id: str, target_admin_id: str, current_admi
 
 @router.patch("/matters/{matter_id}/save")
 async def save_matter_content(matter_id: str, data: dict, current_admin=Depends(verify_token)):
-    """Save GrapesJS HTML and CSS."""
+    """Save Tiptap editor content as HTML."""
     admin_id = current_admin["sub"]
     await check_matter_access(matter_id, admin_id, required_level="Edit")
     
     db = get_db()
     update_data = {
         "content_html": data.get("html"),
-        "content_css": data.get("css"),
         "updated_at": datetime.now().isoformat()
     }
     
@@ -236,7 +239,7 @@ async def update_matter_settings(matter_id: str, data: dict, current_admin=Depen
 
 @router.post("/matters/{matter_id}/export")
 async def export_matter_pdf(matter_id: str, current_admin=Depends(verify_token)):
-    """Generate and return the PDF version of the document."""
+    """Generate and return the PDF version of the document (Tiptap HTML)."""
     admin_id = current_admin["sub"]
     await check_matter_access(matter_id, admin_id)
     
@@ -248,10 +251,9 @@ async def export_matter_pdf(matter_id: str, current_admin=Depends(verify_token))
         
     matter = matter_res.data[0]
     html = matter.get("content_html")
-    css = matter.get("content_css")
     
-    # Generate PDF
-    pdf_bytes = pdf_service.generate_matter_pdf(matter_id, html, css)
+    # Generate PDF from Tiptap HTML
+    pdf_bytes = pdf_service.generate_matter_pdf(matter_id, html)
     
     return Response(
         content=pdf_bytes,
@@ -913,3 +915,92 @@ async def get_case_categories(current_admin=Depends(verify_token)):
             }
         ]
     }
+
+# ──────────────────────────────────────────────────────────────────
+# PHASE 6: STAFF VISIBILITY & PERSONNEL-FACING ACCESS
+# ──────────────────────────────────────────────────────────────────
+
+@router.patch("/matters/{matter_id}/visibility")
+async def toggle_matter_visibility(matter_id: str, data: dict, current_admin=Depends(verify_token)):
+    """
+    HR/Legal only: Toggle whether staff member can see this matter.
+    Only matters marked staff_visible=true are shown to the personnel.
+    """
+    user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
+    if not any(r in ["admin", "super_admin", "hr_admin", "hr", "legal"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="Only HR and Legal can control visibility")
+    
+    admin_id = current_admin["sub"]
+    db = get_db()
+    
+    # Verify matter exists
+    matter_res = await db_execute(lambda: db.table("legal_matters").select("id").eq("id", matter_id).execute())
+    if not matter_res.data:
+        raise HTTPException(status_code=404, detail="Matter not found")
+    
+    # Update visibility
+    staff_visible = data.get("staff_visible", False)
+    await db_execute(lambda: db.table("legal_matters").update({
+        "staff_visible": staff_visible,
+        "updated_at": datetime.now().isoformat()
+    }).eq("id", matter_id).execute())
+    
+    # Audit trail
+    await db_execute(lambda: db.table("legal_matter_history").insert({
+        "matter_id": matter_id,
+        "action": "Visibility Changed",
+        "performed_by": admin_id,
+        "description": f"Matter marked as {'visible' if staff_visible else 'confidential'} to staff member"
+    }).execute())
+    
+    return {"status": "updated", "staff_visible": staff_visible}
+
+@router.get("/staff/self/visible-matters")
+async def get_staff_visible_matters(current_admin=Depends(verify_token)):
+    """
+    Staff Portal: Fetch only the legal matters marked as visible to this staff member.
+    Staff can ONLY see matters where staff_visible=true AND staff_id matches their ID.
+    """
+    admin_id = current_admin["sub"]
+    db = get_db()
+    
+    # Get matters visible to this specific staff member
+    res = await db_execute(lambda: db.table("legal_matters")\
+        .select("id, title, category, status, created_at, content_html")\
+        .eq("staff_id", admin_id)\
+        .eq("staff_visible", True)\
+        .order("created_at", desc=True).execute())
+    
+    return {"matters": res.data or [], "count": len(res.data) if res.data else 0}
+
+@router.get("/staff/self/visible-matters/{matter_id}")
+async def get_staff_visible_matter(matter_id: str, current_admin=Depends(verify_token)):
+    """
+    Staff Portal: Read-only access to a specific visible matter.
+    Staff can ONLY view if staff_visible=true AND staff_id matches their ID.
+    """
+    admin_id = current_admin["sub"]
+    db = get_db()
+    
+    # Fetch matter with visibility check
+    matter_res = await db_execute(lambda: db.table("legal_matters")\
+        .select("id, title, category, status, created_at, content_html, requires_signing")\
+        .eq("id", matter_id)\
+        .eq("staff_id", admin_id)\
+        .eq("staff_visible", True)\
+        .execute())
+    
+    if not matter_res.data:
+        raise HTTPException(status_code=403, detail="You do not have permission to view this matter")
+    
+    matter = matter_res.data[0]
+    
+    # Audit trail (staff viewed document)
+    await db_execute(lambda: db.table("legal_matter_history").insert({
+        "matter_id": matter_id,
+        "action": "Staff Viewed",
+        "performed_by": admin_id,
+        "description": "Staff member accessed visible matter"
+    }).execute())
+    
+    return matter
