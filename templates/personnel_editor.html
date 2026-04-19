@@ -413,7 +413,7 @@
 
         document.getElementById('btn-fullscreen')?.addEventListener('click', () => window.toggleFullScreen());
         document.getElementById('btn-print')?.addEventListener('click', () => window.print());
-        document.getElementById('btn-sign-ribbon')?.addEventListener('click', () => window.prepareForSigning());
+        document.getElementById('btn-dispatch-ribbon')?.addEventListener('click', () => window.openDispatchModal());
 
         // ── UPDATE BUTTON STATES ON SELECTION (REPLACED BY onSelectionUpdate in Editor config) ──
 
@@ -589,47 +589,89 @@
             }
         };
 
-        // DIGITAL SIGNING INTEGRATION
-        window.prepareForSigning = async function () {
-            const title = document.getElementById('document-title').value;
-            if (!title) {
-                alert('Please give the document a title before signing.');
-                return;
-            }
-
-            // Save draft first
-            await window.saveDraft();
-
-            // Get document hash for integrity verification
-            const content = editor.getHTML();
-            const docHash = btoa(content).substring(0, 16); // Simple hash
-            // Dispatch signing request natively
-            const dispatchUrl = `/api/hr-legal/matters/${matterId}/dispatch-signature`;
-
+        // ── DISPATCH CONTROL CENTER ──
+        window.openDispatchModal = async function () {
+            // First, get recipient details to show in modal
             try {
-                const res = await fetch(dispatchUrl, {
+                const res = await fetch(`${API_BASE}/matters/${matterId}`, {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                });
+                const matter = await res.json();
+                
+                const name = matter.external_party_name || "Staff Member";
+                const email = matter.external_party_email || "Linked Staff Email";
+                
+                document.getElementById('dispatch-recipient-display').innerHTML = `
+                    <div class="font-bold text-white">${name}</div>
+                    <div class="text-[10px] text-gray-500 uppercase tracking-tighter">${email}</div>
+                `;
+                
+                // Set default toggle state from matter
+                document.getElementById('dispatch-requires-sig').checked = matter.requires_signing !== false;
+                
+                document.getElementById('dispatch-modal').classList.remove('hidden');
+            } catch (err) {
+                alert("Failed to load matter details for dispatch.");
+            }
+        };
+
+        window.confirmDispatch = async function () {
+            const btn = event.target;
+            const originalText = btn.innerText;
+            btn.disabled = true;
+            btn.innerText = "Processing...";
+            
+            try {
+                const customMessage = document.getElementById('dispatch-email-body').value.trim();
+                const requiresSig = document.getElementById('dispatch-requires-sig').checked;
+                const docTitle = document.getElementById('document-title').value;
+
+                // 1. Save Draft
+                await window.saveDraft();
+                
+                // 2. Prepare (Capture preference & Create Token)
+                const content = editor.getHTML();
+                const docHash = btoa(unescape(encodeURIComponent(content))).substring(0, 16);
+                
+                const prepRes = await fetch(`${API_BASE}/matters/${matterId}/prepare-signing`, {
                     method: 'POST',
-                    headers: {
-                        'Authorization': `Bearer ${localStorage.getItem('ec_token')}`
-                    }
+                    headers: { 
+                        'Authorization': `Bearer ${localStorage.getItem('ec_token')}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        title: docTitle,
+                        hash: docHash,
+                        requires_signing: requiresSig
+                    })
+                });
+                
+                if (!prepRes.ok) throw new Error("Preparation failed");
+                const prepData = await prepRes.json();
+
+                // 3. Dispatch Email
+                const dispRes = await fetch(`${API_BASE}/matters/${matterId}/dispatch-signature`, {
+                    method: 'POST',
+                    headers: { 
+                        'Authorization': `Bearer ${localStorage.getItem('ec_token')}`,
+                        'Content-Type': 'application/json'
+                    },
+                    body: JSON.stringify({
+                        message: customMessage
+                    })
                 });
 
-                if (!res.ok) {
-                    const err = await res.json();
-                    alert(`Failed to dispatch document: ${err.detail || 'Unknown error'}`);
-                    return;
-                }
-
-                const data = await res.json();
-
-                // Notify user of successful email dispatch
-                alert(`✅ ${data.message || 'Signature link automatically dispatched to the staff member!'}`);
-
-                // Reload editor to capture new document state
+                if (!dispRes.ok) throw new Error("Email dispatch failed");
+                
+                alert(`SUCCESS: Document has been sent to the recipient!`);
                 window.location.reload();
+                
             } catch (err) {
-                console.error("Preparation Error:", err);
-                alert("Error preparing document. Check console.");
+                console.error("Dispatch Error:", err);
+                alert("An error occurred during dispatch. Check console.");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = originalText;
             }
         };
 
@@ -659,10 +701,11 @@
         window.loadTemplate = async function (templateName) {
             const templateMap = {
                 'offer-letter': {
-                    name: 'Offer Letter',
                     content: `<div class="letterhead" contenteditable="false" style="padding: 40px 60px; border-bottom: 2px solid var(--brand-gold);">
-                        <strong>EXIMP & CLOVES</strong><br>
-                        Web: https://eximps-cloves.com | Email: admin@eximps-cloves.com
+                        <strong style="font-size: 16pt; letter-spacing: 0.05em;">EXIMP & CLOVES</strong><br>
+                        <span style="font-size: 9pt; font-variant: small-caps; font-weight: 700;">
+                            Web: https://eximps-cloves.com | Email: admin@eximps-cloves.com | Address: 57B, Isaac John Street, Yaba, Lagos
+                        </span>
                     </div>
                     <p style="margin-top: 40px; margin-bottom: 20px;"><strong>Offer of Employment</strong></p>
                     <p>Dear {{STAFF_NAME}},</p>
@@ -889,7 +932,7 @@
                 });
                 if (candRes.ok) {
                     const candidates = await candRes.json();
-                    selectEl.innerHTML = '<option value="">-- Select Administrator / Lawyer --</option>' + candidates.map(c => 
+                    selectEl.innerHTML = '<option value="">-- Select Administrator / Lawyer --</option>' + candidates.map(c =>
                         `<option value="${c.id}">${c.full_name} (${c.role || 'Admin'})</option>`
                     ).join('');
                 }
@@ -899,7 +942,7 @@
                     headers: { 'Authorization': 'Bearer ' + localStorage.ec_token }
                 });
                 const data = await res.json();
-                
+
                 if (!data.collaborators || data.collaborators.length === 0) {
                     listEl.innerHTML = '<div class="p-6 text-center text-gray-500 text-sm">No collaborators added yet.</div>';
                     return;
@@ -919,7 +962,7 @@
                         </div>
                     </div>
                 `).join('');
-                
+
             } catch (e) {
                 listEl.innerHTML = '<div class="p-6 text-center text-red-500 text-sm">Failed to load collaborators.</div>';
             }
@@ -929,13 +972,13 @@
             if (!matterId) return;
             const adminId = document.getElementById('collab-admin-id').value.trim();
             const level = document.getElementById('collab-level').value;
-            
+
             if (!adminId) return alert('Please enter an Admin UUID');
 
             try {
                 const res = await fetch(`${API_BASE}/matters/${matterId}/collaborators`, {
                     method: 'POST',
-                    headers: { 
+                    headers: {
                         'Authorization': 'Bearer ' + localStorage.ec_token,
                         'Content-Type': 'application/json'
                     },
@@ -1038,7 +1081,7 @@
                 ">
                     <div style="font-size: 8pt; font-weight: 900; letter-spacing: 0.15em; color: #C47D0A; text-transform: uppercase;">AUTHORIZED</div>
                     <div style="font-size: 7pt; font-weight: 700; letter-spacing: 0.08em; color: #333; text-transform: uppercase;">Eximp &amp; Cloves Infrastructure Ltd.</div>
-                    <div style="font-size: 7pt; color: #888;">${new Date().toLocaleDateString('en-NG', {day:'2-digit', month:'short', year:'numeric'})}</div>
+                    <div style="font-size: 7pt; color: #888;">${new Date().toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
                 </div>`;
             }
             editor.chain().focus().insertContent(content).run();
@@ -1779,8 +1822,10 @@
                 <option value="18">18</option>
             </select>
             <div class="ribbon-divider"></div>
-            <button onclick="window.insertBranding('seal')" class="ribbon-btn" title="Apply Company Seal">🔖 Seal</button>
-            <button onclick="window.insertBranding('stamp')" class="ribbon-btn" title="Apply Authorized Stamp">🖋️ Stamp</button>
+            <button onclick="window.insertBranding('seal')" class="ribbon-btn" title="Apply Company Seal">🔖
+                Seal</button>
+            <button onclick="window.insertBranding('stamp')" class="ribbon-btn" title="Apply Authorized Stamp">🖋️
+                Stamp</button>
             <div class="ribbon-divider"></div>
 
             <button class="ribbon-btn" data-cmd="toggleBold" title="Bold (Ctrl+B)"><b>B</b></button>
@@ -1825,8 +1870,8 @@
 
             <button id="btn-fullscreen" class="ribbon-btn" title="Full Screen">⛶</button>
             <button id="btn-print" class="ribbon-btn bg-brand-gold/10 text-brand-gold font-bold">🖨 Print</button>
-            <button id="btn-sign-ribbon" class="ribbon-btn bg-green-600/20 text-green-400 font-bold"
-                title="Digital Sign">✍ Sign</button>
+            <button id="btn-dispatch-ribbon" class="ribbon-btn bg-green-600/20 text-green-400 font-bold"
+                title="Finish and Send Document">✓ Finish & Dispatch</button>
         </div>
 
         <!-- CANVAS -->
@@ -2044,21 +2089,79 @@
                 <h2 class="font-bold uppercase tracking-widest text-sm">👥 Manage Collaborators</h2>
                 <button onclick="closeModal('collaborate-modal')">✕</button>
             </div>
-            
+
             <div class="p-4 border-b border-white/5 bg-white/5 flex gap-2">
-                <select id="collab-admin-id" class="flex-1 bg-black/50 border border-white/10 text-white rounded px-3 py-2 text-xs outline-none focus:border-brand-gold">
+                <select id="collab-admin-id"
+                    class="flex-1 bg-black/50 border border-white/10 text-white rounded px-3 py-2 text-xs outline-none focus:border-brand-gold">
                     <option value="">Select Collaborator...</option>
                 </select>
-                <select id="collab-level" class="bg-black/50 border border-white/10 text-white rounded px-3 py-2 text-xs outline-none focus:border-brand-gold">
+                <select id="collab-level"
+                    class="bg-black/50 border border-white/10 text-white rounded px-3 py-2 text-xs outline-none focus:border-brand-gold">
                     <option value="View">View Only</option>
                     <option value="Edit">Can Edit</option>
                 </select>
-                <button onclick="window.addCollaborator()" class="bg-brand-gold text-white px-4 py-2 rounded text-xs font-bold hover:bg-brand-gold-pale transition">Add</button>
+                <button onclick="window.addCollaborator()"
+                    class="bg-brand-gold text-white px-4 py-2 rounded text-xs font-bold hover:bg-brand-gold-pale transition">Add</button>
             </div>
 
             <div id="collaborator-list" class="p-0" style="max-height: 300px; overflow-y: auto;">
                 <!-- Collaborators rendered here -->
                 <div class="p-6 text-center text-gray-500 text-sm">Loading collaborators...</div>
+            </div>
+        </div>
+    </div>
+    <!-- DISPATCH MODAL -->
+    <div id="dispatch-modal" class="modal-overlay hidden" style="z-index: 2000;">
+        <div class="modal-box" style="width: 500px; border: 1px solid var(--brand-gold);">
+            <div class="p-6 border-b border-white/5 flex justify-between items-center text-white bg-brand-gold/5">
+                <h2 class="font-bold uppercase tracking-widest text-sm text-brand-gold">?? Dispatch Control Center</h2>
+                <button onclick="closeModal('dispatch-modal')">?</button>
+            </div>
+            
+            <div class="p-6 space-y-5">
+                <!-- Recipient Info -->
+                <div class="p-4 bg-white/5 rounded-lg border border-white/10 flex items-center justify-between">
+                    <div>
+                        <div class="text-[10px] text-gray-500 uppercase font-bold mb-1">Sending To:</div>
+                        <div id="dispatch-recipient-display">Loading...</div>
+                    </div>
+                    <div class="text-2xl">??</div>
+                </div>
+
+                <!-- Workflow Settings -->
+                <div class="space-y-3">
+                    <label class="flex items-center gap-3 cursor-pointer group">
+                        <div class="relative">
+                            <input type="checkbox" id="dispatch-requires-sig" class="sr-only peer" checked>
+                            <div class="w-10 h-5 bg-gray-700 rounded-full peer peer-checked:bg-brand-gold transition-colors"></div>
+                            <div class="dot absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition-transform peer-checked:translate-x-5"></div>
+                        </div>
+                        <div class="text-xs text-gray-300 group-hover:text-white transition">Requires Digital Signature</div>
+                    </label>
+                    <p class="text-[10px] text-gray-500 pl-[40px] italic">If disabled, document will be sent for 'Acknowledgment Only'.</p>
+                </div>
+
+                <!-- Email Body -->
+                <div>
+                    <label class="block text-[10px] text-gray-500 uppercase font-bold mb-2">Personal Message (Optional)</label>
+                    <textarea id="dispatch-email-body" 
+                        class="w-full bg-black/50 border border-white/10 text-white rounded px-4 py-3 text-xs outline-none focus:border-brand-gold resize-none"
+                        placeholder="e.g. Hi there, please find your new contract attached for review and signature..."
+                        rows="4"></textarea>
+                </div>
+
+                <div class="bg-blue-500/10 border border-blue-500/30 rounded p-3 text-[10px] text-blue-300 leading-relaxed shadow-lg shadow-blue-500/5">
+                    <strong>? PRO TIP:</strong> Your company seal and authorized stamp will be automatically embedded into the final PDF once the recipient completes the workflow.
+                </div>
+            </div>
+
+            <div class="p-6 bg-white/2.5 flex justify-end gap-3">
+                <button onclick="closeModal('dispatch-modal')" 
+                    class="px-5 py-2.5 bg-white/5 border border-white/10 text-white rounded text-[11px] font-bold hover:bg-white/10 transition uppercase">Cancel</button>
+                <button onclick="window.confirmDispatch()"
+                    class="px-6 py-2.5 bg-brand-gold text-white rounded text-[11px] font-bold hover:bg-brand-gold-pale transition shadow-lg shadow-brand-gold/20 uppercase tracking-widest">
+                    Confirm & Send
+                </button>
             </div>
         </div>
     </div>

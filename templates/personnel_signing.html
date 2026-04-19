@@ -38,7 +38,9 @@
             z-index: 50;
         }
 
-        .top-nav img { height: 28px; }
+        .top-nav img {
+            height: 28px;
+        }
 
         /* ── LAYOUT ── */
         .signing-container {
@@ -89,7 +91,9 @@
             gap: 12px;
         }
 
-        .letterhead img { height: 60pt; }
+        .letterhead img {
+            height: 60pt;
+        }
 
         .letterhead-contact {
             text-align: right;
@@ -121,7 +125,9 @@
             border-bottom: 1px solid #eee;
         }
 
-        .document-body p { margin-bottom: 12pt; }
+        .document-body p {
+            margin-bottom: 12pt;
+        }
 
         /* ── SIGNATURE PANEL ── */
         .signature-panel {
@@ -185,14 +191,48 @@
             border-radius: 4px;
             width: 100%;
             height: 140px;
-            touch-action: none; /* Critical: prevents scroll during signature drawing */
-            display: block;     /* Removes inline baseline gap */
+            touch-action: none;
+            /* Critical: prevents scroll during signature drawing */
+            display: block;
+            /* Removes inline baseline gap */
         }
 
         .canvas-controls {
             display: flex;
             gap: 8px;
             justify-content: space-between;
+        }
+
+        .is-locked {
+            opacity: 0.3;
+            filter: grayscale(1) blur(1px);
+            pointer-events: none;
+            user-select: none;
+            transition: all 0.5s ease;
+        }
+
+        .lock-indicator {
+            font-size: 10px;
+            font-weight: 700;
+            color: #C47D0A;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            background: rgba(196, 125, 10, 0.1);
+            padding: 6px 10px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 10px;
+            border: 1px solid rgba(196, 125, 10, 0.2);
+        }
+
+        .is-unlocked .lock-indicator {
+            display: none;
+        }
+        
+        .is-unlocked {
+            opacity: 1;
+            filter: none;
+            pointer-events: auto;
         }
 
         .btn {
@@ -212,7 +252,9 @@
             color: #fff;
         }
 
-        .btn-secondary:hover { background: #444; }
+        .btn-secondary:hover {
+            background: #444;
+        }
 
         .btn-primary {
             background: var(--brand-gold);
@@ -220,7 +262,9 @@
             flex: 1;
         }
 
-        .btn-primary:hover { background: #d4860f; }
+        .btn-primary:hover {
+            background: #d4860f;
+        }
 
         .btn-success {
             background: #10b981;
@@ -228,10 +272,15 @@
             flex: 1;
         }
 
-        .btn-success:hover { background: #059669; }
+        .btn-success:hover {
+            background: #059669;
+        }
 
         /* Active states for touch */
-        .btn:active { opacity: 0.85; transform: scale(0.98); }
+        .btn:active {
+            opacity: 0.85;
+            transform: scale(0.98);
+        }
 
         .status-message {
             padding: 12px;
@@ -274,8 +323,16 @@
             gap: 8px;
         }
 
-        .meta-label { font-weight: 600; white-space: nowrap; }
-        .meta-value { color: var(--brand-gold); text-align: right; word-break: break-word; }
+        .meta-label {
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .meta-value {
+            color: var(--brand-gold);
+            text-align: right;
+            word-break: break-word;
+        }
 
         /* ── MOBILE DOCUMENT PREVIEW TOGGLE ── */
         .doc-toggle-btn {
@@ -307,7 +364,9 @@
             }
 
             /* Reorder: panel first on tablet/mobile */
-            .panel-wrapper { order: -1; }
+            .panel-wrapper {
+                order: -1;
+            }
 
             .signature-panel {
                 position: static;
@@ -319,13 +378,23 @@
                 height: 70vh;
             }
 
-            .doc-toggle-btn { display: flex; align-items: center; justify-content: space-between; }
+            .doc-toggle-btn {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }
         }
 
         /* Mobile: scale the A4 page to fit */
         @media (max-width: 768px) {
-            .top-nav { height: 52px; padding: 0 12px; }
-            .top-nav img { height: 24px; }
+            .top-nav {
+                height: 52px;
+                padding: 0 12px;
+            }
+
+            .top-nav img {
+                height: 24px;
+            }
 
             .signing-container {
                 padding: 0 12px;
@@ -366,7 +435,9 @@
                 height: 190px;
             }
 
-            .panel-title { font-size: 13px; }
+            .panel-title {
+                font-size: 13px;
+            }
         }
 
         @media (max-width: 480px) {
@@ -375,7 +446,9 @@
                 margin-bottom: calc((297mm * 0.35) - 297mm);
             }
 
-            .signing-container { padding: 0 8px; }
+            .signing-container {
+                padding: 0 8px;
+            }
         }
     </style>
 </head>
@@ -387,12 +460,14 @@
         <div style="display:flex; align-items:center; gap:12px;">
             <img src="/static/img/logo_dark.svg" alt="Eximp & Cloves">
             <div style="width:1px; height:20px; background:rgba(255,255,255,0.1);"></div>
-            <span style="color:var(--brand-gold); font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:0.08em;">
+            <span
+                style="color:var(--brand-gold); font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:0.08em;">
                 Legal Signing
             </span>
         </div>
         <div style="display:flex; align-items:center; gap:6px;">
-            <span style="font-size:11px; color:#666; display: none;" id="nav-secure-label">Secured &amp; Encrypted</span>
+            <span style="font-size:11px; color:#666; display: none;" id="nav-secure-label">Secured &amp;
+                Encrypted</span>
             <span style="font-size:16px;">🔏</span>
         </div>
     </div>
@@ -412,14 +487,15 @@
                     <div class="a4-page">
                         <div class="letterhead">
                             <img src="/static/img/logo_firm.png" alt="Eximp & Cloves">
-                            <div class="letterhead-contact" style="font-weight: 500;">
-                                128B AMADU BELLO WAY, VICTORIA ISLAND<br>
-                                LAGOS, NIGERIA<br>
-                                <span style="color: var(--brand-gold)">WWW.EXIMPS-CLOVES.COM</span>
+                            <div class="letterhead-contact" style="font-weight: 700; font-variant: small-caps;">
+                                57B, Isaac John Street, Yaba, Lagos<br>
+                                <span style="color: var(--brand-gold)">Web: eximps-cloves.com</span> |
+                                <span style="color: var(--brand-gold)">Email: admin@eximps-cloves.com</span>
                             </div>
                         </div>
                         <div id="document-content" class="document-body">
-                            <div style="text-align: center; padding: 80px 0; color: #999; font-family: Inter, sans-serif; font-size: 13px;">
+                            <div
+                                style="text-align: center; padding: 80px 0; color: #999; font-family: Inter, sans-serif; font-size: 13px;">
                                 Loading document...
                             </div>
                         </div>
@@ -454,19 +530,20 @@
                 <!-- Signer Details -->
                 <div class="form-group">
                     <label>Full Name *</label>
-                    <input type="text" id="signer-name" placeholder="Enter your full name"
-                        autocomplete="name" inputmode="text">
+                    <input type="text" id="signer-name" placeholder="Enter your full name" autocomplete="name"
+                        inputmode="text">
                 </div>
 
                 <div class="form-group">
                     <label>Email Address *</label>
-                    <input type="email" id="signer-email" placeholder="your.email@example.com"
-                        autocomplete="email" inputmode="email">
+                    <input type="email" id="signer-email" placeholder="your.email@example.com" autocomplete="email"
+                        inputmode="email">
                 </div>
 
                 <!-- Read Confirmation -->
                 <div style="background: #0f0f0f; border: 1px solid #333; border-radius: 4px; padding: 14px;">
-                    <label style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer; font-size: 13px; color: #ccc; line-height: 1.4;">
+                    <label
+                        style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer; font-size: 13px; color: #ccc; line-height: 1.4;">
                         <input type="checkbox" id="confirm-read"
                             style="width: 18px; height: 18px; cursor: pointer; margin-top: 1px; flex-shrink: 0; accent-color: var(--brand-gold);">
                         <span>I have read and fully understand this contract</span>
@@ -474,7 +551,8 @@
                 </div>
 
                 <!-- SIGNATURE SECTION (requires_signing = true) -->
-                <div id="signature-section" style="display: none;">
+                <div id="signature-section" class="is-locked">
+                    <div id="lock-badge" class="lock-indicator">🔒 Confirm reading above to unlock pad</div>
                     <div class="form-group">
                         <label>Digital Signature Pad</label>
                         <canvas id="signature-canvas" aria-label="Signature drawing area"></canvas>
@@ -686,21 +764,28 @@
 
         function updateSigningUI() {
             const isConfirmed = document.getElementById('confirm-read').checked;
+            const section = document.getElementById('signature-section');
 
             if (requiresSigning) {
-                const show = isConfirmed;
-                document.getElementById('signature-section').style.display = show ? 'block' : 'none';
+                // Pad is always visible now, but its locked state depends on confirmation
+                section.style.display = 'block';
                 document.getElementById('acknowledgment-section').style.display = 'none';
 
-                // Lazy-init the canvas the very first time it becomes visible.
-                // Must happen AFTER display:block so getBoundingClientRect() returns real dimensions.
-                if (show && !canvasInitialised) {
+                if (isConfirmed) {
+                    section.classList.add('is-unlocked');
+                    section.classList.remove('is-locked');
+                } else {
+                    section.classList.remove('is-unlocked');
+                    section.classList.add('is-locked');
+                }
+
+                // Initialize canvas on first sight
+                if (!canvasInitialised) {
                     canvasInitialised = true;
-                    // rAF ensures browser has painted block layout before we measure
                     requestAnimationFrame(() => setupCanvas());
                 }
             } else {
-                document.getElementById('signature-section').style.display = 'none';
+                section.style.display = 'none';
                 document.getElementById('acknowledgment-section').style.display = isConfirmed ? 'block' : 'none';
             }
         }
@@ -814,4 +899,5 @@
     </script>
 
 </body>
+
 </html>

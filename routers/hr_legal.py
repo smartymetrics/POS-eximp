@@ -3,7 +3,7 @@ from fastapi.responses import Response
 import os
 from database import get_db, db_execute
 from routers.auth import verify_token, resolve_admin_token
-from datetime import datetime
+from datetime import datetime, timezone
 import json
 import uuid
 import pdf_service
@@ -259,31 +259,7 @@ async def update_matter_settings(matter_id: str, data: dict, current_admin=Depen
     
     return {"status": "updated"}
 
-@router.post("/matters/{matter_id}/export")
-async def export_matter_pdf(matter_id: str, current_admin=Depends(verify_token)):
-    """Generate and return the PDF version of the document (Tiptap HTML)."""
-    admin_id = current_admin["sub"]
-    await check_matter_access(matter_id, current_admin)
-    
-    db = get_db()
-    # Get the latest content
-    matter_res = await db_execute(lambda: db.table("legal_matters").select("*").eq("id", matter_id).execute())
-    if not matter_res.data:
-        raise HTTPException(status_code=404, detail="Matter not found")
-        
-    matter = matter_res.data[0]
-    html = matter.get("content_html")
-    
-    # Generate PDF from Tiptap HTML
-    pdf_bytes = pdf_service.generate_matter_pdf(matter_id, html)
-    
-    return Response(
-        content=pdf_bytes,
-        media_type="application/pdf",
-        headers={
-            "Content-Disposition": f"attachment; filename=Personnel_Matter_{matter_id}.pdf"
-        }
-    )
+
 
 @router.get("/clauses")
 async def get_clause_library(current_admin=Depends(verify_token)):
@@ -554,18 +530,28 @@ def generate_signing_token() -> str:
     import secrets
     return secrets.token_urlsafe(32)
 
-@router.get("/matters/{matter_id}/prepare-signing")
+@router.post("/matters/{matter_id}/prepare-signing")
 async def prepare_signing(
     matter_id: str,
-    hash: str,
-    title: str,
+    data: dict,
     current_admin=Depends(verify_token)
 ):
-    """Prepare document for digital signing (verify integrity, create signing request)."""
+    """Prepare document for digital signing (verify integrity, update settings, create signing request)."""
     admin_id = current_admin["sub"]
     await check_matter_access(matter_id, current_admin, required_level="Edit")
     
+    title = data.get("title", "Untitled Document")
+    hash = data.get("hash")
+    requires_signing = data.get("requires_signing", True)
+    
     db = get_db()
+    
+    # 1. Update the matter itself with the signing preference
+    await db_execute(
+        lambda: db.table("legal_matters").update({
+            "requires_signing": requires_signing
+        }).eq("id", matter_id).execute()
+    )
     
     # Get the latest document
     matter_res = await db_execute(
@@ -627,10 +613,12 @@ async def prepare_signing(
 @router.post("/matters/{matter_id}/dispatch-signature")
 async def dispatch_signature(
     matter_id: str,
+    data: dict = {},
     current_admin=Depends(verify_token)
 ):
-    """Sends the signing link to the recipient (Staff or External Party) associated with the matter."""
+    """Sends the signing link to the recipient (Staff or External Party) and includes a custom message."""
     admin_id = current_admin["sub"]
+    custom_message = data.get("message")
     db = get_db()
     
     # 1. Fetch Matter & Signing Request
@@ -681,7 +669,8 @@ async def dispatch_signature(
         staff_name=signer_name or "Valued Partner",
         email_addr=signer_email,
         doc_title=matter.get("title", "Legal Document"),
-        signing_url=signing_url
+        signing_url=signing_url,
+        custom_message=custom_message
     )
     
     # 4. Audit Log
@@ -701,7 +690,7 @@ async def get_signing_details(signing_token: str):
     
     signing_res = await db_execute(
         lambda: db.table("legal_signing_requests")\
-            .select("*, legal_matters(id, title, content_html, category, drafter_id, requires_signing)")\
+            .select("*, legal_matters(*)")\
             .eq("signing_token", signing_token)\
             .execute()
     )
@@ -713,7 +702,7 @@ async def get_signing_details(signing_token: str):
     
     # Check if expired
     expiry = signing_req.get("expiry_at")
-    if expiry and datetime.fromisoformat(expiry) < datetime.now(datetime.timezone.utc):
+    if expiry and datetime.fromisoformat(expiry) < datetime.now(timezone.utc):
         raise HTTPException(status_code=410, detail="Signing link has expired")
     
     # Extract requires_signing from nested matter object
@@ -890,7 +879,7 @@ async def submit_signature(signing_token: str, data: dict):
     <div class="letterhead-inner">
       <img src="{APP_BASE_URL}/static/img/logo_firm.png" style="height:70px;width:auto;">
       <div class="lh-contact">
-        <div>Phone: +234 912 6864 383</div>
+        <div>57B, Isaac John Street, Yaba, Lagos</div>
         <div>Web: <a href="https://eximps-cloves.com">https://eximps-cloves.com</a></div>
         <div>Email: <a href="mailto:admin@eximps-cloves.com">admin@eximps-cloves.com</a></div>
       </div>
@@ -1378,8 +1367,8 @@ async def export_matter_pdf(matter_id: str, token: str = None, request: Request 
     <div class="header-bar-gold"></div>
     <div class="letterhead-inner">
       <img class="logo-img" src="{APP_BASE_URL}/static/img/logo_firm.png" alt="Eximp &amp; Cloves">
-      <div class="letterhead-contact">
-        <div>Phone: +234 912 6864 383</div>
+      <div class="lh-contact">
+        <div>57B, Isaac John Street, Yaba, Lagos</div>
         <div>Web: <a href="https://eximps-cloves.com">https://eximps-cloves.com</a></div>
         <div>Email: <a href="mailto:admin@eximps-cloves.com">admin@eximps-cloves.com</a></div>
       </div>

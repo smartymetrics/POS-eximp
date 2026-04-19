@@ -1587,7 +1587,15 @@ async def send_chat_invitation_email(email_addr: str, name: str, inviter: str, j
         logger.error(f"Error sending chat invitation to {email_addr}: {e}")
         return None
 
-def _staff_signing_html(staff_name: str, doc_title: str, signing_url: str) -> str:
+def _staff_signing_html(staff_name: str, doc_title: str, signing_url: str, custom_message: str = None) -> str:
+    message_html = ""
+    if custom_message:
+        message_html = f"""
+        <div style="margin: 10px 0 25px 0; padding: 15px; background: #fffcf5; border: 1px dashed #F5A623; border-radius: 6px; font-style: italic; color: #555; font-size: 14px; line-height: 1.6;">
+            "{custom_message}"
+        </div>
+        """
+
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border-radius: 8px; border: 1px solid #ddd; overflow: hidden;">
       <div style="background: #1A1A1A; padding: 24px; text-align: center;">
@@ -1598,6 +1606,9 @@ def _staff_signing_html(staff_name: str, doc_title: str, signing_url: str) -> st
       </div>
       <div style="padding: 32px 24px; background: #fff;">
         <p style="color: #333; font-size: 16px;">Dear <strong>{staff_name}</strong>,</p>
+        
+        {message_html}
+
         <p style="color: #555; line-height: 1.5;">You have been requested to review and digitally sign the following legal document:</p>
         
         <div style="margin: 20px 0; padding: 16px; background-color: #f9f9f9; border-left: 4px solid #F5A623; font-weight: bold; color: #1a1a1a;">
