@@ -43,11 +43,12 @@
           window.location.replace('/legal');
           return;
         }
-        // Sales reps and operations managers belong in the CRM
-        if (roles.includes('sales') || roles.includes('operations')) {
+        // Sales reps, operations, and support belong in the CRM
+        if (roles.includes('sales') || roles.includes('operations') || roles.includes('customer_support')) {
           window.location.replace('/crm');
           return;
         }
+
 
         // Set global user data for role-based UI
         window.ec_token = token;
@@ -3209,6 +3210,7 @@
               <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="marketing" style="accent-color:var(--gold);"> Marketing</label>
               <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="sales" style="accent-color:var(--gold);"> Sales</label>
               <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="operations" style="accent-color:var(--gold);"> Operations</label>
+              <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="customer_support" style="accent-color:var(--gold);"> Customer Support</label>
               <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="super_admin" style="accent-color:var(--gold);"> Super Admin</label>
             </div>
           </div>
@@ -3232,6 +3234,7 @@
               <option value="marketing">Marketing Dashboard (/marketing)</option>
               <option value="sales">Sales Dashboard (/crm)</option>
               <option value="operations">Operations Dashboard (/crm)</option>
+              <option value="customer_support">Customer Support Dashboard (/crm)</option>
               <option value="admin">Full Admin Dashboard (/dashboard)</option>
             </select>
             <div class="form-hint">Determines which page the user lands on after logging in.</div>
@@ -3282,6 +3285,7 @@
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="marketing" style="accent-color:var(--gold);"> Marketing</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="sales" style="accent-color:var(--gold);"> Sales</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="operations" style="accent-color:var(--gold);"> Operations</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="customer_support" style="accent-color:var(--gold);"> Customer Support</label>
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="super_admin" style="accent-color:var(--gold);"> Super Admin</label>
           </div>
         </div>
@@ -3294,6 +3298,7 @@
               <option value="marketing">Marketing Dashboard (/marketing)</option>
               <option value="sales">Sales Dashboard (/crm)</option>
               <option value="operations">Operations Dashboard (/crm)</option>
+              <option value="customer_support">Customer Support Dashboard (/crm)</option>
               <option value="admin">Full Admin Dashboard (/dashboard)</option>
             </select>
             <div class="form-hint" style="margin-top:4px;">Determines which page this user lands on after logging in.</div>
@@ -3688,7 +3693,7 @@
         document.body.classList.remove('role-admin', 'role-lawyer', 'role-staff');
         document.body.classList.add('role-' + currentUserRole);
 
-        document.querySelectorAll('.admin-only, .staff-only, .lawyer-only, .legal-only').forEach(el => {
+        document.querySelectorAll('.admin-only, .staff-only, .lawyer-only, .legal-only, .customer-support-only').forEach(el => {
           el.style.display = 'none';
         });
 
@@ -3702,7 +3707,7 @@
         }
 
         if (hasRole('admin') || hasRole('super_admin')) {
-          document.querySelectorAll('.admin-only, .lawyer-only, .legal-only, .staff-only').forEach(el => el.style.display = '');
+          document.querySelectorAll('.admin-only, .lawyer-only, .legal-only, .staff-only, .customer-support-only').forEach(el => el.style.display = '');
         } else {
           if (hasRole('lawyer')) {
             document.querySelectorAll('.lawyer-only, .legal-only').forEach(el => el.style.display = '');

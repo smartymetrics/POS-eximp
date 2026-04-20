@@ -131,6 +131,66 @@
             },
         });
 
+        // ── CUSTOM INDENT EXTENSION ──
+        const Indent = Extension.create({
+            name: 'indent',
+            addOptions() {
+                return {
+                    types: ['paragraph', 'heading', 'listItem'],
+                    indentSize: 40, // px
+                };
+            },
+            addGlobalAttributes() {
+                return [
+                    {
+                        types: this.options.types,
+                        attributes: {
+                            indent: {
+                                default: 0,
+                                parseHTML: element => parseInt(element.getAttribute('data-indent')) || 0,
+                                renderHTML: attributes => {
+                                    if (!attributes.indent) return {};
+                                    return { 'data-indent': attributes.indent };
+                                },
+                            },
+                        },
+                    },
+                ];
+            },
+            addCommands() {
+                return {
+                    indent: () => ({ tr, state, dispatch }) => {
+                        const { selection } = state;
+                        tr = tr.setSelection(selection);
+                        state.doc.nodesBetween(selection.from, selection.to, (node, pos) => {
+                            if (this.options.types.includes(node.type.name)) {
+                                tr = tr.setNodeMarkup(pos, null, {
+                                    ...node.attrs,
+                                    indent: Math.min((node.attrs.indent || 0) + 1, 10),
+                                });
+                            }
+                        });
+                        if (dispatch) dispatch(tr);
+                        return true;
+                    },
+                    outdent: () => ({ tr, state, dispatch }) => {
+                        const { selection } = state;
+                        tr = tr.setSelection(selection);
+                        state.doc.nodesBetween(selection.from, selection.to, (node, pos) => {
+                            if (this.options.types.includes(node.type.name)) {
+                                tr = tr.setNodeMarkup(pos, null, {
+                                    ...node.attrs,
+                                    indent: Math.max((node.attrs.indent || 0) - 1, 0),
+                                });
+                            }
+                        });
+                        if (dispatch) dispatch(tr);
+                        return true;
+                    },
+                };
+            },
+        });
+
         const editor = new Editor({
             element: document.querySelector('#editor'),
             autofocus: 'end',
@@ -165,6 +225,7 @@
                 FontSize,
                 PageBreak,
                 ResizableImage,
+                Indent,
             ],
             content: '<p>Loading...</p>',
             onSelectionUpdate: ({ editor }) => {
@@ -1414,11 +1475,27 @@
         };
 
         window.indentList = function () {
-            editor.chain().focus().sinkListItem('listItem').run();
+            const { state } = editor;
+            const { $from } = state.selection;
+            const isInList = $from.node(-1)?.type?.name === 'listItem' || $from.node(-2)?.type?.name === 'listItem';
+            
+            if (isInList) {
+                editor.chain().focus().sinkListItem('listItem').run();
+            } else {
+                editor.chain().focus().indent().run();
+            }
         };
 
         window.outdentList = function () {
-            editor.chain().focus().liftListItem('listItem').run();
+            const { state } = editor;
+            const { $from } = state.selection;
+            const isInList = $from.node(-1)?.type?.name === 'listItem' || $from.node(-2)?.type?.name === 'listItem';
+
+            if (isInList) {
+                editor.chain().focus().liftListItem('listItem').run();
+            } else {
+                editor.chain().focus().outdent().run();
+            }
         };
 
         // ── PAGE BREAK COMMAND ──
@@ -1733,14 +1810,8 @@
         }
 
         /* ── EDITOR BODY ── */
-        .document-body {
-            padding: 28px 72px;
-            flex: 1;
-            font-family: 'Tinos', serif;
-            font-size: 11pt;
-            line-height: 1.6;
-            color: #000;
-            cursor: text;
+        .document-body * {
+            color: #000 !important;
         }
 
         .ProseMirror {
@@ -1752,7 +1823,64 @@
             white-space: pre-wrap;
             user-select: text;
             -webkit-user-select: text;
+            color: #000 !important;
+            background-color: #fff !important;
+            caret-color: #000 !important;
         }
+
+        /* Ensure all Tiptap elements within the editor are black */
+        .ProseMirror p, .ProseMirror span, .ProseMirror div, .ProseMirror strong, .ProseMirror em {
+            color: #000 !important;
+        }
+
+        .ProseMirror ol { list-style-type: decimal; }
+        .ProseMirror ol[type="a"] { list-style-type: lower-alpha; }
+        .ProseMirror ol[type="A"] { list-style-type: upper-alpha; }
+        .ProseMirror ol[type="i"] { list-style-type: lower-roman; }
+        .ProseMirror ol[type="I"] { list-style-type: upper-roman; }
+        .ProseMirror ul { list-style-type: disc; }
+
+        /* Robust Switch CSS */
+        .switch {
+            position: relative;
+            display: inline-block;
+            width: 40px;
+            height: 20px;
+        }
+        .switch input { opacity: 0; width: 0; height: 0; }
+        .slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0; left: 0; right: 0; bottom: 0;
+            background-color: #374151;
+            transition: .4s;
+            border-radius: 20px;
+        }
+        .slider:before {
+            position: absolute;
+            content: "";
+            height: 14px;
+            width: 14px;
+            left: 3px;
+            bottom: 3px;
+            background-color: white;
+            transition: .4s;
+            border-radius: 50%;
+        }
+        input:checked + .slider { background-color: var(--brand-gold); }
+        input:checked + .slider:before { transform: translateX(20px); }
+
+        /* Modal Contrast Fixes */
+        #dispatch-modal textarea,
+        #dispatch-modal input[type="text"],
+        #dispatch-modal input[type="email"] {
+            background-color: #000 !important;
+            color: #fff !important;
+            border-color: rgba(255,255,255,0.1) !important;
+        }
+
+        #dispatch-modal .text-gray-300 { color: #ccc !important; }
+        #dispatch-modal .text-gray-500 { color: #888 !important; }
 
         .ProseMirror:focus {
             outline: none;
@@ -1782,7 +1910,21 @@
             margin-bottom: 10pt;
             text-align: justify;
             font-weight: 400;
+            min-height: 1em; /* Ensure empty lines have height */
         }
+
+        .ProseMirror p:empty::before {
+            content: "\00a0"; /* Non-breaking space for truly empty paragraphs */
+        }
+
+        /* ── INDENTATION ── */
+        .ProseMirror [data-indent="1"] { margin-left: 40px !important; }
+        .ProseMirror [data-indent="2"] { margin-left: 80px !important; }
+        .ProseMirror [data-indent="3"] { margin-left: 120px !important; }
+        .ProseMirror [data-indent="4"] { margin-left: 160px !important; }
+        .ProseMirror [data-indent="5"] { margin-left: 200px !important; }
+        .ProseMirror [data-indent="6"] { margin-left: 240px !important; }
+        .ProseMirror [data-indent="7"] { margin-left: 280px !important; }
 
         .ProseMirror h1 {
             font-family: 'Inter', sans-serif;
@@ -2136,8 +2278,8 @@
             <button id="btn-alpha-list" class="ribbon-btn" title="Lettered List (a, b, c)">a. List</button>
             <button id="btn-roman-list" class="ribbon-btn" title="Roman Numeral List (i, ii, iii)">i. List</button>
             <div class="ribbon-divider"></div>
-            <button id="btn-indent" class="ribbon-btn" title="Indent (Tab)">→ Indent</button>
-            <button id="btn-outdent" class="ribbon-btn" title="Outdent (Shift+Tab)">← Outdent</button>
+            <button id="btn-indent" onclick="window.indentList()" class="ribbon-btn" title="Indent (Tab)">→ Indent</button>
+            <button id="btn-outdent" onclick="window.outdentList()" class="ribbon-btn" title="Outdent (Shift+Tab)">← Outdent</button>
 
             <button id="btn-hr" class="ribbon-btn">── Line</button>
             <button id="btn-pagebreak" class="ribbon-btn" title="Page Break">⊢⊣</button>
@@ -2417,20 +2559,16 @@
 
                 <!-- Workflow Settings -->
                 <div class="space-y-3">
-                    <label class="flex items-center gap-3 cursor-pointer group">
-                        <div class="relative">
-                            <input type="checkbox" id="dispatch-requires-sig" class="sr-only peer" checked>
-                            <div
-                                class="w-10 h-5 bg-gray-700 rounded-full peer peer-checked:bg-brand-gold transition-colors">
-                            </div>
-                            <div
-                                class="dot absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition-transform peer-checked:translate-x-5">
-                            </div>
-                        </div>
-                        <div class="text-xs text-gray-300 group-hover:text-white transition">Requires Digital Signature
-                        </div>
-                    </label>
-                    <p class="text-[10px] text-gray-500 pl-[40px] italic">If disabled, document will be sent for
+                    <div class="flex items-center gap-3">
+                        <label class="switch">
+                            <input type="checkbox" id="dispatch-requires-sig" checked>
+                            <span class="slider"></span>
+                        </label>
+                        <label for="dispatch-requires-sig" class="text-xs text-gray-300 cursor-pointer hover:text-white transition">
+                            Requires Digital Signature
+                        </label>
+                    </div>
+                    <p class="text-[10px] text-gray-500 pl-[52px] italic">If disabled, document will be sent for
                         'Acknowledgment Only'.</p>
                 </div>
 

@@ -139,10 +139,19 @@ async def send_marketing_email(campaign: Dict[str, Any], contact: Dict[str, Any]
     contact_id = contact["id"]
     
     # 0. GLOBAL SUPPRESSION CHECK (Anti-Spam Compliance)
+    email = contact.get("email", "").lower()
+    
+    # Check for placeholder domains (protects reputation)
+    suppressed_domains = ["temp-eximps.com", "placeholder.com"]
+    if any(domain in email for domain in suppressed_domains):
+        logger.warning(f"Aborting send to {email} - Placeholder email suppressed.")
+        return None
+
     # If the contact is not subscribed, DO NOT SEND.
     if not contact.get("is_subscribed", True):
-        logger.warning(f"Aborting send to {contact['email']} - Contact is UNSUBSCRIBED.")
+        logger.warning(f"Aborting send to {email} - Contact is UNSUBSCRIBED.")
         return None
+
 
     # 1. Personalize & Sanitize
     html = personalize_content(campaign["html_body_a"], contact)

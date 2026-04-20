@@ -3,7 +3,7 @@ from fastapi.responses import Response
 import os
 from database import get_db, db_execute, SUPABASE_URL
 import os
-from routers.auth import verify_token, resolve_admin_token
+from routers.auth import verify_token, verify_token_optional, resolve_admin_token
 from datetime import datetime, timezone
 import json
 import uuid
@@ -104,8 +104,9 @@ async def check_matter_access(matter_id: str, current_admin: dict, required_leve
 # ── ENDPOINTS ──
 
 @router.get("/branding")
-async def get_legal_branding_api(current_admin=Depends(verify_token)):
-    """Fetch official branding assets for the Personnel Editor."""
+async def get_legal_branding_api(current_admin=Depends(verify_token_optional)):
+    """Fetch official branding assets for the Personnel Editor. 
+    Accessible to anyone with a valid token (including previewers)."""
     return await get_branding_urls()
 
 @router.get("/collaborator-candidates")
@@ -200,7 +201,7 @@ async def get_matter_details(matter_id: str, current_admin=Depends(verify_token)
     await check_matter_access(matter_id, current_admin)
     
     db = get_db()
-    matter_res = await db_execute(lambda: db.table("legal_matters").select("*").eq("id", matter_id).execute())
+    matter_res = await db_execute(lambda: db.table("legal_matters").select("*, staff:admins!legal_matters_staff_id_fkey(*)").eq("id", matter_id).execute())
     collabs_res = await db_execute(lambda: db.table("legal_matter_collaborators").select("*, admins(full_name)").eq("matter_id", matter_id).execute())
     history_res = await db_execute(lambda: db.table("legal_matter_history").select("*").eq("matter_id", matter_id).order("created_at", desc=True).execute())
     
@@ -431,7 +432,7 @@ async def create_matter_from_template(template_id: str, data: dict, current_admi
     if data.get("staff_id"):
         try:
             staff_res = await db_execute(
-                lambda: db.table("staff").select("*").eq("id", data.get("staff_id")).execute()
+                lambda: db.table("admins").select("*").eq("id", data.get("staff_id")).execute()
             )
             if staff_res.data:
                 staff_data = staff_res.data[0]
@@ -699,7 +700,7 @@ async def dispatch_signature(
     recipient_type = "Internal Staff"
 
     if staff_id:
-        staff_res = await db_execute(lambda: db.table("staff").select("full_name, email").eq("id", staff_id).execute())
+        staff_res = await db_execute(lambda: db.table("admins").select("full_name, email").eq("id", staff_id).execute())
         if staff_res.data:
             staff = staff_res.data[0]
             signer_name = staff.get("full_name")
@@ -904,7 +905,24 @@ async def submit_signature(signing_token: str, data: dict):
         "description": f"Contract signed by {data.get('signer_name')} ({data.get('signer_email')})"
     }).execute())
 
-    # ── Fire post-signing confirmation email (non-blocking) ──
+    # ── Fire post-execution confirmation email (non-blocking) ──
+    await _send_matter_executed_email(
+        matter_id=matter_id,
+        signing_token=signing_token,
+        signer_name=data.get("signer_name", "Signatory"),
+        signer_email=data.get("signer_email", "")
+    )
+
+    return {
+        "status": "success",
+        "message": "Document signed successfully",
+        "matter_id": matter_id,
+        "redirect": f"/matters/{matter_id}"
+    }
+
+async def _send_matter_executed_email(matter_id: str, signing_token: str, signer_name: str, signer_email: str):
+    """Refactored helper to send PDF confirmation after either signing or acknowledgment."""
+    db = get_db()
     try:
         from email_service import send_personnel_executed_email
         from weasyprint import HTML as WeasyprintHTML
@@ -913,13 +931,17 @@ async def submit_signature(signing_token: str, data: dict):
         exec_matter = await db_execute(
             lambda: db.table("legal_matters").select("title, content_html, content_css").eq("id", matter_id).execute()
         )
+        if not exec_matter.data: return
+        
         exec_audit = await db_execute(
             lambda: db.table("legal_matter_history").select("*").eq("matter_id", matter_id).order("created_at", desc=False).execute()
         )
 
-        doc_title = exec_matter.data[0].get("title", "Legal Document") if exec_matter.data else "Legal Document"
-        body_html = exec_matter.data[0].get("content_html", "") if exec_matter.data else ""
-        contact_html = exec_matter.data[0].get("content_css") if exec_matter.data else ""
+        matter_data = exec_matter.data[0]
+        doc_title = matter_data.get("title", "Legal Document")
+        body_html = matter_data.get("content_html", "")
+        contact_html = matter_data.get("content_css")
+        
         if not contact_html or contact_html.strip() == "":
             contact_html = """<div>phone: +234 912 6864 383</div>
         <div>web: <a href="https://eximps-cloves.com" class="text-brand-gold">https://eximps-cloves.com</a></div>
@@ -930,11 +952,11 @@ async def submit_signature(signing_token: str, data: dict):
         logo_path = os.path.join(base_dir, "static", "img", "logo_firm.png")
         logo_uri = "file:///" + logo_path.replace("\\", "/")
         
-        # Ensure weasyprint can resolve the signature block logos without failing due to CORS or local SSL limits
+        # Ensure weasyprint can resolve logos
         body_html = body_html.replace(f"{APP_BASE_URL}/static/img/logo_firm.png", logo_uri)
         audit_entries = exec_audit.data or []
 
-        # Build full PDF
+        # Build full PDF (Using the shared styles we established earlier)
         pdf_full_html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Tinos:ital,wght@0,400;0,700;1,400;1,700&display=swap');
@@ -954,6 +976,16 @@ async def submit_signature(signing_token: str, data: dict):
   .footer{{margin-top:auto;}}
   .footer-bars{{display:flex;height:12px;}}
   .fb{{flex:1;background:#000;}}.fg{{flex:1;background:#C47D0A;}}
+  .body p {{ margin-bottom: 12pt; text-align: justify; min-height: 1.2em; }}
+  .body p:empty::before {{ content: "\\00a0"; }}
+  .body [data-indent="1"] {{ margin-left: 40px !important; }}
+  .body [data-indent="2"] {{ margin-left: 80px !important; }}
+  .body [data-indent="3"] {{ margin-left: 120px !important; }}
+  .body [data-indent="4"] {{ margin-left: 160px !important; }}
+  .body [data-indent="5"] {{ margin-left: 200px !important; }}
+  .body [data-indent="6"] {{ margin-left: 240px !important; }}
+  .body [data-indent="7"] {{ margin-left: 280px !important; }}
+  .legal-badge {{ display: inline-flex !important; vertical-align: middle; margin: 10px; }}
 </style></head>
 <body><div class="page">
   <div class="letterhead">
@@ -971,28 +1003,19 @@ async def submit_signature(signing_token: str, data: dict):
 </div></body></html>"""
 
         pdf_bytes = WeasyprintHTML(string=pdf_full_html, base_url=APP_BASE_URL).write_pdf()
-        signer_email_addr = data.get("signer_email", "")
-        signer_name_str = data.get("signer_name", "Signatory")
 
         await send_personnel_executed_email(
-            signer_name=signer_name_str,
-            signer_email=signer_email_addr,
+            signer_name=signer_name,
+            signer_email=signer_email,
             doc_title=doc_title,
             matter_id=matter_id,
             pdf_bytes=pdf_bytes,
             audit_entries=audit_entries,
-            download_token=signing_token   # signing_token is already known to the signer
+            download_token=signing_token
         )
     except Exception as email_err:
         import logging
-        logging.getLogger(__name__).error(f"Post-signing email failed (non-fatal): {email_err}")
-
-    return {
-        "status": "success",
-        "message": "Document signed successfully",
-        "matter_id": matter_id,
-        "redirect": f"/matters/{matter_id}"
-    }
+        logging.getLogger(__name__).error(f"Execution email failed (non-fatal): {email_err}")
 
 @router.post("/signing/{signing_token}/acknowledge")
 async def acknowledge_document(signing_token: str, data: dict):
@@ -1085,9 +1108,19 @@ async def acknowledge_document(signing_token: str, data: dict):
         "matter_id": matter_id,
         "action": "Document Acknowledged",
         "performed_by": None,
-        "description": "Contract acknowledged by recipient (no signature required)"
+        "description": f"Contract acknowledged by staff member ({signing_req.get('signer_email', 'unknown email')})"
     }).execute())
     
+    # ── Fire post-acknowledgment confirmation email (non-blocking) ──
+    # Note: staff member data is pre-populated in signing_req or can be fetched if needed
+    # Usually we use signing_req['signer_name'] and signing_req['signer_email']
+    await _send_matter_executed_email(
+        matter_id=matter_id,
+        signing_token=signing_token,
+        signer_name=signing_req.get("signer_name", "Staff Member"),
+        signer_email=signing_req.get("signer_email", "")
+    )
+
     return {
         "status": "success",
         "message": "Document acknowledged successfully",
@@ -1135,7 +1168,7 @@ async def create_legal_case_from_staff(staff_id: str, data: dict, current_admin=
     
     # Verify staff exists
     staff_res = await db_execute(
-        lambda: db.table("staff").select("id, full_name, position_title, department").eq("id", staff_id).execute()
+        lambda: db.table("admins").select("id, full_name, position_title, department").eq("id", staff_id).execute()
     )
     if not staff_res.data:
         raise HTTPException(status_code=404, detail="Staff member not found")

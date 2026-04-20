@@ -90,7 +90,7 @@ async def score_all_leads(current_admin=Depends(verify_token)):
     
     # ROLE-BASED FILTERING ✅
     roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
-    is_privileged = any(r in ["admin", "operations", "super_admin"] for r in roles)
+    is_privileged = any(r in ["admin", "operations", "super_admin", "customer_support"] for r in roles)
     is_restricted = any(r in ["sales", "staff"] for r in roles) and not is_privileged
     
     admin_id = current_admin.get("sub")
@@ -686,6 +686,8 @@ async def get_lead_details(
         "full_name": client.get("full_name"),
         "email": client.get("email"),
         "phone": client.get("phone"),
+        "estimated_value": client.get("estimated_value"),
+        "pipeline_stage": client.get("pipeline_stage"),
         "assigned_rep_id": client.get("assigned_rep_id"),
         "assigned_rep_name": assigned_rep_name,
         "activities": activities,
@@ -823,7 +825,8 @@ async def list_documents_pipeline(
     """Sales Rep document signing pipeline view"""
     db = get_db()
     admin_id = current_admin.get("sub")
-    is_admin = current_admin.get("role") in ["admin", "operations"]
+    roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
+    is_admin = any(r in ["admin", "operations", "customer_support"] for r in roles)
     
     query = db.table("invoices")\
         .select("id, invoice_number, property_name, property_location, amount, created_at, status, contract_signature_url, clients(id, full_name, email, assigned_rep_id), contract_signing_sessions(*, witness_signatures(*))") \
@@ -874,7 +877,7 @@ async def get_team_performance(current_admin=Depends(verify_token)):
     
     if not is_privileged:
         # Reps shouldn't see full team intelligence
-        raise HTTPException(status_code=403, detail="Intelligence dashboard restricted to Admins & Operations")
+        raise HTTPException(status_code=403, detail="Intelligence dashboard restricted to Admins, Support & Operations")
         
     db = get_db()
     invoices = (await db_execute(lambda: db.table("invoices").select("*").neq("status", "voided").execute())).data or []
@@ -990,7 +993,7 @@ async def get_activity_logs(
         .limit(100)
         
     roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
-    is_privileged = any(r in ["admin", "operations", "super_admin", "legal"] for r in roles)
+    is_privileged = any(r in ["admin", "operations", "super_admin", "legal", "customer_support"] for r in roles)
     
     if not is_privileged:
         query = query.eq("performed_by", current_sub)
@@ -1043,7 +1046,7 @@ async def get_assignable_team(current_admin=Depends(verify_token)):
     assignable = []
     for admin in res.data:
         roles = [r.strip().lower() for r in (admin.get("role") or "").split(",")]
-        if "sales" in roles or "operations" in roles:
+        if any(r in ["sales", "operations", "customer_support"] for r in roles):
             assignable.append({"id": admin["id"], "full_name": admin["full_name"], "email": admin["email"]})
     return assignable
 

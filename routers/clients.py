@@ -16,11 +16,9 @@ async def list_clients(
     current_admin=Depends(verify_token)
 ):
     db = get_db()
-    role = current_admin.get("role", "")
-    admin_id = current_admin["sub"]
-    
     # Privileged check
-    is_privileged = any(r in role.lower() for r in ["admin", "operations"])
+    roles = [r.strip().lower() for r in (role or "").split(",")]
+    is_privileged = any(r in ["admin", "operations", "customer_support"] for r in roles)
     
     query = db.table("clients").select("*")
     
@@ -87,13 +85,29 @@ async def update_client(client_id: str, data: ClientUpdate, current_admin=Depend
     if not update_data:
         return {"message": "No changes applied"}
 
-    # Admin-only fields
-    admin_only_fields = ["email", "nin", "id_number", "passport_photo_url", "id_document_url"]
+    # Admin/Owner check for sensitive fields
+    admin_only_fields = ["nin", "id_number", "passport_photo_url", "id_document_url"]
     
-    if role != "admin":
+    # Fetch client to check ownership
+    client_check = await db_execute(lambda: db.table("clients").select("assigned_rep_id").eq("id", client_id).execute())
+    is_owner = False
+    if client_check.data:
+        is_owner = str(client_check.data[0].get("assigned_rep_id")) == str(current_admin.get("sub"))
+
+    roles_list = [r.strip().lower() for r in (role or "").split(",")]
+    is_privileged = any(r in ["admin", "operations", "customer_support"] for r in roles_list)
+
+    if not is_privileged and not is_owner:
+        # Standard restriction for users who are neither admin nor owner
+        raise HTTPException(status_code=403, detail="Permission denied to update this client")
+    
+    if not is_privileged and is_owner:
+
+        # Prevent owners from editing highly sensitive identification fields, but allow email
         for field in admin_only_fields:
             if field in update_data:
-                raise HTTPException(status_code=403, detail=f"Permission denied to edit {field}")
+                raise HTTPException(status_code=403, detail=f"Permission denied to edit {field} (Admin only)")
+
 
     result = await db_execute(lambda: db.table("clients").update(update_data).eq("id", client_id).execute())
     if not result.data:

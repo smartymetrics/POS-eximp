@@ -2064,7 +2064,7 @@
         // Lead Details & Timeline
         async function openLeadDetails(id) {
             try {
-                const res = await fetch(`/api/crm/contacts/${id}`, {
+                const res = await fetch(`/api/crm/pro/clients/${id}`, {
                     headers: { "Authorization": `Bearer ${token}` }
                 });
                 const lead = await res.json();
@@ -2072,6 +2072,15 @@
                 document.getElementById("detail-lead-name").textContent = lead.full_name;
                 document.getElementById("detail-lead-email").textContent = lead.email;
                 document.getElementById("detail-lead-phone").textContent = lead.phone;
+                
+                // --- MARKETING SAFETY INDICATOR ---
+                const suppressedDomains = ["temp-eximps.com", "placeholder.com"];
+                const isSuppressed = suppressedDomains.some(d => (lead.email || "").toLowerCase().includes(d));
+                const badge = document.getElementById("suppression-badge");
+                if (badge) {
+                    badge.style.display = isSuppressed ? "inline-block" : "none";
+                }
+
                 document.getElementById("detail-lead-value").textContent = `₦${parseFloat(lead.estimated_value || 0).toLocaleString()}`;
                 
                 // Set the current stage dropdown
@@ -2216,20 +2225,26 @@
  
          // --- CRM LEAD EDITING & LOGGING ---
          function openEditLeadForm() {
-             const name = document.getElementById("detail-lead-name").textContent;
-             const id = document.getElementById("leadDetailModal").dataset.id;
-             const val = document.getElementById("detail-lead-value").textContent.replace(/[₦,]/g, '');
-             
-             const newName = prompt("Edit Lead Name:", name);
-             const newVal = prompt("Edit Estimated Value (₦):", val);
- 
-             if (newName || newVal) {
-                 saveLeadDetails(id, { 
-                     full_name: newName || name, 
-                     estimated_value: parseFloat(newVal || val) 
-                 });
-             }
-         }
+              const name = document.getElementById("detail-lead-name").textContent;
+              const email = document.getElementById("detail-lead-email").textContent;
+              const val = document.getElementById("detail-lead-value").textContent.replace(/[₦,]/g, '');
+              const id = document.getElementById("leadDetailModal").dataset.id;
+              
+              const newName = prompt("Edit Lead Name:", name);
+              const newEmail = prompt("Edit Lead Email (to fix placeholders):", email);
+              const newVal = prompt("Edit Lead Value (₦):", val);
+  
+              if (newName !== null || newEmail !== null || newVal !== null) {
+                  const updateData = {};
+                  if (newName && newName !== name) updateData.full_name = newName;
+                  if (newEmail && newEmail !== email) updateData.email = newEmail;
+                  if (newVal && newVal !== val) updateData.estimated_value = parseFloat(newVal);
+
+                  if (Object.keys(updateData).length > 0) {
+                      saveLeadDetails(id, updateData);
+                  }
+              }
+          }
  
          async function saveLeadDetails(id, data) {
              try {
@@ -2810,8 +2825,9 @@
                 } else if (hasRole('marketing')) {
                     if(btnMarketing) btnMarketing.style.display = 'block';
                 }
+                // Customer Support does NOT get extra nav buttons (CRM only)
 
-                const isRestricted = (hasRole('sales') || hasRole('marketing')) && !hasRole('admin') && !hasRole('operations');
+                const isRestricted = (hasRole('sales') || hasRole('marketing')) && !hasRole('admin') && !hasRole('operations') && !hasRole('customer_support');
 
                 if (isRestricted) {
                     // Hide forbidden sections in sidebar
@@ -2824,7 +2840,8 @@
                     // Hide lead assignment tool in modal
                     const assignSection = document.getElementById('section-lead-assignment');
                     if (assignSection) assignSection.style.display = 'none';
-                } else if (hasRole('admin') || hasRole('operations') || hasRole('legal')) {
+                } else if (hasRole('admin') || hasRole('operations') || hasRole('legal') || hasRole('customer_support')) {
+
                     // Show lead assignment tool
                     const assignSection = document.getElementById('section-lead-assignment');
                     if (assignSection) {

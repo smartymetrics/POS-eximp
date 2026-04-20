@@ -27,6 +27,10 @@ async def sync_client_to_marketing(client_data: dict):
             mc_res = await db_execute(lambda: db.table("marketing_contacts").select("*").eq("email", email).execute())
         
         contact_id = None
+        # 1b. Check for placeholder emails (Safety Filter)
+        suppressed_domains = ["temp-eximps.com", "placeholder.com"]
+        is_placeholder = any(domain in email for domain in suppressed_domains)
+        
         marketing_data = {
             "email": email,
             "first_name": client_data.get("full_name", "").split(" ")[0] if client_data.get("full_name") else "",
@@ -34,10 +38,11 @@ async def sync_client_to_marketing(client_data: dict):
             "phone": client_data.get("phone"),
             "contact_type": "client",
             "client_id": client_data.get("id"),
-            "is_subscribed": True, # Assume subscribed if they just bought
+            "is_subscribed": False if is_placeholder else True, # Suppress placeholders
             "engagement_score": 100, # Client conversion = Max score
             "updated_at": datetime.utcnow().isoformat()
         }
+
 
         if mc_res.data:
             # Upgrade existing lead to client
