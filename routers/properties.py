@@ -32,7 +32,12 @@ async def list_archived_properties(current_admin=Depends(verify_token)):
 async def create_property(data: PropertyCreate, current_admin=Depends(verify_token)):
     db = get_db()
     # Use jsonable_encoder to handle Decimal/date types for Supabase
-    property_data = jsonable_encoder(data)
+    property_data = jsonable_encoder(data, exclude_none=True)
+    
+    # Map to DB schema column name if migration hasn't been run
+    if "starting_price" in property_data:
+        property_data["total_price"] = property_data.pop("starting_price")
+        
     result = await db_execute(lambda: db.table("properties").insert(property_data).execute())
     if not result.data:
         raise HTTPException(status_code=400, detail="Failed to create property")
@@ -44,6 +49,11 @@ async def update_property(property_id: str, data: PropertyUpdate, current_admin=
     db = get_db()
     # Filter out None values and encode for Supabase
     update_data = jsonable_encoder(data, exclude_none=True)
+    
+    # Map to DB schema column name if migration hasn't been run
+    if "starting_price" in update_data:
+        update_data["total_price"] = update_data.pop("starting_price")
+        
     result = await db_execute(lambda: db.table("properties").update(update_data).eq("id", property_id).execute())
     if not result.data:
         raise HTTPException(status_code=404, detail="Property not found or update failed")

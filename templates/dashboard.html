@@ -5012,10 +5012,10 @@
         estate_name: document.getElementById('prop-estate').value,
         location: document.getElementById('prop-location').value,
         plot_size_sqm: document.getElementById('prop-size').value ? parseFloat(document.getElementById('prop-size').value) : null,
-        total_price: parseFloat(document.getElementById('prop-price').value),
+        starting_price: parseFloat(document.getElementById('prop-price').value),
         description: document.getElementById('prop-desc').value,
       };
-      if (!body.name || !body.location || isNaN(body.total_price)) return toast('Name, location, and price are required', 'error');
+      if (!body.name || !body.location || isNaN(body.starting_price)) return toast('Name, location, and price are required', 'error');
       const btn = document.querySelector('#addPropertyModal button.btn-primary');
       const ogText = setLoading(btn, true, 'Adding...');
       try {

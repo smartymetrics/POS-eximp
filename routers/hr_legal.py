@@ -1037,6 +1037,12 @@ async def acknowledge_document(signing_token: str, data: dict):
     # Check if already processed
     if signing_req["status"] != "Pending":
         raise HTTPException(status_code=400, detail="Document already processed")
+        
+    # Fetch the matter record
+    matter_res = await db_execute(lambda: db.table("legal_matters").select("*").eq("id", matter_id).execute())
+    if not matter_res.data:
+        raise HTTPException(status_code=404, detail="Matter not found")
+    matter = matter_res.data[0]
     
     # ── Resolve Recipient for Confirmation Email ──
     signer_name = signing_req.get("signer_name")
