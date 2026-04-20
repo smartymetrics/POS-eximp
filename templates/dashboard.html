@@ -1049,7 +1049,8 @@
       font-size: 15px;
     }
 
-    .ql-editor h1, .ql-editor h2 {
+    .ql-editor h1,
+    .ql-editor h2 {
       font-family: 'Playfair Display', serif !important;
     }
 
@@ -1287,21 +1288,24 @@
         Sales Reps
       </a>
       <a class="nav-item" href="/marketing" id="nav-marketing">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 12px; opacity: 0.7;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          style="margin-right: 12px; opacity: 0.7;">
           <path d="M22 2L11 13M22 2l-7 20-4-9-9-4 20-7z"></path>
         </svg>
         Marketing
       </a>
       <a class="nav-item admin-only lawyer-only" href="/legal" id="nav-legal">
-        <svg width="18" height="18" viewBox="0 1 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 12px; opacity: 0.7;">
+        <svg width="18" height="18" viewBox="0 1 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          style="margin-right: 12px; opacity: 0.7;">
           <path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z"></path>
           <path d="M9 12l2 2 4-4"></path>
         </svg>
         Legal Suite
       </a>
       <a class="nav-item admin-only" href="/finance/payouts" id="nav-payouts">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 12px; opacity: 0.7;">
-          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6"/>
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          style="margin-right: 12px; opacity: 0.7;">
+          <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
         </svg>
         Finance & Assets
       </a>
@@ -1327,7 +1331,8 @@
       </a>
 
       <a class="nav-item" href="/hr" id="nav-hr-portal">
-        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 12px; opacity: 0.7;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          style="margin-right: 12px; opacity: 0.7;">
           <path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"></path>
           <circle cx="9" cy="7" r="4"></circle>
           <path d="M23 21v-2a4 4 0 0 0-3-3.87"></path>
@@ -1415,6 +1420,7 @@
         <div class="stat-card gold">
           <div class="stat-label">Total Revenue</div>
           <div class="stat-value small" id="stat-invoiced">—</div>
+          <div class="stat-sub" id="stat-rev-delta">vs prev period</div>
           <div class="stat-sub" id="stat-rev-breakdown" style="font-size: 10px; margin-top: 4px;">
             <span id="stat-overdue-count" style="color:var(--red); font-weight:700;">0 overdue</span> ·
             <span id="stat-partial-count" style="color:var(--amber); font-weight:700;">0 partial</span>
@@ -1496,14 +1502,8 @@
         <div class="card-header">
           <span class="card-title">All Invoices</span>
           <div style="display:flex;gap:12px;align-items:center;flex-wrap:wrap;">
-            <input
-              type="text"
-              class="form-control"
-              id="invoice-search"
-              placeholder="Search invoice # or client name..."
-              oninput="applyInvoiceSearch()"
-              style="min-width:240px;max-width:360px;"
-            >
+            <input type="text" class="form-control" id="invoice-search" placeholder="Search invoice # or client name..."
+              oninput="applyInvoiceSearch()" style="min-width:240px;max-width:360px;">
             <label style="display:flex;align-items:center;gap:6px;font-size:12px;color:var(--gray);cursor:pointer;">
               <input type="checkbox" id="show-voided-inv" onchange="loadInvoices()"
                 style="width:16px;height:16px;accent-color:var(--gold);">
@@ -1802,8 +1802,8 @@
                 </div>
                 <p id="sig-name-lawyer" style="margin:0 0 8px; font-size:12px; color:#555;">No lawyer name set</p>
                 <div style="display:flex; gap:8px;">
-                  <button class="btn btn-ghost btn-sm" style="flex:1;"
-                    onclick="promptSignatureUpload('lawyer')">Change Signature</button>
+                  <button class="btn btn-ghost btn-sm" style="flex:1;" onclick="promptSignatureUpload('lawyer')">Change
+                    Signature</button>
                   <button class="btn btn-ghost btn-sm" onclick="deleteSignature('lawyer')"
                     style="color:var(--red); padding:0 10px;" title="Delete Signature">🗑️</button>
                 </div>
@@ -1839,9 +1839,13 @@
                   <img id="img-sig-company_witness" src="" style="max-height:80px; display:none;">
                   <div id="empty-sig-company_witness" style="color:#bbb; font-size:11px;">No signature uploaded</div>
                 </div>
-                <p id="sig-name-company_witness" style="margin:0 0 4px; font-size:12px; color:#555; font-weight:600;">No witness name set</p>
-                <p id="sig-address-company_witness" style="margin:0 0 2px; font-size:10px; color:var(--gray);">No address set</p>
-                <p id="sig-occ-company_witness" style="margin:0 0 8px; font-size:10px; color:var(--gray); text-transform:uppercase; letter-spacing:0.5px;">No occupation set</p>
+                <p id="sig-name-company_witness" style="margin:0 0 4px; font-size:12px; color:#555; font-weight:600;">No
+                  witness name set</p>
+                <p id="sig-address-company_witness" style="margin:0 0 2px; font-size:10px; color:var(--gray);">No
+                  address set</p>
+                <p id="sig-occ-company_witness"
+                  style="margin:0 0 8px; font-size:10px; color:var(--gray); text-transform:uppercase; letter-spacing:0.5px;">
+                  No occupation set</p>
                 <div style="display:flex; gap:8px;">
                   <button class="btn btn-ghost btn-sm" style="flex:1;"
                     onclick="promptSignatureUpload('company_witness')">Change Signature</button>
@@ -2464,7 +2468,8 @@
             <select class="form-control" id="edit-inv-marketing-campaign">
               <option value="">-- No Campaign (Organic) --</option>
             </select>
-            <div class="form-hint edit-inv-admin-lock" style="display:none; color:var(--red);">Only Admins can edit Attribution.</div>
+            <div class="form-hint edit-inv-admin-lock" style="display:none; color:var(--red);">Only Admins can edit
+              Attribution.</div>
           </div>
           <div class="form-group">
             <label class="form-label">Quantity</label>
@@ -2785,9 +2790,13 @@
             <p style="font-size:13px; color:var(--gray); margin-bottom:24px;">No active signing session found for this
               invoice. You need to start the witness signature orchestration workflow.</p>
             <button class="btn btn-primary w-full" onclick="initiateContractSession()">Start Signing Session</button>
-            <button class="btn btn-ghost w-full" style="margin-top:12px;" onclick="openManualWitnessModal()">Record Walk-in Witness</button>
-            <button class="btn btn-ghost w-full" style="margin-top:12px;" onclick="openManualClientModal()">Record Walk-in Client</button>
-            <button class="btn btn-ghost w-full admin-only lawyer-only" style="margin-top:12px; color:var(--gold-dark); border-color:var(--gold-light);" onclick="openEditWordingsModal()">Edit Contract Wordings</button>
+            <button class="btn btn-ghost w-full" style="margin-top:12px;" onclick="openManualWitnessModal()">Record
+              Walk-in Witness</button>
+            <button class="btn btn-ghost w-full" style="margin-top:12px;" onclick="openManualClientModal()">Record
+              Walk-in Client</button>
+            <button class="btn btn-ghost w-full admin-only lawyer-only"
+              style="margin-top:12px; color:var(--gold-dark); border-color:var(--gold-light);"
+              onclick="openEditWordingsModal()">Edit Contract Wordings</button>
           </div>
 
           <!-- Case 2: Active Session -->
@@ -2799,7 +2808,8 @@
                   Active</span>
                 <span id="contract-expiry" style="font-size:10px; color:#856404;">Expires: —</span>
               </div>
-              <p id="contract-instruction-text" style="font-size:12px; color:#856404; margin-bottom:12px;">The external witness must sign via the portal before the final contract can be executed.</p>
+              <p id="contract-instruction-text" style="font-size:12px; color:#856404; margin-bottom:12px;">The external
+                witness must sign via the portal before the final contract can be executed.</p>
               <div style="display:flex; gap:8px; flex-wrap:wrap;">
                 <button class="btn btn-ghost btn-sm" onclick="copySigningLink()"
                   style="font-size:10px; padding:4px 8px; border-color:#ffeeba;">Copy Link</button>
@@ -2849,54 +2859,85 @@
         <button class="modal-close" onclick="closeModal('editWordingsModal')">×</button>
       </div>
       <div class="modal-body">
-        <div id="wordings-loading" class="loading" style="display:none;"><span class="spinner"></span>Fetching contract wordings...</div>
+        <div id="wordings-loading" class="loading" style="display:none;"><span class="spinner"></span>Fetching contract
+          wordings...</div>
         <div id="wordings-content">
-          <div style="background:#f0f9ff; padding:12px; border:1px solid #bae6fd; border-radius:6px; margin-bottom:16px;">
-            <p style="font-size:12px; color:#0369a1; margin:0;"><strong>Visual Editor Active:</strong> You can edit the text naturally like a word processor. Jinja brackets containing variables like <code>{% raw %}{{ company.name }}{% endraw %}</code> will automatically be replaced with client data when the PDF generates.</p>
+          <div
+            style="background:#f0f9ff; padding:12px; border:1px solid #bae6fd; border-radius:6px; margin-bottom:16px;">
+            <p style="font-size:12px; color:#0369a1; margin:0;"><strong>Visual Editor Active:</strong> You can edit the
+              text naturally like a word processor. Jinja brackets containing variables like
+              <code>{% raw %}{{ company.name }}{% endraw %}</code> will automatically be replaced with client data when
+              the PDF generates.</p>
           </div>
-          
+
           <div class="wordings-tabs" style="display:flex; border-bottom:1px solid #ddd; margin-bottom:0;">
-            <button class="wordings-tab-btn active" id="tab-cover-editor" onclick="switchEditorTab('cover')" style="padding:10px 20px; border:1px solid #ddd; border-bottom:none; background:white; font-weight:600; cursor:pointer; border-top-left-radius:6px; border-top-right-radius:6px; margin-right:4px;">Cover Page</button>
-            <button class="wordings-tab-btn" id="tab-body-editor" onclick="switchEditorTab('body')" style="padding:10px 20px; border:1px solid transparent; border-bottom:none; background:transparent; font-weight:500; color:var(--gray); cursor:pointer; margin-right:4px;">Contract Body</button>
-            <button class="wordings-tab-btn" id="tab-exec-editor" onclick="switchEditorTab('exec')" style="padding:10px 20px; border:1px solid transparent; border-bottom:none; background:transparent; font-weight:500; color:var(--gray); cursor:pointer;">Execution Page</button>
+            <button class="wordings-tab-btn active" id="tab-cover-editor" onclick="switchEditorTab('cover')"
+              style="padding:10px 20px; border:1px solid #ddd; border-bottom:none; background:white; font-weight:600; cursor:pointer; border-top-left-radius:6px; border-top-right-radius:6px; margin-right:4px;">Cover
+              Page</button>
+            <button class="wordings-tab-btn" id="tab-body-editor" onclick="switchEditorTab('body')"
+              style="padding:10px 20px; border:1px solid transparent; border-bottom:none; background:transparent; font-weight:500; color:var(--gray); cursor:pointer; margin-right:4px;">Contract
+              Body</button>
+            <button class="wordings-tab-btn" id="tab-exec-editor" onclick="switchEditorTab('exec')"
+              style="padding:10px 20px; border:1px solid transparent; border-bottom:none; background:transparent; font-weight:500; color:var(--gray); cursor:pointer;">Execution
+              Page</button>
           </div>
-          
-          <div style="border: 1px solid #ddd; border-top:none; padding: 8px; background: #f9f9f9; display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
-            <button class="btn btn-ghost btn-sm" onclick="document.execCommand('bold', false, null)" style="font-weight:bold; padding:4px 10px; font-family:serif;" title="Bold">B</button>
-            <button class="btn btn-ghost btn-sm" onclick="document.execCommand('italic', false, null)" style="font-style:italic; padding:4px 10px; font-family:serif;" title="Italic">I</button>
-            <button class="btn btn-ghost btn-sm" onclick="document.execCommand('underline', false, null)" style="text-decoration:underline; padding:4px 10px; font-family:serif;" title="Underline">U</button>
+
+          <div
+            style="border: 1px solid #ddd; border-top:none; padding: 8px; background: #f9f9f9; display: flex; gap: 6px; align-items: center; flex-wrap: wrap;">
+            <button class="btn btn-ghost btn-sm" onclick="document.execCommand('bold', false, null)"
+              style="font-weight:bold; padding:4px 10px; font-family:serif;" title="Bold">B</button>
+            <button class="btn btn-ghost btn-sm" onclick="document.execCommand('italic', false, null)"
+              style="font-style:italic; padding:4px 10px; font-family:serif;" title="Italic">I</button>
+            <button class="btn btn-ghost btn-sm" onclick="document.execCommand('underline', false, null)"
+              style="text-decoration:underline; padding:4px 10px; font-family:serif;" title="Underline">U</button>
             <div style="width:1px; height:20px; background:#ddd; margin:0 4px;"></div>
-            <button class="btn btn-ghost btn-sm" onclick="document.execCommand('insertOrderedList', false, null)" style="padding:4px 10px;" title="Numbered List">1. List</button>
-            <button class="btn btn-ghost btn-sm" onclick="document.execCommand('insertUnorderedList', false, null)" style="padding:4px 10px;" title="Bullet List">• List</button>
+            <button class="btn btn-ghost btn-sm" onclick="document.execCommand('insertOrderedList', false, null)"
+              style="padding:4px 10px;" title="Numbered List">1. List</button>
+            <button class="btn btn-ghost btn-sm" onclick="document.execCommand('insertUnorderedList', false, null)"
+              style="padding:4px 10px;" title="Bullet List">• List</button>
             <div style="width:1px; height:20px; background:#ddd; margin:0 4px;"></div>
-            <button class="btn btn-ghost btn-sm" onclick="document.execCommand('outdent', false, null)" style="padding:4px 10px;" title="Decrease Indent">←</button>
-            <button class="btn btn-ghost btn-sm" onclick="document.execCommand('indent', false, null)" style="padding:4px 10px;" title="Increase Indent">→</button>
+            <button class="btn btn-ghost btn-sm" onclick="document.execCommand('outdent', false, null)"
+              style="padding:4px 10px;" title="Decrease Indent">←</button>
+            <button class="btn btn-ghost btn-sm" onclick="document.execCommand('indent', false, null)"
+              style="padding:4px 10px;" title="Increase Indent">→</button>
           </div>
-          
+
           <div id="cover-tab-container">
-            <div id="contract-cover-editor" contenteditable="true" style="border: 1px solid #ddd; border-top: none; border-bottom-left-radius:6px; border-bottom-right-radius:6px; height:350px; overflow-y:auto; padding:20px; background:white; font-size:13px; line-height:1.6; outline:none; font-family: 'Times New Roman', serif;"></div>
-            
+            <div id="contract-cover-editor" contenteditable="true"
+              style="border: 1px solid #ddd; border-top: none; border-bottom-left-radius:6px; border-bottom-right-radius:6px; height:350px; overflow-y:auto; padding:20px; background:white; font-size:13px; line-height:1.6; outline:none; font-family: 'Times New Roman', serif;">
+            </div>
+
             <div style="margin-top:16px; background:#f9f9f9; padding:12px; border:1px solid #ddd; border-radius:6px;">
-              <h4 style="font-size:13px; margin:0 0 10px 0; color:var(--text-dark);">Lawfirm "Prepared By" Details (Optional Override)</h4>
+              <h4 style="font-size:13px; margin:0 0 10px 0; color:var(--text-dark);">Lawfirm "Prepared By" Details
+                (Optional Override)</h4>
               <div style="display:flex; gap:12px; margin-bottom:10px;">
                 <div style="flex:1;">
-                   <label style="font-size:11px; font-weight:600; display:block; margin-bottom:4px;">Lawfirm Name</label>
-                   <input type="text" id="lawfirm-name-input" class="input" placeholder="e.g. DELAW CHAMBERS" style="width:100%; font-size:13px; padding:6px 10px; height:32px;">
+                  <label style="font-size:11px; font-weight:600; display:block; margin-bottom:4px;">Lawfirm Name</label>
+                  <input type="text" id="lawfirm-name-input" class="input" placeholder="e.g. DELAW CHAMBERS"
+                    style="width:100%; font-size:13px; padding:6px 10px; height:32px;">
                 </div>
               </div>
               <div>
-                 <label style="font-size:11px; font-weight:600; display:block; margin-bottom:4px;">Lawfirm Address (Use Enter for new lines)</label>
-                 <textarea id="lawfirm-address-input" class="input" placeholder="e.g. 2ND FLOOR, 15 KING GEORGE V. ROAD&#10;IKOYI, LAGOS." style="width:100%; font-size:13px; padding:6px 10px; height:50px; resize:vertical;"></textarea>
+                <label style="font-size:11px; font-weight:600; display:block; margin-bottom:4px;">Lawfirm Address (Use
+                  Enter for new lines)</label>
+                <textarea id="lawfirm-address-input" class="input"
+                  placeholder="e.g. 2ND FLOOR, 15 KING GEORGE V. ROAD&#10;IKOYI, LAGOS."
+                  style="width:100%; font-size:13px; padding:6px 10px; height:50px; resize:vertical;"></textarea>
               </div>
             </div>
           </div>
-          <div id="contract-wordings-editor" contenteditable="true" style="display:none; border: 1px solid #ddd; border-top: none; border-bottom-left-radius:6px; border-bottom-right-radius:6px; height:450px; overflow-y:auto; padding:20px; background:white; font-size:13px; line-height:1.6; outline:none; font-family: 'Times New Roman', serif;"></div>
-          
-          <div id="contract-exec-editor" contenteditable="true" style="display:none; border: 1px solid #ddd; border-top: none; border-bottom-left-radius:6px; border-bottom-right-radius:6px; height:450px; overflow-y:auto; padding:20px; background:white; font-size:13px; line-height:1.6; outline:none; font-family: 'Times New Roman', serif;"></div>
-          
+          <div id="contract-wordings-editor" contenteditable="true"
+            style="display:none; border: 1px solid #ddd; border-top: none; border-bottom-left-radius:6px; border-bottom-right-radius:6px; height:450px; overflow-y:auto; padding:20px; background:white; font-size:13px; line-height:1.6; outline:none; font-family: 'Times New Roman', serif;">
+          </div>
+
+          <div id="contract-exec-editor" contenteditable="true"
+            style="display:none; border: 1px solid #ddd; border-top: none; border-bottom-left-radius:6px; border-bottom-right-radius:6px; height:450px; overflow-y:auto; padding:20px; background:white; font-size:13px; line-height:1.6; outline:none; font-family: 'Times New Roman', serif;">
+          </div>
+
           <div class="form-actions" style="margin-top:16px;">
             <button class="btn btn-ghost" onclick="closeModal('editWordingsModal')">Cancel</button>
-            <button class="btn btn-primary" id="btn-save-wordings" onclick="saveContractWordings()">Save Wordings</button>
+            <button class="btn btn-primary" id="btn-save-wordings" onclick="saveContractWordings()">Save
+              Wordings</button>
           </div>
         </div>
       </div>
@@ -2911,38 +2952,47 @@
         <button class="modal-close" onclick="closeModal('manualWitnessModal')">×</button>
       </div>
       <div class="modal-body">
-        <p style="color:var(--gray); font-size:14px; margin-bottom:16px;">Capture the details and scanned signature for the witness who signed at the office.</p>
+        <p style="color:var(--gray); font-size:14px; margin-bottom:16px;">Capture the details and scanned signature for
+          the witness who signed at the office.</p>
         <div class="form-group">
           <label class="label">Full Name</label>
-          <input type="text" id="manual-witness-full_name" class="input" placeholder="Witness full name" oninput="validateManualWitnessForm()">
+          <input type="text" id="manual-witness-full_name" class="input" placeholder="Witness full name"
+            oninput="validateManualWitnessForm()">
         </div>
         <div class="form-group">
           <label class="label">Email Address</label>
-          <input type="email" id="manual-witness-email" class="input" placeholder="Witness email address" oninput="validateManualWitnessForm()">
+          <input type="email" id="manual-witness-email" class="input" placeholder="Witness email address"
+            oninput="validateManualWitnessForm()">
         </div>
         <div class="form-group">
           <label class="label">Address</label>
-          <input type="text" id="manual-witness-address" class="input" placeholder="Residential address" oninput="validateManualWitnessForm()">
+          <input type="text" id="manual-witness-address" class="input" placeholder="Residential address"
+            oninput="validateManualWitnessForm()">
         </div>
         <div class="form-group">
           <label class="label">Occupation</label>
-          <input type="text" id="manual-witness-occupation" class="input" placeholder="Occupation" oninput="validateManualWitnessForm()">
+          <input type="text" id="manual-witness-occupation" class="input" placeholder="Occupation"
+            oninput="validateManualWitnessForm()">
         </div>
         <div class="form-group">
           <label class="label">Signature Upload</label>
           <div style="display:flex; align-items:center; gap:12px;">
-            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('manualWitnessFile').click()" type="button">Choose Image</button>
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('manualWitnessFile').click()"
+              type="button">Choose Image</button>
             <span id="manualWitnessFileLabel" style="font-size:12px; color:var(--gray);">No file selected</span>
           </div>
-          <input type="file" id="manualWitnessFile" accept="image/*" style="display:none;" onchange="handleManualWitnessFile(this)">
+          <input type="file" id="manualWitnessFile" accept="image/*" style="display:none;"
+            onchange="handleManualWitnessFile(this)">
           <div id="manualWitnessPreviewContainer" style="display:none; margin-top:12px;">
-            <img id="manualWitnessPreview" src="" style="max-width:100%; border:1px solid #eee; border-radius:8px;" alt="Signature preview">
+            <img id="manualWitnessPreview" src="" style="max-width:100%; border:1px solid #eee; border-radius:8px;"
+              alt="Signature preview">
           </div>
         </div>
       </div>
       <div class="form-actions" style="padding:0 24px 24px;">
         <button class="btn btn-ghost" onclick="closeModal('manualWitnessModal')">Cancel</button>
-        <button class="btn btn-primary" id="manualWitnessSubmit" onclick="submitManualWitness()" disabled>Save Witness</button>
+        <button class="btn btn-primary" id="manualWitnessSubmit" onclick="submitManualWitness()" disabled>Save
+          Witness</button>
       </div>
     </div>
   </div>
@@ -2955,22 +3005,27 @@
         <button class="modal-close" onclick="closeModal('manualClientModal')">×</button>
       </div>
       <div class="modal-body">
-        <p style="color:var(--gray); font-size:14px; margin-bottom:16px;">Capture the client’s signature for a contract executed in person at the office.</p>
+        <p style="color:var(--gray); font-size:14px; margin-bottom:16px;">Capture the client’s signature for a contract
+          executed in person at the office.</p>
         <div class="form-group">
           <label class="label">Signature Upload</label>
           <div style="display:flex; align-items:center; gap:12px;">
-            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('manualClientFile').click()" type="button">Choose Image</button>
+            <button class="btn btn-ghost btn-sm" onclick="document.getElementById('manualClientFile').click()"
+              type="button">Choose Image</button>
             <span id="manualClientFileLabel" style="font-size:12px; color:var(--gray);">No file selected</span>
           </div>
-          <input type="file" id="manualClientFile" accept="image/*" style="display:none;" onchange="handleManualClientFile(this)">
+          <input type="file" id="manualClientFile" accept="image/*" style="display:none;"
+            onchange="handleManualClientFile(this)">
           <div id="manualClientPreviewContainer" style="display:none; margin-top:12px;">
-            <img id="manualClientPreview" src="" style="max-width:100%; border:1px solid #eee; border-radius:8px;" alt="Signature preview">
+            <img id="manualClientPreview" src="" style="max-width:100%; border:1px solid #eee; border-radius:8px;"
+              alt="Signature preview">
           </div>
         </div>
       </div>
       <div class="form-actions" style="padding:0 24px 24px;">
         <button class="btn btn-ghost" onclick="closeModal('manualClientModal')">Cancel</button>
-        <button class="btn btn-primary" id="manualClientSubmit" onclick="submitManualClient()" disabled>Save Client Signature</button>
+        <button class="btn btn-primary" id="manualClientSubmit" onclick="submitManualClient()" disabled>Save Client
+          Signature</button>
       </div>
     </div>
   </div>
@@ -3201,67 +3256,85 @@
           </div>
           <div class="form-group span2">
             <label class="form-label">Roles <span class="req">*</span></label>
-              <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="admin" style="accent-color:var(--gold);"> Admin</label>
-              <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="hr_admin" style="accent-color:var(--gold);"> HR Admin</label>
-              <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="line_manager" style="accent-color:var(--gold);"> Line Manager</label>
-              <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="staff" checked style="accent-color:var(--gold);"> Staff</label>
-              <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="lawyer" style="accent-color:var(--gold);"> Lawyer</label>
-              <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="legal" style="accent-color:var(--gold);"> Legal</label>
-              <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="marketing" style="accent-color:var(--gold);"> Marketing</label>
-              <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="sales" style="accent-color:var(--gold);"> Sales</label>
-              <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="operations" style="accent-color:var(--gold);"> Operations</label>
-              <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="customer_support" style="accent-color:var(--gold);"> Customer Support</label>
-              <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input type="checkbox" name="am-roles-check" value="super_admin" style="accent-color:var(--gold);"> Super Admin</label>
-            </div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Department</label>
-            <input type="text" class="form-control" id="am-department" placeholder="e.g. Operations, Legal">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Line Manager (Optional)</label>
-            <select class="form-control" id="am-manager-id">
-              <option value="">— Select Manager —</option>
-              <!-- Populate dynamically if possible, or leave as simple select -->
-            </select>
-          </div>
-          <div class="form-group span2">
-            <label class="form-label">Primary Role (Redirection After Login) <span class="req">*</span></label>
-            <select class="form-control" id="am-primary-role">
-              <option value="staff">Staff Dashboard (/dashboard)</option>
-              <option value="hr">HR Management (/hr)</option>
-              <option value="legal">Legal Dashboard (/legal)</option>
-              <option value="marketing">Marketing Dashboard (/marketing)</option>
-              <option value="sales">Sales Dashboard (/crm)</option>
-              <option value="operations">Operations Dashboard (/crm)</option>
-              <option value="customer_support">Customer Support Dashboard (/crm)</option>
-              <option value="admin">Full Admin Dashboard (/dashboard)</option>
-            </select>
-            <div class="form-hint">Determines which page the user lands on after logging in.</div>
-          </div>
-          <div class="form-group">
-            <label class="form-label">Password <span class="req">*</span></label>
-            <input type="password" class="form-control" id="am-password" placeholder="Min. 8 characters">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Confirm Password <span class="req">*</span></label>
-            <input type="password" class="form-control" id="am-password2" placeholder="Repeat password">
-          </div>
-          <div class="form-group span2"
-            style="background:#fffbf0;border:1px solid #F5A623;border-radius:6px;padding:12px 14px;">
-            <div style="font-size:12px;color:#7d5a0a;line-height:1.6;">
-              <strong>Note:</strong> The new team member will be able to log in immediately at <code
-                style="background:#f0e0b0;padding:1px 5px;border-radius:3px;">/login</code> using the email and password
-              you set here. Share credentials securely.
-            </div>
+            <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input
+                type="checkbox" name="am-roles-check" value="admin" style="accent-color:var(--gold);"> Admin</label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input
+                type="checkbox" name="am-roles-check" value="hr_admin" style="accent-color:var(--gold);"> HR
+              Admin</label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input
+                type="checkbox" name="am-roles-check" value="line_manager" style="accent-color:var(--gold);"> Line
+              Manager</label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input
+                type="checkbox" name="am-roles-check" value="staff" checked style="accent-color:var(--gold);">
+              Staff</label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input
+                type="checkbox" name="am-roles-check" value="lawyer" style="accent-color:var(--gold);"> Lawyer</label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input
+                type="checkbox" name="am-roles-check" value="legal" style="accent-color:var(--gold);"> Legal</label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input
+                type="checkbox" name="am-roles-check" value="marketing" style="accent-color:var(--gold);">
+              Marketing</label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input
+                type="checkbox" name="am-roles-check" value="sales" style="accent-color:var(--gold);"> Sales</label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input
+                type="checkbox" name="am-roles-check" value="operations" style="accent-color:var(--gold);">
+              Operations</label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input
+                type="checkbox" name="am-roles-check" value="customer_support" style="accent-color:var(--gold);">
+              Customer Support</label>
+            <label style="display:flex; align-items:center; gap:6px; font-size:12px; cursor:pointer;"><input
+                type="checkbox" name="am-roles-check" value="super_admin" style="accent-color:var(--gold);"> Super
+              Admin</label>
           </div>
         </div>
-        <div class="form-actions">
-          <button class="btn btn-ghost" onclick="closeModal('addAdminModal')">Cancel</button>
-          <button class="btn btn-primary" onclick="submitAddAdmin()">Create Account</button>
+        <div class="form-group">
+          <label class="form-label">Department</label>
+          <input type="text" class="form-control" id="am-department" placeholder="e.g. Operations, Legal">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Line Manager (Optional)</label>
+          <select class="form-control" id="am-manager-id">
+            <option value="">— Select Manager —</option>
+            <!-- Populate dynamically if possible, or leave as simple select -->
+          </select>
+        </div>
+        <div class="form-group span2">
+          <label class="form-label">Primary Role (Redirection After Login) <span class="req">*</span></label>
+          <select class="form-control" id="am-primary-role">
+            <option value="staff">Staff Dashboard (/dashboard)</option>
+            <option value="hr">HR Management (/hr)</option>
+            <option value="legal">Legal Dashboard (/legal)</option>
+            <option value="marketing">Marketing Dashboard (/marketing)</option>
+            <option value="sales">Sales Dashboard (/crm)</option>
+            <option value="operations">Operations Dashboard (/crm)</option>
+            <option value="customer_support">Customer Support Dashboard (/crm)</option>
+            <option value="admin">Full Admin Dashboard (/dashboard)</option>
+          </select>
+          <div class="form-hint">Determines which page the user lands on after logging in.</div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Password <span class="req">*</span></label>
+          <input type="password" class="form-control" id="am-password" placeholder="Min. 8 characters">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Confirm Password <span class="req">*</span></label>
+          <input type="password" class="form-control" id="am-password2" placeholder="Repeat password">
+        </div>
+        <div class="form-group span2"
+          style="background:#fffbf0;border:1px solid #F5A623;border-radius:6px;padding:12px 14px;">
+          <div style="font-size:12px;color:#7d5a0a;line-height:1.6;">
+            <strong>Note:</strong> The new team member will be able to log in immediately at <code
+              style="background:#f0e0b0;padding:1px 5px;border-radius:3px;">/login</code> using the email and password
+            you set here. Share credentials securely.
+          </div>
         </div>
       </div>
+      <div class="form-actions">
+        <button class="btn btn-ghost" onclick="closeModal('addAdminModal')">Cancel</button>
+        <button class="btn btn-primary" onclick="submitAddAdmin()">Create Account</button>
+      </div>
     </div>
+  </div>
   </div>
 
   <!-- Edit Roles Modal -->
@@ -3275,44 +3348,57 @@
         <input type="hidden" id="er-admin-id">
         <div class="form-group">
           <label class="form-label">Assigned Roles <span class="req">*</span></label>
-          <div style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:12px; background:#f8fafc; border-radius:6px; border:1px solid #e2e8f0;">
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="admin" style="accent-color:var(--gold);"> Admin</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="hr_admin" style="accent-color:var(--gold);"> HR Admin</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="line_manager" style="accent-color:var(--gold);"> Line Manager</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="staff" style="accent-color:var(--gold);"> Staff</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="lawyer" style="accent-color:var(--gold);"> Lawyer</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="legal" style="accent-color:var(--gold);"> Legal</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="marketing" style="accent-color:var(--gold);"> Marketing</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="sales" style="accent-color:var(--gold);"> Sales</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="operations" style="accent-color:var(--gold);"> Operations</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="customer_support" style="accent-color:var(--gold);"> Customer Support</label>
-            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox" name="er-role" value="super_admin" style="accent-color:var(--gold);"> Super Admin</label>
+          <div
+            style="display:grid; grid-template-columns:repeat(3,1fr); gap:10px; padding:12px; background:#f8fafc; border-radius:6px; border:1px solid #e2e8f0;">
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox"
+                name="er-role" value="admin" style="accent-color:var(--gold);"> Admin</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox"
+                name="er-role" value="hr_admin" style="accent-color:var(--gold);"> HR Admin</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox"
+                name="er-role" value="line_manager" style="accent-color:var(--gold);"> Line Manager</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox"
+                name="er-role" value="staff" style="accent-color:var(--gold);"> Staff</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox"
+                name="er-role" value="lawyer" style="accent-color:var(--gold);"> Lawyer</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox"
+                name="er-role" value="legal" style="accent-color:var(--gold);"> Legal</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox"
+                name="er-role" value="marketing" style="accent-color:var(--gold);"> Marketing</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox"
+                name="er-role" value="sales" style="accent-color:var(--gold);"> Sales</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox"
+                name="er-role" value="operations" style="accent-color:var(--gold);"> Operations</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox"
+                name="er-role" value="customer_support" style="accent-color:var(--gold);"> Customer Support</label>
+            <label style="display:flex;align-items:center;gap:6px;font-size:12px;cursor:pointer;"><input type="checkbox"
+                name="er-role" value="super_admin" style="accent-color:var(--gold);"> Super Admin</label>
           </div>
         </div>
-          <div class="form-group">
-            <label class="form-label">Primary Role (Landing Page After Login) <span class="req">*</span></label>
-            <select class="form-control" id="er-primary-role">
-              <option value="staff">Staff Dashboard (/dashboard)</option>
-              <option value="hr">HR Management (/hr)</option>
-              <option value="legal">Legal Dashboard (/legal)</option>
-              <option value="marketing">Marketing Dashboard (/marketing)</option>
-              <option value="sales">Sales Dashboard (/crm)</option>
-              <option value="operations">Operations Dashboard (/crm)</option>
-              <option value="customer_support">Customer Support Dashboard (/crm)</option>
-              <option value="admin">Full Admin Dashboard (/dashboard)</option>
-            </select>
-            <div class="form-hint" style="margin-top:4px;">Determines which page this user lands on after logging in.</div>
+        <div class="form-group">
+          <label class="form-label">Primary Role (Landing Page After Login) <span class="req">*</span></label>
+          <select class="form-control" id="er-primary-role">
+            <option value="staff">Staff Dashboard (/dashboard)</option>
+            <option value="hr">HR Management (/hr)</option>
+            <option value="legal">Legal Dashboard (/legal)</option>
+            <option value="marketing">Marketing Dashboard (/marketing)</option>
+            <option value="sales">Sales Dashboard (/crm)</option>
+            <option value="operations">Operations Dashboard (/crm)</option>
+            <option value="customer_support">Customer Support Dashboard (/crm)</option>
+            <option value="admin">Full Admin Dashboard (/dashboard)</option>
+          </select>
+          <div class="form-hint" style="margin-top:4px;">Determines which page this user lands on after logging in.
           </div>
-          <div class="form-group">
-            <label class="form-label">Department</label>
-            <input type="text" class="form-control" id="er-department" placeholder="e.g. Operations, Legal">
-          </div>
-          <div class="form-group">
-            <label class="form-label">Line Manager (Optional)</label>
-            <select class="form-control" id="er-manager-id">
-              <option value="">— Select Manager —</option>
-            </select>
-          </div>
+        </div>
+        <div class="form-group">
+          <label class="form-label">Department</label>
+          <input type="text" class="form-control" id="er-department" placeholder="e.g. Operations, Legal">
+        </div>
+        <div class="form-group">
+          <label class="form-label">Line Manager (Optional)</label>
+          <select class="form-control" id="er-manager-id">
+            <option value="">— Select Manager —</option>
+          </select>
+        </div>
         <div class="form-actions">
           <button class="btn btn-ghost" onclick="closeModal('editRolesModal')">Cancel</button>
           <button class="btn btn-primary" onclick="submitEditRoles()">Save Roles</button>
@@ -4119,7 +4205,7 @@
       if (!emails.length) return toast('Please enter valid email addresses', 'error');
 
       const [hourStr, minuteStr] = document.getElementById('sched-time').value.split(':');
-      
+
       const body = {
         report_type: document.getElementById('sched-type').value,
         frequency: freq,
@@ -4352,11 +4438,11 @@
 
     // ── KPI UPDATES ───────────────────────────
     function updateKPIs(data) {
-      document.getElementById('stat-invoiced').textContent = fmtNGN(data.total_revenue || 0);
-      document.getElementById('stat-collected').textContent = fmtNGN(data.amount_collected || 0);
-      document.getElementById('stat-refunds').textContent = fmtNGN(data.total_refunds || 0);
-      document.getElementById('stat-clients').textContent = data.new_clients;
-      document.getElementById('stat-pending').textContent = data.pending_verifications;
+      if (document.getElementById('stat-invoiced')) document.getElementById('stat-invoiced').textContent = fmtNGN(data.total_revenue || 0);
+      if (document.getElementById('stat-collected')) document.getElementById('stat-collected').textContent = fmtNGN(data.amount_collected || 0);
+      if (document.getElementById('stat-refunds')) document.getElementById('stat-refunds').textContent = fmtNGN(data.total_refunds || 0);
+      if (document.getElementById('stat-clients')) document.getElementById('stat-clients').textContent = data.new_clients;
+      if (document.getElementById('stat-pending')) document.getElementById('stat-pending').textContent = data.pending_verifications;
 
       const fmtDelta = (val) => {
         if (val === null || val === undefined) return '--';
@@ -4366,9 +4452,9 @@
       };
 
       if (data.delta) {
-        document.getElementById('stat-rev-delta').innerHTML = fmtDelta(data.delta.total_revenue);
-        document.getElementById('stat-col-delta').innerHTML = fmtDelta(data.delta.amount_collected);
-        document.getElementById('stat-cli-delta').innerHTML = fmtDelta(data.delta.new_clients);
+        if (document.getElementById('stat-rev-delta')) document.getElementById('stat-rev-delta').innerHTML = fmtDelta(data.delta.total_revenue);
+        if (document.getElementById('stat-col-delta')) document.getElementById('stat-col-delta').innerHTML = fmtDelta(data.delta.amount_collected);
+        if (document.getElementById('stat-cli-delta')) document.getElementById('stat-cli-delta').innerHTML = fmtDelta(data.delta.new_clients);
         if (document.getElementById('stat-ref-delta')) {
           document.getElementById('stat-ref-delta').innerHTML = fmtDelta(data.delta.total_refunds);
         }
@@ -4527,6 +4613,7 @@
 
     // ── INVOICES TABLE ────────────────────────
     let originalDueDate = null;
+    let dueDateUserChanged = false; // Only true when the user physically interacts
 
     async function loadInvoices() {
       const showVoided = document.getElementById('show-voided-inv')?.checked || false;
@@ -4689,27 +4776,40 @@
         document.getElementById('edit-inv-date').value = inv.invoice_date || '';
         document.getElementById('edit-inv-notes').value = inv.notes || '';
 
-        originalDueDate = inv.due_date;
-        document.getElementById('edit-inv-due-reason').value = '';
+        originalDueDate = (inv.due_date || '').substring(0, 10);
+        document.getElementById('edit-inv-due').value = originalDueDate;
         document.getElementById('edit-inv-due-reason-group').style.display = 'none';
+        document.getElementById('edit-inv-due-reason').value = '';
+        dueDateUserChanged = false; // Reset flag on every modal open
+
+        // Show reason field ONLY when the user physically picks a different date
+        document.getElementById('edit-inv-due').onchange = function (e) {
+          if (e.target.value && e.target.value !== originalDueDate) {
+            dueDateUserChanged = true;
+            document.getElementById('edit-inv-due-reason-group').style.display = 'block';
+          } else {
+            dueDateUserChanged = false;
+            document.getElementById('edit-inv-due-reason-group').style.display = 'none';
+          }
+        };
 
         // Attribution loading
         const campSelect = document.getElementById('edit-inv-marketing-campaign');
         if (campSelect) {
-            campSelect.innerHTML = '<option value="">-- No Campaign (Organic) --</option>';
-            try {
-                const cRes = await apiFetch('/api/marketing/campaigns');
-                const campaigns = await cRes.json();
-                campaigns.filter(c => c.status === 'sent').forEach(c => {
-                    const opt = document.createElement('option');
-                    opt.value = c.id;
-                    opt.textContent = `${c.name} (${new Date(c.created_at).toLocaleDateString()})`;
-                    campSelect.appendChild(opt);
-                });
-                campSelect.value = inv.marketing_campaign_id || '';
-            } catch (e) {
-                console.error("Failed to load campaigns for edit", e);
-            }
+          campSelect.innerHTML = '<option value="">-- No Campaign (Organic) --</option>';
+          try {
+            const cRes = await apiFetch('/api/marketing/campaigns');
+            const campaigns = await cRes.json();
+            campaigns.filter(c => c.status === 'sent').forEach(c => {
+              const opt = document.createElement('option');
+              opt.value = c.id;
+              opt.textContent = `${c.name} (${new Date(c.created_at).toLocaleDateString()})`;
+              campSelect.appendChild(opt);
+            });
+            campSelect.value = inv.marketing_campaign_id || '';
+          } catch (e) {
+            console.error("Failed to load campaigns for edit", e);
+          }
         }
 
         const isStaff = currentUserRole === 'staff';
@@ -4730,38 +4830,38 @@
         const attrInput = document.getElementById('edit-inv-marketing-campaign');
 
         if (isStaff) {
-            termsInput.classList.add('locked-field'); termsInput.disabled = true;
-            termsCustomInput.classList.add('locked-field'); termsCustomInput.readOnly = true;
-            coNameInput.classList.add('locked-field'); coNameInput.readOnly = true;
-            coEmailInput.classList.add('locked-field'); coEmailInput.readOnly = true;
-            repInput.classList.add('locked-field'); repInput.readOnly = true;
-            propSelectInput.classList.add('locked-field'); propSelectInput.disabled = true;
-            propCustomInput.classList.add('locked-field'); propCustomInput.readOnly = true;
-            locInput.classList.add('locked-field'); locInput.readOnly = true;
-            amountInput.classList.add('locked-field'); amountInput.readOnly = true;
-            sizeInput.classList.add('locked-field'); sizeInput.readOnly = true;
-            qtyInput.classList.add('locked-field'); qtyInput.readOnly = true;
-            priceInput.classList.add('locked-field'); priceInput.readOnly = true;
-            dateInput.classList.add('locked-field'); dateInput.readOnly = true;
-            paidInput.classList.add('locked-field'); paidInput.readOnly = true;
-            if (attrInput) { attrInput.classList.add('locked-field'); attrInput.disabled = true; }
-            document.querySelectorAll('.edit-inv-admin-lock').forEach(el => el.style.display = 'block');
+          termsInput.classList.add('locked-field'); termsInput.disabled = true;
+          termsCustomInput.classList.add('locked-field'); termsCustomInput.readOnly = true;
+          coNameInput.classList.add('locked-field'); coNameInput.readOnly = true;
+          coEmailInput.classList.add('locked-field'); coEmailInput.readOnly = true;
+          repInput.classList.add('locked-field'); repInput.readOnly = true;
+          propSelectInput.classList.add('locked-field'); propSelectInput.disabled = true;
+          propCustomInput.classList.add('locked-field'); propCustomInput.readOnly = true;
+          locInput.classList.add('locked-field'); locInput.readOnly = true;
+          amountInput.classList.add('locked-field'); amountInput.readOnly = true;
+          sizeInput.classList.add('locked-field'); sizeInput.readOnly = true;
+          qtyInput.classList.add('locked-field'); qtyInput.readOnly = true;
+          priceInput.classList.add('locked-field'); priceInput.readOnly = true;
+          dateInput.classList.add('locked-field'); dateInput.readOnly = true;
+          paidInput.classList.add('locked-field'); paidInput.readOnly = true;
+          if (attrInput) { attrInput.classList.add('locked-field'); attrInput.disabled = true; }
+          document.querySelectorAll('.edit-inv-admin-lock').forEach(el => el.style.display = 'block');
         } else {
-            termsInput.classList.remove('locked-field'); termsInput.disabled = false;
-            termsCustomInput.classList.remove('locked-field'); termsCustomInput.readOnly = false;
-            coNameInput.classList.remove('locked-field'); coNameInput.readOnly = false;
-            coEmailInput.classList.remove('locked-field'); coEmailInput.readOnly = false;
-            repInput.classList.remove('locked-field'); repInput.readOnly = false;
-            propSelectInput.classList.remove('locked-field'); propSelectInput.disabled = false;
-            propCustomInput.classList.remove('locked-field'); propCustomInput.readOnly = false;
-            locInput.classList.remove('locked-field'); locInput.readOnly = false;
-            amountInput.classList.remove('locked-field'); amountInput.readOnly = false;
-            sizeInput.classList.remove('locked-field'); sizeInput.readOnly = false;
-            qtyInput.classList.remove('locked-field'); qtyInput.readOnly = false;
-            dateInput.classList.remove('locked-field'); dateInput.readOnly = false;
-            paidInput.classList.remove('locked-field'); paidInput.readOnly = false;
-            if (attrInput) { attrInput.classList.remove('locked-field'); attrInput.disabled = false; }
-            document.querySelectorAll('.edit-inv-admin-lock').forEach(el => el.style.display = 'none');
+          termsInput.classList.remove('locked-field'); termsInput.disabled = false;
+          termsCustomInput.classList.remove('locked-field'); termsCustomInput.readOnly = false;
+          coNameInput.classList.remove('locked-field'); coNameInput.readOnly = false;
+          coEmailInput.classList.remove('locked-field'); coEmailInput.readOnly = false;
+          repInput.classList.remove('locked-field'); repInput.readOnly = false;
+          propSelectInput.classList.remove('locked-field'); propSelectInput.disabled = false;
+          propCustomInput.classList.remove('locked-field'); propCustomInput.readOnly = false;
+          locInput.classList.remove('locked-field'); locInput.readOnly = false;
+          amountInput.classList.remove('locked-field'); amountInput.readOnly = false;
+          sizeInput.classList.remove('locked-field'); sizeInput.readOnly = false;
+          qtyInput.classList.remove('locked-field'); qtyInput.readOnly = false;
+          dateInput.classList.remove('locked-field'); dateInput.readOnly = false;
+          paidInput.classList.remove('locked-field'); paidInput.readOnly = false;
+          if (attrInput) { attrInput.classList.remove('locked-field'); attrInput.disabled = false; }
+          document.querySelectorAll('.edit-inv-admin-lock').forEach(el => el.style.display = 'none');
         }
 
         openModal('editInvoiceModal');
@@ -4771,11 +4871,16 @@
     async function submitEditInvoice() {
       const id = document.getElementById('edit-inv-id').value;
       const newDue = document.getElementById('edit-inv-due').value;
+      console.log('[EditInvoice] newDue:', newDue, '| originalDueDate:', originalDueDate, '| userChanged:', dueDateUserChanged);
 
       const body = {
-        due_date: newDue,
         notes: document.getElementById('edit-inv-notes').value
       };
+
+      // Only include due_date in payload if the user deliberately changed it
+      if (dueDateUserChanged && newDue) {
+        body.due_date = newDue;
+      }
 
       if (currentUserRole === 'admin') {
         const termsDropdown = document.getElementById('edit-inv-terms').value;
@@ -4813,7 +4918,8 @@
         body.marketing_campaign_id = document.getElementById('edit-inv-marketing-campaign').value || null;
       }
 
-      if (newDue !== originalDueDate) {
+      // Only require a reason if the user deliberately changed the due date
+      if (dueDateUserChanged) {
         const reason = document.getElementById('edit-inv-due-reason').value.trim();
         if (!reason || reason.length < 10) return toast('Reason (min 10 chars) is required when changing due date', 'error');
         body.reason = reason;
@@ -5421,7 +5527,7 @@
       currentInvoiceId = invoiceId;
       document.getElementById('sendDocsInvoiceInfo').innerHTML = `
         <strong>${invNum}</strong> → ${clientName} &lt;${clientEmail}&gt;`;
-      
+
       // Reset indicators
       document.querySelectorAll('.sent-status-indicator').forEach(el => {
         el.innerHTML = '';
@@ -5596,15 +5702,15 @@
     function renderMemberRow(a, archived = false) {
       const initials = a.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
       const roleColors = {
-        admin:       { bg: 'var(--gold-light)', color: 'var(--gold-dark)', badgeBg: '#fffbf0', badgeColor: '#7d5a0a' },
-        super_admin: { bg: '#fee2e2',           color: '#991b1b',          badgeBg: '#fee2e2', badgeColor: '#991b1b' },
-        lawyer:      { bg: '#f3e8ff',           color: '#7c3aed',          badgeBg: '#f3e8ff', badgeColor: '#6d28d9' },
-        legal:       { bg: '#eef2ff',           color: '#3730a3',          badgeBg: '#eef2ff', badgeColor: '#3730a3' },
-        staff:       { bg: '#ebf5fb',           color: '#2980b9',          badgeBg: '#ebf5fb', badgeColor: '#2471a3' },
-        marketing:   { bg: '#ecfdf5',           color: '#047857',          badgeBg: '#ecfdf5', badgeColor: '#047857' },
-        operations:  { bg: '#fff7ed',           color: '#c2410c',          badgeBg: '#fff7ed', badgeColor: '#c2410c' },
+        admin: { bg: 'var(--gold-light)', color: 'var(--gold-dark)', badgeBg: '#fffbf0', badgeColor: '#7d5a0a' },
+        super_admin: { bg: '#fee2e2', color: '#991b1b', badgeBg: '#fee2e2', badgeColor: '#991b1b' },
+        lawyer: { bg: '#f3e8ff', color: '#7c3aed', badgeBg: '#f3e8ff', badgeColor: '#6d28d9' },
+        legal: { bg: '#eef2ff', color: '#3730a3', badgeBg: '#eef2ff', badgeColor: '#3730a3' },
+        staff: { bg: '#ebf5fb', color: '#2980b9', badgeBg: '#ebf5fb', badgeColor: '#2471a3' },
+        marketing: { bg: '#ecfdf5', color: '#047857', badgeBg: '#ecfdf5', badgeColor: '#047857' },
+        operations: { bg: '#fff7ed', color: '#c2410c', badgeBg: '#fff7ed', badgeColor: '#c2410c' },
       };
-      
+
       const roles = (a.role || 'staff').split(',');
       const primary = a.primary_role || roles[0] || 'staff';
       const rc = roleColors[primary] || roleColors.staff;
@@ -5681,7 +5787,7 @@
     function openAddAdminModal() {
       ['am-name', 'am-email', 'am-password', 'am-password2', 'am-department'].forEach(id => {
         const el = document.getElementById(id);
-        if(el) el.value = '';
+        if (el) el.value = '';
       });
       // Reset checkboxes
       document.querySelectorAll('input[name="am-roles-check"]').forEach(cb => {
@@ -5694,7 +5800,7 @@
       if (addMgrSel) {
         addMgrSel.innerHTML = '<option value="">— Select Manager —</option>';
         (allAdmins || []).forEach(a => {
-            addMgrSel.innerHTML += `<option value="${a.id}">${a.full_name}</option>`;
+          addMgrSel.innerHTML += `<option value="${a.id}">${a.full_name}</option>`;
         });
       }
 
@@ -5727,7 +5833,7 @@
       const ogText = setLoading(btn, true, 'Creating...');
       try {
         const res = await apiFetch('/auth/register', {
-          method: 'POST', 
+          method: 'POST',
           body: JSON.stringify({ full_name: name, email, password: pass, role, primary_role, department, line_manager_id })
         });
         const data = await res.json();
@@ -5793,14 +5899,14 @@
       document.getElementById('er-admin-id').value = adminId;
       document.getElementById('er-name').textContent = adminName;
       document.getElementById('er-department').value = dept || '';
-      
+
       // Populate Line Manager dropdown
       const mgrSel = document.getElementById('er-manager-id');
       const addMgrSel = document.getElementById('am-manager-id');
       mgrSel.innerHTML = '<option value="">— Select Manager —</option>';
       addMgrSel.innerHTML = '<option value="">— Select Manager —</option>';
       (allAdmins || []).forEach(a => {
-        if(a.id !== adminId) {
+        if (a.id !== adminId) {
           mgrSel.innerHTML += `<option value="${a.id}">${a.full_name}</option>`;
           addMgrSel.innerHTML += `<option value="${a.id}">${a.full_name}</option>`;
         }
@@ -6042,18 +6148,18 @@
           </thead>
           <tbody>
             ${pending.map(v => {
-              const sub = v.property_subscriptions || {};
-              const hasSub = !!v.subscription_id;
-              
-              return `
+          const sub = v.property_subscriptions || {};
+          const hasSub = !!v.subscription_id;
+
+          return `
               <tr>
                 <td style="font-size:12px;color:var(--gray);">${new Date(v.created_at).toLocaleString()}</td>
                 <td>
                   <div style="display:flex; align-items:center; gap:10px;">
-                    ${sub.passport_photo_url ? 
-                      `<img src="${sub.passport_photo_url}" style="width:36px; height:36px; border-radius:4px; object-fit:cover; border:1px solid #eee;" alt="Passport">` :
-                      `<div style="width:36px; height:36px; border-radius:4px; background:#f0f0f0; display:flex; align-items:center; justify-content:center; color:#ccc;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>`
-                    }
+                    ${sub.passport_photo_url ?
+              `<img src="${sub.passport_photo_url}" style="width:36px; height:36px; border-radius:4px; object-fit:cover; border:1px solid #eee;" alt="Passport">` :
+              `<div style="width:36px; height:36px; border-radius:4px; background:#f0f0f0; display:flex; align-items:center; justify-content:center; color:#ccc;"><svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M20 21v-2a4 4 0 0 0-4-4H8a4 4 0 0 0-4 4v2"/><circle cx="12" cy="7" r="4"/></svg></div>`
+            }
                     <div>
                       <div class="client-name">${v.clients?.full_name || '—'}</div>
                       <div style="font-size:11px; color:var(--gold-dark); font-weight:500;">${sub.occupation || 'Subscriber'}</div>
@@ -6098,7 +6204,8 @@
                   </div>
                 </td>
               </tr>
-            `;}).join('')}
+            `;
+        }).join('')}
           </tbody>
         </table>
       </div>
@@ -6353,8 +6460,8 @@
               address = prompt('Enter witness address:');
               occupation = prompt('Enter witness occupation:');
               if (!address || !occupation) {
-                 toast('Address and Occupation are required for Company Witness.', 'error');
-                 return;
+                toast('Address and Occupation are required for Company Witness.', 'error');
+                return;
               }
             }
           }
@@ -6408,7 +6515,7 @@
           wList.innerHTML = '';
 
           const witnesses = data.witness_signatures || [];
-          
+
           // Row 1: The External Witness
           const w1 = witnesses.find(w => w.witness_number === 1);
           const row1 = document.createElement('div');
@@ -6420,7 +6527,7 @@
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
               <span class="status ${w1 ? 'paid' : 'unpaid'}">${w1 ? 'SIGNED' : 'PENDING'}</span>
-              ${w1 && ['admin','lawyer'].includes(currentUserRole) ? `<button class="btn btn-danger btn-sm" onclick="confirmRemoveWitness('${w1.id}', 1)">Remove</button>` : ''}
+              ${w1 && ['admin', 'lawyer'].includes(currentUserRole) ? `<button class="btn btn-danger btn-sm" onclick="confirmRemoveWitness('${w1.id}', 1)">Remove</button>` : ''}
             </div>
           `;
           wList.appendChild(row1);
@@ -6722,7 +6829,7 @@
       document.getElementById(`tab-${tab}-editor`).classList.add('active');
       document.getElementById(`tab-${tab}-editor`).style.fontWeight = '600';
       document.getElementById(`tab-${tab}-editor`).style.color = 'inherit';
-      
+
       document.getElementById('cover-tab-container').style.display = tab === 'cover' ? 'block' : 'none';
       document.getElementById('contract-wordings-editor').style.display = tab === 'body' ? 'block' : 'none';
       document.getElementById('contract-exec-editor').style.display = tab === 'exec' ? 'block' : 'none';
@@ -6733,12 +6840,12 @@
       document.getElementById('wordings-loading').style.display = 'block';
       document.getElementById('wordings-content').style.display = 'none';
       openModal('editWordingsModal');
-      
+
       try {
         const res = await apiFetch(`/api/contracts/${currentInvoiceId}/custom-html`);
         const data = await res.json();
         document.getElementById('wordings-loading').style.display = 'none';
-        
+
         if (res.ok) {
           switchEditorTab('cover');
           document.getElementById('wordings-content').style.display = 'block';
@@ -6764,14 +6871,14 @@
       const lfName = document.getElementById('lawfirm-name-input').value;
       const lfAddr = document.getElementById('lawfirm-address-input').value;
       const btn = document.getElementById('btn-save-wordings');
-      
+
       btn.innerText = 'Saving...';
       btn.disabled = true;
-      
+
       try {
         const res = await apiFetch(`/api/contracts/${currentInvoiceId}/custom-html`, {
           method: 'PUT',
-          body: JSON.stringify({ 
+          body: JSON.stringify({
             html_content: htmlContent,
             cover_html: coverHtml,
             execution_html: execHtml,
@@ -6779,7 +6886,7 @@
             lawfirm_address: lfAddr || null
           })
         });
-        
+
         const data = await res.json();
         if (res.ok) {
           toast('Contract wordings saved successfully!', 'success');

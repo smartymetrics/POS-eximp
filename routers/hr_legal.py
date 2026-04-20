@@ -972,12 +972,18 @@ async def _send_matter_executed_email(matter_id: str, signing_token: str, signer
   .lh-contact a{{color:#C47D0A;text-decoration:none;}}
   .text-brand-gold{{color:#C47D0A;}}
   .lh-divider{{height:2px;background:#eee;margin:0 60px;}}
-  .body{{padding:28px 72px;flex:1;line-height:1.6;}}
+  .body{{padding:45px 72px 28px;flex:1;line-height:1.6;}}
   .body img{{max-width:100%;height:auto;}}
   .footer{{margin-top:auto;}}
   .footer-bars{{display:flex;height:12px;}}
   .fb{{flex:1;background:#000;}}.fg{{flex:1;background:#C47D0A;}}
   .body p {{ margin-bottom: 12pt; text-align: justify; min-height: 1.2em; }}
+  .body ol, .body ul {{ margin: 0 0 12pt 24pt; padding: 0; }}
+  .body li {{ margin-bottom: 4pt; }}
+  .body ol[type="a"], .body ol.lower-alpha {{ list-style-type: lower-alpha; }}
+  .body ol[type="A"], .body ol.upper-alpha {{ list-style-type: upper-alpha; }}
+  .body ol[type="i"], .body ol.lower-roman {{ list-style-type: lower-roman; }}
+  .body ol[type="I"], .body ol.upper-roman {{ list-style-type: upper-roman; }}
   .body p:empty::before {{ content: "\\00a0"; }}
   .body [data-indent="1"] {{ margin-left: 40px !important; }}
   .body [data-indent="2"] {{ margin-left: 80px !important; }}
@@ -1603,7 +1609,7 @@ async def export_matter_pdf(matter_id: str, token: str = None, request: Request 
   .header-bar-gold {{
     position: absolute; top: 0; right: 0;
     width: 40%; height: 30px;
-    background: var(--brand-gold);
+    background: #C47D0A;
   }}
   .letterhead-inner {{
     display: flex;
@@ -1641,6 +1647,11 @@ async def export_matter_pdf(matter_id: str, token: str = None, request: Request 
   .document-body p {{ margin-bottom: 8pt; }}
   .document-body ul {{ margin: 8pt 0 8pt 24pt; list-style: disc; }}
   .document-body ol {{ margin: 8pt 0 8pt 24pt; }}
+  .document-body ol[type="a"], .document-body ol.lower-alpha {{ list-style-type: lower-alpha; }}
+  .document-body ol[type="A"], .document-body ol.upper-alpha {{ list-style-type: upper-alpha; }}
+  .document-body ol[type="i"], .document-body ol.lower-roman {{ list-style-type: lower-roman; }}
+  .document-body ol[type="I"], .document-body ol.upper-roman {{ list-style-type: upper-roman; }}
+  .document-body li {{ margin-bottom: 4pt; }}
   .document-body table {{ width: 100%; border-collapse: collapse; margin: 12pt 0; }}
   .document-body td, .document-body th {{ border: 1px solid #ccc; padding: 6pt 8pt; font-size: 10pt; }}
   .document-body th {{ background: #f5f5f5; font-weight: 700; }}
