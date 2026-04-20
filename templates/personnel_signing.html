@@ -86,9 +86,9 @@
             padding: 0;
             margin-bottom: 10mm; 
         }
-        .header-bar-black { position: absolute; top: 0; left: 0; width: 60%; height: 40px; background: #000; border-bottom-right-radius: 40px; }
-        .header-bar-gold { position: absolute; top: 0; right: 0; width: 40%; height: 30px; background: var(--brand-gold); }
-        .letterhead-inner { display: flex; justify-content: space-between; align-items: center; padding: 45px 60px 20px; position: relative; z-index: 2; }
+        .header-bar-black { position: absolute; top: 0; left: 0; width: 60%; height: 40px; background: #000; border-bottom-right-radius: 40px; z-index: 2; }
+        .header-bar-gold { position: absolute; top: 0; right: 0; width: 70%; height: 30px; background: var(--brand-gold); z-index: 1; }
+        .letterhead-inner { display: flex; justify-content: space-between; align-items: center; padding: 45px 60px 20px; position: relative; z-index: 3; }
         .letterhead-divider { height: 2px; background: #eee; margin: 0 60px; }
         
         .letterhead img {
@@ -751,12 +751,12 @@
         }
 
         // ── LOAD SIGNING DETAILS ──
-        async function loadSigningDetails() {
             try {
                 const endpoint = IS_PREVIEW_MODE 
                     ? `${API_BASE}/preview/${PREVIEW_TOKEN}`
                     : `${API_BASE}/signing/${signingToken}/details`;
                 
+                console.log("Loading document from:", endpoint);
                 const res = await fetch(endpoint);
 
                 if (!res.ok) {
@@ -768,25 +768,38 @@
                 }
 
                 const data = await res.json();
-                const signingReq = IS_PREVIEW_MODE ? null : data;
-                const matter = IS_PREVIEW_MODE ? data : (data.legal_matters || {});
+                console.log("Document data received:", data);
+
+                // Unwrapping logic
+                // Preview endpoint returns matter directly. Signing details endpoint returns { matter:..., signatories:... } or a nested object.
+                let matter = null;
+                let signingReq = null;
+
+                if (IS_PREVIEW_MODE) {
+                    matter = data;
+                } else {
+                    signingReq = data;
+                    matter = data.matter || data.legal_matters || data;
+                }
 
                 requiresSigning = IS_PREVIEW_MODE ? false : (signingReq.requires_signing !== false);
 
                 if (!IS_PREVIEW_MODE) {
-                    document.getElementById('confirm-read').addEventListener('change', updateSigningUI);
+                    const confirmRead = document.getElementById('confirm-read');
+                    if (confirmRead) confirmRead.addEventListener('change', updateSigningUI);
                     updateSigningUI();
 
-                    document.getElementById('doc-title').textContent = signingReq.document_title || 'Untitled Document';
+                    document.getElementById('doc-title').textContent = (signingReq.document_title || matter.title) || 'Untitled Document';
                     document.getElementById('doc-date').textContent =
-                        signingReq.created_at
-                            ? new Date(signingReq.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+                        (signingReq.created_at || matter.created_at)
+                            ? new Date(signingReq.created_at || matter.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
                             : '--';
-                    document.getElementById('doc-status').textContent = signingReq.status || 'Pending';
+                    document.getElementById('doc-status').textContent = matter.status || 'Pending';
                 }
 
-                if (matter.content_html) {
-                    let documentHTML = matter.content_html;
+                const contentHtml = matter.content_html || matter.html;
+                if (contentHtml) {
+                    let documentHTML = contentHtml;
                     
                     // Replace placeholders with official graphics for preview/signing
                     const logoUrl = brandingAssets.firm_logo;
@@ -803,6 +816,8 @@
                                                .replace(/\{\{\s*stamp\s*\}\}/g, stampHTML);
                     
                     document.getElementById('document-content').innerHTML = documentHTML;
+                } else {
+                    document.getElementById('document-content').innerHTML = '<div style="text-align:center; padding:80px 0; color:#666;">Document content is empty or unavailable.</div>';
                 }
                 
                 if (matter.content_css) {
@@ -810,14 +825,20 @@
                     if (lh) lh.innerHTML = matter.content_css;
                 }
 
-                // Auto-fill name/email if dispatched to known person (future: from query params)
+                // Auto-fill name/email if dispatched to known person 
                 const params = new URLSearchParams(window.location.search);
-                if (params.get('name')) document.getElementById('signer-name').value = params.get('name');
-                if (params.get('email')) document.getElementById('signer-email').value = params.get('email');
+                if (params.get('name')) {
+                    const nameInput = document.getElementById('signer-name');
+                    if (nameInput) nameInput.value = params.get('name');
+                }
+                if (params.get('email')) {
+                    const emailInput = document.getElementById('signer-email');
+                    if (emailInput) emailInput.value = params.get('email');
+                }
 
             } catch (e) {
                 console.error('loadSigningDetails error:', e);
-                showStatus('Failed to load document. Please refresh and try again.', 'error');
+                showStatus('Failed to load document details. Please refresh.', 'error');
             }
         }
 

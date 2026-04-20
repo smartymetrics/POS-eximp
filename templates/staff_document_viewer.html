@@ -89,11 +89,11 @@
             width: 60%; height: 40px;
             background: #000;
             border-bottom-right-radius: 40px;
-            z-index: 1;
+            z-index: 2;
         }
         .header-bar-gold {
             position: absolute; top: 0; right: 0;
-            width: 40%; height: 30px;
+            width: 70%; height: 30px;
             background: var(--brand-gold);
             z-index: 1;
         }
@@ -103,7 +103,7 @@
             align-items: center;
             padding: 50px 60px 20px;
             position: relative;
-            z-index: 2;
+            z-index: 3;
         }
         .letterhead-contact {
             border-left: 2px solid #000;
@@ -251,6 +251,7 @@
             const errorEl    = document.getElementById('error');
             const contentEl  = document.getElementById('content');
             const titleEl    = document.getElementById('doc-title');
+            const token      = localStorage.getItem('ec_token');
 
             if (!matterId) {
                 loadingEl.classList.add('hidden');
@@ -259,15 +260,44 @@
             }
 
             try {
-                const res = await fetch(`${API_BASE}/staff/self/visible-matters/${matterId}`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                let matter = null;
+                console.log("Fetching matter:", matterId);
+
+                // Try admin endpoint first (for HR/Legal admins)
+                const adminRes = await fetch(`${API_BASE}/matters/${matterId}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
                 });
 
-                if (!res.ok) throw new Error('Access denied');
-                const matter = await res.json();
+                if (adminRes.ok) {
+                    const adminData = await adminRes.json();
+                    console.log("Admin API response:", adminData);
+                    // Admin endpoint returns { matter: {...}, collaborators: [...], history: [...] }
+                    matter = adminData.matter || adminData;
+                } else {
+                    console.log("Admin API failed, trying staff API...");
+                    // Fallback to staff visibility endpoint for regular employees
+                    const staffRes = await fetch(`${API_BASE}/staff/self/visible-matters/${matterId}`, {
+                        headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (!staffRes.ok) {
+                        const errData = await staffRes.json();
+                        throw new Error(errData.detail || 'Access denied');
+                    }
+                    matter = await staffRes.json();
+                    console.log("Staff API response:", matter);
+                }
 
+                if (!matter) throw new Error("Document data is null");
+
+                // Title and content unwrapping
                 titleEl.textContent = matter.title || 'Legal Document';
-                contentEl.innerHTML = matter.content_html || '<p style="color:#666;">No content available.</p>';
+                
+                const htmlContent = matter.content_html || matter.html || "";
+                if (htmlContent) {
+                    contentEl.innerHTML = htmlContent;
+                } else {
+                    contentEl.innerHTML = '<p style="color:#666; text-align:center; padding:100px 0;">No content available in this document.</p>';
+                }
 
                 loadingEl.classList.add('hidden');
                 canvasEl.classList.remove('hidden');

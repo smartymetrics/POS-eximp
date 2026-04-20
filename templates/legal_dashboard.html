@@ -1373,13 +1373,59 @@
                     <td class="px-6 py-4 text-xs text-gray-400">Admin</td>
                     <td class="px-6 py-4">
                         <div class="flex gap-2">
-                            <button onclick="window.location.href='/legal/view?id=${m.id}'" class="p-2 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20" title="View Document">👁️</button>
-                            <button onclick="window.location.href='/legal/advanced-editor?id=${m.id}'" class="p-2 bg-brand-gold/10 text-brand-gold rounded hover:bg-brand-gold/20" title="Open Editor">✏️</button>
-                            <button onclick="openAuditTrail('${m.id}')" class="p-2 bg-white/5 text-gray-400 rounded hover:bg-white/10" title="View Audit">📜</button>
+                            <button onclick="window.location.href='/legal/view?id=${m.id}'" class="p-2 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20 transition-all flex items-center justify-center w-8 h-8" title="View Document">👁️</button>
+                            ${m.status !== 'Executed' ? `
+                                <button onclick="window.location.href='/legal/advanced-editor?id=${m.id}'" class="p-2 bg-brand-gold/10 text-brand-gold rounded hover:bg-brand-gold/20 transition-all flex items-center justify-center w-8 h-8" title="Open Editor">✏️</button>
+                            ` : `
+                                <button onclick="copyPersonnelPreviewLink('${m.id}')" class="p-2 bg-purple-500/10 text-purple-400 rounded hover:bg-purple-500/20 transition-all flex items-center justify-center w-8 h-8" title="Share Preview Link">🔗</button>
+                            `}
+                            <button onclick="duplicateMatter('${m.id}')" class="p-2 bg-white/5 text-gray-400 rounded hover:bg-white/10 transition-all flex items-center justify-center w-8 h-8" title="Duplicate Matter">👯</button>
+                            <button onclick="openAuditTrail('${m.id}')" class="p-2 bg-white/5 text-gray-400 rounded hover:bg-white/10 transition-all flex items-center justify-center w-8 h-8" title="View Audit">📜</button>
                         </div>
                     </td>
                 </tr>
             `).join('');
+        }
+
+        async function copyPersonnelPreviewLink(matterId) {
+            try {
+                const res = await fetch(`${HR_LEGAL_API}/matters/${matterId}/preview-link`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                });
+                const data = await res.json();
+                const url = data.preview_url || data.link;
+                if (url) {
+                    const fullUrl = url.startsWith('http') ? url : `${window.location.origin}${url}`;
+                    await navigator.clipboard.writeText(fullUrl);
+                    alert('✅ Secure preview link copied to clipboard!\n\nThis link expires in 48 hours.');
+                } else {
+                    alert('Failed to generate link: ' + (data.detail || 'Unknown error'));
+                }
+            } catch (err) {
+                console.error('Sharing error:', err);
+                alert('Connection error while generating link.');
+            }
+        }
+
+        async function duplicateMatter(matterId) {
+            if (!confirm('Duplicate this matter? This will create a new Draft with identical content.')) return;
+            try {
+                const res = await fetch(`${HR_LEGAL_API}/matters/${matterId}/duplicate`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                });
+                const data = await res.json();
+                if (data.status === 'success') {
+                    alert('Matter duplicated successfully!');
+                    fetchPersonnelMatters(); // Refresh
+                } else {
+                    alert('Duplication failed: ' + (data.detail || 'Unknown error'));
+                }
+            } catch (err) {
+                console.error('Duplication error:', err);
+                alert('Connection error.');
+            }
         }
 
         async function fetchSummary() {

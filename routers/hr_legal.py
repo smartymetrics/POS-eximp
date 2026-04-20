@@ -868,6 +868,7 @@ async def submit_signature(signing_token: str, data: dict):
         update_data = {
             "status": "Executed",
             "signed_at": datetime.now().isoformat(),
+            "executed_at": datetime.now().isoformat(),
             "signed_by": signer_email,
             "staff_visible": True,
             "content_html": patched_html,
@@ -964,9 +965,9 @@ async def _send_matter_executed_email(matter_id: str, signing_token: str, signer
   body{{font-family:'Tinos', 'Times New Roman',serif;font-size:11pt;color:#000;background:white;margin:0;}}
   .page{{width:210mm;min-height:297mm;display:flex;flex-direction:column;}}
   .letterhead{{position:relative;}}
-  .header-bar-black{{position:absolute;top:0;left:0;width:60%;height:40px;background:#000;border-bottom-right-radius:40px;}}
-  .header-bar-gold{{position:absolute;top:0;right:0;width:40%;height:30px;background:#C47D0A;}}
-  .letterhead-inner{{display:flex;justify-content:space-between;align-items:center;padding:50px 60px 20px;position:relative;z-index:2;}}
+  .header-bar-black{{position:absolute;top:0;left:0;width:60%;height:40px;background:#000;border-bottom-right-radius:40px;z-index:2;}}
+  .header-bar-gold{{position:absolute;top:0;right:0;width:70%;height:30px;background:#C47D0A;z-index:1;}}
+  .letterhead-inner{{display:flex;justify-content:space-between;align-items:center;padding:50px 60px 20px;position:relative;z-index:3;}}
   .lh-contact{{border-left:2px solid #000;padding:4px 15px;font-size:9pt;line-height:1.5;color:#111;font-weight:700;font-variant-caps:all-small-caps;letter-spacing:0.05em;font-family:'Inter', sans-serif;}}
   .lh-contact a{{color:#C47D0A;text-decoration:none;}}
   .text-brand-gold{{color:#C47D0A;}}
@@ -1037,11 +1038,30 @@ async def acknowledge_document(signing_token: str, data: dict):
     if signing_req["status"] != "Pending":
         raise HTTPException(status_code=400, detail="Document already processed")
     
-    # Update signing request to "Acknowledged" status
+    # ── Resolve Recipient for Confirmation Email ──
+    signer_name = signing_req.get("signer_name")
+    signer_email = signing_req.get("signer_email")
+    
+    if not signer_email:
+        # Lookup from matter since it wasn't populated during dispatch
+        staff_id = matter.get("staff_id")
+        if staff_id:
+            staff_res = await db_execute(lambda: db.table("admins").select("full_name, email").eq("id", staff_id).execute())
+            if staff_res.data:
+                signer_name = staff_res.data[0].get("full_name")
+                signer_email = staff_res.data[0].get("email")
+        
+        if not signer_email:
+            signer_name = matter.get("external_party_name")
+            signer_email = matter.get("external_party_email")
+
+    # Update signing request with the resolved details for the audit record
     await db_execute(
         lambda: db.table("legal_signing_requests").update({
             "status": "Acknowledged",
             "acknowledged_at": datetime.now().isoformat(),
+            "signer_name": signer_name,
+            "signer_email": signer_email,
             "signature_metadata": {
                 "type": "acknowledgment",
                 "timestamp": data.get("timestamp"),
@@ -1049,77 +1069,70 @@ async def acknowledge_document(signing_token: str, data: dict):
             }
         }).eq("id", signing_req["id"]).execute()
     )
+
+    # ── Update matter status to Executed ──
+    branding = await get_branding_urls()
+    logo_url = branding.get("firm_logo")
+    stamp_url = branding.get("stamp_url")
+    signed_date_str = datetime.now().strftime("%d %B %Y, %H:%M")
     
-    # Update matter status to Executed
-    matter_res = await db_execute(
-        lambda: db.table("legal_matters").select("staff_id").eq("id", matter_id).execute()
+    seal_html = f"""<div class="legal-badge seal-badge" style="display:inline-flex;flex-direction:column;align-items:center;border:3px solid #C47D0A;border-radius:50%;width:110px;height:110px;justify-content:center;padding:8px;text-align:center;box-shadow:0 0 0 2px #C47D0A inset;line-height:1.1;background:rgba(196,125,10,0.05);color:#C47D0A;vertical-align:middle;margin:10px;"><img src="{logo_url}" style="height:40px;width:auto;margin-bottom:2px;opacity:0.9;"><span style="font-size:6.5pt;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;">OFFICIAL<br>CORPORATE SEAL</span></div>"""
+    
+    if stamp_url:
+        stamp_html = f"""<div class="legal-badge stamp-badge" style="display:inline-block;border:2px solid #C47D0A;padding:10px 20px;text-align:center;transform:rotate(-3deg);opacity:0.9;background:rgba(196,125,10,0.05);color:#C47D0A;vertical-align:middle;margin:10px;"><img src="{stamp_url}" style="height:36px;width:auto;display:block;margin:0 auto 4px;"><div style="font-size:10pt;font-weight:900;letter-spacing:0.15em;text-transform:uppercase;">AUTHORIZED</div><div style="font-size:8pt;color:#888;">{signed_date_str}</div></div>"""
+    else:
+        stamp_html = f"""<div class="legal-badge stamp-badge" style="display:inline-block;border:2px solid #C47D0A;padding:10px 20px;text-align:center;transform:rotate(-3deg);opacity:0.9;background:rgba(196,125,10,0.05);color:#C47D0A;vertical-align:middle;margin:10px;"><div style="font-size:10pt;font-weight:900;letter-spacing:0.15em;text-transform:uppercase;">AUTHORIZED</div><div style="font-size:8pt;font-weight:700;color:#333;text-transform:uppercase;">Eximp &amp; Cloves Infrastructure Ltd.</div><div style="font-size:8pt;color:#888;">{signed_date_str}</div></div>"""
+
+    raw_html = matter.get("content_html") or ""
+    patched_html = raw_html.replace("{{ seal }}", seal_html).replace("{{ stamp }}", stamp_html)
+
+    update_data = {
+        "status": "Executed",
+        "signed_at": datetime.now().isoformat(),
+        "executed_at": datetime.now().isoformat(),
+        "signed_by": "acknowledged",
+        "content_html": patched_html,
+        "staff_visible": True,
+        "signature_metadata": {
+            "type": "acknowledgment",
+            "acknowledged_at": datetime.now().isoformat()
+        }
+    }
+    
+    await db_execute(
+        lambda: db.table("legal_matters").update(update_data).eq("id", matter_id).execute()
     )
     
-    if matter_res.data:
-        matter = matter_res.data[0]
-        
-        # ── Resolve placeholders in existing content_html (without sig_block) ──
-        branding = await get_branding_urls()
-        logo_url = branding.get("firm_logo")
-        stamp_url = branding.get("stamp_url")
-        signed_at = datetime.now().strftime("%d %B %Y, %H:%M")
-        
-        seal_html = f"""<div class="legal-badge seal-badge" style="display:inline-flex;flex-direction:column;align-items:center;border:3px solid #C47D0A;border-radius:50%;width:110px;height:110px;justify-content:center;padding:8px;text-align:center;box-shadow:0 0 0 2px #C47D0A inset;line-height:1.1;background:rgba(196,125,10,0.05);color:#C47D0A;vertical-align:middle;margin:10px;"><img src="{logo_url}" style="height:40px;width:auto;margin-bottom:2px;opacity:0.9;"><span style="font-size:6.5pt;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;">OFFICIAL<br>CORPORATE SEAL</span></div>"""
-        
-        if stamp_url:
-            stamp_html = f"""<div class="legal-badge stamp-badge" style="display:inline-block;border:2px solid #C47D0A;padding:10px 20px;text-align:center;transform:rotate(-3deg);opacity:0.9;background:rgba(196,125,10,0.05);color:#C47D0A;vertical-align:middle;margin:10px;"><img src="{stamp_url}" style="height:36px;width:auto;display:block;margin:0 auto 4px;"><div style="font-size:10pt;font-weight:900;letter-spacing:0.15em;text-transform:uppercase;">AUTHORIZED</div><div style="font-size:8pt;color:#888;">{signed_at}</div></div>"""
-        else:
-            stamp_html = f"""<div class="legal-badge stamp-badge" style="display:inline-block;border:2px solid #C47D0A;padding:10px 20px;text-align:center;transform:rotate(-3deg);opacity:0.9;background:rgba(196,125,10,0.05);color:#C47D0A;vertical-align:middle;margin:10px;"><div style="font-size:10pt;font-weight:900;letter-spacing:0.15em;text-transform:uppercase;">AUTHORIZED</div><div style="font-size:8pt;font-weight:700;color:#333;text-transform:uppercase;">Eximp &amp; Cloves Infrastructure Ltd.</div><div style="font-size:8pt;color:#888;">{signed_at}</div></div>"""
+    # Auto-link to HR Staff Profile if staff_id exists
+    if matter.get("staff_id"):
+        try:
+            await db_execute(
+                lambda: db.table("staff_documents").insert({
+                    "staff_id": matter["staff_id"],
+                    "document_type": "Legal Contract - Acknowledged",
+                    "document_link": f"/api/hr-legal/matters/{matter_id}/export",
+                    "uploaded_at": datetime.now().isoformat()
+                }).execute()
+            )
+        except:
+            pass  # Document link may already exist
 
-        raw_html = matter.get("content_html") or ""
-        patched_html = raw_html.replace("{{ seal }}", seal_html).replace("{{ stamp }}", stamp_html)
-
-        update_data = {
-            "status": "Executed",
-            "signed_at": datetime.now().isoformat(),
-            "signed_by": "acknowledged",
-            "content_html": patched_html,
-            "signature_metadata": {
-                "type": "acknowledgment",
-                "acknowledged_at": datetime.now().isoformat()
-            }
-        }
-        
-        await db_execute(
-            lambda: db.table("legal_matters").update(update_data).eq("id", matter_id).execute()
-        )
-        
-        # Auto-link to HR Staff Profile if staff_id exists
-        if matter.get("staff_id"):
-            try:
-                await db_execute(
-                    lambda: db.table("staff_documents").insert({
-                        "staff_id": matter["staff_id"],
-                        "document_type": "Legal Contract - Acknowledged",
-                        "document_link": f"/api/hr-legal/matters/{matter_id}/export",
-                        "uploaded_at": datetime.now().isoformat()
-                    }).execute()
-                )
-            except:
-                pass  # Document link may already exist
-    
     # Audit trail
     await db_execute(lambda: db.table("legal_matter_history").insert({
         "matter_id": matter_id,
         "action": "Document Acknowledged",
         "performed_by": None,
-        "description": f"Contract acknowledged by staff member ({signing_req.get('signer_email', 'unknown email')})"
+        "description": f"Contract acknowledged by {signer_name or 'staff member'} ({signer_email or 'unknown email'})"
     }).execute())
     
     # ── Fire post-acknowledgment confirmation email (non-blocking) ──
-    # Note: staff member data is pre-populated in signing_req or can be fetched if needed
-    # Usually we use signing_req['signer_name'] and signing_req['signer_email']
-    await _send_matter_executed_email(
-        matter_id=matter_id,
-        signing_token=signing_token,
-        signer_name=signing_req.get("signer_name", "Staff Member"),
-        signer_email=signing_req.get("signer_email", "")
-    )
+    if signer_email:
+        await _send_matter_executed_email(
+            matter_id=matter_id,
+            signing_token=signing_token,
+            signer_name=signer_name or "Staff Member",
+            signer_email=signer_email
+        )
 
     return {
         "status": "success",
@@ -1335,6 +1348,55 @@ async def get_staff_visible_matter(matter_id: str, current_admin=Depends(verify_
     
     return matter
 
+
+@router.post("/matters/{matter_id}/duplicate")
+async def duplicate_matter(matter_id: str, current_admin=Depends(verify_token)):
+    """
+    Creates a new matter by copying content from an existing one.
+    Resets status to 'Draft' and clears signatures.
+    """
+    db = get_db()
+    
+    # Fetch source
+    source_res = await db_execute(lambda: db.table("legal_matters").select("*").eq("id", matter_id).execute())
+    if not source_res.data:
+        raise HTTPException(status_code=404, detail="Source matter not found")
+        
+    source = source_res.data[0]
+    
+    # Build new matter (resetting execution fields)
+    new_matter = {
+        "title": f"Copy of {source.get('title', 'Untitled')}",
+        "category": source.get("category"),
+        "staff_id": source.get("staff_id"),
+        "content_html": source.get("content_html"),
+        "content_css": source.get("content_css"),
+        "meta_data": source.get("meta_data") or {},
+        "status": "Draft",
+        "staff_visible": False,
+        "executed_at": None,
+        "signed_at": None,
+        "signed_by": None,
+        "signature_metadata": None,
+        "drafter_id": current_admin["sub"]
+    }
+    
+    # Insert
+    res = await db_execute(lambda: db.table("legal_matters").insert(new_matter).execute())
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to duplicate matter")
+        
+    new_id = res.data[0]["id"]
+    
+    # Log history
+    await db_execute(lambda: db.table("legal_matter_history").insert({
+        "matter_id": new_id,
+        "action": "Matter Created",
+        "performed_by": current_admin["sub"],
+        "description": f"Duplicated from matter {matter_id[:8]}"
+    }).execute())
+    
+    return {"status": "success", "new_id": new_id}
 
 @router.post("/matters/{matter_id}/preview-link")
 async def generate_preview_link(matter_id: str, current_admin=Depends(verify_token)):
