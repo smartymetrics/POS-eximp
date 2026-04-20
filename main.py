@@ -193,7 +193,13 @@ async def legal_advanced_editor_page(request: Request, id: str = None):
 @app.get("/signing/{signing_token}", response_class=HTMLResponse)
 async def signing_page(request: Request, signing_token: str):
     """Render the digital signing page."""
-    return templates.TemplateResponse("personnel_signing.html", {"request": request, "signing_token": signing_token})
+    return templates.TemplateResponse("personnel_signing.html", {"request": request, "signing_token": signing_token, "is_preview": False})
+
+
+@app.get("/preview/{preview_token}", response_class=HTMLResponse)
+async def preview_page(request: Request, preview_token: str):
+    """Render the digital signing page in Read-Only Preview Mode."""
+    return templates.TemplateResponse("personnel_signing.html", {"request": request, "signing_token": None, "preview_token": preview_token, "is_preview": True})
 
 
 @app.get("/legal/my-matters", response_class=HTMLResponse)

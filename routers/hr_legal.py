@@ -1,7 +1,8 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, UploadFile, File
 from fastapi.responses import Response
 import os
-from database import get_db, db_execute
+from database import get_db, db_execute, SUPABASE_URL
+import os
 from routers.auth import verify_token, resolve_admin_token
 from datetime import datetime, timezone
 import json
@@ -10,6 +11,51 @@ import pdf_service
 
 router = APIRouter()
 APP_BASE_URL = os.getenv("APP_BASE_URL", "https://app.eximps-cloves.com")
+
+# ── HELPER: LEGAL BRANDING ──
+async def get_branding_urls():
+    """Fetches high-fidelity Seal and Stamp URLs from the Signature Vault (company_signatures table)."""
+    db = get_db()
+    res = await db_execute(lambda: db.table("company_signatures").select("*").eq("is_active", True).execute())
+    
+    branding = {
+        "seal_url": None, 
+        "stamp_url": None, 
+        "auth_signature": None, 
+        "auth_name": "Managing Director",
+        "firm_logo": f"{APP_BASE_URL}/static/img/logo_firm.png"
+    }
+
+    if res.data:
+        for sig in res.data:
+            role = sig.get("role", "").lower()
+            url = sig.get("signature_base64")
+            if not url: continue
+            
+            # Company stamp/seal
+            if role == "stamp" or role == "seal":
+                branding["stamp_url" if role == "stamp" else "seal_url"] = url
+            
+            # Authorized Signatory
+            if role == "director" or role == "md" or (role == "ceo" and not branding["auth_signature"]):
+                branding["auth_signature"] = url
+                branding["auth_name"] = "Managing Director"
+            elif role == "lawyer" and not branding["auth_signature"]:
+                branding["auth_signature"] = url
+                branding["auth_name"] = "Legal Counsel"
+    
+    # ── SMART DISCOVERY FALLBACK ──
+    # If URLs are missing but we have an authority signature, try to find seal/stamp in the same folder
+    if branding["auth_signature"] and (not branding["seal_url"] or not branding["stamp_url"]):
+        base_path = branding["auth_signature"].rsplit('/', 1)[0]
+        if not branding["seal_url"]:
+            branding["seal_url"] = f"{base_path}/seal.png"
+        if not branding["stamp_url"]:
+            branding["stamp_url"] = f"{base_path}/stamp.png"
+
+    return branding
+    
+    return branding
 
 # ── HELPER: PERMISSION CHECK ──
 async def check_matter_access(matter_id: str, current_admin: dict, required_level: str = "View"):
@@ -56,6 +102,11 @@ async def check_matter_access(matter_id: str, current_admin: dict, required_leve
     raise HTTPException(status_code=403, detail="You do not have permission to access this legal matter")
 
 # ── ENDPOINTS ──
+
+@router.get("/branding")
+async def get_legal_branding_api(current_admin=Depends(verify_token)):
+    """Fetch official branding assets for the Personnel Editor."""
+    return await get_branding_urls()
 
 @router.get("/collaborator-candidates")
 async def get_collaborator_candidates(current_admin=Depends(verify_token)):
@@ -220,6 +271,8 @@ async def save_matter_content(matter_id: str, data: dict, current_admin=Depends(
         "content_html": data.get("html"),
         "updated_at": datetime.now().isoformat()
     }
+    if "css" in data:
+        update_data["content_css"] = data.get("css")
     
     await db_execute(lambda: db.table("legal_matters").update(update_data).eq("id", matter_id).execute())
     
@@ -762,7 +815,14 @@ async def submit_signature(signing_token: str, data: dict):
         sig_image    = data.get("signature_image", "")
         signed_at    = datetime.now().strftime("%d %B %Y, %H:%M")
 
-        # ── Build the executed signature block ──
+        # ── Resolve placeholders in existing content_html ──
+        branding = await get_branding_urls()
+        logo_url = branding.get("firm_logo")
+        stamp_url = branding.get("stamp_url")
+        auth_sig = branding.get("auth_signature")
+        auth_name = branding.get("auth_name", "Authorized Signatory")
+
+        # ── Update sig_block with actual Authority Signature ──
         sig_block = f"""
 <div style="margin-top: 60px; border-top: 2px solid #C47D0A; padding-top: 20px; font-family: 'Times New Roman', serif;">
   <p style="font-size: 9pt; font-weight: 700; color: #C47D0A; text-transform: uppercase; letter-spacing: 0.15em; margin-bottom: 16px;">
@@ -780,18 +840,25 @@ async def submit_signature(signing_token: str, data: dict):
       <td style="width: 50%; padding-left: 40px; vertical-align: top; border-left: 1px solid #eee;">
         <p style="font-size: 8pt; font-weight: 700; color: #333; text-transform: uppercase; letter-spacing: 0.08em; margin-bottom: 6px;">Employer / Authorized Representative</p>
         <div style="height: 60px; border-bottom: 1px solid #333; margin-bottom: 6px;">
-          <img src="{APP_BASE_URL}/static/img/logo_firm.png" style="height: 48px; width: auto; opacity: 0.7;" onerror="">
+          {f"<img src='{auth_sig}' style='max-height: 60px; width: auto; opacity: 1;'>" if auth_sig else f"<img src='{logo_url}' style='height: 48px; width: auto; opacity: 0.7;'>"}
         </div>
         <p style="font-size: 9pt; font-weight: 700; margin: 0;">Eximp &amp; Cloves Infrastructure Limited</p>
+        <p style="font-size: 8pt; color: #666; font-weight: 600; margin: 2px 0 0;">{auth_name}</p>
         <p style="font-size: 8pt; color: #888; margin: 4px 0 0;">Date: {signed_at}</p>
       </td>
     </tr>
   </table>
 </div>"""
 
-        # ── Resolve placeholders in existing content_html ──
-        seal_html = """<div style="display:inline-flex;flex-direction:column;align-items:center;border:3px solid #C47D0A;border-radius:50%;width:110px;height:110px;justify-content:center;padding:8px;text-align:center;box-shadow:0 0 0 2px #C47D0A inset;"><img src="{base}/static/img/logo_firm.png" style="height:44px;width:auto;"><span style="font-size:6pt;font-weight:900;letter-spacing:0.1em;color:#C47D0A;text-transform:uppercase;line-height:1.2;">EXIMP &amp; CLOVES<br>SEAL</span></div>""".format(base=APP_BASE_URL)
-        stamp_html = f"""<div style="display:inline-block;border:2px solid #C47D0A;padding:8px 18px;text-align:center;transform:rotate(-8deg);opacity:0.85;"><div style="font-size:8pt;font-weight:900;letter-spacing:0.15em;color:#C47D0A;text-transform:uppercase;">AUTHORIZED</div><div style="font-size:7pt;font-weight:700;color:#333;text-transform:uppercase;">Eximp &amp; Cloves Infrastructure Ltd.</div><div style="font-size:7pt;color:#888;">{signed_at}</div></div>"""
+        # Seal is dynamic CSS (Elite badge)
+
+        # Seal is dynamic CSS (Elite badge)
+        seal_html = f"""<div class="legal-badge seal-badge" style="display:inline-flex;flex-direction:column;align-items:center;border:3px solid #C47D0A;border-radius:50%;width:110px;height:110px;justify-content:center;padding:8px;text-align:center;box-shadow:0 0 0 2px #C47D0A inset;line-height:1.1;background:rgba(196,125,10,0.05);color:#C47D0A;vertical-align:middle;margin:10px;"><img src="{logo_url}" style="height:40px;width:auto;margin-bottom:2px;opacity:0.9;"><span style="font-size:6.5pt;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;">OFFICIAL<br>CORPORATE SEAL</span></div>"""
+        
+        if stamp_url:
+            stamp_html = f"""<div class="legal-badge stamp-badge" style="display:inline-block;border:2px solid #C47D0A;padding:10px 20px;text-align:center;transform:rotate(-3deg);opacity:0.9;background:rgba(196,125,10,0.05);color:#C47D0A;vertical-align:middle;margin:10px;"><img src="{stamp_url}" style="height:36px;width:auto;display:block;margin:0 auto 4px;"><div style="font-size:10pt;font-weight:900;letter-spacing:0.15em;text-transform:uppercase;">AUTHORIZED</div><div style="font-size:8pt;color:#888;">{signed_at}</div></div>"""
+        else:
+            stamp_html = f"""<div class="legal-badge stamp-badge" style="display:inline-block;border:2px solid #C47D0A;padding:10px 20px;text-align:center;transform:rotate(-3deg);opacity:0.9;background:rgba(196,125,10,0.05);color:#C47D0A;vertical-align:middle;margin:10px;"><div style="font-size:10pt;font-weight:900;letter-spacing:0.15em;text-transform:uppercase;">AUTHORIZED</div><div style="font-size:8pt;font-weight:700;color:#333;text-transform:uppercase;">Eximp &amp; Cloves Infrastructure Ltd.</div><div style="font-size:8pt;color:#888;">{signed_at}</div></div>"""
 
         raw_html = matter.get("content_html") or ""
         raw_html = raw_html.replace("{{ seal }}", seal_html).replace("{{ stamp }}", stamp_html)
@@ -844,7 +911,7 @@ async def submit_signature(signing_token: str, data: dict):
 
         # Fetch the final executed matter for email
         exec_matter = await db_execute(
-            lambda: db.table("legal_matters").select("title, content_html").eq("id", matter_id).execute()
+            lambda: db.table("legal_matters").select("title, content_html, content_css").eq("id", matter_id).execute()
         )
         exec_audit = await db_execute(
             lambda: db.table("legal_matter_history").select("*").eq("matter_id", matter_id).order("created_at", desc=False).execute()
@@ -852,20 +919,35 @@ async def submit_signature(signing_token: str, data: dict):
 
         doc_title = exec_matter.data[0].get("title", "Legal Document") if exec_matter.data else "Legal Document"
         body_html = exec_matter.data[0].get("content_html", "") if exec_matter.data else ""
+        contact_html = exec_matter.data[0].get("content_css") if exec_matter.data else ""
+        if not contact_html or contact_html.strip() == "":
+            contact_html = """<div>phone: +234 912 6864 383</div>
+        <div>web: <a href="https://eximps-cloves.com" class="text-brand-gold">https://eximps-cloves.com</a></div>
+        <div>email: <a href="mailto:admin@eximps-cloves.com" class="text-brand-gold">admin@eximps-cloves.com</a></div>"""
+
+        import os
+        base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+        logo_path = os.path.join(base_dir, "static", "img", "logo_firm.png")
+        logo_uri = "file:///" + logo_path.replace("\\", "/")
+        
+        # Ensure weasyprint can resolve the signature block logos without failing due to CORS or local SSL limits
+        body_html = body_html.replace(f"{APP_BASE_URL}/static/img/logo_firm.png", logo_uri)
         audit_entries = exec_audit.data or []
 
         # Build full PDF
         pdf_full_html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
+  @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Tinos:ital,wght@0,400;0,700;1,400;1,700&display=swap');
   @page {{size:A4;margin:0;}}
-  body{{font-family:'Times New Roman',serif;font-size:11pt;color:#000;background:white;margin:0;}}
+  body{{font-family:'Tinos', 'Times New Roman',serif;font-size:11pt;color:#000;background:white;margin:0;}}
   .page{{width:210mm;min-height:297mm;display:flex;flex-direction:column;}}
   .letterhead{{position:relative;}}
   .header-bar-black{{position:absolute;top:0;left:0;width:60%;height:40px;background:#000;border-bottom-right-radius:40px;}}
   .header-bar-gold{{position:absolute;top:0;right:0;width:40%;height:30px;background:#C47D0A;}}
   .letterhead-inner{{display:flex;justify-content:space-between;align-items:center;padding:50px 60px 20px;position:relative;z-index:2;}}
-  .lh-contact{{border-left:2px solid #000;padding:4px 15px;font-size:9pt;line-height:1.7;font-weight:700;font-variant:small-caps;}}
+  .lh-contact{{border-left:2px solid #000;padding:4px 15px;font-size:9pt;line-height:1.5;color:#111;font-weight:700;font-variant-caps:all-small-caps;letter-spacing:0.05em;font-family:'Inter', sans-serif;}}
   .lh-contact a{{color:#C47D0A;text-decoration:none;}}
+  .text-brand-gold{{color:#C47D0A;}}
   .lh-divider{{height:2px;background:#eee;margin:0 60px;}}
   .body{{padding:28px 72px;flex:1;line-height:1.6;}}
   .body img{{max-width:100%;height:auto;}}
@@ -877,11 +959,9 @@ async def submit_signature(signing_token: str, data: dict):
   <div class="letterhead">
     <div class="header-bar-black"></div><div class="header-bar-gold"></div>
     <div class="letterhead-inner">
-      <img src="{APP_BASE_URL}/static/img/logo_firm.png" style="height:70px;width:auto;">
+      <img src="{logo_uri}" style="height:70px;width:auto;">
       <div class="lh-contact">
-        <div>57B, Isaac John Street, Yaba, Lagos</div>
-        <div>Web: <a href="https://eximps-cloves.com">https://eximps-cloves.com</a></div>
-        <div>Email: <a href="mailto:admin@eximps-cloves.com">admin@eximps-cloves.com</a></div>
+        {contact_html}
       </div>
     </div>
     <div class="lh-divider"></div>
@@ -954,10 +1034,28 @@ async def acknowledge_document(signing_token: str, data: dict):
     
     if matter_res.data:
         matter = matter_res.data[0]
+        
+        # ── Resolve placeholders in existing content_html (without sig_block) ──
+        branding = await get_branding_urls()
+        logo_url = branding.get("firm_logo")
+        stamp_url = branding.get("stamp_url")
+        signed_at = datetime.now().strftime("%d %B %Y, %H:%M")
+        
+        seal_html = f"""<div class="legal-badge seal-badge" style="display:inline-flex;flex-direction:column;align-items:center;border:3px solid #C47D0A;border-radius:50%;width:110px;height:110px;justify-content:center;padding:8px;text-align:center;box-shadow:0 0 0 2px #C47D0A inset;line-height:1.1;background:rgba(196,125,10,0.05);color:#C47D0A;vertical-align:middle;margin:10px;"><img src="{logo_url}" style="height:40px;width:auto;margin-bottom:2px;opacity:0.9;"><span style="font-size:6.5pt;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;">OFFICIAL<br>CORPORATE SEAL</span></div>"""
+        
+        if stamp_url:
+            stamp_html = f"""<div class="legal-badge stamp-badge" style="display:inline-block;border:2px solid #C47D0A;padding:10px 20px;text-align:center;transform:rotate(-3deg);opacity:0.9;background:rgba(196,125,10,0.05);color:#C47D0A;vertical-align:middle;margin:10px;"><img src="{stamp_url}" style="height:36px;width:auto;display:block;margin:0 auto 4px;"><div style="font-size:10pt;font-weight:900;letter-spacing:0.15em;text-transform:uppercase;">AUTHORIZED</div><div style="font-size:8pt;color:#888;">{signed_at}</div></div>"""
+        else:
+            stamp_html = f"""<div class="legal-badge stamp-badge" style="display:inline-block;border:2px solid #C47D0A;padding:10px 20px;text-align:center;transform:rotate(-3deg);opacity:0.9;background:rgba(196,125,10,0.05);color:#C47D0A;vertical-align:middle;margin:10px;"><div style="font-size:10pt;font-weight:900;letter-spacing:0.15em;text-transform:uppercase;">AUTHORIZED</div><div style="font-size:8pt;font-weight:700;color:#333;text-transform:uppercase;">Eximp &amp; Cloves Infrastructure Ltd.</div><div style="font-size:8pt;color:#888;">{signed_at}</div></div>"""
+
+        raw_html = matter.get("content_html") or ""
+        patched_html = raw_html.replace("{{ seal }}", seal_html).replace("{{ stamp }}", stamp_html)
+
         update_data = {
             "status": "Executed",
             "signed_at": datetime.now().isoformat(),
             "signed_by": "acknowledged",
+            "content_html": patched_html,
             "signature_metadata": {
                 "type": "acknowledgment",
                 "acknowledged_at": datetime.now().isoformat()
@@ -1205,6 +1303,68 @@ async def get_staff_visible_matter(matter_id: str, current_admin=Depends(verify_
     return matter
 
 
+@router.post("/matters/{matter_id}/preview-link")
+async def generate_preview_link(matter_id: str, current_admin=Depends(verify_token)):
+    """Generates a 48-hour valid JWT token for sharing a read-only preview."""
+    import jwt as _jwt
+    from routers.auth import SECRET_KEY, ALGORITHM
+    from datetime import timedelta
+    
+    payload = {
+        "sub": "preview",
+        "matter_id": str(matter_id),
+        "exp": datetime.now(timezone.utc) + timedelta(hours=48)
+    }
+    preview_token = _jwt.encode(payload, SECRET_KEY, algorithm=ALGORITHM)
+    
+    # Log the action
+    db = get_db()
+    await db_execute(lambda: db.table("legal_matter_history").insert({
+        "matter_id": matter_id,
+        "action": "Preview Link Generated",
+        "performed_by": current_admin.get("sub"),
+        "description": "Generated a 48-hour secure preview link."
+    }).execute())
+    
+    return {"preview_token": preview_token, "preview_url": f"/preview/{preview_token}"}
+
+
+@router.get("/preview/{token}")
+async def get_preview_data(token: str):
+    """Decodes the preview token and returns the matter payload if valid."""
+    import jwt as _jwt
+    from routers.auth import SECRET_KEY, ALGORITHM
+    db = get_db()
+    
+    try:
+        payload = _jwt.decode(token, SECRET_KEY, algorithms=[ALGORITHM])
+        matter_id = payload.get("matter_id")
+        if not matter_id:
+            raise HTTPException(status_code=400, detail="Invalid token payload")
+    except _jwt.ExpiredSignatureError:
+        raise HTTPException(status_code=403, detail="Preview link has expired. Please request a new one.")
+    except Exception:
+        raise HTTPException(status_code=400, detail="Invalid or corrupt preview link.")
+        
+    matter_res = await db_execute(
+        lambda: db.table("legal_matters").select("*, legal_matter_signatories(*)").eq("id", matter_id).execute()
+    )
+    if not matter_res.data:
+        raise HTTPException(status_code=404, detail="Document cannot be found.")
+        
+    matter = matter_res.data[0]
+    
+    # Audit trail (Guest View)
+    await db_execute(lambda: db.table("legal_matter_history").insert({
+        "matter_id": matter_id,
+        "action": "Preview Link Accessed",
+        "performed_by": None,
+        "description": "Guest accessed document via 48H Preview Link."
+    }).execute())
+    
+    return matter
+
+
 @router.get("/matters/{matter_id}/export")
 async def export_matter_pdf(matter_id: str, token: str = None, request: Request = None):
     """
@@ -1215,7 +1375,7 @@ async def export_matter_pdf(matter_id: str, token: str = None, request: Request 
       3. ?token=<signing_token>       — raw UUID signing token (external signer download)
     """
     db = get_db()
-    matter_query = db.table("legal_matters").select("id, title, content_html, staff_id")
+    matter_query = db.table("legal_matters").select("id, title, content_html, content_css, staff_id")
 
     # ── Strategy 1: JWT via header or query param ──
     current_admin = None
@@ -1270,6 +1430,36 @@ async def export_matter_pdf(matter_id: str, token: str = None, request: Request 
     matter = res.data[0]
     title = matter.get("title", "Legal Document")
     body_html = matter.get("content_html", "<p>No content.</p>") or "<p>No content.</p>"
+    contact_html = matter.get("content_css")
+    if not contact_html or contact_html.strip() == "":
+        contact_html = """<div>phone: +234 912 6864 383</div>
+        <div>web: <a href="https://eximps-cloves.com" class="text-brand-gold">https://eximps-cloves.com</a></div>
+        <div>email: <a href="mailto:admin@eximps-cloves.com" class="text-brand-gold">admin@eximps-cloves.com</a></div>"""
+
+    import os
+    base_dir = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
+    logo_path = os.path.join(base_dir, "static", "img", "logo_firm.png")
+    logo_uri = "file:///" + logo_path.replace("\\", "/")
+    
+    # Ensure weasyprint can resolve the signature block logos without failing due to CORS or local SSL limits
+    body_html = body_html.replace(f"{APP_BASE_URL}/static/img/logo_firm.png", logo_uri)
+
+    # ── Handle branding placeholders (for Preview/Draft PDFs) ──
+    # If the document hasn't been executed yet, we show the "Elite" placeholders in the PDF export too.
+    if "{{ seal }}" in body_html or "{{ stamp }}" in body_html:
+        branding = await get_branding_urls()
+        logo_url = logo_uri # Safe local URI for WeasyPrint
+        stamp_url = branding.get("stamp_url")
+        
+        # Seal is dynamic CSS (Elite badge)
+        seal_html = f"""<div style="display:inline-flex;flex-direction:column;align-items:center;border:3px solid #C47D0A;border-radius:50%;width:110px;height:110px;justify-content:center;padding:8px;text-align:center;box-shadow:0 0 0 2px #C47D0A inset;line-height:1.1;color:#C47D0A;background:rgba(196,125,10,0.02);vertical-align:middle;margin:10px;"><img src="{logo_url}" style="height:40px;width:auto;margin-bottom:2px;opacity:0.8;"><div style="font-size:6.5pt;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;">OFFICIAL SEAL<br>DRAFT</div></div>"""
+        
+        if stamp_url:
+            stamp_html = f"""<div style="display:inline-block;border:2px solid #C47D0A;padding:10px 20px;text-align:center;transform:rotate(-3deg);color:#C47D0A;background:rgba(196,125,10,0.02);vertical-align:middle;margin:10px;"><img src="{stamp_url}" style="height:36px;width:auto;display:block;margin:0 auto 4px;opacity:0.8;"><div style="font-size:10pt;font-weight:900;letter-spacing:0.15em;text-transform:uppercase;">AUTHORIZED</div></div>"""
+        else:
+            stamp_html = f"""<div style="display:inline-block;border:2px solid #C47D0A;padding:10px 20px;text-align:center;transform:rotate(-3deg);color:#C47D0A;background:rgba(196,125,10,0.02);vertical-align:middle;margin:10px;"><div style="font-size:10pt;font-weight:900;letter-spacing:0.15em;text-transform:uppercase;">AUTHORIZED</div><div style="font-size:8pt;font-weight:700;color:#333;text-transform:uppercase;">Eximp &amp; Cloves Infrastructure Ltd.</div></div>"""
+            
+        body_html = body_html.replace("{{ seal }}", seal_html).replace("{{ stamp }}", stamp_html)
 
     # Build full branded HTML document for WeasyPrint
     full_html = f"""<!DOCTYPE html>
@@ -1297,6 +1487,8 @@ async def export_matter_pdf(matter_id: str, token: str = None, request: Request 
     display: flex;
     flex-direction: column;
     position: relative;
+    padding: 0;
+    overflow: hidden;
   }}
 
   /* ── LETTERHEAD ── */
@@ -1316,23 +1508,24 @@ async def export_matter_pdf(matter_id: str, token: str = None, request: Request 
     display: flex;
     justify-content: space-between;
     align-items: center;
-    padding: 50px 60px 20px;
+    padding: 45px 60px 20px;
     position: relative;
     z-index: 2;
   }}
   .logo-img {{ height: 70px; width: auto; }}
-  .letterhead-contact {{
+  .lh-contact {{
     border-left: 2px solid #000;
     padding: 4px 15px;
     font-size: 9pt;
-    line-height: 1.7;
+    line-height: 1.5;
     color: #111;
     font-weight: 700;
-    font-variant: small-caps;
+    font-variant-caps: all-small-caps;
     letter-spacing: 0.05em;
     font-family: 'Inter', sans-serif;
   }}
-  .letterhead-contact a {{ color: var(--brand-gold); text-decoration: none; }}
+  .lh-contact a {{ color: var(--brand-gold); text-decoration: none; }}
+  .text-brand-gold {{ color: var(--brand-gold); }}
   .letterhead-divider {{ height: 2px; background: #eee; margin: 0 60px; }}
 
   /* ── BODY ── */
@@ -1341,9 +1534,9 @@ async def export_matter_pdf(matter_id: str, token: str = None, request: Request 
     flex: 1;
     line-height: 1.6;
   }}
-  .document-body h1 {{ font-size: 18pt; font-weight: 800; margin: 20pt 0 10pt; }}
-  .document-body h2 {{ font-size: 14pt; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin: 16pt 0 8pt; }}
-  .document-body h3 {{ font-size: 12pt; font-weight: 600; margin: 14pt 0 6pt; }}
+  .document-body h1 {{ font-size: 18pt; font-family: 'Inter', sans-serif; font-weight: 800; margin: 20pt 0 10pt; }}
+  .document-body h2 {{ font-size: 14pt; font-family: 'Inter', sans-serif; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin: 16pt 0 8pt; }}
+  .document-body h3 {{ font-size: 12pt; font-family: 'Inter', sans-serif; font-weight: 600; margin: 14pt 0 6pt; }}
   .document-body p {{ margin-bottom: 8pt; }}
   .document-body ul {{ margin: 8pt 0 8pt 24pt; list-style: disc; }}
   .document-body ol {{ margin: 8pt 0 8pt 24pt; }}
@@ -1366,11 +1559,9 @@ async def export_matter_pdf(matter_id: str, token: str = None, request: Request 
     <div class="header-bar-black"></div>
     <div class="header-bar-gold"></div>
     <div class="letterhead-inner">
-      <img class="logo-img" src="{APP_BASE_URL}/static/img/logo_firm.png" alt="Eximp &amp; Cloves">
+      <img class="logo-img" src="{logo_uri}" alt="Eximp &amp; Cloves">
       <div class="lh-contact">
-        <div>57B, Isaac John Street, Yaba, Lagos</div>
-        <div>Web: <a href="https://eximps-cloves.com">https://eximps-cloves.com</a></div>
-        <div>Email: <a href="mailto:admin@eximps-cloves.com">admin@eximps-cloves.com</a></div>
+        {contact_html}
       </div>
     </div>
     <div class="letterhead-divider"></div>

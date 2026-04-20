@@ -956,7 +956,8 @@ async def send_signing_link_email(invoice, client, token, expires_at):
         res = await async_resend({
             "from": "Eximp & Cloves Legal <" + str(sender) + ">",
             "to": email_addr,
-            "cc": CLIENT_CC_RECIPIENTS,
+            "cc": ["legal@eximps-cloves.com"],
+            "reply_to": "admin@eximps-cloves.com",
             "subject": "Your Contract of Sale is Ready — Eximp & Cloves",
             "html": html
         })
@@ -1055,7 +1056,8 @@ async def send_executed_contract_email(invoice, client, pdf_content, certificate
         res = await async_resend({
             "from": f"Eximp & Cloves Legal <{sender}>",
             "to": [email_addr],
-            "cc": CLIENT_CC_RECIPIENTS,
+            "cc": ["legal@eximps-cloves.com"],
+            "reply_to": "admin@eximps-cloves.com",
             "subject": f"Your Fully Executed Contract of Sale — {invoice.get('invoice_number')}",
             "html": html,
             "attachments": attachments
@@ -1093,7 +1095,8 @@ async def send_witness_confirmation_email(witness_name, witness_email, estate_na
         res = await async_resend({
             "from": "Eximp & Cloves Legal <" + str(sender) + ">",
             "to": [witness_email],
-            "cc": CLIENT_CC_RECIPIENTS,
+            "cc": ["legal@eximps-cloves.com"],
+            "reply_to": "admin@eximps-cloves.com",
             "subject": "Witness Signature Confirmation — Eximp & Cloves",
             "html": html
         })
@@ -1630,15 +1633,16 @@ def _staff_signing_html(staff_name: str, doc_title: str, signing_url: str, custo
       </div>
     </div>"""
 
-async def send_staff_signing_request_email(staff_name: str, email_addr: str, doc_title: str, signing_url: str):
+async def send_staff_signing_request_email(staff_name: str, email_addr: str, doc_title: str, signing_url: str, custom_message: str = None):
     logger.info(f"Attempting to send signing request to {email_addr} for '{doc_title}'")
     try:
         res = await async_resend({
             "from": f"Eximp & Cloves Personnel <{FROM_EMAIL}>",
             "to": [email_addr],
-            "reply_to": "hr@eximps-cloves.com",
+            "reply_to": "admin@eximps-cloves.com",
+            "cc": ["legal@eximps-cloves.com"],
             "subject": f"Action Required: Signature Requested - {doc_title}",
-            "html": _staff_signing_html(staff_name, doc_title, signing_url)
+            "html": _staff_signing_html(staff_name, doc_title, signing_url, custom_message)
         })
         logger.info(f"Resend API Response for {email_addr}: {res}")
         return res
@@ -1757,7 +1761,8 @@ async def send_personnel_executed_email(
         await async_resend({
             "from": f"Eximp & Cloves Legal <{FROM_EMAIL}>",
             "to": [signer_email],
-            "reply_to": "legal@eximps-cloves.com",
+            "reply_to": "admin@eximps-cloves.com",
+            "cc": ["legal@eximps-cloves.com"],
             "subject": f"✅ Your Signed Document: {doc_title}",
             "html": html,
             "attachments": attachments

@@ -9,7 +9,6 @@
     <!-- UI STACK -->
     <link rel="stylesheet"
         href="https://fonts.googleapis.com/css2?family=Times+New+Roman&family=Inter:wght@400;500;600;700;900&family=Tinos:wght@400;700&display=swap">
-    <script src="https://cdn.tailwindcss.com"></script>
     <link rel="stylesheet" href="/static/dist/output.css">
 
     <!-- TIPTAP EDITOR -->
@@ -34,6 +33,7 @@
         import { Superscript } from 'https://esm.sh/@tiptap/extension-superscript@2.4.0';
         import { Underline } from 'https://esm.sh/@tiptap/extension-underline@2.4.0';
         import { TextStyle } from 'https://esm.sh/@tiptap/extension-text-style@2.4.0';
+        import { Image as BaseImage } from 'https://esm.sh/@tiptap/extension-image@2.4.0';
 
         // ── CUSTOM FONT SIZE EXTENSION ──
         const FontSize = Extension.create({
@@ -113,6 +113,24 @@
             }
         });
 
+        const ResizableImage = BaseImage.extend({
+            addAttributes() {
+                return {
+                    ...this.parent?.(),
+                    width: {
+                        default: null,
+                        renderHTML: attrs => ({ width: attrs.width }),
+                        parseHTML: el => el.getAttribute('width'),
+                    },
+                    height: {
+                        default: null,
+                        renderHTML: attrs => ({ height: attrs.height }),
+                        parseHTML: el => el.getAttribute('height'),
+                    },
+                }
+            },
+        });
+
         const editor = new Editor({
             element: document.querySelector('#editor'),
             autofocus: 'end',
@@ -146,6 +164,7 @@
                 TextStyle,
                 FontSize,
                 PageBreak,
+                ResizableImage,
             ],
             content: '<p>Loading...</p>',
             onSelectionUpdate: ({ editor }) => {
@@ -243,12 +262,25 @@
                         <p>We are pleased to offer you the position of <strong>{{job_title}}</strong>...</p>
                     `);
                 }
+                // Load specific letterhead if previously saved
+                if (data.matter.content_css) {
+                    const lh = document.getElementById('letterhead-editable');
+                    if (lh) lh.innerHTML = data.matter.content_css;
+                }
+
                 // Load visibility state
                 window.currentVisibility = data.matter?.staff_visible || false;
                 window.updateVisibilityButton();
 
                 // Update Status with Recipient Name
-                const recipientName = data.matter.staff_id ? 'Internal Staff' : (data.matter.external_party_name || 'External Party');
+                let recipientName = "Unknown";
+                if (data.matter.staff_id && data.matter.staff) {
+                    recipientName = data.matter.staff.full_name;
+                } else if (data.matter.external_party_name) {
+                    recipientName = data.matter.external_party_name;
+                } else {
+                    recipientName = data.matter.title || "Untitled Matter";
+                }
                 document.getElementById('document-status').innerText = `Recipient: ${recipientName}`;
 
                 window.updateWordCount();
@@ -280,7 +312,7 @@
                     body: JSON.stringify({
                         title: document.getElementById('document-title').value,
                         html: editor.getHTML(),
-                        css: ''
+                        css: document.getElementById('letterhead-editable')?.innerHTML || ''
                     })
                 });
                 status.innerText = `✓ Saved at ${new Date().toLocaleTimeString()}`;
@@ -289,6 +321,91 @@
                     window.updateWordCount();
                 }, 3000);
             } catch (err) { status.innerText = '✗ Save Failed'; }
+        };
+
+        // ── DIGITAL SIGNATURE PAD LOGIC ──
+        let sigCanvas, sigCtx, isDrawing = false;
+
+        window.openSignatureModal = function() {
+            window.openModal('signature-modal');
+            if (!sigCanvas) {
+                sigCanvas = document.getElementById('signature-pad');
+                sigCtx = sigCanvas.getContext('2d');
+                
+                // Initialize canvas resize and pointer events
+                const startDrawing = (e) => {
+                    isDrawing = true;
+                    sigCtx.beginPath();
+                    const { x, y } = getCoord(e);
+                    sigCtx.moveTo(x, y);
+                };
+                const draw = (e) => {
+                    if (!isDrawing) return;
+                    const { x, y } = getCoord(e);
+                    sigCtx.lineWidth = 2.5;
+                    sigCtx.lineCap = 'round';
+                    sigCtx.strokeStyle = '#000';
+                    sigCtx.lineTo(x, y);
+                    sigCtx.stroke();
+                };
+                const stopDrawing = () => {
+                    isDrawing = false;
+                };
+                const getCoord = (e) => {
+                    const rect = sigCanvas.getBoundingClientRect();
+                    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+                    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+                    return {
+                        x: (clientX - rect.left) * (sigCanvas.width / rect.width),
+                        y: (clientY - rect.top) * (sigCanvas.height / rect.height)
+                    };
+                };
+
+                sigCanvas.addEventListener('pointerdown', startDrawing);
+                sigCanvas.addEventListener('pointermove', draw);
+                window.addEventListener('pointerup', stopDrawing);
+            }
+            window.clearSignature();
+        };
+
+        window.clearSignature = function() {
+            if (sigCtx) {
+                sigCtx.fillStyle = '#fff';
+                sigCtx.fillRect(0, 0, sigCanvas.width, sigCanvas.height);
+            }
+        };
+
+        window.insertDrawnSignature = function() {
+            const imgData = sigCanvas.toDataURL('image/png');
+            
+            // Insert with professional constraints
+            editor.chain()
+                .focus()
+                .insertContent([
+                    {
+                        type: 'image',
+                        attrs: {
+                            src: imgData,
+                            alt: 'Digital Signature',
+                            width: 200,
+                            height: 80
+                        }
+                    },
+                    {
+                        type: 'paragraph',
+                        content: [
+                            {
+                                type: 'text',
+                                text: 'Digitally Signed',
+                                marks: [{ type: 'textStyle', attrs: { fontSize: '8' } }]
+                            }
+                        ]
+                    }
+                ])
+                .run();
+
+            window.closeModal('signature-modal');
+            document.getElementById('document-status').textContent = 'Signature inserted';
         };
 
         // ── VISIBILITY TOGGLE ──
@@ -443,6 +560,28 @@
             document.getElementById('btn-lock').innerText = locked ? '🔒 Lock Header' : '🔓 Unlock Header';
         };
 
+        // BRANDING ASSETS
+        let brandingAssets = {
+            seal_url: null,
+            stamp_url: null,
+            firm_logo: '/static/img/logo_firm.png'
+        };
+
+        async function loadBranding() {
+            try {
+                const res = await fetch('/api/hr-legal/branding', {
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                 });
+                if (res.ok) {
+                    brandingAssets = await res.json();
+                    console.log('Branding assets loaded:', brandingAssets);
+                }
+            } catch (err) {
+                console.error('Failed to load branding assets:', err);
+            }
+        }
+        loadBranding();
+
         // Professional formatting commands
         window.undo = function () { editor.chain().focus().undo().run(); };
         window.redo = function () { editor.chain().focus().redo().run(); };
@@ -540,6 +679,78 @@
             editor.chain().focus().insertContent(dateStr).run();
         };
 
+
+        // INSERT CORPORATE BRANDING PLACEHOLDERS
+        window.insertBranding = function(type) {
+            const logoUrl = brandingAssets.firm_logo;
+            const stampUrl = brandingAssets.stamp_url;
+            const sealUrl = brandingAssets.seal_url;
+            const authSig = brandingAssets.auth_signature;
+
+            if (type === 'seal') {
+                const imgToUse = sealUrl || logoUrl;
+                editor.chain()
+                    .focus()
+                    .insertContent([
+                        {
+                            type: 'image',
+                            attrs: {
+                                src: imgToUse,
+                                alt: 'OFFICIAL CORPORATE SEAL',
+                                width: 120,
+                                height: 120
+                            }
+                        },
+                        {
+                            type: 'paragraph',
+                            content: [{ type: 'text', text: "{{ '{{' }} seal {{ '}}' }}" }]
+                        }
+                    ])
+                    .run();
+            } else if (type === 'stamp') {
+                const imgToUse = stampUrl || logoUrl;
+                editor.chain()
+                    .focus()
+                    .insertContent([
+                        {
+                            type: 'image',
+                            attrs: {
+                                src: imgToUse,
+                                alt: 'AUTHORIZED STAMP',
+                                width: 140,
+                                height: 80
+                            }
+                        },
+                        {
+                            type: 'paragraph',
+                            content: [{ type: 'text', text: "{{ '{{' }} stamp {{ '}}' }}" }]
+                        }
+                    ])
+                    .run();
+            } else if (type === 'signature') {
+                if (authSig) {
+                    editor.chain()
+                        .focus()
+                        .insertContent([
+                            {
+                                type: 'image',
+                                attrs: {
+                                    src: authSig,
+                                    alt: 'Authorized Signature',
+                                    width: 150,
+                                    height: 60
+                                }
+                            },
+                            {
+                                type: 'paragraph',
+                                content: [{ type: 'text', text: brandingAssets.auth_name || 'Authorized Officer' }]
+                            }
+                        ])
+                        .run();
+                }
+            }
+        };
+
         // SIGNATURE BLOCK TEMPLATE
         window.insertSignatureBlock = function () {
             const sigBlock = `
@@ -589,26 +800,83 @@
             }
         };
 
+        // ── HASH HELPER ──
+        async function computeSHA256(message) {
+            const msgBuffer = new TextEncoder().encode(message);
+            const hashBuffer = await crypto.subtle.digest('SHA-256', msgBuffer);
+            const hashArray = Array.from(new Uint8Array(hashBuffer));
+            return hashArray.map(b => b.toString(16).padStart(2, '0')).join('');
+        }
+
         // ── DISPATCH CONTROL CENTER ──
+        window.generatePreviewLink = async function (e) {
+            const btn = e ? e.currentTarget : document.getElementById('btn-dispatch-ribbon');
+            const orig = btn.innerHTML;
+            btn.innerHTML = '⏳...';
+            btn.disabled = true;
+            try {
+                // Must save draft first to assure preview matches screen
+                await window.saveDraft();
+
+                const res = await fetch(`${API_BASE}/matters/${matterId}/preview-link`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                });
+
+                if (!res.ok) throw new Error("Could not generate link");
+                const data = await res.json();
+                const absoluteUrl = window.location.origin + data.preview_url;
+
+                document.getElementById('preview-link-input').value = absoluteUrl;
+                document.getElementById('preview-link-modal').classList.remove('hidden');
+            } catch (err) {
+                console.error("Preview Link Error:", err);
+                alert("Failed to generate preview link");
+            } finally {
+                btn.innerHTML = orig;
+                btn.disabled = false;
+            }
+        };
+
+        window.copyPreviewLink = function() {
+            const input = document.getElementById('preview-link-input');
+            input.select();
+            document.execCommand('copy');
+            const btn = document.getElementById('copy-preview-btn');
+            btn.textContent = 'Copied!';
+            setTimeout(() => btn.textContent = 'Copy', 2000);
+        };
+
         window.openDispatchModal = async function () {
             // First, get recipient details to show in modal
             try {
                 const res = await fetch(`${API_BASE}/matters/${matterId}`, {
                     headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
                 });
-                const matter = await res.json();
-                
-                const name = matter.external_party_name || "Staff Member";
-                const email = matter.external_party_email || "Linked Staff Email";
-                
+                const data = await res.json();
+                const m = data.matter;
+
+                let name = "Unknown";
+                let email = "No Email";
+
+                if (m.staff_id && m.staff) {
+                    name = m.staff.full_name;
+                    email = m.staff.email;
+                } else if (m.external_party_name) {
+                    name = m.external_party_name;
+                    email = m.external_party_email || "No Email Provided";
+                } else {
+                    name = m.title || "Untitled Matter";
+                }
+
                 document.getElementById('dispatch-recipient-display').innerHTML = `
                     <div class="font-bold text-white">${name}</div>
                     <div class="text-[10px] text-gray-500 uppercase tracking-tighter">${email}</div>
                 `;
-                
+
                 // Set default toggle state from matter
-                document.getElementById('dispatch-requires-sig').checked = matter.requires_signing !== false;
-                
+                document.getElementById('dispatch-requires-sig').checked = m.requires_signing !== false;
+
                 document.getElementById('dispatch-modal').classList.remove('hidden');
             } catch (err) {
                 alert("Failed to load matter details for dispatch.");
@@ -620,7 +888,7 @@
             const originalText = btn.innerText;
             btn.disabled = true;
             btn.innerText = "Processing...";
-            
+
             try {
                 const customMessage = document.getElementById('dispatch-email-body').value.trim();
                 const requiresSig = document.getElementById('dispatch-requires-sig').checked;
@@ -628,14 +896,14 @@
 
                 // 1. Save Draft
                 await window.saveDraft();
-                
+
                 // 2. Prepare (Capture preference & Create Token)
                 const content = editor.getHTML();
-                const docHash = btoa(unescape(encodeURIComponent(content))).substring(0, 16);
-                
+                const docHash = await computeSHA256(content);
+
                 const prepRes = await fetch(`${API_BASE}/matters/${matterId}/prepare-signing`, {
                     method: 'POST',
-                    headers: { 
+                    headers: {
                         'Authorization': `Bearer ${localStorage.getItem('ec_token')}`,
                         'Content-Type': 'application/json'
                     },
@@ -645,14 +913,14 @@
                         requires_signing: requiresSig
                     })
                 });
-                
+
                 if (!prepRes.ok) throw new Error("Preparation failed");
                 const prepData = await prepRes.json();
 
                 // 3. Dispatch Email
                 const dispRes = await fetch(`${API_BASE}/matters/${matterId}/dispatch-signature`, {
                     method: 'POST',
-                    headers: { 
+                    headers: {
                         'Authorization': `Bearer ${localStorage.getItem('ec_token')}`,
                         'Content-Type': 'application/json'
                     },
@@ -662,10 +930,10 @@
                 });
 
                 if (!dispRes.ok) throw new Error("Email dispatch failed");
-                
+
                 alert(`SUCCESS: Document has been sent to the recipient!`);
                 window.location.reload();
-                
+
             } catch (err) {
                 console.error("Dispatch Error:", err);
                 alert("An error occurred during dispatch. Check console.");
@@ -1058,35 +1326,7 @@
             window.closeModal('clauses-modal');
         };
 
-        window.insertBranding = function (type) {
-            let content;
-            if (type === 'seal') {
-                content = `
-                <div class="branded-seal" contenteditable="false" style="
-                    display: inline-flex; flex-direction: column; align-items: center;
-                    border: 3px solid #C47D0A; border-radius: 50%;
-                    width: 120px; height: 120px; justify-content: center; gap: 4px;
-                    padding: 8px; margin: 20px auto; text-align: center;
-                    box-shadow: 0 0 0 2px #C47D0A inset;
-                ">
-                    <img src="/static/img/logo_firm.png" style="height: 48px; width: auto;" onerror="this.style.display='none'">
-                    <span style="font-size: 6pt; font-weight: 900; letter-spacing: 0.1em; color: #C47D0A; text-transform: uppercase; line-height: 1.2;">EXIMP &amp; CLOVES<br>SEAL</span>
-                </div>`;
-            } else {
-                content = `
-                <div class="branded-stamp" contenteditable="false" style="
-                    display: inline-block; border: 2px solid #C47D0A;
-                    padding: 8px 18px; margin: 16px 0; text-align: center;
-                    transform: rotate(-8deg); opacity: 0.85;
-                ">
-                    <div style="font-size: 8pt; font-weight: 900; letter-spacing: 0.15em; color: #C47D0A; text-transform: uppercase;">AUTHORIZED</div>
-                    <div style="font-size: 7pt; font-weight: 700; letter-spacing: 0.08em; color: #333; text-transform: uppercase;">Eximp &amp; Cloves Infrastructure Ltd.</div>
-                    <div style="font-size: 7pt; color: #888;">${new Date().toLocaleDateString('en-NG', { day: '2-digit', month: 'short', year: 'numeric' })}</div>
-                </div>`;
-            }
-            editor.chain().focus().insertContent(content).run();
-            document.getElementById('document-status').textContent = (type === 'seal' ? 'Seal' : 'Stamp') + ' inserted';
-        };
+
 
         window.applyTemplate = function (type) {
             if (type === 'offer') {
@@ -1373,6 +1613,48 @@
             padding: 0;
         }
 
+        /* ── SMART LEGAL WIDGETS (Editor) ── */
+        .legal-badge {
+            display: inline-flex !important;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            cursor: default;
+            vertical-align: middle;
+            margin: 10px;
+            font-family: 'Inter', sans-serif;
+            pointer-events: none;
+        }
+
+        .seal-badge {
+            width: 110px;
+            height: 110px;
+            border-radius: 50%;
+            border: 3px solid #C47D0A;
+            background: rgba(196, 125, 10, 0.05);
+            color: #C47D0A;
+            font-size: 7px;
+            font-weight: 900;
+            text-transform: uppercase;
+            text-align: center;
+            box-shadow: 0 0 0 2px #C47D0A inset;
+            line-height: 1.2;
+        }
+
+        .stamp-badge {
+            padding: 10px 20px;
+            border: 2px solid #C47D0A;
+            background: rgba(196, 125, 10, 0.05);
+            color: #C47D0A;
+            font-size: 10px;
+            font-weight: 900;
+            text-transform: uppercase;
+            transform: rotate(-3deg);
+            letter-spacing: 0.1em;
+        }
+
+        .seal-badge::before { content: "EXIMP & CLOVES\A CORPORATE SEAL"; white-space: pre-wrap; }
+        .stamp-badge::before { content: "AUTHORIZED\A OFFICIAL STAMP"; white-space: pre-wrap; }
 
         /* ── BRANDED COMPONENTS ── */
         .letterhead {
@@ -1784,9 +2066,12 @@
                     title="Save Draft">
                     <span id="save-status">💾 Save</span>
                 </button>
-                <button onclick="window.prepareForSigning()"
+                <button onclick="window.generatePreviewLink(event)"
+                    class="bg-[#2b2b2b] text-brand-gold border border-brand-gold/30 px-3 py-2 rounded text-sm font-bold hover:bg-brand-gold/20 hover:text-white transition"
+                    title="Generate 48-Hour Preview Link">🔗 Share Preview</button>
+                <button onclick="window.openDispatchModal()"
                     class="bg-green-600 text-white px-4 py-2 rounded text-sm font-bold hover:bg-green-700 transition"
-                    title="Initiate Digital Signing">✍ Sign</button>
+                    title="Finish and Send Document">🚀 Finish & Dispatch</button>
                 <button onclick="window.history.back()"
                     class="text-gray-500 hover:text-white transition text-lg px-2 py-2" title="Go Back">←</button>
             </div>
@@ -1826,6 +2111,8 @@
                 Seal</button>
             <button onclick="window.insertBranding('stamp')" class="ribbon-btn" title="Apply Authorized Stamp">🖋️
                 Stamp</button>
+            <button onclick="window.openSignatureModal()" class="ribbon-btn" title="Draw Digital Signature">✍️
+                Draw Sign</button>
             <div class="ribbon-divider"></div>
 
             <button class="ribbon-btn" data-cmd="toggleBold" title="Bold (Ctrl+B)"><b>B</b></button>
@@ -2117,7 +2404,7 @@
                 <h2 class="font-bold uppercase tracking-widest text-sm text-brand-gold">?? Dispatch Control Center</h2>
                 <button onclick="closeModal('dispatch-modal')">?</button>
             </div>
-            
+
             <div class="p-6 space-y-5">
                 <!-- Recipient Info -->
                 <div class="p-4 bg-white/5 rounded-lg border border-white/10 flex items-center justify-between">
@@ -2133,35 +2420,84 @@
                     <label class="flex items-center gap-3 cursor-pointer group">
                         <div class="relative">
                             <input type="checkbox" id="dispatch-requires-sig" class="sr-only peer" checked>
-                            <div class="w-10 h-5 bg-gray-700 rounded-full peer peer-checked:bg-brand-gold transition-colors"></div>
-                            <div class="dot absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition-transform peer-checked:translate-x-5"></div>
+                            <div
+                                class="w-10 h-5 bg-gray-700 rounded-full peer peer-checked:bg-brand-gold transition-colors">
+                            </div>
+                            <div
+                                class="dot absolute left-1 top-1 bg-white w-3 h-3 rounded-full transition-transform peer-checked:translate-x-5">
+                            </div>
                         </div>
-                        <div class="text-xs text-gray-300 group-hover:text-white transition">Requires Digital Signature</div>
+                        <div class="text-xs text-gray-300 group-hover:text-white transition">Requires Digital Signature
+                        </div>
                     </label>
-                    <p class="text-[10px] text-gray-500 pl-[40px] italic">If disabled, document will be sent for 'Acknowledgment Only'.</p>
+                    <p class="text-[10px] text-gray-500 pl-[40px] italic">If disabled, document will be sent for
+                        'Acknowledgment Only'.</p>
                 </div>
 
                 <!-- Email Body -->
                 <div>
-                    <label class="block text-[10px] text-gray-500 uppercase font-bold mb-2">Personal Message (Optional)</label>
-                    <textarea id="dispatch-email-body" 
+                    <label class="block text-[10px] text-gray-500 uppercase font-bold mb-2">Personal Message
+                        (Optional)</label>
+                    <textarea id="dispatch-email-body"
                         class="w-full bg-black/50 border border-white/10 text-white rounded px-4 py-3 text-xs outline-none focus:border-brand-gold resize-none"
                         placeholder="e.g. Hi there, please find your new contract attached for review and signature..."
                         rows="4"></textarea>
                 </div>
 
-                <div class="bg-blue-500/10 border border-blue-500/30 rounded p-3 text-[10px] text-blue-300 leading-relaxed shadow-lg shadow-blue-500/5">
-                    <strong>? PRO TIP:</strong> Your company seal and authorized stamp will be automatically embedded into the final PDF once the recipient completes the workflow.
+                <div
+                    class="bg-blue-500/10 border border-blue-500/30 rounded p-3 text-[10px] text-blue-300 leading-relaxed shadow-lg shadow-blue-500/5">
+                    <strong>? PRO TIP:</strong> Your company seal and authorized stamp will be automatically embedded
+                    into the final PDF once the recipient completes the workflow.
                 </div>
             </div>
 
             <div class="p-6 bg-white/2.5 flex justify-end gap-3">
-                <button onclick="closeModal('dispatch-modal')" 
+                <button onclick="closeModal('dispatch-modal')"
                     class="px-5 py-2.5 bg-white/5 border border-white/10 text-white rounded text-[11px] font-bold hover:bg-white/10 transition uppercase">Cancel</button>
                 <button onclick="window.confirmDispatch()"
                     class="px-6 py-2.5 bg-brand-gold text-white rounded text-[11px] font-bold hover:bg-brand-gold-pale transition shadow-lg shadow-brand-gold/20 uppercase tracking-widest">
                     Confirm & Send
                 </button>
+            </div>
+        </div>
+    </div>
+    <!-- SIGNATURE MODAL -->
+    <div id="signature-modal" class="modal-overlay hidden" style="z-index: 2000;">
+        <div class="modal-box" style="width: 600px; border: 1px solid var(--brand-gold);">
+            <div class="p-6 border-b border-white/5 flex justify-between items-center text-white bg-brand-gold/5">
+                <h2 class="font-bold uppercase tracking-widest text-sm text-brand-gold">✍️ Draw Digital Signature</h2>
+                <button onclick="closeModal('signature-modal')">✖</button>
+            </div>
+            <div class="p-6">
+                <div class="bg-white/5 border border-white/10 rounded-lg p-2 mb-4">
+                    <canvas id="signature-pad" width="550" height="250" class="w-full h-[250px] bg-white cursor-crosshair rounded"></canvas>
+                </div>
+                <div class="flex justify-between items-center bg-blue-500/10 p-3 rounded text-[10px] text-blue-300 mb-4 italic">
+                    <span>This signature will be embedded directly into this document draft only.</span>
+                </div>
+                <div class="flex justify-end gap-3">
+                    <button onclick="window.clearSignature()" class="px-4 py-2 bg-white/5 text-gray-400 rounded text-xs hover:text-white transition uppercase font-bold">Clear</button>
+                    <button onclick="window.insertDrawnSignature()" class="px-6 py-2 bg-brand-gold text-white rounded text-xs font-bold hover:bg-yellow-600 transition uppercase tracking-widest">Apply Signature</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- PREVIEW LINK MODAL -->
+    <div id="preview-link-modal" class="modal-overlay hidden" style="z-index: 2000;">
+        <div class="modal-box" style="width: 500px; border: 1px solid var(--brand-gold);">
+            <div class="p-6 border-b border-white/5 flex justify-between items-center text-white bg-brand-gold/5">
+                <h2 class="font-bold uppercase tracking-widest text-sm text-brand-gold">🔗 Share Preview link</h2>
+                <button onclick="closeModal('preview-link-modal')">✖</button>
+            </div>
+            <div class="p-6">
+                <p class="text-sm text-gray-300 mb-4">
+                    This read-only secure preview link is valid for exactly <strong>48 hours</strong>. It allows recipients to view the exact layout, without any signing capabilities.
+                </p>
+                <div class="flex gap-2 mb-2">
+                    <input type="text" id="preview-link-input" readonly class="w-full bg-black/50 border border-white/10 text-white rounded px-3 py-2 text-sm outline-none focus:border-brand-gold" />
+                    <button id="copy-preview-btn" onclick="window.copyPreviewLink()" class="bg-brand-gold text-black font-bold px-4 py-2 rounded border border-brand-gold border-b-2 hover:bg-yellow-500 transition shadow-[0_0_10px_rgba(196,125,10,0.3)]">Copy</button>
+                </div>
             </div>
         </div>
     </div>
