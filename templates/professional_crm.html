@@ -68,6 +68,47 @@
             to { transform: rotate(360deg); }
         }
 
+        /* --- SKELETON & SHIMMER ANIMATIONS --- */
+        @keyframes shimmer {
+            0% { background-position: -468px 0; }
+            100% { background-position: 468px 0; }
+        }
+
+        .skeleton {
+            background: #252525;
+            background-image: linear-gradient(to right, #252525 0%, #333333 20%, #252525 40%, #252525 100%);
+            background-repeat: no-repeat;
+            background-size: 800px 104px;
+            display: inline-block;
+            position: relative;
+            animation: shimmer 1.5s linear infinite forwards;
+            border-radius: 4px;
+        }
+
+        .skl-card { width: 100%; height: 120px; margin-bottom: 12px; border-radius: 12px; }
+        .skl-text { height: 14px; margin-bottom: 8px; border-radius: 4px; }
+        .skl-sh { width: 40%; }
+        .skl-md { width: 70%; }
+        .skl-lg { width: 90%; }
+        .skl-avatar { width: 32px; height: 32px; border-radius: 50%; }
+        .skl-table-row { height: 60px; width: 100%; display: block; margin-bottom: 4px; }
+        .skl-chart { width: 100%; height: 300px; border-radius: 12px; }
+
+        @keyframes fadeInUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+
+        .animate-fade-in {
+            animation: fadeInUp 0.4s ease forwards;
+        }
+
+        .stagger-1 { animation-delay: 0.05s; }
+        .stagger-2 { animation-delay: 0.1s; }
+        .stagger-3 { animation-delay: 0.15s; }
+        .stagger-4 { animation-delay: 0.2s; }
+        .stagger-5 { animation-delay: 0.25s; }
+
         .sidebar {
             width: 280px;
             height: 100vh;
@@ -1418,7 +1459,7 @@
         const adminData = JSON.parse(localStorage.getItem('admin') || '{}');
         const adminId = adminData.id || "";
         const adminName = adminData.name || "Admin";
-        const isAdminUser = (adminData.role || '').toLowerCase().includes('admin') || (adminData.role || '').toLowerCase().includes('operations');
+        const isAdminUser = (adminData.role || '').toLowerCase().includes('admin') || (adminData.role || '').toLowerCase().includes('operations') || (adminData.role || '').toLowerCase().includes('customer_support');
         
         // --- ROLE BASED UI RESTRICTIONS ---
         function applyUIPermissions() {
@@ -1426,7 +1467,7 @@
             const roleStr = (admin.role || 'staff').toLowerCase();
             const roles = roleStr.split(',').map(r => r.trim());
             
-            const isPrivileged = roles.some(r => ['admin', 'operations', 'super_admin'].includes(r));
+            const isPrivileged = roles.some(r => ['admin', 'operations', 'super_admin', 'customer_support'].includes(r));
             const isRestricted = roles.some(r => ['sales', 'staff'].includes(r)) && !isPrivileged;
             
             // Sales Reps & Staff are restricted
@@ -1445,6 +1486,45 @@
         }
         
         document.addEventListener('DOMContentLoaded', applyUIPermissions);
+        
+        // --- SKELETON RENDERER ---
+        function renderSkeletons(containerId, type, count = 5) {
+            const container = document.getElementById(containerId);
+            if (!container) return;
+            
+            let html = '';
+            if (type === 'table-row') {
+                for (let i = 0; i < count; i++) {
+                    html += `
+                        <tr style="border-bottom: 1px solid #222;">
+                            <td style="padding: 16px;"><div class="skeleton" style="width: 80px; height: 10px;"></div></td>
+                            <td style="padding: 16px;">
+                                <div style="display: flex; align-items: center; gap: 12px;">
+                                    <div class="skeleton skl-avatar"></div>
+                                    <div style="flex:1">
+                                        <div class="skeleton skl-md skl-text"></div>
+                                        <div class="skeleton skl-sh skl-text"></div>
+                                    </div>
+                                </div>
+                            </td>
+                            <td style="padding: 16px;"><div class="skeleton skl-lg skl-text"></div></td>
+                            <td style="padding: 16px;"><div class="skeleton skl-md skl-text"></div></td>
+                            <td style="padding: 16px; text-align: right;"><div class="skeleton skl-sh skl-text" style="display:inline-block"></div></td>
+                            <td style="padding: 16px; text-align: center;"><div class="skeleton" style="width: 50px; height: 18px; border-radius: 99px;"></div></td>
+                            <td style="padding: 16px; text-align: right;"><div class="skeleton" style="width: 30px; height: 30px; border-radius: 6px;"></div></td>
+                        </tr>
+                    `;
+                }
+            } else if (type === 'card') {
+                for (let i = 0; i < count; i++) {
+                    html += `<div class="skeleton skl-card"></div>`;
+                }
+            } else if (type === 'chart') {
+                html = `<div class="skeleton skl-chart"></div>`;
+            }
+            
+            container.innerHTML = html;
+        }
 
         // GLOBAL TOKEN for other functions
         window.ec_token = token;
@@ -1486,6 +1566,8 @@
 
         async function loadVerifications() {
             const container = document.getElementById("crmVerificationsTable");
+            renderSkeletons("crmVerificationsTable", "table-row", 6);
+            
             try {
                 const res = await fetch("/api/verifications/", {
                     headers: { "Authorization": `Bearer ${token}` }
@@ -1497,13 +1579,14 @@
                     return;
                 }
 
-                container.innerHTML = pending.map(v => {
+                container.innerHTML = pending.map((v, index) => {
                     const sub = v.property_subscriptions || {};
                     const statusClass = v.status === 'pending' ? 'bg-amber-500/10 text-amber-500' : 
                                       v.status === 'confirmed' ? 'bg-emerald-500/10 text-emerald-500' : 'bg-red-500/10 text-red-500';
+                    const staggerClass = index < 10 ? `stagger-${(index % 5) + 1}` : '';
                     
                     return `
-                        <tr style="border-bottom: 1px solid #222; transition: background 0.2s;" class="hover:bg-white/5">
+                        <tr style="border-bottom: 1px solid #222; transition: background 0.2s;" class="hover:bg-white/5 animate-fade-in ${staggerClass}">
                             <td style="padding: 16px; color: #666; font-size: 11px;">${new Date(v.created_at).toLocaleString()}</td>
                             <td style="padding: 16px;">
                                 <div style="display: flex; align-items: center; gap: 12px;">
@@ -1660,14 +1743,16 @@
 
 
         async function loadCampaigns() {
+            renderSkeletons("smsCampaigns", "table-row", 3);
+            renderSkeletons("emailCampaigns", "table-row", 3);
             try {
                 const res = await fetch("/api/marketing/campaigns", {
                     headers: { "Authorization": `Bearer ${token}` }
                 });
                 const campaigns = await res.json();
                 
-                const render = (type) => campaigns.filter(c => c.type === type || (type ==='email' && !c.type)).map(c => `
-                    <div style="padding: 12px; border-bottom: 1px solid #222;">
+                const render = (type) => campaigns.filter(c => c.type === type || (type ==='email' && !c.type)).map((c, index) => `
+                    <div style="padding: 12px; border-bottom: 1px solid #222;" class="animate-fade-in stagger-${(index % 5) + 1}">
                         <div style="display: flex; justify-content: space-between; margin-bottom: 4px;">
                             <span style="font-size: 13px; font-weight: 700; color: #fff;">${c.name}</span>
                             <span style="font-size: 10px; padding: 2px 6px; border-radius: 4px; background: ${c.status === 'sent' ? '#065f46' : '#374151'}; color: #fff;">${c.status.toUpperCase()}</span>
@@ -1687,6 +1772,7 @@
         }
 
         async function loadPortalInstances() {
+            renderSkeletons("portalInstances", "table-row", 3);
             try {
                 // Fetching active signing sessions as portal instances
                 const res = await fetch("/api/contracts/activity", {
@@ -1694,8 +1780,8 @@
                 });
                 const activities = await res.json();
                 
-                const html = activities.map(a => `
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 6px; margin-bottom: 8px; border: 1px solid #222;">
+                const html = activities.map((a, index) => `
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 12px; background: rgba(255,255,255,0.02); border-radius: 6px; margin-bottom: 8px; border: 1px solid #222;" class="animate-fade-in stagger-${(index % 5) + 1}">
                         <div>
                             <div style="font-size: 12px; font-weight: 700; color: #fff;">${a.description}</div>
                             <div style="font-size: 10px; color: #666;">${new Date(a.created_at).toLocaleString()}</div>
@@ -1713,6 +1799,7 @@
 
         // Load all leads with scoring
         async function loadLeads() {
+            renderSkeletons("hotLeadsTable", "table-row", 8);
             try {
                 const res = await fetch(`${API_BASE}/lead-scoring/all`, {
                     headers: { "Authorization": `Bearer ${token}` }
@@ -1726,8 +1813,8 @@
                 const totalPipeline = data.prioritized_leads.reduce((sum, lead) => sum + (lead.total_deals * 500000), 0);
                 document.getElementById("total-pipeline").textContent = `₦${(totalPipeline / 1000000).toFixed(1)}M`;
                 
-                const html = data.prioritized_leads.map(lead => `
-                    <tr>
+                const html = data.prioritized_leads.map((lead, index) => `
+                    <tr class="animate-fade-in stagger-${(index % 5) + 1}">
                         <td style="padding: 12px; font-weight: 600;">${lead.client_name}</td>
                         <td style="text-align: right; padding: 12px; font-size: 18px; font-weight: 700; color: var(--gold);">${lead.score}</td>
                         <td style="text-align: center; padding: 12px;"><span class="badge badge-${lead.score >= 80 ? 'hot' : lead.score >= 60 ? 'warm' : 'cool'}">${lead.score >= 80 ? 'HOT' : lead.score >= 60 ? 'WARM' : 'COOL'}</span></td>
@@ -1757,6 +1844,7 @@
 
         // Load team performance
         async function loadTeamPerformance() {
+            renderSkeletons("teamLeaderboard", "table-row", 6);
             try {
                 const res = await fetch(`${API_BASE}/analytics/team-performance`, {
                     headers: { "Authorization": `Bearer ${token}` }
@@ -1764,7 +1852,7 @@
                 const data = await res.json();
                 
                 const html = data.team_leaderboard.map((rep, idx) => `
-                    <tr>
+                    <tr class="animate-fade-in stagger-${(idx % 5) + 1}">
                         <td style="padding: 12px;"><strong>${idx + 1}. ${rep.sales_rep}</strong></td>
                         <td style="text-align: right; padding: 12px;">${rep.total_deals}</td>
                         <td style="text-align: right; padding: 12px; color: var(--gold); font-weight: 600;">₦${(rep.total_revenue / 1000000).toFixed(1)}M</td>
@@ -1782,14 +1870,15 @@
 
         // Load Properties
         async function loadProperties() {
+            renderSkeletons("propertiesGrid", "card", 3);
             try {
                 const res = await fetch(`${API_BASE}/properties`, {
                     headers: { "Authorization": `Bearer ${token}` }
                 });
                 const data = await res.json();
                 
-                const html = data.map(prop => `
-                    <div class="card" style="border: 1px solid #333; transition: transform 0.2s; cursor: pointer;">
+                const html = data.map((prop, idx) => `
+                    <div class="card animate-fade-in stagger-${(idx % 5) + 1}" style="border: 1px solid #333; transition: transform 0.2s; cursor: pointer;">
                         <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 12px;">
                             <span class="badge" style="background: rgba(16, 185, 129, 0.1); color: #10B981; font-size: 10px; border: 1px solid rgba(16, 185, 129, 0.2);">AVAILABLE</span>
                             <span style="font-size: 10px; color: #666; font-weight: 600;">${prop.estate_name || 'Individual Plot'}</span>
@@ -1860,6 +1949,8 @@
 
         // Load Market Intelligence
         async function loadMarketIntelligence() {
+            renderSkeletons("market-avg-price", "skl-text", 1);
+            renderSkeletons("market-median", "skl-text", 1);
             try {
                 const res = await fetch(`${API_BASE}/analytics/market-intelligence`, {
                     headers: { "Authorization": `Bearer ${token}` }
@@ -1897,6 +1988,7 @@
 
         // --- PIPELINE / KANBAN LOGIC (LEAD CENTRIC) ---
         async function loadPipeline() {
+            ["lead", "nurturing", "interest", "paid", "closed"].forEach(s => renderSkeletons(`col-${s}`, "card", 3));
             try {
                 const res = await fetch("/api/crm/pipeline", {
                     headers: { "Authorization": `Bearer ${token}` }
@@ -1908,13 +2000,13 @@
                     const data = pipeline[stage];
                     if (!data) return;
                     document.getElementById(`count-${stage}`).textContent = data.count;
-                    const html = data.deals.map(lead => {
+                    const html = data.deals.map((lead, index) => {
                         const probability = stage === 'lead' ? 0 : stage === 'nurturing' ? 25 : stage === 'interest' ? 50 : stage === 'paid' ? 75 : 100;
                         const weightedVal = (parseFloat(lead.estimated_value || 0) * (probability / 100)).toLocaleString();
                         const isProtected = ['paid', 'closed'].includes(stage);
 
                         return `
-                        <div class="deal-card ${isProtected ? 'protected-col' : ''}" 
+                        <div class="deal-card ${isProtected ? 'protected-col' : ''} animate-fade-in stagger-${(index % 5) + 1}" 
                              draggable="${!isProtected}" 
                              ondragstart="drag(event)" 
                              onclick="openLeadDetails('${lead.id}')" 
@@ -1979,6 +2071,7 @@
                 if (searchTxt) url += `search_text=${encodeURIComponent(searchTxt)}&`;
                 if (repId) url += `rep_id=${repId}&`;
 
+                renderSkeletons("documentsList", "table-row", 5);
                 const res = await fetch(url, {
                     headers: { "Authorization": `Bearer ${token}` }
                 });
@@ -2035,7 +2128,7 @@
                     }
 
                     return `
-                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid #222; transition: all 0.2s hover:bg-[#1A1A1A]">
+                    <div style="display: flex; justify-content: space-between; align-items: center; padding: 16px; border-bottom: 1px solid #222; transition: all 0.2s hover:bg-[#1A1A1A]" class="animate-fade-in stagger-${(index % 5) + 1}">
                         <div>
                             <div style="font-size: 14px; font-weight: 700; color: #fff;">${clientName}</div>
                             <div style="font-size: 11px; color: #888; margin-top: 4px;">Invoice: <span style="color:var(--gold);">${invNo}</span></div>
@@ -2073,6 +2166,7 @@
                 if(searchTxt) url += `search_text=${encodeURIComponent(searchTxt)}&`;
                 if(repId) url += `rep_id=${repId}&`;
                 
+                renderSkeletons("activityLogsFeed", "table-row", 8);
                 const res = await fetch(url, {
                     headers: { "Authorization": `Bearer ${token}` }
                 });
@@ -2099,12 +2193,12 @@
                     if (filterContainer) filterContainer.style.display = "none";
                 }
                 
-                const html = logs.length > 0 ? logs.map(log => {
+                const html = logs.length > 0 ? logs.map((log, index) => {
                     const date_opt = new Date(log.created_at).toLocaleString();
                     const admin_name = log.admins ? (log.admins.full_name || log.admins.email || 'System') : 'System';
                     const client_name = log.clients ? `${log.clients.full_name}` : 'General';
                     return `
-                    <div class="timeline-item" style="padding-bottom: 24px;">
+                    <div class="timeline-item animate-fade-in stagger-${(index % 5) + 1}" style="padding-bottom: 24px;">
                         <div style="font-size: 13px; font-weight: 700; color: #fff;">${log.event_type.replace(/_/g, ' ').toUpperCase()}</div>
                         <div style="font-size: 11px; color: #aaa; margin-top: 4px;">Actor: <span style="color:var(--gold);">${admin_name}</span> &bull; Context: ${client_name}</div>
                         <div style="font-size: 13px; color: #bbb; margin-top: 8px; line-height: 1.5;">${log.description}</div>
@@ -2822,6 +2916,7 @@
 
          // --- REVENUE INTELLIGENCE LOGIC ---
         async function loadRevenueIntelligence() {
+            renderSkeletons("attributionTable", "table-row", 3);
             try {
                 // Load Attribution
                 const attrRes = await fetch("/api/intelligence/attribution/summary", {
@@ -2829,8 +2924,8 @@
                 });
                 const attribution = await attrRes.json();
                 
-                const attrHtml = attribution.map(a => `
-                    <div class="flex justify-between items-center p-3 bg-white/5 rounded-lg border border-[#333]">
+                const attrHtml = attribution.map((a, index) => `
+                    <div class="flex justify-between items-center p-3 bg-white/5 rounded-lg border border-[#333] animate-fade-in stagger-${(index % 5) + 1}">
                         <div>
                             <div class="text-sm font-semibold">${a.campaign_name}</div>
                             <div class="text-[10px] text-gray-500">${a.deal_count} Sales Attributed</div>

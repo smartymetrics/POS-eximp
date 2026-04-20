@@ -90,8 +90,8 @@ app.include_router(marketing_sequences.router, prefix="/api/marketing/sequences"
 app.include_router(marketing_webhooks.router, tags=["webhooks"])  # tracking at root level, public
 app.include_router(marketing_media.router, prefix="/api/marketing/media", tags=["marketing"], dependencies=[Depends(require_roles(marketing_roles))])
 app.include_router(marketing_events.router, prefix="/api/marketing/events", tags=["marketing"], dependencies=[Depends(require_roles(marketing_roles))])
-app.include_router(crm.router, prefix="/api/crm", tags=["crm"], dependencies=[Depends(require_roles(["admin", "super_admin", "operations", "sales"]))])
-app.include_router(crm_professional.router, prefix="/api/crm/pro", tags=["crm"], dependencies=[Depends(require_roles(["admin", "super_admin", "operations", "sales"]))])
+app.include_router(crm.router, prefix="/api/crm", tags=["crm"], dependencies=[Depends(require_roles(["admin", "super_admin", "operations", "sales", "customer_support"]))])
+app.include_router(crm_professional.router, prefix="/api/crm/pro", tags=["crm"], dependencies=[Depends(require_roles(["admin", "super_admin", "operations", "sales", "customer_support"]))])
 app.include_router(payouts.router, prefix="/api/payouts", tags=["payouts"])
 app.include_router(support.router, prefix="/api/support", tags=["support"])
 app.include_router(revenue_intelligence.router, prefix="/api/intelligence", tags=["intelligence"])

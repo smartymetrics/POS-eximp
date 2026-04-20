@@ -380,7 +380,7 @@ async def list_all_documents(
     db = get_db()
 
     roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
-    is_privileged = any(r in ["admin", "operations", "super_admin", "lawyer", "legal"] for r in roles)
+    is_privileged = any(r in ["admin", "operations", "super_admin", "lawyer", "legal", "customer_support"] for r in roles)
     is_restricted = any(r in ["sales", "staff"] for r in roles) and not is_privileged
     admin_id = current_admin.get("sub")
 
@@ -644,7 +644,7 @@ async def get_lead_details(
     
     # ROLE-BASED ACCESS CHECK ✅
     roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
-    is_privileged = any(r in ["admin", "operations", "super_admin"] for r in roles)
+    is_privileged = any(r in ["admin", "operations", "super_admin", "customer_support"] for r in roles)
     is_restricted = any(r in ["sales", "staff"] for r in roles) and not is_privileged
     
     admin_id = current_admin.get("sub")
@@ -778,7 +778,7 @@ async def get_client_ltv_analysis(current_admin=Depends(verify_token)):
     
     # ROLE-BASED FILTERING ✅
     roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
-    is_privileged = any(r in ["admin", "operations", "super_admin"] for r in roles)
+    is_privileged = any(r in ["admin", "operations", "super_admin", "customer_support"] for r in roles)
     is_restricted = any(r in ["sales", "staff"] for r in roles) and not is_privileged
     
     admin_id = current_admin.get("sub")
@@ -872,8 +872,7 @@ async def list_documents_pipeline(
 async def get_team_performance(current_admin=Depends(verify_token)):
     """Comprehensive team leaderboard"""
     # ROLE-BASED ACCESS RESTRICTION ✅
-    roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
-    is_privileged = any(r in ["admin", "operations", "super_admin"] for r in roles)
+    is_privileged = any(r in ["admin", "operations", "super_admin", "customer_support"] for r in roles)
     
     if not is_privileged:
         # Reps shouldn't see full team intelligence
@@ -952,8 +951,7 @@ async def generate_report(request: Request, current_admin=Depends(verify_token))
         query = db.table("invoices").select("*").neq("status", "voided")
         
         # ROLE-BASED FILTERING ✅
-        roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
-        is_privileged = any(r in ["admin", "operations", "super_admin"] for r in roles)
+        is_privileged = any(r in ["admin", "operations", "super_admin", "customer_support"] for r in roles)
         is_restricted = any(r in ["sales", "staff"] for r in roles) and not is_privileged
         
         admin_id = current_admin.get("sub")

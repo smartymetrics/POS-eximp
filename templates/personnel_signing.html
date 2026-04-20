@@ -751,6 +751,7 @@
         }
 
         // ── LOAD SIGNING DETAILS ──
+        async function loadSigningDetails() {
             try {
                 const endpoint = IS_PREVIEW_MODE 
                     ? `${API_BASE}/preview/${PREVIEW_TOKEN}`

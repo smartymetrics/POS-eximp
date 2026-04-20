@@ -149,7 +149,7 @@ async def get_sales_pipeline(current_admin=Depends(verify_token)):
     role = current_admin.get("role", "")
     admin_id = current_admin.get("sub")
     
-    is_privileged = any(r in role.lower() for r in ["admin", "operations"])
+    is_privileged = any(r in role.lower() for r in ["admin", "operations", "customer_support"])
 
     # 1. Base Query
     query = db.table("clients").select("""
@@ -454,7 +454,7 @@ async def get_pipeline_health(current_admin=Depends(verify_token)):
     role = current_admin.get("role", "")
     admin_id = current_admin["sub"]
     
-    is_privileged = any(r in role.lower() for r in ["admin", "operations"])
+    is_privileged = any(r in role.lower() for r in ["admin", "operations", "customer_support"])
     
     # 1. Base Query
     query = db.table("invoices").select("""
@@ -504,7 +504,7 @@ async def get_sales_rep_performance(current_admin=Depends(verify_token)):
     role = current_admin.get("role", "")
     admin_id = current_admin["sub"]
     
-    is_privileged = any(r in role.lower() for r in ["admin", "operations"])
+    is_privileged = any(r in role.lower() for r in ["admin", "operations", "customer_support"])
     
     query = db.table("invoices").select("""
         id, sales_rep_name, amount, amount_paid, status, created_at, clients(assigned_rep_id)
