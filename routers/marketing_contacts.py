@@ -244,40 +244,6 @@ async def get_contact_history(id: str, current_admin=Depends(verify_token)):
     # Sort by recent
     timeline.sort(key=lambda x: x["timestamp"], reverse=True)
     return timeline
-@router.delete("/diagnostic/deduplicate")
-async def deduplicate_contacts(current_admin=Depends(verify_token)):
-    db = get_db()
-    res = await db_execute(lambda: db.table("marketing_contacts").select("*").order("created_at", desc=False).execute())
-    contacts = res.data or []
-    seen_clients, seen_emails, to_delete = {}, {}, []
-    
-    for c in contacts:
-        cid = c.get("client_id")
-        email = c.get("email").strip().lower() if c.get("email") else None
-        is_duplicate = False
-        
-        if cid:
-            if cid in seen_clients: is_duplicate = True
-            else: seen_clients[cid] = c
-                
-        if email:
-            if email in seen_emails and not is_duplicate:
-                existing = seen_emails[email]
-                if existing.get("client_id") and not cid: is_duplicate = True
-                elif cid and not existing.get("client_id"): to_delete.append(existing["id"])
-                else: is_duplicate = True
-        
-        if is_duplicate: to_delete.append(c["id"])
-        else:
-            if cid: seen_clients[cid] = c
-            if email: seen_emails[email] = c
-
-    if to_delete:
-        for i in range(0, len(to_delete), 50):
-            await db_execute(lambda: db.table("marketing_contacts").delete().in_("id", to_delete[i:i+50]).execute())
-            
-    final_count = (await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").execute())).count
-    return {"status": "success", "deleted_duplicates": len(to_delete), "final_count": final_count}
 
 @router.post("/sync-all-stats")
 async def sync_all_marketing_stats(current_admin=Depends(verify_token)):

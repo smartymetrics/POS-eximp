@@ -1526,13 +1526,6 @@
         }
 
         async function loadOverview() {
-            // One-time self-healing deduplication call to clean up the recent email edit duplicates
-            // We do NOT await this to ensure the UI paints immediately
-            fetch('/api/marketing/contacts/diagnostic/deduplicate', {
-                method: 'DELETE',
-                headers: { 'Authorization': 'Bearer ' + token }
-            }).catch(e => console.error("Background dedup fail", e));
-
             let overviewData = null;
             try {
                 const res = await fetch('/api/marketing/analytics/overview?t=' + new Date().getTime(), {

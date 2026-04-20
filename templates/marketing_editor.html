@@ -1287,30 +1287,32 @@
         const data = await res.json();
 
         // Set subject
-        document.getElementById('subject-field').value = data.subject_a || '';
+        if (document.getElementById('subject-field')) {
+          document.getElementById('subject-field').value = data.subject_a || '';
+        }
 
         // Check if it's a completely new, untouched campaign
         const content = (data.html_body_a || '').trim();
 
-        // Very aggressive check for blank/placeholder
+        // 🟢 FIX: Be much much less aggressive. We don't want to hide user work just because it's short.
         let isPlaceholder = false;
-        if (!content) isPlaceholder = true;
-        if (content.includes('<h1>Start Designing!</h1>')) isPlaceholder = true;
-        if (content.length < 50) isPlaceholder = true; // No valid campaign is under 50 chars
+        if (!content || content === '<h1>Start Designing!</h1>') {
+          isPlaceholder = true;
+        }
 
         if (!isPlaceholder) {
           // Instantly close the picker so the UI is immediately clean
           closeTemplates();
 
-          // Safely load components to prevent JS halting on syntax errors
+          // Safely load components
           try {
-            // NOTE: For full HTML strings, grapesjs prefers extracting the body.
-            // We will let grapesjs parse it cleanly.
+            // Note: setComponents handles both HTML strings and JSON objects
             editor.setComponents(data.html_body_a);
           } catch (e) {
             console.error("GrapesJS failed to parse HTML:", e);
           }
         } else {
+          // Only show templates if it's truly a blank canvas
           renderTemplates();
           openTemplates();
         }
@@ -1321,14 +1323,16 @@
 
     document.getElementById('save-campaign').onclick = async () => {
       const statusLabel = document.getElementById('save-status');
-      statusLabel.innerText = '💾 Saving...';
+      if (statusLabel) statusLabel.innerText = '💾 Saving...';
 
       // Use GrapesJS Newsletter command to inline CSS for maximum email compatibility
-      let fullHtml;
+      let fullHtml = '';
       try {
         fullHtml = editor.runCommand('gjs-get-inlined-html');
+        // If the command returned something too small or empty, force manual backup
+        if (!fullHtml || fullHtml.length < 50) throw new Error("Inlined HTML too small");
       } catch (e) {
-        console.warn("Inliner command failed, falling back to manual merge:", e);
+        console.warn("Inliner command issue, using master merge:", e);
         const html = editor.getHtml();
         const css = editor.getCss();
         fullHtml = `<html><head><style>${css}</style></head><body>${html}</body></html>`;
@@ -1336,21 +1340,32 @@
 
       const payload = {
         html_body_a: fullHtml,
-        subject_a: document.getElementById('subject-field').value
+        subject_a: document.getElementById('subject-field') ? document.getElementById('subject-field').value : ''
       };
 
-      const res = await fetch(`/api/marketing/campaigns/${campaignId}`, {
-        method: 'PUT',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('ec_token') },
-        body: JSON.stringify(payload)
-      });
+      try {
+        const res = await fetch(`/api/marketing/campaigns/${campaignId}`, {
+          method: 'PUT',
+          headers: { 
+            'Content-Type': 'application/json', 
+            'Authorization': 'Bearer ' + localStorage.getItem('ec_token') 
+          },
+          body: JSON.stringify(payload)
+        });
 
-      if (res.ok) {
-        statusLabel.innerText = '✅ Saved';
-        setTimeout(() => { statusLabel.innerText = ''; }, 3000);
-      } else {
-        statusLabel.innerText = '❌ Error saving';
-        console.error("Save failure:", await res.text());
+        if (res.ok) {
+          if (statusLabel) {
+            statusLabel.innerText = '✅ Saved Successfully';
+            setTimeout(() => { statusLabel.innerText = ''; }, 3000);
+          }
+        } else {
+          const errText = await res.text();
+          if (statusLabel) statusLabel.innerText = '❌ Error saving';
+          console.error("Save failure:", errText);
+        }
+      } catch (e) {
+        console.error("Network error on save:", e);
+        if (statusLabel) statusLabel.innerText = '❌ Network Error';
       }
     };
 

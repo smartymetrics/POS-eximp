@@ -12,8 +12,11 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
     db = get_db()
     
     # 1. Total Contacts stats
-    total_contacts = db.table("marketing_contacts").select("id", count="exact").execute().count
-    subscribed = db.table("marketing_contacts").select("id", count="exact").eq("is_subscribed", True).execute().count
+    total_contacts_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").execute())
+    total_contacts = total_contacts_res.count or 0
+    
+    subscribed_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").eq("is_subscribed", True).execute())
+    subscribed = subscribed_res.count or 0
     
     # 2. Campaign Stats — fetch ALL campaigns (not limited to 30 days) so historical spend is included
     campaigns_res = await db_execute(lambda: db.table("email_campaigns").select("*").execute())
@@ -37,7 +40,8 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
     open_delta = f"↑ {avg_open_val:.1f}% vs avg" if avg_open_val > 0 else "↑ 0% vs avg"
     
     # 4. Deltas (Month over Month)
-    new_this_month = db.table("marketing_contacts").select("id", count="exact").gte("created_at", last_30_days).execute().count or 0
+    new_this_month_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").gte("created_at", last_30_days).execute())
+    new_this_month = new_this_month_res.count or 0
     previous_total = total_contacts - new_this_month
     
     if previous_total == 0 and new_this_month > 0:
@@ -55,7 +59,8 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
     for i in range(13, -1, -1):
         d = (datetime.utcnow() - timedelta(days=i)).date()
         date_str = d.isoformat()
-        count = db.table("marketing_contacts").select("id", count="exact").lte("created_at", (d + timedelta(days=1)).isoformat()).execute().count or 0
+        day_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").lte("created_at", (d + timedelta(days=1)).isoformat()).execute())
+        count = day_res.count or 0
         growth_data.append({"date": date_str, "count": count})
 
     # 6. Total Attributed Revenue & Segment ROI/CPA
@@ -111,6 +116,12 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
         })
     segment_stats.sort(key=lambda x: x["revenue"], reverse=True)
 
+    # 7. Engagement stats
+    opens_count_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").gt("total_emails_opened", 0).execute())
+    hot_leads_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").gte("engagement_score", 50).execute())
+    warm_leads_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").lt("engagement_score", 50).gte("engagement_score", 30).execute())
+    cold_leads_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").lt("engagement_score", 30).execute())
+
     return {
         "contacts": {
             "total": total_contacts or 0,
@@ -128,10 +139,10 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
             "avg_cpa": cpa
         },
         "engagement": {
-            "total_opens": db.table("marketing_contacts").select("id", count="exact").gt("total_emails_opened", 0).execute().count or 0,
-            "hot_leads": db.table("marketing_contacts").select("id", count="exact").gte("engagement_score", 50).execute().count or 0,
-            "warm_leads": db.table("marketing_contacts").select("id", count="exact").lt("engagement_score", 50).gte("engagement_score", 30).execute().count or 0,
-            "cold_leads": db.table("marketing_contacts").select("id", count="exact").lt("engagement_score", 30).execute().count or 0
+            "total_opens": opens_count_res.count or 0,
+            "hot_leads": hot_leads_res.count or 0,
+            "warm_leads": warm_leads_res.count or 0,
+            "cold_leads": cold_leads_res.count or 0
         },
         "segment_stats": segment_stats,
         "growth": growth_data
