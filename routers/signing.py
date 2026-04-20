@@ -144,7 +144,7 @@ async def submit_client_signature(token: str, data: ClientContractSignatureSubmi
             "contract_signed_at": datetime.now().isoformat(),
             "contract_audit_ip": audit_ip,
             "contract_audit_agent": audit_agent,
-            "pipeline_stage": "contract"
+            "pipeline_stage": "paid"
         }).eq("id", invoice["id"]).execute()
 
 

@@ -186,7 +186,7 @@ async def get_sales_pipeline(current_admin=Depends(verify_token)):
         fin_map[cid]["total_paid"] += float(inv["amount_paid"] or 0)
 
     # 4. Group by stage in-memory
-    stages = ["inspection", "offer", "contract", "closed"]
+    stages = ["lead", "nurturing", "interest", "paid", "closed"]
     pipeline = {stage: {"deals": [], "count": 0, "total_value": 0} for stage in stages}
 
     for lead in all_leads:
@@ -242,7 +242,7 @@ async def import_leads_csv(file: UploadFile = File(...), current_admin=Depends(v
         
         lead_data = {
             "assigned_rep_id": admin_id,
-            "pipeline_stage": "inspection",
+            "pipeline_stage": "lead",
             "created_at": datetime.now().isoformat()
         }
 
@@ -273,6 +273,8 @@ async def create_lead(data: dict, current_admin=Depends(verify_token)):
     admin_id = current_admin["sub"]
     
     data["assigned_rep_id"] = admin_id
+    if not data.get("pipeline_stage"):
+        data["pipeline_stage"] = "lead"
     data["created_at"] = datetime.now().isoformat()
     
     res = await db_execute(lambda: db.table("clients").insert(data).execute())
@@ -293,10 +295,26 @@ async def create_lead(data: dict, current_admin=Depends(verify_token)):
 
 @router.put("/pipeline/{client_id}/move")
 async def move_lead_in_pipeline(client_id: str, new_stage: str, current_admin=Depends(verify_token)):
-    """Update client pipeline stage and log the activity."""
+    """Update client pipeline stage and log the activity. Manual moves to paid/closed are blocked."""
     db = get_db()
     admin_id = current_admin["sub"]
     
+    # 1. Fetch current lead state for integrity check
+    lead_res = await db_execute(lambda: db.table("clients").select("id, pipeline_stage").eq("id", client_id).execute())
+    if not lead_res.data:
+        raise HTTPException(status_code=404, detail="Lead not found")
+    
+    current_stage = lead_res.data[0].get("pipeline_stage")
+    
+    # 2. ENFORCE SYSTEM-ONLY RULE
+    # Manual movement into OR out of these stages is forbidden for audit integrity
+    protected_stages = ['paid', 'closed']
+    if new_stage in protected_stages or current_stage in protected_stages:
+        raise HTTPException(
+            status_code=403, 
+            detail="Manual movement inhibited for Paid/Closed stages. Automated triggers (Payments/Signing) only."
+        )
+
     # Update stage
     await db_execute(lambda: db.table("clients").update({
         "pipeline_stage": new_stage, 
@@ -311,6 +329,8 @@ async def move_lead_in_pipeline(client_id: str, new_stage: str, current_admin=De
         "performed_by": admin_id,
         "created_at": datetime.now().isoformat()
     }).execute())
+    
+    return {"status": "success"}
     
     return {"status": "success"}
 

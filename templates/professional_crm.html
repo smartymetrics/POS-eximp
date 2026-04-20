@@ -294,6 +294,41 @@
          }
          .deal-card.dragging { opacity: 0.5; }
          
+         /* Quick Move Arrows */
+         .quick-move-btn {
+             width: 28px;
+             height: 28px;
+             border-radius: 50%;
+             background: rgba(255,255,255,0.05);
+             border: 1px solid #444;
+             color: #888;
+             display: flex;
+             align-items: center;
+             justify-content: center;
+             cursor: pointer;
+             transition: all 0.2s;
+             font-size: 10px;
+         }
+         .quick-move-btn:hover {
+             background: var(--gold);
+             color: white;
+             border-color: var(--gold);
+             transform: scale(1.1);
+         }
+         .protected-col {
+             background: rgba(196, 125, 10, 0.03) !important;
+             border-style: dashed !important;
+         }
+         .protected-badge {
+             font-size: 9px;
+             background: rgba(196, 125, 10, 0.1);
+             color: var(--gold);
+             padding: 2px 8px;
+             border-radius: 4px;
+             font-weight: 800;
+             letter-spacing: 0.5px;
+         }
+         
          /* Timeline Activity Style */
          .timeline { position: relative; padding-left: 20px; }
          .timeline::before {
@@ -785,47 +820,53 @@
              </div>
             
             <div class="kanban-container" style="display: flex; gap: 16px; overflow-x: auto; padding-bottom: 20px; align-items: flex-start; height: 75vh;">
-                <!-- INSPECTION COLUMN -->
+                <!-- LEAD COLUMN -->
                 <div class="kanban-col-wrapper card" style="flex: 1; min-width: 280px; background: rgba(0,0,0,0.2); border: 1px solid #333; height: 100%; display: flex; flex-direction: column;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #444;">
-                        <h3 style="font-weight: 700; color: #fff; text-transform: uppercase; font-size: 11px; letter-spacing: 1px;">1. Inspection <span style="font-weight: normal; color: #666;">(20%)</span></h3>
-                        <span class="badge" style="background: rgba(255,255,255,0.1); color: #fff;" id="count-inspection">0</span>
+                        <h3 style="font-weight: 700; color: #fff; text-transform: uppercase; font-size: 11px; letter-spacing: 1px;">1. Lead <span style="font-weight: normal; color: #666;">(0%)</span></h3>
+                        <span class="badge" style="background: rgba(255,255,255,0.1); color: #fff;" id="count-lead">0</span>
                     </div>
-                    <div id="col-inspection" class="kanban-col" style="flex: 1; overflow-y: auto; padding: 5px; min-height: 200px;" ondragover="allowDrop(event)" ondrop="drop(event, 'inspection')">
-                        <!-- cards go here -->
+                    <div id="col-lead" class="kanban-col" style="flex: 1; overflow-y: auto; padding: 5px; min-height: 200px;" ondragover="allowDrop(event)" ondrop="drop(event, 'lead')">
                     </div>
                 </div>
 
-                <!-- OFFER COLUMN -->
+                <!-- NURTURING COLUMN -->
                 <div class="kanban-col-wrapper card" style="flex: 1; min-width: 280px; background: rgba(0,0,0,0.2); border: 1px solid #333; height: 100%; display: flex; flex-direction: column;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #444;">
-                        <h3 style="font-weight: 700; color: #eab308; text-transform: uppercase; font-size: 11px; letter-spacing: 1px;">2. Offer <span style="font-weight: normal; color: #666;">(50%)</span></h3>
-                        <span class="badge" style="background: rgba(234, 179, 8, 0.1); color: #eab308;" id="count-offer">0</span>
+                        <h3 style="font-weight: 700; color: #fff; text-transform: uppercase; font-size: 11px; letter-spacing: 1px;">2. Nurturing <span style="font-weight: normal; color: #666;">(25%)</span></h3>
+                        <span class="badge" style="background: rgba(255,255,255,0.1); color: #fff;" id="count-nurturing">0</span>
                     </div>
-                    <div id="col-offer" class="kanban-col" style="flex: 1; overflow-y: auto; padding: 5px; min-height: 200px;" ondragover="allowDrop(event)" ondrop="drop(event, 'offer')">
-                        <!-- cards go here -->
+                    <div id="col-nurturing" class="kanban-col" style="flex: 1; overflow-y: auto; padding: 5px; min-height: 200px;" ondragover="allowDrop(event)" ondrop="drop(event, 'nurturing')">
                     </div>
                 </div>
 
-                <!-- CONTRACT COLUMN -->
+                <!-- INTEREST COLUMN -->
                 <div class="kanban-col-wrapper card" style="flex: 1; min-width: 280px; background: rgba(0,0,0,0.2); border: 1px solid #333; height: 100%; display: flex; flex-direction: column;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #444;">
-                        <h3 style="font-weight: 700; color: #60a5fa; text-transform: uppercase; font-size: 11px; letter-spacing: 1px;">3. Contract <span style="font-weight: normal; color: #666;">(80%)</span></h3>
-                        <span class="badge" style="background: rgba(96, 165, 250, 0.1); color: #60a5fa;" id="count-contract">0</span>
+                        <h3 style="font-weight: 700; color: #fff; text-transform: uppercase; font-size: 11px; letter-spacing: 1px;">3. Interest <span style="font-weight: normal; color: #666;">(50%)</span></h3>
+                        <span class="badge" style="background: rgba(255,255,255,0.1); color: #fff;" id="count-interest">0</span>
                     </div>
-                    <div id="col-contract" class="kanban-col" style="flex: 1; overflow-y: auto; padding: 5px; min-height: 200px;" ondragover="allowDrop(event)" ondrop="drop(event, 'contract')">
-                        <!-- cards go here -->
+                    <div id="col-interest" class="kanban-col" style="flex: 1; overflow-y: auto; padding: 5px; min-height: 200px;" ondragover="allowDrop(event)" ondrop="drop(event, 'interest')">
+                    </div>
+                </div>
+
+                <!-- PAID COLUMN -->
+                <div class="kanban-col-wrapper card" style="flex: 1; min-width: 280px; background: rgba(0,0,0,0.2); border: 1px solid #333; height: 100%; display: flex; flex-direction: column;">
+                    <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #444;">
+                        <h3 style="font-weight: 700; color: #fff; text-transform: uppercase; font-size: 11px; letter-spacing: 1px;">4. Paid <span style="font-weight: normal; color: #666;">(75%)</span></h3>
+                        <span class="badge" style="background: rgba(255,255,255,0.1); color: #fff;" id="count-paid">0</span>
+                    </div>
+                    <div id="col-paid" class="kanban-col" style="flex: 1; overflow-y: auto; padding: 5px; min-height: 200px;" ondragover="allowDrop(event)" ondrop="drop(event, 'paid')">
                     </div>
                 </div>
 
                 <!-- CLOSED COLUMN -->
-                <div class="kanban-col-wrapper card" style="flex: 1; min-width: 280px; background: rgba(0,0,0,0.2); border: 1px solid #333; border-top: 3px solid #22c55e; height: 100%; display: flex; flex-direction: column;">
+                <div class="kanban-col-wrapper card" style="flex: 1; min-width: 280px; background: rgba(0,0,0,0.2); border: 1px solid #333; height: 100%; display: flex; flex-direction: column;">
                     <div style="display: flex; justify-content: space-between; align-items: center; margin-bottom: 15px; padding-bottom: 10px; border-bottom: 1px solid #444;">
-                        <h3 style="font-weight: 700; color: #22c55e; text-transform: uppercase; font-size: 11px; letter-spacing: 1px;">4. Closed <span style="font-weight: normal; color: #666;">(100%)</span></h3>
-                        <span class="badge" style="background: rgba(34, 197, 94, 0.1); color: #22c55e;" id="count-closed">0</span>
+                        <h3 style="font-weight: 700; color: #fff; text-transform: uppercase; font-size: 11px; letter-spacing: 1px;">5. Closed <span style="font-weight: normal; color: #666;">(100%)</span></h3>
+                        <span class="badge" style="background: rgba(255,255,255,0.1); color: #fff;" id="count-closed">0</span>
                     </div>
                     <div id="col-closed" class="kanban-col" style="flex: 1; overflow-y: auto; padding: 5px; min-height: 200px;" ondragover="allowDrop(event)" ondrop="drop(event, 'closed')">
-                        <!-- cards go here -->
                     </div>
                 </div>
             </div>
@@ -1055,7 +1096,7 @@
                      <div style="margin-bottom: 24px;">
                          <label style="font-size: 10px; font-weight: 800; color: #555; text-transform: uppercase; margin-bottom: 4px; display: block;">Pipeline Stage (Mobile quick-move)</label>
                          <select id="detail-lead-stage" onchange="saveLeadStage()" style="width: 100%; background: #1A1A1A; border: 1px solid #333; color: #fff; border-radius: 8px; padding: 10px; font-size: 13px; outline: none;">
-                             <option value="inspection">Inspection</option>
+                             <option value="lead">Lead</option>
                              <option value="offer">Offer</option>
                              <option value="contract">Contract</option>
                              <option value="closed">Closed (Won)</option>
@@ -1861,35 +1902,51 @@
                     headers: { "Authorization": `Bearer ${token}` }
                 });
                 const pipeline = await res.json();
-                const stages = ["inspection", "offer", "contract", "closed"];
+                const stages = ["lead", "nurturing", "interest", "paid", "closed"];
                 
                 stages.forEach(stage => {
                     const data = pipeline[stage];
                     if (!data) return;
                     document.getElementById(`count-${stage}`).textContent = data.count;
-                    
                     const html = data.deals.map(lead => {
-                        const probability = stage === 'inspection' ? 20 : stage === 'offer' ? 50 : stage === 'contract' ? 80 : 100;
+                        const probability = stage === 'lead' ? 0 : stage === 'nurturing' ? 25 : stage === 'interest' ? 50 : stage === 'paid' ? 75 : 100;
                         const weightedVal = (parseFloat(lead.estimated_value || 0) * (probability / 100)).toLocaleString();
+                        const isProtected = ['paid', 'closed'].includes(stage);
 
                         return `
-                        <div class="deal-card" draggable="true" ondragstart="drag(event)" onclick="openLeadDetails('${lead.id}')" data-id="${lead.id}">
+                        <div class="deal-card ${isProtected ? 'protected-col' : ''}" 
+                             draggable="${!isProtected}" 
+                             ondragstart="drag(event)" 
+                             onclick="openLeadDetails('${lead.id}')" 
+                             data-id="${lead.id}">
                             <div style="display: flex; justify-content: space-between; align-items: start; margin-bottom: 8px;">
                                 <div style="font-size: 10px; color: #666; font-weight: 700;">PROSPECT</div>
                                 <div style="font-size: 10px; color: #555;">${new Date(lead.created_at).toLocaleDateString()}</div>
                             </div>
                             <div style="font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 4px;">${lead.full_name || 'Unknown Client'}</div>
                             <div style="font-size: 16px; font-weight: 800; color: var(--gold);">₦${parseFloat(lead.amount || 0).toLocaleString()}</div>
-                            ${lead.actual_paid > 0 ? `<div style="font-size: 10px; color: #3498db; margin-top: 2px;">Paid: ₦${parseFloat(lead.actual_paid).toLocaleString()}</div>` : ''}
-                            <div style="font-size: 10px; color: #22c55e; margin-top: 2px;">Forecast: ₦${weightedVal} <span style="color: #666;">(${probability}%)</span></div>
+                            
+                            <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
+                                ${lead.actual_paid > 0 ? `<div style="font-size: 10px; color: #3498db;">Paid: ₦${parseFloat(lead.actual_paid).toLocaleString()}</div>` : '<div></div>'}
+                                ${isProtected ? `<div class="protected-badge"><i class="fas fa-lock mr-1"></i> AUTOMATED</div>` : ''}
+                            </div>
+                            
+                            <div style="font-size: 10px; color: #22c55e; margin-top: 4px;">Forecast: ₦${weightedVal} <span style="color: #666;">(${probability}%)</span></div>
                             
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 8px; border-top: 1px solid #333;">
-                                <div style="display: flex; gap: 8px;">
-                                    <button onclick="event.stopPropagation(); initiateLeadChat('${lead.id}', '${lead.full_name}')" title="Start Chat" style="color: var(--gold); background: rgba(196,125,10,0.1); width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; border:0;">
+                                <div style="display: flex; gap: 6px;">
+                                    ${!isProtected && stage !== 'lead' ? `
+                                        <button onclick="event.stopPropagation(); moveLeadFast('${lead.id}', '${stage}', 'prev')" class="quick-move-btn" title="Move Left">
+                                            <i class="fas fa-arrow-left"></i>
+                                        </button>
+                                    ` : ''}
+                                    ${!isProtected && stage !== 'interest' ? `
+                                        <button onclick="event.stopPropagation(); moveLeadFast('${lead.id}', '${stage}', 'next')" class="quick-move-btn" title="Move Right">
+                                            <i class="fas fa-arrow-right"></i>
+                                        </button>
+                                    ` : ''}
+                                    <button onclick="event.stopPropagation(); initiateLeadChat('${lead.id}', '${lead.full_name}')" title="Start Chat" style="color: var(--gold); background: rgba(196,125,10,0.1); width: 28px; height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; border:0;">
                                         <i class="fas fa-comment-dots" style="font-size:10px;"></i>
-                                    </button>
-                                    <button onclick="event.stopPropagation(); logDailyActivity('${lead.id}')" title="Log Activity" style="color: #fff; background: #333; width: 24px; height: 24px; border-radius: 4px; display: flex; align-items: center; justify-content: center; border:0;">
-                                        <i class="fas fa-pen-nib" style="font-size:10px;"></i>
                                     </button>
                                 </div>
                                 <div style="font-size: 9px; color: #444; font-weight: 700; text-transform: uppercase;">ID: ${lead.id.split('-')[0]}</div>
@@ -2132,7 +2189,7 @@
                  email: document.getElementById("lead-email").value,
                  phone: document.getElementById("lead-phone").value,
                  estimated_value: parseFloat(document.getElementById("lead-value").value || 0),
-                 pipeline_stage: "inspection"
+                 pipeline_stage: "lead"
              };
  
              try {
@@ -2385,6 +2442,36 @@
             if (col) col.classList.remove('drag-over');
         });
 
+        async function moveLeadFast(dealId, currentStage, direction) {
+            const stages = ["lead", "nurturing", "interest", "paid", "closed"];
+            const currIdx = stages.indexOf(currentStage);
+            let nextIdx = (direction === 'next') ? currIdx + 1 : currIdx - 1;
+            
+            if (nextIdx < 0 || nextIdx > 2) return; // Only allow manual moves within first 3 stages
+            
+            const newStage = stages[nextIdx];
+            showPageLoader('Moving lead...');
+            
+            try {
+                const res = await fetch(`/api/crm/pipeline/${dealId}/move?new_stage=${newStage}`, {
+                    method: "PUT",
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                
+                if (res.ok) {
+                    loadPipeline();
+                    if (typeof loadRevenueIntelligence === 'function') loadRevenueIntelligence();
+                } else {
+                    const err = await res.json();
+                    alert("Move failed: " + err.detail);
+                }
+            } catch (err) {
+                console.error("Move error:", err);
+            } finally {
+                hidePageLoader();
+            }
+        }
+
         async function drop(ev, newStage) {
             ev.preventDefault();
             const col = ev.target.closest('.kanban-col');
@@ -2392,6 +2479,12 @@
             
             const dealId = ev.dataTransfer.getData("dealId");
             if (!dealId) return;
+
+            // Enforcement check in UI
+            if (['paid', 'closed'].includes(newStage)) {
+                alert("Protected Stage: Manual movement into Paid/Closed is restricted for audit integrity.");
+                return;
+            }
 
             try {
                 const res = await fetch(`/api/crm/pipeline/${dealId}/move?new_stage=${newStage}`, {

@@ -337,7 +337,7 @@ async def form_submission(
             "attribution_utm_medium": payload.utm_medium,
             "attribution_utm_campaign": payload.utm_campaign,
             "source": "google_form",
-            "pipeline_stage": "inspection"
+            "pipeline_stage": "lead"
         }
 
         invoice_res = await db_execute(lambda: db.table("invoices").insert(jsonable_encoder(invoice_insert)).execute())
