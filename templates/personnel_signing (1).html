@@ -1,0 +1,1108 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Digital Document Signing | Eximp & Cloves</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com">
+    <link rel="stylesheet" href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;900&display=swap">
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        :root {
+            --brand-gold: #C47D0A;
+            --studio-bg: #2b2b2b;
+            --paper-white: #ffffff;
+            --text-dark: #111;
+        }
+
+        body {
+            background: #0f1115;
+            font-family: 'Inter', sans-serif;
+            color: #fff;
+            margin: 0;
+            overflow-x: hidden;
+        }
+
+        /* ── TOP NAV ── */
+        .top-nav {
+            background: #1a1a1a;
+            border-bottom: 3px solid var(--brand-gold);
+            padding: 0 16px;
+            height: 56px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            position: sticky;
+            top: 0;
+            z-index: 50;
+        }
+
+        .top-nav img {
+            height: 28px;
+        }
+
+        /* ── LAYOUT ── */
+        .signing-container {
+            display: grid;
+            grid-template-columns: 1fr 420px;
+            gap: 24px;
+            max-width: 1600px;
+            margin: 24px auto;
+            padding: 0 24px;
+        }
+
+        /* ── DOCUMENT PREVIEW ── */
+        .preview-scroll-area {
+            height: 85vh;
+            overflow-y: auto;
+            background: #1e2128;
+            padding: 24px;
+            border-radius: 12px;
+            border: 1px solid #333;
+            scrollbar-width: thin;
+        }
+
+        /* A4 paper — scales down on small screens */
+        .a4-page {
+            width: 210mm;
+            min-height: 297mm;
+            background: white;
+            margin: 0 auto;
+            padding: 0;
+            box-shadow: 0 0 30px rgba(0, 0, 0, 0.5);
+            color: #000;
+            position: relative;
+            font-family: 'Times New Roman', serif;
+            font-size: 11.5pt;
+            line-height: 1.5;
+            /* Scale to fit container width on small screens */
+            transform-origin: top center;
+            overflow: hidden;
+        }
+
+        .letterhead {
+            position: relative;
+            padding: 0;
+            margin-bottom: 10mm; 
+        }
+        .header-bar-black { position: absolute; top: 0; left: 0; width: 60%; height: 40px; background: #000; border-bottom-right-radius: 40px; z-index: 2; }
+        .header-bar-gold { position: absolute; top: 0; right: 0; width: 70%; height: 30px; background: var(--brand-gold); z-index: 1; }
+        .letterhead-inner { display: flex; justify-content: space-between; align-items: center; padding: 50px 60px 20px; position: relative; z-index: 3; }
+        .letterhead-divider { height: 2px; background: #eee; margin: 0 60px; }
+        
+        .letterhead img {
+            height: 70px;
+            width: auto;
+        }
+
+        .letterhead-contact {
+            border-left: 2px solid #000;
+            padding: 4px 15px;
+            font-family: 'Inter', sans-serif;
+            font-size: 9pt;
+            line-height: 1.5;
+            color: #111;
+            text-align: left;
+            font-weight: 700;
+            font-variant-caps: all-small-caps;
+            letter-spacing: 0.05em;
+        }
+        
+        .text-brand-gold { color: var(--brand-gold) !important; text-decoration: none; }
+
+        .document-body {
+            font-family: 'Tinos', 'Times New Roman', serif;
+            font-size: 11.5pt;
+            line-height: 1.6;
+            color: #111;
+            text-align: justify;
+            /* BUG8 FIX: match PDF body padding exactly (was 10mm 15mm 20mm ≈ 38px 57px,
+               now 28px 72px = same as WeasyPrint PDF output) */
+            padding: 28px 72px 28px;
+            min-height: 200mm;
+        }
+
+        .document-body h2 {
+            font-family: 'Inter', sans-serif;
+            font-size: 11pt;
+            font-weight: 900;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            margin-top: 20pt;
+            margin-bottom: 8pt;
+            color: #000;
+            border-bottom: 1px solid #eee;
+        }
+
+        .document-body p {
+            margin-bottom: 12pt;
+            min-height: 1em;
+        }
+
+        .document-body p:empty::before {
+            content: "\00a0";
+        }
+
+        /* BUG4 FIX: hide Tiptap page-break widget in preview (it's an editor UI element) */
+        .document-body [data-page-break="true"],
+        .document-body .editor-page-break {
+            display: none !important;
+        }
+
+        /* BUG5 FIX: strip yellow editor styling from unresolved merge-field tokens */
+        .document-body .merge-field {
+            background: none !important;
+            border: none !important;
+            padding: 0 !important;
+            font-family: inherit !important;
+            font-size: inherit !important;
+            color: #000 !important;
+        }
+
+        .document-body [data-indent="1"] { margin-left: 40px !important; }
+        .document-body [data-indent="2"] { margin-left: 80px !important; }
+        .document-body [data-indent="3"] { margin-left: 120px !important; }
+        .document-body [data-indent="4"] { margin-left: 160px !important; }
+        .document-body [data-indent="5"] { margin-left: 200px !important; }
+        .document-body [data-indent="6"] { margin-left: 240px !important; }
+        .document-body [data-indent="7"] { margin-left: 280px !important; }
+
+        .document-body ul {
+            list-style-type: disc;
+            padding-left: 2rem;
+            margin: 6pt 0 10pt;
+        }
+
+        .document-body ol {
+            padding-left: 2rem;
+            margin: 6pt 0 10pt;
+        }
+
+        .document-body ol[type="a"] { list-style-type: lower-alpha; }
+        .document-body ol[type="A"] { list-style-type: upper-alpha; }
+        .document-body ol[type="i"] { list-style-type: lower-roman; }
+        .document-body ol[type="I"] { list-style-type: upper-roman; }
+        .document-body ol:not([type]) { list-style-type: decimal; }
+
+        .document-body li {
+            margin-bottom: 4pt;
+            display: list-item;
+        }
+
+        /* ── SMART LEGAL WIDGETS (Preview) ── */
+        .legal-badge {
+            display: inline-flex !important;
+            align-items: center;
+            justify-content: center;
+            user-select: none;
+            cursor: default;
+            vertical-align: middle;
+            margin: 10px;
+            font-family: 'Inter', sans-serif;
+        }
+
+        .seal-badge {
+            width: 110px;
+            height: 110px;
+            border-radius: 50%;
+            border: 3px solid #C47D0A;
+            background: rgba(196, 125, 10, 0.05);
+            color: #C47D0A;
+            font-size: 7px;
+            font-weight: 900;
+            text-transform: uppercase;
+            text-align: center;
+            box-shadow: 0 0 0 2px #C47D0A inset;
+            line-height: 1.2;
+        }
+
+        .stamp-badge {
+            padding: 10px 20px;
+            border: 2px solid #C47D0A;
+            background: rgba(196, 125, 10, 0.05);
+            color: #C47D0A;
+            font-size: 10px;
+            font-weight: 900;
+            text-transform: uppercase;
+            transform: rotate(-3deg);
+            letter-spacing: 0.1em;
+        }
+
+        .seal-badge::before { content: "EXIMP & CLOVES\A SEAL PENDING"; white-space: pre-wrap; }
+        .stamp-badge::before { content: "AUTHORIZED\A OFFICIAL STAMP"; white-space: pre-wrap; }
+
+        /* ── SIGNATURE PANEL ── */
+        .signature-panel {
+            background: #1a1a1a;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 20px;
+            display: flex;
+            flex-direction: column;
+            gap: 15px;
+            /* Stick to top while scrolling on desktop */
+            position: sticky;
+            top: 72px;
+            max-height: calc(100vh - 88px);
+            overflow-y: auto;
+        }
+
+        .panel-title {
+            font-size: 14px;
+            font-weight: bold;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--brand-gold);
+        }
+
+        .form-group {
+            display: flex;
+            flex-direction: column;
+            gap: 5px;
+        }
+
+        .form-group label {
+            font-size: 11px;
+            text-transform: uppercase;
+            color: #999;
+            font-weight: 600;
+        }
+
+        .form-group input,
+        .form-group textarea {
+            background: #0f0f0f;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 10px;
+            color: #fff;
+            font-size: 13px;
+            -webkit-appearance: none;
+        }
+
+        .form-group input:focus,
+        .form-group textarea:focus {
+            outline: none;
+            border-color: var(--brand-gold);
+            box-shadow: 0 0 8px rgba(196, 125, 10, 0.3);
+        }
+
+        #signature-canvas {
+            border: 2px dashed #444;
+            background: #0f0f0f;
+            cursor: crosshair;
+            border-radius: 4px;
+            width: 100%;
+            height: 140px;
+            touch-action: none;
+            /* Critical: prevents scroll during signature drawing */
+            display: block;
+            /* Removes inline baseline gap */
+        }
+
+        .canvas-controls {
+            display: flex;
+            gap: 8px;
+            justify-content: space-between;
+        }
+
+        .is-locked .form-group,
+        .is-locked .canvas-controls,
+        .is-locked .btn-success {
+            opacity: 0.4;
+            pointer-events: none;
+            user-select: none;
+            filter: grayscale(1);
+            transition: all 0.5s ease;
+        }
+        
+        /* Removed filter off the wrapper to prevent iOS Safari invisible-rendering bugs */
+
+        .lock-indicator {
+            font-size: 10px;
+            font-weight: 700;
+            color: #C47D0A;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            background: rgba(196, 125, 10, 0.1);
+            padding: 6px 10px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 10px;
+            border: 1px solid rgba(196, 125, 10, 0.2);
+        }
+
+        .is-unlocked .lock-indicator {
+            display: none;
+        }
+
+        .is-unlocked {
+            opacity: 1;
+            filter: none;
+            pointer-events: auto;
+        }
+
+        .btn {
+            padding: 12px 16px;
+            border-radius: 4px;
+            border: none;
+            font-size: 13px;
+            font-weight: bold;
+            text-transform: uppercase;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            letter-spacing: 0.03em;
+        }
+
+        .btn-secondary {
+            background: #333;
+            color: #fff;
+        }
+
+        .btn-secondary:hover {
+            background: #444;
+        }
+
+        .btn-primary {
+            background: var(--brand-gold);
+            color: #000;
+            flex: 1;
+        }
+
+        .btn-primary:hover {
+            background: #d4860f;
+        }
+
+        .btn-success {
+            background: #10b981;
+            color: #fff;
+            flex: 1;
+        }
+
+        .btn-success:hover {
+            background: #059669;
+        }
+
+        /* Active states for touch */
+        .btn:active {
+            opacity: 0.85;
+            transform: scale(0.98);
+        }
+
+        .status-message {
+            padding: 12px;
+            border-radius: 4px;
+            font-size: 12px;
+            text-align: center;
+        }
+
+        .status-success {
+            background: rgba(16, 185, 129, 0.12);
+            color: #10b981;
+            border: 1px solid rgba(16, 185, 129, 0.4);
+        }
+
+        .status-error {
+            background: rgba(239, 68, 68, 0.12);
+            color: #ef4444;
+            border: 1px solid rgba(239, 68, 68, 0.4);
+        }
+
+        .status-info {
+            background: rgba(196, 125, 10, 0.12);
+            color: var(--brand-gold);
+            border: 1px solid rgba(196, 125, 10, 0.4);
+        }
+
+        .document-meta {
+            background: #0f0f0f;
+            border: 1px solid #333;
+            border-radius: 4px;
+            padding: 12px;
+        }
+
+        .meta-item {
+            display: flex;
+            justify-content: space-between;
+            font-size: 11px;
+            color: #999;
+            padding: 4px 0;
+            gap: 8px;
+        }
+
+        .meta-label {
+            font-weight: 600;
+            white-space: nowrap;
+        }
+
+        .meta-value {
+            color: var(--brand-gold);
+            text-align: right;
+            word-break: break-word;
+        }
+
+        /* ── MOBILE DOCUMENT PREVIEW TOGGLE ── */
+        .doc-toggle-btn {
+            display: none;
+            width: 100%;
+            background: #1e2128;
+            border: 1px solid #333;
+            border-radius: 8px;
+            padding: 14px 16px;
+            color: var(--brand-gold);
+            font-weight: 700;
+            font-size: 13px;
+            text-align: left;
+            cursor: pointer;
+            margin-bottom: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+        }
+
+        /* ── RESPONSIVE BREAKPOINTS ── */
+
+        /* Tablet: collapse to single column */
+        @media (max-width: 1024px) {
+            .signing-container {
+                grid-template-columns: 1fr;
+                padding: 0 16px;
+                margin: 16px auto;
+                gap: 16px;
+            }
+
+            /* Reorder: panel first on tablet/mobile */
+            .panel-wrapper {
+                order: -1;
+            }
+
+            .signature-panel {
+                position: static;
+                max-height: none;
+                overflow-y: visible;
+            }
+
+            .preview-scroll-area {
+                height: 70vh;
+            }
+
+            .doc-toggle-btn {
+                display: flex;
+                align-items: center;
+                justify-content: space-between;
+            }
+        }
+
+        /* Mobile: scale the A4 page to fit */
+        @media (max-width: 768px) {
+            .top-nav {
+                height: 52px;
+                padding: 0 12px;
+            }
+
+            .top-nav img {
+                height: 24px;
+            }
+
+            .signing-container {
+                padding: 0 12px;
+                margin: 12px auto;
+                gap: 12px;
+            }
+
+            .preview-scroll-area {
+                padding: 12px;
+                border-radius: 8px;
+                height: 60vh;
+            }
+
+            /* Scale A4 so it fits the mobile viewport */
+            .a4-page-wrapper {
+                overflow-x: auto;
+            }
+
+            .a4-page {
+                transform: scale(0.45);
+                transform-origin: top left;
+                /* Let the scaled element define its own space */
+                margin-bottom: calc((297mm * 0.45) - 297mm);
+            }
+
+            .signature-panel {
+                padding: 16px;
+                gap: 12px;
+            }
+
+            .btn {
+                padding: 14px 16px;
+                font-size: 14px;
+            }
+
+            /* Bigger canvas on mobile for easier signing & better resolution */
+            #signature-canvas {
+                height: 190px;
+            }
+
+            .panel-title {
+                font-size: 13px;
+            }
+        }
+
+        @media (max-width: 480px) {
+            .a4-page {
+                transform: scale(0.35);
+                margin-bottom: calc((297mm * 0.35) - 297mm);
+            }
+
+            .signing-container {
+                padding: 0 8px;
+            }
+        }
+    </style>
+</head>
+
+<body>
+
+    <!-- TOP NAV -->
+    <div class="top-nav">
+        <div style="display:flex; align-items:center; gap:12px;">
+            <img src="/static/img/logo_dark.svg" alt="Eximp & Cloves">
+            <div style="width:1px; height:20px; background:rgba(255,255,255,0.1);"></div>
+            <span
+                style="color:var(--brand-gold); font-weight:700; font-size:12px; text-transform:uppercase; letter-spacing:0.08em;">
+                {% if is_preview %}Document Preview{% else %}Legal Signing{% endif %}
+            </span>
+        </div>
+        <div style="display:flex; align-items:center; gap:6px;">
+            <span style="font-size:11px; color:#666; display: none;" id="nav-secure-label">Secured &amp;
+                Encrypted</span>
+            <span style="font-size:16px;">🔏</span>
+        </div>
+    </div>
+
+    <!-- MAIN LAYOUT -->
+    <div class="signing-container">
+
+        <!-- DOCUMENT PREVIEW (shown below panel on mobile) -->
+        <div id="preview-wrapper">
+            <!-- Mobile toggle button -->
+            <button class="doc-toggle-btn" onclick="toggleDocPreview()" id="doc-toggle-btn">
+                <span>📄 View Document</span>
+                <span id="toggle-arrow">▼</span>
+            </button>
+            <div id="preview-area" class="preview-scroll-area">
+                {% if is_preview %}
+                <div style="background: rgba(196, 125, 10, 0.1); border: 1px solid var(--brand-gold); color: var(--brand-gold); padding: 12px; margin-bottom: 20px; text-align: center; font-weight: bold; font-size: 13px; border-radius: 6px; letter-spacing: 0.05em; text-transform: uppercase;">
+                    ⚠️ Preview Mode - Read Only. Link Expires in 48 Hours.
+                </div>
+                {% endif %}
+                <div class="a4-page-wrapper">
+                    <div class="a4-page">
+                        <div class="letterhead">
+                            <div class="header-bar-black"></div>
+                            <div class="header-bar-gold"></div>
+                            <div class="letterhead-inner">
+                                <img src="/static/img/logo_firm.png" style="height: 70px;">
+                                <div id="letterhead-contact-area" class="letterhead-contact">
+                                    <div>phone: +234 912 6864 383</div>
+                                    <div>web: <span class="text-brand-gold">https://eximps-cloves.com</span></div>
+                                    <div>email: <span class="text-brand-gold">admin@eximps-cloves.com</span></div>
+                                </div>
+                            </div>
+                            <div class="letterhead-divider"></div>
+                        </div>
+                        <div id="document-content" class="document-body">
+                            <div
+                                style="text-align: center; padding: 80px 0; color: #999; font-family: Inter, sans-serif; font-size: 13px;">
+                                Loading document...
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- SIGNATURE PANEL -->
+        {% if not is_preview %}
+        <div class="panel-wrapper">
+            <div id="status-message" style="display: none; margin-bottom: 12px;" class="status-message"></div>
+
+            <div class="signature-panel">
+                <div class="panel-title">📋 Signature Details</div>
+
+                <!-- Document Meta -->
+                <div class="document-meta">
+                    <div class="meta-item">
+                        <span class="meta-label">Document:</span>
+                        <span class="meta-value" id="doc-title">Loading...</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Prepared:</span>
+                        <span class="meta-value" id="doc-date">--</span>
+                    </div>
+                    <div class="meta-item">
+                        <span class="meta-label">Status:</span>
+                        <span class="meta-value" id="doc-status">Pending Signature</span>
+                    </div>
+                </div>
+
+                <!-- Signer Details -->
+                <div class="form-group">
+                    <label>Full Name *</label>
+                    <input type="text" id="signer-name" placeholder="Enter your full name" autocomplete="name"
+                        inputmode="text">
+                </div>
+
+                <div class="form-group">
+                    <label>Email Address *</label>
+                    <input type="email" id="signer-email" placeholder="your.email@example.com" autocomplete="email"
+                        inputmode="email">
+                </div>
+
+                <!-- Read Confirmation -->
+                <div style="background: #0f0f0f; border: 1px solid #333; border-radius: 4px; padding: 14px;">
+                    <label
+                        style="display: flex; align-items: flex-start; gap: 12px; cursor: pointer; font-size: 13px; color: #ccc; line-height: 1.4;">
+                        <input type="checkbox" id="confirm-read"
+                            style="width: 18px; height: 18px; cursor: pointer; margin-top: 1px; flex-shrink: 0; accent-color: var(--brand-gold);">
+                        <span>I have read and fully understand this contract</span>
+                    </label>
+                </div>
+
+                <!-- SIGNATURE SECTION (requires_signing = true) -->
+                <div id="signature-section" class="is-locked">
+                    <div id="lock-badge" class="lock-indicator">🔒 Confirm reading above to unlock pad</div>
+                    <div class="form-group">
+                        <label>Digital Signature Pad</label>
+                        <canvas id="signature-canvas" aria-label="Signature drawing area"></canvas>
+                        <p style="font-size: 10px; color: #666; margin-top: 6px; line-height: 1.5;">
+                            Draw your signature using your finger or mouse.<br>
+                            <span style="color: #444;">Tip: sign slowly for a cleaner result.</span>
+                        </p>
+                    </div>
+
+                    <div class="canvas-controls" style="margin-bottom: 12px;">
+                        <button class="btn btn-secondary" onclick="clearSignature()">↺ Clear</button>
+                    </div>
+
+                    <button class="btn btn-success" onclick="submitSignature()" style="width: 100%;">
+                        ✓ Sign &amp; Execute Document
+                    </button>
+
+                    <p style="font-size: 10px; color: #555; text-align: center; margin-top: 8px; line-height: 1.5;">
+                        By signing, you confirm you have read and agree to the terms of this document.
+                    </p>
+                </div>
+
+                <!-- ACKNOWLEDGMENT SECTION (requires_signing = false) -->
+                <div id="acknowledgment-section" style="display: none;">
+                    <button class="btn btn-success" onclick="submitAcknowledgment()" style="width: 100%;">
+                        ✓ Acknowledge &amp; Complete
+                    </button>
+                    <p style="font-size: 10px; color: #555; text-align: center; margin-top: 8px; line-height: 1.5;">
+                        By acknowledging, you confirm that you have reviewed this document.
+                    </p>
+                </div>
+            </div>
+        </div>
+        {% endif %}
+
+    </div>
+
+    <script>
+        const API_BASE = '/api/hr-legal';
+        const IS_PREVIEW_MODE = {{ 'true' if is_preview else 'false' }};
+        const PREVIEW_TOKEN = "{{ preview_token if is_preview else '' }}";
+        
+        let canvas, ctx, isDrawing = false;
+        let signingToken = null;
+        let documentHTML = '';
+        let requiresSigning = true;
+        let docPreviewOpen = true; // desktop: always open; mobile: toggled
+        let brandingAssets = { firm_logo: '/static/img/logo_firm.png', stamp_url: null };
+
+        // ── MOBILE PREVIEW TOGGLE ──
+        function toggleDocPreview() {
+            const isMobile = window.innerWidth <= 1024;
+            if (!isMobile) return;
+            const area = document.getElementById('preview-area');
+            const arrow = document.getElementById('toggle-arrow');
+            docPreviewOpen = !docPreviewOpen;
+            area.style.display = docPreviewOpen ? 'block' : 'none';
+            arrow.textContent = docPreviewOpen ? '▲' : '▼';
+        }
+
+        // On mobile, hide doc preview by default (panel is shown first, unless it's preview mode)
+        function initLayout() {
+            if (window.innerWidth <= 1024) {
+                if (IS_PREVIEW_MODE) {
+                    document.getElementById('toggle-arrow').textContent = '▲';
+                } else {
+                    const area = document.getElementById('preview-area');
+                    area.style.display = 'none';
+                    docPreviewOpen = false;
+                    document.getElementById('toggle-arrow').textContent = '▼';
+                }
+            } else {
+                document.getElementById('nav-secure-label').style.display = 'inline';
+            }
+        }
+
+        // ── INITIALIZATION ──
+        async function init() {
+            initLayout();
+
+            const path = window.location.pathname;
+            signingToken = path.split('/').pop();
+
+            if (!signingToken && !IS_PREVIEW_MODE) {
+                showStatus('Invalid signing link', 'error');
+                return;
+            }
+
+            // Fetch branding first
+            try {
+                const bRes = await fetch(`${API_BASE}/branding`);
+                if (bRes.ok) brandingAssets = await bRes.json();
+            } catch (err) { console.warn("Optional branding load failed:", err); }
+
+            await loadSigningDetails();
+        }
+
+        // ── LOAD SIGNING DETAILS ──
+        async function loadSigningDetails() {
+            try {
+                const endpoint = IS_PREVIEW_MODE 
+                    ? `${API_BASE}/preview/${PREVIEW_TOKEN}`
+                    : `${API_BASE}/signing/${signingToken}/details`;
+                
+                console.log("Loading document from:", endpoint);
+                const res = await fetch(endpoint);
+
+                if (!res.ok) {
+                    showStatus(
+                        res.status === 410 || res.status === 403 ? 'This link has expired.' : 'Document not found.',
+                        'error'
+                    );
+                    return;
+                }
+
+                const data = await res.json();
+                console.log("Document data received:", data);
+
+                // Unwrapping logic
+                // Preview endpoint returns matter directly. Signing details endpoint returns { matter:..., signatories:... } or a nested object.
+                let matter = null;
+                let signingReq = null;
+
+                if (IS_PREVIEW_MODE) {
+                    matter = data;
+                } else {
+                    signingReq = data;
+                    matter = data.matter || data.legal_matters || data;
+                }
+
+                requiresSigning = IS_PREVIEW_MODE ? false : (signingReq.requires_signing !== false);
+
+                if (!IS_PREVIEW_MODE) {
+                    const confirmRead = document.getElementById('confirm-read');
+                    if (confirmRead) confirmRead.addEventListener('change', updateSigningUI);
+                    updateSigningUI();
+
+                    document.getElementById('doc-title').textContent = (signingReq.document_title || matter.title) || 'Untitled Document';
+                    document.getElementById('doc-date').textContent =
+                        (signingReq.created_at || matter.created_at)
+                            ? new Date(signingReq.created_at || matter.created_at).toLocaleDateString('en-GB', { day: 'numeric', month: 'long', year: 'numeric' })
+                            : '--';
+                    document.getElementById('doc-status').textContent = matter.status || 'Pending';
+                }
+
+                const contentHtml = matter.content_html || matter.html;
+                if (contentHtml) {
+                    let documentHTML = contentHtml;
+                    
+                    // Replace placeholders with official graphics for preview/signing
+                    const logoUrl = brandingAssets.firm_logo;
+                    const sealHTML = `<div class="legal-badge seal-badge" style="display:inline-flex;flex-direction:column;align-items:center;border:3px solid #C47D0A;border-radius:50%;width:110px;height:110px;justify-content:center;padding:8px;text-align:center;box-shadow:0 0 0 2px #C47D0A inset;line-height:1.1;background:rgba(196,125,10,0.05);color:#C47D0A;vertical-align:middle;margin:10px;"><img src="${logoUrl}" style="height:40px;width:auto;margin-bottom:2px;opacity:0.9;"><span style="font-size:6.5pt;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;">OFFICIAL<br>CORPORATE SEAL</span></div>`;
+                    
+                    let stampHTML = '';
+                    if (brandingAssets.stamp_url) {
+                        stampHTML = `<div class="legal-badge stamp-badge" style="display:inline-block;border:2px solid #C47D0A;padding:10px 20px;text-align:center;transform:rotate(-3deg);opacity:0.9;background:rgba(196,125,10,0.05);color:#C47D0A;vertical-align:middle;margin:10px;"><img src="${brandingAssets.stamp_url}" style="height:36px;width:auto;display:block;margin:0 auto 4px;"><div style="font-size:10pt;font-weight:900;letter-spacing:0.15em;text-transform:uppercase;">AUTHORIZED</div></div>`;
+                    } else {
+                        stampHTML = `<div class="legal-badge stamp-badge" style="display:inline-block;border:2px solid #C47D0A;padding:10px 20px;text-align:center;transform:rotate(-3deg);opacity:0.9;background:rgba(196,125,10,0.05);color:#C47D0A;vertical-align:middle;margin:10px;"><div style="font-size:10pt;font-weight:900;letter-spacing:0.15em;text-transform:uppercase;">AUTHORIZED</div><div style="font-size:8pt;font-weight:700;color:#333;text-transform:uppercase;">Eximp &amp; Cloves Infrastructure Ltd.</div></div>`;
+                    }
+
+                    documentHTML = documentHTML.replace(/\{\{\s*seal\s*\}\}/g, sealHTML)
+                                               .replace(/\{\{\s*stamp\s*\}\}/g, stampHTML);
+                    
+                    document.getElementById('document-content').innerHTML = documentHTML;
+                } else {
+                    document.getElementById('document-content').innerHTML = '<div style="text-align:center; padding:80px 0; color:#666;">Document content is empty or unavailable.</div>';
+                }
+                
+                if (matter.content_css) {
+                    const lh = document.getElementById('letterhead-contact-area');
+                    if (lh) lh.innerHTML = matter.content_css;
+                }
+
+                // Auto-fill name/email if dispatched to known person 
+                const params = new URLSearchParams(window.location.search);
+                if (params.get('name')) {
+                    const nameInput = document.getElementById('signer-name');
+                    if (nameInput) nameInput.value = params.get('name');
+                }
+                if (params.get('email')) {
+                    const emailInput = document.getElementById('signer-email');
+                    if (emailInput) emailInput.value = params.get('email');
+                }
+
+            } catch (e) {
+                console.error('loadSigningDetails error:', e);
+                showStatus('Failed to load document details. Please refresh.', 'error');
+            }
+        }
+
+        // ── CANVAS SETUP ──
+        function setupCanvas() {
+            canvas = document.getElementById('signature-canvas');
+            if (!canvas) return;
+            ctx = canvas.getContext('2d');
+
+            function resizeCanvas() {
+                const dataURL = canvas.width > 0 ? canvas.toDataURL() : null;
+                const rect = canvas.getBoundingClientRect();
+                const dpr = window.devicePixelRatio || 1;
+                canvas.width = rect.width * dpr;
+                canvas.height = rect.height * dpr;
+                ctx.scale(dpr, dpr);
+                ctx.fillStyle = '#0f0f0f';
+                ctx.fillRect(0, 0, rect.width, rect.height);
+                if (dataURL) {
+                    const img = new Image();
+                    img.onload = () => ctx.drawImage(img, 0, 0, rect.width, rect.height);
+                    img.src = dataURL;
+                }
+                ctx.strokeStyle = '#C47D0A';
+                ctx.lineWidth = 2;
+                ctx.lineCap = 'round';
+                ctx.lineJoin = 'round';
+            }
+
+            resizeCanvas();
+            new ResizeObserver(resizeCanvas).observe(canvas);
+
+            // Pointer Events — handles mouse, touch, and stylus
+            canvas.addEventListener('pointerdown', e => {
+                e.preventDefault();
+                try { canvas.setPointerCapture(e.pointerId); } catch(err) {} /* Ignore iOS capture errors */
+                isDrawing = true;
+                const { x, y } = canvasPoint(e);
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+            });
+
+            canvas.addEventListener('pointermove', e => {
+                e.preventDefault();
+                if (!isDrawing) return;
+                const { x, y } = canvasPoint(e);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            });
+
+            canvas.addEventListener('pointerup', e => { e.preventDefault(); stopDrawing(); });
+            canvas.addEventListener('pointercancel', stopDrawing);
+
+            // Legacy Touch Fallbacks for mobile webviews (in-app browsers)
+            canvas.addEventListener('touchstart', e => {
+                e.preventDefault();
+                isDrawing = true;
+                const { x, y } = touchPoint(e);
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+            }, { passive: false });
+
+            canvas.addEventListener('touchmove', e => {
+                e.preventDefault();
+                if (!isDrawing) return;
+                const { x, y } = touchPoint(e);
+                ctx.lineTo(x, y);
+                ctx.stroke();
+            }, { passive: false });
+
+            canvas.addEventListener('touchend', e => { e.preventDefault(); stopDrawing(); });
+            canvas.addEventListener('touchcancel', stopDrawing);
+        }
+
+        function canvasPoint(e) {
+            const rect = canvas.getBoundingClientRect();
+            return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+        }
+
+        function touchPoint(e) {
+            const rect = canvas.getBoundingClientRect();
+            const touch = e.touches[0];
+            return { x: touch.clientX - rect.left, y: touch.clientY - rect.top };
+        }
+
+        function stopDrawing() {
+            if (!isDrawing) return;
+            isDrawing = false;
+            ctx.closePath();
+        }
+
+        function clearSignature() {
+            const rect = canvas.getBoundingClientRect();
+            ctx.fillStyle = '#0f0f0f';
+            ctx.fillRect(0, 0, rect.width, rect.height);
+        }
+
+        function hasSignature() {
+            const imageData = ctx.getImageData(0, 0, canvas.width, canvas.height);
+            const data = imageData.data;
+            for (let i = 0; i < data.length; i += 4) {
+                if (data[i] > 30 || data[i + 1] > 30 || data[i + 2] > 30) return true;
+            }
+            return false;
+        }
+
+        // ── UPDATE SIGNING UI ──
+        let canvasInitialised = false;
+
+        function updateSigningUI() {
+            const isConfirmed = document.getElementById('confirm-read').checked;
+            const section = document.getElementById('signature-section');
+
+            if (requiresSigning) {
+                // Pad is always visible now, but its locked state depends on confirmation
+                section.style.display = 'block';
+                document.getElementById('acknowledgment-section').style.display = 'none';
+
+                if (isConfirmed) {
+                    section.classList.add('is-unlocked');
+                    section.classList.remove('is-locked');
+                } else {
+                    section.classList.remove('is-unlocked');
+                    section.classList.add('is-locked');
+                }
+
+                // Initialize canvas on first sight
+                if (!canvasInitialised) {
+                    canvasInitialised = true;
+                    requestAnimationFrame(() => setupCanvas());
+                }
+            } else {
+                section.style.display = 'none';
+                document.getElementById('acknowledgment-section').style.display = isConfirmed ? 'block' : 'none';
+            }
+        }
+
+        // ── SUBMIT SIGNATURE ──
+        async function submitSignature() {
+            const signerName = document.getElementById('signer-name').value.trim();
+            const signerEmail = document.getElementById('signer-email').value.trim();
+
+            if (!signerName || !signerEmail) {
+                showStatus('Please enter your full name and email address.', 'error');
+                return;
+            }
+
+            if (!/^[^\s@]+@[^\s@]+\.[^\s@]+$/.test(signerEmail)) {
+                showStatus('Please enter a valid email address.', 'error');
+                return;
+            }
+
+            if (!hasSignature()) {
+                showStatus('Please draw your signature in the pad above.', 'error');
+                return;
+            }
+
+            const signatureImage = canvas.toDataURL('image/png');
+
+            try {
+                showStatus('Submitting signature...', 'info');
+
+                const res = await fetch(`${API_BASE}/signing/${signingToken}/submit`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        signer_name: signerName,
+                        signer_email: signerEmail,
+                        signature_image: signatureImage,
+                        timestamp: new Date().toISOString(),
+                        user_agent: navigator.userAgent
+                    })
+                });
+
+                if (!res.ok) {
+                    const err = await res.json().catch(() => ({}));
+                    throw new Error(err.detail || 'Signing failed');
+                }
+
+                const result = await res.json();
+
+                document.querySelector('.signature-panel').innerHTML = `
+                    <div style="text-align: center; padding: 32px 16px;">
+                        <div style="font-size: 52px; margin-bottom: 16px;">✅</div>
+                        <h2 style="color: var(--brand-gold); font-weight: 900; text-transform: uppercase; margin-bottom: 10px; font-size: 16px; letter-spacing: 0.05em;">Execution Complete</h2>
+                        <p style="font-size: 13px; color: #999; margin-bottom: 8px; line-height: 1.5;">This document has been legally signed and archived.</p>
+                        <p style="font-size: 12px; color: #bbb; margin-bottom: 28px; line-height: 1.5;">A copy of your signed document and the audit trail have been sent to your email.</p>
+                        <a href="/api/hr-legal/matters/${result.matter_id}/export?token=${signingToken}" target="_blank"
+                           style="display: block; background: var(--brand-gold); color: #000; font-weight: 700; font-size: 13px; text-transform: uppercase; text-decoration: none; padding: 14px; border-radius: 4px; letter-spacing: 0.03em;">
+                           ⬇ Download Signed PDF
+                        </a>
+                    </div>
+                `;
+            } catch (e) {
+                console.error('submitSignature error:', e);
+                showStatus(e.message || 'Failed to submit signature. Please try again.', 'error');
+            }
+        }
+
+        // ── SUBMIT ACKNOWLEDGMENT ──
+        async function submitAcknowledgment() {
+            try {
+                showStatus('Submitting acknowledgment...', 'info');
+
+                const res = await fetch(`${API_BASE}/signing/${signingToken}/acknowledge`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({
+                        timestamp: new Date().toISOString(),
+                        user_agent: navigator.userAgent
+                    })
+                });
+
+                if (!res.ok) throw new Error('Acknowledgment failed');
+
+                showStatus('✓ Document acknowledged successfully!', 'success');
+
+                setTimeout(() => {
+                    document.querySelector('.signature-panel').innerHTML = `
+                        <div style="text-align: center; padding: 32px 16px;">
+                            <div style="font-size: 52px; margin-bottom: 16px;">✅</div>
+                            <h2 style="color: var(--brand-gold); font-weight: 900; text-transform: uppercase; margin-bottom: 10px; font-size: 16px;">Acknowledged</h2>
+                            <p style="font-size: 13px; color: #999; line-height: 1.5;">You have successfully acknowledged this document.</p>
+                        </div>
+                    `;
+                }, 1500);
+            } catch (e) {
+                console.error('submitAcknowledgment error:', e);
+                showStatus('Failed to acknowledge document. Please try again.', 'error');
+            }
+        }
+
+        function showStatus(message, type) {
+            const statusEl = document.getElementById('status-message');
+            statusEl.textContent = message;
+            statusEl.className = `status-message status-${type}`;
+            statusEl.style.display = 'block';
+            // Auto-hide info messages
+            if (type === 'info') return;
+            setTimeout(() => { statusEl.style.display = 'none'; }, 6000);
+        }
+
+        init();
+    </script>
+
+</body>
+
+</html>
