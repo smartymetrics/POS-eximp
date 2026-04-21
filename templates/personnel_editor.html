@@ -1278,17 +1278,18 @@
                 }
 
                 listEl.innerHTML = data.collaborators.map(c => `
-                    <div class="flex items-center justify-between p-4 border-b border-white/5 hover:bg-white/5 transition">
-                        <div>
-                            <div class="text-white font-bold text-sm">${c.admins?.full_name || 'Admin'}</div>
-                            <div class="text-xs text-gray-400">UUID: ${c.admin_id}</div>
-                        </div>
+                    <div class="flex items-center justify-between p-4 border-b border-white/5 hover:bg-white/10 transition group">
                         <div class="flex items-center gap-3">
-                            <span class="text-xs px-2 py-1 rounded ${c.permission_level === 'Edit' ? 'bg-orange-500/20 text-orange-400' : 'bg-blue-500/20 text-blue-400'} border border-white/10">
-                                ${c.permission_level}
-                            </span>
-                            <button onclick="window.removeCollaborator('${c.admin_id}')" class="text-red-400 hover:text-red-300 transition" title="Remove">✕</button>
+                            <div class="w-10 h-10 rounded-full bg-brand-gold/10 border border-brand-gold/20 flex items-center justify-center text-brand-gold font-black text-xs">
+                                ${c.admins?.full_name?.split(' ').map(x => x[0]).join('') || 'AD'}
+                            </div>
+                            <div>
+                                <div class="text-brand-gold font-bold text-sm tracking-tight">${c.admins?.full_name || 'Administrator'}</div>
+                                <div class="text-[10px] text-gray-500 uppercase tracking-widest font-bold">${c.permission_level} Access</div>
+                            </div>
                         </div>
+                        <button onclick="window.removeCollaborator('${c.admin_id}')" 
+                                class="p-2 text-gray-600 hover:text-red-500 hover:bg-red-500/10 rounded-lg transition" title="Remove Collaborator">✕</button>
                     </div>
                 `).join('');
 
@@ -2513,7 +2514,7 @@
 
     <!-- COLLABORATION MODAL -->
     <div id="collaborate-modal" class="modal-overlay hidden" style="z-index: 1000;">
-        <div class="modal-box" style="width: 500px;">
+        <div class="modal-box shadow-2xl shadow-black/50" style="width: 580px; border: 1px solid #333;">
             <div class="p-6 border-b border-white/5 flex justify-between items-center text-white">
                 <h2 class="font-bold uppercase tracking-widest text-sm">👥 Manage Collaborators</h2>
                 <button onclick="closeModal('collaborate-modal')">✕</button>
@@ -2521,16 +2522,18 @@
 
             <div class="p-4 border-b border-white/5 bg-white/5 flex gap-2">
                 <select id="collab-admin-id"
-                    class="flex-1 bg-black/50 border border-white/10 text-white rounded px-3 py-2 text-xs outline-none focus:border-brand-gold">
-                    <option value="">Select Collaborator...</option>
+                    style="background: #1a1a1a; color: #fff;"
+                    class="flex-1 border border-white/10 rounded px-3 py-2 text-xs outline-none focus:border-brand-gold shadow-inner">
+                    <option value="">-- Select Administrator / Lawyer --</option>
                 </select>
                 <select id="collab-level"
-                    class="bg-black/50 border border-white/10 text-white rounded px-3 py-2 text-xs outline-none focus:border-brand-gold">
+                    style="background: #1a1a1a; color: #fff;"
+                    class="w-32 border border-white/10 rounded px-3 py-2 text-xs outline-none focus:border-brand-gold shadow-inner">
                     <option value="View">View Only</option>
                     <option value="Edit">Can Edit</option>
                 </select>
                 <button onclick="window.addCollaborator()"
-                    class="bg-brand-gold text-white px-4 py-2 rounded text-xs font-bold hover:bg-brand-gold-pale transition">Add</button>
+                    class="bg-brand-gold text-black px-6 py-2 rounded text-xs font-black hover:bg-yellow-500 transition shadow-lg shadow-brand-gold/10">ADD</button>
             </div>
 
             <div id="collaborator-list" class="p-0" style="max-height: 300px; overflow-y: auto;">
@@ -2633,7 +2636,9 @@
                     This read-only secure preview link is valid for exactly <strong>48 hours</strong>. It allows recipients to view the exact layout, without any signing capabilities.
                 </p>
                 <div class="flex gap-2 mb-2">
-                    <input type="text" id="preview-link-input" readonly class="w-full bg-black/50 border border-white/10 text-white rounded px-3 py-2 text-sm outline-none focus:border-brand-gold" />
+                    <input type="text" id="preview-link-input" readonly 
+                        style="background: #0a0a0a; color: var(--brand-gold);"
+                        class="w-full border border-white/10 rounded px-3 py-2.5 text-sm font-mono outline-none focus:border-brand-gold shadow-inner" />
                     <button id="copy-preview-btn" onclick="window.copyPreviewLink()" class="bg-brand-gold text-black font-bold px-4 py-2 rounded border border-brand-gold border-b-2 hover:bg-yellow-500 transition shadow-[0_0_10px_rgba(196,125,10,0.3)]">Copy</button>
                 </div>
             </div>
