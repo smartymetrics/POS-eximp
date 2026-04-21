@@ -1,16 +1,20 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Onboarding & Payouts | Eximp & Cloves</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    <link
+        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap"
+        rel="stylesheet">
     <style>
         :root {
             --bg: #09090B;
             --card: #121214;
-            --brand: #C47D0A; /* Premium Gold */
+            --brand: #C47D0A;
+            /* Premium Gold */
             --accent: #FFC107;
             --text: #F8FAFC;
             --muted: #94A3B8;
@@ -19,11 +23,15 @@
             --success: #10B981;
         }
 
-        * { margin: 0; padding: 0; box-sizing: border-box; }
-        
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
         body {
             background-color: var(--bg);
-            background-image: 
+            background-image:
                 radial-gradient(circle at 0% 0%, rgba(196, 125, 10, 0.05) 0%, transparent 50%),
                 radial-gradient(circle at 100% 100%, rgba(196, 125, 10, 0.03) 0%, transparent 50%);
             color: var(--text);
@@ -48,22 +56,43 @@
         }
 
         @keyframes slideUp {
-            from { opacity: 0; transform: translateY(30px) scale(0.95); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
+            from {
+                opacity: 0;
+                transform: translateY(30px) scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
         }
 
-        .logo-area { text-align: center; margin-bottom: 40px; }
-        .logo-area img { height: 60px; margin-bottom: 20px; filter: brightness(1.2); }
-        .logo-area h1 { 
+        .logo-area {
+            text-align: center;
+            margin-bottom: 40px;
+        }
+
+        .logo-area img {
+            height: 60px;
+            margin-bottom: 20px;
+            filter: brightness(1.2);
+        }
+
+        .logo-area h1 {
             font-family: 'Playfair Display', serif;
-            font-size: 32px; 
+            font-size: 32px;
             background: linear-gradient(135deg, #FFF 0%, var(--brand) 100%);
             -webkit-background-clip: text;
             background-clip: text;
             -webkit-text-fill-color: transparent;
             margin-bottom: 8px;
         }
-        .logo-area p { color: var(--muted); font-size: 15px; letter-spacing: 0.5px; }
+
+        .logo-area p {
+            color: var(--muted);
+            font-size: 15px;
+            letter-spacing: 0.5px;
+        }
 
         .type-selector {
             display: flex;
@@ -89,40 +118,71 @@
             gap: 6px;
         }
 
-        .type-btn i { font-size: 18px; color: var(--muted); transition: 0.4s; }
-        .type-btn span { font-size: 13px; font-weight: 600; color: var(--muted); transition: 0.4s; }
-        
-        .type-btn:hover { background: rgba(255, 255, 255, 0.05); }
+        .type-btn i {
+            font-size: 18px;
+            color: var(--muted);
+            transition: 0.4s;
+        }
+
+        .type-btn span {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--muted);
+            transition: 0.4s;
+        }
+
+        .type-btn:hover {
+            background: rgba(255, 255, 255, 0.05);
+        }
 
         .type-btn.active {
             background: linear-gradient(135deg, rgba(196, 125, 10, 0.2) 0%, rgba(196, 125, 10, 0.05) 100%);
             border-color: rgba(196, 125, 10, 0.3);
             box-shadow: 0 10px 20px -5px rgba(0, 0, 0, 0.3);
         }
-        .type-btn.active i { color: var(--brand); transform: translateY(-2px); }
-        .type-btn.active span { color: #fff; }
+
+        .type-btn.active i {
+            color: var(--brand);
+            transform: translateY(-2px);
+        }
+
+        .type-btn.active span {
+            color: #fff;
+        }
 
         .form-section {
             animation: fadeIn 0.5s ease;
         }
 
         @keyframes fadeIn {
-            from { opacity: 0; }
-            to { opacity: 1; }
+            from {
+                opacity: 0;
+            }
+
+            to {
+                opacity: 1;
+            }
         }
 
-        .form-group { margin-bottom: 24px; position: relative; }
-        .form-group label { 
-            display: block; 
-            margin-bottom: 10px; 
-            font-size: 12px; 
+        .form-group {
+            margin-bottom: 24px;
+            position: relative;
+        }
+
+        .form-group label {
+            display: block;
+            margin-bottom: 10px;
+            font-size: 12px;
             font-weight: 700;
             text-transform: uppercase;
             letter-spacing: 1.5px;
-            color: var(--brand); 
+            color: var(--brand);
         }
 
-        .input-wrapper { position: relative; }
+        .input-wrapper {
+            position: relative;
+        }
+
         .input-wrapper i {
             position: absolute;
             left: 16px;
@@ -133,7 +193,9 @@
             pointer-events: none;
         }
 
-        input, select, textarea {
+        input,
+        select,
+        textarea {
             width: 100%;
             background: rgba(255, 255, 255, 0.02);
             border: 1px solid var(--border);
@@ -145,14 +207,20 @@
             outline: none;
             transition: all 0.3s;
         }
-        
-        input:focus, select:focus, textarea:focus {
+
+        input:focus,
+        select:focus,
+        textarea:focus {
             border-color: var(--brand);
             background: rgba(255, 255, 255, 0.05);
             box-shadow: 0 0 0 4px rgba(196, 125, 10, 0.1);
         }
 
-        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 20px; }
+        .input-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 20px;
+        }
 
         .upload-area {
             border: 2px dashed var(--border);
@@ -163,14 +231,30 @@
             transition: 0.3s;
             background: rgba(255, 255, 255, 0.01);
         }
-        .upload-area:hover { 
-            border-color: var(--brand); 
-            background: rgba(196, 125, 10, 0.03); 
+
+        .upload-area:hover {
+            border-color: var(--brand);
+            background: rgba(196, 125, 10, 0.03);
             transform: translateY(-2px);
         }
-        .upload-area i { font-size: 32px; color: var(--muted); margin-bottom: 12px; }
-        .upload-area p { color: var(--muted); font-size: 14px; margin-bottom: 4px; }
-        .upload-area span { color: var(--brand); font-weight: 600; font-size: 13px; }
+
+        .upload-area i {
+            font-size: 32px;
+            color: var(--muted);
+            margin-bottom: 12px;
+        }
+
+        .upload-area p {
+            color: var(--muted);
+            font-size: 14px;
+            margin-bottom: 4px;
+        }
+
+        .upload-area span {
+            color: var(--brand);
+            font-weight: 600;
+            font-size: 13px;
+        }
 
         .verification-box {
             margin-top: 40px;
@@ -188,6 +272,7 @@
             cursor: pointer;
             align-items: flex-start;
         }
+
         .checkbox-container input {
             width: 20px;
             height: 20px;
@@ -212,11 +297,15 @@
             transition: all 0.4s;
             box-shadow: 0 20px 40px -10px rgba(196, 125, 10, 0.3);
         }
-        .submit-btn:hover { 
-            transform: translateY(-2px) scale(1.01); 
+
+        .submit-btn:hover {
+            transform: translateY(-2px) scale(1.01);
             box-shadow: 0 25px 50px -10px rgba(196, 125, 10, 0.4);
         }
-        .submit-btn:active { transform: scale(0.98); }
+
+        .submit-btn:active {
+            transform: scale(0.98);
+        }
 
         .payout-info {
             display: flex;
@@ -232,20 +321,34 @@
             margin-bottom: 30px;
         }
 
-        .hidden { display: none; }
+        .hidden {
+            display: none;
+        }
 
         @media (max-width: 600px) {
-            .portal-container { padding: 32px 24px; }
-            .input-row { grid-template-columns: 1fr; gap: 0; }
-            .type-btn span { font-size: 11px; }
+            .portal-container {
+                padding: 32px 24px;
+            }
+
+            .input-row {
+                grid-template-columns: 1fr;
+                gap: 0;
+            }
+
+            .type-btn span {
+                font-size: 11px;
+            }
         }
     </style>
 </head>
+
 <body>
 
     <div class="portal-container">
         <div class="logo-area">
-            <img src="/static/img/logo.svg" onerror="this.src='https://via.placeholder.com/150x50/1A1D23/D4AF37?text=EXIMP+%26+CLOVES'" alt="Eximp & Cloves">
+            <img src="/static/img/logo.svg"
+                onerror="this.src='https://via.placeholder.com/150x50/1A1D23/D4AF37?text=EXIMP+%26+CLOVES'"
+                alt="Eximp & Cloves">
             <h1>Onboarding & Claims</h1>
             <p id="portal-subtitle">Secure payout registration for verified partners</p>
         </div>
@@ -291,7 +394,8 @@
                         </div>
                     </div>
                     <div class="form-group" id="tin-group">
-                        <label>Tax ID (TIN) <span style="color:var(--muted); font-size:10px; font-weight:400;">(Required for standard rate)</span></label>
+                        <label>Tax ID (TIN) <span style="color:var(--muted); font-size:10px; font-weight:400;">(Required
+                                for standard rate)</span></label>
                         <div class="input-wrapper">
                             <i class="fas fa-stamp"></i>
                             <input type="text" id="payee_tin" placeholder="For tax compliance">
@@ -318,14 +422,17 @@
                 </div>
 
                 <!-- Claim Amount Section -->
-                <div class="form-group" style="margin-top: 20px; padding: 20px; background: rgba(196, 125, 10, 0.03); border: 1px solid var(--border); border-radius: 12px;">
+                <div class="form-group"
+                    style="margin-top: 20px; padding: 20px; background: rgba(196, 125, 10, 0.03); border: 1px solid var(--border); border-radius: 12px;">
                     <label style="color:var(--brand); font-weight:700;">Claim Amount (NGN)</label>
                     <div class="input-wrapper" style="border-color: var(--brand);">
                         <i class="fas fa-coins" style="color:var(--brand);"></i>
-                        <input type="number" id="claim_amount" required step="0.01" placeholder="Enter total amount to be paid">
+                        <input type="number" id="claim_amount" required step="0.01"
+                            placeholder="Enter total amount to be paid">
                     </div>
                     <p style="font-size:11px; color:var(--muted); margin-top:8px;">
-                        Please specify the <b>Total Amount</b> as per your quotation or agreement. This amount will be reviewed and verified by the Finance Audit team.
+                        Please specify the <b>Total Amount</b> as per your quotation or agreement. This amount will be
+                        reviewed and verified by the Finance Audit team.
                     </p>
                 </div>
 
@@ -336,11 +443,13 @@
                         <label>Bank Selection</label>
                         <div class="input-wrapper">
                             <i class="fas fa-piggy-bank"></i>
-                            <input type="text" id="bank_search" placeholder="Search for your bank..." onfocus="showBankDropdown()" oninput="filterBanks()" autocomplete="off">
+                            <input type="text" id="bank_search" placeholder="Search for your bank..."
+                                onfocus="showBankDropdown()" oninput="filterBanks()" autocomplete="off">
                             <input type="hidden" id="bank_name" name="bank_name" required>
                         </div>
-                        
-                        <div id="bank_dropdown" class="hidden" style="position: absolute; top: 100%; left: 0; width: 100%; background: #1A1A1E; border: 1px solid var(--border); border-radius: 12px; margin-top: 8px; z-index: 50; max-height: 250px; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
+
+                        <div id="bank_dropdown" class="hidden"
+                            style="position: absolute; top: 100%; left: 0; width: 100%; background: #1A1A1E; border: 1px solid var(--border); border-radius: 12px; margin-top: 8px; z-index: 50; max-height: 250px; overflow-y: auto; box-shadow: 0 10px 30px rgba(0,0,0,0.5);">
                             <!-- Options injected by JS -->
                         </div>
                     </div>
@@ -374,25 +483,32 @@
 
                 <!-- Document Upload -->
                 <div class="form-group">
-                    <label id="upload-label">Quotation / Supporting Document <span style="color:var(--muted); font-size:10px; font-weight:400;">(Optional)</span></label>
+                    <label id="upload-label">Quotation / Supporting Document <span
+                            style="color:var(--muted); font-size:10px; font-weight:400;">(Optional)</span></label>
                     <div class="upload-area" onclick="document.getElementById('fileInput').click()">
                         <i class="fas fa-file-upload"></i>
                         <p id="file-name">Upload your quotation or receipt for verification</p>
                         <span>PDF, JPG or PNG (Max 10MB)</span>
-                        <input type="file" id="fileInput" class="hidden" accept="image/*,.pdf" onchange="updateFileName(this)">
+                        <input type="file" id="fileInput" class="hidden" accept="image/*,.pdf"
+                            onchange="updateFileName(this)">
                     </div>
                 </div>
 
                 <!-- WHT Policy Notice -->
-                <div style="margin: 30px 0; padding: 20px; background: rgba(196, 125, 10, 0.05); border: 1px solid rgba(196, 125, 10, 0.2); border-radius: 16px;">
+                <div
+                    style="margin: 30px 0; padding: 20px; background: rgba(196, 125, 10, 0.05); border: 1px solid rgba(196, 125, 10, 0.2); border-radius: 16px;">
                     <div style="display:flex; gap:12px; align-items:flex-start;">
                         <i class="fas fa-info-circle" style="color:var(--brand); margin-top:3px;"></i>
                         <div>
-                            <h4 style="font-size:13px; font-weight:700; color:var(--brand); text-transform:uppercase; margin-bottom:4px;">Tax Compliance Notice (WHT 2025)</h4>
+                            <h4
+                                style="font-size:13px; font-weight:700; color:var(--brand); text-transform:uppercase; margin-bottom:4px;">
+                                Tax Compliance Notice (WHT 2025)</h4>
                             <p style="font-size:12px; color:var(--muted); line-height:1.5;">
-                                All payments are subject to Nigerian Withholding Tax regulations. 
-                                Providing a valid <b style="color:var(--text);">Tax ID (TIN)</b> allows us to apply the standard rate (2% - 10%). 
-                                Claims submitted without a verified TIN receive a <b style="color:var(--accent);">double-rate penalty</b> deduction as mandated by law.
+                                All payments are subject to Nigerian Withholding Tax regulations.
+                                Providing a valid <b style="color:var(--text);">Tax ID (TIN)</b> allows us to apply the
+                                standard rate (2% - 10%).
+                                Claims submitted without a verified TIN receive a <b
+                                    style="color:var(--accent);">double-rate penalty</b> deduction as mandated by law.
                             </p>
                         </div>
                     </div>
@@ -402,7 +518,9 @@
                 <div class="verification-box">
                     <label class="checkbox-container">
                         <input type="checkbox" required>
-                        <span>I certify that the information provided is accurate and that <b>payment is requested only for satisfactory services rendered or goods delivered</b>. I understand that Eximp & Cloves processes claims only against <b>audited and approved proformas/receipts</b>.</span>
+                        <span>I certify that the information provided is accurate and that <b>payment is requested only
+                                for satisfactory services rendered or goods delivered</b>. I understand that Eximp &
+                            Cloves processes claims only against <b>audited and approved proformas/receipts</b>.</span>
                     </label>
                 </div>
 
@@ -414,10 +532,10 @@
     <script>
         let currentType = 'company';
 
-        function setType(type, evt=null) {
+        function setType(type, evt = null) {
             currentType = type;
             document.querySelectorAll('.type-btn').forEach(btn => btn.classList.remove('active'));
-            
+
             if (evt && evt.currentTarget) {
                 evt.currentTarget.classList.add('active');
             } else {
@@ -465,16 +583,16 @@
 
         // --- BANK SEARCH LOGIC ---
         const allBanks = [
-            "Access Bank", "Zenith Bank", "First Bank", "United Bank for Africa (UBA)", 
-            "Guaranty Trust Bank (GTBank)", "Fidelity Bank", "Union Bank", "Stanbic IBTC", 
-            "Sterling Bank", "Wema Bank", "Ecobank", "First City Monument Bank (FCMB)", 
-            "Keystone Bank", "Polaris Bank", "Unity Bank", "Heritage Bank", 
-            "Premium Trust Bank", "Optimus Bank", "Titan Trust Bank", "SunTrust Bank", 
-            "Providus Bank", "Globus Bank", "Parallex Bank", "Signature Bank", 
-            "Jaiz Bank", "Taj Bank", "Lotus Bank", "Alternative Bank (AltBank)", 
-            "OPay", "PalmPay", "Moniepoint", "Kuda Bank", "FairMoney", "Carbon", 
-            "Alat by Wema", "VFD Microfinance Bank", "Rubies Bank", "Sparkle", 
-            "GoMoney", "Mint Digital Bank", "Eyowo", "Pocket by PiggyVest", 
+            "Access Bank", "Zenith Bank", "First Bank", "United Bank for Africa (UBA)",
+            "Guaranty Trust Bank (GTBank)", "Fidelity Bank", "Union Bank", "Stanbic IBTC",
+            "Sterling Bank", "Wema Bank", "Ecobank", "First City Monument Bank (FCMB)",
+            "Keystone Bank", "Polaris Bank", "Unity Bank", "Heritage Bank",
+            "Premium Trust Bank", "Optimus Bank", "Titan Trust Bank", "SunTrust Bank",
+            "Providus Bank", "Globus Bank", "Parallex Bank", "Signature Bank",
+            "Jaiz Bank", "Taj Bank", "Lotus Bank", "Alternative Bank (AltBank)",
+            "OPay", "PalmPay", "Moniepoint", "Kuda Bank", "FairMoney", "Carbon",
+            "Alat by Wema", "VFD Microfinance Bank", "Rubies Bank", "Sparkle",
+            "GoMoney", "Mint Digital Bank", "Eyowo", "Pocket by PiggyVest",
             "9PSB", "MTN MoMo PSB", "Airtel SmartCash PSB", "Glo MoneyMaster PSB", "Hope PSB",
             "Other"
         ];
@@ -508,7 +626,7 @@
             document.getElementById('bank_search').value = bank;
             document.getElementById('bank_name').value = bank;
             document.getElementById('bank_dropdown').classList.add('hidden');
-            
+
             const otherGroup = document.getElementById('other_bank_group');
             if (bank === 'Other') {
                 otherGroup.classList.remove('hidden');
@@ -532,15 +650,34 @@
             e.preventDefault();
             const btn = document.getElementById('submitBtn');
             const originalText = btn.innerText;
-            
-            // Check if "Other" was selected and update bank_name
-            if (document.getElementById('bank_name').value === 'Other') {
-                const custom = document.getElementById('custom_bank_name').value;
+
+            // Resolve "Other" custom bank entry
+            if (document.getElementById('bank_name') && document.getElementById('bank_name').value === 'Other') {
+                const customEl = document.getElementById('custom_bank_name');
+                const custom = customEl ? customEl.value.trim() : '';
                 if (!custom) {
                     alert('Please enter your bank name');
                     return;
                 }
                 document.getElementById('bank_name').value = custom;
+            }
+
+            // Bank field guard: all three bank fields must be present before submission.
+            // This prevents a partial update (e.g. user opens "Update Bank Info" but only
+            // changes account number and leaves bank_name blank) from overwriting the
+            // stored bank details with empty values and corrupting future receipts.
+            const submittedBankName = (document.getElementById('bank_name') ? document.getElementById('bank_name').value : '').trim();
+            const submittedAccNumber = (document.getElementById('acc_number') ? document.getElementById('acc_number').value : '').trim();
+            const submittedAccName = (document.getElementById('acc_name') ? document.getElementById('acc_name').value : '').trim();
+            const bankEditorOpen = !!document.getElementById('bank_editor_view') &&
+                !document.getElementById('bank_editor_view').classList.contains('hidden');
+
+            if (bankEditorOpen) {
+                // User explicitly opened the bank editor — all three fields are mandatory
+                if (!submittedBankName || !submittedAccNumber || !submittedAccName) {
+                    alert('Please fill in all three bank fields: Bank Name, Account Number, and Account Name.');
+                    return;
+                }
             }
 
             btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Submitting Claim...';
@@ -555,11 +692,11 @@
             formData.append('payee_phone', document.getElementById('payee_phone').value || "");
             formData.append('payee_id_number', document.getElementById('payee_id_number').value || "");
             formData.append('payee_tin', document.getElementById('payee_tin').value || "");
-            formData.append('bank_name', document.getElementById('bank_name').value);
-            formData.append('acc_number', document.getElementById('acc_number').value);
-            formData.append('acc_name', document.getElementById('acc_name').value);
+            formData.append('bank_name', submittedBankName);
+            formData.append('acc_number', submittedAccNumber);
+            formData.append('acc_name', submittedAccName);
             formData.append('claim_amount', document.getElementById('claim_amount').value);
-            
+
             const fileInput = document.getElementById('fileInput');
             if (fileInput.files[0]) {
                 formData.append('file', fileInput.files[0]);
@@ -570,9 +707,9 @@
                     method: 'POST',
                     body: formData
                 });
-                
+
                 const result = await response.json();
-                
+
                 if (result.status === "success") {
                     btn.innerHTML = '<i class="fas fa-check-circle"></i> Success';
                     btn.style.background = '#10B981';
@@ -597,7 +734,7 @@
         async function resolveInvite() {
             const urlParts = window.location.pathname.split('/');
             const token = urlParts[urlParts.length - 1];
-            
+
             if (!token || token === 'OFFICIAL') {
                 // If it's the legacy/generic link, we allow manual selection 
                 // but this will be deprecated once token invites are fully tested.
@@ -612,13 +749,13 @@
                     window.location.href = "https://eximpcloves.com";
                     return;
                 }
-                
+
                 inviteData = await res.json();
-                
+
                 // 1. Lock Category
                 setType(inviteData.category);
                 document.getElementById('type_selectors').style.display = 'none';
-                
+
                 // 2. Pre-fill Email
                 document.getElementById('payee_email').value = inviteData.email;
                 document.getElementById('payee_email').readOnly = true;
@@ -629,7 +766,7 @@
                     const payee = inviteData.payee_data;
                     document.getElementById('payee_name').value = payee.name;
                     document.getElementById('payee_phone').value = payee.phone || "";
-                    
+
                     // Pre-fill existing bank details (even if hidden initially)
                     document.getElementById('bank_name').value = payee.bank_name || "";
                     document.getElementById('acc_number').value = payee.account_number || "";
@@ -637,9 +774,9 @@
 
                     const introSection = document.querySelector('.portal-header p');
                     const bankSection = document.querySelectorAll('.form-section')[1];
-                    
+
                     introSection.innerHTML = `<span style="color:#10B981; font-weight:700;"><i class="fas fa-check-circle"></i> Recognized Partner.</span> Welcome back, ${payee.name}. Simply upload your receipt or proforma below.`;
-                    
+
                     // Show locked bank view with "Change" option
                     bankSection.innerHTML = `
                         <div id="bank_locked_view" style="background:rgba(255,255,255,0.03); padding:24px; border-radius:24px; border:1px solid rgba(255,255,255,0.05); margin-bottom:20px;">
@@ -670,41 +807,67 @@
         function unlockBankDetails() {
             const lockedView = document.getElementById('bank_locked_view');
             const editorView = document.getElementById('bank_editor_view');
-            
-            // Move original fields into the editor view area
+
+            // Capture existing values BEFORE replacing the DOM so we can re-fill below.
+            const existingBank = (inviteData && inviteData.payee_data) ? (inviteData.payee_data.bank_name || '') : '';
+            const existingAccNum = (inviteData && inviteData.payee_data) ? (inviteData.payee_data.account_number || '') : '';
+            const existingAccNam = (inviteData && inviteData.payee_data) ? (inviteData.payee_data.account_name || '') : '';
+
+            // Build the editor with explicit data-* attributes carrying current values.
+            // Using a <select> for bank_name: options are injected by initializeBanks(),
+            // which runs async. We set the value AFTER the list is populated via a
+            // MutationObserver on the select rather than relying on a race-prone setTimeout.
             const bankFormContent = `
                 <div class="form-section animate-fade-in">
                     <div style="margin-bottom:20px; display:flex; justify-content:space-between; align-items:center;">
                         <h2 style="font-size:14px; font-weight:700; color:var(--brand); text-transform:uppercase;">Update Bank Details</h2>
+                        <span style="font-size:11px; color:var(--muted);">All three fields required to update bank</span>
                     </div>
                     <div class="form-group">
                         <label>Bank Name</label>
-                        <select id="bank_name" class="form-input" onchange="checkOtherBank(this.value)">
+                        <select id="bank_name" class="form-input"
+                                data-prefill="${existingBank}"
+                                onchange="checkOtherBank(this.value)">
                             <option value="">Search or Select Bank...</option>
                         </select>
                     </div>
+                    <div class="form-group" id="other_bank_group" class="form-group hidden">
+                        <label>Specify Bank Name</label>
+                        <input type="text" id="custom_bank_name" placeholder="Enter bank name manually">
+                    </div>
                     <div class="form-group">
                         <label>Account Number</label>
-                        <input type="text" id="acc_number" placeholder="0000000000" maxlength="10">
+                        <input type="text" id="acc_number" value="${existingAccNum}" placeholder="0000000000" maxlength="10">
                     </div>
                     <div class="form-group">
                         <label>Account Name</label>
-                        <input type="text" id="acc_name" placeholder="Name on account">
+                        <input type="text" id="acc_name" value="${existingAccNam}" placeholder="Name on account">
                     </div>
                 </div>
             `;
-            
+
             editorView.innerHTML = bankFormContent;
             editorView.classList.remove('hidden');
             lockedView.style.display = 'none';
-            
-            // Re-populate the bank list for the editor
-            initializeBanks(); 
-            if (inviteData && inviteData.payee_data) {
-                document.getElementById('bank_name').value = inviteData.payee_data.bank_name;
-                document.getElementById('acc_number').value = inviteData.payee_data.account_number;
-                document.getElementById('acc_name').value = inviteData.payee_data.account_name;
-            }
+
+            // Populate the bank dropdown, then apply the pre-fill value.
+            // initializeBanks() injects <option> elements synchronously after calling it,
+            // so a single requestAnimationFrame is sufficient to let the DOM update.
+            initializeBanks();
+            requestAnimationFrame(() => {
+                const sel = document.getElementById('bank_name');
+                if (sel && existingBank) {
+                    sel.value = existingBank;
+                    // If the value isn't in the list (e.g. was a custom entry),
+                    // fall through to the "Other" path so the user can re-type it.
+                    if (!sel.value && existingBank) {
+                        sel.value = 'Other';
+                        checkOtherBank('Other');
+                        const custom = document.getElementById('custom_bank_name');
+                        if (custom) custom.value = existingBank;
+                    }
+                }
+            });
         }
 
         // Initialize view
@@ -713,4 +876,5 @@
         });
     </script>
 </body>
+
 </html>

@@ -295,10 +295,19 @@ async def review_payout_request(request_id: str, data: PayoutReview, bg_tasks: B
 
     # ─── TRIGGER AUTOMATED RECEIPT EMAIL ──────────────────────
     if data.status == 'approved' and updated_req.get('vendor_id'):
-        vendor = req.get('vendors')
-        if vendor and vendor.get('email'):
-            # Fetch fresh version of request for the receipt (includes updated WHT/amounts)
-            bg_tasks.add_task(send_payout_receipt_email, updated_req, vendor, current_admin['sub'])
+        # Re-fetch with vendor join AFTER the update so the email/PDF carries:
+        #   1. Correct bank_name/account_number from the vendors table — req.get('vendors')
+        #      was populated from the original select(*) which has no join and returns None
+        #      for nested vendor fields, causing the email to show no bank details.
+        #   2. Post-approval net_payout_amount / wht_amount (from the DB, not stale req).
+        receipt_res = await db_execute(
+            lambda: db.table('expenditure_requests').select('*, vendors(*)').eq('id', request_id).execute()
+        )
+        if receipt_res.data:
+            full_req = receipt_res.data[0]
+            vendor = full_req.get('vendors')
+            if vendor and vendor.get('email'):
+                bg_tasks.add_task(send_payout_receipt_email, full_req, vendor, current_admin['sub'])
 
     return updated_req
 
@@ -479,25 +488,66 @@ async def submit_payout_claim_from_portal(
     db = get_db()
     
     # 1. Vendor Logic (Create or Update)
-    vendor_data = {
-        "type": type.lower(),
-        "name": payee_name,
-        "email": payee_email,
-        "phone": payee_phone,
-        "rc_number": payee_id_number,
-        "tin": payee_tin,
-        "bank_name": bank_name,
-        "account_number": acc_number,
-        "account_name": acc_name,
-        "updated_at": datetime.now().isoformat()
-    }
-    
+    #
+    # BANK-DETAILS POLICY:
+    #   - On first submission (new vendor): store everything including bank details.
+    #   - On repeat submission (returning vendor): update name/contact fields BUT only
+    #     update bank fields if ALL three (bank_name, account_number, account_name) are
+    #     non-empty. This prevents a partial/blank form submission from silently wiping
+    #     the vendor's stored bank details, which would corrupt receipts for past requests.
+    #   - Bank details at submission time are ALSO snapshotted onto the expenditure_request
+    #     row itself (bank_name_snapshot etc.) so that re-sending a receipt for an old
+    #     request always shows the bank that was active when the claim was submitted,
+    #     regardless of what the vendor updates later.
+
+    # Resolve effective bank details: use submitted values if all three provided,
+    # otherwise fall back to whatever is already stored for this vendor.
+    bank_name_submitted    = bank_name.strip()
+    acc_number_submitted   = acc_number.strip()
+    acc_name_submitted     = acc_name.strip()
+    all_bank_fields_present = bool(bank_name_submitted and acc_number_submitted and acc_name_submitted)
+
     # Check if vendor exists
-    existing = await db_execute(lambda: db.table("vendors").select("id").eq("email", payee_email).execute())
+    existing = await db_execute(lambda: db.table("vendors").select("*").eq("email", payee_email).execute())
     if existing.data:
-        vendor_id = existing.data[0]['id']
-        await db_execute(lambda: db.table("vendors").update(vendor_data).eq("id", vendor_id).execute())
+        vendor_id        = existing.data[0]['id']
+        stored_bank_name = existing.data[0].get("bank_name", "") or ""
+        stored_acc_num   = existing.data[0].get("account_number", "") or ""
+        stored_acc_name  = existing.data[0].get("account_name", "") or ""
+
+        # Decide which bank details to write back to the vendor master record
+        effective_bank_name = bank_name_submitted   if all_bank_fields_present else stored_bank_name
+        effective_acc_num   = acc_number_submitted  if all_bank_fields_present else stored_acc_num
+        effective_acc_name  = acc_name_submitted    if all_bank_fields_present else stored_acc_name
+
+        vendor_update = {
+            "name":         payee_name,
+            "phone":        payee_phone,
+            "rc_number":    payee_id_number,
+            "tin":          payee_tin,
+            "bank_name":    effective_bank_name,
+            "account_number": effective_acc_num,
+            "account_name": effective_acc_name,
+            "updated_at":   datetime.now().isoformat()
+        }
+        await db_execute(lambda: db.table("vendors").update(vendor_update).eq("id", vendor_id).execute())
     else:
+        # Brand-new vendor: store everything as-is
+        effective_bank_name = bank_name_submitted
+        effective_acc_num   = acc_number_submitted
+        effective_acc_name  = acc_name_submitted
+        vendor_data = {
+            "type":           type.lower(),
+            "name":           payee_name,
+            "email":          payee_email,
+            "phone":          payee_phone,
+            "rc_number":      payee_id_number,
+            "tin":            payee_tin,
+            "bank_name":      effective_bank_name,
+            "account_number": effective_acc_num,
+            "account_name":   effective_acc_name,
+            "updated_at":     datetime.now().isoformat()
+        }
         res = await db_execute(lambda: db.table("vendors").insert(vendor_data).execute())
         vendor_id = res.data[0]['id']
 
@@ -530,7 +580,14 @@ async def submit_payout_claim_from_portal(
         "wht_amount": float(wht_calc['wht_amount']),
         "net_payout_amount": float(wht_calc['net_amount']),
         "proforma_url": quotation_url,
-        "status": "pending_verification"
+        "status": "pending_verification",
+        # Snapshot the exact bank details submitted with THIS claim.
+        # This decouples the receipt/PDF from future vendor bank updates:
+        # if the vendor changes bank next month, old receipts still show
+        # the bank that was used for this specific transaction.
+        "bank_name_snapshot":       effective_bank_name,
+        "account_number_snapshot":  effective_acc_num,
+        "account_name_snapshot":    effective_acc_name,
     }
     await db_execute(lambda: db.table("expenditure_requests").insert(req_payload).execute())
     

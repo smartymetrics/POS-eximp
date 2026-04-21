@@ -1243,6 +1243,14 @@ def _payout_receipt_html(payout: dict, vendor: dict, payment_amount: float = Non
     total_due = float(payout.get("net_payout_amount") or 0)
     balance = max(0, total_due - total_paid)
     ref = payout.get("payout_reference") or "N/A"
+
+    # BANK SNAPSHOT RESOLUTION:
+    # Prefer the snapshot stored on the expenditure_request at submission time.
+    # This means if a vendor changes their bank details for a future transaction,
+    # receipts for THIS specific payout still show the bank that was used here.
+    # Fall back to the current vendor record only if no snapshot exists (legacy rows).
+    display_bank_name  = payout.get("bank_name_snapshot")    or vendor.get("bank_name")    or "N/A"
+    display_acc_number = payout.get("account_number_snapshot") or vendor.get("account_number") or "N/A"
     
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -1264,8 +1272,8 @@ def _payout_receipt_html(payout: dict, vendor: dict, payment_amount: float = Non
             <tr><td>Balance Outstanding</td><td style="text-align:right;color:{'#27ae60' if balance == 0 else '#F5A623'};">NGN {balance:,.2f}</td></tr>
             <tr style="height: 10px;"><td></td><td></td></tr>
             <tr><td>Reference</td><td style="text-align:right;color:#fff;">{ref}</td></tr>
-            <tr><td>Payee Bank</td><td style="text-align:right;color:#fff;">{vendor.get('bank_name','N/A')}</td></tr>
-            <tr><td>Account</td><td style="text-align:right;color:#fff;">{vendor.get('account_number','N/A')}</td></tr>
+            <tr><td>Payee Bank</td><td style="text-align:right;color:#fff;">{display_bank_name}</td></tr>
+            <tr><td>Account</td><td style="text-align:right;color:#fff;">{display_acc_number}</td></tr>
           </table>
         </div>
         <p style="color: #555; font-size: 13px;">The official Payment Advice (PDF) with full tax breakdown is attached to this email.</p>
@@ -1770,4 +1778,3 @@ async def send_personnel_executed_email(
         logger.info(f"Post-signing email sent to {signer_email} for matter {matter_id}")
     except Exception as e:
         logger.error(f"Error sending post-signing email to {signer_email}: {e}")
-

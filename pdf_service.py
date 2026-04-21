@@ -757,10 +757,18 @@ def generate_payout_receipt_pdf(payout: dict, vendor: dict) -> bytes:
     payout_data = payout.copy()
     payout_data["payout_reference"] = payout_data.get("payout_reference") or "Processed"
 
+    # BANK SNAPSHOT RESOLUTION (mirrors email_service logic):
+    # Prefer snapshot columns recorded at submission time over the vendor's current
+    # master record, so a vendor changing banks later never corrupts old PDF receipts.
+    vendor_for_pdf = vendor.copy()
+    vendor_for_pdf["bank_name"]       = payout_data.get("bank_name_snapshot")       or vendor.get("bank_name")       or "N/A"
+    vendor_for_pdf["account_number"]  = payout_data.get("account_number_snapshot")  or vendor.get("account_number")  or "N/A"
+    vendor_for_pdf["account_name"]    = payout_data.get("account_name_snapshot")    or vendor.get("account_name")    or "N/A"
+
     html_content = template.render(
         company=comp_ctx,
         payout=payout_data,
-        vendor=vendor,
+        vendor=vendor_for_pdf,
         amount_in_words=naira_in_words(payout_data.get("net_payout_amount") or 0),
         format_currency=format_currency,
         generated_at=datetime.now().strftime("%d %b %Y")
@@ -812,7 +820,8 @@ def get_default_execution_html_fragment(invoice: dict, client: dict) -> str:
         with open(path, "r", encoding="utf-8") as f:
             return f.read()
     except Exception:
-        return "<p>Execution placeholder</p>"
+        return "<p>Execution placeholder</p>"
+
 
 def generate_matter_pdf(matter_id: str, html_content: str, css_content: str) -> bytes:
     """
