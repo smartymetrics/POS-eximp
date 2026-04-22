@@ -156,12 +156,12 @@ def _receipt_html(invoice: dict, client: dict) -> str:
             <tr><td>Balance Due</td><td style="text-align:right;color:{'#27ae60' if balance == 0 else '#F5A623'};">NGN {balance:,.2f}</td></tr>
           </table>
         </div>
-        <p style="color: #555; font-size: 13px;">The full receipt PDF is attached to this email.</p>
-        <hr style="border-color: #eee;">
-        <p style="color: #999; font-size: 12px; margin: 0;">
           Eximp & Cloves Infrastructure Limited | RC 8311800<br>
           57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383<br>
           <a href="https://www.eximps-cloves.com" style="color: #999; text-decoration: none;">www.eximps-cloves.com</a>
+        </p>
+        <p style="color: #C47D0A; font-size: 10px; font-weight: 600; text-align: center; margin-top: 16px; font-family: 'Outfit', sans-serif; text-transform: uppercase; letter-spacing: 0.5px;">
+          Note: Tax would be deducted by the company and be paid to the Government.
         </p>
         <p style="color: #888; font-size: 11px; text-align: center; margin-top: 16px;">
           Please review our official refund policy at <a href="https://www.eximps-cloves.com/refund" style="color: #C47D0A; text-decoration: none;">www.eximps-cloves.com/refund</a>
@@ -1274,8 +1274,11 @@ def _payout_receipt_html(payout: dict, vendor: dict, payment_amount: float = Non
             <tr><td>Reference</td><td style="text-align:right;color:#fff;">{ref}</td></tr>
             <tr><td>Payee Bank</td><td style="text-align:right;color:#fff;">{display_bank_name}</td></tr>
             <tr><td>Account</td><td style="text-align:right;color:#fff;">{display_acc_number}</td></tr>
+            <tr><td>Due Date</td><td style="text-align:right;color:#fff;">{payout.get('due_date','—')}</td></tr>
+            <tr><td>Phone</td><td style="text-align:right;color:#fff;">{vendor.get('phone','—')}</td></tr>
           </table>
         </div>
+        <p style="color: #555; text-align: center; font-size: 11px;">Note: Tax would be deducted by the company and be paid to the Government.</p>
         <p style="color: #555; font-size: 13px;">The official Payment Advice (PDF) with full tax breakdown is attached to this email.</p>
         <p style="color: #555; font-size: 13px;">Thank you for your partnership.</p>
         <hr style="border-color: #eee;">

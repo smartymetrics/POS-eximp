@@ -4,7 +4,7 @@ from pydantic import BaseModel
 from database import get_db, db_execute
 from models import ExpenditureRequestCreate, PayoutReview, AssetCreate, VendorCreate, VoidExpenditureRequest, PayoutPaymentData
 from routers.auth import verify_token, has_any_role, require_roles
-from email_service import send_payout_receipt_email, send_portal_invite_email, send_report_email
+from email_service import send_payout_receipt_email, send_portal_invite_email, send_report_email, send_receipt_email
 from report_service import ReportService
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
@@ -202,21 +202,62 @@ async def record_payout_payment(request_id: str, data: PayoutPaymentData, bg_tas
 async def verify_bill_request(
     request_id: str,
     data: VerifyRequest,
+    bg_tasks: BackgroundTasks,
     current_admin=Depends(require_roles(["admin", "super_admin", "operations"]))
 ):
-    """Bill Verification: promote to 'pending' (audit queue) or reject outright."""
+    """
+    Bill Verification: promotion to 'pending' (audit queue) triggers revenue sync for portal claims.
+    """
     if not has_any_role(current_admin, ["admin", "operations"]):
         raise HTTPException(status_code=403, detail="Only authorized roles can perform this action")
     
     db = get_db()
-    req_res = await db_execute(lambda: db.table("expenditure_requests").select("*").eq("id", request_id).execute())
+    req_res = await db_execute(lambda: db.table("expenditure_requests").select("*, vendors(*)").eq("id", request_id).execute())
     if not req_res.data:
         raise HTTPException(status_code=404, detail="Bill not found")
     
+    req = req_res.data[0]
     action = data.action  # 'pending' or 'rejected'
-    if action not in ('pending', 'rejected'):
-        raise HTTPException(status_code=400, detail="Invalid action. Use 'pending' or 'rejected'.")
     
+    if action == 'pending':
+        # --- BI-DIRECTIONAL SYNC (Revenue CRM) ---
+        if req.get("invoice_id"):
+            inv_id = req["invoice_id"]
+            # Fetch Invoice and Client for receipting
+            inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", inv_id).execute())
+            if inv_res.data:
+                invoice = inv_res.data[0]
+                client = invoice.get("clients")
+                payout_amount = req["amount_gross"] # The reported total paid by client
+
+                # 1. Update Invoice Balance
+                new_paid = float(invoice.get("amount_paid", 0)) + float(payout_amount)
+                await db_execute(lambda: db.table("invoices").update({"amount_paid": new_paid, "status": "paid" if new_paid >= float(invoice["amount"]) else "partial"}).eq("id", inv_id).execute())
+
+                # 2. Assign Rep if missing ("Dictate Rep" logic)
+                if not invoice.get("sales_rep_id"):
+                    vendor = req.get("vendors")
+                    if vendor and vendor.get("email"):
+                        rep_res = await db_execute(lambda: db.table("sales_reps").select("id").eq("email", vendor["email"]).execute())
+                        if rep_res.data:
+                            await db_execute(lambda: db.table("invoices").update({"sales_rep_id": rep_res.data[0]["id"]}).eq("id", inv_id).execute())
+
+                # 3. Log CRM Payment
+                payment_payload = {
+                    "client_id": invoice["client_id"],
+                    "invoice_id": inv_id,
+                    "amount": float(payout_amount),
+                    "payment_method": "portal_reported",
+                    "reference": f"CLAIM-{req['id'][:8]}",
+                    "payment_date": datetime.now(timezone.utc).isoformat(),
+                }
+                await db_execute(lambda: db.table("payments").insert(payment_payload).execute())
+
+                # 4. Notify Client (Automated Receipt)
+                if client and client.get("email"):
+                    bg_tasks.add_task(send_receipt_email, invoice, client, current_admin['sub'])
+
+    # Update Expenditure Status
     update_payload = {
         "status": action,
         "reviewed_by": current_admin['sub'],
@@ -466,132 +507,345 @@ async def resolve_portal_invite(token: str):
         "payee_data": payee_data
     }
 
+@router.get("/portal/lookup-invoice")
+async def portal_lookup_invoice(invoice_number: str, claimant_email: Optional[str] = None):
+    """
+    Rich invoice lookup for commission claims.
+    Returns payment type (initial_deposit vs instalment), rep conflict status,
+    payment history, and commission preview.
+    """
+    db = get_db()
+
+    # 1. Fetch invoice with client data
+    res = await db_execute(lambda: db.table("invoices")
+        .select("id, client_id, amount, amount_paid, property_name, sales_rep_id, sales_rep_name, clients(full_name)")
+        .eq("invoice_number", invoice_number)
+        .execute()
+    )
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Invoice not found. Please check the number and try again.")
+
+    inv = res.data[0]
+    invoice_id = inv["id"]
+
+    # 2. Commission History — Detect if an 'Initial Deposit Commission' has been claimed
+    #    We check expenditure_requests for this invoice to see if anyone has already triggered the deal commission.
+    claims_res = await db_execute(lambda: db.table("expenditure_requests")
+        .select("id")
+        .eq("vendor_invoice_number", invoice_number)
+        .eq("payment_type", "initial_deposit")
+        .neq("status", "rejected")
+        .execute()
+    )
+    has_initial_claim = len(claims_res.data or []) > 0
+    payment_type = "initial_deposit" if not has_initial_claim else "instalment"
+    
+    # Also fetch client payments for the history list
+    payments_res = await db_execute(lambda: db.table("payments")
+        .select("id, amount, created_at, payment_method")
+        .eq("invoice_id", invoice_id)
+        .order("created_at")
+        .execute()
+    )
+    prior_payments = payments_res.data or []
+    payment_count = len(prior_payments)
+    payment_sequence = payment_count + 1
+
+    property_price = float(inv.get("amount") or 0)
+    amount_paid_so_far = float(inv.get("amount_paid") or 0)
+    balance = max(0.0, property_price - amount_paid_so_far)
+
+    # Commission base:
+    #   Initial deposit → commission on full property value (the deal is triggered)
+    #   Instalment      → commission on the instalment amount the rep reports
+    commission_base = property_price if payment_type == "initial_deposit" else None  # None = use claim_amount
+    commission_rate = 0.05   # 5% gross (10% less 50% WHT effectively; matches existing 10%/5WHT)
+    commission_preview = round(property_price * commission_rate, 2) if payment_type == "initial_deposit" else None
+
+    # 3. Sales rep conflict detection
+    rep_status = "unassigned"
+    assigned_rep_name = None
+    assigned_rep_email = None
+
+    if inv.get("sales_rep_id"):
+        rep_res = await db_execute(lambda: db.table("sales_reps")
+            .select("id, name, email")
+            .eq("id", inv["sales_rep_id"])
+            .execute()
+        )
+        if rep_res.data:
+            rep = rep_res.data[0]
+            assigned_rep_name = rep.get("name") or inv.get("sales_rep_name") or "Unknown Rep"
+            assigned_rep_email = (rep.get("email") or "").lower()
+
+            if claimant_email:
+                rep_status = "yours" if claimant_email.lower() == assigned_rep_email else "conflict"
+            else:
+                rep_status = "conflict"
+    elif inv.get("sales_rep_name"):
+        # Name recorded but no ID link yet
+        assigned_rep_name = inv.get("sales_rep_name")
+        # If claimant name can be verified against vendor table
+        if claimant_email:
+            vendor_check = await db_execute(lambda: db.table("vendors")
+                .select("name")
+                .eq("email", claimant_email)
+                .execute()
+            )
+            if vendor_check.data:
+                vendor_name = vendor_check.data[0].get("name", "").lower()
+                rep_status = "yours" if assigned_rep_name.lower() in vendor_name or vendor_name in assigned_rep_name.lower() else "conflict"
+            else:
+                rep_status = "conflict"
+        else:
+            rep_status = "conflict"
+
+    client_name = inv["clients"]["full_name"] if inv.get("clients") else "Unknown Client"
+
+    return {
+        "status": "success",
+        "invoice_id": invoice_id,
+        "client_name": client_name,
+        "property_name": inv.get("property_name") or "—",
+        "property_price": property_price,
+        "amount_paid": amount_paid_so_far,
+        "balance": balance,
+        # ── Payment type intelligence ──
+        "payment_type": payment_type,            # "initial_deposit" | "instalment"
+        "payment_sequence": payment_sequence,    # 1, 2, 3 …
+        "payment_count": payment_count,          # how many prior payments exist
+        # ── Commission preview ──
+        "commission_rate": commission_rate,
+        "commission_base": commission_base,      # None → use reported claim_amount
+        "commission_preview": commission_preview,# pre-calc for deposit; null for instalment
+        # ── Rep assignment ──
+        "rep_status": rep_status,                # "unassigned" | "yours" | "conflict"
+        "assigned_rep_name": assigned_rep_name,
+        # ── History ──
+        "previous_payments": [
+            {
+                "seq": i + 1,
+                "amount": float(p.get("amount") or 0),
+                "date": (p.get("created_at") or "")[:10],
+                "method": p.get("payment_method") or "—"
+            }
+            for i, p in enumerate(prior_payments)
+        ]
+    }
+
+@router.get("/portal/fetch-vendor")
+async def portal_fetch_vendor(email: str):
+    """Fetches existing vendor details to auto-fill the portal for returning users."""
+    db = get_db()
+    res = await db_execute(lambda: db.table("vendors").select("*").eq("email", email).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+    # Return non-sensitive contact and bank details for auto-fill
+    v = res.data[0]
+    return {
+        "status": "success", 
+        "data": {
+            "name": v.get("name"),
+            "phone": v.get("phone"),
+            "rc_number": v.get("rc_number"),
+            "tin": v.get("tin"),
+            "bank_name": v.get("bank_name"),
+            "account_number": v.get("account_number"),
+            "account_name": v.get("account_name")
+        }
+    }
+
 
 @router.post("/portal/submit")
 async def submit_payout_claim_from_portal(
-    type: str = Form(...),
+    type: str = Form(...), # office, staff_commission, partner
     payee_name: str = Form(...),
     payee_email: str = Form(...),
     payee_phone: str = Form(""),
-    payee_id_number: str = Form(""),
+    payee_id: str = Form(""),
     payee_tin: str = Form(""),
-    bank_name: str = Form(...),
-    acc_number: str = Form(...),
-    acc_name: str = Form(...),
     claim_amount: float = Form(...),
+    remarks: str = Form(""),
+    invoice_number: Optional[str] = Form(None),
+    bank_name: Optional[str] = Form(None),
+    acc_number: Optional[str] = Form(None),
+    acc_name: Optional[str] = Form(None),
+    is_already_paid: bool = Form(False),
+    payout_reference: Optional[str] = Form(None),
+    # ── NEW: payment type & dispute fields ──
+    payment_type: Optional[str] = Form(None),        # "initial_deposit" | "instalment"
+    property_price: Optional[float] = Form(None),    # full property value (for deposit commission)
+    is_dispute: bool = Form(False),                  # True when another rep is already assigned
+    dispute_reason: Optional[str] = Form(None),      # required when is_dispute=True
     file: Optional[UploadFile] = File(None)
 ):
     """
-    Public-facing endpoint for portal submissions.
-    Automatically creates/updates Vendor and generates a Pending Request.
+    Unified endpoint for the 'Claims & Payouts' portal.
+    Handles Office Expenditures, Staff Commissions, and Partner Commissions.
+    Now supports initial deposit vs instalment differentiation and rep dispute escalation.
     """
     db = get_db()
-    
-    # 1. Vendor Logic (Create or Update)
-    #
-    # BANK-DETAILS POLICY:
-    #   - On first submission (new vendor): store everything including bank details.
-    #   - On repeat submission (returning vendor): update name/contact fields BUT only
-    #     update bank fields if ALL three (bank_name, account_number, account_name) are
-    #     non-empty. This prevents a partial/blank form submission from silently wiping
-    #     the vendor's stored bank details, which would corrupt receipts for past requests.
-    #   - Bank details at submission time are ALSO snapshotted onto the expenditure_request
-    #     row itself (bank_name_snapshot etc.) so that re-sending a receipt for an old
-    #     request always shows the bank that was active when the claim was submitted,
-    #     regardless of what the vendor updates later.
 
-    # Resolve effective bank details: use submitted values if all three provided,
-    # otherwise fall back to whatever is already stored for this vendor.
-    bank_name_submitted    = bank_name.strip()
-    acc_number_submitted   = acc_number.strip()
-    acc_name_submitted     = acc_name.strip()
-    all_bank_fields_present = bool(bank_name_submitted and acc_number_submitted and acc_name_submitted)
+    # ── Validate dispute submission ──
+    if is_dispute and not dispute_reason:
+        raise HTTPException(status_code=400, detail="A reason is required when raising a rep ownership dispute.")
 
-    # Check if vendor exists
-    existing = await db_execute(lambda: db.table("vendors").select("*").eq("email", payee_email).execute())
-    if existing.data:
-        vendor_id        = existing.data[0]['id']
-        stored_bank_name = existing.data[0].get("bank_name", "") or ""
-        stored_acc_num   = existing.data[0].get("account_number", "") or ""
-        stored_acc_name  = existing.data[0].get("account_name", "") or ""
-
-        # Decide which bank details to write back to the vendor master record
-        effective_bank_name = bank_name_submitted   if all_bank_fields_present else stored_bank_name
-        effective_acc_num   = acc_number_submitted  if all_bank_fields_present else stored_acc_num
-        effective_acc_name  = acc_name_submitted    if all_bank_fields_present else stored_acc_name
-
+    # 1. Vendor / Payee Resolution
+    existing_vendor = await db_execute(lambda: db.table("vendors").select("id").eq("email", payee_email).execute())
+    if existing_vendor.data:
+        vendor_id = existing_vendor.data[0]['id']
         vendor_update = {
-            "name":         payee_name,
-            "phone":        payee_phone,
-            "rc_number":    payee_id_number,
-            "tin":          payee_tin,
-            "bank_name":    effective_bank_name,
-            "account_number": effective_acc_num,
-            "account_name": effective_acc_name,
-            "updated_at":   datetime.now().isoformat()
+            "name": payee_name,
+            "phone": payee_phone,
+            "rc_number": payee_id,
+            "tin": payee_tin,
+            "updated_at": datetime.now(timezone.utc).isoformat()
         }
+        if bank_name and acc_number:
+            vendor_update.update({
+                "bank_name": bank_name,
+                "account_number": acc_number,
+                "account_name": acc_name
+            })
         await db_execute(lambda: db.table("vendors").update(vendor_update).eq("id", vendor_id).execute())
     else:
-        # Brand-new vendor: store everything as-is
-        effective_bank_name = bank_name_submitted
-        effective_acc_num   = acc_number_submitted
-        effective_acc_name  = acc_name_submitted
         vendor_data = {
-            "type":           type.lower(),
-            "name":           payee_name,
-            "email":          payee_email,
-            "phone":          payee_phone,
-            "rc_number":      payee_id_number,
-            "tin":            payee_tin,
-            "bank_name":      effective_bank_name,
-            "account_number": effective_acc_num,
-            "account_name":   effective_acc_name,
-            "updated_at":     datetime.now().isoformat()
+            "type": "staff" if type == "staff_commission" else ("individual" if type == "partner" else "company"),
+            "name": payee_name,
+            "email": payee_email,
+            "phone": payee_phone,
+            "rc_number": payee_id,
+            "tin": payee_tin,
+            "bank_name": bank_name,
+            "account_number": acc_number,
+            "account_name": acc_name
         }
-        res = await db_execute(lambda: db.table("vendors").insert(vendor_data).execute())
-        vendor_id = res.data[0]['id']
+        v_res = await db_execute(lambda: db.table("vendors").insert(vendor_data).execute())
+        vendor_id = v_res.data[0]['id']
 
-    # 2. File Upload (Quotation)
-    quotation_url = None
+    # 2. Commission Logic (Staff & Partner) & Fraud/Dispute Shield
+    is_high_risk = False
+    risk_notes = []
+    linked_invoice_id = None
+
+    if type in ["staff_commission", "partner"] and invoice_number:
+        inv_res = await db_execute(lambda: db.table("invoices")
+            .select("id, client_id, sales_rep_id, sales_rep_name, amount, clients(full_name, email)")
+            .eq("invoice_number", invoice_number)
+            .execute()
+        )
+        if inv_res.data:
+            inv = inv_res.data[0]
+            linked_invoice_id = inv["id"]
+
+            # ── Rep dispute escalation ──
+            if is_dispute:
+                is_high_risk = True
+                existing_rep = inv.get("sales_rep_name") or f"Rep ID {inv.get('sales_rep_id', 'unknown')}"
+                risk_notes.append(
+                    f"⚠️ REP OWNERSHIP DISPUTE: {payee_name} ({payee_email}) is challenging "
+                    f"existing assignment to '{existing_rep}'. "
+                    f"Reason given: {dispute_reason}"
+                )
+            else:
+                # Standard fraud checks
+                if inv.get("clients"):
+                    cid = inv["client_id"]
+                    act_res = await db_execute(lambda: db.table("activity_log")
+                        .select("id").eq("client_id", cid).execute()
+                    )
+                    if not act_res.data:
+                        is_high_risk = True
+                        risk_notes.append("🚩 NO CRM HISTORY: Client exists but has zero logged activity.")
+                else:
+                    is_high_risk = True
+                    risk_notes.append("🚩 ANONYMOUS INVOICE: Not yet linked to a verified client record.")
+
+        # ── Commission calculation by payment type ──
+        #   Initial Deposit → commission on FULL property value (deal trigger)
+        #   Instalment      → commission on the reported instalment amount only
+        COMMISSION_RATE = Decimal("0.10")
+        WHT_RATE = Decimal("0.05")
+
+        if payment_type == "initial_deposit" and property_price and property_price > 0:
+            commission_base = Decimal(str(property_price))
+            payment_type_label = "Initial Deposit Commission"
+        else:
+            commission_base = Decimal(str(claim_amount))
+            payment_type_label = "Instalment Commission" if payment_type == "instalment" else "Commission"
+
+        gross = commission_base * COMMISSION_RATE
+        wht = gross * WHT_RATE
+        net = gross - wht
+
+        title = (
+            f"{'Staff' if type == 'staff_commission' else 'Partner'} "
+            f"{payment_type_label}: {invoice_number}"
+        )
+    else:
+        # Office Expenditure — no change
+        gross = Decimal(str(claim_amount))
+        wht = Decimal("0")
+        net = gross
+        title = f"Office Expenditure: {payee_name}"
+
+    # 3. File Upload
+    file_url = None
     if file:
         file_ext = file.filename.split('.')[-1]
         file_path = f"portal_claims/{vendor_id}_{uuid.uuid4().hex}.{file_ext}"
         content = await file.read()
-        db.storage.from_("Cloud Infrastructure").upload(file_path, content)
-        quotation_url = file_path
+        file_url = file_path
 
-    # 3. Create Expenditure Request (Treating Amount as Gross)
-    amount_decimal = Decimal(str(claim_amount))
-    
-    # Calculate initial WHT suggestion
-    has_tin = bool(payee_tin)
-    # Default to 'professional' or 'goods' based on amount if no info
-    category = 'professional' 
-    wht_calc = calculate_wht_2025(amount_decimal, category, has_tin=has_tin)
-    
-    req_payload = {
-        "title": f"Portal Claim: {payee_name}",
-        "description": f"Claim submitted via Payout Portal by {payee_name}.",
+    # 4. Create Record
+    payload = {
+        "title": title,
+        "description": remarks or f"Portal submission via {type}",
         "vendor_id": vendor_id,
-        "amount_gross": float(amount_decimal),
-        "payout_method": "direct_pay",
-        "is_wht_applicable": True,
-        "wht_rate": float(wht_calc['rate']),
-        "wht_amount": float(wht_calc['wht_amount']),
-        "net_payout_amount": float(wht_calc['net_amount']),
-        "proforma_url": quotation_url,
-        "status": "pending_verification",
-        # Snapshot the exact bank details submitted with THIS claim.
-        # This decouples the receipt/PDF from future vendor bank updates:
-        # if the vendor changes bank next month, old receipts still show
-        # the bank that was used for this specific transaction.
-        "bank_name_snapshot":       effective_bank_name,
-        "account_number_snapshot":  effective_acc_num,
-        "account_name_snapshot":    effective_acc_name,
+        "invoice_id": linked_invoice_id,
+        "amount_gross": float(gross),
+        "wht_rate": 5 if type in ["staff_commission", "partner"] else 0,
+        "wht_amount": float(wht),
+        "net_payout_amount": float(net),
+        "receipt_url": file_url,
+        "status": "paid" if is_already_paid else "pending_verification",
+        "payout_reference": payout_reference if is_already_paid else None,
+        "paid_at": datetime.now(timezone.utc).isoformat() if is_already_paid else None,
+        "is_high_risk": is_high_risk,
+        "risk_notes": "\n".join(risk_notes) if risk_notes else None,
+        "source_platform": "payout_portal",
+        # ── NEW fields ──
+        "payment_type": payment_type,           # "initial_deposit" | "instalment" | null
+        "is_disputed": is_dispute,              # Finance sees disputed claims in a separate queue
+        "vendor_invoice_number": invoice_number,
     }
-    await db_execute(lambda: db.table("expenditure_requests").insert(req_payload).execute())
-    
-    return {"status": "success", "message": "Claim submitted successfully. Our finance team will review it shortly."}
+
+    await db_execute(lambda: db.table("expenditure_requests").insert(payload).execute())
+
+    # 5. Auto-assign rep on uncontested claims (rep_status was "unassigned")
+    #    Only assign if this is NOT a dispute and NOT already assigned.
+    if linked_invoice_id and not is_dispute and not is_high_risk:
+        # Check if invoice still has no rep
+        check_inv = await db_execute(lambda: db.table("invoices").select("sales_rep_id").eq("id", linked_invoice_id).execute())
+        if check_inv.data and not check_inv.data[0].get("sales_rep_id"):
+            rep_res = await db_execute(lambda: db.table("sales_reps")
+                .select("id")
+                .eq("email", payee_email)
+                .execute()
+            )
+            if rep_res.data:
+                await db_execute(lambda: db.table("invoices")
+                    .update({"sales_rep_id": rep_res.data[0]["id"], "sales_rep_name": payee_name})
+                    .eq("id", linked_invoice_id)
+                    .execute()
+                )
+
+    status_message = (
+        "Dispute lodged. Finance will review and contact both parties."
+        if is_dispute
+        else "Record submitted successfully."
+    )
+    return {"status": "success", "message": status_message, "is_dispute": is_dispute}
 
 @router.patch("/requests/{request_id}/void")
 async def void_payout_request(request_id: str, data: VoidExpenditureRequest, current_admin=Depends(require_roles(["admin", "super_admin"]))):
