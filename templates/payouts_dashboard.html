@@ -1189,7 +1189,7 @@
                     <h3 style="font-size:20px;">Company Asset Inventory</h3>
                     <p style="color:var(--gray); font-size:13px;">Tracking distributed equipment and high-value infrastructure.</p>
                 </div>
-                <button class="btn btn-gold" style="font-size:12px; padding:10px 16px;">
+                <button class="btn btn-gold" onclick="openAddAssetModal()" style="font-size:12px; padding:10px 16px;">
                     <i class="fas fa-plus"></i> RECORD ASSET
                 </button>
             </div>
@@ -1586,6 +1586,57 @@
                 </div>
                 <button class="btn btn-gold" onclick="submitWhtRemittance()" style="padding:16px 32px;"><i class="fas fa-check-double"></i> MARK AS REMITTED</button>
             </div>
+        </div>
+    </div>
+
+    <!-- ADD ASSET MODAL -->
+    <div class="modal" id="addAssetModal">
+        <div class="modal-content" style="max-width:500px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+                <h2 style="font-family: 'Playfair Display', serif; font-size:20px;">Record New Asset</h2>
+                <button onclick="closeModal('addAssetModal')" style="background:none; border:none; color:var(--gray); cursor:pointer;"><i class="fas fa-times fa-lg"></i></button>
+            </div>
+            <form id="addAssetForm">
+                <div style="margin-bottom:16px;">
+                    <label class="form-label">Asset Name</label>
+                    <input type="text" id="asset-name" class="form-input" required placeholder="e.g. MacBook Pro M3">
+                </div>
+                <div style="margin-bottom:16px;">
+                    <label class="form-label">Category</label>
+                    <select id="asset-category" class="form-input" required>
+                        <option value="IT Equipment">IT Equipment (Computers, Phones)</option>
+                        <option value="Vehicle">Vehicle</option>
+                        <option value="Office Furniture">Office Furniture</option>
+                        <option value="Specialized Machinery">Specialized Machinery</option>
+                        <option value="Other">Other</option>
+                    </select>
+                </div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-bottom:16px;">
+                    <div>
+                        <label class="form-label">Serial Number / Tag</label>
+                        <input type="text" id="asset-serial" class="form-input" placeholder="e.g. SN-10294">
+                    </div>
+                    <div>
+                        <label class="form-label">Purchase Cost (₦)</label>
+                        <input type="number" id="asset-cost" class="form-input" step="0.01" required placeholder="0.00">
+                    </div>
+                </div>
+                <div style="margin-bottom:24px;">
+                    <label class="form-label">Purchase Date</label>
+                    <input type="date" id="asset-date" class="form-input" required>
+                </div>
+                <div style="margin-bottom:24px; padding:12px; background:rgba(196,125,10,0.05); border-radius:8px; border:1px solid rgba(196,125,10,0.1);">
+                    <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
+                        <input type="checkbox" id="asset-auto-expense" style="accent-color:var(--gold);" checked>
+                        <span style="font-weight:600; font-size:13px;">Automated Expense Sync</span>
+                    </label>
+                    <p style="color:var(--gray); font-size:11px; margin-top:4px; margin-left:22px;">Automatically adds this purchase to your Operational Flow expenses.</p>
+                </div>
+                <div style="display:flex; justify-content:flex-end; gap:12px;">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('addAssetModal')">Cancel</button>
+                    <button type="submit" class="btn btn-gold">Record Asset</button>
+                </div>
+            </form>
         </div>
     </div>
 
@@ -2803,10 +2854,56 @@
         window.openPaymentModal = openPaymentModal;
         window.viewDocument = viewDocument;
         window.closeDocModal = closeDocModal;
+        window.openAddAssetModal = openAddAssetModal;
 
         // Modern Event Binding
         document.getElementById('emailInviteBtn').addEventListener('click', openInviteModal);
         document.getElementById('invitePartnerForm').addEventListener('submit', handleInviteSubmit);
+        document.getElementById('addAssetForm').addEventListener('submit', handleAddAssetSubmit);
+
+        function openAddAssetModal() {
+            document.getElementById('addAssetForm').reset();
+            document.getElementById('addAssetModal').style.display = 'flex';
+        }
+
+        async function handleAddAssetSubmit(e) {
+            e.preventDefault();
+            const btn = e.target.querySelector('button[type="submit"]');
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            btn.disabled = true;
+
+            const payload = {
+                name: document.getElementById('asset-name').value,
+                category: document.getElementById('asset-category').value,
+                serial_number: document.getElementById('asset-serial').value || null,
+                purchase_cost: parseFloat(document.getElementById('asset-cost').value) || 0,
+                purchase_date: document.getElementById('asset-date').value || null,
+                auto_expense: document.getElementById('asset-auto-expense').checked
+            };
+
+            try {
+                const res = await apiFetch('/api/payouts/assets', {
+                    method: 'POST',
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    toast("Asset recorded successfully!", "success");
+                    closeModal('addAssetModal');
+                    fetchAssets();
+                    fetchStats(); // Update the top-level cards
+                } else {
+                    const err = await res.json();
+                    toast(err.detail || "Failed to record asset", "error");
+                }
+            } catch (err) {
+                console.error(err);
+                toast("Network error while saving asset", "error");
+            } finally {
+                btn.innerHTML = 'Record Asset';
+                btn.disabled = false;
+            }
+        }
 
         // Initialize
         checkAuth();

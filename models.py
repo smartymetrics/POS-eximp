@@ -555,6 +555,7 @@ class AssetCreate(BaseModel):
     purchase_date: Optional[date] = None
     procurement_id: Optional[str] = None
     assigned_to: Optional[str] = None
+    auto_expense: Optional[bool] = False
 
 class VoidExpenditureRequest(BaseModel):
     reason: str

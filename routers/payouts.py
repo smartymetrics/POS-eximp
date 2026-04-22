@@ -393,8 +393,29 @@ async def trigger_manual_receipt(request_id: str, bg_tasks: BackgroundTasks, cur
 @router.post("/assets")
 async def record_company_asset(data: AssetCreate, current_admin=Depends(require_roles(["admin", "super_admin"]))):
     db = get_db()
-    res = await db_execute(lambda: db.table("company_assets").insert(data.dict()).execute())
-    return res.data[0]
+    
+    # 1. Insert the asset
+    asset_data = data.dict(exclude={"auto_expense"})
+    res = await db_execute(lambda: db.table("company_assets").insert(asset_data).execute())
+    new_asset = res.data[0]
+    
+    # 2. Automated Expense Flow (Option 2)
+    if data.auto_expense and data.purchase_cost and data.purchase_cost > 0:
+        expense_payload = {
+            "title": f"Asset Purchase: {data.name}",
+            "description": f"Automated expense log for {data.category} (SN: {data.serial_number or 'N/A'})",
+            "amount_gross": float(data.purchase_cost),
+            "amount_paid": float(data.purchase_cost),
+            "net_payout_amount": float(data.purchase_cost),
+            "status": "paid",
+            "payout_method": "direct_pay",
+            "requester_id": current_admin['sub'],
+            "is_wht_applicable": False,
+            "created_at": data.purchase_date.isoformat() if data.purchase_date else datetime.now().isoformat()
+        }
+        await db_execute(lambda: db.table("expenditure_requests").insert(expense_payload).execute())
+        
+    return new_asset
 
 @router.get("/assets")
 async def list_assets(assigned_to: Optional[str] = None, current_admin=Depends(require_roles(["admin", "super_admin"]))):
