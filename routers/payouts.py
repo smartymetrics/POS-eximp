@@ -928,102 +928,123 @@ async def get_payout_stats(
         .lte("created_at", end_ts)
         
     res = await db_execute(lambda: query.execute())
-    data = res.data or []
+    exp_data = res.data or []
+
+    # 2b. Commission Earnings Query (The Earned Ledger)
+    comm_query = db.table("commission_earnings")\
+        .select("*, sales_reps(name)")\
+        .eq("is_voided", False)\
+        .gte("created_at", start_ts)\
+        .lte("created_at", end_ts)
     
-    # Aggregation for Charts
-    # If period <= 31 days, group by Day. Otherwise group by Month.
+    comm_res = await db_execute(lambda: comm_query.execute())
+    comm_data = comm_res.data or []
+
+    # Initialize Intelligence
+    segment_stats = {
+        "commissions": {"paid": 0, "owed": 0},
+        "reimbursements": {"paid": 0, "owed": 0},
+        "ops": {"paid": 0, "owed": 0}
+    }
+    
+    payees = {}; requesters = {}; creditors = {}; period_totals = {}
+    total_gross = 0; total_paid = 0; total_ap = 0; total_wht = 0
+    
     date_format_len = 10 if (days and days <= 31) or (not days and start_date) else 7
     
-    period_totals = {}
-    categories = {}
-    payees = {}
-    requesters = {}
-    total_gross = 0
-    total_wht = 0
-    
-    creditors = {}
-    total_paid = 0
-    total_ap = 0
-    
-    for r in data:
-        bucket = r['created_at'][:date_format_len]
-        gross_val = float(r['amount_gross'] or 0)
-        net_val = float(r['net_payout_amount'] or 0)
-        paid_val = float(r['amount_paid'] or 0)
-        balance = max(0, net_val - paid_val)
+    # PROCESS EXPENDITURE REQUESTS
+    for r in exp_data:
+        # Date Bucketing
+        bucket = (r.get('created_at') or datetime.now().isoformat())[:date_format_len]
         
-        period_totals[bucket] = period_totals.get(bucket, 0) + gross_val
+        # Financial Parsing
+        gross = float(r.get('amount_gross') or 0)
+        net = float(r.get('net_payout_amount') or 0)
+        paid = float(r.get('amount_paid') or 0)
+        wht = float(r.get('wht_amount') or 0)
+        owed = max(0, net - paid)
         
-        method = r['payout_method'] or 'Other'
-        categories[method] = categories.get(method, 0) + gross_val
+        # CATEGORIZATION ENGINE
+        v_info = r.get('vendors') or {}
+        v_type = v_info.get('type', 'company')
+        p_type = (r.get('payment_type') or '').lower()
+        p_method = (r.get('payout_method') or '').lower()
         
-        # Payee Aggregation (Actual Cash Paid)
-        p_name = r.get('vendors', {}).get('name', 'Unknown Payee') if r.get('vendors') else 'Unknown Payee'
-        payees[p_name] = payees.get(p_name, 0) + paid_val
+        # 1. Commission Logic
+        if p_type == 'commission' or v_type == 'staff':
+            cat = "commissions"
+        # 2. Reimbursement Logic
+        elif p_method == 'reimbursement' or p_type == 'reimbursement':
+            cat = "reimbursements"
+        # 3. Operations (Catch-all)
+        else:
+            cat = "ops"
+            
+        segment_stats[cat]["paid"] += paid
+        segment_stats[cat]["owed"] += owed
         
-        # Creditor Aggregation (Outstanding Balance)
-        if balance > 0:
-            creditors[p_name] = creditors.get(p_name, 0) + balance
+        # Analytics Aggregation
+        p_name = v_info.get('name', 'General Vendor')
+        r_name = (r.get('admins') or {}).get('full_name', 'System')
         
-        # Requester Aggregation
-        req_name = r.get('admins', {}).get('full_name', 'Unknown Admin') if r.get('admins') else 'Unknown Admin'
-        requesters[req_name] = requesters.get(req_name, 0) + gross_val
+        payees[p_name] = payees.get(p_name, 0) + paid
+        requesters[r_name] = requesters.get(r_name, 0) + gross
+        if owed > 0: creditors[p_name] = creditors.get(p_name, 0) + owed
         
-        total_gross += gross_val
-        total_paid += paid_val
-        total_ap += balance
-        total_wht += float(r['wht_amount'] or 0)
+        total_gross += gross; total_paid += paid; total_ap += owed; total_wht += wht
+        period_totals[bucket] = period_totals.get(bucket, 0) + gross
+
+    # PROCESS COMMISSION EARNINGS
+    for c in comm_data:
+        bucket = (c.get('created_at') or datetime.now().isoformat())[:date_format_len]
+        amount = float(c.get('commission_amount') or 0)
+        is_paid = c.get('is_paid', False)
         
-    # Formatting Trend
-    sorted_buckets = sorted(period_totals.keys())
-    trend = [{"month": b, "total": period_totals[b]} for b in sorted_buckets]
-    
-    # Sort and slice top 5
-    top_payees = sorted(payees.items(), key=lambda x: x[1], reverse=True)[:5]
-    top_requesters = sorted(requesters.items(), key=lambda x: x[1], reverse=True)[:5]
-    top_creditors = sorted(creditors.items(), key=lambda x: x[1], reverse=True)[:5]
-    
-    # 3. Active Requests (Always Current State)
-    active_count = (await db_execute(lambda: db.table("expenditure_requests").select("id", count="exact").eq("status", "pending").execute())).count
-    
-    # 4. Liability (Cumulative WHT awaiting remittance)
-    # This reflects the current ledger state for FIRS compliance.
+        segment_stats["commissions"]["paid"] += amount if is_paid else 0
+        segment_stats["commissions"]["owed"] += 0 if is_paid else amount
+        
+        rep_name = (c.get('sales_reps') or {}).get('name', 'Staff Partner')
+        payees[rep_name] = payees.get(rep_name, 0) + (amount if is_paid else 0)
+        if not is_paid: creditors[rep_name] = creditors.get(rep_name, 0) + amount
+        
+        total_paid += amount if is_paid else 0
+        total_ap += 0 if is_paid else amount
+        period_totals[bucket] = period_totals.get(bucket, 0) + amount
+
+    # 4. Global Current State Indicators
     try:
-        liability_res = await db_execute(lambda: db.table("expenditure_requests")\
-            .select("wht_amount")\
-            .in_("status", ["approved", "partially_paid", "paid"])\
-            .eq("is_wht_remitted", False)\
-            .gt("wht_amount", 0)\
-            .execute())
+        active_count_res = await db_execute(lambda: db.table("expenditure_requests").select("id", count="exact").eq("status", "pending").execute())
+        active_count = active_count_res.count
+        
+        liability_res = await db_execute(lambda: db.table("expenditure_requests").select("wht_amount").in_("status", ["approved", "partially_paid", "paid"]).eq("is_wht_remitted", False).gt("wht_amount", 0).execute())
         total_liability = sum(float(r['wht_amount'] or 0) for r in liability_res.data)
-    except Exception as e:
-        logger.warning(f"Liability calculation fallback (column likely missing): {e}")
-        # If the column doesn't exist yet, we fallback to the period total
-        # until the user runs the provided SQL migration.
-        total_liability = total_wht
-    
-    # 5. Company Assets (Total Book Value)
-    try:
+        
         asset_res = await db_execute(lambda: db.table("company_assets").select("purchase_cost").execute())
         total_assets = sum(float(r.get('purchase_cost') or 0) for r in asset_res.data)
-    except Exception as e:
-        logger.warning(f"Asset calculation failed: {e}")
-        total_assets = 0
+    except:
+        active_count = 0; total_liability = total_wht; total_assets = 0
+
+    # Sort Analytics
+    top_payees = dict(sorted(payees.items(), key=lambda x: x[1], reverse=True)[:5])
+    top_requesters = dict(sorted(requesters.items(), key=lambda x: x[1], reverse=True)[:5])
+    top_creditors = dict(sorted(creditors.items(), key=lambda x: x[1], reverse=True)[:5])
 
     return {
-        "trend": trend,
-        "categories": categories,
-        "top_payees": dict(top_payees),
-        "top_requesters": dict(top_requesters),
-        "top_creditors": dict(top_creditors),
-        "total_expenditure": total_gross,
-        "total_paid": total_paid,
-        "total_ap": total_ap,
-        "total_wht_period": total_wht,
-        "total_net_liability": total_liability,
-        "total_asset_value": total_assets,
-        "active_request_count": active_count,
-        "count_period": len(data)
+        "overview": {
+            "total_paid": total_paid,
+            "total_owed": total_ap,
+            "total_wht": total_liability,
+            "active_requests": active_count,
+            "total_assets": total_assets
+        },
+        "segments": segment_stats,
+        "analytics": {
+            "top_payees": top_payees,
+            "top_requesters": top_requesters,
+            "top_creditors": top_creditors,
+            "categories": {k.title(): (v["paid"] + v["owed"]) for k, v in segment_stats.items() if (v["paid"] + v["owed"]) > 0}
+        },
+        "trend": [{"month": b, "total": period_totals[b]} for b in sorted(period_totals.keys())]
     }
 
 @router.post("/stats/send-email")
