@@ -1237,6 +1237,21 @@
                     </button>
                 </div>
             </div>
+            <div style="background:var(--dark2); padding:16px 24px; border-radius:12px; border:1px solid var(--border); margin-bottom:24px; display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;">
+                <div style="flex:1; min-width:200px;">
+                    <label class="form-label">Search Ledger</label>
+                    <input type="text" id="comm-search" class="form-input" placeholder="Search rep, client, or invoice..." onkeyup="renderCommissions(window.commissionData || [])">
+                </div>
+                <div>
+                    <label class="form-label">Start Date</label>
+                    <input type="date" id="comm-start-date" class="form-input">
+                </div>
+                <div>
+                    <label class="form-label">End Date</label>
+                    <input type="date" id="comm-end-date" class="form-input">
+                </div>
+                <button class="btn btn-gold" onclick="fetchCommissions()" style="padding: 10px 24px;">APPLY FILTER</button>
+            </div>
             <div class="table-container">
                 <table class="data-table">
                     <thead>
@@ -2038,21 +2053,39 @@
 
         async function fetchCommissions() {
             try {
-                // Fetch from the standard commission earnings endpoint
-                const res = await apiFetch('/api/commission/earnings');
-                const data = await res.json();
-                renderCommissions(data);
+                const startDate = document.getElementById('comm-start-date')?.value;
+                const endDate = document.getElementById('comm-end-date')?.value;
+                let url = '/api/commission/earnings';
+                if (startDate || endDate) {
+                    const params = new URLSearchParams();
+                    if (startDate) params.append('start_date', startDate);
+                    if (endDate) params.append('end_date', endDate);
+                    url += `?${params.toString()}`;
+                }
+                const res = await apiFetch(url);
+                window.commissionData = await res.json();
+                renderCommissions(window.commissionData);
             } catch (e) { console.error("Commission load fail", e); }
         }
 
         function renderCommissions(data) {
             const body = document.getElementById('commissionBody');
             if (!body) return;
-            if (data.length === 0) {
-                body.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:40px; color:var(--gray);">No commission records found.</td></tr>';
+            
+            const searchTerm = (document.getElementById('comm-search')?.value || "").toLowerCase();
+            const filteredData = data.filter(c => {
+                if (!searchTerm) return true;
+                return (c.sales_reps?.name || "").toLowerCase().includes(searchTerm) ||
+                       (c.clients?.full_name || "").toLowerCase().includes(searchTerm) ||
+                       (c.invoices?.invoice_number || "").toLowerCase().includes(searchTerm) ||
+                       (c.estate_name || "").toLowerCase().includes(searchTerm);
+            });
+
+            if (filteredData.length === 0) {
+                body.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:40px; color:var(--gray);">No commission records match your filters.</td></tr>';
                 return;
             }
-            body.innerHTML = data.map(c => {
+            body.innerHTML = filteredData.map(c => {
                 const net = c.net_commission || c.final_amount || c.commission_amount;
                 const gross = c.gross_commission || c.commission_amount || (net / 0.95);
                 const wht = c.wht_amount || (gross - net);
@@ -2319,7 +2352,11 @@
                 <tr>
                     <td><strong>${v.name}</strong><br><small style="color:var(--gray)">${v.email}</small></td>
                     <td>${v.type.toUpperCase()}</td>
-                    <td>${v.tin || v.rc_number || 'N/A'}</td>
+                    <td>
+                        ${v.tin ? `<div style="font-weight:700; font-size:11px;">TIN: ${v.tin}</div>` : ''}
+                        ${v.rc_number ? `<div style="color:var(--gray); font-size:10px;">RC: ${v.rc_number}</div>` : ''}
+                        ${!v.tin && !v.rc_number ? 'N/A' : ''}
+                    </td>
                     <td>${v.bank_name || 'N/A'}</td>
                     <td>${v.account_number || 'xxxxx'}<br><small style="color:var(--gray)">${v.account_name || ''}</small></td>
                     <td>
@@ -2352,9 +2389,9 @@
 
         async function savePartnerRates() {
             const id = document.getElementById('edit-partner-id').value;
-            const status = document.getElementById('edit-partner-status').checked;
-            const comm = document.getElementById('edit-partner-comm').value;
-            const wht = document.getElementById('edit-partner-wht').value;
+            const status = document.getElementById('is-commission-partner').checked;
+            const comm = document.getElementById('partner-gross-rate').value;
+            const wht = document.getElementById('partner-wht-rate').value;
             
             try {
                 const res = await apiFetch(`/api/payouts/vendors/${id}/commission-config`, {
@@ -2366,9 +2403,9 @@
                     })
                 });
                 if (res.ok) {
-                    toast("Vendor rates updated successfully", "success");
-                    closeModal('editPartnerRateModal');
-                    fetchVendors(); // Refresh registry
+                    toast("Vendor partner status updated", "success");
+                    closeModal('editPartnerModal');
+                    fetchVendors(); 
                 } else {
                     const err = await res.json();
                     toast(err.detail || "Update failed", "error");
@@ -3481,39 +3518,9 @@
 
         document.getElementById('editPartnerForm').addEventListener('submit', async (e) => {
             e.preventDefault();
-            const id = document.getElementById('edit-partner-id').value;
-            const btn = e.target.querySelector('button[type="submit"]');
-            
-            const payload = {
-                is_commission_partner: document.getElementById('is-commission-partner').checked,
-                gross_commission_rate: parseFloat(document.getElementById('partner-gross-rate').value),
-                wht_rate: parseFloat(document.getElementById('partner-wht-rate').value)
-            };
-
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
-            btn.disabled = true;
-
-            try {
-                const res = await apiFetch(`/api/payouts/vendors/${id}/partner-settings`, {
-                    method: 'PATCH',
-                    body: JSON.stringify(payload)
-                });
-
-                if (res.ok) {
-                    toast("Partner settings synchronized!", "success");
-                    closeModal('editPartnerModal');
-                    fetchVendors();
-                } else {
-                    const err = await res.json();
-                    toast(err.detail || "Update failed", "error");
-                }
-            } catch (err) {
-                toast("Network connection error", "error");
-            } finally {
-                btn.innerHTML = 'Save Settings';
-                btn.disabled = false;
-            }
+            savePartnerRates();
         });
+
 
         // Initialize
         checkAuth();

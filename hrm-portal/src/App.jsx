@@ -2775,6 +2775,8 @@ function StaffPayroll({ user }) {
   const [tab, setTab] = useState("payslips");
   const [data, setData] = useState({ payslips: [], commissions: null });
   const [loading, setLoading] = useState(true);
+  const [viewingDocs, setViewingDocs] = useState(null);
+  const [searchTerm, setSearchTerm] = useState("");
   const [dates, setDates] = useState({
     start: new Date(new Date().getFullYear(), new Date().getMonth() - 2, 1).toISOString().split('T')[0],
     end: new Date().toISOString().split('T')[0]
@@ -2794,9 +2796,24 @@ function StaffPayroll({ user }) {
     finally { setLoading(false); }
   };
 
+  const viewDocument = async (requestId) => {
+    try {
+      const res = await apiFetch(`${API_BASE}/payouts/requests/${requestId}/proof-files`);
+      setViewingDocs(res);
+    } catch (e) { alert("Could not load proof files"); }
+  };
+
   useEffect(() => { loadData(); }, [dates.start, dates.end]);
 
-  const totalEarnedFiltered = data.commissions?.earnings?.reduce((a, b) => a + parseFloat(b.final_amount), 0) || 0;
+  const filteredEarnings = data.commissions?.earnings?.filter(e => {
+    if (!searchTerm) return true;
+    const term = searchTerm.toLowerCase();
+    return (e.clients?.full_name || "").toLowerCase().includes(term) ||
+           (e.invoices?.invoice_number || "").toLowerCase().includes(term) ||
+           (e.estate_name || "").toLowerCase().includes(term);
+  }) || [];
+
+  const totalEarnedFiltered = filteredEarnings.reduce((a, b) => a + parseFloat(b.final_amount || b.net_commission || 0), 0) || 0;
   const totalPaidFiltered = data.commissions?.payouts?.reduce((a, b) => a + parseFloat(b.total_amount), 0) || 0;
 
   return (
@@ -2808,9 +2825,10 @@ function StaffPayroll({ user }) {
         </div>
         <div style={{ display: "flex", alignItems: "center", gap: 10, background: C.base, padding: "4px 12px", borderRadius: 8, border: `1px solid ${C.border}` }}>
           <div style={{ fontSize: 11, color: C.sub, fontWeight: 700 }}>FILTER:</div>
-          <input type="date" className="inp" style={{ padding: "4px 8px", fontSize: 11, width: 130, border: "none", background: "transparent" }} value={dates.start} onChange={e => setDates(d => ({ ...d, start: e.target.value }))} />
+          <input type="text" className="inp" placeholder="Search client, invoice..." style={{ padding: "4px 8px", fontSize: 11, width: 140, border: "none", background: "transparent", borderRight: `1px solid ${C.border}` }} value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+          <input type="date" className="inp" style={{ padding: "4px 8px", fontSize: 11, width: 120, border: "none", background: "transparent" }} value={dates.start} onChange={e => setDates(d => ({ ...d, start: e.target.value }))} />
           <div style={{ fontSize: 11, color: C.sub }}>to</div>
-          <input type="date" className="inp" style={{ padding: "4px 8px", fontSize: 11, width: 130, border: "none", background: "transparent" }} value={dates.end} onChange={e => setDates(d => ({ ...d, end: e.target.value }))} />
+          <input type="date" className="inp" style={{ padding: "4px 8px", fontSize: 11, width: 120, border: "none", background: "transparent" }} value={dates.end} onChange={e => setDates(d => ({ ...d, end: e.target.value }))} />
         </div>
       </div>
 
@@ -2874,28 +2892,38 @@ function StaffPayroll({ user }) {
                   </div>
                   <div className="tw">
                     <table className="ht">
-                      <thead><tr>{['Date', 'Client Info', 'Invoice', 'Gross', 'WHT', 'Net', 'Status'].map(h => <th key={h}>{h}</th>)}</tr></thead>
+                      <thead><tr>{['Date', 'Client & Property', 'Invoice', 'Revenue', 'Rate', 'Gross', 'Tax', 'Net', 'Status', ''].map(h => <th key={h}>{h}</th>)}</tr></thead>
                       <tbody>
-                        {data.commissions.earnings.map(e => {
+                        {filteredEarnings.map(e => {
                           const gross = e.gross_commission || e.commission_amount;
                           const wht = e.wht_amount || 0;
                           const net = e.net_commission || e.final_amount;
+                          const revenue = e.payment_amount || (gross / (e.commission_rate / 100));
+                          const rate = e.commission_rate || (gross / revenue * 100);
+                          
                           return (
                             <tr key={e.id}>
-                              <td style={{ fontSize: 12, color: C.sub }}>{new Date(e.created_at).toLocaleDateString()}</td>
+                              <td style={{ fontSize: 11, color: C.sub }}>{new Date(e.created_at).toLocaleDateString()}</td>
                               <td>
                                 <div style={{ fontWeight: 700 }}>{e.clients?.full_name || "—"}</div>
-                                <div style={{ fontSize: 10, color: C.muted }}>Estate: {e.estate_name}</div>
+                                <div style={{ fontSize: 10, color: C.muted }}>Estate: {e.estate_name || "General"}</div>
                               </td>
                               <td style={{ fontSize: 11, color: C.sub }}>{e.invoices?.invoice_number || "—"}</td>
+                              <td style={{ fontWeight: 600 }}>{fmt(revenue)}</td>
+                              <td style={{ fontSize: 11 }}>{Number(rate).toFixed(1)}%</td>
                               <td style={{ fontWeight: 600 }}>{fmt(gross)}</td>
-                              <td style={{ color: "#EF4444", fontSize: 12 }}>-{fmt(wht)}</td>
+                              <td style={{ color: "#EF4444", fontSize: 11 }}>-{fmt(wht)}</td>
                               <td style={{ fontWeight: 800, color: T.gold }}>{fmt(net)}</td>
-                              <td><span className={`tg ${e.is_paid ? "tg2" : parseFloat(e.amount_paid || 0) > 0 ? "ty" : "tr"}`}>{e.is_paid ? "Paid" : parseFloat(e.amount_paid || 0) > 0 ? "Partial" : "Unpaid"}</span></td>
+                              <td><span className={`tg ${e.is_paid ? "tg2" : parseFloat(e.amount_paid || 0) > 0 ? "ty" : "tr"}`} style={{ fontSize: 9 }}>{e.is_paid ? "Paid" : parseFloat(e.amount_paid || 0) > 0 ? "Partial" : "Unpaid"}</span></td>
+                              <td>
+                                {e.expenditure_id && (
+                                  <button onClick={() => viewDocument(e.expenditure_id)} className="bg" style={{ fontSize: 9, padding: "4px 8px" }}>PROOF</button>
+                                )}
+                              </td>
                             </tr>
                           );
                         })}
-                        {data.commissions.earnings.length === 0 && <tr><td colSpan="7" style={{ textAlign: "center", padding: 30, color: C.muted }}>No earnings records found for this date range.</td></tr>}
+                        {filteredEarnings.length === 0 && <tr><td colSpan="10" style={{ textAlign: "center", padding: 30, color: C.muted }}>No earnings records match your filters.</td></tr>}
                       </tbody>
                     </table>
                   </div>
@@ -2927,8 +2955,36 @@ function StaffPayroll({ user }) {
         )
       )}
     </div>
-  );
-}
+
+    {viewingDocs && (
+      <Modal onClose={() => setViewingDocs(null)} title={viewingDocs.title || "Document Intelligence"} width={800}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+          <div style={{ padding: 14, background: `${T.orange}0D`, borderRadius: 12, border: `1px solid ${T.orange}22` }}>
+            <div style={{ fontSize: 11, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Payout Proof Documentation</div>
+            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+              {[...(viewingDocs.receipt_files || []), ...(viewingDocs.proforma_files || [])].map((file, i) => (
+                <a key={i} href={file.startsWith('http') ? file : `${API_BASE}/payouts/requests/${viewingDocs.id}/view-document/receipt?file_index=${i}`} target="_blank" rel="noreferrer" className="bg" style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", textDecoration: "none" }}>
+                  <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                  <span style={{ fontSize: 12 }}>File #{i + 1}</span>
+                </a>
+              ))}
+              {[...(viewingDocs.receipt_files || []), ...(viewingDocs.proforma_files || [])].length === 0 && (
+                <div style={{ fontSize: 13, color: C.muted }}>No physical proof files attached to this record.</div>
+              )}
+            </div>
+          </div>
+          <div style={{ height: 400, background: "#000", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", color: "#666" }}>
+            <div style={{ textAlign: "center" }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>📄</div>
+              <div style={{ fontSize: 14 }}>Click a file above to view secure attachment</div>
+              <div style={{ fontSize: 11, marginTop: 4, color: "#444" }}>Encrypted Storage Stream Active</div>
+            </div>
+          </div>
+        </div>
+      </Modal>
+    )}
+  </div>
+);
 
 
 // ─── MODULE: LEAVE MANAGEMENT ────────────────────────────────────────────────
