@@ -606,9 +606,15 @@ async def send_report_email(emails: list, subject: str, message: str, attachment
 
 
 def _commission_html(rep: dict, client: dict, invoice: dict, earning: dict) -> str:
-    amount = float(earning["payment_amount"])
-    rate = float(earning["commission_rate"])
-    comm = float(earning["commission_amount"])
+    # Handle triad with fallbacks
+    rate = float(earning.get("commission_rate") or 0)
+    gross_val = float(earning.get("gross_commission") or earning["commission_amount"])
+    wht_val = float(earning.get("wht_amount") or 0)
+    net_val = float(earning.get("net_commission") or (gross_val - wht_val))
+    
+    # Calculate effective WHT rate for display
+    wht_rate_val = (wht_val / gross_val * 100) if gross_val > 0 else 5.0
+    wht_rate_pct = "{:.1f}".format(wht_rate_val)
     
     balance = float(invoice.get("balance_due", 0))
     balance_note = ""
@@ -632,13 +638,27 @@ def _commission_html(rep: dict, client: dict, invoice: dict, earning: dict) -> s
           <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #777;">Client:</td><td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; color: #333;"><strong>{client.get('full_name')}</strong></td></tr>
           <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #777;">Property:</td><td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; color: #333;">{invoice.get('property_name')}</td></tr>
           <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #777;">Invoice:</td><td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; color: #333;">{invoice.get('invoice_number')}</td></tr>
-          <tr><td style="padding: 8px 0; border-bottom: 1px solid #333; color: #777;">Payment:</td><td style="padding: 8px 0; border-bottom: 1px solid #333; text-align: right; color: #333;"><strong>NGN {amount:,.2f}</strong></td></tr>
+          <tr><td style="padding: 8px 0; border-bottom: 1px solid #333; color: #777;">Payment Rec'd:</td><td style="padding: 8px 0; border-bottom: 1px solid #333; text-align: right; color: #333;"><strong>NGN {float(earning['payment_amount']):,.2f}</strong></td></tr>
         </table>
         
-        <div style="background: #1A1A1A; padding: 20px; text-align: center; color: #fff; border-radius: 6px;">
-          <p style="margin: 0; font-size: 12px; color: #aaa; text-transform: uppercase;">Your Commission</p>
-          <p style="margin: 8px 0 0; font-size: 28px; color: #27ae60; font-weight: bold;">NGN {comm:,.2f}</p>
-          <p style="margin: 4px 0 0; font-size: 13px; color: #888;">Rate applied: {rate}%</p>
+        <div style="background: #1A1A1A; padding: 24px; border-radius: 8px; margin: 24px 0;">
+          <table style="width: 100%; color: #ccc; font-size: 13px;">
+            <tr>
+                <td style="text-align: left; padding: 4px 0;">Gross Commission ({rate}%)</td>
+                <td style="text-align: right; color: #fff;">NGN {gross_val:,.2f}</td>
+            </tr>
+            <tr>
+                <td style="text-align: left; padding: 4px 0;">WHT Withheld ({wht_rate_pct}%)</td>
+                <td style="text-align: right; color: #e74c3c;">-NGN {wht_val:,.2f}</td>
+            </tr>
+            <tr style="border-top: 1px solid #333;">
+                <td style="text-align: left; padding: 12px 0 0; font-weight: bold; color: #aaa; text-transform: uppercase;">Net Payable</td>
+                <td style="text-align: right; padding: 12px 0 0; color: #27ae60; font-size: 24px; font-weight: bold;">NGN {net_val:,.2f}</td>
+            </tr>
+          </table>
+          <p style="margin: 16px 0 0; font-size: 10px; color: #666; font-style: italic; text-align: center;">
+            * Withholding Tax (WHT) deducted as per the Nigerian Finance Act.
+          </p>
         </div>
         
         {balance_note}
@@ -707,7 +727,7 @@ def _commission_void_html(rep: dict, client: dict, invoice: dict, earning: dict,
         </div>
         
         <table style="width: 100%; border-collapse: collapse; margin: 20px 0; font-size: 14px;">
-          <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #777;">Amount Reversed:</td><td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; color: #e74c3c;"><strong>-NGN {amount:,.2f}</strong></td></tr>
+          <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #777;">Net Amount Reversed:</td><td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; color: #e74c3c;"><strong>-NGN {float(earning.get('net_commission') or earning['commission_amount']):,.2f}</strong></td></tr>
           <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #777;">Property:</td><td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; color: #333;">{invoice.get('property_name')}</td></tr>
         </table>
         
@@ -825,12 +845,23 @@ def _refund_receipt_html(invoice: dict, payment: dict, client: dict) -> str:
 
 def _commission_paid_html(rep: dict, batch: dict) -> str:
     amount_val = float(batch.get("total_amount", 0))
+    # Dynamic tax rate lookup (default to 5% if not set)
+    wht_rate = float(rep.get("wht_rate") if rep.get("wht_rate") is not None else 5.0)
+    
+    # Derive gross/wht for display based on the actual rate
+    # Net = Gross * (1 - Rate/100) => Gross = Net / (1 - Rate/100)
+    divisor = 1 - (wht_rate / 100)
+    gross_val = amount_val / divisor if divisor > 0 else amount_val
+    wht_val = gross_val - amount_val
+    
     amount_str = "{:,.2f}".format(amount_val)
+    gross_str = "{:,.2f}".format(gross_val)
+    wht_str = "{:,.2f}".format(wht_val)
+    wht_pct_str = "{:.1f}".format(wht_rate)
     rep_name = str(rep.get("name", "Rep"))
     ref_val = str(batch.get("reference", "N/A"))
     date_val = str(batch.get("paid_at", "")[:10])
     
-    # Use replacement to avoid ANY f-string/format parsing issues with braces in HTML or quotes
     html = """
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #1A1A1A; padding: 24px; text-align: center;">
@@ -841,18 +872,30 @@ def _commission_paid_html(rep: dict, batch: dict) -> str:
       </div>
       <div style="padding: 32px 24px; background: #fff; border: 1px solid #eee;">
         <p style="color: #333;">Dear <strong>{{rep_name}}</strong>,</p>
-        <p style="color: #555;">We are pleased to inform you that a commission payout has been processed for you.</p>
+        <p style="color: #555;">We are pleased to inform you that a commission payout has been successfully processed and remitted to your account.</p>
         
-        <div style="background: #f9f9f9; border-radius: 8px; padding: 24px; text-align: center; margin: 24px 0;">
-          <p style="color: #888; margin: 0 0 8px; font-size: 13px; text-transform: uppercase;">Amount Paid</p>
-          <p style="color: #27ae60; font-size: 32px; font-weight: bold; margin: 0;">NGN {{amount_str}}</p>
-          <hr style="border-color: #ddd; margin: 16px 0;">
-          <p style="color: #555; font-size: 13px;">Reference: <strong>{{reference}}</strong></p>
-          <p style="color: #555; font-size: 12px;">Date: {{date_str}}</p>
+        <div style="background: #1A1A1A; padding: 24px; border-radius: 8px; margin: 24px 0;">
+          <table style="width: 100%; color: #ccc; font-size: 13px; border-collapse: collapse;">
+            <tr>
+                <td style="text-align: left; padding: 6px 0;">Gross Commission Accrued</td>
+                <td style="text-align: right; color: #fff;">NGN {{gross_str}}</td>
+            </tr>
+            <tr>
+                <td style="text-align: left; padding: 6px 0;">Withholding Tax ({{wht_pct_str}}% WHT)</td>
+                <td style="text-align: right; color: #e74c3c;">-NGN {{wht_str}}</td>
+            </tr>
+            <tr style="border-top: 1px solid #333;">
+                <td style="text-align: left; padding: 15px 0 0; font-weight: bold; color: #aaa; text-transform: uppercase;">Amount Disbursed (Net)</td>
+                <td style="text-align: right; padding: 15px 0 0; color: #27ae60; font-size: 28px; font-weight: bold;">NGN {{amount_str}}</td>
+            </tr>
+          </table>
+          <p style="margin: 16px 0 0; font-size: 10px; color: #666; font-style: italic; text-align: center;">
+            * Payout Reference: {{reference}} | Date: {{date_str}}
+          </p>
         </div>
         
-        <p style="color: #555; font-size: 13px;">Please check your bank account or contact the Finance Department if you have any questions.</p>
-        <p style="color: #555; font-size: 13px;">Keep up the great work!</p>
+        <p style="color: #555; font-size: 13px;">The funds have been transferred as per your registered bank details. Please allow 24-48 hours for the transaction to reflect depending on your bank.</p>
+        <p style="color: #555; font-size: 13px; font-weight: bold;">Thank you for your partnership and continued dedication!</p>
         
         <hr style="border-color: #eee; margin: 24px 0;">
         <p style="color: #999; font-size: 12px; margin: 0; text-align: center;">
@@ -861,7 +904,7 @@ def _commission_paid_html(rep: dict, batch: dict) -> str:
         </p>
       </div>
     </div>"""
-    return html.replace("{{rep_name}}", rep_name).replace("{{amount_str}}", amount_str).replace("{{reference}}", ref_val).replace("{{date_str}}", date_val)
+    return html.replace("{{rep_name}}", rep_name).replace("{{amount_str}}", amount_str).replace("{{gross_str}}", gross_str).replace("{{wht_str}}", wht_str).replace("{{wht_pct_str}}", wht_pct_str).replace("{{reference}}", ref_val).replace("{{date_str}}", date_val)
 
 async def send_commission_paid_email(rep: dict, batch: dict):
     from routers.analytics import log_activity

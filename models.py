@@ -324,12 +324,16 @@ class SalesRepCreate(BaseModel):
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     commission_rate: Decimal = Decimal("5.0")
+    gross_commission_rate: Optional[Decimal] = None
+    wht_rate: Decimal = Decimal("5.0")
 
 class SalesRepUpdate(BaseModel):
     name: Optional[str] = None
     email: Optional[EmailStr] = None
     phone: Optional[str] = None
     commission_rate: Optional[Decimal] = None
+    gross_commission_rate: Optional[Decimal] = None
+    wht_rate: Optional[Decimal] = None
     is_active: Optional[bool] = None
 
 class ResolveUnmatchedRequest(BaseModel):
@@ -362,6 +366,7 @@ class CommissionRateCreate(BaseModel):
     sales_rep_id: str
     estate_name: str
     rate: Decimal
+    wht_rate: Optional[Decimal] = Decimal("5.0")
     effective_from: date
     reason: Optional[str] = None
 
@@ -378,6 +383,7 @@ class CommissionPayout(BaseModel):
 
 class DefaultRateUpdate(BaseModel):
     rate: Decimal
+    wht_rate: Optional[Decimal] = Decimal("5.0")
     reason: Optional[str] = None
 
 
@@ -519,6 +525,11 @@ class VendorCreate(BaseModel):
     account_name: Optional[str] = None
     id_document_url: Optional[str] = None
     admin_id: Optional[str] = None
+
+class VendorPartnerUpdate(BaseModel):
+    is_commission_partner: bool
+    gross_commission_rate: Decimal
+    wht_rate: Decimal = Decimal("5.0")
 
 class ExpenditureRequestCreate(BaseModel):
     title: str

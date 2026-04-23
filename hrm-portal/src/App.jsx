@@ -2431,14 +2431,16 @@ function AgentCommissions() {
     try {
       const d = await apiFetch(`${API_BASE}/commission/default-rate`);
       setDefaultRate(d.rate || "5.0");
-    } catch (e) { setDefaultRate("5.0"); }
+      setWhtRate(d.wht_rate || "5.0");
+    } catch (e) { setDefaultRate("5.0"); setWhtRate("5.0"); }
   };
+  const [whtRate, setWhtRate] = useState("5.0");
   const saveDefaultRate = async () => {
     setSavingRate(true);
     try {
       await apiFetch(`${API_BASE}/commission/default-rate`, {
         method: "PATCH",
-        body: JSON.stringify({ rate: parseFloat(defaultRate), reason: "Updated via HR Portal" })
+        body: JSON.stringify({ rate: parseFloat(defaultRate), wht_rate: parseFloat(whtRate), reason: "Updated via HR Portal" })
       });
       setShowRateModal(false);
     } catch (e) { alert("Failed: " + e.message); }
@@ -2452,6 +2454,7 @@ function AgentCommissions() {
     setRepRateDate(new Date().toISOString().split("T")[0]);
     setShowRepRateModal(true);
   };
+  const [repRateWht, setRepRateWht] = useState("5.0");
   const saveRepRate = async () => {
     if (!repRateEstate || !repRateVal) return alert("Estate and rate required.");
     setSavingRepRate(true);
@@ -2462,6 +2465,7 @@ function AgentCommissions() {
           sales_rep_id: repRateTarget.id,
           estate_name: repRateEstate,
           rate: parseFloat(repRateVal),
+          wht_rate: parseFloat(repRateWht),
           effective_from: repRateDate,
           reason: "Set via HR Portal"
         })
@@ -2640,19 +2644,23 @@ function AgentCommissions() {
           ) : (
             <div className="tw">
               <table className="ht">
-                <thead><tr>{["Rep", "Client", "Invoice", "Commission", "Status", "Collected"].map(h => <th key={h}>{h}</th>)}</tr></thead>
+                <thead><tr>{["Rep", "Client", "Invoice", "Gross", "WHT", "Net", "Status"].map(h => <th key={h}>{h}</th>)}</tr></thead>
                 <tbody>
                   {earnings.map(e => {
                     const isPaid = e.is_paid;
                     const amtPaid = parseFloat(e.amount_paid || 0);
+                    const gross = e.gross_commission || e.commission_amount;
+                    const wht = e.wht_amount || 0;
+                    const net = e.net_commission || e.final_amount;
                     return (
                       <tr key={e.id}>
                         <td style={{ fontWeight: 700 }}>{e.sales_reps?.name || "—"}</td>
                         <td style={{ fontSize: 12 }}>{e.clients?.full_name || "—"}</td>
                         <td style={{ fontSize: 11, color: C.sub }}>{e.invoices?.invoice_number || "—"}</td>
-                        <td style={{ fontWeight: 700 }}>{fmt(e.final_amount)}</td>
+                        <td style={{ fontWeight: 600 }}>{fmt(gross)}</td>
+                        <td style={{ color: "#EF4444", fontSize: 12 }}>-{fmt(wht)}</td>
+                        <td style={{ fontWeight: 800, color: T.gold }}>{fmt(net)}</td>
                         <td><span className={`tg ${isPaid ? "tg2" : amtPaid > 0 ? "ty" : "tr"}`}>{isPaid ? "Paid" : amtPaid > 0 ? "Partial" : "Unpaid"}</span></td>
-                        <td style={{ fontSize: 12 }}>{isPaid ? fmt(e.amount_paid) : amtPaid > 0 ? `${fmt(amtPaid)} of ${fmt(e.final_amount)}` : "—"}</td>
                       </tr>
                     );
                   })}
@@ -2670,8 +2678,12 @@ function AgentCommissions() {
             <div style={{ background: C.base, border: `1px solid ${C.border}`, borderRadius: 8, padding: 14, fontSize: 12, color: C.sub, lineHeight: 1.6 }}>
               This rate applies to all reps without a custom estate rate. Changes do not affect already-generated earnings.
             </div>
-            <div><Lbl>Default Rate (%)</Lbl>
-              <input type="number" className="inp" step="0.1" min="0" max="100" value={defaultRate} onChange={e => setDefaultRate(e.target.value)} placeholder="5.0" /></div>
+            <div className="g2" style={{ gap: 12 }}>
+              <div><Lbl>Default Rate (%)</Lbl>
+                <input type="number" className="inp" step="0.1" min="0" max="100" value={defaultRate} onChange={e => setDefaultRate(e.target.value)} placeholder="5.0" /></div>
+              <div><Lbl>WHT Rate (%)</Lbl>
+                <input type="number" className="inp" step="0.1" min="0" max="100" value={whtRate} onChange={e => setWhtRate(e.target.value)} placeholder="5.0" /></div>
+            </div>
             <button className="bp" onClick={saveDefaultRate} disabled={savingRate} style={{ padding: 14 }}>
               {savingRate ? "Saving..." : "Save Global Rate"}
             </button>
@@ -2688,9 +2700,11 @@ function AgentCommissions() {
             </div>
             <div><Lbl>Estate Name *</Lbl>
               <input type="text" className="inp" placeholder="e.g. Cloves Estate Phase 2" value={repRateEstate} onChange={e => setRepRateEstate(e.target.value)} /></div>
-            <div className="g2" style={{ gap: 12 }}>
+            <div className="g3" style={{ gap: 12 }}>
               <div><Lbl>Rate (%) *</Lbl>
                 <input type="number" className="inp" step="0.1" min="0" max="100" placeholder="5.0" value={repRateVal} onChange={e => setRepRateVal(e.target.value)} /></div>
+              <div><Lbl>WHT (%) *</Lbl>
+                <input type="number" className="inp" step="0.1" min="0" max="100" placeholder="5.0" value={repRateWht} onChange={e => setRepRateWht(e.target.value)} /></div>
               <div><Lbl>Effective From</Lbl>
                 <input type="date" className="inp" value={repRateDate} onChange={e => setRepRateDate(e.target.value)} /></div>
             </div>
@@ -2860,21 +2874,28 @@ function StaffPayroll({ user }) {
                   </div>
                   <div className="tw">
                     <table className="ht">
-                      <thead><tr>{['Date', 'Client Info', 'Invoice', 'Amount', 'Status'].map(h => <th key={h}>{h}</th>)}</tr></thead>
+                      <thead><tr>{['Date', 'Client Info', 'Invoice', 'Gross', 'WHT', 'Net', 'Status'].map(h => <th key={h}>{h}</th>)}</tr></thead>
                       <tbody>
-                        {data.commissions.earnings.map(e => (
-                          <tr key={e.id}>
-                            <td style={{ fontSize: 12, color: C.sub }}>{new Date(e.created_at).toLocaleDateString()}</td>
-                            <td>
-                              <div style={{ fontWeight: 700 }}>{e.clients?.full_name || "—"}</div>
-                              <div style={{ fontSize: 10, color: C.muted }}>Estate: {e.estate_name}</div>
-                            </td>
-                            <td style={{ fontSize: 11, color: C.sub }}>{e.invoices?.invoice_number || "—"}</td>
-                            <td style={{ fontWeight: 800, color: T.gold }}>{fmt(e.final_amount)}</td>
-                            <td><span className={`tg ${e.is_paid ? "tg2" : parseFloat(e.amount_paid || 0) > 0 ? "ty" : "tr"}`}>{e.is_paid ? "Paid" : parseFloat(e.amount_paid || 0) > 0 ? "Partial" : "Unpaid"}</span></td>
-                          </tr>
-                        ))}
-                        {data.commissions.earnings.length === 0 && <tr><td colSpan="5" style={{ textAlign: "center", padding: 30, color: C.muted }}>No earnings records found for this date range.</td></tr>}
+                        {data.commissions.earnings.map(e => {
+                          const gross = e.gross_commission || e.commission_amount;
+                          const wht = e.wht_amount || 0;
+                          const net = e.net_commission || e.final_amount;
+                          return (
+                            <tr key={e.id}>
+                              <td style={{ fontSize: 12, color: C.sub }}>{new Date(e.created_at).toLocaleDateString()}</td>
+                              <td>
+                                <div style={{ fontWeight: 700 }}>{e.clients?.full_name || "—"}</div>
+                                <div style={{ fontSize: 10, color: C.muted }}>Estate: {e.estate_name}</div>
+                              </td>
+                              <td style={{ fontSize: 11, color: C.sub }}>{e.invoices?.invoice_number || "—"}</td>
+                              <td style={{ fontWeight: 600 }}>{fmt(gross)}</td>
+                              <td style={{ color: "#EF4444", fontSize: 12 }}>-{fmt(wht)}</td>
+                              <td style={{ fontWeight: 800, color: T.gold }}>{fmt(net)}</td>
+                              <td><span className={`tg ${e.is_paid ? "tg2" : parseFloat(e.amount_paid || 0) > 0 ? "ty" : "tr"}`}>{e.is_paid ? "Paid" : parseFloat(e.amount_paid || 0) > 0 ? "Partial" : "Unpaid"}</span></td>
+                            </tr>
+                          );
+                        })}
+                        {data.commissions.earnings.length === 0 && <tr><td colSpan="7" style={{ textAlign: "center", padding: 30, color: C.muted }}>No earnings records found for this date range.</td></tr>}
                       </tbody>
                     </table>
                   </div>

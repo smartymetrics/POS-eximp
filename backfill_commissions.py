@@ -2,7 +2,7 @@ import os
 import sys
 from datetime import date
 from database import supabase
-from routers.verifications import get_commission_rate
+from commission_service import get_commission_config
 
 def backfill():
     print("Starting Commission Backfill...")
@@ -45,8 +45,8 @@ def backfill():
             
         rep = rep_res[0]
         
-        # Determine rate
-        rate = get_commission_rate(
+        # Determine rate configuration
+        config = get_commission_config(
             sales_rep_id=rep["id"],
             estate_name=invoice["property_name"],
             verification_date=date.fromisoformat(v["created_at"].split("T")[0]), # Use creation date for rate check
@@ -54,7 +54,9 @@ def backfill():
         )
         
         deposit = float(v["deposit_amount"])
-        commission_amount = round(deposit * rate / 100, 2)
+        gross_comm = round(deposit * config["gross_rate"] / 100, 2)
+        wht_amt = round(gross_comm * config["wht_rate"] / 100, 2)
+        net_comm = gross_comm - wht_amt
         
         # Find payment record
         # Webhook creates it with '{date}_form_deposit'
@@ -80,11 +82,14 @@ def backfill():
                 "client_id": client["id"],
                 "estate_name": invoice["property_name"],
                 "payment_amount": deposit,
-                "commission_rate": rate,
-                "commission_amount": commission_amount,
+                "commission_rate": config["gross_rate"],
+                "commission_amount": net_comm,
+                "gross_commission": gross_comm,
+                "wht_amount": wht_amt,
+                "net_commission": net_comm,
                 "created_at": v["created_at"] # Keep historical timestamp
             }).execute()
-            print(f"✅ Backfilled: {rep_name} - {invoice['invoice_number']} ({fmt_currency(commission_amount)})")
+            print(f"✅ Backfilled: {rep_name} - {invoice['invoice_number']} ({fmt_currency(net_comm)})")
             backfilled_count += 1
         except Exception as e:
             print(f"❌ Error backfilling V-ID {v['id']}: {e}")

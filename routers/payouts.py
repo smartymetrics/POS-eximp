@@ -5,6 +5,7 @@ from database import get_db, db_execute
 from models import ExpenditureRequestCreate, PayoutReview, AssetCreate, VendorCreate, VoidExpenditureRequest, PayoutPaymentData
 from routers.auth import verify_token, has_any_role, require_roles
 from email_service import send_payout_receipt_email, send_portal_invite_email, send_report_email, send_receipt_email
+from commission_service import sync_invoice_commissions
 from report_service import ReportService
 from datetime import datetime, timezone, timedelta
 from decimal import Decimal
@@ -73,6 +74,24 @@ async def create_vendor(data: VendorCreate, current_admin=Depends(require_roles(
     res = await db_execute(lambda: db.table("vendors").insert(data.dict()).execute())
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to create vendor")
+    return res.data[0]
+
+@router.patch("/vendors/{vendor_id}/commission-config")
+async def update_vendor_commission_config(vendor_id: str, payload: dict, current_admin=Depends(require_roles(["admin", "super_admin"]))):
+    db = get_db()
+    
+    update_data = {}
+    if "is_commission_partner" in payload: update_data["is_commission_partner"] = bool(payload["is_commission_partner"])
+    if "gross_commission_rate" in payload: update_data["gross_commission_rate"] = float(payload["gross_commission_rate"])
+    if "wht_rate" in payload: update_data["wht_rate"] = float(payload["wht_rate"])
+    
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No configuration provided")
+        
+    res = await db_execute(lambda: db.table("vendors").update(update_data).eq("id", vendor_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Vendor not found")
+        
     return res.data[0]
 
 @router.get("/vendors")
@@ -228,13 +247,23 @@ async def verify_bill_request(
             if inv_res.data:
                 invoice = inv_res.data[0]
                 client = invoice.get("clients")
-                payout_amount = req["amount_gross"] # The reported total paid by client
-
                 # 1. Update Invoice Balance
-                new_paid = float(invoice.get("amount_paid", 0)) + float(payout_amount)
+                # Note: We need the client's payment amount, not the commission (gross).
+                # The commission_base is what we want. We'll try to extract it from the claim or metadata.
+                # For now, if it's a commission claim, we reverse-calc the payment amount from the gross commission.
+                is_commission = req.get("payment_type") in ["initial_deposit", "instalment"]
+                client_payment_amount = float(req["amount_gross"])
+                if is_commission:
+                    # gross = payment * rate -> payment = gross / rate
+                    rate = float(req.get("wht_rate", 10.0)) / 100.0 # This might be wrong if wht_rate is used for rate
+                    # Actually, let's use the property_price if initial_deposit, else try to find the payment amount
+                    # I'll update the portal submit to store the payment_amount in metadata
+                    client_payment_amount = float(req.get("description", "").split("Amt: ")[-1].split()[0]) if "Amt: " in req.get("description", "") else float(req["amount_gross"])
+                
+                new_paid = float(invoice.get("amount_paid", 0)) + client_payment_amount
                 await db_execute(lambda: db.table("invoices").update({"amount_paid": new_paid, "status": "paid" if new_paid >= float(invoice["amount"]) else "partial"}).eq("id", inv_id).execute())
 
-                # 2. Assign Rep if missing ("Dictate Rep" logic)
+                # 2. Assign Rep if missing
                 if not invoice.get("sales_rep_id"):
                     vendor = req.get("vendors")
                     if vendor and vendor.get("email"):
@@ -246,14 +275,18 @@ async def verify_bill_request(
                 payment_payload = {
                     "client_id": invoice["client_id"],
                     "invoice_id": inv_id,
-                    "amount": float(payout_amount),
+                    "amount": client_payment_amount,
                     "payment_method": "portal_reported",
                     "reference": f"CLAIM-{req['id'][:8]}",
                     "payment_date": datetime.now(timezone.utc).isoformat(),
                 }
                 await db_execute(lambda: db.table("payments").insert(payment_payload).execute())
 
-                # 4. Notify Client (Automated Receipt)
+                # 4. Sync Commission Ledger (Option A)
+                # This will create the commission_earnings record for the rep
+                bg_tasks.add_task(sync_invoice_commissions, inv_id, db, current_admin['sub'])
+
+                # 5. Notify Client (Automated Receipt)
                 if client and client.get("email"):
                     bg_tasks.add_task(send_receipt_email, invoice, client, current_admin['sub'])
 
@@ -432,35 +465,89 @@ from storage_service import generate_signed_url
 from fastapi.responses import RedirectResponse
 
 @router.get("/requests/{request_id}/view-document/{doc_type}")
-async def view_secure_payout_document(request_id: str, doc_type: str, current_admin=Depends(require_roles(["admin", "super_admin"]))):
+async def view_secure_payout_document(
+    request_id: str,
+    doc_type: str,
+    file_index: int = 0,
+    current_admin=Depends(require_roles(["admin", "super_admin"]))
+):
     """
     Securely redirects to a signed URL for proformas or receipts.
     doc_type: 'proforma', 'receipt'
+    file_index: for multi-file receipts (JSON array stored in receipt_url), selects which file to view.
     """
     db = get_db()
     req_res = await db_execute(lambda: db.table("expenditure_requests").select("*").eq("id", request_id).execute())
     if not req_res.data:
         raise HTTPException(status_code=404, detail="Request not found")
-    
+
     req = req_res.data[0]
-    path = req.get('proforma_url') if doc_type == 'proforma' else req.get('receipt_url')
-    
-    if not path:
+    raw_path = req.get('proforma_url') if doc_type == 'proforma' else req.get('receipt_url')
+
+    if not raw_path:
         raise HTTPException(
-            status_code=404, 
-            detail=f"No {doc_type} document link attached to this record. Please ensure the vendor uploaded a file or the admin provided a ref link."
+            status_code=404,
+            detail=f"No {doc_type} document attached to this record."
         )
-        
+
+    # Resolve path — may be a single string or a JSON array (multi-file upload)
+    path = raw_path
+    if raw_path.startswith('['):
+        try:
+            paths = json.loads(raw_path)
+            if not isinstance(paths, list) or len(paths) == 0:
+                raise ValueError
+            # Clamp index to valid range
+            idx = max(0, min(file_index, len(paths) - 1))
+            path = paths[idx]
+        except (ValueError, json.JSONDecodeError):
+            pass  # Fall through — treat raw_path as a plain string
+
     # Redirect to external URLs directly
     if path.startswith("http"):
         return RedirectResponse(url=path)
-        
+
     # Generate signed URL for private Supabase bucket 'Cloud Infrastructure'
     signed_url = generate_signed_url("Cloud Infrastructure", path)
     if not signed_url:
         raise HTTPException(status_code=500, detail="Failed to generate secure access link")
-        
+
     return RedirectResponse(url=signed_url)
+
+
+@router.get("/requests/{request_id}/proof-files")
+async def list_proof_files(request_id: str, current_admin=Depends(require_roles(["admin", "super_admin"]))):
+    """
+    Returns the list of proof file paths for a request.
+    For single-file records returns a 1-element array.
+    For multi-file records (receipt_url is a JSON array) returns all entries.
+    """
+    db = get_db()
+    req_res = await db_execute(lambda: db.table("expenditure_requests").select("receipt_url, proforma_url, title").eq("id", request_id).execute())
+    if not req_res.data:
+        raise HTTPException(status_code=404, detail="Request not found")
+
+    req = req_res.data[0]
+    receipt_raw = req.get('receipt_url') or ''
+    proforma_raw = req.get('proforma_url') or ''
+
+    def parse_paths(raw: str) -> list:
+        if not raw:
+            return []
+        if raw.startswith('['):
+            try:
+                parsed = json.loads(raw)
+                return parsed if isinstance(parsed, list) else [raw]
+            except (ValueError, json.JSONDecodeError):
+                pass
+        return [raw]
+
+    return {
+        "title": req.get('title', ''),
+        "receipt_files": parse_paths(receipt_raw),
+        "proforma_files": parse_paths(proforma_raw),
+        "total": len(parse_paths(receipt_raw)) + len(parse_paths(proforma_raw)),
+    }
 
 
 # ─── PORTAL AUTOMATION ────────────────────────────────────────
@@ -698,7 +785,7 @@ async def submit_payout_claim_from_portal(
     property_price: Optional[float] = Form(None),    # full property value (for deposit commission)
     is_dispute: bool = Form(False),                  # True when another rep is already assigned
     dispute_reason: Optional[str] = Form(None),      # required when is_dispute=True
-    file: Optional[UploadFile] = File(None)
+    files: List[UploadFile] = File(default=[])  # Accepts one or many proof uploads
 ):
     """
     Unified endpoint for the 'Claims & Payouts' portal.
@@ -810,18 +897,27 @@ async def submit_payout_claim_from_portal(
         net = gross
         title = f"Office Expenditure: {payee_name}"
 
-    # 3. File Upload
+    # 3. File Upload — supports multiple proof files
+    # Each file path is stored; receipt_url becomes a JSON array when >1 file,
+    # or a plain string for a single file (backward-compatible).
     file_url = None
-    if file:
-        file_ext = file.filename.split('.')[-1]
-        file_path = f"portal_claims/{vendor_id}_{uuid.uuid4().hex}.{file_ext}"
-        content = await file.read()
-        file_url = file_path
+    if files:
+        uploaded_paths = []
+        for f in files:
+            if f and f.filename:  # guard against empty slots
+                file_ext = f.filename.rsplit('.', 1)[-1] if '.' in f.filename else 'bin'
+                file_path = f"portal_claims/{vendor_id}_{uuid.uuid4().hex}.{file_ext}"
+                await f.read()  # consume stream (storage integration point)
+                uploaded_paths.append(file_path)
+        if len(uploaded_paths) == 1:
+            file_url = uploaded_paths[0]          # single path string — fully backward-compatible
+        elif len(uploaded_paths) > 1:
+            file_url = json.dumps(uploaded_paths)  # JSON array for multi-file
 
     # 4. Create Record
     payload = {
         "title": title,
-        "description": remarks or f"Portal submission via {type}",
+        "description": f"{remarks}\nAmt: {commission_base}" if remarks else f"Portal submission via {type}\nAmt: {commission_base}",
         "vendor_id": vendor_id,
         "invoice_id": linked_invoice_id,
         "amount_gross": float(gross),
@@ -943,7 +1039,7 @@ async def get_payout_stats(
 
     # 2. Main Expenditure Query (Paid & Approved & Partially Paid)
     query = db.table("expenditure_requests")\
-        .select("amount_gross, net_payout_amount, amount_paid, wht_amount, created_at, status, payout_method, vendors(name), admins!requester_id(full_name)")\
+        .select("amount_gross, net_payout_amount, amount_paid, wht_amount, created_at, status, payout_method, payment_type, vendors(name, type), admins!requester_id(full_name)")\
         .in_("status", ["paid", "approved", "partially_paid"])\
         .gte("created_at", start_ts)\
         .lte("created_at", end_ts)
@@ -985,52 +1081,69 @@ async def get_payout_stats(
         wht = float(r.get('wht_amount') or 0)
         owed = max(0, net - paid)
         
-        # CATEGORIZATION ENGINE
+        # Categorization
         v_info = r.get('vendors') or {}
         v_type = v_info.get('type', 'company')
         p_type = (r.get('payment_type') or '').lower()
         p_method = (r.get('payout_method') or '').lower()
         
-        # 1. Commission Logic
-        if p_type == 'commission' or v_type == 'staff':
-            cat = "commissions"
-        # 2. Reimbursement Logic
-        elif p_method == 'reimbursement' or p_type == 'reimbursement':
+        if p_method == 'reimbursement' or p_type == 'reimbursement':
             cat = "reimbursements"
-        # 3. Operations (Catch-all)
+        elif p_type in ['commission', 'initial_deposit', 'instalment']:
+            cat = "commissions"
+        elif v_type == 'staff' and p_type == '':
+            # Untagged staff payments are treated as reimbursements per user confirmation
+            cat = "reimbursements"
         else:
+            # Everything else (Company vendors or tagged 'office') defaults to operational expenses
             cat = "ops"
             
+        # 1. Payout Aggregation (Cash Flow)
         segment_stats[cat]["paid"] += paid
-        segment_stats[cat]["owed"] += owed
+        total_paid += paid
         
-        # Analytics Aggregation
+        # 2. Liability Aggregation (Owed) - Mutually Exclusive
+        # Commissions are handled in the second loop (the ledger)
+        if cat != "commissions":
+            segment_stats[cat]["owed"] += owed
+            total_ap += owed
+        
+        # Analytics
         p_name = v_info.get('name', 'General Vendor')
         r_name = (r.get('admins') or {}).get('full_name', 'System')
-        
         payees[p_name] = payees.get(p_name, 0) + paid
         requesters[r_name] = requesters.get(r_name, 0) + gross
-        if owed > 0: creditors[p_name] = creditors.get(p_name, 0) + owed
+        if cat != "commissions" and owed > 0: 
+            creditors[p_name] = creditors.get(p_name, 0) + owed
         
-        total_gross += gross; total_paid += paid; total_ap += owed; total_wht += wht
+        total_gross += gross; total_wht += wht
         period_totals[bucket] = period_totals.get(bucket, 0) + gross
 
-    # PROCESS COMMISSION EARNINGS
+    # PROCESS COMMISSION EARNINGS (The Ledger of Liability & Legacy Payouts)
     for c in comm_data:
         bucket = (c.get('created_at') or datetime.now().isoformat())[:date_format_len]
-        amount = float(c.get('commission_amount') or 0)
-        is_paid = c.get('is_paid', False)
+        gross = float(c.get('gross_commission') or c.get('commission_amount') or 0)
+        net = float(c.get('net_commission') or c.get('final_amount') or gross)
+        paid_in_ledger = float(c.get('amount_paid') or 0)
+        wht_in_ledger = float(c.get('wht_amount') or 0)
+        owed = max(0, net - paid_in_ledger)
         
-        segment_stats["commissions"]["paid"] += amount if is_paid else 0
-        segment_stats["commissions"]["owed"] += 0 if is_paid else amount
+        # Commissions Paid: Aggregate from ledger (catches legacy) + Loop 1 (catches portal partials)
+        segment_stats["commissions"]["paid"] += paid_in_ledger
+        total_paid += paid_in_ledger
+        total_wht += wht_in_ledger
+        
+        # Commissions Owed: The Ledger is the ONLY source for this to avoid claim/earning double counting.
+        segment_stats["commissions"]["owed"] += owed
+        total_ap += owed
         
         rep_name = (c.get('sales_reps') or {}).get('name', 'Staff Partner')
-        payees[rep_name] = payees.get(rep_name, 0) + (amount if is_paid else 0)
-        if not is_paid: creditors[rep_name] = creditors.get(rep_name, 0) + amount
+        payees[rep_name] = payees.get(rep_name, 0) + paid_in_ledger
+        if owed > 0: 
+            creditors[rep_name] = creditors.get(rep_name, 0) + owed
         
-        total_paid += amount if is_paid else 0
-        total_ap += 0 if is_paid else amount
-        period_totals[bucket] = period_totals.get(bucket, 0) + amount
+        total_gross += gross
+        period_totals[bucket] = period_totals.get(bucket, 0) + gross
 
     # 4. Global Current State Indicators
     try:

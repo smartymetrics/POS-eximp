@@ -3,7 +3,7 @@ from typing import List, Optional
 from datetime import date, datetime, timedelta
 from collections import defaultdict
 
-from models import CommissionRateCreate, CommissionAdjustment, CommissionPayout, DefaultRateUpdate, CommissionVoidRequest
+from models import CommissionRateCreate, CommissionAdjustment, CommissionPayout, DefaultRateUpdate, CommissionVoidRequest, SalesRepUpdate
 from database import get_db, db_execute
 from routers.auth import verify_token
 from routers.analytics import log_activity
@@ -11,11 +11,109 @@ from email_service import send_commission_void_email, send_commission_paid_email
 
 router = APIRouter()
 
+@router.post("/migrate-legacy")
+async def migrate_legacy_rates(current_admin=Depends(verify_token)):
+    if current_admin.get("role") not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Super admin only")
+        
+    db = get_db()
+    res = await db_execute(lambda: db.table("commission_earnings").select("*").eq("is_voided", False).execute())
+    records = res.data or []
+    updated = 0
+    
+    for r in records:
+        rate = float(r.get("commission_rate") or 0)
+        # If rate is 9.5, it's a legacy 'Net' record
+        if rate == 9.5 or (r.get("wht_amount") is None and rate > 0):
+            pay_amt = float(r.get("payment_amount") or 0)
+            new_gross_rate = 10.0 if rate == 9.5 else rate
+            new_wht_rate = 5.0
+            
+            gross_comm = round(pay_amt * new_gross_rate / 100, 2)
+            wht_amt = round(gross_comm * new_wht_rate / 100, 2)
+            net_comm = gross_comm - wht_amt
+            
+            await db_execute(lambda: db.table("commission_earnings").update({
+                "commission_rate": new_gross_rate,
+                "gross_commission": gross_comm,
+                "wht_amount": wht_amt,
+                "net_commission": net_comm,
+                "commission_amount": net_comm
+            }).eq("id", r["id"]).execute())
+            updated += 1
+            
+    return {"status": "success", "updated_records": updated}
+
+@router.post("/remit-wht")
+async def remit_commission_wht(data: dict, current_admin=Depends(verify_token)):
+    if current_admin.get("role") not in ["admin", "super_admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Finance clearance required")
+        
+    ids = data.get("ids", [])
+    ref = data.get("receipt_reference")
+    
+    if not ids or not ref:
+        raise HTTPException(status_code=400, detail="IDs and Receipt Reference required")
+        
+    db = get_db()
+    await db_execute(lambda: db.table("commission_earnings").update({
+        "is_wht_remitted": True,
+        "wht_remitted_at": datetime.now().isoformat(),
+        "wht_receipt_ref": ref
+    }).in_("id", ids).execute())
+    
+    from routers.analytics import log_activity
+    await log_activity(
+        "commission_wht_remitted",
+        f"Remitted WHT for {len(ids)} commissions. Receipt: {ref}",
+        current_admin["id"]
+    )
+    
+    return {"status": "success", "cleared": len(ids)}
+
+@router.get("/sales-reps")
+async def list_sales_reps(current_admin=Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("sales_reps").select("*").order("name").execute())
+    return res.data
+
+@router.patch("/sales-reps/{rep_id}/commission-config")
+async def update_rep_commission_config(rep_id: str, payload: SalesRepUpdate, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+    if current_admin.get("role") not in ["admin", "super_admin", "hr", "operations"] and current_admin.get("primary_role") != "hr":
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    db = get_db()
+    
+    update_data = {}
+    if payload.commission_rate is not None: update_data["commission_rate"] = float(payload.commission_rate)
+    if payload.gross_commission_rate is not None: update_data["gross_commission_rate"] = float(payload.gross_commission_rate)
+    if payload.wht_rate is not None: update_data["wht_rate"] = float(payload.wht_rate)
+    
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No configuration fields provided")
+        
+    res = await db_execute(lambda: db.table("sales_reps").update(update_data).eq("id", rep_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Sales rep not found")
+        
+    background_tasks.add_task(
+        log_activity,
+        "sales_rep_commission_configured",
+        f"Updated commission configuration for {res.data[0]['name']}. New Rates: Comm={update_data.get('gross_commission_rate')}%, WHT={update_data.get('wht_rate')}%",
+        performed_by=current_admin["sub"]
+    )
+    return res.data[0]
+
 @router.get("/default-rate")
 async def get_default_rate(current_admin=Depends(verify_token)):
     db = get_db()
-    res = await db_execute(lambda: db.table("system_settings").select("*").eq("key", "default_commission_rate").execute())
-    return {"rate": res.data[0]["value"] if res.data else "5.00"}
+    res = await db_execute(lambda: db.table("system_settings").select("*").in_("key", ["default_commission_rate", "default_wht_rate"]).execute())
+    
+    settings = {s["key"]: s["value"] for s in res.data}
+    return {
+        "rate": settings.get("default_commission_rate", "5.00"),
+        "wht_rate": settings.get("default_wht_rate", "5.00")
+    }
 
 @router.patch("/default-rate")
 async def update_default_rate(payload: DefaultRateUpdate, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
@@ -23,28 +121,30 @@ async def update_default_rate(payload: DefaultRateUpdate, background_tasks: Back
         raise HTTPException(status_code=403, detail="Not authorized")
         
     db = get_db()
-    existing = await db_execute(lambda: db.table("system_settings").select("id").eq("key", "default_commission_rate").execute())
-    if existing.data:
-        await db_execute(lambda: db.table("system_settings").update({
-            "value": str(payload.rate),
-            "updated_by": current_admin["sub"],
-            "updated_at": datetime.now().isoformat()
-        }).eq("id", existing.data[0]["id"]).execute())
-    else:
-        await db_execute(lambda: db.table("system_settings").insert({
-            "key": "default_commission_rate",
-            "value": str(payload.rate),
-            "updated_by": current_admin["sub"],
-            "updated_at": datetime.now().isoformat()
-        }).execute())
+    
+    # Update Default Commission Rate
+    await db_execute(lambda: db.table("system_settings").upsert({
+        "key": "default_commission_rate",
+        "value": str(payload.rate),
+        "updated_by": current_admin["sub"],
+        "updated_at": datetime.now().isoformat()
+    }, on_conflict="key").execute())
+
+    # Update Default WHT Rate
+    await db_execute(lambda: db.table("system_settings").upsert({
+        "key": "default_wht_rate",
+        "value": str(payload.wht_rate),
+        "updated_by": current_admin["sub"],
+        "updated_at": datetime.now().isoformat()
+    }, on_conflict="key").execute())
     
     background_tasks.add_task(
         log_activity,
         "commission_default_rate_updated",
-        f"Updated default commission rate to {payload.rate}%",
+        f"Updated default system rates: Commission={payload.rate}%, WHT={payload.wht_rate}%",
         performed_by=current_admin["sub"]
     )
-    return {"message": "Default rate updated", "rate": str(payload.rate)}
+    return {"message": "Default rates updated", "rate": str(payload.rate), "wht_rate": str(payload.wht_rate)}
 
 @router.get("/rates/{rep_id}")
 async def get_rep_rates(rep_id: str, current_admin=Depends(verify_token)):
@@ -78,6 +178,7 @@ async def set_rep_rate(payload: CommissionRateCreate, background_tasks: Backgrou
         "sales_rep_id": payload.sales_rep_id,
         "estate_name": payload.estate_name,
         "rate": float(payload.rate),
+        "wht_rate": float(payload.wht_rate or 5.0),
         "effective_from": payload.effective_from.isoformat(),
         "reason": payload.reason,
         "set_by": current_admin["sub"]
@@ -269,11 +370,64 @@ async def list_payouts(rep_id: Optional[str] = None, start_date: Optional[str] =
     res = await db_execute(lambda: query.execute())
     return res.data
 
-@router.get("/payouts/rep/{rep_id}")
+@router.post("/payouts/rep/{rep_id}")
 async def rep_payouts(rep_id: str, current_admin=Depends(verify_token)):
     db = get_db()
     res = await db_execute(lambda: db.table("payout_batches").select("*, admins:paid_by(full_name)").eq("sales_rep_id", rep_id).order("paid_at", desc=True).execute())
     return res.data
+
+
+@router.post("/payout/{id}")
+async def pay_single_commission(id: str, payload: dict, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+    if current_admin.get("role") not in ["admin", "super_admin", "hr", "operations"] and current_admin.get("primary_role") != "hr":
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    db = get_db()
+    
+    # 1. Fetch the earning record
+    earning_res = await db_execute(lambda: db.table("commission_earnings").select("*, sales_reps(*)").eq("id", id).execute())
+    if not earning_res.data:
+        raise HTTPException(status_code=404, detail="Earning record not found")
+        
+    earning = earning_res.data[0]
+    if earning["is_paid"]:
+        raise HTTPException(status_code=400, detail="Commission already marked as paid")
+
+    # 2. Determine net amount (the actual cash to be paid)
+    net_amount = float(earning.get("net_commission") or earning.get("final_amount") or earning["commission_amount"])
+    
+    # 3. Create a mini-batch for this single payout
+    batch = await db_execute(lambda: db.table("payout_batches").insert({
+        "sales_rep_id": earning["sales_rep_id"],
+        "total_amount": net_amount,
+        "reference": payload.get("reference", "DIRECT-PAY"),
+        "notes": f"Single payout for earning {id}",
+        "paid_by": current_admin["sub"]
+    }).execute())
+    batch_id = batch.data[0]["id"]
+
+    # 4. Update the earning record
+    await db_execute(lambda: db.table("commission_earnings").update({
+        "is_paid": True,
+        "paid_at": datetime.now().isoformat(),
+        "paid_by": current_admin["sub"],
+        "amount_paid": net_amount,
+        "payout_batch_id": batch_id,
+        "payout_reference": payload.get("reference")
+    }).eq("id", id).execute())
+
+    # 5. Log activity
+    background_tasks.add_task(
+        log_activity,
+        "commission_payout",
+        f"Paid commission of NGN {net_amount:,.2f} to {earning['sales_reps']['name']}",
+        performed_by=current_admin["sub"]
+    )
+    
+    # 6. Send Email
+    background_tasks.add_task(send_commission_paid_email, earning["sales_reps"], batch.data[0])
+
+    return {"message": "Payout recorded successfully", "batch_id": batch_id}
 
 
 @router.get("/my")

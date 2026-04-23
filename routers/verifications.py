@@ -7,7 +7,7 @@ from email_service import send_receipt_and_statement_email, send_rejection_email
 from routers.analytics import log_activity
 from datetime import datetime, date
 
-from commission_service import get_commission_rate
+from commission_service import get_commission_config
 # Re-exported for other modules that depend on it
 
 router = APIRouter()
@@ -110,15 +110,17 @@ async def confirm_verification(
             rep = rep_res.data[0]
             
     if rep_id:
-            # Use the rate logic with fallbacks
-            rate = get_commission_rate(
+            # Use the rate logic with configurations
+            config = get_commission_config(
                 sales_rep_id=rep_id,
                 estate_name=invoice["property_name"],
                 verification_date=date.today(),
                 db=db
             )
             deposit = float(verify_rec["deposit_amount"])
-            commission_amount = round(deposit * rate / 100, 2)
+            gross_comm = round(deposit * config["gross_rate"] / 100, 2)
+            wht_amt = round(gross_comm * config["wht_rate"] / 100, 2)
+            net_comm = gross_comm - wht_amt
             
             # Robust payment lookup: try reference first, then any payment on this invoice with 'deposit'
             ref = f"{verify_rec['payment_date']}_form_deposit"
@@ -134,7 +136,7 @@ async def confirm_verification(
             payment_id = pay_res.data[0]["id"] if pay_res.data else None
             
             if payment_id:
-                # Insert earnings record
+                # Insert professional earnings record
                 earning_res = await db_execute(lambda: db.table("commission_earnings").insert({
                     "sales_rep_id": rep_id,
                     "invoice_id": invoice["id"],
@@ -142,8 +144,11 @@ async def confirm_verification(
                     "client_id": client["id"],
                     "estate_name": invoice["property_name"],
                     "payment_amount": deposit,
-                    "commission_rate": rate,
-                    "commission_amount": commission_amount,
+                    "commission_rate": config["gross_rate"],
+                    "commission_amount": net_comm, # Compatibility field
+                    "gross_commission": gross_comm,
+                    "wht_amount": wht_amt,
+                    "net_commission": net_comm
                 }).execute())
                 earning = earning_res.data[0]
                 

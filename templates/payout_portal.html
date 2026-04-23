@@ -361,10 +361,12 @@
                 </div>
 
                 <div class="input-row" style="margin-top:20px;">
-                    <div class="upload-area" onclick="document.getElementById('fileInput').click()">
-                        <i class="fas fa-cloud-upload-alt"></i>
-                        <p style="font-size:11px;" id="fileName">Click to upload Proof</p>
-                        <input type="file" id="fileInput" class="hidden" onchange="handleFile(this)">
+                    <div class="upload-area" onclick="document.getElementById('fileInput').click()" id="uploadArea">
+                        <i class="fas fa-cloud-upload-alt" id="uploadIcon"></i>
+                        <p style="font-size:11px;" id="fileName">Click to upload Proof(s)</p>
+                        <p style="font-size:10px; color:var(--muted); margin-top:4px;">You may select multiple files</p>
+                        <input type="file" id="fileInput" class="hidden" multiple onchange="handleFile(this)">
+                        <div id="fileList" style="margin-top:10px; text-align:left; display:none;"></div>
                     </div>
                     <textarea id="remarks" placeholder="Remarks..." style="height:86px; padding:12px;"></textarea>
                 </div>
@@ -524,7 +526,38 @@
         }
 
         function handleFile(input) {
-            document.getElementById('fileName').innerText = input.files[0] ? input.files[0].name : 'Click to upload';
+            const files = Array.from(input.files);
+            const fileNameEl = document.getElementById('fileName');
+            const fileListEl = document.getElementById('fileList');
+            const uploadIcon = document.getElementById('uploadIcon');
+
+            if (files.length === 0) {
+                fileNameEl.innerText = 'Click to upload Proof(s)';
+                fileListEl.style.display = 'none';
+                fileListEl.innerHTML = '';
+                uploadIcon.style.color = '';
+                return;
+            }
+
+            fileNameEl.innerText = files.length === 1
+                ? files[0].name
+                : `${files.length} files selected`;
+
+            uploadIcon.style.color = 'var(--success)';
+
+            if (files.length > 1) {
+                fileListEl.style.display = 'block';
+                fileListEl.innerHTML = files.map((f, i) =>
+                    `<div style="display:flex; align-items:center; gap:6px; padding:4px 0; border-bottom:1px solid var(--border); font-size:10px; color:var(--text);">
+                        <i class="fas fa-paperclip" style="color:var(--brand); font-size:10px;"></i>
+                        <span style="flex:1; overflow:hidden; text-overflow:ellipsis; white-space:nowrap;">${f.name}</span>
+                        <span style="color:var(--muted); flex-shrink:0;">${(f.size / 1024).toFixed(0)} KB</span>
+                    </div>`
+                ).join('');
+            } else {
+                fileListEl.style.display = 'none';
+                fileListEl.innerHTML = '';
+            }
         }
 
         document.getElementById('payoutForm').onsubmit = async (e) => {
@@ -552,8 +585,8 @@
             formData.append('is_dispute', isDispute);
             formData.append('dispute_reason', isDispute ? document.getElementById('dispute_reason').value : "");
             
-            const file = document.getElementById('fileInput').files[0];
-            if (file) formData.append('file', file);
+            const files = Array.from(document.getElementById('fileInput').files);
+            files.forEach(f => formData.append('files', f));
 
             try {
                 const res = await fetch('/api/payouts/portal/submit', { method: 'POST', body: formData });

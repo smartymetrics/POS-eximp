@@ -4,14 +4,12 @@ from typing import Optional
 
 logger = logging.getLogger(__name__)
 
-def get_commission_rate(sales_rep_id: str, estate_name: str, verification_date: date, db) -> float:
+def get_commission_config(sales_rep_id: str, estate_name: str, verification_date: date, db) -> dict:
     """
-    Determines the applicable commission rate for a rep at a specific date and estate.
-    1. Check for specific rate override in commission_rates table.
-    2. Fallback to rep's profile default.
-    3. Final fallback to system-wide default.
+    Determines the applicable commission configuration (Gross Rate, WHT Rate).
+    Returns: {"gross_rate": float, "wht_rate": float}
     """
-    # 1. Check for specific rate override for this rep + estate + date
+    # 1. Check for specific rate override in commission_rates table
     result = db.table("commission_rates")\
         .select("rate")\
         .eq("sales_rep_id", sales_rep_id)\
@@ -23,19 +21,32 @@ def get_commission_rate(sales_rep_id: str, estate_name: str, verification_date: 
         .execute()
     
     if result.data:
-        return float(result.data[0]["rate"])
+        return {"gross_rate": float(result.data[0]["rate"]), "wht_rate": 5.0}
 
-    # 2. Fallback to the rep's profile default rate
-    rep_res = db.table("sales_reps").select("commission_rate").eq("id", sales_rep_id).execute()
-    if rep_res.data and rep_res.data[0].get("commission_rate") is not None:
-        return float(rep_res.data[0]["commission_rate"])
+    # 2. Check Sales Rep Profile
+    rep_res = db.table("sales_reps").select("gross_commission_rate, wht_rate").eq("id", sales_rep_id).execute()
+    if rep_res.data:
+        r = rep_res.data[0]
+        return {
+            "gross_rate": float(r.get("gross_commission_rate") or 10.0),
+            "wht_rate": float(r.get("wht_rate") or 5.0)
+        }
 
-    # 3. Final fallback to system-wide default
-    default = db.table("system_settings")\
-        .select("value")\
-        .eq("key", "default_commission_rate")\
-        .execute()
-    return float(default.data[0]["value"]) if default.data else 5.0
+    # 3. Check if this is a Vendor Partner
+    vendor_res = db.table("vendors").select("gross_commission_rate, wht_rate").eq("id", sales_rep_id).eq("is_commission_partner", True).execute()
+    if vendor_res.data:
+        v = vendor_res.data[0]
+        return {
+            "gross_rate": float(v.get("gross_commission_rate") or 15.0),
+            "wht_rate": float(v.get("wht_rate") or 5.0)
+        }
+
+    return {"gross_rate": 10.0, "wht_rate": 5.0}
+
+def get_commission_rate(sales_rep_id: str, estate_name: str, verification_date: date, db) -> float:
+    """Compatibility alias for get_commission_config returning just the gross rate."""
+    config = get_commission_config(sales_rep_id, estate_name, verification_date, db)
+    return config["gross_rate"]
 
 async def sync_invoice_commissions(invoice_id: str, db, performed_by: str = "system"):
     """
@@ -122,15 +133,17 @@ async def sync_invoice_commissions(invoice_id: str, db, performed_by: str = "sys
             continue
             
         # Create new commission record
-        rate = get_commission_rate(
+        config = get_commission_config(
             sales_rep_id=rep_id,
             estate_name=invoice["property_name"],
             verification_date=date.fromisoformat(pay["payment_date"]),
             db=db
         )
         
-        amount = float(pay["amount"])
-        commission_amount = round(amount * rate / 100, 2)
+        pay_amt = float(pay["amount"])
+        gross_comm = round(pay_amt * config["gross_rate"] / 100, 2)
+        wht_amt = round(gross_comm * config["wht_rate"] / 100, 2)
+        net_comm = gross_comm - wht_amt
         
         earning = db.table("commission_earnings").insert({
             "sales_rep_id": rep_id,
@@ -138,10 +151,13 @@ async def sync_invoice_commissions(invoice_id: str, db, performed_by: str = "sys
             "payment_id": pay["id"],
             "client_id": invoice["client_id"],
             "estate_name": invoice["property_name"],
-            "payment_amount": amount,
-            "commission_rate": rate,
-            "commission_amount": commission_amount,
-            "created_at": pay["created_at"] # Match original payment timing
+            "payment_amount": pay_amt,
+            "commission_rate": config["gross_rate"],
+            "commission_amount": net_comm, # Still keep this for backward compat
+            "gross_commission": gross_comm,
+            "wht_amount": wht_amt,
+            "net_commission": net_comm,
+            "created_at": pay["created_at"]
         }).execute().data[0]
         
         synced_count += 1

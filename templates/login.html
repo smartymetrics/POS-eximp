@@ -255,12 +255,25 @@
           headers: { 'Content-Type': 'application/json' },
           body: JSON.stringify({ email, password })
         });
-        const data = await res.json();
-        if (!res.ok) throw new Error(data.detail || 'Invalid credentials');
+
+        const contentType = res.headers.get("content-type");
+        let data;
+        if (contentType && contentType.includes("application/json")) {
+          data = await res.json();
+        } else {
+          // User requested friendly crash message for server-side failures
+          throw new Error("Server crashed and the engineers are working on it.");
+        }
+
+        if (!res.ok) {
+          // For 500 errors, use the crash message. For 401/others, use the detail or fallback.
+          if (res.status >= 500) throw new Error("Server crashed and the engineers are working on it.");
+          throw new Error(data.detail || 'Invalid credentials');
+        }
+        
         localStorage.setItem('ec_token', data.access_token);
         localStorage.setItem('admin', JSON.stringify(data.admin));
 
-        
         // Redirection based on Primary Role (Default Interface)
         const primary = (data.admin && data.admin.primary_role) ? data.admin.primary_role.toLowerCase() : '';
         const userRoles = (data.admin.role || '').toLowerCase().split(',').map(r => r.trim()).filter(Boolean);
@@ -279,7 +292,11 @@
           window.location.href = '/dashboard';
         }
       } catch (e) {
-        err.textContent = e.message;
+        if (e.name === 'TypeError' || e.message.includes('fetch')) {
+          err.textContent = 'Connection lost. Please check your internet and try again.';
+        } else {
+          err.textContent = e.message;
+        }
         err.style.display = 'block';
         btn.disabled = false;
         btn.textContent = 'Sign In';

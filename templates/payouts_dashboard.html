@@ -1001,7 +1001,12 @@
             <div class="stat-card">
                 <span>Total Paid Out</span>
                 <h3 id="stat-total-paid">₦0.00</h3>
-                <div class="trend neutral" id="active-period-label">Rolling 30 Days</div>
+                <div class="trend neutral" id="main-period-label">Rolling 30 Days</div>
+            </div>
+            <div class="stat-card" onclick="switchTab('requests')" style="cursor:pointer; border-color: rgba(59, 130, 246, 0.2);">
+                <span>Pending Audit</span>
+                <h3 id="stat-pending-count">0</h3>
+                <div class="trend neutral">Awaiting Verification</div>
             </div>
             <div class="stat-card">
                 <span>Accounts Payable (Owed)</span>
@@ -1030,14 +1035,16 @@
             </div>
             <div class="stat-card">
                 <span>Operational Flow</span>
-                <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:10px;">
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-top:10px;">
                     <div>
                         <div style="font-size:10px; color:var(--gray);">EXPENSES</div>
                         <h4 id="stat-ops-paid" style="font-size:16px;">₦0.00</h4>
+                        <div style="font-size:10px; color:var(--error); margin-top:4px;">OWED: <span id="stat-ops-owed">₦0.00</span></div>
                     </div>
                     <div style="text-align:right;">
                         <div style="font-size:10px; color:var(--gray);">REIMB.</div>
                         <h4 id="stat-reimb-paid" style="font-size:16px; color:var(--success);">₦0.00</h4>
+                        <div style="font-size:10px; color:var(--error); margin-top:4px;">OWED: <span id="stat-reimb-owed">₦0.00</span></div>
                     </div>
                 </div>
             </div>
@@ -1145,7 +1152,9 @@
                             <th>TIN / Registration</th>
                             <th>Bank Name</th>
                             <th>Account Details</th>
+                            <th>Partner Status</th>
                             <th>Last Activity</th>
+                            <th>Action</th>
                         </tr>
                     </thead>
                     <tbody id="vendorBody">
@@ -1214,10 +1223,18 @@
 
         <!-- COMMISSION LEDGER VIEW -->
         <div id="commissions-view" class="view-content" style="display:none; padding-top:20px;">
-            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                 <div>
                     <h3 style="font-size:20px;">Staff & Partner Commission Ledger</h3>
                     <p style="color:var(--gray); font-size:13px;">Real-time tracking of sales commissions and earnings.</p>
+                </div>
+                <div style="display:flex; gap:10px;">
+                    <button class="btn btn-gold" onclick="openCommissionSettings()" style="font-size:12px; padding:10px 16px; font-weight:700;">
+                        <i class="fas fa-cog"></i> CONFIGURE RATES
+                    </button>
+                    <button class="btn" onclick="openCommWhtModal()" style="font-size:12px; padding:10px 16px; font-weight:700; border-color:var(--error); color:var(--error);">
+                        <i class="fas fa-file-invoice"></i> REMIT WHT
+                    </button>
                 </div>
             </div>
             <div class="table-container">
@@ -1230,7 +1247,9 @@
                             <th>Invoice Ref</th>
                             <th>Revenue (NGN)</th>
                             <th>Rate</th>
-                            <th>Net Commission</th>
+                            <th>Gross Comm.</th>
+                            <th>Tax (5%)</th>
+                            <th>Net Payout</th>
                             <th>Status</th>
                         </tr>
                     </thead>
@@ -1640,6 +1659,52 @@
         </div>
     </div>
 
+    <!-- VENDOR PARTNER MODAL -->
+    <div class="modal" id="editPartnerModal">
+        <div class="modal-content" style="max-width:500px;">
+            <div class="modal-header">
+                <h2 style="font-family: 'Playfair Display', serif; font-size:20px;">Partner Management</h2>
+                <button onclick="closeModal('editPartnerModal')" style="background:none; border:none; color:var(--gray); cursor:pointer;"><i class="fas fa-times fa-lg"></i></button>
+            </div>
+            <div id="partner-details-strip" style="margin-bottom:20px; padding:12px; background:rgba(255,255,255,0.03); border-radius:12px; border:1px solid var(--border);">
+                <div style="font-size:11px; color:var(--gray); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Vendor Identity</div>
+                <div id="edit-partner-name" style="font-size:16px; font-weight:700; color:#fff;">Vendor Name</div>
+                <div id="edit-partner-email" style="font-size:12px; color:var(--gray);">vendor@email.com</div>
+            </div>
+            <form id="editPartnerForm">
+                <input type="hidden" id="edit-partner-id">
+                
+                <div style="margin-bottom:24px; padding:16px; background:rgba(16,185,129,0.05); border-radius:12px; border:1px solid rgba(16,185,129,0.2);">
+                    <label style="display:flex; align-items:center; gap:12px; cursor:pointer;">
+                        <input type="checkbox" id="is-commission-partner" style="accent-color:var(--success); transform:scale(1.2);">
+                        <div>
+                            <div style="font-weight:700; font-size:14px; color:var(--success);">Active Commission Partner</div>
+                            <div style="font-size:11px; color:var(--gray); margin-top:2px;">Enables this vendor to claim sales commissions via the portal.</div>
+                        </div>
+                    </label>
+                </div>
+
+                <div id="partner-rate-config" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px;">
+                    <div>
+                        <label class="form-label">Gross Commission Rate (%)</label>
+                        <input type="number" id="partner-gross-rate" class="form-input" step="0.1" value="15.0">
+                        <small style="font-size:9px; color:var(--gray);">Standard is 15.0%</small>
+                    </div>
+                    <div>
+                        <label class="form-label">WHT Deduction (%)</label>
+                        <input type="number" id="partner-wht-rate" class="form-input" step="0.1" value="5.0">
+                        <small style="font-size:9px; color:var(--gray);">Mandatory 5.0%</small>
+                    </div>
+                </div>
+
+                <div style="display:flex; justify-content:flex-end; gap:12px;">
+                    <button type="button" class="btn btn-ghost" onclick="closeModal('editPartnerModal')">Cancel</button>
+                    <button type="submit" class="btn btn-gold">Save Settings</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
     <!-- DOCUMENT PREVIEW MODAL -->
     <div class="doc-preview-modal" id="docPreviewModal">
         <div class="doc-preview-content">
@@ -1653,6 +1718,9 @@
                 <button onclick="closeDocModal()"
                     style="background:none; border:none; color:var(--gray); cursor:pointer;"><i
                         class="fas fa-times fa-lg"></i></button>
+            </div>
+            <div id="docNavStrip" style="display:none; padding:12px 32px; background:rgba(255,255,255,0.02); border-bottom:1px solid var(--border); overflow-x:auto; gap:12px; align-items:center;">
+                <!-- File tabs will be injected here -->
             </div>
             <div class="doc-preview-body">
                 <div id="docLoader" class="doc-preview-loader">
@@ -1670,6 +1738,195 @@
     </div>
 
     <div id="toast" class="toast"></div>
+
+    <!-- COMMISSION WHT REMITTANCE MODAL -->
+    <div class="modal" id="commWhtModal">
+        <div class="modal-content" style="max-width: 650px;">
+            <div class="modal-header">
+                <div>
+                    <h2 style="font-family: 'Playfair Display', serif; font-size: 20px;">Document Commission Tax Payment</h2>
+                    <p style="color:var(--gray); font-size:11px; text-transform:uppercase; letter-spacing:1px; margin-top:4px;">Tax Authority Remittance Documentation</p>
+                </div>
+                <button onclick="closeModal('commWhtModal')" style="background:none; border:none; color:var(--gray); cursor:pointer;"><i class="fas fa-times fa-lg"></i></button>
+            </div>
+            
+            <div style="background:rgba(239,68,68,0.05); padding:15px; border-radius:12px; border:1px solid rgba(239,68,68,0.2); margin-bottom:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center;">
+                    <span style="color:var(--gray); font-size:12px;">Total Liability Selected:</span>
+                    <strong id="comm-wht-total" style="color:var(--error); font-size:20px;">₦0.00</strong>
+                </div>
+            </div>
+
+            <div style="max-height: 300px; overflow-y: auto; margin-bottom:20px; border:1px solid var(--border); border-radius:8px;">
+                <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
+                    <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 10;">
+                        <tr>
+                            <th style="padding:10px; text-align:left;"><input type="checkbox" id="comm-wht-select-all" onclick="toggleAllCommWht(this)"></th>
+                            <th style="padding:10px; text-align:left;">Partner</th>
+                            <th style="padding:10px; text-align:left;">Invoice</th>
+                            <th style="padding:10px; text-align:right;">WHT Amount</th>
+                        </tr>
+                    </thead>
+                    <tbody id="comm-wht-body">
+                        <!-- Dynamic content -->
+                    </tbody>
+                </table>
+            </div>
+
+            <div class="form-group">
+                <label class="form-label">FIRS Receipt Reference / Remittance ID</label>
+                <input type="text" id="comm-wht-ref" class="form-input" placeholder="Enter government receipt number">
+            </div>
+
+            <div style="text-align: right; margin-top: 20px;">
+                <button class="btn btn-gold" onclick="submitCommWhtRemittance()" style="padding:10px 25px;">DOCUMENT PAYMENT</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- COMMISSION PAYOUT MODAL -->
+    <div class="modal" id="payCommissionModal">
+        <div class="modal-content" style="max-width: 450px;">
+            <div class="modal-header">
+                <div>
+                    <h2 style="font-family: 'Playfair Display', serif; font-size: 20px;">Remit Commission</h2>
+                    <p style="color:var(--gray); font-size:11px; text-transform:uppercase; letter-spacing:1px; margin-top:4px;">Official Payout Processing</p>
+                </div>
+                <button onclick="closeModal('payCommissionModal')" style="background:none; border:none; color:var(--gray); cursor:pointer;"><i class="fas fa-times fa-lg"></i></button>
+            </div>
+            
+            <form id="commPayoutForm" onsubmit="processCommPayout(event)">
+                <input type="hidden" id="pay-comm-id">
+                <div class="form-group" style="background:rgba(255,255,255,0.02); padding:15px; border-radius:8px; margin-bottom:20px; border:1px dashed var(--border);">
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                        <span style="color:var(--gray); font-size:12px;">Recipient:</span>
+                        <strong id="pay-comm-rep" style="color:var(--white);">--</strong>
+                    </div>
+                    <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
+                        <span style="color:var(--gray); font-size:12px;">Net Payable:</span>
+                        <strong id="pay-comm-net" style="color:var(--gold-bright); font-size:18px;">₦0.00</strong>
+                    </div>
+                    <div style="display:flex; justify-content:space-between;">
+                        <span style="color:var(--gray); font-size:12px;">Tax Withheld (WHT):</span>
+                        <span id="pay-comm-wht" style="color:var(--red); font-size:12px;">₦0.00</span>
+                    </div>
+                </div>
+
+                <div class="form-group">
+                    <label class="form-label">Payment Method</label>
+                    <select class="form-control" id="pay-comm-method">
+                        <option value="Bank Transfer">Bank Transfer</option>
+                        <option value="Cash">Cash / Other</option>
+                    </select>
+                </div>
+                <div class="form-group">
+                    <label class="form-label">Bank Reference / Narration</label>
+                    <input type="text" class="form-control" id="pay-comm-ref" placeholder="EXIMP-COMM-2024-XXXX" required>
+                </div>
+
+                <div style="margin-top:24px; display:flex; gap:12px;">
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('payCommissionModal')" style="flex:1;">Cancel</button>
+                    <button type="submit" class="btn btn-primary" style="flex:2;">Confirm Payout</button>
+                </div>
+            </form>
+        </div>
+    </div>
+
+    <!-- COMMISSION SETTINGS MODAL -->
+    <div class="modal" id="commissionSettingsModal">
+        <div class="modal-content" style="max-width: 700px;">
+            <div class="modal-header">
+                <div>
+                    <h2 style="font-size:18px;">Commission & Tax Configuration</h2>
+                    <p style="color:var(--gray); font-size:12px;">Manage global defaults and partner-specific overrides.</p>
+                </div>
+                <button class="close-btn" onclick="closeModal('commissionSettingsModal')">&times;</button>
+            </div>
+            
+            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:30px; padding:20px; background:rgba(196,125,10,0.05); border-radius:12px; border:1px solid rgba(196,125,10,0.1);">
+                <div>
+                    <label class="form-label">Global Default Commission (%)</label>
+                    <input type="number" id="default-comm-rate" class="form-input" step="0.01" placeholder="e.g. 10.00">
+                </div>
+                <div>
+                    <label class="form-label">Global Default WHT (%)</label>
+                    <input type="number" id="default-wht-rate" class="form-input" step="0.01" placeholder="e.g. 5.00">
+                </div>
+                <div style="grid-column: span 2; display:flex; justify-content:space-between; align-items:center;">
+                    <button class="btn" onclick="triggerTaxSync()" style="padding:8px 16px; font-size:11px; border-color:var(--gray); color:var(--gray);">
+                        <i class="fas fa-history"></i> SYNC HISTORICAL TAX (9.5% → 10%)
+                    </button>
+                    <button class="btn btn-gold" onclick="updateDefaultRates()" style="padding:8px 20px; font-size:12px;">UPDATE DEFAULTS</button>
+                </div>
+            </div>
+
+            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+                <table class="data-table" style="font-size:13px;">
+                    <thead>
+                        <tr>
+                            <th>Sales Representative / Partner</th>
+                            <th>Comm %</th>
+                            <th>Tax (WHT) %</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody id="repRatesBody">
+                        <tr><td colspan="4" style="text-align:center; padding:20px; color:var(--gray);">Loading partner rates...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+    </div>
+
+    <!-- INDIVIDUAL REP RATE MODAL -->
+    <div class="modal" id="editRepRateModal" style="z-index: 2001;">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <h2 id="edit-rep-name" style="font-size:16px;">Edit Rates</h2>
+                <button class="close-btn" onclick="closeModal('editRepRateModal')">&times;</button>
+            </div>
+            <input type="hidden" id="edit-rep-id">
+            <div class="form-group">
+                <label class="form-label">Commission Rate (%)</label>
+                <input type="number" id="edit-rep-comm" class="form-input" step="0.01">
+            </div>
+            <div class="form-group" style="margin-top:15px;">
+                <label class="form-label">Withholding Tax Rate (%)</label>
+                <input type="number" id="edit-rep-wht" class="form-input" step="0.01">
+            </div>
+            <button class="btn btn-gold" onclick="saveRepRates()" style="width:100%; margin-top:20px;">SAVE CHANGES</button>
+        </div>
+    </div>
+
+    <!-- EDIT VENDOR PARTNER RATE MODAL -->
+    <div class="modal" id="editPartnerRateModal" style="z-index: 2001;">
+        <div class="modal-content" style="max-width: 400px;">
+            <div class="modal-header">
+                <div>
+                    <h2 id="edit-partner-name" style="font-size:16px;">Edit Partner Rates</h2>
+                    <p style="color:var(--gray); font-size:11px;">External Commission Configuration</p>
+                </div>
+                <button class="close-btn" onclick="closeModal('editPartnerRateModal')">&times;</button>
+            </div>
+            <input type="hidden" id="edit-partner-id">
+            <div class="form-group">
+                <label class="form-label" style="display:flex; justify-content:space-between;">
+                    Commission Partner Status
+                    <input type="checkbox" id="edit-partner-status" style="width:auto; margin:0;">
+                </label>
+                <p style="font-size:10px; color:var(--gray); margin-top:-8px;">Enable this to allow commission earnings for this vendor.</p>
+            </div>
+            <div class="form-group" style="margin-top:15px;">
+                <label class="form-label">Gross Commission Rate (%)</label>
+                <input type="number" id="edit-partner-comm" class="form-input" step="0.01">
+            </div>
+            <div class="form-group" style="margin-top:15px;">
+                <label class="form-label">Withholding Tax Rate (%)</label>
+                <input type="number" id="edit-partner-wht" class="form-input" step="0.01">
+            </div>
+            <button class="btn btn-gold" onclick="savePartnerRates()" style="width:100%; margin-top:20px;">SAVE PARTNER SETTINGS</button>
+        </div>
+    </div>
 
     <style>
         @keyframes spin {
@@ -1701,7 +1958,19 @@
                 'Authorization': `Bearer ${token}`,
                 ...options.headers
             };
-            return fetch(url, { ...options, headers });
+            try {
+                const res = await fetch(url, { ...options, headers });
+                if (res.status >= 500) {
+                    toast("Server crashed and the engineers are working on it.", "error");
+                    throw new Error("Server Crash");
+                }
+                return res;
+            } catch (e) {
+                if (e.name === 'TypeError' || e.message.includes('fetch')) {
+                    toast("Connection lost. Please check your internet and try again.", "error");
+                }
+                throw e;
+            }
         }
 
         async function checkAuth() {
@@ -1759,7 +2028,8 @@
                 fetchRequests(),
                 fetchVendors(),
                 fetchAssets(),
-                fetchCommissions()
+                fetchCommissions(),
+                fetchStats()
             ]);
             
             setTimeout(() => icon.classList.remove('fa-spin-once'), 800);
@@ -1779,39 +2049,255 @@
             const body = document.getElementById('commissionBody');
             if (!body) return;
             if (data.length === 0) {
-                body.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:var(--gray);">No commission records found.</td></tr>';
+                body.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:40px; color:var(--gray);">No commission records found.</td></tr>';
                 return;
             }
-            body.innerHTML = data.map(c => `
+            body.innerHTML = data.map(c => {
+                const net = c.net_commission || c.final_amount || c.commission_amount;
+                const gross = c.gross_commission || c.commission_amount || (net / 0.95);
+                const wht = c.wht_amount || (gross - net);
+                const rate = c.commission_rate || (gross / (c.payment_amount || 1) * 100);
+                const repName = c.sales_reps?.name || 'Unknown Rep';
+                
+                return `
                 <tr>
                     <td>${new Date(c.created_at).toLocaleDateString()}</td>
                     <td>
-                        <div style="font-weight:700;">${c.sales_reps?.name || 'Unknown Rep'}</div>
-                        <small style="color:var(--gray)">${c.sales_rep_id.slice(0,8)}</small>
+                        <div style="font-weight:700;">${repName}</div>
+                        <small style="color:var(--gray); text-transform:uppercase; font-size:9px;">${c.sales_rep_id.slice(0,8)}</small>
                     </td>
                     <td>
-                        <div style="font-weight:700;">${c.clients?.full_name || 'N/A'}</div>
+                        <div style="font-weight:700;">${c.clients?.full_name || 'Legacy Client'}</div>
                         <small style="color:var(--gray)">${c.estate_name || 'General'}</small>
                     </td>
-                    <td style="font-family:monospace;">${c.invoices?.invoice_number || 'Direct'}</td>
-                    <td>₦${c.payment_amount.toLocaleString()}</td>
-                    <td>${c.commission_rate}%</td>
-                    <td style="font-weight:700; color:var(--success)">₦${c.commission_amount.toLocaleString()}</td>
+                    <td><code style="color:var(--gold); font-size:11px;">${c.invoices?.invoice_number || 'DIR-REF'}</code></td>
+                    <td style="color:var(--gray)">₦${(c.payment_amount || 0).toLocaleString()}</td>
+                    <td style="font-weight:700; color:var(--white);">${rate.toFixed(1)}%</td>
+                    <td style="font-weight:700; color:var(--gray)">₦${gross.toLocaleString()}</td>
+                    <td style="color:var(--error); font-size:11px;">- ₦${wht.toLocaleString()}</td>
+                    <td style="font-weight:700; color:var(--success); font-size:14px;">₦${net.toLocaleString()}</td>
                     <td>
-                        <span class="status-pill ${c.is_paid ? 'approved' : 'pending'}">
-                            ${c.is_paid ? 'PAID' : 'PENDING'}
-                        </span>
+                        <div style="display:flex; align-items:center; gap:10px;">
+                            <span class="status-pill ${c.is_paid ? 'approved' : 'pending'}" style="font-size:9px;">
+                                ${c.is_paid ? 'PAID' : 'PENDING'}
+                            </span>
+                            ${!c.is_paid ? `
+                                <button class="btn btn-gold btn-sm" style="padding:4px 10px; font-size:10px;" 
+                                    onclick="openPayCommModal('${c.id}', '${repName.replace(/'/g, "\\'")}', ${net}, ${wht})">
+                                    PAY NOW
+                                </button>
+                            ` : '<i class="fas fa-check-circle" style="color:var(--success)"></i>'}
+                        </div>
                     </td>
                 </tr>
-            `).join('');
+            `}).join('');
+        }
+
+        function openPayCommModal(id, name, net, wht) {
+            document.getElementById('pay-comm-id').value = id;
+            document.getElementById('pay-comm-rep').innerText = name;
+            document.getElementById('pay-comm-net').innerText = '₦' + net.toLocaleString();
+            document.getElementById('pay-comm-wht').innerText = '₦' + wht.toLocaleString();
+            document.getElementById('pay-comm-ref').value = `COMM-PAY-${new Date().getFullYear()}-${id.slice(0,4).toUpperCase()}`;
+            openModal('payCommissionModal');
+        }
+
+        async function triggerTaxSync() {
+            if (!confirm("This will convert all legacy 9.5% records to the new 10% Gross / 5% Tax standard. Continue?")) return;
+            
+            try {
+                const res = await apiFetch('/api/commission/migrate-legacy', { method: 'POST' });
+                const data = await res.json();
+                if (res.ok) {
+                    toast(`Data sync complete. Normalized ${data.updated_records} records.`, "success");
+                    fetchCommissions();
+                    fetchStats();
+                } else {
+                    toast(data.detail || "Sync failed", "error");
+                }
+            } catch (e) { toast("Network error during sync", "error"); }
+        }
+
+        async function openCommissionSettings() {
+            document.getElementById('commissionSettingsModal').style.display = 'flex';
+            fetchDefaultRates();
+            fetchRepRates();
+        }
+
+        async function fetchDefaultRates() {
+            try {
+                const res = await apiFetch('/api/commission/default-rate');
+                const data = await res.json();
+                document.getElementById('default-comm-rate').value = data.rate;
+                document.getElementById('default-wht-rate').value = data.wht_rate;
+            } catch (e) { toast("Failed to load defaults", "error"); }
+        }
+
+        async function updateDefaultRates() {
+            const rate = document.getElementById('default-comm-rate').value;
+            const wht = document.getElementById('default-wht-rate').value;
+            try {
+                const res = await apiFetch('/api/commission/default-rate', {
+                    method: 'PATCH',
+                    body: JSON.stringify({ rate, wht_rate: wht })
+                });
+                if (res.ok) toast("Default rates updated globally", "success");
+            } catch (e) { toast("Update failed", "error"); }
+        }
+
+        async function fetchRepRates() {
+            const body = document.getElementById('repRatesBody');
+            if (!body) return;
+            try {
+                const res = await apiFetch('/api/commission/sales-reps');
+                const reps = await res.json();
+                body.innerHTML = reps.map(r => `
+                    <tr>
+                        <td><strong>${r.name}</strong></td>
+                        <td>${r.gross_commission_rate || 'Inherited'}%</td>
+                        <td>${r.wht_rate || 'Inherited'}%</td>
+                        <td>
+                            <button class="btn" onclick="openEditRepRate('${r.id}', '${r.name}', ${r.gross_commission_rate}, ${r.wht_rate})" style="padding:4px 8px; font-size:11px;">
+                                EDIT
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch (e) { body.innerHTML = '<tr><td colspan="4" style="color:var(--error)">Error loading rates</td></tr>'; }
+        }
+
+        let pendingCommWht = [];
+        async function openCommWhtModal() {
+            try {
+                const res = await apiFetch('/api/commission/earnings');
+                const all = await res.json();
+                pendingCommWht = all.filter(c => c.is_paid && !c.is_wht_remitted && (c.wht_amount || 0) > 0);
+                
+                const body = document.getElementById('comm-wht-body');
+                if (pendingCommWht.length === 0) {
+                    body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:30px; color:var(--gray);">No outstanding commission tax found.</td></tr>';
+                } else {
+                    body.innerHTML = pendingCommWht.map(c => `
+                        <tr>
+                            <td style="padding:10px;"><input type="checkbox" class="comm-wht-cb" value="${c.id}" data-amt="${c.wht_amount}" onclick="calcCommWhtTotal()"></td>
+                            <td style="padding:10px;">${c.sales_reps?.name || 'Partner'}</td>
+                            <td style="padding:10px;">${c.invoices?.invoice_number || 'Direct'}</td>
+                            <td style="padding:10px; text-align:right; color:var(--error); font-weight:700;">₦${c.wht_amount.toLocaleString()}</td>
+                        </tr>
+                    `).join('');
+                }
+                document.getElementById('comm-wht-total').innerText = '₦0.00';
+                document.getElementById('comm-wht-ref').value = '';
+                document.getElementById('commWhtModal').style.display = 'flex';
+            } catch (e) { toast("Connection failed", "error"); }
+        }
+
+        function toggleAllCommWht(src) {
+            document.querySelectorAll('.comm-wht-cb').forEach(cb => cb.checked = src.checked);
+            calcCommWhtTotal();
+        }
+
+        function calcCommWhtTotal() {
+            let total = 0;
+            document.querySelectorAll('.comm-wht-cb:checked').forEach(cb => total += parseFloat(cb.getAttribute('data-amt')));
+            document.getElementById('comm-wht-total').innerText = '₦' + total.toLocaleString();
+        }
+
+        async function submitCommWhtRemittance() {
+            const ref = document.getElementById('comm-wht-ref').value.trim();
+            const ids = Array.from(document.querySelectorAll('.comm-wht-cb:checked')).map(cb => cb.value);
+            
+            if (!ref || ids.length === 0) return toast("Receipt Ref and Selection required", "error");
+            
+            try {
+                const res = await apiFetch('/api/commission/remit-wht', {
+                    method: 'POST',
+                    body: JSON.stringify({ ids, receipt_reference: ref })
+                });
+                if (res.ok) {
+                    toast("Tax remittance documented successfully", "success");
+                    closeModal('commWhtModal');
+                    fetchCommissions();
+                    fetchStats();
+                } else {
+                    const err = await res.json();
+                    toast(err.detail || "Documentation failed", "error");
+                }
+            } catch (e) { toast("Documentation failed", "error"); }
+        }
+
+        function openEditRepRate(id, name, comm, wht) {
+            document.getElementById('editRepRateModal').style.display = 'flex';
+            document.getElementById('edit-rep-id').value = id;
+            document.getElementById('edit-rep-name').innerText = `Edit Rates for ${name}`;
+            document.getElementById('edit-rep-comm').value = comm || '';
+            document.getElementById('edit-rep-wht').value = wht || '';
+        }
+
+        async function saveRepRates() {
+            const id = document.getElementById('edit-rep-id').value;
+            const comm = document.getElementById('edit-rep-comm').value;
+            const wht = document.getElementById('edit-rep-wht').value;
+            try {
+                const res = await apiFetch(`/api/commission/sales-reps/${id}/commission-config`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ 
+                        gross_commission_rate: comm ? parseFloat(comm) : null,
+                        wht_rate: wht ? parseFloat(wht) : null
+                    })
+                });
+                if (res.ok) {
+                    toast("Partner rates updated", "success");
+                    closeModal('editRepRateModal');
+                    fetchRepRates();
+                }
+            } catch (e) { toast("Update failed", "error"); }
+        }
+
+        async function processCommPayout(event) {
+            event.preventDefault();
+            const id = document.getElementById('pay-comm-id').value;
+            const method = document.getElementById('pay-comm-method').value;
+            const ref = document.getElementById('pay-comm-ref').value;
+            const btn = event.target.querySelector('button[type="submit"]');
+
+            btn.disabled = true;
+            btn.innerText = 'Processing...';
+
+            try {
+                // Pointing to the commission payout endpoint
+                const res = await apiFetch(`/api/commission/payout/${id}`, {
+                    method: 'POST',
+                    body: JSON.stringify({ 
+                        payout_method: method,
+                        reference: ref 
+                    })
+                });
+
+                if (res.ok) {
+                    toast("Commission Payout Successful!", "success");
+                    closeModal('payCommissionModal');
+                    fetchCommissions();
+                    fetchStats(); // Update dashboard pulses
+                } else {
+                    const err = await res.json();
+                    toast(err.detail || "Payout failed", "error");
+                }
+            } catch (err) {
+                toast("Network error during payout", "error");
+            } finally {
+                btn.disabled = false;
+                btn.innerText = 'Confirm Payout';
+            }
         }
 
         async function fetchVendors() {
             try {
                 const res = await apiFetch('/api/payouts/vendors');
-                vendorsData = await res.json();
-                renderVendors(vendorsData);
-            } catch (e) { console.error("Vendor load fail", e); }
+                const data = await res.json();
+                vendorsData = data;
+                renderVendors(data);
+            } catch (e) { toast("Registry Engine Delayed", "error"); }
         }
 
         async function fetchAssets() {
@@ -1836,9 +2322,58 @@
                     <td>${v.tin || v.rc_number || 'N/A'}</td>
                     <td>${v.bank_name || 'N/A'}</td>
                     <td>${v.account_number || 'xxxxx'}<br><small style="color:var(--gray)">${v.account_name || ''}</small></td>
+                    <td>
+                        ${v.is_commission_partner ? 
+                            '<span style="color:var(--success); font-weight:700; font-size:10px;"><i class="fas fa-check-circle"></i> PARTNER</span>' : 
+                            '<span style="color:var(--gray); font-size:10px;">STANDARD VENDOR</span>'}
+                        ${v.gross_commission_rate ? `<div style="font-size:9px; color:var(--gold); margin-top:2px;">Rate: ${v.gross_commission_rate}%</div>` : ''}
+                    </td>
                     <td>${new Date(v.updated_at || Date.now()).toLocaleDateString()}</td>
+                    <td>
+                        <button onclick="openEditPartnerModal('${v.id}')" class="btn" style="padding:4px 8px; font-size:10px; border-color:var(--border); color:var(--gray);">
+                            <i class="fas fa-edit"></i> RATES
+                        </button>
+                    </td>
                 </tr>
             `).join('');
+        }
+
+        function openEditPartnerModal(id) {
+            const vendor = vendorsData.find(v => v.id === id);
+            if (!vendor) return;
+            
+            document.getElementById('editPartnerRateModal').style.display = 'flex';
+            document.getElementById('edit-partner-id').value = id;
+            document.getElementById('edit-partner-name').innerText = `Edit Rates for ${vendor.name}`;
+            document.getElementById('edit-partner-status').checked = !!vendor.is_commission_partner;
+            document.getElementById('edit-partner-comm').value = vendor.gross_commission_rate || '';
+            document.getElementById('edit-partner-wht').value = vendor.wht_rate || '';
+        }
+
+        async function savePartnerRates() {
+            const id = document.getElementById('edit-partner-id').value;
+            const status = document.getElementById('edit-partner-status').checked;
+            const comm = document.getElementById('edit-partner-comm').value;
+            const wht = document.getElementById('edit-partner-wht').value;
+            
+            try {
+                const res = await apiFetch(`/api/payouts/vendors/${id}/commission-config`, {
+                    method: 'PATCH',
+                    body: JSON.stringify({ 
+                        is_commission_partner: status,
+                        gross_commission_rate: comm ? parseFloat(comm) : null,
+                        wht_rate: wht ? parseFloat(wht) : null
+                    })
+                });
+                if (res.ok) {
+                    toast("Vendor rates updated successfully", "success");
+                    closeModal('editPartnerRateModal');
+                    fetchVendors(); // Refresh registry
+                } else {
+                    const err = await res.json();
+                    toast(err.detail || "Update failed", "error");
+                }
+            } catch (e) { toast("Network error", "error"); }
         }
 
         function renderAssets(data) {
@@ -1946,7 +2481,8 @@
         function updateStats(data) {
             // This function is now mostly used for current session context (Audit Queue & Liability)
             const activeData = data.filter(r => r.status !== 'voided');
-            document.getElementById('stat-pending-count').innerText = activeData.filter(r => r.status === 'pending').length;
+            const el = document.getElementById('stat-pending-count');
+            if (el) el.innerText = activeData.filter(r => r.status === 'pending').length;
             
             // Note: Total Expenditure and WHT are now driven by the fetchStats() API for better historical accuracy
             // across different timeframes.
@@ -2066,7 +2602,7 @@
                     
                     ${req.receipt_url ? `
                         <button class="btn-view-doc" onclick="viewDocument('${req.id}')" style="margin: 15px 0;">
-                            <i class="fas fa-file-pdf"></i> VIEW EVIDENCE / PROOF
+                            <i class="fas fa-file-pdf"></i> ${req.receipt_url.startsWith('[') ? `VIEW ${JSON.parse(req.receipt_url).length} PROOF FILES` : 'VIEW EVIDENCE / PROOF'}
                         </button>
                     ` : ""}
 
@@ -2562,13 +3098,19 @@
                 if (tf === 'custom') {
                     if (!start || !end) return;
                     url += `?start_date=${start}&end_date=${end}`;
-                    document.getElementById('active-period-label').innerText = `Metrics: ${start} to ${end}`;
+                    const label = `Metrics: ${start} to ${end}`;
+                    if (document.getElementById('active-period-label')) document.getElementById('active-period-label').innerText = label;
+                    if (document.getElementById('main-period-label')) document.getElementById('main-period-label').innerText = label;
                 } else if (tf === 'all') {
                     url += `?days=10000`;
-                    document.getElementById('active-period-label').innerText = `Metrics: All Time`;
+                    const label = `Metrics: All Time`;
+                    if (document.getElementById('active-period-label')) document.getElementById('active-period-label').innerText = label;
+                    if (document.getElementById('main-period-label')) document.getElementById('main-period-label').innerText = label;
                 } else {
                     url += `?days=${tf}`;
-                    document.getElementById('active-period-label').innerText = `Metrics: Rolling ${tf} Days`;
+                    const label = `Metrics: Rolling ${tf} Days`;
+                    if (document.getElementById('active-period-label')) document.getElementById('active-period-label').innerText = label;
+                    if (document.getElementById('main-period-label')) document.getElementById('main-period-label').innerText = label;
                 }
 
                 const res = await apiFetch(url);
@@ -2580,7 +3122,8 @@
                 document.getElementById('stat-total-ap').innerText = '₦' + (ov.total_owed || 0).toLocaleString();
                 document.getElementById('stat-total-wht').innerText = '₦' + (ov.total_wht || 0).toLocaleString();
                 document.getElementById('stat-asset-value').innerText = '₦' + (ov.total_assets || 0).toLocaleString();
-                document.getElementById('stat-pending-count').innerText = ov.active_requests || 0;
+                const pendingEl = document.getElementById('stat-pending-count');
+                if (pendingEl) pendingEl.innerText = ov.active_requests || 0;
                 
                 // 2. Update Segment Pulses
                 const seg = data.segments || {};
@@ -2591,7 +3134,9 @@
                 
                 if (document.getElementById('stat-ops-paid')) {
                     document.getElementById('stat-ops-paid').innerText = '₦' + (seg.ops?.paid || 0).toLocaleString();
+                    document.getElementById('stat-ops-owed').innerText = '₦' + (seg.ops?.owed || 0).toLocaleString();
                     document.getElementById('stat-reimb-paid').innerText = '₦' + (seg.reimbursements?.paid || 0).toLocaleString();
+                    document.getElementById('stat-reimb-owed').innerText = '₦' + (seg.reimbursements?.owed || 0).toLocaleString();
                 }
                 
                 renderCharts(data);
@@ -2797,14 +3342,12 @@
         }
 
         // --- DOCUMENT PREVIEW ---
-        async function viewDocument(requestId) {
+        async function viewDocument(requestId, fileIndex = 0) {
             const modal = document.getElementById('docPreviewModal');
             const frame = document.getElementById('docFrame');
             const img = document.getElementById('docImg');
             const loader = document.getElementById('docLoader');
-
-            const req = requestsData.find(r => r.id === requestId);
-            const isPdf = (req.proforma_url || '').toLowerCase().endsWith('.pdf');
+            const nav = document.getElementById('docNavStrip');
 
             modal.style.display = 'flex';
             loader.style.display = 'flex';
@@ -2812,25 +3355,39 @@
             img.style.display = 'none';
 
             try {
-                const response = await apiFetch(`/api/payouts/requests/${requestId}/view-document/proforma`);
-                if (response.ok) {
-                    if (isPdf) {
-                        frame.src = response.url;
-                        frame.onload = () => {
-                            loader.style.display = 'none';
-                            frame.style.display = 'block';
-                        };
-                    } else {
-                        img.src = response.url;
-                        img.onload = () => {
-                            loader.style.display = 'none';
-                            img.style.display = 'block';
-                        };
-                    }
+                // Fetch the list of files if this is the first open or we need info
+                const listRes = await apiFetch(`/api/payouts/requests/${requestId}/proof-files`);
+                const fileInfo = await listRes.json();
+                
+                if (fileInfo.receipt_files.length > 1) {
+                    nav.style.display = 'flex';
+                    nav.innerHTML = fileInfo.receipt_files.map((f, i) => `
+                        <button onclick="viewDocument('${requestId}', ${i})" 
+                                style="padding:6px 12px; border-radius:8px; border:1px solid ${i === fileIndex ? 'var(--gold)' : 'var(--border)'}; 
+                                       background:${i === fileIndex ? 'rgba(196,125,10,0.1)' : 'transparent'}; 
+                                       color:${i === fileIndex ? 'var(--gold)' : 'var(--gray)'}; cursor:pointer; font-size:11px; font-weight:700; white-space:nowrap;">
+                            <i class="fas ${f.toLowerCase().endsWith('.pdf') ? 'fa-file-pdf' : 'fa-image'}"></i> File ${i + 1}
+                        </button>
+                    `).join('');
                 } else {
-                    const err = await response.json();
-                    toast(err.detail || "Could not retrieve document", "error");
-                    closeDocModal();
+                    nav.style.display = 'none';
+                }
+
+                const docUrl = `/api/payouts/requests/${requestId}/view-document/receipt?file_index=${fileIndex}`;
+                const isPdf = fileInfo.receipt_files[fileIndex]?.toLowerCase().endsWith('.pdf');
+
+                if (isPdf) {
+                    frame.src = docUrl;
+                    frame.onload = () => {
+                        loader.style.display = 'none';
+                        frame.style.display = 'block';
+                    };
+                } else {
+                    img.src = docUrl;
+                    img.onload = () => {
+                        loader.style.display = 'none';
+                        img.style.display = 'block';
+                    };
                 }
             } catch (e) {
                 console.error(e);
@@ -2905,6 +3462,59 @@
             }
         }
 
+        // --- PARTNER MANAGEMENT ---
+        let vendorsData = [];
+        
+        function openEditPartnerModal(vendorId) {
+            const v = vendorsData.find(vend => vend.id === vendorId);
+            if (!v) return;
+
+            document.getElementById('edit-partner-id').value = v.id;
+            document.getElementById('edit-partner-name').innerText = v.name;
+            document.getElementById('edit-partner-email').innerText = v.email || 'No email attached';
+            document.getElementById('is-commission-partner').checked = v.is_commission_partner || false;
+            document.getElementById('partner-gross-rate').value = v.gross_commission_rate || 15.0;
+            document.getElementById('partner-wht-rate').value = v.wht_rate || 5.0;
+
+            document.getElementById('editPartnerModal').style.display = 'flex';
+        }
+
+        document.getElementById('editPartnerForm').addEventListener('submit', async (e) => {
+            e.preventDefault();
+            const id = document.getElementById('edit-partner-id').value;
+            const btn = e.target.querySelector('button[type="submit"]');
+            
+            const payload = {
+                is_commission_partner: document.getElementById('is-commission-partner').checked,
+                gross_commission_rate: parseFloat(document.getElementById('partner-gross-rate').value),
+                wht_rate: parseFloat(document.getElementById('partner-wht-rate').value)
+            };
+
+            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Saving...';
+            btn.disabled = true;
+
+            try {
+                const res = await apiFetch(`/api/payouts/vendors/${id}/partner-settings`, {
+                    method: 'PATCH',
+                    body: JSON.stringify(payload)
+                });
+
+                if (res.ok) {
+                    toast("Partner settings synchronized!", "success");
+                    closeModal('editPartnerModal');
+                    fetchVendors();
+                } else {
+                    const err = await res.json();
+                    toast(err.detail || "Update failed", "error");
+                }
+            } catch (err) {
+                toast("Network connection error", "error");
+            } finally {
+                btn.innerHTML = 'Save Settings';
+                btn.disabled = false;
+            }
+        });
+
         // Initialize
         checkAuth();
         fetchRequests();
@@ -2912,6 +3522,20 @@
         fetchVendors();
         fetchAssets();
         fetchCommissions();
+        
+        // --- SMART POLLING (Option 1) ---
+        let lastPulseFetch = Date.now();
+        window.addEventListener('focus', () => {
+            const now = Date.now();
+            // Only refresh if the user focuses back and data is older than 5 minutes (300,000 ms)
+            if (now - lastPulseFetch > 300000) {
+                console.log("Smart Polling: Tab focused, refreshing stale financial data...");
+                fetchStats();
+                fetchRequests();
+                lastPulseFetch = now;
+            }
+        });
+
         // --- MOBILE NAV TOGGLE ---
         function toggleSidebar() {
             const sidebar = document.getElementById('sidebar');
