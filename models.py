@@ -539,6 +539,7 @@ class ExpenditureRequestCreate(BaseModel):
     due_date: Optional[date] = None
     vendor_data: Optional[VendorCreate] = None # For inline creation
     amount_gross: Decimal
+    category: Optional[str] = "General"
     payout_method: str # 'direct_pay', 'reimbursement'
     is_wht_applicable: bool = True
     wht_exemption_reason: Optional[str] = None

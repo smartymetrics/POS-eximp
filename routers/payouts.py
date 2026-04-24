@@ -142,6 +142,7 @@ async def submit_payout_request(data: ExpenditureRequestCreate, current_admin=De
         "net_payout_amount": float(wht_details['net_amount']),
         "proforma_url": data.proforma_url,
         "receipt_url": data.receipt_url,
+        "category": data.category or "General",
         "status": "pending_verification"
     }
     
@@ -443,6 +444,7 @@ async def record_company_asset(data: AssetCreate, current_admin=Depends(require_
             "status": "paid",
             "payout_method": "direct_pay",
             "requester_id": current_admin['sub'],
+            "category": "Capital Expenditure",
             "is_wht_applicable": False,
             "created_at": data.purchase_date.isoformat() if data.purchase_date else datetime.now().isoformat()
         }
@@ -543,6 +545,7 @@ async def list_proof_files(request_id: str, current_admin=Depends(require_roles(
         return [raw]
 
     return {
+        "id": request_id,
         "title": req.get('title', ''),
         "receipt_files": parse_paths(receipt_raw),
         "proforma_files": parse_paths(proforma_raw),
@@ -831,6 +834,36 @@ async def submit_payout_claim_from_portal(
         v_res = await db_execute(lambda: db.table("vendors").insert(vendor_data).execute())
         vendor_id = v_res.data[0]['id']
 
+    # 1b. Requester Resolution (Identify staff member from email or invite)
+    requester_id = None
+    # Priority 1: Check if payee is an admin themselves
+    staff_res = await db_execute(lambda: db.table("admins").select("id").eq("email", payee_email).execute())
+    if staff_res.data:
+        requester_id = staff_res.data[0]['id']
+    
+    # Priority 2: Check if payee is a staff-vendor with linked admin_id
+    if not requester_id:
+        v_link = await db_execute(lambda: db.table("vendors").select("admin_id").eq("email", payee_email).not_.is_("admin_id", "null").execute())
+        if v_link.data:
+            requester_id = v_link.data[0]['admin_id']
+
+    # Priority 3: Check if there was an invitation for this email
+    if not requester_id:
+        inv_res = await db_execute(lambda: db.table("portal_invites").select("invited_by").eq("email", payee_email).execute())
+        if inv_res.data:
+            requester_id = inv_res.data[0]['invited_by']
+
+    # 1c. Category Mapping
+    category_map = {
+        "office": "Office Expenditure",
+        "staff_commission": "Sales Commission",
+        "partner": "Partner Payout",
+        "company": "Company Expenditure",
+        "contractor": "Contractor Payout",
+        "disbursement": "Office Expenditure"
+    }
+    category = category_map.get(type, "General Expenditure")
+
     # 2. Commission Logic (Staff & Partner) & Fraud/Dispute Shield
     is_high_risk = False
     risk_notes = []
@@ -891,11 +924,11 @@ async def submit_payout_claim_from_portal(
             f"{payment_type_label}: {invoice_number}"
         )
     else:
-        # Office Expenditure — no change
+        # Office / Company / Contractor Expenditure
         gross = Decimal(str(claim_amount))
         wht = Decimal("0")
         net = gross
-        title = f"Office Expenditure: {payee_name}"
+        title = f"{category}: {payee_name}"
 
     # 3. File Upload — supports multiple proof files.
     # Each file is uploaded to the 'Cloud Infrastructure' private bucket.
@@ -944,6 +977,8 @@ async def submit_payout_claim_from_portal(
         "is_high_risk": is_high_risk,
         "risk_notes": "\n".join(risk_notes) if risk_notes else None,
         "source_platform": "payout_portal",
+        "requester_id": requester_id,
+        "category": category,
         # ── NEW fields ──
         "payment_type": payment_type,           # "initial_deposit" | "instalment" | null
         "is_disputed": is_dispute,              # Finance sees disputed claims in a separate queue
@@ -1158,18 +1193,60 @@ async def get_payout_stats(
         total_gross += gross
         period_totals[bucket] = period_totals.get(bucket, 0) + gross
 
-    # 4. Global Current State Indicators
-    try:
-        active_count_res = await db_execute(lambda: db.table("expenditure_requests").select("id", count="exact").eq("status", "pending").execute())
-        active_count = active_count_res.count
+    # 4. ADVANCED ANALYTICS (Aging, Compliance, Velocity)
+    aging = {"0-30": 0, "31-60": 0, "61-90": 0, "90+": 0}
+    compliance = {"remitted": 0, "pending": 0}
+    pay_times = []
+    
+    # We need a broader query for aging (all unpaid regardless of date filter)
+    aging_res = await db_execute(lambda: db.table("expenditure_requests")
+        .select("amount_gross, net_payout_amount, amount_paid, created_at, status")
+        .in_("status", ["approved", "partially_paid", "pending"])
+        .execute())
+    
+    now = datetime.now(timezone.utc)
+    for r in (aging_res.data or []):
+        unpaid = float(r['net_payout_amount'] or 0) - float(r['amount_paid'] or 0)
+        if unpaid <= 0: continue
         
-        liability_res = await db_execute(lambda: db.table("expenditure_requests").select("wht_amount").in_("status", ["approved", "partially_paid", "paid"]).eq("is_wht_remitted", False).gt("wht_amount", 0).execute())
-        total_liability = sum(float(r['wht_amount'] or 0) for r in liability_res.data)
+        created = datetime.fromisoformat(r['created_at'].replace('Z', '+00:00'))
+        age_days = (now - created).days
         
-        asset_res = await db_execute(lambda: db.table("company_assets").select("purchase_cost").execute())
-        total_assets = sum(float(r.get('purchase_cost') or 0) for r in asset_res.data)
-    except:
-        active_count = 0; total_liability = total_wht; total_assets = 0
+        if age_days <= 30: aging["0-30"] += unpaid
+        elif age_days <= 60: aging["31-60"] += unpaid
+        elif age_days <= 90: aging["61-90"] += unpaid
+        else: aging["90+"] += unpaid
+
+    # WHT Compliance (from Paid records)
+    comp_res = await db_execute(lambda: db.table("expenditure_requests")
+        .select("wht_amount, is_wht_remitted")
+        .gt("wht_amount", 0)
+        .in_("status", ["paid", "partially_paid"])
+        .execute())
+    for r in (comp_res.data or []):
+        val = float(r['wht_amount'] or 0)
+        if r.get('is_wht_remitted'): compliance["remitted"] += val
+        else: compliance["pending"] += val
+
+    # Global Metrics (Current Snapshot)
+    active_res = await db_execute(lambda: db.table("expenditure_requests").select("id", count="exact").eq("status", "pending").execute())
+    active_count = active_res.count or 0
+    
+    asset_res = await db_execute(lambda: db.table("company_assets").select("purchase_cost").execute())
+    total_assets = sum(float(r.get('purchase_cost') or 0) for r in (asset_res.data or []))
+
+    # Efficiency (Time to Pay)
+    eff_res = await db_execute(lambda: db.table("expenditure_requests")
+        .select("created_at, reviewed_at")
+        .eq("status", "paid")
+        .not_.is_("reviewed_at", "null")
+        .limit(50)
+        .execute())
+    for r in (eff_res.data or []):
+        c = datetime.fromisoformat(r['created_at'].replace('Z', '+00:00'))
+        p = datetime.fromisoformat(r['reviewed_at'].replace('Z', '+00:00'))
+        pay_times.append((p - c).total_seconds() / 3600)
+    avg_speed = sum(pay_times) / len(pay_times) if pay_times else 0
 
     # Sort Analytics
     top_payees = dict(sorted(payees.items(), key=lambda x: x[1], reverse=True)[:5])
@@ -1180,16 +1257,19 @@ async def get_payout_stats(
         "overview": {
             "total_paid": total_paid,
             "total_owed": total_ap,
-            "total_wht": total_liability,
+            "total_wht": compliance["pending"],
             "active_requests": active_count,
-            "total_assets": total_assets
+            "total_assets": total_assets,
+            "avg_pay_hours": round(avg_speed, 1)
         },
         "segments": segment_stats,
         "analytics": {
             "top_payees": top_payees,
             "top_requesters": top_requesters,
             "top_creditors": top_creditors,
-            "categories": {k.title(): (v["paid"] + v["owed"]) for k, v in segment_stats.items() if (v["paid"] + v["owed"]) > 0}
+            "categories": {k.title(): (v["paid"] + v["owed"]) for k, v in segment_stats.items() if (v["paid"] + v["owed"]) > 0},
+            "aging": aging,
+            "compliance": compliance
         },
         "trend": [{"month": b, "total": period_totals[b]} for b in sorted(period_totals.keys())]
     }
@@ -1220,24 +1300,43 @@ async def send_on_demand_report(
 @router.get("/stats/export")
 async def export_payout_report(
     report_type: str = "payout_audit",
+    ledger: Optional[str] = None, # new parameter for specific tab export
     start_date: Optional[str] = None,
     end_date: Optional[str] = None,
     current_admin=Depends(require_roles(["admin", "super_admin", "operations"]))
 ):
-    """Generate and stream a CSV report directly."""
-    report_data = await ReportService.get_report_data(report_type, start_date, end_date)
+    """Generates CSV export for the specified report type or ledger view."""
+    db = get_db()
     
-    # Convert to DataFrame for easy export
-    df = pd.DataFrame(report_data['items'])
+    if ledger:
+        # Specialized exports for each dashboard tab
+        if ledger == 'commissions':
+            res = await db_execute(lambda: db.table("commission_earnings").select("created_at, sales_reps(name), commission_amount, wht_amount, net_commission, is_paid").execute())
+            df = pd.DataFrame(res.data)
+        elif ledger == 'staff':
+            res = await db_execute(lambda: db.table("expenditure_requests").select("created_at, vendors(name), title, category, amount_gross, net_payout_amount, status").eq("vendors.type", "staff").execute())
+            df = pd.DataFrame(res.data)
+        elif ledger == 'vendors':
+            res = await db_execute(lambda: db.table("expenditure_requests").select("created_at, vendors(name, type), title, category, amount_gross, wht_amount, net_payout_amount, status").or_("vendors.type.eq.company,vendors.type.eq.individual").execute())
+            df = pd.DataFrame(res.data)
+        else:
+            res = await db_execute(lambda: db.table("expenditure_requests").select("*").execute())
+            df = pd.DataFrame(res.data)
+    else:
+        # Standard Audit Report
+        report_data = await ReportService.get_report_data(report_type, start_date, end_date)
+        df = pd.DataFrame(report_data)
+
+    if df.empty:
+        raise HTTPException(status_code=404, detail="No data found for the selected criteria")
+
+    stream = io.StringIO()
+    df.to_csv(stream, index=False)
     
-    output = io.StringIO()
-    df.to_csv(output, index=False)
-    output.seek(0)
-    
-    filename = f"{report_type}_{datetime.now().strftime('%Y%m%d')}.csv"
+    filename = f"{ledger or report_type}_export_{datetime.now().strftime('%Y%m%d')}.csv"
     
     return StreamingResponse(
-        iter([output.getvalue()]),
+        io.BytesIO(stream.getvalue().encode()),
         media_type="text/csv",
         headers={"Content-Disposition": f"attachment; filename={filename}"}
     )

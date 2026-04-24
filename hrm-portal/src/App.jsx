@@ -2963,13 +2963,13 @@ function StaffPayroll({ user }) {
           <div style={{ padding: 14, background: `${T.orange}0D`, borderRadius: 12, border: `1px solid ${T.orange}22` }}>
             <div style={{ fontSize: 11, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Payout Proof Documentation</div>
             <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-              {[...(viewingDocs.receipt_files || []), ...(viewingDocs.proforma_files || [])].map((file, i) => (
-                <a key={i} href={file.startsWith('http') ? file : `${API_BASE}/payouts/requests/${viewingDocs.id}/view-document/receipt?file_index=${i}`} target="_blank" rel="noreferrer" className="bg" style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", textDecoration: "none" }}>
+              {[...(viewingDocs.proforma_files || []).map((f, i) => ({ f, i, t: 'proforma' })), ...(viewingDocs.receipt_files || []).map((f, i) => ({ f, i, t: 'receipt' }))].map((doc, idx) => (
+                <a key={idx} href={`${API_BASE}/payouts/requests/${viewingDocs.id}/view-document/${doc.t}?file_index=${doc.i}`} target="_blank" rel="noreferrer" className="bg" style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", textDecoration: "none" }}>
                   <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                  <span style={{ fontSize: 12 }}>File #{i + 1}</span>
+                  <span style={{ fontSize: 12 }}>{doc.t.toUpperCase()} #{doc.i + 1}</span>
                 </a>
               ))}
-              {[...(viewingDocs.receipt_files || []), ...(viewingDocs.proforma_files || [])].length === 0 && (
+              {(viewingDocs.total || 0) === 0 && (
                 <div style={{ fontSize: 13, color: C.muted }}>No physical proof files attached to this record.</div>
               )}
             </div>

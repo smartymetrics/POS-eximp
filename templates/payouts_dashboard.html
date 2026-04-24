@@ -306,6 +306,143 @@
             font-family: inherit;
         }
 
+        /* --- PRESENTATION MODE & VISIBILITY --- */
+        body.presentation-mode .sidebar, 
+        body.presentation-mode .top-bar { 
+            display: none !important; 
+        }
+        body.presentation-mode .main-content { 
+            margin-left: 0 !important; 
+            width: 100% !important; 
+            padding: 40px 60px !important;
+        }
+        .visibility-toggle {
+            position: absolute;
+            top: 12px;
+            right: 12px;
+            cursor: pointer;
+            font-size: 14px;
+            color: var(--gray);
+            opacity: 0;
+            transition: all 0.3s ease;
+            z-index: 100;
+            background: rgba(0,0,0,0.5);
+            width: 28px;
+            height: 28px;
+            display: none; /* Changed from flex to hide by default */
+            align-items: center;
+            justify-content: center;
+            border-radius: 50%;
+        }
+        .tab .visibility-toggle {
+            top: -10px;
+            right: -10px;
+            font-size: 10px;
+            width: 20px;
+            height: 20px;
+        }
+        
+        /* Eye icons ONLY appear when configuring the view */
+        body.manage-view-mode .visibility-toggle {
+            display: flex;
+            opacity: 0.6;
+        }
+        .visibility-toggle:hover {
+            opacity: 1 !important;
+            color: var(--gold);
+            transform: scale(1.1);
+        }
+        .hidden-element {
+            display: none !important;
+        }
+
+        /* Show ghosts only when managing view */
+        body.manage-view-mode .hidden-element {
+            display: flex !important;
+            opacity: 0.2 !important;
+            filter: blur(2px) grayscale(100%);
+            pointer-events: auto !important;
+        }
+        
+        body.manage-view-mode .tab.hidden-element {
+            display: inline-flex !important;
+        }
+
+        body.presentation-mode .main-content { 
+            margin-left: 0 !important; 
+            width: 100% !important; 
+            padding: 40px 60px !important;
+        }
+
+        /* GLOBAL PRESENTATION CONTROLS STYLING */
+        #pres-controls {
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
+            background: rgba(18, 18, 20, 0.6);
+            backdrop-filter: blur(15px);
+            padding: 6px;
+            border-radius: 50px;
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
+            opacity: 0.4; /* Stealth by default */
+        }
+        #pres-controls:hover {
+            opacity: 1;
+            background: rgba(18, 18, 20, 0.95);
+            border-color: var(--gold);
+        }
+        #pres-controls .btn {
+            border-radius: 50px !important;
+            padding: 0 !important;
+            width: 44px;
+            height: 44px;
+            min-width: 44px !important;
+            justify-content: center;
+            border: none !important;
+            background: transparent !important;
+            color: var(--gray);
+            transition: all 0.3s ease;
+            position: relative;
+        }
+        #pres-controls .btn i {
+            font-size: 16px;
+        }
+        #pres-controls .btn:hover {
+            color: var(--white);
+            background: rgba(255,255,255,0.05) !important;
+            transform: scale(1.1);
+        }
+        #pres-controls .btn.active-mode {
+            color: var(--gold);
+            background: rgba(196, 125, 10, 0.1) !important;
+        }
+        #pres-controls .btn .btn-text {
+            position: absolute;
+            bottom: 55px;
+            right: 0;
+            background: var(--gold);
+            color: #000;
+            padding: 6px 12px;
+            border-radius: 6px;
+            font-size: 11px;
+            font-weight: 700;
+            white-space: nowrap;
+            opacity: 0;
+            pointer-events: none;
+            transition: 0.2s;
+            transform: translateY(10px);
+        }
+        #pres-controls .btn:hover .btn-text {
+            opacity: 1;
+            transform: translateY(0);
+        }
+
+        /* Chart ghosts */
+        body.manage-view-mode .chart-card.hidden-element {
+            display: block !important;
+            opacity: 0.2 !important;
+            filter: grayscale(100%);
+        }
+
         .btn-gold {
             background: var(--gold);
             color: #000;
@@ -422,7 +559,7 @@
         /* --- ANALYTICS --- */
         .analytics-grid {
             display: grid;
-            grid-template-columns: 2fr 1fr;
+            grid-template-columns: repeat(auto-fit, minmax(400px, 1fr));
             gap: 32px;
             margin-bottom: 48px;
         }
@@ -968,6 +1105,18 @@
         </div>
     </aside>
 
+    <!-- GLOBAL PRESENTATION CONTROLS -->
+    <div id="pres-controls" style="position:fixed; bottom:30px; right:30px; z-index:9999; display:flex; gap:8px; align-items:center;">
+        <button class="btn" id="manage-view-btn" onclick="toggleManageView()" style="display:none;" title="Configure View">
+            <i class="fas fa-sliders-h"></i>
+            <span class="btn-text">CONFIGURE VIEW</span>
+        </button>
+        <button class="btn" id="pres-btn" onclick="togglePresentationMode()" title="Presentation Mode">
+            <i class="fas fa-desktop"></i>
+            <span class="btn-text">PRESENTATION MODE</span>
+        </button>
+    </div>
+
     <!-- CONTENT -->
     <main class="main-content">
         <div class="header">
@@ -999,21 +1148,25 @@
         <div class="stats-grid">
             <!-- LAYER 1: Global Cash Flow -->
             <div class="stat-card">
+                <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
                 <span>Total Paid Out</span>
                 <h3 id="stat-total-paid">₦0.00</h3>
                 <div class="trend neutral" id="main-period-label">Rolling 30 Days</div>
             </div>
             <div class="stat-card" onclick="switchTab('requests')" style="cursor:pointer; border-color: rgba(59, 130, 246, 0.2);">
+                <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
                 <span>Pending Audit</span>
                 <h3 id="stat-pending-count">0</h3>
                 <div class="trend neutral">Awaiting Verification</div>
             </div>
             <div class="stat-card">
+                <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
                 <span>Accounts Payable (Owed)</span>
                 <h3 id="stat-total-ap" style="color: var(--error)">₦0.00</h3>
                 <div class="trend neutral">Outstanding Liability</div>
             </div>
             <div class="stat-card" onclick="openWhtRemittanceModal()" style="cursor:pointer; border-color: rgba(196, 125, 10, 0.2);">
+                <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
                 <span>Tax Withheld (WHT)</span>
                 <h3 id="stat-total-wht" style="color: var(--gold)">₦0.00</h3>
                 <div class="trend up"><i class="fas fa-university"></i> Awaiting Remittance</div>
@@ -1021,6 +1174,7 @@
 
             <!-- LAYER 2: Category Pulse -->
             <div class="stat-card" style="background: rgba(196, 125, 10, 0.03); border-color: rgba(196, 125, 10, 0.2);">
+                <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
                 <span>Commission Pulse</span>
                 <div style="display:flex; justify-content:space-between; align-items:flex-end; margin-top:10px;">
                     <div>
@@ -1034,6 +1188,7 @@
                 </div>
             </div>
             <div class="stat-card">
+                <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
                 <span>Operational Flow</span>
                 <div style="display:grid; grid-template-columns: 1fr 1fr; gap:15px; margin-top:10px;">
                     <div>
@@ -1049,6 +1204,7 @@
                 </div>
             </div>
             <div class="stat-card">
+                <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
                 <span>Asset Net Value</span>
                 <h3 id="stat-asset-value">₦0.00</h3>
                 <div class="trend neutral">Company Equipment</div>
@@ -1056,16 +1212,42 @@
         </div>
 
         <div class="tabs">
-            <div class="tab active" onclick="switchTab('requests', event)">Audit Queue</div>
-            <div class="tab" onclick="switchTab('verification', event)" id="verif-tab">Bill Verification <span
-                    id="verif-badge"
-                    style="display:none; background:var(--error); color:#fff; font-size:10px; border-radius:8px; padding:2px 6px; margin-left:4px;">0</span>
+            <div class="tab active" onclick="switchTab('requests', event)">
+                <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
+                Audit Queue
             </div>
-            <div class="tab" onclick="switchTab('vendors', event)">Vendor Registry</div>
-            <div class="tab" onclick="switchTab('reimbursements', event)">Staff Claims</div>
-            <div class="tab" onclick="switchTab('assets', event)">Asset Inventory</div>
-            <div class="tab" onclick="switchTab('commissions', event)">Commission Ledger</div>
-            <div class="tab" onclick="switchTab('analytics', event)">Intelligence & Reporting</div>
+            <div class="tab" onclick="switchTab('verification', event)" id="verif-tab">
+                <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
+                Bill Verification <span id="verif-badge" style="display:none; background:var(--error); color:#fff; font-size:10px; border-radius:8px; padding:2px 6px; margin-left:4px;">0</span>
+            </div>
+            <div class="tab" onclick="switchTab('vendors', event)">
+                <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
+                Vendor Registry
+            </div>
+            <div class="tab" onclick="switchTab('reimbursements', event)">
+                <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
+                Staff Claims
+            </div>
+            <div class="tab" onclick="switchTab('assets', event)">
+                <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
+                Asset Inventory
+            </div>
+            <div class="tab" onclick="switchTab('commissions', event)">
+                <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
+                Commission Ledger
+            </div>
+            <div class="tab" onclick="switchTab('operations', event)">
+                <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
+                Operation Ledger
+            </div>
+            <div class="tab" onclick="switchTab('external', event)">
+                <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
+                Partner & Vendor Ledger
+            </div>
+            <div class="tab" onclick="switchTab('analytics', event)">
+                <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
+                Intelligence & Reporting
+            </div>
         </div>
 
         <div id="requests-view" class="view-content active">
@@ -1171,6 +1353,23 @@
                     <h3 style="font-size:20px;">Staff & Management Claims</h3>
                     <p style="color:var(--gray); font-size:13px;">Reimbursements and internal expenditure requests.</p>
                 </div>
+                <button class="btn btn-gold" onclick="exportLedger('staff')">
+                    <i class="fas fa-download"></i> EXPORT CLAIMS
+                </button>
+            </div>
+            <div style="background:var(--dark2); padding:16px 24px; border-radius:12px; border:1px solid var(--border); margin-bottom:24px; display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;">
+                <div style="flex:1; min-width:200px;">
+                    <label class="form-label">Search Claims</label>
+                    <input type="text" id="staff-search" class="form-input" placeholder="Search staff name or description..." onkeyup="renderReimbursements(requestsData || [])">
+                </div>
+                <div>
+                    <label class="form-label">Start Date</label>
+                    <input type="date" id="staff-start-date" class="form-input" onchange="renderReimbursements(requestsData || [])">
+                </div>
+                <div>
+                    <label class="form-label">End Date</label>
+                    <input type="date" id="staff-end-date" class="form-input" onchange="renderReimbursements(requestsData || [])">
+                </div>
             </div>
             <div class="table-container">
                 <table class="data-table">
@@ -1179,9 +1378,11 @@
                             <th>Submission</th>
                             <th>Staff Member</th>
                             <th>Description</th>
+                            <th>Category</th>
                             <th>Gross Amount</th>
+                            <th>Net Payout</th>
                             <th>Status</th>
-                            <th>Audit Trail</th>
+                            <th>Evidence</th>
                         </tr>
                     </thead>
                     <tbody id="reimbursementBody">
@@ -1275,6 +1476,101 @@
             </div>
         </div>
 
+        <!-- OPERATION LEDGER VIEW (OFFICE OPS) -->
+        <div id="operations-view" class="view-content" style="display:none; padding-top:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <div>
+                    <h3 style="font-size:20px;">Operational Expense Ledger</h3>
+                    <p style="color:var(--gray); font-size:13px;">Recurring office operations, utilities, rent, and general overhead.</p>
+                </div>
+                <button class="btn btn-gold" onclick="exportLedger('operations')">
+                    <i class="fas fa-download"></i> EXPORT LEDGER
+                </button>
+            </div>
+            <div style="background:var(--dark2); padding:16px 24px; border-radius:12px; border:1px solid var(--border); margin-bottom:24px; display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;">
+                <div style="flex:1; min-width:200px;">
+                    <label class="form-label">Search Office Ops</label>
+                    <input type="text" id="ops-search" class="form-input" placeholder="Search payee, category, or requester..." onkeyup="renderOperations(requestsData || [])">
+                </div>
+                <div>
+                    <label class="form-label">Start Date</label>
+                    <input type="date" id="ops-start-date" class="form-input" onchange="renderOperations(requestsData || [])">
+                </div>
+                <div>
+                    <label class="form-label">End Date</label>
+                    <input type="date" id="ops-end-date" class="form-input" onchange="renderOperations(requestsData || [])">
+                </div>
+            </div>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Approval Date</th>
+                            <th>Requester</th>
+                            <th>Objective / Ref</th>
+                            <th>Payee</th>
+                            <th>Category</th>
+                            <th>Gross Value</th>
+                            <th>Tax (WHT)</th>
+                            <th>Net Payout</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="operationsBody">
+                        <tr><td colspan="10" style="text-align:center; padding:40px; color:var(--gray);">Fetching operational records...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- PARTNER & VENDOR LEDGER (EXTERNAL) -->
+        <div id="external-view" class="view-content" style="display:none; padding-top:20px;">
+            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
+                <div>
+                    <h3 style="font-size:20px;">Partner & Vendor Ledger</h3>
+                    <p style="color:var(--gray); font-size:13px;">Professional external payments for contractors, corporate vendors, and corporate partners.</p>
+                </div>
+                <button class="btn btn-gold" onclick="exportLedger('vendors')">
+                    <i class="fas fa-download"></i> EXPORT VENDORS
+                </button>
+            </div>
+            <div style="background:var(--dark2); padding:16px 24px; border-radius:12px; border:1px solid var(--border); margin-bottom:24px; display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;">
+                <div style="flex:1; min-width:200px;">
+                    <label class="form-label">Search Vendors</label>
+                    <input type="text" id="external-search" class="form-input" placeholder="Search contractor name or company..." onkeyup="renderExternalLedger(requestsData || [])">
+                </div>
+                <div>
+                    <label class="form-label">Start Date</label>
+                    <input type="date" id="external-start-date" class="form-input" onchange="renderExternalLedger(requestsData || [])">
+                </div>
+                <div>
+                    <label class="form-label">End Date</label>
+                    <input type="date" id="external-end-date" class="form-input" onchange="renderExternalLedger(requestsData || [])">
+                </div>
+            </div>
+            <div class="table-container">
+                <table class="data-table">
+                    <thead>
+                        <tr>
+                            <th>Date</th>
+                            <th>Requester</th>
+                            <th>Purpose / Invoice</th>
+                            <th>Payee (Entity)</th>
+                            <th>Type</th>
+                            <th>Category</th>
+                            <th>Gross Value</th>
+                            <th>WHT</th>
+                            <th>Net Payout</th>
+                            <th>Status</th>
+                        </tr>
+                    </thead>
+                    <tbody id="externalBody">
+                        <tr><td colspan="10" style="text-align:center; padding:40px; color:var(--gray);">Fetching external records...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
         <!-- Analytics View -->
         <div id="analytics-view" class="view-content" style="display:none; padding-top:20px;">
             <div style="background:var(--dark2); padding:24px; border-radius:16px; border:1px solid var(--border); margin-bottom:32px; display:flex; flex-wrap:wrap; gap:20px; align-items:flex-end;">
@@ -1307,6 +1603,7 @@
 
             <div class="analytics-grid">
                 <div class="chart-card">
+                    <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
                     <h4 id="burnChartTitle">Gross Expenditure Trend</h4>
                     <div style="height:300px; position:relative;">
                         <div class="chart-loader" id="loader-burn"><i class="fas fa-circle-notch fa-spin"></i></div>
@@ -1314,6 +1611,7 @@
                     </div>
                 </div>
                 <div class="chart-card">
+                    <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
                     <h4>Spend Allocation</h4>
                     <div style="height:300px; position:relative;">
                         <div class="chart-loader" id="loader-category"><i class="fas fa-circle-notch fa-spin"></i></div>
@@ -1324,6 +1622,7 @@
 
             <div class="analytics-grid" style="margin-top:32px;">
                 <div class="chart-card">
+                    <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
                     <h4>Top Spend by Payee (Vendors)</h4>
                     <div style="height:300px; position:relative;">
                         <div class="chart-loader" id="loader-payee"><i class="fas fa-circle-notch fa-spin"></i></div>
@@ -1331,6 +1630,7 @@
                     </div>
                 </div>
                 <div class="chart-card">
+                    <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
                     <h4>Top Outstanding Payables (Creditors)</h4>
                     <div style="height:300px; position:relative;">
                         <div class="chart-loader" id="loader-creditor"><i class="fas fa-circle-notch fa-spin"></i></div>
@@ -1340,12 +1640,36 @@
             </div>
 
             <div class="analytics-grid" style="margin-top:32px;">
-                <div class="chart-card" style="grid-column: span 2;">
+                <div class="chart-card">
+                    <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
+                    <h4>Accounts Payable Aging (Owed)</h4>
+                    <div style="height:300px; position:relative;">
+                        <div class="chart-loader" id="loader-aging"><i class="fas fa-circle-notch fa-spin"></i></div>
+                        <canvas id="agingChart"></canvas>
+                    </div>
+                </div>
+                <div class="chart-card">
+                    <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
+                    <h4>WHT Compliance Tracker</h4>
+                    <div style="height:300px; position:relative;">
+                        <div class="chart-loader" id="loader-tax"><i class="fas fa-circle-notch fa-spin"></i></div>
+                        <canvas id="taxComplianceChart"></canvas>
+                    </div>
+                </div>
+            </div>
+
+            <div class="analytics-grid" style="margin-top:32px;">
+                <div class="chart-card">
                     <h4>Top Spend by Requester (Staff)</h4>
                     <div style="height:300px; position:relative;">
                         <div class="chart-loader" id="loader-requester"><i class="fas fa-circle-notch fa-spin"></i></div>
                         <canvas id="requesterChart"></canvas>
                     </div>
+                </div>
+                <div class="chart-card" style="display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+                    <div style="color:var(--gold); font-size:48px; font-weight:800;" id="stat-avg-speed">0.0h</div>
+                    <div style="text-transform:uppercase; font-size:12px; font-weight:700; color:var(--gray); margin-top:8px;">Avg. Payout Velocity</div>
+                    <p style="font-size:11px; color:var(--gray); margin-top:12px; max-width:200px;">Time from request creation to payment confirmation.</p>
                 </div>
             </div>
 
@@ -1966,6 +2290,11 @@
             setTimeout(() => el.classList.remove('visible'), 3000);
         }
 
+        function openModal(id) {
+            const modal = document.getElementById(id);
+            if (modal) modal.style.display = 'flex';
+        }
+
         async function apiFetch(url, options = {}) {
             const token = localStorage.getItem('ec_token');
             const headers = {
@@ -2018,6 +2347,103 @@
         }
 
         // --- DATA LOADING ---
+        function renderOperations(data) {
+            const body = document.getElementById('operationsBody');
+            if (!body) return;
+
+            const searchTerm = (document.getElementById('ops-search')?.value || "").toLowerCase();
+            const startDate = document.getElementById('ops-start-date')?.value;
+            const endDate = document.getElementById('ops-end-date')?.value;
+
+            // Office Ops = Office/General/Disbursement categories AND NOT Staff Commissions
+            const officeCategories = ['Office Expenditure', 'General Expenditure', 'Disbursement', 'Capital Expenditure'];
+            let opsData = data.filter(r => r.status !== 'pending_verification' && r.status !== 'voided' && r.status !== 'rejected');
+            opsData = opsData.filter(r => officeCategories.includes(r.category) || r.category === 'General');
+
+            opsData = opsData.filter(r => {
+                if (startDate && new Date(r.created_at) < new Date(startDate)) return false;
+                if (endDate && new Date(r.created_at) > new Date(endDate + 'T23:59:59')) return false;
+
+                if (!searchTerm) return true;
+                return (r.title || "").toLowerCase().includes(searchTerm) ||
+                       (r.vendors?.name || "").toLowerCase().includes(searchTerm) ||
+                       (r.admins?.full_name || "").toLowerCase().includes(searchTerm) ||
+                       (r.vendor_invoice_number || "").toLowerCase().includes(searchTerm);
+            });
+
+            if (opsData.length === 0) {
+                body.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:40px; color:var(--gray);">No operational records match your filters.</td></tr>';
+                return;
+            }
+
+            body.innerHTML = opsData.map(req => `
+                <tr>
+                    <td>${new Date(req.created_at).toLocaleDateString()}</td>
+                    <td>${req.admins?.full_name || (req.vendors?.type === 'staff' ? req.vendors.name : 'System')}</td>
+                    <td>
+                        <div style="font-weight:700;">${req.title}</div>
+                        <small style="color:var(--gray)">${req.vendor_invoice_number ? 'Ref: ' + req.vendor_invoice_number : 'ID: ' + req.id.slice(0, 8)}</small>
+                    </td>
+                    <td>${req.vendors?.name || 'N/A'}</td>
+                    <td><small style="color:var(--gold); font-weight:700;">${req.category || 'Office'}</small></td>
+                    <td><div style="font-weight:700;">₦${req.amount_gross.toLocaleString()}</div></td>
+                    <td style="color:var(--error)">${req.wht_amount > 0 ? '- ₦' + req.wht_amount.toLocaleString(undefined, { minimumFractionDigits: 2 }) : '—'}</td>
+                    <td style="color:var(--success); font-weight:700;">₦${req.net_payout_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
+                    <td><span class="status-pill ${(req.status === 'paid' || req.status === 'partially_paid') ? 'approved' : 'pending'}">${req.status.replace('_', ' ').toUpperCase()}</span></td>
+                </tr>
+            `).join('');
+        }
+
+        function renderExternalLedger(data) {
+            const body = document.getElementById('externalBody');
+            if (!body) return;
+
+            const searchTerm = (document.getElementById('external-search')?.value || "").toLowerCase();
+            const startDate = document.getElementById('external-start-date')?.value;
+            const endDate = document.getElementById('external-end-date')?.value;
+
+            // External = Company/Individual types OR Contractor/Company categories
+            let extData = data.filter(r => r.status !== 'pending_verification' && r.status !== 'voided' && r.status !== 'rejected');
+            extData = extData.filter(r => r.vendors?.type === 'company' || r.vendors?.type === 'individual' || r.category === 'Contractor Payout' || r.category === 'Company Expenditure');
+
+            extData = extData.filter(r => {
+                if (startDate && new Date(r.created_at) < new Date(startDate)) return false;
+                if (endDate && new Date(r.created_at) > new Date(endDate + 'T23:59:59')) return false;
+
+                if (!searchTerm) return true;
+                return (r.title || "").toLowerCase().includes(searchTerm) ||
+                       (r.vendors?.name || "").toLowerCase().includes(searchTerm) ||
+                       (r.admins?.full_name || "").toLowerCase().includes(searchTerm);
+            });
+
+            if (extData.length === 0) {
+                body.innerHTML = '<tr><td colspan="10" style="text-align:center; padding:40px; color:var(--gray);">No vendor records found.</td></tr>';
+                return;
+            }
+
+            body.innerHTML = extData.map(req => {
+                const typeLabel = req.vendors?.type === 'company' ? 'COMPANY' : 'PARTNER';
+                const typeColor = req.vendors?.type === 'company' ? 'var(--gold)' : 'var(--success)';
+                
+                return `
+                <tr>
+                    <td>${new Date(req.created_at).toLocaleDateString()}</td>
+                    <td>${req.admins?.full_name || 'System'}</td>
+                    <td>
+                        <div style="font-weight:700;">${req.title}</div>
+                        <small style="color:var(--gray)">Ref: ${req.vendor_invoice_number || req.id.slice(0,8)}</small>
+                    </td>
+                    <td><strong>${req.vendors?.name || 'N/A'}</strong></td>
+                    <td><span style="font-size:10px; font-weight:800; color:${typeColor}; border:1px solid ${typeColor}; padding:2px 6px; border-radius:4px;">${typeLabel}</span></td>
+                    <td><small style="color:var(--gray); font-weight:700;">${req.category || 'External'}</small></td>
+                    <td>₦${req.amount_gross.toLocaleString()}</td>
+                    <td style="color:var(--error)">${req.wht_amount > 0 ? '-' + req.wht_amount.toLocaleString() : '—'}</td>
+                    <td style="font-weight:700; color:var(--success);">₦${req.net_payout_amount.toLocaleString()}</td>
+                    <td><span class="status-pill ${req.status}">${req.status.toUpperCase()}</span></td>
+                </tr>`;
+            }).join('');
+        }
+
         async function fetchRequests() {
             try {
                 const showVoided = document.getElementById('toggle-voided').checked;
@@ -2025,6 +2451,8 @@
                 requestsData = await res.json();
                 renderRequests(requestsData);
                 renderVerifications(requestsData);
+                renderOperations(requestsData);
+                renderExternalLedger(requestsData);
                 payableBills = requestsData.filter(r => r.status === 'approved' || r.status === 'partially_paid');
                 updateStats(requestsData);
             } catch (e) {
@@ -2433,11 +2861,28 @@
         }
 
         function renderReimbursements(data) {
-            const staffList = data.filter(r => r.vendors?.type === 'staff' || r.vendors?.type === 'individual');
             const body = document.getElementById('reimbursementBody');
             if (!body) return;
+
+            const searchTerm = (document.getElementById('staff-search')?.value || "").toLowerCase();
+            const startDate = document.getElementById('staff-start-date')?.value;
+            const endDate = document.getElementById('staff-end-date')?.value;
+
+            // Staff Claims = Staff type ONLY
+            let staffList = data.filter(r => r.vendors?.type === 'staff');
+
+            staffList = staffList.filter(r => {
+                if (startDate && new Date(r.created_at) < new Date(startDate)) return false;
+                if (endDate && new Date(r.created_at) > new Date(endDate + 'T23:59:59')) return false;
+
+                if (!searchTerm) return true;
+                const vname = (r.vendors?.name || "").toLowerCase();
+                const title = (r.title || "").toLowerCase();
+                return vname.includes(searchTerm) || title.includes(searchTerm);
+            });
+
             if (staffList.length === 0) {
-                body.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px; color:var(--gray);">No staff claims found.</td></tr>';
+                body.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:40px; color:var(--gray);">No staff claims found.</td></tr>';
                 return;
             }
             body.innerHTML = staffList.map(req => `
@@ -2445,11 +2890,11 @@
                     <td>${new Date(req.created_at).toLocaleDateString()}</td>
                     <td><strong>${req.vendors?.name || 'Staff'}</strong></td>
                     <td>${req.title}</td>
+                    <td><small style="color:var(--gold); font-weight:700; font-size:10px;">${req.category || 'General'}</small></td>
                     <td style="font-weight:700;">₦${req.amount_gross.toLocaleString()}</td>
-                    <td style="color:var(--error)">${req.wht_amount > 0 ? `- ₦${req.wht_amount.toLocaleString()}` : '—'}</td>
                     <td style="font-weight:700; color:var(--success);">₦${req.net_payout_amount.toLocaleString()}</td>
                     <td><span class="status-pill pending">${req.status}</span></td>
-                    <td><button onclick="viewDocument('${req.id}')" class="btn" style="padding:4px 8px; font-size:10px;">PROFORMA</button></td>
+                    <td><button onclick="viewDocument('${req.id}', 'proforma')" class="btn" style="padding:4px 8px; font-size:10px;">VIEW</button></td>
                 </tr>
             `).join('');
         }
@@ -2468,7 +2913,7 @@
             body.innerHTML = auditQueue.map(req => `
                 <tr style="${req.status === 'voided' ? 'opacity: 0.5; background: rgba(255,0,0,0.02);' : ''}">
                     <td>${new Date(req.created_at).toLocaleDateString()}</td>
-                    <td>${req.admins?.full_name || 'System'}</td>
+                    <td>${req.admins?.full_name || (req.vendors?.type === 'staff' ? req.vendors.name : 'System')}</td>
                     <td>
                         <div style="font-weight:700;">${req.title}</div>
                         <small style="color:var(--gray)">${req.vendor_invoice_number ? 'Ref: ' + req.vendor_invoice_number : 'ID: ' + req.id.slice(0, 8)}</small>
@@ -2506,8 +2951,8 @@
                     </td>
                     <td><span class="status-pill ${(req.status === 'partially_paid' || req.status === 'paid') ? 'approved' : req.status}">${req.status.replace('_', ' ')}</span></td>
                     <td>
-                        ${(req.status === 'paid' || req.status === 'partially_paid') ? `<button onclick="triggerManualReceipt('${req.id}')" class="btn" style="padding: 6px 12px; font-size:11px; margin-bottom: 6px; border-color:var(--gold); color:var(--gold);"><i class="fas fa-paper-plane"></i> RECEIPT</button><br>` : ''}
-                        ${req.status === 'pending' ? `<button onclick="openReview('${req.id}')" class="btn" style="padding: 6px 12px; font-size:11px;">REVIEW</button>` :
+                        ${(req.status === 'paid' || req.status === 'partially_paid') ? `<button onclick="triggerManualReceipt('${req.id}')" class="btn" style="padding: 6px 12px; font-size:11px; margin-bottom: 6px; border-color:var(--gold); color:var(--gold);"><i class="fas fa-paper-plane"></i> EMAIL RCT</button> <button onclick="viewDocument('${req.id}', 'receipt')" class="btn" style="padding: 6px 12px; font-size:11px; margin-bottom: 6px; border-color:var(--success); color:var(--success);"><i class="fas fa-eye"></i> PROOF</button><br>` : ''}
+                        ${req.status === 'pending' ? `<button onclick="openReview('${req.id}')" class="btn" style="padding: 6px 12px; font-size:11px;">REVIEW</button> <button onclick="viewDocument('${req.id}', 'proforma')" class="btn" style="padding: 6px 12px; font-size:11px; border-color:var(--gray); color:var(--gray);">PROFORMA</button>` :
                     req.status === 'voided' ? '<i class="fas fa-ban" style="color:var(--error)"></i>' :
                         `<button onclick="openReview('${req.id}')" class="btn" style="padding: 6px 12px; font-size:11px; border-color:var(--gray); color:var(--gray);">INFO</button>`}
                     </td>
@@ -2637,9 +3082,9 @@
                         <p style="font-size:13px; color:var(--gray); line-height:1.5;">${req.description || 'No description provided'}</p>
                     </div>
                     
-                    ${req.receipt_url ? `
+                    ${(req.receipt_url || req.proforma_url) ? `
                         <button class="btn-view-doc" onclick="viewDocument('${req.id}')" style="margin: 15px 0;">
-                            <i class="fas fa-file-pdf"></i> ${req.receipt_url.startsWith('[') ? `VIEW ${JSON.parse(req.receipt_url).length} PROOF FILES` : 'VIEW EVIDENCE / PROOF'}
+                            <i class="fas fa-file-invoice"></i> VIEW ATTACHED DOCUMENTS
                         </button>
                     ` : ""}
 
@@ -2744,6 +3189,7 @@
                     <td>${req.vendors?.type || 'N/A'}</td>
                     <td>
                         <button onclick="openVerifyModal('${req.id}')" class="btn btn-gold" style="padding: 6px 12px; font-size:11px;">VERIFY</button>
+                        <button onclick="viewDocument('${req.id}', 'proforma')" class="btn" style="padding: 6px 12px; font-size:11px; border-color:var(--gray); color:var(--gray);">VIEW</button>
                     </td>
                 </tr>
             `).join('');
@@ -3097,6 +3543,82 @@
             toast("Link Copied", "success");
         }
 
+        async function exportLedger(ledgerType) {
+            toast(`Preparing ${ledgerType.toUpperCase()} export...`, "info");
+            try {
+                const res = await apiFetch(`/api/payouts/stats/export?ledger=${ledgerType}`);
+                if (!res.ok) throw new Error("Export failed");
+                const blob = await res.blob();
+                const url = window.URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = `${ledgerType}_ledger_${new Date().toISOString().split('T')[0]}.csv`;
+                document.body.appendChild(a);
+                a.click();
+                a.remove();
+                window.URL.revokeObjectURL(url);
+                toast("Export Complete", "success");
+            } catch (e) {
+                toast("Export Error", "error");
+            }
+        }
+
+        function toggleVisibility(icon, event) {
+            event.stopPropagation();
+            const parent = icon.closest('.stat-card') || icon.closest('.tab') || icon.closest('.chart-card');
+            if (!parent) return;
+            
+            const isHidden = parent.classList.toggle('hidden-element');
+            if (isHidden) {
+                icon.classList.replace('fa-eye', 'fa-eye-slash');
+                toast("Element Hidden", "info");
+            } else {
+                icon.classList.replace('fa-eye-slash', 'fa-eye');
+                toast("Element Restored", "success");
+            }
+        }
+
+        function toggleManageView() {
+            const isManaging = document.body.classList.toggle('manage-view-mode');
+            const btn = document.getElementById('manage-view-btn');
+            if (isManaging) {
+                btn.classList.add('active-mode');
+                btn.innerHTML = '<i class="fas fa-check"></i><span class="btn-text">FINISH CONFIG</span>';
+                toast("Managing View: Faint items will be hidden during presentation.", "info");
+            } else {
+                btn.classList.remove('active-mode');
+                btn.innerHTML = '<i class="fas fa-sliders-h"></i><span class="btn-text">CONFIGURE VIEW</span>';
+                toast("View Locked", "success");
+            }
+        }
+
+        function togglePresentationMode() {
+            const isPresenting = document.body.classList.toggle('presentation-mode');
+            const btn = document.getElementById('pres-btn');
+            const configBtn = document.getElementById('manage-view-btn');
+            
+            if (isPresenting) {
+                btn.classList.add('active-mode');
+                btn.innerHTML = '<i class="fas fa-compress-arrows-alt"></i><span class="btn-text">EXIT PRESENTATION</span>';
+                configBtn.style.display = 'flex';
+                toast("Presentation Mode Active. Use 'Configure View' to hide data.", "info");
+            } else {
+                // Total Restore
+                btn.classList.remove('active-mode');
+                document.body.classList.remove('manage-view-mode');
+                document.querySelectorAll('.hidden-element').forEach(el => {
+                    el.classList.remove('hidden-element');
+                    const icon = el.querySelector('.visibility-toggle');
+                    if (icon) icon.classList.replace('fa-eye-slash', 'fa-eye');
+                });
+                btn.innerHTML = '<i class="fas fa-desktop"></i><span class="btn-text">PRESENTATION MODE</span>';
+                configBtn.style.display = 'none';
+                configBtn.classList.remove('active-mode');
+                configBtn.innerHTML = '<i class="fas fa-sliders-h"></i><span class="btn-text">CONFIGURE VIEW</span>';
+                toast("Dashboard Restored", "success");
+            }
+        }
+
         function switchTab(viewId, event) {
             document.querySelectorAll('.view-content').forEach(v => v.style.display = 'none');
             document.querySelectorAll('.tab').forEach(t => t.classList.remove('active'));
@@ -3107,7 +3629,6 @@
             if (event && event.target) {
                 event.target.classList.add('active');
             } else {
-                // Fallback to finding tab by text if event is missing
                 const tabs = Array.from(document.querySelectorAll('.tab'));
                 const matched = tabs.find(t => t.innerText.toLowerCase().includes(viewId));
                 if (matched) matched.classList.add('active');
@@ -3116,11 +3637,12 @@
             if (viewId === 'analytics') fetchStats();
             if (viewId === 'vendors') fetchVendors();
             if (viewId === 'assets') fetchAssets();
+            if (viewId === 'external') renderExternalLedger(requestsData);
             toast(`Switching to ${viewId.toUpperCase()}...`, 'info');
         }
 
         // --- ANALYTICS & CHARTS ---
-        let burnChart, categoryChart, payeeChart, requesterChart, creditorChart;
+        let burnChart, categoryChart, payeeChart, requesterChart, creditorChart, agingChart, taxComplianceChart;
 
         async function fetchStats() {
             // Show loaders
@@ -3159,6 +3681,7 @@
                 document.getElementById('stat-total-ap').innerText = '₦' + (ov.total_owed || 0).toLocaleString();
                 document.getElementById('stat-total-wht').innerText = '₦' + (ov.total_wht || 0).toLocaleString();
                 document.getElementById('stat-asset-value').innerText = '₦' + (ov.total_assets || 0).toLocaleString();
+                if (document.getElementById('stat-avg-speed')) document.getElementById('stat-avg-speed').innerText = (ov.avg_pay_hours || 0) + 'h';
                 const pendingEl = document.getElementById('stat-pending-count');
                 if (pendingEl) pendingEl.innerText = ov.active_requests || 0;
                 
@@ -3207,12 +3730,16 @@
             const ctx3 = document.getElementById('payeeChart').getContext('2d');
             const ctx4 = document.getElementById('requesterChart').getContext('2d');
             const ctx5 = document.getElementById('creditorChart').getContext('2d');
+            const ctx6 = document.getElementById('agingChart').getContext('2d');
+            const ctx7 = document.getElementById('taxComplianceChart').getContext('2d');
 
             if (burnChart) burnChart.destroy();
             if (categoryChart) categoryChart.destroy();
             if (payeeChart) payeeChart.destroy();
             if (requesterChart) requesterChart.destroy();
             if (creditorChart) creditorChart.destroy();
+            if (agingChart) agingChart.destroy();
+            if (taxComplianceChart) taxComplianceChart.destroy();
 
             const analytics = data.analytics || {};
 
@@ -3301,6 +3828,42 @@
                 },
                 options: barOptions
             });
+
+            // 4. Aging Chart
+            agingChart = new Chart(ctx6, {
+                type: 'bar',
+                data: {
+                    labels: Object.keys(analytics.aging || {}),
+                    datasets: [{ 
+                        label: 'Owed Amount', 
+                        data: Object.values(analytics.aging || {}), 
+                        backgroundColor: ['#10B981', '#FFC107', '#F59E0B', '#EF4444'],
+                        borderRadius: 4 
+                    }]
+                },
+                options: barOptions
+            });
+
+            // 5. Tax Compliance
+            const tax = analytics.compliance || {remitted: 0, pending: 0};
+            taxComplianceChart = new Chart(ctx7, {
+                type: 'doughnut',
+                data: {
+                    labels: ['REMITTED', 'PENDING'],
+                    datasets: [{
+                        data: [tax.remitted, tax.pending],
+                        backgroundColor: ['#10B981', '#EF4444'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { position: 'bottom', labels: { color: '#94A3B8', font: { size: 10 } } }
+                    }
+                }
+            });
         }
 
         // --- REPORTING HUB ---
@@ -3379,7 +3942,8 @@
         }
 
         // --- DOCUMENT PREVIEW ---
-        async function viewDocument(requestId, fileIndex = 0) {
+        let activeDocUrl = null;
+        async function viewDocument(requestId, activeDocType = null, activeFileIndex = 0) {
             const modal = document.getElementById('docPreviewModal');
             const frame = document.getElementById('docFrame');
             const img = document.getElementById('docImg');
@@ -3392,35 +3956,66 @@
             img.style.display = 'none';
 
             try {
-                // Fetch the list of files if this is the first open or we need info
                 const listRes = await apiFetch(`/api/payouts/requests/${requestId}/proof-files`);
                 const fileInfo = await listRes.json();
                 
-                if (fileInfo.receipt_files.length > 1) {
+                const docs = [];
+                (fileInfo.proforma_files || []).forEach((f, i) => {
+                    docs.push({ docType: 'proforma', index: i, original: f });
+                });
+                (fileInfo.receipt_files || []).forEach((f, i) => {
+                    docs.push({ docType: 'receipt', index: i, original: f });
+                });
+
+                if (docs.length === 0) {
+                    toast("No documents attached to this record", "error");
+                    closeDocModal();
+                    return;
+                }
+
+                // If not specified, default to the requested type or the first document available
+                let currentDoc = docs.find(d => d.docType === activeDocType && d.index === activeFileIndex);
+                if (!currentDoc) currentDoc = docs.find(d => d.docType === activeDocType) || docs[0];
+
+                if (docs.length > 1) {
                     nav.style.display = 'flex';
-                    nav.innerHTML = fileInfo.receipt_files.map((f, i) => `
-                        <button onclick="viewDocument('${requestId}', ${i})" 
-                                style="padding:6px 12px; border-radius:8px; border:1px solid ${i === fileIndex ? 'var(--gold)' : 'var(--border)'}; 
-                                       background:${i === fileIndex ? 'rgba(196,125,10,0.1)' : 'transparent'}; 
-                                       color:${i === fileIndex ? 'var(--gold)' : 'var(--gray)'}; cursor:pointer; font-size:11px; font-weight:700; white-space:nowrap;">
-                            <i class="fas ${f.toLowerCase().endsWith('.pdf') ? 'fa-file-pdf' : 'fa-image'}"></i> File ${i + 1}
-                        </button>
-                    `).join('');
+                    nav.innerHTML = docs.map(d => {
+                        const isActive = d.docType === currentDoc.docType && d.index === currentDoc.index;
+                        const isPdf = d.original.toLowerCase().endsWith('.pdf');
+                        const label = d.docType.toUpperCase() + ' ' + (d.index + 1);
+                        return `
+                        <button onclick="viewDocument('${requestId}', '${d.docType}', ${d.index})" 
+                                style="padding:6px 12px; border-radius:8px; border:1px solid ${isActive ? 'var(--gold)' : 'var(--border)'}; 
+                                       background:${isActive ? 'rgba(196,125,10,0.1)' : 'transparent'}; 
+                                       color:${isActive ? 'var(--gold)' : 'var(--gray)'}; cursor:pointer; font-size:11px; font-weight:700; white-space:nowrap;">
+                            <i class="fas ${isPdf ? 'fa-file-pdf' : 'fa-image'}"></i> ${label}
+                        </button>`;
+                    }).join('');
                 } else {
                     nav.style.display = 'none';
                 }
 
-                const docUrl = `/api/payouts/requests/${requestId}/view-document/receipt?file_index=${fileIndex}`;
-                const isPdf = fileInfo.receipt_files[fileIndex]?.toLowerCase().endsWith('.pdf');
+                const docUrl = `/api/payouts/requests/${requestId}/view-document/${currentDoc.docType}?file_index=${currentDoc.index}`;
+                const isPdf = currentDoc.original.toLowerCase().endsWith('.pdf');
+
+                // Clear previous URL to avoid memory leaks
+                if (activeDocUrl) URL.revokeObjectURL(activeDocUrl);
+
+                // Fetch the file as a blob to include authorization headers
+                const fileRes = await apiFetch(docUrl);
+                if (!fileRes.ok) throw new Error("Could not retrieve secure document");
+                
+                const blob = await fileRes.blob();
+                activeDocUrl = URL.createObjectURL(blob);
 
                 if (isPdf) {
-                    frame.src = docUrl;
+                    frame.src = activeDocUrl;
                     frame.onload = () => {
                         loader.style.display = 'none';
                         frame.style.display = 'block';
                     };
                 } else {
-                    img.src = docUrl;
+                    img.src = activeDocUrl;
                     img.onload = () => {
                         loader.style.display = 'none';
                         img.style.display = 'block';
@@ -3428,7 +4023,7 @@
                 }
             } catch (e) {
                 console.error(e);
-                toast("Network error while retrieving document", "error");
+                toast(e.message || "Network error while retrieving document", "error");
                 closeDocModal();
             }
         }
@@ -3437,6 +4032,10 @@
             document.getElementById('docPreviewModal').style.display = 'none';
             document.getElementById('docFrame').src = '';
             document.getElementById('docImg').src = '';
+            if (activeDocUrl) {
+                URL.revokeObjectURL(activeDocUrl);
+                activeDocUrl = null;
+            }
         }
 
         // --- GLOBAL EXPOSURE & EVENT BINDING ---
@@ -3449,6 +4048,13 @@
         window.viewDocument = viewDocument;
         window.closeDocModal = closeDocModal;
         window.openAddAssetModal = openAddAssetModal;
+        window.exportLedger = exportLedger;
+        window.togglePresentationMode = togglePresentationMode;
+        window.toggleVisibility = toggleVisibility;
+        window.toggleManageView = toggleManageView;
+        window.handleTimeframeChange = handleTimeframeChange;
+        window.fetchStats = fetchStats;
+        window.openReportModal = openReportModal;
 
         // Modern Event Binding
         document.getElementById('emailInviteBtn').addEventListener('click', openInviteModal);
