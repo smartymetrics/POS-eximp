@@ -1,0 +1,1730 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Property Subscription | Eximp & Cloves Infrastructure Limited</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <link
+        href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700;800&family=Playfair+Display:wght@700&display=swap"
+        rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+    <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.5/dist/signature_pad.umd.min.js"></script>
+    <style>
+        * {
+            font-family: 'Inter', sans-serif;
+        }
+
+        h1,
+        h2,
+        .playfair {
+            font-family: 'Playfair Display', serif;
+        }
+
+        :root {
+            --gold: #C47D0A;
+            --gold-light: #FDE8BC;
+            --dark: #0F0F0F;
+            --muted: #6B7280;
+        }
+
+        .step-progress {
+            display: flex;
+            justify-content: space-between;
+            position: relative;
+            margin-bottom: 3rem;
+        }
+
+        .step-progress::before {
+            content: "";
+            position: absolute;
+            top: 50%;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: #E5E7EB;
+            z-index: 1;
+            transform: translateY(-50%);
+        }
+
+        .step-item {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: #fff;
+            border: 2px solid #E5E7EB;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 2;
+            font-weight: bold;
+            transition: all 0.3s ease;
+            color: var(--muted);
+        }
+
+        .step-item.active {
+            border-color: var(--gold);
+            color: var(--gold);
+            background: var(--gold-light);
+            transform: scale(1.1);
+        }
+
+        .step-item.completed {
+            background: var(--gold);
+            border-color: var(--gold);
+            color: #fff;
+        }
+
+        .form-card {
+            display: none;
+            animation: fadeIn 0.4s ease-out;
+        }
+
+        .form-card.active {
+            display: block;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .gold-button {
+            background: var(--gold);
+            color: white;
+            padding: 0.75rem 2rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            transition: all 0.2s;
+            cursor: pointer;
+        }
+
+        .gold-button:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+            box-shadow: 0 4px 12px rgba(196, 125, 10, 0.3);
+        }
+
+        .gold-button:disabled {
+            background: #D1D5DB;
+            cursor: not-allowed;
+            transform: none;
+            box-shadow: none;
+        }
+
+        .nav-button {
+            padding: 0.75rem 2rem;
+            border-radius: 9999px;
+            font-weight: 600;
+            transition: all 0.2s;
+            border: 1px solid #E5E7EB;
+            color: var(--muted);
+        }
+
+        .sig-pad {
+            border: 2px dashed #E5E7EB;
+            border-radius: 12px;
+            background: #FAFAFA;
+            cursor: crosshair;
+        }
+
+        .autocomplete-list {
+            position: absolute;
+            top: 100%;
+            left: 0;
+            width: 100%;
+            max-height: 200px;
+            overflow-y: auto;
+            background: white;
+            border: 1px solid #E5E7EB;
+            border-radius: 8px;
+            z-index: 50;
+            box-shadow: 0 4px 20px rgba(0, 0, 0, 0.1);
+            display: none;
+        }
+
+        .autocomplete-item {
+            padding: 10px 16px;
+            cursor: pointer;
+            border-bottom: 1px solid #F3F4F6;
+        }
+
+        .autocomplete-item:hover {
+            background: #F9FAFB;
+            color: var(--gold);
+        }
+    </style>
+</head>
+
+<body class="bg-gray-50 min-h-screen">
+
+    <!-- Header / Branding -->
+    <header class="bg-white border-b border-gray-100 shadow-sm py-4 sticky top-0 z-40">
+        <div class="max-w-4xl mx-auto px-6 flex justify-between items-center flex-wrap gap-4">
+            <div class="flex items-center gap-3">
+                <img src="/static/img/logo.png" alt="Eximp & Cloves" class="h-10 w-auto"
+                    onerror="this.style.display='none'; this.nextElementSibling.style.display='flex'">
+                <div class="w-10 h-10 bg-black rounded-lg flex items-center justify-center" style="display:none;">
+                    <span class="text-gold font-bold text-xl">EC</span>
+                </div>
+                <div>
+                    <h1 class="text-xl font-bold text-gray-900 leading-tight playfair">Eximp & Cloves Infrastructure
+                        Limited</h1>
+                    <p class="text-[10px] text-muted uppercase tracking-widest font-bold">Property Sales Subscription
+                        Form</p>
+                </div>
+            </div>
+            {% if rep %}
+            <div
+                class="flex items-center gap-4 bg-white px-4 py-2 rounded-2xl border border-gray-200 shadow-sm hover:shadow-md transition-shadow">
+                <div
+                    class="w-10 h-10 rounded-full border-2 border-gold flex items-center justify-center bg-gray-50 overflow-hidden">
+                    <i class="fas fa-user-tie text-gold text-lg"></i>
+                </div>
+                <div class="text-sm border-l border-gray-100 pl-4">
+                    <p class="text-[10px] text-gold uppercase tracking-widest font-bold mb-0.5">Authorized Consultant
+                    </p>
+                    <p class="font-bold text-gray-900 text-sm leading-tight">{{ rep.name }}</p>
+                </div>
+            </div>
+            {% endif %}
+        </div>
+    </header>
+
+    <main class="max-w-3xl mx-auto px-6 py-12">
+
+        <!-- ===== INTRO CARD (shown before form starts) ===== -->
+        <div id="introCard" class="bg-white rounded-3xl shadow-xl border border-gray-100 overflow-hidden">
+
+            <!-- Gold header bar -->
+            <div class="px-8 py-6" style="background: linear-gradient(135deg, #0F0F0F 0%, #2a2a2a 100%);">
+                <p class="text-xs uppercase tracking-widest font-bold mb-1" style="color: #C47D0A;">Property Sales Subscription</p>
+                <h2 class="text-2xl font-bold text-white playfair">Eximp and Cloves Infrastructure Limited</h2>
+            </div>
+
+            <div class="p-8 space-y-7">
+
+                <!-- Welcome -->
+                <p class="text-gray-700 leading-relaxed">
+                    We are delighted you have chosen to subscribe with us! Please take a moment to complete the form with your accurate personal information.
+                </p>
+                <p class="text-gray-600 text-sm leading-relaxed">
+                    Providing correct details helps us process your documentation quickly and ensures a smooth, hassle-free experience.
+                </p>
+
+                <!-- Divider -->
+                <hr class="border-gray-100">
+
+                <!-- Important Notes -->
+                <div>
+                    <h3 class="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <i class="fas fa-info-circle" style="color: #C47D0A;"></i>
+                        Important Notes Before You Begin
+                    </h3>
+
+                    <!-- Duration -->
+                    <div class="flex items-center gap-3 bg-amber-50 border border-amber-100 rounded-2xl px-5 py-3 mb-5">
+                        <i class="fas fa-clock text-amber-500"></i>
+                        <p class="text-sm text-gray-700"><span class="font-semibold">Duration:</span> This form should take not more than <span class="font-bold text-amber-700">five minutes</span> to complete.</p>
+                    </div>
+
+                    <!-- Document Uploads -->
+                    <div class="rounded-2xl border border-gray-100 bg-gray-50 px-6 py-5 mb-5">
+                        <p class="text-sm font-bold text-gray-800 mb-3 flex items-center gap-2">
+                            <i class="fas fa-paperclip" style="color: #C47D0A;"></i>
+                            Document Uploads
+                        </p>
+                        <p class="text-xs text-gray-500 mb-3">You will be required to submit and upload the following:</p>
+                        <ul class="space-y-2">
+                            <li class="flex items-start gap-3 text-sm text-gray-700">
+                                <span class="mt-0.5 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style="background:#C47D0A;">1</span>
+                                A recent <strong>Passport Photograph</strong>.
+                            </li>
+                            <li class="flex items-start gap-3 text-sm text-gray-700">
+                                <span class="mt-0.5 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style="background:#C47D0A;">2</span>
+                                A signed copy of your <strong>Signature on a plain white sheet</strong>.
+                            </li>
+                            <li class="flex items-start gap-3 text-sm text-gray-700">
+                                <span class="mt-0.5 w-5 h-5 rounded-full flex items-center justify-center text-xs font-bold text-white flex-shrink-0" style="background:#C47D0A;">3</span>
+                                A copy of your <strong>NIN Slip / International Passport</strong>.
+                            </li>
+                        </ul>
+                    </div>
+
+                    <!-- Preparation note -->
+                    <p class="text-sm text-gray-700 bg-blue-50 border border-blue-100 rounded-xl px-4 py-3">
+                        <i class="fas fa-lightbulb text-blue-400 mr-2"></i>
+                        <strong>Preparation:</strong> Ensure you have these three files ready before proceeding to fill out the form.
+                    </p>
+                </div>
+
+                <!-- Divider -->
+                <hr class="border-gray-100">
+
+                <!-- Why We Need Your Details -->
+                <div>
+                    <h3 class="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <i class="fas fa-shield-alt" style="color: #C47D0A;"></i>
+                        Why We Need Your Details
+                    </h3>
+                    <div class="grid grid-cols-1 sm:grid-cols-3 gap-3">
+                        <div class="rounded-xl border border-gray-100 bg-gray-50 px-4 py-4 text-center">
+                            <i class="fas fa-bolt text-amber-500 text-lg mb-2"></i>
+                            <p class="text-xs font-bold text-gray-800 mb-1">Goal</p>
+                            <p class="text-xs text-gray-500">To process your documentation quickly.</p>
+                        </div>
+                        <div class="rounded-xl border border-gray-100 bg-gray-50 px-4 py-4 text-center">
+                            <i class="fas fa-smile text-green-500 text-lg mb-2"></i>
+                            <p class="text-xs font-bold text-gray-800 mb-1">Benefit</p>
+                            <p class="text-xs text-gray-500">To ensure a smooth, hassle-free experience.</p>
+                        </div>
+                        <div class="rounded-xl border border-gray-100 bg-gray-50 px-4 py-4 text-center">
+                            <i class="fas fa-lock text-blue-500 text-lg mb-2"></i>
+                            <p class="text-xs font-bold text-gray-800 mb-1">Protection</p>
+                            <p class="text-xs text-gray-500">To legally protect you and your property.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Divider -->
+                <hr class="border-gray-100">
+
+                <!-- Contact, Support & Payment -->
+                <div>
+                    <h3 class="text-base font-bold text-gray-900 mb-4 flex items-center gap-2">
+                        <i class="fas fa-headset" style="color: #C47D0A;"></i>
+                        Contact, Support &amp; Payment
+                    </h3>
+                    <p class="text-xs text-gray-500 mb-4">For any inquiries or assistance, please reach out using the details below:</p>
+                    <div class="rounded-2xl border border-amber-100 bg-amber-50 divide-y divide-amber-100 overflow-hidden">
+                        <div class="flex items-center gap-4 px-5 py-3">
+                            <i class="fas fa-university w-5 text-center" style="color:#C47D0A;"></i>
+                            <div>
+                                <p class="text-xs text-gray-500">Bank</p>
+                                <p class="text-sm font-semibold text-gray-800">Providus Bank</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4 px-5 py-3">
+                            <i class="fas fa-hashtag w-5 text-center" style="color:#C47D0A;"></i>
+                            <div>
+                                <p class="text-xs text-gray-500">Account Number</p>
+                                <p class="text-sm font-semibold text-gray-800 tracking-wide">1308184591</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4 px-5 py-3">
+                            <i class="fas fa-building w-5 text-center" style="color:#C47D0A;"></i>
+                            <div>
+                                <p class="text-xs text-gray-500">Account Name</p>
+                                <p class="text-sm font-semibold text-gray-800">Eximp &amp; Cloves Infrastructure Limited</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-4 px-5 py-3">
+                            <i class="fab fa-whatsapp w-5 text-center text-green-500"></i>
+                            <div>
+                                <p class="text-xs text-gray-500">Call / WhatsApp</p>
+                                <p class="text-sm font-semibold text-gray-800">+2349126864383</p>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Thank you note -->
+                <p class="text-center text-sm font-semibold text-gray-600 pt-2">
+                    Thank you for choosing <span style="color:#C47D0A;">Eximp and Cloves Infrastructure Limited</span>
+                </p>
+
+                <!-- CTA Button -->
+                <div class="flex justify-center pt-2">
+                    <button type="button" onclick="startForm()"
+                        class="gold-button flex items-center gap-3 px-8 py-4 text-base">
+                        <i class="fas fa-arrow-right"></i>
+                        Proceed to Fill the Form
+                    </button>
+                </div>
+
+            </div>
+        </div>
+        <!-- ===== END INTRO CARD ===== -->
+
+        <!-- Form section (hidden until intro is dismissed) -->
+        <div id="formSection" class="hidden">
+
+        <!-- Progress Bar -->
+        <div class="step-progress">
+            <div class="step-item active" data-step="1">1</div>
+            <div class="step-item" data-step="2">2</div>
+            <div class="step-item" data-step="3">3</div>
+            <div class="step-item" data-step="4">4</div>
+            <div class="step-item" data-step="5">5</div>
+            <div class="step-item" data-step="6">6</div>
+        </div>
+
+        <form id="subscriptionForm" class="space-y-8 bg-white p-8 rounded-3xl shadow-xl border border-gray-100">
+
+            <!-- Inline Global Error Banner -->
+            <div id="globalErrorBanner"
+                class="hidden bg-red-50 border border-red-200 rounded-2xl p-4 mb-2 animate-pulse-once">
+                <div class="flex items-start gap-3">
+                    <i class="fas fa-exclamation-triangle text-red-500 mt-1"></i>
+                    <div>
+                        <p class="font-bold text-red-800">Submission Failed</p>
+                        <p id="globalErrorMessage" class="text-sm text-red-700"></p>
+                    </div>
+                </div>
+            </div>
+
+            <!-- Inline Validation Error Banner -->
+            <div id="stepErrorBanner"
+                class="hidden bg-red-50 border border-red-200 rounded-2xl p-4 mb-2 animate-pulse-once"></div>
+
+            <!-- Step 1: Personal Details -->
+            <div class="form-card active" data-step="1">
+                <h2 class="text-3xl font-bold mb-2">Subscriber Bio-data</h2>
+                <p class="text-muted mb-8">Tell us about yourself to begin your property purchase.</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6">
+                    <div class="md:col-span-1">
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Title <span class="text-red-500">*</span></label>
+                        <select name="title" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
+                            <option value="">-- Title --</option>
+                            <option value="Mr">Mr.</option>
+                            <option value="Mrs">Mrs.</option>
+                            <option value="Ms">Ms.</option>
+                            <option value="Chief">Chief</option>
+                            <option value="Engr">Engr.</option>
+                            <option value="Dr">Dr.</option>
+                        </select>
+                    </div>
+                    <div class="md:col-span-2">
+                        <label class="block text-sm font-bold text-gray-700 mb-2">First Name <span class="text-red-500">*</span></label>
+                        <input type="text" name="first_name" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                            placeholder="Enter first name">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Middle Name</label>
+                        <input type="text" name="middle_name"
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                            placeholder="Optional">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Last Name (Surname) <span class="text-red-500">*</span></label>
+                        <input type="text" name="last_name" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                            placeholder="Enter surname">
+                    </div>
+                </div>
+
+                <div class="mt-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Residential Address <span class="text-red-500">*</span></label>
+                    <textarea name="residential_address" required rows="2"
+                        class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                        placeholder="Full home address"></textarea>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Email Address <span class="text-red-500">*</span></label>
+                        <input type="email" name="email" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                            placeholder="example@email.com">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Whatsapp Line <span class="text-red-500">*</span></label>
+                        <input type="tel" name="whatsapp_phone" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                            placeholder="+234...">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 2: Professional Profile -->
+            <div class="form-card" data-step="2">
+                <h2 class="text-3xl font-bold mb-2">Professional Profile</h2>
+                <p class="text-muted mb-8">This helps us customize your experience and future offers.</p>
+
+                <div class="relative">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Search Occupation / Job <span class="text-red-500">*</span></label>
+                    <div class="relative">
+                        <i class="fas fa-search absolute left-4 top-1/2 -translate-y-1/2 text-muted"></i>
+                        <input type="text" id="occupationSearch" name="occupation" required autocomplete="off"
+                            class="w-full p-4 pl-12 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                            placeholder="Start typing your job (e.g. Engineer, Business...)">
+                    </div>
+                    <div id="occupationList" class="autocomplete-list"></div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-8">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Marital Status <span class="text-red-500">*</span></label>
+                        <select name="marital_status" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
+                            <option value="">-- Status --</option>
+                            <option value="Single">Single</option>
+                            <option value="Married">Married</option>
+                            <option value="Divorced">Divorced</option>
+                            <option value="Widowed">Widowed</option>
+                        </select>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Date of Birth <span class="text-red-500">*</span></label>
+                        <input type="date" name="date_of_birth" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Nationality <span class="text-red-500">*</span></label>
+                        <input type="text" name="nationality" value="Nigerian" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Source of Income <span class="text-red-500">*</span></label>
+                        <input type="text" name="source_of_income" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                            placeholder="e.g. Business, Salary">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 3: Next of Kin -->
+            <div class="form-card" data-step="3">
+                <h2 class="text-3xl font-bold mb-2">Next of Kin Details</h2>
+                <p class="text-muted mb-8">In case of emergency or legal representation, who should we contact?</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">NOK Full Name <span class="text-red-500">*</span></label>
+                        <input type="text" name="nok_name" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                            placeholder="Full name">
+                    </div>
+                    <div class="md:col-span-1">
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Relationship <span class="text-red-500">*</span></label>
+                        <div class="space-y-3 mt-2">
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="radio" name="nok_relationship" value="Parent" required
+                                    class="w-4 h-4 text-gold border-gray-300 focus:ring-gold" onchange="toggleOtherNok(this)">
+                                <span class="text-gray-700 text-sm">Parent</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="radio" name="nok_relationship" value="Spouse"
+                                    class="w-4 h-4 text-gold border-gray-300 focus:ring-gold" onchange="toggleOtherNok(this)">
+                                <span class="text-gray-700 text-sm">Spouse</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="radio" name="nok_relationship" value="Child"
+                                    class="w-4 h-4 text-gold border-gray-300 focus:ring-gold" onchange="toggleOtherNok(this)">
+                                <span class="text-gray-700 text-sm">Child</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="radio" name="nok_relationship" value="Sibling"
+                                    class="w-4 h-4 text-gold border-gray-300 focus:ring-gold" onchange="toggleOtherNok(this)">
+                                <span class="text-gray-700 text-sm">Sibling</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="radio" name="nok_relationship" value="Legal Guardian"
+                                    class="w-4 h-4 text-gold border-gray-300 focus:ring-gold" onchange="toggleOtherNok(this)">
+                                <span class="text-gray-700 text-sm">Legal Guardian</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="radio" name="nok_relationship" value="Friend"
+                                    class="w-4 h-4 text-gold border-gray-300 focus:ring-gold" onchange="toggleOtherNok(this)">
+                                <span class="text-gray-700 text-sm">Friend</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="radio" name="nok_relationship" value="Care Worker"
+                                    class="w-4 h-4 text-gold border-gray-300 focus:ring-gold" onchange="toggleOtherNok(this)">
+                                <span class="text-gray-700 text-sm">Care Worker</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="radio" name="nok_relationship" value="Healthcare Provider"
+                                    class="w-4 h-4 text-gold border-gray-300 focus:ring-gold" onchange="toggleOtherNok(this)">
+                                <span class="text-gray-700 text-sm">Healthcare Provider</span>
+                            </label>
+                            <label class="flex items-center gap-3 cursor-pointer">
+                                <input type="radio" name="nok_relationship" value="Other"
+                                    class="w-4 h-4 text-gold border-gray-300 focus:ring-gold" onchange="toggleOtherNok(this)">
+                                <span class="text-gray-700 text-sm">Other:</span>
+                                <input type="text" id="otherNokRelationship" placeholder="..." disabled
+                                    class="flex-1 max-w-[200px] bg-transparent border-b border-gray-300 text-sm p-1 outline-none focus:border-gold disabled:opacity-50">
+                            </label>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">NOK Phone Number <span class="text-red-500">*</span></label>
+                        <input type="tel" name="nok_phone" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                            placeholder="+234...">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">NOK Email Address</label>
+                        <input type="email" name="nok_email"
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                            placeholder="Optional">
+                    </div>
+                </div>
+
+                <div class="mt-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">NOK Occupation <span class="text-red-500">*</span></label>
+                    <input type="text" name="nok_occupation" required
+                        class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                        placeholder="NOK's job description">
+                </div>
+
+                <div class="mt-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">NOK Residential Address <span class="text-red-500">*</span></label>
+                    <textarea name="nok_address" required rows="2"
+                        class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                        placeholder="NOK's full home address"></textarea>
+                </div>
+            </div>
+
+            <!-- Step 4: KYC & Documents -->
+            <div class="form-card" data-step="4">
+                <h2 class="text-3xl font-bold mb-2">KYC Verification</h2>
+                <p class="text-muted mb-8">Secure identity verification is required for property authentication.</p>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Passport Photo -->
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-4">Passport Photograph <span
+                                class="text-red-500">*</span></label>
+                        <div class="group relative w-40 h-48 mx-auto">
+                            <div class="w-full h-full bg-gray-100 rounded-xl flex items-center justify-center border-2 border-dashed border-gray-300 overflow-hidden"
+                                id="passportPreview">
+                                <i class="fas fa-user text-3xl text-gray-300"></i>
+                                <img src="" class="hidden w-full h-full object-cover">
+                                <div id="passportStatus"
+                                    class="absolute inset-0 bg-black/40 flex items-center justify-center hidden">
+                                    <i class="fas fa-circle-notch fa-spin text-white"></i>
+                                </div>
+                            </div>
+                            <input type="file" name="passport_photo" accept="image/jpeg,image/png,image/webp" required
+                                class="absolute inset-0 opacity-0 cursor-pointer"
+                                onchange="handleFileSelection(this, 'passportPreview', 'passport', 'passportStatus')">
+                            <input type="hidden" name="passport_photo_url" id="passport_photo_url">
+                            <div class="mt-2 text-center text-xs text-gold font-bold">CLICK TO UPLOAD <span
+                                    class="text-red-500">*</span></div>
+                        </div>
+                    </div>
+
+                    <!-- Identification -->
+                    <div class="space-y-6">
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">NIN / ID Number <span class="text-red-500">*</span></label>
+                            <input type="text" name="nin_id_number" required
+                                class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                                placeholder="Enter ID number">
+                        </div>
+                        <div>
+                            <label class="block text-sm font-bold text-gray-700 mb-2">Upload ID Document (NIN/Passport)
+                                <span class="text-red-500">*</span></label>
+                            <div class="relative group">
+                                <input type="file" name="nin_document"
+                                    accept="image/jpeg,image/png,image/webp,application/pdf" required
+                                    onchange="handleFileSelection(this, null, 'id_document', 'idStatus')"
+                                    class="w-full p-2.5 text-sm text-gray-500 border border-gray-300 rounded-xl cursor-pointer bg-gray-50 outline-none">
+                                <div id="idStatus" class="absolute right-4 top-1/2 -translate-y-1/2 hidden">
+                                    <i class="fas fa-circle-notch fa-spin text-gold"></i>
+                                </div>
+                                <input type="hidden" name="nin_document_url" id="nin_document_url">
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="bg-blue-50 p-4 rounded-xl mt-8 flex gap-3">
+                    <i class="fas fa-shield-halved text-blue-500 mt-1"></i>
+                    <p class="text-xs text-blue-700">All documents are stored in encrypted environments and used only
+                        for legal property registration.</p>
+                </div>
+            </div>
+
+            <!-- Step 5: Property Selection -->
+            <div class="form-card" data-step="5">
+                <h2 class="text-3xl font-bold mb-2">Purchase Details</h2>
+                <p class="text-muted mb-8">Select the property and ownership structure.</p>
+
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Select Estate / Property <span class="text-red-500">*</span></label>
+                    <select name="property_name" id="propertySelect" required
+                        class="w-full p-4 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                        onchange="toggleOtherProperty(this)">
+                        <option value="" disabled selected>-- Select a Property --</option>
+                        {% for prop in properties %}
+                        <option value="{{ prop }}">{{ prop }}</option>
+                        {% endfor %}
+                        <option value="Other">Other (Manual Entry)</option>
+                    </select>
+                </div>
+
+                <div id="otherPropertyContainer" class="mt-4 hidden">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Specify Property Name</label>
+                    <input type="text" id="otherPropertyName"
+                        class="w-full p-4 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none"
+                        placeholder="Type property name here">
+                </div>
+
+                <div class="mt-6 mb-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Is this property being purchased: <span
+                            class="text-red-500">*</span></label>
+                    <select name="purchase_purpose" required
+                        class="w-full p-4 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
+                        <option value="" disabled selected>-- Select an Option --</option>
+                        <option value="For yourself">For yourself</option>
+                        <option value="For someone else">For someone else</option>
+                    </select>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mt-6">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Plot Size <span class="text-red-500">*</span></label>
+                        <select name="plot_size" id="plotSizeSelect" onchange="toggleOtherPlotSize(this)"
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
+                            <option value="300sqm">300sqm</option>
+                            <option value="450sqm">450sqm</option>
+                            <option value="500sqm" selected>500sqm</option>
+                            <option value="600sqm">600sqm</option>
+                            <option value="1 Acre">1 Acre</option>
+                            <option value="Other">Other</option>
+                        </select>
+                        <input type="text" id="otherPlotSize"
+                            class="mt-2 w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none hidden"
+                            placeholder="Enter custom size">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Ownership Type <span class="text-red-500">*</span></label>
+                        <select name="ownership_type" id="ownershipSelect" onchange="handleOwnershipChange()"
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold focus:border-gold outline-none">
+                            <option value="sole" selected>Sole Ownership</option>
+                            <option value="joint">Joint Ownership</option>
+                        </select>
+
+                        <!-- Hidden inputs to hold Co-Owner data -->
+                        <input type="hidden" name="co_owner_name" id="hidden_co_owner_name">
+                        <input type="hidden" name="co_owner_address" id="hidden_co_owner_address">
+                        <input type="hidden" name="co_owner_occupation" id="hidden_co_owner_occupation">
+                        <input type="hidden" name="co_owner_phone" id="hidden_co_owner_phone">
+                        <input type="hidden" name="co_owner_email" id="hidden_co_owner_email">
+                    </div>
+                </div>
+
+                <div class="mt-8 mb-8 bg-white border border-gray-100 shadow-sm p-6 rounded-2xl">
+                    <label class="block text-lg font-bold text-gray-900 mb-1">Quantity <span
+                            class="text-red-500">*</span></label>
+                    <p class="text-sm font-medium text-gray-600 mb-4">Please select the number of units or plots you
+                        wish to purchase for this property.</p>
+                    <div class="space-y-4">
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="radio" name="quantity" value="1" required
+                                class="w-5 h-5 text-gold border-gray-300 focus:ring-gold"
+                                onchange="toggleOtherQuantity(this)">
+                            <span class="text-gray-700 font-medium text-lg">1</span>
+                        </label>
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="radio" name="quantity" value="2"
+                                class="w-5 h-5 text-gold border-gray-300 focus:ring-gold"
+                                onchange="toggleOtherQuantity(this)">
+                            <span class="text-gray-700 font-medium text-lg">2</span>
+                        </label>
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="radio" name="quantity" value="3"
+                                class="w-5 h-5 text-gold border-gray-300 focus:ring-gold"
+                                onchange="toggleOtherQuantity(this)">
+                            <span class="text-gray-700 font-medium text-lg">3</span>
+                        </label>
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="radio" name="quantity" value="4"
+                                class="w-5 h-5 text-gold border-gray-300 focus:ring-gold"
+                                onchange="toggleOtherQuantity(this)">
+                            <span class="text-gray-700 font-medium text-lg">4</span>
+                        </label>
+                        <label class="flex items-center gap-3 cursor-pointer">
+                            <input type="radio" name="quantity" value="Other"
+                                class="w-5 h-5 text-gold border-gray-300 focus:ring-gold"
+                                onchange="toggleOtherQuantity(this)">
+                            <span class="text-gray-700 font-medium text-lg whitespace-nowrap">Other:</span>
+                            <input type="number" id="otherQuantity" placeholder="..." disabled
+                                class="flex-1 max-w-[200px] bg-transparent border-b border-gray-300 p-1 outline-none focus:border-gold disabled:opacity-50">
+                        </label>
+                    </div>
+                </div>
+
+                <div
+                    class="grid grid-cols-1 md:grid-cols-2 lg:grid-cols-3 gap-6 mt-8 p-6 bg-gray-50 rounded-2xl border border-gray-200">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2 text-gold">Deposit Amount (NGN) <span
+                                class="text-red-500">*</span></label>
+                        <div class="relative">
+                            <span class="absolute left-4 top-1/2 -translate-y-1/2 font-bold text-gray-400">₦</span>
+                            <input type="number" name="deposit_amount" required
+                                class="w-full p-3 pl-8 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold outline-none font-bold"
+                                placeholder="0.00">
+                        </div>
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Payment Date <span
+                                class="text-red-500">*</span></label>
+                        <input type="date" name="payment_date" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold outline-none">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Payment Duration <span class="text-red-500">*</span></label>
+                        <select name="payment_duration" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold outline-none">
+                            <option value="Outright">Outright Payment</option>
+                            <option value="3 Months">3 Months Installment</option>
+                            <option value="6 Months">6 Months Installment</option>
+                            <option value="12 Months">12 Months Installment</option>
+                        </select>
+                    </div>
+                </div>
+
+                <div class="mt-6">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Upload Payment Receipt <span class="text-red-500">*</span></label>
+                    <div class="relative group">
+                        <input type="file" name="payment_receipt"
+                            accept="image/jpeg,image/png,image/webp,application/pdf" required
+                            onchange="handleFileSelection(this, null, 'receipt', 'receiptStatus')"
+                            class="w-full p-2.5 text-sm text-gray-500 border border-gray-300 rounded-xl focus:ring-2 focus:ring-gold outline-none">
+                        <div id="receiptStatus" class="absolute right-4 top-1/2 -translate-y-1/2 hidden">
+                            <i class="fas fa-circle-notch fa-spin text-gold"></i>
+                        </div>
+                        <input type="hidden" name="payment_receipt_url" id="payment_receipt_url">
+                    </div>
+                </div>
+            </div>
+
+            <!-- Step 6: Review & Sign -->
+            <div class="form-card" data-step="6">
+                <h2 class="text-3xl font-bold mb-2">Finalize & Sign</h2>
+                <p class="text-muted mb-8">Please review all information and provide your signature.</p>
+
+                <!-- Terms Content -->
+                <div
+                    class="bg-gray-50 p-6 rounded-2xl border border-gray-200 mb-8 max-h-48 overflow-y-auto text-sm text-gray-600 leading-relaxed">
+                    <h3 class="font-bold text-gray-900 mb-2">DECLARATION & CONSENT</h3>
+                    By checking the box below, I confirm that I have read, understand, and consent to all of the
+                    following Eximp & Cloves Infrastructure limited documents:
+                    <a href="https://eximps-cloves.com/terms" target="_blank"
+                        class="text-gold font-bold underline">Terms and Conditions</a>,
+                    <a href="https://eximps-cloves.com/terms" target="_blank"
+                        class="text-gold font-bold underline">Payment Protection Promise</a> and
+                    <a href="https://eximps-cloves.com/refund" target="_blank"
+                        class="text-gold font-bold underline">Refund Policies</a>.
+                    I accept full responsibility for all legal implications and interpretations of this agreement. I
+                    understand that this subscription form becomes binding on all parties immediately upon the company's
+                    receipt of my payment.
+                </div>
+
+                <div class="flex items-start gap-3 mb-8">
+                    <input type="checkbox" id="consent" required
+                        class="mt-1 w-5 h-5 rounded border-gray-300 text-gold focus:ring-gold">
+                    <label for="consent" class="text-sm font-medium text-gray-700">I Agree to the Terms & Conditions and
+                        understand all legal implications.</label>
+                </div>
+
+                <!-- Signature Pad -->
+                <div class="mb-6">
+                    <div class="flex justify-between items-center mb-2">
+                        <label class="text-sm font-bold text-gray-700">Client Signature <span
+                                class="text-red-500">*</span></label>
+                        <div class="flex gap-4 items-center">
+                            <label
+                                class="text-xs text-blue-600 font-bold hover:underline cursor-pointer flex items-center gap-1">
+                                <i class="fas fa-upload"></i> UPLOAD IMAGE
+                                <input type="file" accept="image/jpeg,image/png,image/webp" class="hidden"
+                                    onchange="uploadSignatureImage(this)">
+                            </label>
+                            <span class="text-gray-300">|</span>
+                            <button type="button" onclick="clearSignature()"
+                                class="text-xs text-red-500 font-bold hover:underline">CLEAR</button>
+                        </div>
+                    </div>
+                    <canvas id="signature-pad" class="sig-pad w-full h-48"></canvas>
+                    <p class="text-center text-[10px] text-muted mt-2 uppercase tracking-widest font-bold">Sign or
+                        Upload Inside the Box Above</p>
+
+                    <!-- Data Collection Notice -->
+                    <div class="mt-4 flex items-start gap-3 bg-gray-50 border border-gray-200 rounded-xl px-4 py-3">
+                        <i class="fas fa-shield-alt text-gray-400 mt-0.5 flex-shrink-0 text-sm"></i>
+                        <p class="text-[11px] text-gray-500 leading-relaxed">
+                            <span class="font-semibold text-gray-600">Digital Signature Notice:</span>
+                            For legal verification and audit purposes, your
+                            <span class="font-medium text-gray-600">IP address</span>,
+                            <span class="font-medium text-gray-600">device type</span>, and
+                            <span class="font-medium text-gray-600">browser user agent</span>
+                            are automatically recorded at the time of signing — whether you draw your signature or upload a scanned copy.
+                            This information is securely stored and used solely to authenticate this document.
+                        </p>
+                    </div>
+                </div>
+
+                <div class="mt-6 relative" id="salesRepSearchGroup">
+                    <label class="block text-sm font-bold text-gray-700 mb-2">Referring Representative / Realtor
+                        (Optional)</label>
+                    <div class="relative">
+                        <i class="fas fa-user-tie absolute left-4 top-1/2 -translate-y-1/2 text-muted"></i>
+                        <input type="text" id="salesRepSearch" name="sales_rep_name" autocomplete="off"
+                            class="w-full p-3 pl-12 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold outline-none"
+                            placeholder="Search by name or phone number...">
+                        <input type="hidden" name="sales_rep_id" id="sales_rep_id" value="{{ rep.id if rep else '' }}">
+                    </div>
+                    <div id="salesRepList" class="autocomplete-list shadow-2xl border-gold/20"></div>
+                    {% if rep %}
+                    <p class="text-[10px] text-green-600 font-bold mt-1 uppercase tracking-wider"><i
+                            class="fas fa-link mr-1"></i> Attribution Linked to {{ rep.name }}</p>
+                    {% endif %}
+                </div>
+            </div>
+
+            <!-- Navigation -->
+            <div class="flex justify-between items-center pt-8 border-top border-gray-100">
+                <button type="button" id="prevBtn" onclick="changeStep(-1)" class="nav-button hidden">
+                    <i class="fas fa-arrow-left mr-2"></i> Previous
+                </button>
+                <div class="flex-1"></div>
+                <button type="button" id="nextBtn" onclick="changeStep(1)" class="gold-button">
+                    Next Step <i class="fas fa-arrow-right ml-2"></i>
+                </button>
+                <button type="submit" id="submitBtn" class="gold-button hidden">
+                    Complete Subscription <i class="fas fa-check-circle ml-2"></i>
+                </button>
+            </div>
+
+        </form>
+
+        </div><!-- end #formSection -->
+    </main>
+
+    <!-- SUCCESS MODAL -->
+    <div id="successModal" class="fixed inset-0 bg-black/80 z-50 flex items-center justify-center p-6 hidden">
+        <div class="bg-white rounded-3xl p-10 max-w-sm w-full text-center shadow-2xl">
+            <div class="w-20 h-20 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-6">
+                <i class="fas fa-check text-4xl text-green-500 animate-bounce"></i>
+            </div>
+            <h3 class="text-2xl font-bold mb-2">Form Submitted!</h3>
+            <p class="text-muted mb-4">Your subscription is being processed.</p>
+            <div class="bg-gray-50 p-4 rounded-2xl mb-8">
+                <p class="text-[10px] text-muted uppercase font-bold tracking-widest mb-1">Invoice Number</p>
+                <p id="successInvoiceNum" class="text-xl font-bold text-gray-900">INC-XXXX</p>
+            </div>
+            <button onclick="window.location.reload()" class="gold-button w-full">Done</button>
+        </div>
+    </div>
+
+    <!-- CO-OWNER MODAL -->
+    <div id="coOwnerModal"
+        class="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4 hidden">
+        <div class="bg-white rounded-3xl p-8 max-w-lg w-full shadow-2xl relative max-h-[90vh] overflow-y-auto">
+            <button type="button" onclick="closeCoOwnerModal()"
+                class="absolute top-4 right-4 w-8 h-8 rounded-full bg-gray-100 flex items-center justify-center hover:bg-gray-200 text-gray-500">
+                <i class="fas fa-times"></i>
+            </button>
+            <div class="flex items-center gap-3 mb-6 border-b border-gray-100 pb-4">
+                <div class="w-10 h-10 rounded-full bg-gold-light/30 flex items-center justify-center text-gold">
+                    <i class="fas fa-users"></i>
+                </div>
+                <div>
+                    <h3 class="text-xl font-bold text-gray-900">Co-Owner Details</h3>
+                    <p class="text-xs text-muted">Required for Joint Ownership</p>
+                </div>
+            </div>
+
+            <!-- Inline error banner for co-owner modal -->
+            <div id="coOwnerErrorBanner"
+                class="hidden bg-red-50 border border-red-200 rounded-xl p-3 mb-4 text-red-700 text-sm"></div>
+
+            <div class="space-y-4">
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Full Name <span class="text-red-500">*</span></label>
+                    <input type="text" id="modal_co_owner_name" required
+                        class="w-full p-3 rounded-xl border border-gray-300 focus:border-gold outline-none"
+                        placeholder="Full name">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Residential Address <span class="text-red-500">*</span></label>
+                    <input type="text" id="modal_co_owner_address" required
+                        class="w-full p-3 rounded-xl border border-gray-300 focus:border-gold outline-none"
+                        placeholder="Full home address">
+                </div>
+                <div>
+                    <label class="block text-sm font-bold text-gray-700 mb-1">Occupation</label>
+                    <input type="text" id="modal_co_owner_occupation" required
+                        class="w-full p-3 rounded-xl border border-gray-300 focus:border-gold outline-none"
+                        placeholder="e.g. Engineer">
+                </div>
+                <div class="grid grid-cols-2 gap-4">
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Phone Number <span class="text-red-500">*</span></label>
+                        <input type="tel" id="modal_co_owner_phone" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:border-gold outline-none"
+                            placeholder="+234...">
+                    </div>
+                    <div>
+                        <label class="block text-sm font-bold text-gray-700 mb-1">Email Address</label>
+                        <input type="email" id="modal_co_owner_email" required
+                            class="w-full p-3 rounded-xl border border-gray-300 focus:border-gold outline-none"
+                            placeholder="email@example.com">
+                    </div>
+                </div>
+                <div class="pt-4">
+                    <button type="button" onclick="saveCoOwner()" class="gold-button w-full shadow-lg">Save Co-Owner
+                        Details</button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        let currentStep = 1;
+        const totalSteps = 6;
+        let activeUploads = 0;
+        const form = document.getElementById('subscriptionForm');
+        let signaturePad;
+
+        // Initialize Signature Pad
+        function initSignaturePad() {
+            const canvas = document.getElementById('signature-pad');
+            const ratio = Math.max(window.devicePixelRatio || 1, 1);
+            canvas.width = canvas.offsetWidth * ratio;
+            canvas.height = canvas.offsetHeight * ratio;
+            canvas.getContext("2d").scale(ratio, ratio);
+            signaturePad = new SignaturePad(canvas, {
+                penColor: "rgb(0, 0, 0)"
+            });
+        }
+
+        function clearSignature() { if (signaturePad) signaturePad.clear(); }
+
+        // Upload Signature Image to Canvas
+        function uploadSignatureImage(input) {
+            if (input.files && input.files[0]) {
+                const file = input.files[0];
+                const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp'];
+                const ext = file.name.split('.').pop().toLowerCase();
+                const allowedExts = ['jpg', 'jpeg', 'png', 'webp'];
+
+                if (!allowedMimeTypes.includes(file.type) && !allowedExts.includes(ext)) {
+                    alert("Unsupported signature format. Please upload your signature as a clear Image (JPG, PNG).");
+                    input.value = '';
+                    return;
+                }
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const img = new Image();
+                    img.onload = function () {
+                        const canvas = document.getElementById('signature-pad');
+                        const ctx = canvas.getContext('2d');
+
+                        // Clear previous signature
+                        clearSignature();
+
+                        // Calculate aspect ratio to fit image beautifully
+                        const hRatio = canvas.width / img.width;
+                        const vRatio = canvas.height / img.height;
+                        const ratio = Math.min(hRatio, vRatio);
+                        const centerShift_x = (canvas.width - img.width * ratio) / 2;
+                        const centerShift_y = (canvas.height - img.height * ratio) / 2;
+
+                        ctx.clearRect(0, 0, canvas.width, canvas.height); // Extra clear
+                        ctx.drawImage(img, 0, 0, img.width, img.height,
+                            centerShift_x, centerShift_y, img.width * ratio, img.height * ratio);
+
+                        // Notify signaturePad it isn't empty (since we bypassed its event handlers)
+                        signaturePad._isEmpty = false;
+                    }
+                    img.src = e.target.result;
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+            // Reset input so the same file can be uploaded again if cleared
+            input.value = '';
+        }
+
+        // --- INLINE VALIDATION ERROR BANNER ---
+        function showStepError(missingFields) {
+            let banner = document.getElementById('stepErrorBanner');
+            if (!banner) return;
+            let html = `<div class="flex items-start gap-3">
+                <i class="fas fa-exclamation-circle text-red-500 mt-0.5 text-lg"></i>
+                <div>
+                    <p class="font-bold text-red-700 text-sm mb-1">Please complete the following required fields:</p>
+                    <ul class="list-disc list-inside space-y-0.5">`;
+            missingFields.forEach(f => {
+                html += `<li class="text-red-600 text-sm">${f}</li>`;
+            });
+            html += `</ul></div></div>`;
+            banner.innerHTML = html;
+            banner.classList.remove('hidden');
+            banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+        }
+
+        function clearStepError() {
+            const banner = document.getElementById('stepErrorBanner');
+            if (banner) banner.classList.add('hidden');
+        }
+
+        // Wizard Logic
+        function updateSteps() {
+            document.querySelectorAll('.form-card').forEach(card => {
+                card.classList.remove('active');
+            });
+            document.querySelector(`.form-card[data-step="${currentStep}"]`).classList.add('active');
+
+            document.querySelectorAll('.step-item').forEach(dot => {
+                const stepIdx = parseInt(dot.dataset.step);
+                dot.classList.remove('active', 'completed');
+                if (stepIdx === currentStep) dot.classList.add('active');
+                if (stepIdx < currentStep) dot.classList.add('completed');
+            });
+
+            // Buttons
+            // Navigation Buttons visibility logic
+            const prevBtn = document.getElementById('prevBtn');
+            const nextBtn = document.getElementById('nextBtn');
+            const submitBtn = document.getElementById('submitBtn');
+
+            prevBtn.classList.toggle('hidden', currentStep === 1);
+
+            if (currentStep === totalSteps) {
+                nextBtn.classList.add('hidden');
+                submitBtn.classList.remove('hidden');
+            } else {
+                nextBtn.classList.remove('hidden');
+                submitBtn.classList.add('hidden');
+            }
+
+            if (currentStep === 6 && !signaturePad) {
+                setTimeout(initSignaturePad, 100);
+            }
+        }
+
+        function validateCurrentStep() {
+            const card = document.querySelector(`.form-card[data-step="${currentStep}"]`);
+            const requiredFields = card.querySelectorAll('input[required], select[required], textarea[required]');
+            const missing = [];
+
+            requiredFields.forEach(field => {
+                let isMissing = false;
+
+                if (field.type === 'radio') {
+                    const name = field.name;
+                    const group = card.querySelectorAll(`input[name="${name}"]`);
+                    const checked = Array.from(group).find(r => r.checked);
+                    if (!checked) isMissing = true;
+                } else if (field.type === 'checkbox') {
+                    if (!field.checked) isMissing = true;
+                } else if (field.type === 'file') {
+                    // Check if file is selected OR if we already have an upload URL in a hidden field
+                    const hiddenId = field.name === 'payment_receipt' ? 'payment_receipt_url' :
+                                   field.name === 'passport_photo' ? 'passport_photo_url' :
+                                   field.name === 'id_document' ? 'nin_document_url' : null;
+                    const hiddenVal = hiddenId ? document.getElementById(hiddenId)?.value : null;
+
+                    if (!field.files.length && !hiddenVal) isMissing = true;
+                } else {
+                    if (!field.value.trim()) isMissing = true;
+                }
+
+                if (isMissing) {
+                    field.classList.add('border-red-500', 'ring-1', 'ring-red-400');
+                    // Label discovery
+                    let labelText = field.getAttribute('placeholder') || field.name || 'Unknown field';
+                    const label = card.querySelector(`label[for="${field.id}"]`) || 
+                                 field.closest('div')?.querySelector('label');
+                    if (label) labelText = label.textContent.trim().replace('*', '').trim();
+                    if (!missing.includes(labelText)) missing.push(labelText);
+                } else {
+                    field.classList.remove('border-red-500', 'ring-1', 'ring-red-400');
+                }
+            });
+
+            return missing;
+        }
+
+        function changeStep(delta) {
+            // Validation on forward move
+            if (delta > 0) {
+                const missing = validateCurrentStep();
+                if (missing.length > 0) {
+                    showStepError(missing);
+                    return;
+                } else {
+                    clearStepError();
+                }
+            }
+
+            currentStep += delta;
+            if (currentStep < 1) currentStep = 1;
+            if (currentStep > totalSteps) currentStep = totalSteps;
+            updateSteps();
+            window.scrollTo({ top: 0, behavior: 'smooth' });
+        }
+
+        // File Selection, Preview & Immediate Upload
+        async function handleFileSelection(input, previewId, fileType, statusId) {
+            if (!input.files || !input.files[0]) return;
+
+            const file = input.files[0];
+            const allowedMimeTypes = ['image/jpeg', 'image/png', 'image/webp', 'application/pdf'];
+            const ext = file.name.split('.').pop().toLowerCase();
+            const allowedExts = ['jpg', 'jpeg', 'png', 'webp', 'pdf'];
+
+            if (!allowedMimeTypes.includes(file.type) && !allowedExts.includes(ext)) {
+                alert("Unsupported file format detected. Please provide your documents as high-quality Images (JPG, PNG) or PDF files for processing.");
+                input.value = ''; // Reset the input
+                return;
+            }
+
+            // 1. Locally Preview if it's an image
+            if (previewId) {
+                const reader = new FileReader();
+                reader.onload = function (e) {
+                    const container = document.getElementById(previewId);
+                    const img = container.querySelector('img');
+                    img.src = e.target.result;
+                    img.classList.remove('hidden');
+                    const userIcon = container.querySelector('.fa-user');
+                    if (userIcon) userIcon.classList.add('hidden');
+                }
+                reader.readAsDataURL(input.files[0]);
+            }
+
+            // 2. Background Upload to Storage
+            const statusEl = document.getElementById(statusId);
+            if (statusEl) {
+                statusEl.classList.remove('hidden');
+                statusEl.innerHTML = '<i class="fas fa-circle-notch fa-spin text-gold"></i>';
+            }
+
+            activeUploads++;
+
+            try {
+                const formData = new FormData();
+                formData.append('file', input.files[0]);
+                formData.append('file_type', fileType);
+
+                const response = await fetch('/api/subscriptions/upload-file', {
+                    method: 'POST',
+                    body: formData
+                });
+
+                if (!response.ok) throw new Error("Upload failed");
+                const result = await response.json();
+
+                if (result.status === 'success') {
+                    // Update hidden field with the URL
+                    const urlInputId = fileType === 'id_document' ? 'nin_document_url' :
+                        fileType === 'passport' ? 'passport_photo_url' :
+                            'payment_receipt_url';
+                    document.getElementById(urlInputId).value = result.url;
+
+                    if (statusEl) {
+                        statusEl.innerHTML = '<i class="fas fa-check-circle text-green-500"></i>';
+                    }
+                } else {
+                    throw new Error(result.message || "Upload failed");
+                }
+            } catch (error) {
+                console.error("Upload error:", error);
+                if (statusEl) {
+                    statusEl.innerHTML = '<i class="fas fa-exclamation-triangle text-red-500" title="Upload failed. Please try again."></i>';
+                }
+                alert("Document upload failed. Please try selecting the file again.");
+            } finally {
+                activeUploads = Math.max(0, activeUploads - 1);
+            }
+        }
+
+        // Searchable Occupations
+        const occupations = [
+            'Academic', 'Accountant', 'Account Manager', 'Actuary', 'Acupuncturist', 'Actor/Actress', 'Administrative Assistant', 'Administrator', 'Advocate', 'Aeronautical Engineer', 
+            'Agronomist', 'Air Traffic Controller', 'Aircraft Mechanic', 'Ambassador', 'Analyst', 'Anesthesiologist', 'Animal Breeder', 'Animator', 'Anthropologist', 'Appraiser', 
+            'Architect', 'Archivist', 'Artist', 'Art Director', 'Asset Manager', 'Astronomer', 'Athlete', 'Attorney', 'Auctioneer', 'Auditor', 'Author', 'Auto Mechanic', 'Aviation Consultant',
+            'Bailiff', 'Baker', 'Banker', 'Barber', 'Barrister', 'Bartender', 'Bellhop', 'Biochemist', 'Biologist', 'Biomedical Engineer', 'Biotechnologist', 'Blacksmith', 'Block Molder', 
+            'Blockchain Developer', 'Bodyguard', 'Bookkeeper', 'Botanist', 'Brand Ambassador', 'Bricklayer', 'Broadcaster', 'Broker', 'Budget Analyst', 'Building Contractor', 
+            'Business Analyst', 'Businessman/Woman', 'Business Consultant', 'Business Developer', 'Butcher', 'Buyer',
+            'Cabinet Maker', 'Call Center Agent', 'Camera Operator', 'Captain', 'Carpenter', 'Cartographer', 'Cashier', 'Caterer', 'Cell Biologist', 'Ceramic Artist', 'Chartered Accountant', 
+            'Chauffeur', 'Chef', 'Chemical Engineer', 'Chemist', 'Chief Executive Officer', 'Chief Financial Officer', 'Chief Operating Officer', 'Chiropractor', 'Cinematographer', 
+            'Civil Engineer', 'Civil Servant', 'Clergy', 'Clerk', 'Clinical Psychologist', 'Coach', 'Coast Guard', 'Content Creator', 'Cobbler', 'Comedian', 'Commercial Pilot', 
+            'Communications Specialist', 'Community Manager', 'Compliance Officer', 'Computer Programmer', 'Concierge', 'Constructor', 'Consultant', 'Content Writer', 'Contractor', 
+            'Copywriter', 'Corporate Trainer', 'Cosmetologist', 'Counselor', 'Courier', 'Court Registrar', 'Craftsman', 'Creative Director', 'Credit Analyst', 'Customer Service Rep', 'Cyber Security Analyst',
+            'Data Analyst', 'Data Scientist', 'Database Administrator', 'Dean', 'Debt Collector', 'Decorator', 'Delivery Driver', 'Dentist', 'Dermatologist', 'Designer', 'Detective', 
+            'Developer', 'Dietitian', 'Digital Marketer', 'Diplomat', 'Director', 'Dispatcher', 'District Manager', 'Diver', 'Doctor', 'Draftsman', 'Driver', 'Dry Cleaner',
+            'Ecologist', 'Economist', 'Editor', 'Education Consultant', 'Electrician', 'Electrical Engineer', 'Electronics Technician', 'Elementary Teacher', 'Embalmer', 'Emergency Medical Technician', 
+            'Employee Relations Specialist', 'Energy Auditor', 'Engineer', 'Engraver', 'Entrepreneur', 'Environmental Consultant', 'Epidemiologist', 'Estate Agent', 'Event Planner', 
+            'Executive Assistant', 'Exercise Physiologist', 'Exporter',
+            'Fabricator', 'Factory Worker', 'Farmer', 'Farm Manager', 'Fashion Designer', 'Fashion Consultant', 'Film Director', 'Film Maker', 'Finance Manager', 'Financial Advisor', 
+            'Financial Analyst', 'Firefighter', 'Fisherman', 'Fitness Trainer', 'Flight Attendant', 'Florist', 'Food Scientist', 'Forensic Scientist', 'Forester', 'Forklift Operator', 
+            'Freight Forwarder', 'Full Stack Developer', 'Funeral Director',
+            'Gardener', 'Gas Fitter', 'Geologist', 'Geophysicist', 'Glazier', 'General Contractor', 'General Manager', 'Goldsmith', 'Graphic Designer', 'Green Grocer', 'Guide', 'Guitarist',
+            'Haberdasher', 'Hairdresser', 'Hairstylist', 'Health Consultant', 'Health Inspector', 'Heavy Equipment Operator', 'Historian', 'Home Maker', 'Horticulturist', 'Hospital Administrator', 
+            'Hotelier', 'Hotel Manager', 'Housekeeper', 'Human Resources Manager', 'HVAC Technician', 'Hydrogeologist',
+            'Illustrator', 'Immigration Officer', 'Importer', 'Industrial Designer', 'Industrial Engineer', 'Information Officer', 'Insurance Agent', 'Insurance Broker', 'Interior Decorator', 
+            'Interior Designer', 'Interpreter', 'Inventor', 'Inventory Controller', 'Investment Analyst', 'Investment Banker', 'IT Consultant', 'IT Manager', 'IT Specialist',
+            'Janitor', 'Jeweler', 'Jockey', 'Journalist', 'Judge', 'Justice of the Peace',
+            'Kitchen Assistant', 'Knitter', 'Laboratory Technician', 'Laborer', 'Landlord/Lady', 'Land Surveyor', 'Landscape Architect', 'Lawyer', 'Lecturer', 'Legal Assistant', 
+            'Librarian', 'Lifeguard', 'Line Manager', 'Linguist', 'Livestock Farmer', 'Loan Officer', 'Locksmith', 'Logistician', 'Logistics Manager',
+            'Machine Operator', 'Magistrate', 'Maid', 'Mail Carrier', 'Makeup Artist', 'Management Consultant', 'Manager', 'Manufacturer', 'Marine Biologist', 'Marine Engineer', 
+            'Market Researcher', 'Marketing Manager', 'Marketing Specialist', 'Mason', 'Massage Therapist', 'Mathematician', 'Mechanical Engineer', 'Mechanic', 'Media Consultant', 
+            'Medical Lab Scientist', 'Medical Practitioner', 'Merchant', 'Merchant Seaman', 'Messenger', 'Metallurgist', 'Meteorologist', 'Microbiologist', 'Midwife', 'Military Personnel', 
+            'Miner', 'Minister', 'Model', 'Mortician', 'Musician',
+            'Nanny', 'Navigator', 'Network Administrator', 'Network Engineer', 'Neurosurgeon', 'Newsreader', 'Notary Public', 'Nurse', 'Nutritionist',
+            'Obstetrician', 'Occupational Therapist', 'Oceanographer', 'Office Manager', 'Oil Rig Worker', 'Operations Manager', 'Optician', 'Optometrist', 'Orthodontist', 'Orthopedic Surgeon', 'Osteopath',
+            'Painter', 'Paleontologist', 'Paramedic', 'Paralegal', 'Pastor', 'Pathologist', 'Payroll Clerk', 'Pediatrician', 'Permanent Secretary', 'Personal Assistant', 'Personnel Manager', 
+            'Pest Control Technician', 'Petroleum Engineer', 'Pharmacist', 'Pharmacologist', 'Philanthropist', 'Philosopher', 'Photographer', 'Physicist', 'Physiotherapist', 'Pilot', 
+            'Plumber', 'Podiatrist', 'Police Officer', 'Politician', 'Postmaster', 'Poultry Farmer', 'Preacher', 'President', 'Priest', 'Principal', 'Printers', 'Privacy Officer', 
+            'Private Investigator', 'Probation Officer', 'Producer', 'Product Manager', 'Professor', 'Programmer', 'Project Manager', 'Promoter', 'Proofreader', 'Property Manager', 
+            'Psychiatrist', 'Psychologist', 'Public Relations Officer', 'Public Servant', 'Publisher', 'Purchasing Agent',
+            'Quantity Surveyor', 'Quarry Manager',
+            'Radiographer', 'Radiologist', 'Real Estate Agent', 'Realtor', 'Receptionist', 'Recruiter', 'Referee', 'Relationship Manager', 'Reporter', 'Researcher', 'Resort Manager', 
+            'Retiree', 'Risk Manager', 'Road Worker', 'Roofer',
+            'Safety Officer', 'Sailor', 'Sales Executive', 'Sales Manager', 'Sales Representative', 'Sanitary Inspector', 'Scholar', 'Scientist', 'Sculptor', 'Seaman', 'Secretary', 
+            'Security Consultant', 'Security Personnel', 'Senior Advocate', 'Shop Assistant', 'Singer', 'Social Media Influencer', 'Social Worker', 'Software Developer', 'Software Engineer', 
+            'Solicitor', 'Sound Engineer', 'Specialist', 'Speech Therapist', 'Sports Coach', 'Statistician', 'Stockbroker', 'Stone Mason', 'Store Manager', 'Storekeeper', 'Strategist', 
+            'Structural Engineer', 'Student', 'Supervisor', 'Surgeon', 'Surveyor', 'Systems Analyst', 'Systems Engineer',
+            'Tailor', 'Tax Consultant', 'Taxi Driver', 'Teacher', 'Technical Writer', 'Technician', 'Telemarketer', 'Teller', 'Tiler', 'Tourism Consultant', 'Tour Guide', 'Town Planner', 
+            'Trader', 'Traffic Warden', 'Trainer', 'Translator', 'Travel Agent', 'Treasurer', 'Truck Driver', 'Tutor', 'Typist',
+            'UI/UX Designer', 'Underwriter', 'Upholsterer', 'Urban Planner', 'Urologist',
+            'Valuer', 'Vendor', 'Veterinary Doctor', 'Video Editor', 'Videographer', 'Virtual Assistant', 'Visual Artist', 'Vocational Instructor', 'Waiter/Waitress', 'Warehouse Manager', 
+            'Web Designer', 'Web Developer', 'Welder', 'Wholesaler', 'Woodworker', 'Writer',
+            'X-ray Technician',
+            'Yard Manager', 'Yoga Instructor', 'Youth Worker',
+            'Zoologist'
+        ];
+
+        const searchInput = document.getElementById('occupationSearch');
+        const listContainer = document.getElementById('occupationList');
+
+        searchInput.addEventListener('input', function () {
+            const val = this.value.toLowerCase();
+            listContainer.innerHTML = '';
+            if (!val) {
+                listContainer.style.display = 'none';
+                return;
+            }
+            const matches = occupations.filter(o => o.toLowerCase().includes(val));
+            matches.forEach(m => {
+                const div = document.createElement('div');
+                div.className = 'autocomplete-item';
+                div.textContent = m;
+                div.onclick = () => {
+                    searchInput.value = m;
+                    listContainer.style.display = 'none';
+                };
+                listContainer.appendChild(div);
+            });
+            listContainer.style.display = matches.length ? 'block' : 'none';
+        });
+
+        document.addEventListener('click', (e) => {
+            if (!searchInput.contains(e.target)) listContainer.style.display = 'none';
+            if (repSearch && !repSearch.contains(e.target)) repList.style.display = 'none';
+        });
+
+        // Searchable Sales Representatives
+        let allReps = [];
+        const repSearch = document.getElementById('salesRepSearch');
+        const repList = document.getElementById('salesRepList');
+        const hiddenRepId = document.getElementById('sales_rep_id');
+
+        async function fetchReps() {
+            try {
+                const res = await fetch('/api/sales-reps/public/active');
+                if (res.ok) allReps = await res.json();
+            } catch (e) { console.error("Failed to load reps", e); }
+        }
+
+        if (repSearch) {
+            fetchReps();
+            repSearch.addEventListener('input', function () {
+                const val = this.value.toLowerCase();
+                repList.innerHTML = '';
+                // Clear ID if user starts typing something new (they need to re-select)
+                hiddenRepId.value = '';
+
+                if (!val) {
+                    repList.style.display = 'none';
+                    return;
+                }
+                const matches = allReps.filter(r =>
+                    r.name.toLowerCase().includes(val) ||
+                    (r.phone && r.phone.includes(val))
+                );
+                matches.forEach(r => {
+                    const div = document.createElement('div');
+                    div.className = 'autocomplete-item group transition-all';
+                    div.innerHTML = `
+                        <div class="flex flex-col">
+                            <span class="font-bold text-gray-900 group-hover:text-gold">${r.name}</span>
+                            <span class="text-[10px] text-muted uppercase tracking-wider flex items-center gap-1">
+                                <i class="fas fa-phone-alt text-[8px]"></i> ${r.phone || 'No phone recorded'}
+                            </span>
+                        </div>
+                    `;
+                    div.onclick = () => {
+                        repSearch.value = r.name;
+                        hiddenRepId.value = r.id;
+                        repList.style.display = 'none';
+                    };
+                    repList.appendChild(div);
+                });
+                repList.style.display = matches.length ? 'block' : 'none';
+            });
+        }
+
+        // Other Property Toggle
+        function toggleOtherProperty(select) {
+            const container = document.getElementById('otherPropertyContainer');
+            const input = document.getElementById('otherPropertyName');
+            if (select.value === 'Other') {
+                container.classList.remove('hidden');
+                input.required = true;
+            } else {
+                container.classList.add('hidden');
+                input.required = false;
+            }
+        }
+
+        // Other Plot Size Toggle
+        function toggleOtherPlotSize(select) {
+            const input = document.getElementById('otherPlotSize');
+            if (select.value === 'Other') {
+                input.classList.remove('hidden');
+                input.required = true;
+            } else {
+                input.classList.add('hidden');
+                input.required = false;
+            }
+        }
+
+        // Other Quantity Toggle
+        function toggleOtherQuantity(radio) {
+            const input = document.getElementById('otherQuantity');
+            if (radio.value === 'Other') {
+                input.disabled = false;
+                input.required = true;
+                input.focus();
+            } else {
+                input.disabled = true;
+                input.required = false;
+                input.value = '';
+            }
+        }
+
+        // Other NOK Relationship Toggle
+        function toggleOtherNok(radio) {
+            const input = document.getElementById('otherNokRelationship');
+            if (radio.value === 'Other') {
+                input.disabled = false;
+                input.required = true;
+                input.focus();
+            } else {
+                input.disabled = true;
+                input.required = false;
+                input.value = '';
+            }
+        }
+
+        // --- CO-OWNER MODAL LOGIC ---
+        function handleOwnershipChange(isLoad = false) {
+            const val = document.getElementById('ownershipSelect').value;
+            if (val === 'joint') {
+                if (!isLoad) {
+                    document.getElementById('coOwnerModal').classList.remove('hidden');
+                }
+            } else {
+                // Clear hidden fields when sole is selected
+                document.getElementById('hidden_co_owner_name').value = "";
+                document.getElementById('hidden_co_owner_address').value = "";
+                document.getElementById('hidden_co_owner_occupation').value = "";
+                document.getElementById('hidden_co_owner_phone').value = "";
+                document.getElementById('hidden_co_owner_email').value = "";
+            }
+        }
+
+        function closeCoOwnerModal() {
+            document.getElementById('coOwnerModal').classList.add('hidden');
+            // If they closed it without saving, and fields are empty, revert to sole
+            if (!document.getElementById('hidden_co_owner_name').value) {
+                document.getElementById('ownershipSelect').value = 'sole';
+            }
+        }
+
+        function saveCoOwner() {
+            const fields = [
+                { id: 'modal_co_owner_name', label: 'Full Name', required: true },
+                { id: 'modal_co_owner_address', label: 'Residential Address', required: true },
+                { id: 'modal_co_owner_occupation', label: 'Occupation', required: true },
+                { id: 'modal_co_owner_phone', label: 'Phone Number', required: true },
+                { id: 'modal_co_owner_email', label: 'Email Address', required: true },
+            ];
+
+            const missing = [];
+            fields.forEach(f => {
+                const el = document.getElementById(f.id);
+                if (f.required && !el.value.trim()) {
+                    missing.push(f.label);
+                    el.classList.add('border-red-500', 'ring-1', 'ring-red-400');
+                } else {
+                    el.classList.remove('border-red-500', 'ring-1', 'ring-red-400');
+                }
+            });
+
+            if (missing.length > 0) {
+                const banner = document.getElementById('coOwnerErrorBanner');
+                banner.innerHTML = `<div class="flex items-start gap-2">
+                    <i class="fas fa-exclamation-circle text-red-500 mt-0.5"></i>
+                    <div>
+                        <p class="font-bold text-red-700 text-sm mb-1">Please fill in the following required fields:</p>
+                        <ul class="list-disc list-inside">${missing.map(m => `<li class="text-red-600 text-sm">${m}</li>`).join('')}</ul>
+                    </div>
+                </div>`;
+                banner.classList.remove('hidden');
+                return;
+            }
+
+            document.getElementById('coOwnerErrorBanner').classList.add('hidden');
+
+            const name = document.getElementById('modal_co_owner_name').value.trim();
+            const addr = document.getElementById('modal_co_owner_address').value.trim();
+            const occ = document.getElementById('modal_co_owner_occupation').value.trim();
+            const phone = document.getElementById('modal_co_owner_phone').value.trim();
+            const email = document.getElementById('modal_co_owner_email').value.trim();
+
+            // Save to hidden form fields
+            document.getElementById('hidden_co_owner_name').value = name;
+            document.getElementById('hidden_co_owner_address').value = addr;
+            document.getElementById('hidden_co_owner_occupation').value = occ;
+            document.getElementById('hidden_co_owner_phone').value = phone;
+            document.getElementById('hidden_co_owner_email').value = email;
+
+            document.getElementById('coOwnerModal').classList.add('hidden');
+
+            // Optional: Show a subtle confirmation
+            const btn = document.querySelector('button[onclick="saveCoOwner()"]');
+            const oldTxt = btn.innerHTML;
+            btn.innerHTML = '<i class="fas fa-check"></i> Saved!';
+            btn.classList.replace('bg-gold', 'bg-green-500');
+            setTimeout(() => {
+                btn.innerHTML = oldTxt;
+                btn.classList.replace('bg-green-500', 'bg-gold');
+            }, 2000);
+        }
+
+        // --- AUTO-SAVE LOGIC ---
+        const AUTOSAVE_KEY = 'ecPropertyFormState';
+
+        function saveFormState() {
+            const state = {};
+            const inputs = form.querySelectorAll('input, select, textarea');
+            inputs.forEach(input => {
+                if (input.type === 'file' || input.type === 'hidden') return; // Skip files and raw hidden vars
+                if (input.type === 'radio' || input.type === 'checkbox') {
+                    if (input.checked) state[input.name || input.id] = input.value;
+                } else {
+                    if (input.name) state[input.name] = input.value;
+                    else if (input.id) state[input.id] = input.value;
+                }
+            });
+            localStorage.setItem(AUTOSAVE_KEY, JSON.stringify(state));
+        }
+
+        function loadFormState() {
+            const savedString = localStorage.getItem(AUTOSAVE_KEY);
+            if (!savedString) return;
+            try {
+                const state = JSON.parse(savedString);
+                const inputs = form.querySelectorAll('input, select, textarea');
+                inputs.forEach(input => {
+                    if (input.type === 'file' || input.type === 'hidden') return;
+
+                    const val = state[input.name] !== undefined ? state[input.name] : state[input.id];
+                    if (val !== undefined && val !== "") {
+                        if (input.type === 'radio' || input.type === 'checkbox') {
+                            if (input.value === val) input.checked = true;
+                        } else {
+                            input.value = val;
+                        }
+                    }
+                });
+
+                // Re-trigger visual UI toggles based on loaded state
+                const propSelect = document.getElementById('propertySelect');
+                if (propSelect) toggleOtherProperty(propSelect);
+
+                const plotSelect = document.getElementById('plotSizeSelect');
+                if (plotSelect) toggleOtherPlotSize(plotSelect);
+
+                const qRadios = document.getElementsByName('quantity');
+                qRadios.forEach(r => { if (r.checked) toggleOtherQuantity(r); });
+
+                handleOwnershipChange(true); // Pass true to prevent modal popup on load
+            } catch (e) {
+                console.error("Autosave load failed", e);
+            }
+        }
+
+        form.addEventListener('input', saveFormState);
+        form.addEventListener('change', saveFormState);
+        document.addEventListener('DOMContentLoaded', () => {
+            loadFormState();
+            updateSteps(); // Ensure wizard is in the right state on load
+        });
+        form.addEventListener('submit', async (e) => {
+            e.preventDefault();
+            clearStepError();
+            document.getElementById('globalErrorBanner')?.classList.add('hidden');
+
+            const goldBtn = document.getElementById('submitBtn');
+            const originalText = goldBtn.innerHTML;
+
+            // 1. Enter Locked Loading State Immediately
+            goldBtn.disabled = true;
+            goldBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> Processing Application...';
+
+            try {
+                // 2. Wait for background uploads (Max 5s silenty, then ask)
+                if (typeof activeUploads !== 'undefined' && activeUploads > 0) {
+                    console.log("Waiting for background uploads...", activeUploads);
+                    goldBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> Finishing Document Uploads...';
+
+                    let pollCount = 0;
+                    while (activeUploads > 0 && pollCount < 10) { // 5 seconds (10 * 500ms)
+                        await new Promise(r => setTimeout(r, 500));
+                        pollCount++;
+                    }
+
+                    if (activeUploads > 0) {
+                        const proceed = confirm("Some documents are still uploading. Do you want to submit with currently uploaded files anyway?");
+                        if (!proceed) {
+                            goldBtn.disabled = false;
+                            goldBtn.innerHTML = originalText;
+                            return;
+                        }
+                    }
+                    // Restore processing text for finalize step
+                    goldBtn.innerHTML = '<i class="fas fa-circle-notch fa-spin mr-2"></i> Finalizing Application...';
+                }
+
+                // 3. Document Validation & Preparation
+                const formData = new FormData(form);
+                const data = Object.fromEntries(formData.entries());
+
+                // Co-Owner check
+                if (data.ownership_type === 'joint' && !document.getElementById('hidden_co_owner_name').value) {
+                    showStepError(["Co-Owner details (Joint ownership selected)"]);
+                    currentStep = 5;
+                    updateSteps();
+                    throw new Error("Validation failed");
+                }
+
+                // Add UTMs and Attribution
+                const urlParams = new URLSearchParams(window.location.search);
+                const utmKeys = ['utm_source', 'utm_medium', 'utm_campaign', 'utm_content', 'utm_term'];
+                utmKeys.forEach(k => {
+                    data[k] = urlParams.get(k) || localStorage.getItem(`ec_${k}`);
+                });
+                data.marketing_campaign_id = urlParams.get('mcid') || localStorage.getItem('mcid');
+
+                // Handle Overrides
+                if (data.property_name === 'Other') data.property_name = document.getElementById('otherPropertyName').value;
+                if (data.plot_size === 'Other') data.plot_size = document.getElementById('otherPlotSize').value;
+                if (data.quantity === 'Other') data.quantity = document.getElementById('otherQuantity').value;
+                if (data.nok_relationship === 'Other') data.nok_relationship = document.getElementById('otherNokRelationship').value;
+
+                // 4. Handle Signature
+                if (typeof signaturePad !== 'undefined' && signaturePad && !signaturePad.isEmpty()) {
+                    data.signature_data = signaturePad.toDataURL();
+                } else {
+                    showStepError(["Client Signature (Required)"]);
+                    currentStep = 6;
+                    updateSteps();
+                    throw new Error("Validation failed");
+                }
+
+                // Check Consent
+                if (!document.getElementById('consent').checked) {
+                    showStepError(["Consent to terms (Required)"]);
+                    throw new Error("Validation failed");
+                }
+                data.consent_given = true;
+
+                // 4. API Submission
+                const response = await fetch('/api/subscriptions/submit', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify(data)
+                });
+
+                const result = await response.json();
+                if (result.status === 'success') {
+                    localStorage.removeItem(AUTOSAVE_KEY);
+                    document.getElementById('successInvoiceNum').textContent = result.invoice_number;
+                    document.getElementById('successModal').classList.remove('hidden');
+                } else {
+                    throw new Error(result.message || "Unknown error occurred");
+                }
+            } catch (err) {
+                if (err.message !== "Validation failed") {
+                    console.error("Submission error:", err);
+                    const banner = document.getElementById('globalErrorBanner');
+                    const msg = document.getElementById('globalErrorMessage');
+                    if (banner && msg) {
+                        banner.classList.remove('hidden');
+                        msg.textContent = "Oops! We encountered an issue. Please check your connection and try again.";
+                        banner.scrollIntoView({ behavior: 'smooth', block: 'center' });
+                    }
+                }
+            } finally {
+                goldBtn.disabled = false;
+                goldBtn.innerHTML = originalText;
+            }
+        });
+
+        // ===== INTRO → FORM TRANSITION =====
+        function startForm() {
+            const intro = document.getElementById('introCard');
+            const formSection = document.getElementById('formSection');
+
+            intro.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+            intro.style.opacity = '0';
+            intro.style.transform = 'translateY(-10px)';
+
+            setTimeout(() => {
+                intro.classList.add('hidden');
+                formSection.classList.remove('hidden');
+                formSection.style.opacity = '0';
+                formSection.style.transform = 'translateY(10px)';
+                formSection.style.transition = 'opacity 0.4s ease, transform 0.4s ease';
+                requestAnimationFrame(() => {
+                    requestAnimationFrame(() => {
+                        formSection.style.opacity = '1';
+                        formSection.style.transform = 'translateY(0)';
+                    });
+                });
+                window.scrollTo({ top: 0, behavior: 'smooth' });
+            }, 400);
+        }
+    </script>
+</body>
+
+</html>
