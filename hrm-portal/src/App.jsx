@@ -46,7 +46,7 @@ const T = {
   glow: "0 0 0 1px #C47D0A33, 0 0 14px #C47D0A18",
   glowHover: "0 0 0 1.5px #C47D0A, 0 0 22px #C47D0A40",
 };
-const DARK = { bg: "#0F1115", surface: "#111317", card: "#1E2128", border: "#2D2F36", input: "#161820", text: "#E5E7EB", sub: "#9CA3AF", muted: "#6B7280" };
+const DARK = { bg: "#0B0C0F", surface: "#111317", card: "#1A1D24", border: "#2D2F36", input: "#161820", text: "#E5E7EB", sub: "#A0A0A0", muted: "#6B7280" };
 const LIGHT = { bg: "#F0F2F6", surface: "#FFFFFF", card: "#FFFFFF", border: "#DDE3EE", input: "#F4F6FA", text: "#1A2130", sub: "#556677", muted: "#99AABB" };
 
 // Data will be fetched from API
@@ -347,9 +347,13 @@ function Sidebar({ page, setPage, user, onLogout, items, roleLabel, onMenuOpen }
         <div style={{ fontSize: 9, color: C.muted, letterSpacing: "2px", padding: "0 4px 8px", fontWeight: 700, textTransform: "uppercase", flexShrink: 0 }}>{roleLabel}</div>
         <nav style={{ display: "flex", flexDirection: "column", gap: 2 }}>
           {items.map(n => (
-            <button key={n.id} className={`nb ${page === n.id ? "on" : ""}`} onClick={() => setPage(n.id)}>
-              {IC[n.icon]}{n.label}
+            n.isHeader ? (
+              <div key={n.label} style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "1px", fontWeight: 800, padding: "16px 16px 6px", marginTop: 4 }}>{n.label}</div>
+            ) : (
+            <button key={n.id} className={`nb ${page === n.id ? "on" : ""}`} onClick={() => !n.disabled && setPage(n.id)} style={{ opacity: n.disabled ? 0.5 : 1, cursor: n.disabled ? 'not-allowed' : 'pointer' }}>
+              {IC[n.icon]}{n.label} {n.disabled && <span style={{fontSize: 9, marginLeft: 'auto', background: '#333', padding: '2px 6px', borderRadius: 4}}>SOON</span>}
             </button>
+            )
           ))}
         </nav>
       </div>
@@ -2055,7 +2059,7 @@ function Tasks({ currentUser }) {
 }
 
 // ─── MODULE: MISMANAGEMENT ────────────────────────────────────────────────────
-function Mismanagement({ viewOnly, userId, isManager }) {
+function Disciplinary({ viewOnly, userId, isManager }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [incidents, setIncidents] = useState([]);
   const [staff, setStaff] = useState([]);
@@ -2111,7 +2115,7 @@ function Mismanagement({ viewOnly, userId, isManager }) {
     <div className="fade">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 22 }}>
         <div>
-          <div className="ho" style={{ fontSize: 22 }}>Mismanagement Dashboard</div>
+          <div className="ho" style={{ fontSize: 22 }}>Disciplinary Dashboard</div>
           <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>
             {viewOnly ? "Your flagged incidents. Contact HR or your line manager to resolve."
               : "Graded incident tracking — records are visible to HR, Managers, and the individual."}
@@ -2134,7 +2138,7 @@ function Mismanagement({ viewOnly, userId, isManager }) {
       ) : Object.keys(summary).length === 0 ? (
         <div className="gc" style={{ padding: 48, textAlign: "center" }}>
           <div style={{ fontSize: 28, marginBottom: 12, color: "#4ADE80" }}>✓</div>
-          <div style={{ color: "#4ADE80", fontWeight: 800 }}>No mismanagement flags on record</div>
+          <div style={{ color: "#4ADE80", fontWeight: 800 }}>No disciplinary flags on record</div>
         </div>
       ) : (
         <div className="g2" style={{ gap: 16 }}>
@@ -2167,7 +2171,7 @@ function Mismanagement({ viewOnly, userId, isManager }) {
       )}
 
       {showLog && (
-        <Modal onClose={() => setShowLog(false)} title="Log Mismanagement Incident">
+        <Modal onClose={() => setShowLog(false)} title="Log Disciplinary Incident">
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div><Lbl>Staff Member *</Lbl>
               <select className="inp" value={f.uid} onChange={e => setF(x => ({ ...x, uid: e.target.value }))}>
@@ -5193,22 +5197,34 @@ function Portal({ user, onLogout, navItems, roleLabel, renderPage, initialPage }
 
 function HRAdminPortal({ user, onLogout }) {
   const nav = [
+    { isHeader: true, label: "Hub 1: Recruitment" },
+    { id: "ats", icon: "staff", label: "ATS & Jobs" },
+    { isHeader: true, label: "Hub 2: People & Org" },
     { id: "dashboard", icon: "dashboard", label: "HR Overview" },
     { id: "staff", icon: "staff", label: "Staff Directory" },
-    { id: "leave", icon: "presence", label: "Leave Management" },
-    { id: "admin", icon: "dashboard", label: "Workforce Stats" },
-    { id: "presence", icon: "presence", label: "Presence" },
-    { id: "perf", icon: "perf", label: "Performance" },
+    { isHeader: true, label: "Hub 3: Time & Attendance" },
+    { id: "presence", icon: "presence", label: "Attendance Logs" },
+    { isHeader: true, label: "Hub 4: Leave Management" },
+    { id: "leave", icon: "presence", label: "Leave Requests" },
+    { isHeader: true, label: "Hub 5: Performance" },
+    { id: "perf", icon: "perf", label: "Scorecards" },
     { id: "goals", icon: "goal", label: "Goal Management" },
-    { id: "payroll", icon: "payroll", label: "Payroll" },
+    { isHeader: true, label: "Hub 6: Compensation" },
+    { id: "payroll", icon: "payroll", label: "Payroll Engine" },
+    { isHeader: true, label: "Hub 8: Compliance" },
+    { id: "disciplinary", icon: "mis", label: "Disciplinary" },
+    { id: "assets", icon: "tasks", label: "Asset Management" },
+    { id: "legal_vault", icon: "tasks", label: "Legal Vault" },
+    { isHeader: true, label: "Hub 9: Administration" },
     { id: "tasks", icon: "tasks", label: "Task Manager" },
-    { id: "mismanage", icon: "mis", label: "Mismanagement" },
-    { id: "legal_vault", icon: "tasks", label: "Legal Matters" },
+    { id: "admin", icon: "dashboard", label: "Workforce Stats" },
+    { isHeader: true, label: "Personal" },
     { id: "myprofile", icon: "profile", label: "My Profile" },
   ];
   return (
     <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="HR Administration" renderPage={p => {
       if (p === "dashboard") return <HRDashboard />;
+      if (p === "ats") return <RecruitmentHub />;
       if (p === "staff") return <StaffDirectory authRole="hr" />;
       if (p === "leave") return <LeaveManagement user={user} />;
       if (p === "admin") return <Administration />;
@@ -5217,7 +5233,8 @@ function HRAdminPortal({ user, onLogout }) {
       if (p === "goals") return <Goals canManageKpiTemplates />;
       if (p === "payroll") return <Payroll />;
       if (p === "tasks") return <Tasks currentUser={user} />;
-      if (p === "mismanage") return <Mismanagement />;
+      if (p === "disciplinary") return <Disciplinary />;
+      if (p === "assets") return <AssetManager />;
       if (p === "legal_vault") return <LegalManager staffId={null} staffName={null} isHR={true} />; 
       if (p === "myprofile") return <MyProfile user={user} />;
     }} />
@@ -5226,14 +5243,21 @@ function HRAdminPortal({ user, onLogout }) {
 
 function ManagerPortal({ user, onLogout }) {
   const nav = [
+    { isHeader: true, label: "Hub 2: People & Org" },
     { id: "dashboard", icon: "dashboard", label: "Team Dashboard" },
     { id: "team", icon: "staff", label: "My Team" },
-    { id: "leave", icon: "presence", label: "Leave Approval" },
-    { id: "presence", icon: "presence", label: "Presence" },
-    { id: "perf", icon: "perf", label: "Team Performance" },
+    { isHeader: true, label: "Hub 3: Time & Attendance" },
+    { id: "presence", icon: "presence", label: "Team Presence" },
+    { isHeader: true, label: "Hub 4: Leave Management" },
+    { id: "leave", icon: "presence", label: "Leave Approvals" },
+    { isHeader: true, label: "Hub 5: Performance" },
+    { id: "perf", icon: "perf", label: "Team Scorecards" },
     { id: "goals", icon: "goal", label: "Team Goals" },
+    { isHeader: true, label: "Hub 8: Compliance" },
+    { id: "disciplinary", icon: "mis", label: "Incidents" },
+    { isHeader: true, label: "Hub 9: Administration" },
     { id: "tasks", icon: "tasks", label: "Task Manager" },
-    { id: "mismanage", icon: "mis", label: "Incidents" },
+    { isHeader: true, label: "Personal" },
     { id: "myprofile", icon: "profile", label: "My Profile" },
     { id: "myperformance", icon: "perf", label: "My Performance" },
   ];
@@ -5256,7 +5280,7 @@ function ManagerPortal({ user, onLogout }) {
       if (p === "perf") return <Performance />;
       if (p === "goals") return <Goals />;
       if (p === "tasks") return <Tasks currentUser={user} />;
-      if (p === "mismanage") return <Mismanagement isManager userId={user.id} />;
+      if (p === "disciplinary") return <Disciplinary isManager userId={user.id} />;
       if (p === "myprofile") return <MyProfile user={user} />;
       if (p === "myperformance") return <Performance viewOnly userId={user.id} />;
 
@@ -5292,16 +5316,23 @@ function ManagerPortal({ user, onLogout }) {
 
 function StaffPortal({ user, onLogout }) {
   const nav = [
+    { isHeader: true, label: "Hub 2: People & Org" },
     { id: "dashboard", icon: "dashboard", label: "My Dashboard" },
     { id: "profile", icon: "profile", label: "My Profile" },
-    { id: "leave", icon: "presence", label: "My Leave" },
-    { id: "perf", icon: "perf", label: "My Performance" },
-    { id: "goals", icon: "goal", label: "My Goals" },
-    { id: "tasks", icon: "tasks", label: "My Tasks" },
+    { isHeader: true, label: "Hub 3: Time & Attendance" },
     { id: "presence", icon: "presence", label: "My Presence" },
+    { isHeader: true, label: "Hub 4: Leave Management" },
+    { id: "leave", icon: "presence", label: "My Leave" },
+    { isHeader: true, label: "Hub 5: Performance" },
+    { id: "perf", icon: "perf", label: "My Scorecard" },
+    { id: "goals", icon: "goal", label: "My Goals" },
+    { isHeader: true, label: "Hub 6: Compensation" },
     { id: "payroll", icon: "payslip", label: "My Payroll" },
-    { id: "mismanage", icon: "mis", label: "My Flags" },
+    { isHeader: true, label: "Hub 8: Compliance" },
+    { id: "disciplinary", icon: "mis", label: "My Flags" },
     { id: "legal_vault", icon: "tasks", label: "Legal Vault" },
+    { isHeader: true, label: "Hub 9: Administration" },
+    { id: "tasks", icon: "tasks", label: "My Tasks" },
   ];
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [tasks, setTasks] = useState([]);
@@ -5335,7 +5366,7 @@ function StaffPortal({ user, onLogout }) {
       if (pg === "tasks") return <Tasks currentUser={user} />;
       if (pg === "presence") return <Presence currentUserId={user.id} currentUser={user} />;
       if (pg === "payroll") return <StaffPayroll user={user} />;
-      if (pg === "mismanage") return <Mismanagement viewOnly userId={user.id} />;
+      if (pg === "disciplinary") return <Disciplinary viewOnly userId={user.id} />;
       if (pg === "legal_vault") return <LegalManager staffId={user.id} staffName={user.full_name} isHR={false} />;
 
       return (
@@ -5424,6 +5455,337 @@ const isLineManagerUser = (user) => {
       : [];
   return roles.includes("line_manager");
 };
+
+
+// ─── ASSET MANAGEMENT ────────────────────────────────────────────────────────
+function AssetManager() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [assets, setAssets] = useState([]);
+  const [staffList, setStaffList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [showAssignModal, setShowAssignModal] = useState(false);
+  const [showCreateModal, setShowCreateModal] = useState(false);
+  const [selectedAsset, setSelectedAsset] = useState(null);
+  const [assignForm, setAssignForm] = useState({ staff_id: "", status: "Assigned", notes: "" });
+  const [createForm, setCreateForm] = useState({ asset_name: "", asset_type: "Equipment", serial_number: "", purchase_cost: "" });
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [assData, stfData] = await Promise.all([
+        apiFetch(`${API_BASE}/hr/assets`),
+        apiFetch(`${API_BASE}/hr/staff`)
+      ]);
+      setAssets(assData || []);
+      setStaffList(stfData || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleAssign = async () => {
+    try {
+      await apiFetch(`${API_BASE}/hr/assets/${selectedAsset.id}/assign`, {
+        method: "PATCH",
+        body: JSON.stringify(assignForm)
+      });
+      setShowAssignModal(false);
+      fetchData();
+    } catch (e) { alert("Failed to assign: " + e.message); }
+  };
+
+  const handleCreate = async () => {
+    if (!createForm.asset_name) return alert("Asset name required");
+    try {
+      await apiFetch(`${API_BASE}/hr/assets`, {
+        method: "POST",
+        body: JSON.stringify({
+          ...createForm,
+          purchase_cost: createForm.purchase_cost ? parseFloat(createForm.purchase_cost) : null
+        })
+      });
+      setShowCreateModal(false);
+      setCreateForm({ asset_name: "", asset_type: "Equipment", serial_number: "", purchase_cost: "" });
+      fetchData();
+    } catch (e) { alert("Failed to create: " + e.message); }
+  };
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Asset Management</div>
+          <div style={{ fontSize: 13, color: C.sub }}>Track and assign physical company property across the workforce.</div>
+        </div>
+        <button className="bp" onClick={() => setShowCreateModal(true)}>+ Register New Asset</button>
+      </div>
+
+      <div className="g4" style={{ marginBottom: 22 }}>
+        <StatCard label="Total Assets" value={assets.length} />
+        <StatCard label="Assigned" value={assets.filter(a => a.status === 'Assigned').length} col="#60A5FA" />
+        <StatCard label="Available" value={assets.filter(a => a.status === 'Available').length} col="#4ADE80" />
+        <StatCard label="Maintenance" value={assets.filter(a => a.status === 'Maintenance').length} col="#F87171" />
+      </div>
+
+      <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+        <div className="tw">
+          <table className="ht">
+            <thead>
+              <tr>
+                <th>Asset Details</th>
+                <th>Type / Serial</th>
+                <th>Status</th>
+                <th>Current Assignee</th>
+                <th>Fin. Link</th>
+                <th style={{ textAlign: "right" }}>Actions</th>
+              </tr>
+            </thead>
+            <tbody>
+              {assets.map(a => (
+                <tr key={a.id}>
+                  <td>
+                    <div style={{ fontWeight: 800, color: C.text }}>{a.asset_name}</div>
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Added {new Date(a.created_at).toLocaleDateString()}</div>
+                  </td>
+                  <td>
+                    <div style={{ color: C.text }}>{a.asset_type}</div>
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 2, fontFamily: "monospace" }}>{a.serial_number || "N/A"}</div>
+                  </td>
+                  <td>
+                    <span className="tg" style={{ background: a.status === 'Available' ? '#4ADE8022' : a.status === 'Assigned' ? '#60A5FA22' : '#F8717122', color: a.status === 'Available' ? '#4ADE80' : a.status === 'Assigned' ? '#60A5FA' : '#F87171' }}>{a.status}</span>
+                  </td>
+                  <td>
+                    {a.admins ? (
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <Av av={a.admins.full_name[0]} sz={24} />
+                        <div>
+                          <div style={{ fontWeight: 700, color: C.text, fontSize: 12 }}>{a.admins.full_name}</div>
+                          <div style={{ fontSize: 10, color: C.muted }}>{a.admins.department}</div>
+                        </div>
+                      </div>
+                    ) : <span style={{ color: C.muted, fontStyle: "italic" }}>Unassigned</span>}
+                  </td>
+                  <td>
+                    {a.payout_request_id ? (
+                      <span style={{ fontSize: 10, background: `${T.orange}1A`, color: T.orange, padding: "3px 6px", borderRadius: 4, fontWeight: 700 }}>Linked to Payout</span>
+                    ) : <span style={{ color: C.muted }}>—</span>}
+                  </td>
+                  <td style={{ textAlign: "right" }}>
+                    <button className="bg" style={{ padding: "6px 12px", fontSize: 11 }} onClick={() => {
+                      setSelectedAsset(a);
+                      setAssignForm({ staff_id: a.assigned_to || "", status: a.status, notes: a.notes || "" });
+                      setShowAssignModal(true);
+                    }}>Manage</button>
+                  </td>
+                </tr>
+              ))}
+              {assets.length === 0 && !loading && (
+                <tr><td colSpan="6" style={{ textAlign: "center", padding: 30, color: C.muted }}>No assets registered yet.</td></tr>
+              )}
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      {showCreateModal && (
+        <Modal title="Register Asset" width={480} onClose={() => setShowCreateModal(false)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div><Lbl>Asset Name *</Lbl><input className="inp" value={createForm.asset_name} onChange={e => setCreateForm({...createForm, asset_name: e.target.value})} placeholder="e.g. MacBook Pro M2" /></div>
+            <div className="g2">
+              <div><Lbl>Asset Type</Lbl>
+                <select className="inp" value={createForm.asset_type} onChange={e => setCreateForm({...createForm, asset_type: e.target.value})}>
+                  <option>Equipment</option><option>Vehicle</option><option>Property</option><option>Software License</option>
+                </select>
+              </div>
+              <div><Lbl>Serial Number</Lbl><input className="inp" value={createForm.serial_number} onChange={e => setCreateForm({...createForm, serial_number: e.target.value})} placeholder="Optional" /></div>
+            </div>
+            <div><Lbl>Purchase Cost (Optional)</Lbl><input type="number" className="inp" value={createForm.purchase_cost} onChange={e => setCreateForm({...createForm, purchase_cost: e.target.value})} placeholder="0.00" /></div>
+            <button className="bp" onClick={handleCreate} style={{ marginTop: 10 }}>Register Asset</button>
+          </div>
+        </Modal>
+      )}
+
+      {showAssignModal && selectedAsset && (
+        <Modal title="Manage Asset Assignment" width={480} onClose={() => setShowAssignModal(false)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ padding: 14, background: `${T.orange}11`, borderRadius: 10, border: `1px solid ${T.orange}33` }}>
+              <div style={{ fontSize: 16, fontWeight: 800, color: C.text }}>{selectedAsset.asset_name}</div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Serial: {selectedAsset.serial_number || "N/A"}</div>
+            </div>
+            <div><Lbl>Assign To Staff</Lbl>
+              <select className="inp" value={assignForm.staff_id} onChange={e => setAssignForm({...assignForm, staff_id: e.target.value})}>
+                <option value="">— Unassigned (Return to Inventory) —</option>
+                {staffList.filter(u => u.is_active).map(u => <option key={u.id} value={u.id}>{u.full_name} ({u.department})</option>)}
+              </select>
+            </div>
+            <div><Lbl>Asset Status</Lbl>
+              <select className="inp" value={assignForm.status} onChange={e => setAssignForm({...assignForm, status: e.target.value})}>
+                <option value="Available">Available</option>
+                <option value="Assigned">Assigned</option>
+                <option value="Maintenance">Maintenance</option>
+                <option value="Retired">Retired</option>
+              </select>
+            </div>
+            <div><Lbl>Assignment Notes</Lbl><textarea className="inp" rows="2" value={assignForm.notes} onChange={e => setAssignForm({...assignForm, notes: e.target.value})} placeholder="Condition details, expected return date, etc." /></div>
+            <button className="bp" onClick={handleAssign} style={{ marginTop: 10 }}>Save Assignment</button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+
+
+// ─── RECRUITMENT / ATS ───────────────────────────────────────────────────────
+function RecruitmentHub() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [jobs, setJobs] = useState([]);
+  const [apps, setApps] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState("jobs"); // "jobs" | "pipeline"
+  const [showJobModal, setShowJobModal] = useState(false);
+  const [jobForm, setJobForm] = useState({ title: "", department: "General", employment_type: "Full-time", location: "Remote", salary_range: "" });
+
+  useEffect(() => {
+    fetchData();
+  }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [j, a] = await Promise.all([
+        apiFetch(`${API_BASE}/hr/recruitment/jobs`),
+        apiFetch(`${API_BASE}/hr/recruitment/applications`)
+      ]);
+      setJobs(j || []);
+      setApps(a || []);
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const createJob = async () => {
+    if (!jobForm.title) return alert("Job title required");
+    try {
+      await apiFetch(`${API_BASE}/hr/recruitment/jobs`, {
+        method: "POST",
+        body: JSON.stringify(jobForm)
+      });
+      setShowJobModal(false);
+      fetchData();
+    } catch (e) { alert(e.message); }
+  };
+
+  const updateAppStatus = async (appId, newStatus) => {
+    try {
+      await apiFetch(`${API_BASE}/hr/recruitment/applications/${appId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: newStatus })
+      });
+      fetchData();
+    } catch (e) { alert(e.message); }
+  };
+
+  const statuses = ["Applied", "Screening", "Interview", "Offered", "Hired", "Rejected"];
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Recruitment & ATS</div>
+          <div style={{ fontSize: 13, color: C.sub }}>Manage job requisitions and candidate pipelines.</div>
+        </div>
+        <div style={{ display: "flex", gap: 12 }}>
+          <Tabs items={[["jobs", "Job Board"], ["pipeline", "ATS Pipeline"]]} active={view} setActive={setView} />
+          {view === "jobs" && <button className="bp" onClick={() => setShowJobModal(true)} style={{ height: 38 }}>+ Post Job</button>}
+        </div>
+      </div>
+
+      {view === "jobs" && (
+        <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+          <div className="tw">
+            <table className="ht">
+              <thead><tr><th>Job Title & Dept</th><th>Type / Location</th><th>Status</th><th>Applicants</th></tr></thead>
+              <tbody>
+                {jobs.map(j => {
+                  const applicantCount = apps.filter(a => a.job_id === j.id).length;
+                  return (
+                    <tr key={j.id}>
+                      <td><div style={{ fontWeight: 800, color: C.text }}>{j.title}</div><div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{j.department}</div></td>
+                      <td><div style={{ color: C.text }}>{j.employment_type}</div><div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{j.location || "Remote"}</div></td>
+                      <td><span className="tg" style={{ background: j.status === 'Open' ? '#4ADE8022' : '#F8717122', color: j.status === 'Open' ? '#4ADE80' : '#F87171' }}>{j.status}</span></td>
+                      <td><div style={{ fontWeight: 800, color: T.orange }}>{applicantCount}</div></td>
+                    </tr>
+                  )
+                })}
+                {jobs.length === 0 && !loading && <tr><td colSpan="4" style={{ textAlign: "center", padding: 30, color: C.muted }}>No active job requisitions.</td></tr>}
+              </tbody>
+            </table>
+          </div>
+        </div>
+      )}
+
+      {view === "pipeline" && (
+        <div style={{ display: "flex", gap: 16, overflowX: "auto", paddingBottom: 20 }}>
+          {statuses.map(status => {
+            const colApps = apps.filter(a => a.status === status);
+            return (
+              <div key={status} style={{ minWidth: 280, width: 280, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontWeight: 800, color: C.text, textTransform: "uppercase", fontSize: 11, letterSpacing: "1px" }}>{status}</div>
+                  <span className="tg tm">{colApps.length}</span>
+                </div>
+                {colApps.map(a => (
+                  <div key={a.id} className="gc" style={{ padding: 14, cursor: "pointer", borderLeft: `3px solid ${T.orange}` }}>
+                    <div style={{ fontWeight: 800, color: C.text, fontSize: 13 }}>{a.candidate_name}</div>
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Role: {a.job_requisitions?.title || "Unknown"}</div>
+                    <select className="inp" style={{ marginTop: 10, padding: "6px 10px", fontSize: 11 }} value={a.status} onChange={e => updateAppStatus(a.id, e.target.value)}>
+                      {statuses.map(s => <option key={s} value={s}>Move to {s}</option>)}
+                    </select>
+                  </div>
+                ))}
+              </div>
+            )
+          })}
+        </div>
+      )}
+
+      {showJobModal && (
+        <Modal title="Create Job Requisition" width={480} onClose={() => setShowJobModal(false)}>
+           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div><Lbl>Job Title *</Lbl><input className="inp" value={jobForm.title} onChange={e => setJobForm({...jobForm, title: e.target.value})} placeholder="e.g. Senior Backend Engineer" /></div>
+            <div className="g2">
+              <div><Lbl>Department</Lbl>
+                <select className="inp" value={jobForm.department} onChange={e => setJobForm({...jobForm, department: e.target.value})}>
+                  <option>General</option><option>Sales & Acquisitions</option><option>Engineering</option><option>HR</option><option>Finance</option>
+                </select>
+              </div>
+              <div><Lbl>Employment Type</Lbl>
+                <select className="inp" value={jobForm.employment_type} onChange={e => setJobForm({...jobForm, employment_type: e.target.value})}>
+                  <option>Full-time</option><option>Part-time</option><option>Contract</option>
+                </select>
+              </div>
+            </div>
+            <div className="g2">
+              <div><Lbl>Location</Lbl><input className="inp" value={jobForm.location} onChange={e => setJobForm({...jobForm, location: e.target.value})} placeholder="e.g. London, UK or Remote" /></div>
+              <div><Lbl>Salary Range</Lbl><input className="inp" value={jobForm.salary_range} onChange={e => setJobForm({...jobForm, salary_range: e.target.value})} placeholder="e.g. £50k - £70k" /></div>
+            </div>
+            <button className="bp" onClick={createJob} style={{ marginTop: 10 }}>Post Job Requisition</button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
 
 // ─── ROOT ────────────────────────────────────────────────────────────────────
 export default function App() {
