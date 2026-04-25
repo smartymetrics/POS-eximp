@@ -5218,6 +5218,7 @@ function HRAdminPortal({ user, onLogout }) {
     { isHeader: true, label: "Hub 9: Administration" },
     { id: "tasks", icon: "tasks", label: "Task Manager" },
     { id: "admin", icon: "dashboard", label: "Workforce Stats" },
+    { id: "offboarding", icon: "staff", label: "Offboarding Workflow" },
     { isHeader: true, label: "Personal" },
     { id: "myprofile", icon: "profile", label: "My Profile" },
   ];
@@ -5228,10 +5229,13 @@ function HRAdminPortal({ user, onLogout }) {
       if (p === "staff") return <StaffDirectory authRole="hr" />;
       if (p === "leave") return <LeaveManagement user={user} />;
       if (p === "admin") return <Administration />;
+      if (p === "culture") return <CultureHub authRole="hr" />;
+      if (p === "offboarding") return <OffboardingManager />;
       if (p === "presence") return <Presence currentUser={user} />;
       if (p === "perf") return <Performance />;
       if (p === "goals") return <Goals canManageKpiTemplates />;
       if (p === "payroll") return <Payroll />;
+      if (p === "culture") return <CultureHub authRole="staff" />;
       if (p === "tasks") return <Tasks currentUser={user} />;
       if (p === "disciplinary") return <Disciplinary />;
       if (p === "assets") return <AssetManager />;
@@ -5253,6 +5257,8 @@ function ManagerPortal({ user, onLogout }) {
     { isHeader: true, label: "Hub 5: Performance" },
     { id: "perf", icon: "perf", label: "Team Scorecards" },
     { id: "goals", icon: "goal", label: "Team Goals" },
+    { isHeader: true, label: "Hub 7: Engagement & Culture" },
+    { id: "culture", icon: "profile", label: "Culture & Surveys" },
     { isHeader: true, label: "Hub 8: Compliance" },
     { id: "disciplinary", icon: "mis", label: "Incidents" },
     { isHeader: true, label: "Hub 9: Administration" },
@@ -5281,6 +5287,7 @@ function ManagerPortal({ user, onLogout }) {
       if (p === "goals") return <Goals />;
       if (p === "tasks") return <Tasks currentUser={user} />;
       if (p === "disciplinary") return <Disciplinary isManager userId={user.id} />;
+      if (p === "culture") return <CultureHub authRole="manager" />;
       if (p === "myprofile") return <MyProfile user={user} />;
       if (p === "myperformance") return <Performance viewOnly userId={user.id} />;
 
@@ -5326,6 +5333,8 @@ function StaffPortal({ user, onLogout }) {
     { isHeader: true, label: "Hub 5: Performance" },
     { id: "perf", icon: "perf", label: "My Scorecard" },
     { id: "goals", icon: "goal", label: "My Goals" },
+    { isHeader: true, label: "Hub 7: Engagement & Culture" },
+    { id: "culture", icon: "profile", label: "Culture & Surveys" },
     { isHeader: true, label: "Hub 6: Compensation" },
     { id: "payroll", icon: "payslip", label: "My Payroll" },
     { isHeader: true, label: "Hub 8: Compliance" },
@@ -5786,6 +5795,313 @@ function RecruitmentHub() {
     </div>
   );
 }
+
+
+// ─── OFFBOARDING MANAGER ──────────────────────────────────────────────────
+function OffboardingManager() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [staff, setStaff] = useState([]);
+  const [assets, setAssets] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [selectedStaff, setSelectedStaff] = useState(null);
+  const [offboardForm, setOffboardForm] = useState({ exit_date: new Date().toISOString().split('T')[0], exit_reason: "" });
+  const [processing, setProcessing] = useState(false);
+
+  useEffect(() => { fetchData(); }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const [sData, aData] = await Promise.all([
+        apiFetch(`${API_BASE}/hr/staff`),
+        apiFetch(`${API_BASE}/hr/assets`)
+      ]);
+      setStaff(sData.filter(s => s.is_active));
+      setAssets(aData || []);
+    } catch(e) { console.error(e); } finally { setLoading(false); }
+  };
+
+  const staffAssets = selectedStaff ? assets.filter(a => a.assigned_to === selectedStaff.id) : [];
+
+  const handleOffboard = async () => {
+    if(!offboardForm.exit_reason) return alert("Exit reason required");
+    setProcessing(true);
+    try {
+      // 1. Unassign all assets
+      for (let a of staffAssets) {
+        await apiFetch(`${API_BASE}/hr/assets/${a.id}/assign`, {
+          method: "PATCH",
+          body: JSON.stringify({ staff_id: null, status: "Available", notes: "Returned during offboarding" })
+        });
+      }
+      
+      // 2. Deactivate profile
+      await apiFetch(`${API_BASE}/hr/profile/${selectedStaff.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ exit_date: offboardForm.exit_date, exit_reason: offboardForm.exit_reason })
+      });
+      
+      alert(`Successfully offboarded ${selectedStaff.full_name}`);
+      setSelectedStaff(null);
+      setOffboardForm({ exit_date: new Date().toISOString().split('T')[0], exit_reason: "" });
+      fetchData();
+    } catch(e) { alert(e.message); } finally { setProcessing(false); }
+  };
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Exit & Offboarding</div>
+          <div style={{ fontSize: 13, color: C.sub }}>Securely deactivate staff accounts and recover company property.</div>
+        </div>
+      </div>
+
+      <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+        <div className="tw">
+            <table className="ht">
+              <thead><tr><th>Staff Member</th><th>Role / Dept</th><th>Assigned Assets</th><th style={{textAlign: "right"}}>Action</th></tr></thead>
+              <tbody>
+                {staff.map(s => {
+                  const count = assets.filter(a => a.assigned_to === s.id).length;
+                  return (
+                    <tr key={s.id}>
+                      <td>
+                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                          <Av av={s.full_name[0]} sz={32} />
+                          <div style={{ fontWeight: 800, color: C.text }}>{s.full_name}</div>
+                        </div>
+                      </td>
+                      <td><div style={{ color: C.text }}>{s.role?.replace(/,/g, ", ")}</div><div style={{ fontSize: 11, color: C.muted }}>{s.department}</div></td>
+                      <td>{count > 0 ? <span className="tg to">{count} items to recover</span> : <span className="tg tm">Clear</span>}</td>
+                      <td style={{ textAlign: "right" }}><button className="bg" style={{ padding: "6px 12px", fontSize: 11, background: "#F8717122", color: "#F87171", border: "1px solid #F87171" }} onClick={() => setSelectedStaff(s)}>Offboard</button></td>
+                    </tr>
+                  );
+                })}
+                {staff.length === 0 && !loading && <tr><td colSpan="4" style={{ textAlign: "center", padding: 30, color: C.muted }}>No active staff.</td></tr>}
+              </tbody>
+            </table>
+        </div>
+      </div>
+
+      {selectedStaff && (
+        <Modal title={`Offboard ${selectedStaff.full_name}`} width={480} onClose={() => !processing && setSelectedStaff(null)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ padding: 14, background: `${T.orange}11`, borderRadius: 10, border: `1px solid ${T.orange}33` }}>
+              <div style={{ fontSize: 13, color: T.orange, fontWeight: 800, marginBottom: 8 }}>ASSET RECOVERY CHECKLIST</div>
+              {staffAssets.length > 0 ? staffAssets.map(a => (
+                <div key={a.id} style={{ display: "flex", justifyContent: "space-between", fontSize: 12, marginBottom: 6, color: C.text }}>
+                  <span>• {a.asset_name} ({a.asset_type})</span>
+                  <span style={{ color: C.muted }}>{a.serial_number || "No Serial"}</span>
+                </div>
+              )) : <div style={{ fontSize: 12, color: C.muted }}>No assets assigned. Safe to proceed.</div>}
+              {staffAssets.length > 0 && <div style={{ fontSize: 11, color: "#F87171", marginTop: 8, fontWeight: 800 }}>⚠️ Proceeding will automatically mark all items above as "Available/Returned".</div>}
+            </div>
+            
+            <div className="g2">
+              <div><Lbl>Exit Date</Lbl><input type="date" className="inp" value={offboardForm.exit_date} onChange={e => setOffboardForm({...offboardForm, exit_date: e.target.value})} /></div>
+              <div><Lbl>Exit Reason</Lbl>
+                <select className="inp" value={offboardForm.exit_reason} onChange={e => setOffboardForm({...offboardForm, exit_reason: e.target.value})}>
+                  <option value="">— Select —</option>
+                  <option value="Resignation">Resignation</option>
+                  <option value="Termination">Termination</option>
+                  <option value="End of Contract">End of Contract</option>
+                  <option value="Retirement">Retirement</option>
+                </select>
+              </div>
+            </div>
+            
+            <button className="bp" onClick={handleOffboard} disabled={processing} style={{ marginTop: 10, background: "#F87171", borderColor: "#F87171", color: "#fff" }}>
+              {processing ? "Processing..." : "Finalize Offboarding & Deactivate"}
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+
+// ─── CULTURE & ENGAGEMENT HUB ────────────────────────────────────────────────
+function CultureHub({ authRole }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const isHR = authRole === "hr";
+  const [surveys, setSurveys] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [view, setView] = useState("surveys"); // surveys | analytics
+  
+  // Create State
+  const [showCreate, setShowCreate] = useState(false);
+  const [createForm, setCreateForm] = useState({ title: "", description: "", questions: [""] });
+  
+  // Respond State
+  const [activeSurvey, setActiveSurvey] = useState(null);
+  const [answers, setAnswers] = useState({});
+  const [isAnon, setIsAnon] = useState(true);
+  const [submitting, setSubmitting] = useState(false);
+
+  useEffect(() => { fetchData(); }, []);
+
+  const fetchData = async () => {
+    setLoading(true);
+    try {
+      const data = await apiFetch(`${API_BASE}/hr/culture/surveys`);
+      setSurveys(data || []);
+    } catch(e) { console.error(e); } finally { setLoading(false); }
+  };
+
+  const handleCreate = async () => {
+    if(!createForm.title || createForm.questions.filter(q=>q.trim()).length === 0) return alert("Title and at least 1 question required.");
+    try {
+      await apiFetch(`${API_BASE}/hr/culture/surveys`, {
+        method: "POST",
+        body: JSON.stringify({
+          title: createForm.title,
+          description: createForm.description,
+          questions: createForm.questions.filter(q=>q.trim())
+        })
+      });
+      setShowCreate(false);
+      setCreateForm({ title: "", description: "", questions: [""] });
+      fetchData();
+    } catch(e) { alert(e.message); }
+  };
+
+  const handleSubmitResponse = async () => {
+    if(Object.keys(answers).length === 0) return alert("Please answer at least one question.");
+    setSubmitting(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/culture/surveys/${activeSurvey.id}/respond`, {
+        method: "POST",
+        body: JSON.stringify({ answers, is_anonymous: isAnon })
+      });
+      alert("Thank you! Your response has been securely submitted.");
+      setActiveSurvey(null);
+      setAnswers({});
+      fetchData();
+    } catch(e) { alert(e.message); } finally { setSubmitting(false); }
+  };
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Engagement & Culture</div>
+          <div style={{ fontSize: 13, color: C.sub }}>Company pulse checks, eNPS, and anonymous surveys.</div>
+        </div>
+        <div style={{ display: "flex", gap: 12 }}>
+          {isHR && <Tabs items={[["surveys", "Active Surveys"], ["analytics", "Analytics"]]} active={view} setActive={setView} />}
+          {isHR && view === "surveys" && <button className="bp" onClick={() => setShowCreate(true)} style={{ height: 38 }}>+ Launch Survey</button>}
+        </div>
+      </div>
+
+      {view === "surveys" && (
+        <div className="g3">
+          {surveys.map(s => (
+            <div key={s.id} className="gc" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 800, color: C.text }}>{s.title}</div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{s.questions.length} Questions</div>
+                </div>
+                {s.is_active ? <span className="tg tg2">Active</span> : <span className="tg tr">Closed</span>}
+              </div>
+              <div style={{ fontSize: 13, color: C.sub, lineHeight: "1.5" }}>{s.description || "No description provided."}</div>
+              {s.is_active && (
+                <button className="bg" style={{ alignSelf: "flex-start", padding: "8px 16px" }} onClick={() => setActiveSurvey(s)}>
+                  Take Survey
+                </button>
+              )}
+            </div>
+          ))}
+          {surveys.length === 0 && !loading && <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: C.muted }}>No surveys available.</div>}
+        </div>
+      )}
+
+      {view === "analytics" && isHR && (
+         <div className="g2">
+            {surveys.map(s => {
+              const resCount = s.responses ? s.responses.length : 0;
+              return (
+                <div key={s.id} className="gc" style={{ padding: 20 }}>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: C.text, marginBottom: 12 }}>{s.title}</div>
+                  <div style={{ fontSize: 24, fontWeight: 900, color: T.gold }}>{resCount}</div>
+                  <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "1px", fontWeight: 800 }}>Total Responses</div>
+                  {resCount > 0 && (
+                    <div style={{ marginTop: 16, borderTop: `1px solid ${C.border}`, paddingTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+                      {s.questions.map((q, i) => {
+                        const answersForQ = s.responses.map(r => r[i]).filter(Boolean);
+                        return (
+                          <div key={i} style={{ background: C.bg, padding: 12, borderRadius: 8 }}>
+                            <div style={{ fontSize: 12, fontWeight: 800, color: C.text, marginBottom: 8 }}>Q: {q}</div>
+                            {answersForQ.slice(0, 3).map((a, j) => (
+                               <div key={j} style={{ fontSize: 12, color: C.sub, padding: "4px 8px", background: `${C.border}55`, borderRadius: 4, marginBottom: 4 }}>"{a}"</div>
+                            ))}
+                            {answersForQ.length > 3 && <div style={{ fontSize: 10, color: T.orange, marginTop: 4 }}>+ {answersForQ.length - 3} more responses</div>}
+                          </div>
+                        )
+                      })}
+                    </div>
+                  )}
+                </div>
+              )
+            })}
+         </div>
+      )}
+
+      {showCreate && (
+        <Modal title="Launch New Survey" width={540} onClose={() => setShowCreate(false)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div><Lbl>Survey Title *</Lbl><input className="inp" value={createForm.title} onChange={e => setCreateForm({...createForm, title: e.target.value})} placeholder="e.g. Q3 eNPS Pulse Check" /></div>
+            <div><Lbl>Description</Lbl><textarea className="inp" rows="2" value={createForm.description} onChange={e => setCreateForm({...createForm, description: e.target.value})} placeholder="Explain the purpose of this survey..." /></div>
+            
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              <Lbl>Questions</Lbl>
+              {createForm.questions.map((q, idx) => (
+                <input key={idx} className="inp" value={q} onChange={e => {
+                  const newQ = [...createForm.questions];
+                  newQ[idx] = e.target.value;
+                  setCreateForm({...createForm, questions: newQ});
+                }} placeholder={`Question ${idx + 1}`} />
+              ))}
+              <button className="bg" style={{ alignSelf: "flex-start", padding: "6px 12px", fontSize: 11 }} onClick={() => setCreateForm({...createForm, questions: [...createForm.questions, ""]})}>+ Add Question</button>
+            </div>
+            
+            <button className="bp" onClick={handleCreate} style={{ marginTop: 10 }}>Publish Survey</button>
+          </div>
+        </Modal>
+      )}
+
+      {activeSurvey && (
+        <Modal title={activeSurvey.title} width={600} onClose={() => !submitting && setActiveSurvey(null)}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            {activeSurvey.description && <div style={{ fontSize: 13, color: C.sub, background: `${T.gold}11`, padding: 12, borderRadius: 8, border: `1px solid ${T.gold}33` }}>{activeSurvey.description}</div>}
+            
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {activeSurvey.questions.map((q, idx) => (
+                <div key={idx}>
+                  <div style={{ fontSize: 14, fontWeight: 800, color: C.text, marginBottom: 8 }}>{idx + 1}. {q}</div>
+                  <textarea className="inp" rows="2" value={answers[idx] || ""} onChange={e => setAnswers({...answers, [idx]: e.target.value})} placeholder="Your answer..." />
+                </div>
+              ))}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: C.text, fontWeight: 800 }}>
+                <input type="checkbox" checked={isAnon} onChange={e => setIsAnon(e.target.checked)} style={{ width: 16, height: 16, accentColor: T.gold }} />
+                Submit Anonymously (Hide my identity)
+              </label>
+              <button className="bp" onClick={handleSubmitResponse} disabled={submitting}>
+                {submitting ? "Submitting..." : "Submit Responses"}
+              </button>
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 
 // ─── ROOT ────────────────────────────────────────────────────────────────────
 export default function App() {
