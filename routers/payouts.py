@@ -256,7 +256,14 @@ async def verify_bill_request(
                 client_payment_amount = float(req["amount_gross"])
                 if is_commission:
                     # gross = payment * rate -> payment = gross / rate
-                    rate = float(req.get("wht_rate", 10.0)) / 100.0 # This might be wrong if wht_rate is used for rate
+                    # BUG FIX: Handle wht_rate as a decimal (0.05) or percentage (5.0)
+                    rate = float(req.get("wht_rate", 0.1))
+                    if rate > 1.0: rate = rate / 100.0
+                    
+                    if rate > 0:
+                        client_payment_amount = float(req["amount_gross"]) / rate
+                    else:
+                        client_payment_amount = float(req["amount_gross"])
                     # Actually, let's use the property_price if initial_deposit, else try to find the payment amount
                     # I'll update the portal submit to store the payment_amount in metadata
                     client_payment_amount = float(req.get("description", "").split("Amt: ")[-1].split()[0]) if "Amt: " in req.get("description", "") else float(req["amount_gross"])
@@ -298,7 +305,7 @@ async def verify_bill_request(
         "reviewed_at": datetime.now(timezone.utc).isoformat(),
     }
     if action == 'rejected':
-        update_payload["wht_exemption_reason"] = data.reason or "Bill rejected at verification stage"
+        update_payload["rejection_reason"] = data.reason or "Bill rejected at verification stage"
     elif action == 'pending' and data.due_date:
         update_payload["due_date"] = data.due_date
     
@@ -321,7 +328,8 @@ async def review_payout_request(request_id: str, data: PayoutReview, bg_tasks: B
         "reviewed_by": current_admin['sub'],
         "reviewed_at": datetime.now(timezone.utc).isoformat(),
         "payout_reference": data.payout_reference,
-        "wht_exemption_reason": data.rejection_reason if data.status == 'rejected' else req.get('wht_exemption_reason')
+        "rejection_reason": data.rejection_reason if data.status == 'rejected' else req.get('rejection_reason'),
+        "wht_exemption_reason": req.get('wht_exemption_reason')
     }
     
     # Handle WHT Override (as requested by user)
@@ -963,7 +971,8 @@ async def submit_payout_claim_from_portal(
     # 4. Create Record
     payload = {
         "title": title,
-        "description": f"{remarks}\nAmt: {gross}" if remarks else f"Portal submission via {type}\nAmt: {gross}",
+        "description": f"Portal submission via {type}\nAmt: {gross}",
+        "remarks": remarks or None,
         "vendor_id": vendor_id,
         "invoice_id": linked_invoice_id,
         "amount_gross": float(gross),
@@ -981,7 +990,8 @@ async def submit_payout_claim_from_portal(
         "category": category,
         # ── NEW fields ──
         "payment_type": payment_type,           # "initial_deposit" | "instalment" | null
-        "is_disputed": is_dispute,              # Finance sees disputed claims in a separate queue
+        "is_disputed": is_dispute,
+        "dispute_reason": dispute_reason if is_dispute else None,
         "vendor_invoice_number": invoice_number,
     }
 

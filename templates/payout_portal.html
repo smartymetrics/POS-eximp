@@ -56,12 +56,28 @@
         }
 
         @keyframes slideUp {
-            from { opacity: 0; transform: translateY(30px) scale(0.95); }
-            to { opacity: 1; transform: translateY(0) scale(1); }
+            from {
+                opacity: 0;
+                transform: translateY(30px) scale(0.95);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0) scale(1);
+            }
         }
 
-        .logo-area { text-align: center; margin-bottom: 32px; }
-        .logo-area img { height: 50px; margin-bottom: 16px; filter: brightness(1.2); }
+        .logo-area {
+            text-align: center;
+            margin-bottom: 32px;
+        }
+
+        .logo-area img {
+            height: 50px;
+            margin-bottom: 16px;
+            filter: brightness(1.2);
+        }
+
         .logo-area h1 {
             font-family: 'Playfair Display', serif;
             font-size: 28px;
@@ -73,79 +89,259 @@
         }
 
         .main-nav {
-            display: grid; grid-template-columns: repeat(4, 1fr);
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
             background: rgba(255, 255, 255, 0.03);
-            padding: 6px; border-radius: 16px; margin-bottom: 24px;
-            border: 1px solid var(--border); gap: 4px;
+            padding: 6px;
+            border-radius: 16px;
+            margin-bottom: 24px;
+            border: 1px solid var(--border);
+            gap: 4px;
         }
 
         .nav-btn {
-            padding: 14px 8px; border: none; background: none; color: var(--muted);
-            font-family: inherit; font-weight: 600; font-size: 11px;
-            text-transform: uppercase; letter-spacing: 0.5px; border-radius: 12px;
-            cursor: pointer; transition: all 0.3s; display: flex;
-            flex-direction: column; align-items: center; justify-content: center; gap: 6px;
+            padding: 14px 8px;
+            border: none;
+            background: none;
+            color: var(--muted);
+            font-family: inherit;
+            font-weight: 600;
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+            border-radius: 12px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
         }
-        .nav-btn i { font-size: 16px; }
+
+        .nav-btn i {
+            font-size: 16px;
+        }
+
         .nav-btn.active {
-            background: var(--brand); color: #000;
+            background: var(--brand);
+            color: #000;
             box-shadow: 0 4px 12px rgba(196, 125, 10, 0.2);
         }
 
         .sub-nav {
-            display: flex; gap: 16px; margin-bottom: 24px; padding: 0 8px 12px;
-            border-bottom: 1px solid var(--border); justify-content: center;
+            display: flex;
+            gap: 16px;
+            margin-bottom: 24px;
+            padding: 0 8px 12px;
+            border-bottom: 1px solid var(--border);
+            justify-content: center;
         }
-        .sub-btn { font-size: 13px; font-weight: 600; color: var(--muted); cursor: pointer; padding: 4px 0; position: relative; transition: 0.3s; }
-        .sub-btn.active { color: var(--brand); }
-        .sub-btn.active::after { content: ''; position: absolute; bottom: -1px; left: 0; width: 100%; height: 2px; background: var(--brand); border-radius: 2px; }
 
-        .form-section { margin-bottom: 32px; animation: fadeIn 0.5s ease-out; }
-        @keyframes fadeIn { from { opacity: 0; transform: translateY(10px); } to { opacity: 1; transform: translateY(0); } }
-
-        .form-group { margin-bottom: 20px; }
-        label { display: block; margin-bottom: 8px; font-size: 11px; font-weight: 700; color: var(--muted); text-transform: uppercase; letter-spacing: 1px; }
-
-        .input-wrapper { position: relative; display: flex; align-items: center; }
-        .input-wrapper i { position: absolute; left: 16px; color: var(--brand); font-size: 18px; z-index: 2; }
-        
-        input, select, textarea {
-            width: 100%; background: rgba(255, 255, 255, 0.02); border: 1px solid var(--border);
-            padding: 12px 16px 12px 44px; border-radius: 12px; color: #fff; font-size: 14px;
-            font-family: inherit; outline: none; transition: all 0.3s;
+        .sub-btn {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--muted);
+            cursor: pointer;
+            padding: 4px 0;
+            position: relative;
+            transition: 0.3s;
         }
-        input:focus, textarea:focus { border-color: var(--brand); background: rgba(255, 255, 255, 0.05); box-shadow: 0 0 0 4px rgba(196, 125, 10, 0.1); }
 
-        .input-row { display: grid; grid-template-columns: 1fr 1fr; gap: 16px; }
-
-        .btn-identify, .btn-lookup {
-            height: 48px; padding: 0 24px; background: var(--brand); color: #000;
-            border: none; border-radius: 12px; font-weight: 700; font-size: 13px;
-            cursor: pointer; font-family: inherit; transition: 0.3s; white-space: nowrap;
+        .sub-btn.active {
+            color: var(--brand);
         }
-        .btn-identify:hover, .btn-lookup:hover { filter: brightness(1.1); transform: translateY(-1px); }
-        .btn-identify:disabled, .btn-lookup:disabled { opacity: 0.4; cursor: not-allowed; transform: none; }
 
-        .upload-area { border: 2px dashed var(--border); padding: 24px; border-radius: 16px; text-align: center; cursor: pointer; transition: 0.3s; background: rgba(255, 255, 255, 0.01); }
-        .upload-area:hover { border-color: var(--brand); background: rgba(196, 125, 10, 0.03); }
+        .sub-btn.active::after {
+            content: '';
+            position: absolute;
+            bottom: -1px;
+            left: 0;
+            width: 100%;
+            height: 2px;
+            background: var(--brand);
+            border-radius: 2px;
+        }
+
+        .form-section {
+            margin-bottom: 32px;
+            animation: fadeIn 0.5s ease-out;
+        }
+
+        @keyframes fadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(10px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        label {
+            display: block;
+            margin-bottom: 8px;
+            font-size: 11px;
+            font-weight: 700;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 1px;
+        }
+
+        .input-wrapper {
+            position: relative;
+            display: flex;
+            align-items: center;
+        }
+
+        .input-wrapper i {
+            position: absolute;
+            left: 16px;
+            color: var(--brand);
+            font-size: 18px;
+            z-index: 2;
+        }
+
+        input,
+        select,
+        textarea {
+            width: 100%;
+            background: rgba(255, 255, 255, 0.02);
+            border: 1px solid var(--border);
+            padding: 12px 16px 12px 44px;
+            border-radius: 12px;
+            color: #fff;
+            font-size: 14px;
+            font-family: inherit;
+            outline: none;
+            transition: all 0.3s;
+        }
+
+        input:focus,
+        textarea:focus {
+            border-color: var(--brand);
+            background: rgba(255, 255, 255, 0.05);
+            box-shadow: 0 0 0 4px rgba(196, 125, 10, 0.1);
+        }
+
+        .input-row {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+        }
+
+        .btn-identify,
+        .btn-lookup {
+            height: 48px;
+            padding: 0 24px;
+            background: var(--brand);
+            color: #000;
+            border: none;
+            border-radius: 12px;
+            font-weight: 700;
+            font-size: 13px;
+            cursor: pointer;
+            font-family: inherit;
+            transition: 0.3s;
+            white-space: nowrap;
+        }
+
+        .btn-identify:hover,
+        .btn-lookup:hover {
+            filter: brightness(1.1);
+            transform: translateY(-1px);
+        }
+
+        .btn-identify:disabled,
+        .btn-lookup:disabled {
+            opacity: 0.4;
+            cursor: not-allowed;
+            transform: none;
+        }
+
+        .upload-area {
+            border: 2px dashed var(--border);
+            padding: 24px;
+            border-radius: 16px;
+            text-align: center;
+            cursor: pointer;
+            transition: 0.3s;
+            background: rgba(255, 255, 255, 0.01);
+        }
+
+        .upload-area:hover {
+            border-color: var(--brand);
+            background: rgba(196, 125, 10, 0.03);
+        }
 
         .submit-btn {
-            width: 100%; background: linear-gradient(135deg, var(--brand) 0%, var(--accent) 100%);
-            color: #000; border: none; padding: 18px; border-radius: 16px;
-            font-weight: 800; font-size: 15px; text-transform: uppercase; letter-spacing: 2px;
-            cursor: pointer; margin-top: 24px; transition: all 0.4s;
+            width: 100%;
+            background: linear-gradient(135deg, var(--brand) 0%, var(--accent) 100%);
+            color: #000;
+            border: none;
+            padding: 18px;
+            border-radius: 16px;
+            font-weight: 800;
+            font-size: 15px;
+            text-transform: uppercase;
+            letter-spacing: 2px;
+            cursor: pointer;
+            margin-top: 24px;
+            transition: all 0.4s;
             box-shadow: 0 20px 40px -10px rgba(196, 125, 10, 0.3);
         }
 
-        .badge { display: inline-flex; align-items: center; gap: 6px; padding: 6px 14px; border-radius: 20px; font-size: 11px; font-weight: 800; text-transform: uppercase; }
-        .hidden { display: none; }
-        .form-hint { font-size: 11px; color: var(--muted); margin-top: 6px; display: block; }
-        .checkbox-row { display: flex; align-items: center; gap: 10px; margin-top: 8px; cursor: pointer; }
-        .checkbox-row input { width: 18px; height: 18px; accent-color: var(--brand); }
+        .badge {
+            display: inline-flex;
+            align-items: center;
+            gap: 6px;
+            padding: 6px 14px;
+            border-radius: 20px;
+            font-size: 11px;
+            font-weight: 800;
+            text-transform: uppercase;
+        }
+
+        .hidden {
+            display: none;
+        }
+
+        .form-hint {
+            font-size: 11px;
+            color: var(--muted);
+            margin-top: 6px;
+            display: block;
+        }
+
+        .checkbox-row {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            margin-top: 8px;
+            cursor: pointer;
+        }
+
+        .checkbox-row input {
+            width: 18px;
+            height: 18px;
+            accent-color: var(--brand);
+        }
 
         @media (max-width: 600px) {
-            .main-nav { grid-template-columns: 1fr 1fr; }
-            .input-row { grid-template-columns: 1fr; gap: 0; }
+            .main-nav {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .input-row {
+                grid-template-columns: 1fr;
+                gap: 0;
+            }
         }
     </style>
 </head>
@@ -154,7 +350,8 @@
 
     <div class="portal-container">
         <div class="logo-area">
-            <img src="/static/img/logo.svg" onerror="this.src='https://www.eximps-cloves.com/logo.svg'" alt="Eximp & Cloves">
+            <img src="/static/img/logo.svg" onerror="this.src='https://www.eximps-cloves.com/logo.svg'"
+                alt="Eximp & Cloves">
             <h1>Claims & Payouts</h1>
             <p style="font-size:13px; color:var(--muted);">Secure Unified Financial Portal</p>
         </div>
@@ -183,13 +380,16 @@
 
         <form id="payoutForm">
             <!-- STEP 1: IDENTITY -->
-            <div class="form-section" style="background: rgba(255,255,255,0.02); border: 1px solid var(--border); padding: 24px; border-radius: 20px;">
+            <div class="form-section"
+                style="background: rgba(255,255,255,0.02); border: 1px solid var(--border); padding: 24px; border-radius: 20px;">
                 <div class="form-group" style="margin-bottom:0;">
-                    <label style="color:var(--brand);">1. Identify Yourself <span style="color:var(--error)">*</span></label>
+                    <label style="color:var(--brand);">1. Identify Yourself <span
+                            style="color:var(--error)">*</span></label>
                     <div style="display:flex; gap:12px;">
                         <div class="input-wrapper" style="flex:1;">
                             <i class="fas fa-envelope"></i>
-                            <input type="email" id="payee_email" required placeholder="Enter your business email" oninput="validateLookupState()">
+                            <input type="email" id="payee_email" required placeholder="Enter your business email"
+                                oninput="validateLookupState()">
                         </div>
                         <button type="button" class="btn-identify" id="btn-identify" onclick="fetchVendorDetails()">
                             <i class="fas fa-id-card"></i> Identify
@@ -206,7 +406,8 @@
                     <div style="display:flex; gap:12px;">
                         <div class="input-wrapper" style="flex:1;">
                             <i class="fas fa-file-invoice-dollar"></i>
-                            <input type="text" id="invoice_number" placeholder="e.g. EC-001234" oninput="clearInvoiceResult()">
+                            <input type="text" id="invoice_number" placeholder="e.g. EC-001234"
+                                oninput="clearInvoiceResult()">
                         </div>
                         <button type="button" class="btn-lookup" id="lookup-btn" onclick="lookupInvoice()">
                             <i class="fas fa-search"></i> Check
@@ -219,7 +420,8 @@
                     <p style="font-size:12px; margin-top:8px;">Validating records...</p>
                 </div>
 
-                <div id="inv-error" class="hidden" style="padding:14px; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.2); border-radius:12px; color:#F87171; font-size:13px; margin-top:12px;">
+                <div id="inv-error" class="hidden"
+                    style="padding:14px; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.2); border-radius:12px; color:#F87171; font-size:13px; margin-top:12px;">
                     <i class="fas fa-times-circle"></i> <span id="inv-error-text"></span>
                 </div>
 
@@ -228,15 +430,16 @@
                         <span id="payment-type-badge" class="badge"></span>
                     </div>
 
-                    <div style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; overflow:hidden;">
-                            <div style="padding:12px 16px; border-right:1px solid var(--border);">
-                                <div style="font-size:10px; color:var(--muted);">Assignment</div>
-                                <div id="inv-assignment" style="font-size:14px; font-weight:600; color:var(--brand);"></div>
-                            </div>
-                            <div style="padding:12px 16px;">
-                                <div style="font-size:10px; color:var(--muted);">Property</div>
-                                <div id="inv-property" style="font-size:14px; font-weight:600;"></div>
-                            </div>
+                    <div
+                        style="background:rgba(255,255,255,0.02); border:1px solid var(--border); border-radius:12px; overflow:hidden;">
+                        <div style="padding:12px 16px; border-right:1px solid var(--border);">
+                            <div style="font-size:10px; color:var(--muted);">Assignment</div>
+                            <div id="inv-assignment" style="font-size:14px; font-weight:600; color:var(--brand);"></div>
+                        </div>
+                        <div style="padding:12px 16px;">
+                            <div style="font-size:10px; color:var(--muted);">Property</div>
+                            <div id="inv-property" style="font-size:14px; font-weight:600;"></div>
+                        </div>
                         <div style="display:grid; grid-template-columns:1fr 1fr 1fr;">
                             <div style="padding:12px 16px; border-right:1px solid var(--border);">
                                 <div style="font-size:10px; color:var(--muted);">Price</div>
@@ -248,17 +451,22 @@
                             </div>
                             <div style="padding:12px 16px;">
                                 <div style="font-size:10px; color:var(--muted);">Balance</div>
-                                <div id="inv-balance" style="font-size:14px; font-weight:700; color:var(--error);"></div>
+                                <div id="inv-balance" style="font-size:14px; font-weight:700; color:var(--error);">
+                                </div>
                             </div>
                         </div>
                     </div>
 
                     <!-- Status Banners -->
-                    <div id="rep-unassigned" class="hidden" style="padding:14px; background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); border-radius:12px; margin-top:12px; font-size:12px;">
-                        <i class="fas fa-user-plus" style="color:var(--success);"></i> <strong>Unassigned Deal</strong> — You can claim this sale.
+                    <div id="rep-unassigned" class="hidden"
+                        style="padding:14px; background:rgba(16,185,129,0.06); border:1px solid rgba(16,185,129,0.2); border-radius:12px; margin-top:12px; font-size:12px;">
+                        <i class="fas fa-user-plus" style="color:var(--success);"></i> <strong>Unassigned Deal</strong>
+                        — You can claim this sale.
                     </div>
-                    <div id="rep-yours" class="hidden" style="padding:14px; background:rgba(59,130,246,0.06); border:1px solid rgba(59,130,246,0.2); border-radius:12px; margin-top:12px; font-size:12px;">
-                        <i class="fas fa-check-circle" style="color:#60A5FA;"></i> <strong>Assigned to You</strong> — You are the registered rep.
+                    <div id="rep-yours" class="hidden"
+                        style="padding:14px; background:rgba(59,130,246,0.06); border:1px solid rgba(59,130,246,0.2); border-radius:12px; margin-top:12px; font-size:12px;">
+                        <i class="fas fa-check-circle" style="color:#60A5FA;"></i> <strong>Assigned to You</strong> —
+                        You are the registered rep.
                     </div>
                     <div id="rep-conflict" class="hidden" style="background:rgba(239,68,68,0.04); border:1px solid rgba(239,68,68,0.25);
                                 border-radius:12px; padding:16px; margin-top:12px;">
@@ -270,7 +478,8 @@
                                     Ownership Conflict Detected
                                 </div>
                                 <div style="font-size:12px; color:var(--muted); line-height:1.5;">
-                                    This invoice is assigned to <strong id="conflict-rep-name" style="color:var(--text);"></strong>.
+                                    This invoice is assigned to <strong id="conflict-rep-name"
+                                        style="color:var(--text);"></strong>.
                                     If you believe this is an error, please state your reason below.
                                 </div>
                             </div>
@@ -283,21 +492,33 @@
                                        font-family:inherit; outline:none; resize:none;"></textarea>
                         </div>
                         <label class="checkbox-row" style="justify-content: flex-start; margin-top:0;">
-                            <input type="checkbox" id="confirm-dispute" style="width:16px; height:16px; accent-color:#F87171;">
-                            <span style="font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em;">Raise Official Dispute Claim</span>
+                            <input type="checkbox" id="confirm-dispute"
+                                style="width:16px; height:16px; accent-color:#F87171;">
+                            <span
+                                style="font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em;">Raise
+                                Official Dispute Claim</span>
                         </label>
                     </div>
 
-                    <div id="commission-preview" class="hidden" style="padding:16px; background:rgba(196,125,10,0.05); border:1px solid rgba(196,125,10,0.2); border-radius:12px; margin-top:12px;">
+                    <div id="commission-preview" class="hidden"
+                        style="padding:16px; background:rgba(196,125,10,0.05); border:1px solid rgba(196,125,10,0.2); border-radius:12px; margin-top:12px;">
                         <div style="display:grid; grid-template-columns:1fr 1fr; gap:12px; font-size:12px;">
-                            <div><div style="color:var(--muted); font-size:10px;">Gross (10%)</div><div id="cp-gross" style="font-weight:700; color:var(--brand);"></div></div>
-                            <div><div style="color:var(--muted); font-size:10px;">Net After Tax</div><div id="cp-net" style="font-weight:700; color:var(--success);"></div></div>
+                            <div>
+                                <div style="color:var(--muted); font-size:10px;">Gross (10%)</div>
+                                <div id="cp-gross" style="font-weight:700; color:var(--brand);"></div>
+                            </div>
+                            <div>
+                                <div style="color:var(--muted); font-size:10px;">Net After Tax</div>
+                                <div id="cp-net" style="font-weight:700; color:var(--success);"></div>
+                            </div>
                         </div>
-                        <div id="cp-note" style="font-size:10px; color:var(--muted); margin-top:10px; line-height:1.4;"></div>
+                        <div id="cp-note" style="font-size:10px; color:var(--muted); margin-top:10px; line-height:1.4;">
+                        </div>
                     </div>
                 </div>
 
-                <input type="hidden" id="hid_payment_type"><input type="hidden" id="hid_property_price"><input type="hidden" id="hid_is_dispute" value="false"><input type="hidden" id="hid_invoice_id">
+                <input type="hidden" id="hid_payment_type"><input type="hidden" id="hid_property_price"><input
+                    type="hidden" id="hid_is_dispute" value="false"><input type="hidden" id="hid_invoice_id">
             </div>
 
             <!-- STEP 3: PAYEE DETAILS -->
@@ -335,7 +556,8 @@
             <!-- STEP 4: PAYMENT DETAILS -->
             <div class="form-section">
                 <label>4. Payout Information</label>
-                <div class="form-group" style="padding: 20px; background: rgba(196,125,10,0.03); border: 1px solid var(--border); border-radius: 16px;">
+                <div class="form-group"
+                    style="padding: 20px; background: rgba(196,125,10,0.03); border: 1px solid var(--border); border-radius: 16px;">
                     <label style="color:var(--brand);">Claim Amount (NGN)</label>
                     <div class="input-wrapper">
                         <i class="fas fa-coins"></i>
@@ -343,7 +565,8 @@
                     </div>
                     <div id="already-paid-wrap" class="checkbox-row">
                         <input type="checkbox" id="already_paid" onchange="toggleAlreadyPaid()">
-                        <span style="font-size:11px; color:var(--muted);">Already paid directly by Company? (Audit only)</span>
+                        <span style="font-size:11px; color:var(--muted);">Already paid directly by Company? (Audit
+                            only)</span>
                     </div>
                 </div>
 
@@ -380,18 +603,18 @@
                                 <option value="Optimus Bank">
                                 <option value="Signature Bank">
                                 <option value="Nova Bank">
-                                
-                                <!-- Non-Interest Banks -->
+
+                                    <!-- Non-Interest Banks -->
                                 <option value="Jaiz Bank">
                                 <option value="Taj Bank">
                                 <option value="Lotus Bank">
-                                
-                                <!-- Merchant Banks -->
+
+                                    <!-- Merchant Banks -->
                                 <option value="Coronation Merchant Bank">
                                 <option value="FBNQuest Merchant Bank">
                                 <option value="Rand Merchant Bank">
-                                
-                                <!-- Fintechs & Payment Platforms -->
+
+                                    <!-- Fintechs & Payment Platforms -->
                                 <option value="Moniepoint (TeamApt)">
                                 <option value="Opay">
                                 <option value="Kuda Bank">
@@ -413,8 +636,8 @@
                                 <option value="Eyowo">
                                 <option value="Rubies Bank">
                                 <option value="Safe Haven Microfinance Bank">
-                                
-                                <!-- Major Microfinance Banks -->
+
+                                    <!-- Major Microfinance Banks -->
                                 <option value="LAPO Microfinance Bank">
                                 <option value="Accion Microfinance Bank">
                                 <option value="NPF Microfinance Bank">
@@ -425,7 +648,8 @@
                         </div>
                     </div>
                     <div class="input-row">
-                        <input type="text" id="acc_number" placeholder="Account Number" maxlength="10" style="padding-left:16px;">
+                        <input type="text" id="acc_number" placeholder="Account Number" maxlength="10"
+                            style="padding-left:16px;">
                         <input type="text" id="acc_name" placeholder="Account Name" style="padding-left:16px;">
                     </div>
                 </div>
@@ -637,7 +861,7 @@
             btn.disabled = true;
 
             const isDispute = !document.getElementById('rep-conflict').classList.contains('hidden') && document.getElementById('confirm-dispute').checked;
-            
+
             const formData = new FormData();
             formData.append('type', currentTab === 'disbursement' ? subTab : currentTab);
             formData.append('payee_name', document.getElementById('payee_name').value);
@@ -654,7 +878,8 @@
             formData.append('payment_type', document.getElementById('hid_payment_type').value);
             formData.append('is_dispute', isDispute);
             formData.append('dispute_reason', isDispute ? document.getElementById('dispute_reason').value : "");
-            
+            formData.append('remarks', document.getElementById('remarks').value || "");
+
             const files = Array.from(document.getElementById('fileInput').files);
             files.forEach(f => formData.append('files', f));
 

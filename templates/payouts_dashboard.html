@@ -17,7 +17,7 @@
             const script1 = document.createElement('script');
             script1.src = "https://cdnjs.cloudflare.com/ajax/libs/Chart.js/4.4.1/chart.umd.js";
             document.head.appendChild(script1);
-            
+
             setTimeout(() => {
                 if (typeof Chart === 'undefined') {
                     console.log("Intelligence Engine: Cloudflare failed, trying Google...");
@@ -78,7 +78,9 @@
         .mobile-header {
             display: none;
             position: fixed;
-            top: 0; left: 0; right: 0;
+            top: 0;
+            left: 0;
+            right: 0;
             height: 60px;
             background: var(--dark2);
             border-bottom: 1px solid var(--border);
@@ -98,14 +100,14 @@
             align-items: center;
             justify-content: center;
             border-radius: 8px;
-            background: rgba(255,255,255,0.03);
+            background: rgba(255, 255, 255, 0.03);
         }
 
         .sidebar-overlay {
             display: none;
             position: fixed;
             inset: 0;
-            background: rgba(0,0,0,0.7);
+            background: rgba(0, 0, 0, 0.7);
             backdrop-filter: blur(4px);
             z-index: 950;
             opacity: 0;
@@ -307,15 +309,17 @@
         }
 
         /* --- PRESENTATION MODE & VISIBILITY --- */
-        body.presentation-mode .sidebar, 
-        body.presentation-mode .top-bar { 
-            display: none !important; 
+        body.presentation-mode .sidebar,
+        body.presentation-mode .top-bar {
+            display: none !important;
         }
-        body.presentation-mode .main-content { 
-            margin-left: 0 !important; 
-            width: 100% !important; 
+
+        body.presentation-mode .main-content {
+            margin-left: 0 !important;
+            width: 100% !important;
             padding: 40px 60px !important;
         }
+
         .visibility-toggle {
             position: absolute;
             top: 12px;
@@ -326,14 +330,16 @@
             opacity: 0;
             transition: all 0.3s ease;
             z-index: 100;
-            background: rgba(0,0,0,0.5);
+            background: rgba(0, 0, 0, 0.5);
             width: 28px;
             height: 28px;
-            display: none; /* Changed from flex to hide by default */
+            display: none;
+            /* Changed from flex to hide by default */
             align-items: center;
             justify-content: center;
             border-radius: 50%;
         }
+
         .tab .visibility-toggle {
             top: -10px;
             right: -10px;
@@ -341,17 +347,19 @@
             width: 20px;
             height: 20px;
         }
-        
+
         /* Eye icons ONLY appear when configuring the view */
         body.manage-view-mode .visibility-toggle {
             display: flex;
             opacity: 0.6;
         }
+
         .visibility-toggle:hover {
             opacity: 1 !important;
             color: var(--gold);
             transform: scale(1.1);
         }
+
         .hidden-element {
             display: none !important;
         }
@@ -363,14 +371,14 @@
             filter: blur(2px) grayscale(100%);
             pointer-events: auto !important;
         }
-        
+
         body.manage-view-mode .tab.hidden-element {
             display: inline-flex !important;
         }
 
-        body.presentation-mode .main-content { 
-            margin-left: 0 !important; 
-            width: 100% !important; 
+        body.presentation-mode .main-content {
+            margin-left: 0 !important;
+            width: 100% !important;
             padding: 40px 60px !important;
         }
 
@@ -382,14 +390,17 @@
             padding: 6px;
             border-radius: 50px;
             border: 1px solid rgba(255, 255, 255, 0.08);
-            box-shadow: 0 20px 40px rgba(0,0,0,0.4);
-            opacity: 0.4; /* Stealth by default */
+            box-shadow: 0 20px 40px rgba(0, 0, 0, 0.4);
+            opacity: 0.4;
+            /* Stealth by default */
         }
+
         #pres-controls:hover {
             opacity: 1;
             background: rgba(18, 18, 20, 0.95);
             border-color: var(--gold);
         }
+
         #pres-controls .btn {
             border-radius: 50px !important;
             padding: 0 !important;
@@ -403,18 +414,22 @@
             transition: all 0.3s ease;
             position: relative;
         }
+
         #pres-controls .btn i {
             font-size: 16px;
         }
+
         #pres-controls .btn:hover {
             color: var(--white);
-            background: rgba(255,255,255,0.05) !important;
+            background: rgba(255, 255, 255, 0.05) !important;
             transform: scale(1.1);
         }
+
         #pres-controls .btn.active-mode {
             color: var(--gold);
             background: rgba(196, 125, 10, 0.1) !important;
         }
+
         #pres-controls .btn .btn-text {
             position: absolute;
             bottom: 55px;
@@ -431,6 +446,7 @@
             transition: 0.2s;
             transform: translateY(10px);
         }
+
         #pres-controls .btn:hover .btn-text {
             opacity: 1;
             transform: translateY(0);
@@ -633,7 +649,10 @@
             color: var(--gold);
             font-size: 24px;
         }
-        .chart-loader.hidden { display: none; }
+
+        .chart-loader.hidden {
+            display: none;
+        }
 
         .table-container {
             background: var(--dark2);
@@ -986,38 +1005,102 @@
 
         /* --- RESPONSIVE MEDIA QUERIES --- */
         @media (max-width: 1024px) {
-            .sidebar { transform: translateX(-100%); }
-            .sidebar.active { transform: translateX(0); }
-            .mobile-header { display: flex; }
-            .main-content { margin-left: 0; padding: 80px 16px 40px; }
-            .header { flex-direction: column; align-items: flex-start; gap: 20px; }
-            .header-actions { width: 100%; flex-wrap: wrap; }
-            .btn { flex: 1; justify-content: center; min-width: 140px; }
-            .stats-grid { grid-template-columns: repeat(2, 1fr); }
-            .analytics-grid { grid-template-columns: 1fr; }
-            .report-hub { grid-template-columns: 1fr; }
+            .sidebar {
+                transform: translateX(-100%);
+            }
+
+            .sidebar.active {
+                transform: translateX(0);
+            }
+
+            .mobile-header {
+                display: flex;
+            }
+
+            .main-content {
+                margin-left: 0;
+                padding: 80px 16px 40px;
+            }
+
+            .header {
+                flex-direction: column;
+                align-items: flex-start;
+                gap: 20px;
+            }
+
+            .header-actions {
+                width: 100%;
+                flex-wrap: wrap;
+            }
+
+            .btn {
+                flex: 1;
+                justify-content: center;
+                min-width: 140px;
+            }
+
+            .stats-grid {
+                grid-template-columns: repeat(2, 1fr);
+            }
+
+            .analytics-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .report-hub {
+                grid-template-columns: 1fr;
+            }
         }
 
         @media (max-width: 640px) {
-            .mobile-header { height: 50px; padding: 0 12px; }
-            .header h1 { font-size: 22px; }
-            .stats-grid { grid-template-columns: 1fr; gap: 12px; }
-            .stat-card { padding: 16px; min-width: 0 !important; width: 100% !important; }
-            .modal-content { padding: 24px; border-radius: 20px; max-height: 95vh; }
-            
-            .tabs { 
-                gap: 12px; 
-                overflow-x: auto; 
-                padding-bottom: 8px; 
+            .mobile-header {
+                height: 50px;
+                padding: 0 12px;
+            }
+
+            .header h1 {
+                font-size: 22px;
+            }
+
+            .stats-grid {
+                grid-template-columns: 1fr;
+                gap: 12px;
+            }
+
+            .stat-card {
+                padding: 16px;
+                min-width: 0 !important;
+                width: 100% !important;
+            }
+
+            .modal-content {
+                padding: 24px;
+                border-radius: 20px;
+                max-height: 95vh;
+            }
+
+            .tabs {
+                gap: 12px;
+                overflow-x: auto;
+                padding-bottom: 8px;
                 margin-bottom: 20px;
                 display: flex;
                 flex-wrap: nowrap;
                 -webkit-overflow-scrolling: touch;
                 scrollbar-width: none;
             }
-            .tabs::-webkit-scrollbar { display: none; }
-            .tab { font-size: 11px; white-space: nowrap; flex-shrink: 0; padding: 8px 12px; }
-            
+
+            .tabs::-webkit-scrollbar {
+                display: none;
+            }
+
+            .tab {
+                font-size: 11px;
+                white-space: nowrap;
+                flex-shrink: 0;
+                padding: 8px 12px;
+            }
+
             .table-container {
                 width: 100%;
                 overflow-x: auto;
@@ -1025,27 +1108,60 @@
                 margin: 0 -16px;
                 padding: 0 16px;
             }
-            
-            .data-table th, .data-table td { padding: 8px 10px; font-size: 10px; }
-            .btn-gold { padding: 12px !important; }
-            .header-actions { flex-direction: column; width: 100%; gap: 10px; }
-            .header-actions .btn { width: 100%; }
+
+            .data-table th,
+            .data-table td {
+                padding: 8px 10px;
+                font-size: 10px;
+            }
+
+            .btn-gold {
+                padding: 12px !important;
+            }
+
+            .header-actions {
+                flex-direction: column;
+                width: 100%;
+                gap: 10px;
+            }
+
+            .header-actions .btn {
+                width: 100%;
+            }
         }
 
         @media (max-width: 480px) {
-            .main-content { padding: 70px 12px 40px; }
-            .header h1 { font-size: 20px; }
-            .stat-card h3 { font-size: 20px; }
-            .data-table th, .data-table td { font-size: 9px; }
+            .main-content {
+                padding: 70px 12px 40px;
+            }
+
+            .header h1 {
+                font-size: 20px;
+            }
+
+            .stat-card h3 {
+                font-size: 20px;
+            }
+
+            .data-table th,
+            .data-table td {
+                font-size: 9px;
+            }
         }
 
         /* --- SYNC ANIMATION --- */
         .fa-spin-once {
             animation: spinOnce 0.8s cubic-bezier(0.4, 0, 0.2, 1);
         }
+
         @keyframes spinOnce {
-            from { transform: rotate(0deg); }
-            to { transform: rotate(360deg); }
+            from {
+                transform: rotate(0deg);
+            }
+
+            to {
+                transform: rotate(360deg);
+            }
         }
     </style>
 </head>
@@ -1098,7 +1214,8 @@
                     <small id="adminRole">Administrator</small>
                 </div>
             </div>
-            <button onclick="window.location.href='/hr'" class="btn" style="width: 100%; margin-bottom: 10px; font-size: 11px; padding: 10px; background: rgba(196, 125, 10, 0.1); border-color: rgba(196, 125, 10, 0.3); color: var(--gold);">
+            <button onclick="window.location.href='/hr'" class="btn"
+                style="width: 100%; margin-bottom: 10px; font-size: 11px; padding: 10px; background: rgba(196, 125, 10, 0.1); border-color: rgba(196, 125, 10, 0.3); color: var(--gold);">
                 <i class="fas fa-users-cog"></i> HR & PERSONNEL
             </button>
             <button class="logout-btn" onclick="logout()"><i class="fas fa-sign-out-alt"></i> SIGN OUT</button>
@@ -1106,8 +1223,10 @@
     </aside>
 
     <!-- GLOBAL PRESENTATION CONTROLS -->
-    <div id="pres-controls" style="position:fixed; bottom:30px; right:30px; z-index:9999; display:flex; gap:8px; align-items:center;">
-        <button class="btn" id="manage-view-btn" onclick="toggleManageView()" style="display:none;" title="Configure View">
+    <div id="pres-controls"
+        style="position:fixed; bottom:30px; right:30px; z-index:9999; display:flex; gap:8px; align-items:center;">
+        <button class="btn" id="manage-view-btn" onclick="toggleManageView()" style="display:none;"
+            title="Configure View">
             <i class="fas fa-sliders-h"></i>
             <span class="btn-text">CONFIGURE VIEW</span>
         </button>
@@ -1153,7 +1272,8 @@
                 <h3 id="stat-total-paid">₦0.00</h3>
                 <div class="trend neutral" id="main-period-label">Rolling 30 Days</div>
             </div>
-            <div class="stat-card" onclick="switchTab('requests')" style="cursor:pointer; border-color: rgba(59, 130, 246, 0.2);">
+            <div class="stat-card" onclick="switchTab('requests')"
+                style="cursor:pointer; border-color: rgba(59, 130, 246, 0.2);">
                 <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
                 <span>Pending Audit</span>
                 <h3 id="stat-pending-count">0</h3>
@@ -1165,7 +1285,8 @@
                 <h3 id="stat-total-ap" style="color: var(--error)">₦0.00</h3>
                 <div class="trend neutral">Outstanding Liability</div>
             </div>
-            <div class="stat-card" onclick="openWhtRemittanceModal()" style="cursor:pointer; border-color: rgba(196, 125, 10, 0.2);">
+            <div class="stat-card" onclick="openWhtRemittanceModal()"
+                style="cursor:pointer; border-color: rgba(196, 125, 10, 0.2);">
                 <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
                 <span>Tax Withheld (WHT)</span>
                 <h3 id="stat-total-wht" style="color: var(--gold)">₦0.00</h3>
@@ -1194,12 +1315,14 @@
                     <div>
                         <div style="font-size:10px; color:var(--gray);">EXPENSES</div>
                         <h4 id="stat-ops-paid" style="font-size:16px;">₦0.00</h4>
-                        <div style="font-size:10px; color:var(--error); margin-top:4px;">OWED: <span id="stat-ops-owed">₦0.00</span></div>
+                        <div style="font-size:10px; color:var(--error); margin-top:4px;">OWED: <span
+                                id="stat-ops-owed">₦0.00</span></div>
                     </div>
                     <div style="text-align:right;">
                         <div style="font-size:10px; color:var(--gray);">REIMB.</div>
                         <h4 id="stat-reimb-paid" style="font-size:16px; color:var(--success);">₦0.00</h4>
-                        <div style="font-size:10px; color:var(--error); margin-top:4px;">OWED: <span id="stat-reimb-owed">₦0.00</span></div>
+                        <div style="font-size:10px; color:var(--error); margin-top:4px;">OWED: <span
+                                id="stat-reimb-owed">₦0.00</span></div>
                     </div>
                 </div>
             </div>
@@ -1218,7 +1341,8 @@
             </div>
             <div class="tab" onclick="switchTab('verification', event)" id="verif-tab">
                 <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
-                Bill Verification <span id="verif-badge" style="display:none; background:var(--error); color:#fff; font-size:10px; border-radius:8px; padding:2px 6px; margin-left:4px;">0</span>
+                Bill Verification <span id="verif-badge"
+                    style="display:none; background:var(--error); color:#fff; font-size:10px; border-radius:8px; padding:2px 6px; margin-left:4px;">0</span>
             </div>
             <div class="tab" onclick="switchTab('vendors', event)">
                 <i class="fas fa-eye visibility-toggle" onclick="toggleVisibility(this, event)"></i>
@@ -1313,13 +1437,14 @@
                 </table>
             </div>
         </div>
-        
+
         <!-- VENDOR REGISTRY VIEW -->
         <div id="vendors-view" class="view-content" style="display:none; padding-top:20px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
                 <div>
                     <h3 style="font-size:20px;">Vendor & Payee Registry</h3>
-                    <p style="color:var(--gray); font-size:13px;">Official records of verified suppliers and contractors.</p>
+                    <p style="color:var(--gray); font-size:13px;">Official records of verified suppliers and
+                        contractors.</p>
                 </div>
                 <button class="btn btn-gold" onclick="openInviteModal()" style="font-size:12px; padding:10px 16px;">
                     <i class="fas fa-user-plus"></i> REGISTER NEW PARTNER
@@ -1340,7 +1465,10 @@
                         </tr>
                     </thead>
                     <tbody id="vendorBody">
-                        <tr><td colspan="6" style="text-align:center; padding:40px; color:var(--gray);">Fetching partner records...</td></tr>
+                        <tr>
+                            <td colspan="6" style="text-align:center; padding:40px; color:var(--gray);">Fetching partner
+                                records...</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -1357,18 +1485,23 @@
                     <i class="fas fa-download"></i> EXPORT CLAIMS
                 </button>
             </div>
-            <div style="background:var(--dark2); padding:16px 24px; border-radius:12px; border:1px solid var(--border); margin-bottom:24px; display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;">
+            <div
+                style="background:var(--dark2); padding:16px 24px; border-radius:12px; border:1px solid var(--border); margin-bottom:24px; display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;">
                 <div style="flex:1; min-width:200px;">
                     <label class="form-label">Search Claims</label>
-                    <input type="text" id="staff-search" class="form-input" placeholder="Search staff name or description..." onkeyup="renderReimbursements(requestsData || [])">
+                    <input type="text" id="staff-search" class="form-input"
+                        placeholder="Search staff name or description..."
+                        onkeyup="renderReimbursements(requestsData || [])">
                 </div>
                 <div>
                     <label class="form-label">Start Date</label>
-                    <input type="date" id="staff-start-date" class="form-input" onchange="renderReimbursements(requestsData || [])">
+                    <input type="date" id="staff-start-date" class="form-input"
+                        onchange="renderReimbursements(requestsData || [])">
                 </div>
                 <div>
                     <label class="form-label">End Date</label>
-                    <input type="date" id="staff-end-date" class="form-input" onchange="renderReimbursements(requestsData || [])">
+                    <input type="date" id="staff-end-date" class="form-input"
+                        onchange="renderReimbursements(requestsData || [])">
                 </div>
             </div>
             <div class="table-container">
@@ -1386,7 +1519,10 @@
                         </tr>
                     </thead>
                     <tbody id="reimbursementBody">
-                        <tr><td colspan="6" style="text-align:center; padding:40px; color:var(--gray);">Fetching internal claims...</td></tr>
+                        <tr>
+                            <td colspan="6" style="text-align:center; padding:40px; color:var(--gray);">Fetching
+                                internal claims...</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -1397,7 +1533,8 @@
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
                 <div>
                     <h3 style="font-size:20px;">Company Asset Inventory</h3>
-                    <p style="color:var(--gray); font-size:13px;">Tracking distributed equipment and high-value infrastructure.</p>
+                    <p style="color:var(--gray); font-size:13px;">Tracking distributed equipment and high-value
+                        infrastructure.</p>
                 </div>
                 <button class="btn btn-gold" onclick="openAddAssetModal()" style="font-size:12px; padding:10px 16px;">
                     <i class="fas fa-plus"></i> RECORD ASSET
@@ -1416,7 +1553,10 @@
                         </tr>
                     </thead>
                     <tbody id="assetBody">
-                        <tr><td colspan="6" style="text-align:center; padding:40px; color:var(--gray);">Fetching asset inventory...</td></tr>
+                        <tr>
+                            <td colspan="6" style="text-align:center; padding:40px; color:var(--gray);">Fetching asset
+                                inventory...</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -1427,21 +1567,27 @@
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                 <div>
                     <h3 style="font-size:20px;">Staff & Partner Commission Ledger</h3>
-                    <p style="color:var(--gray); font-size:13px;">Real-time tracking of sales commissions and earnings.</p>
+                    <p style="color:var(--gray); font-size:13px;">Real-time tracking of sales commissions and earnings.
+                    </p>
                 </div>
                 <div style="display:flex; gap:10px;">
-                    <button class="btn btn-gold" onclick="openCommissionSettings()" style="font-size:12px; padding:10px 16px; font-weight:700;">
+                    <button class="btn btn-gold" onclick="openCommissionSettings()"
+                        style="font-size:12px; padding:10px 16px; font-weight:700;">
                         <i class="fas fa-cog"></i> CONFIGURE RATES
                     </button>
-                    <button class="btn" onclick="openCommWhtModal()" style="font-size:12px; padding:10px 16px; font-weight:700; border-color:var(--error); color:var(--error);">
+                    <button class="btn" onclick="openCommWhtModal()"
+                        style="font-size:12px; padding:10px 16px; font-weight:700; border-color:var(--error); color:var(--error);">
                         <i class="fas fa-file-invoice"></i> REMIT WHT
                     </button>
                 </div>
             </div>
-            <div style="background:var(--dark2); padding:16px 24px; border-radius:12px; border:1px solid var(--border); margin-bottom:24px; display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;">
+            <div
+                style="background:var(--dark2); padding:16px 24px; border-radius:12px; border:1px solid var(--border); margin-bottom:24px; display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;">
                 <div style="flex:1; min-width:200px;">
                     <label class="form-label">Search Ledger</label>
-                    <input type="text" id="comm-search" class="form-input" placeholder="Search rep, client, or invoice..." onkeyup="renderCommissions(window.commissionData || [])">
+                    <input type="text" id="comm-search" class="form-input"
+                        placeholder="Search rep, client, or invoice..."
+                        onkeyup="renderCommissions(window.commissionData || [])">
                 </div>
                 <div>
                     <label class="form-label">Start Date</label>
@@ -1451,7 +1597,8 @@
                     <label class="form-label">End Date</label>
                     <input type="date" id="comm-end-date" class="form-input">
                 </div>
-                <button class="btn btn-gold" onclick="fetchCommissions()" style="padding: 10px 24px;">APPLY FILTER</button>
+                <button class="btn btn-gold" onclick="fetchCommissions()" style="padding: 10px 24px;">APPLY
+                    FILTER</button>
             </div>
             <div class="table-container">
                 <table class="data-table">
@@ -1470,7 +1617,10 @@
                         </tr>
                     </thead>
                     <tbody id="commissionBody">
-                        <tr><td colspan="8" style="text-align:center; padding:40px; color:var(--gray);">Fetching commission records...</td></tr>
+                        <tr>
+                            <td colspan="8" style="text-align:center; padding:40px; color:var(--gray);">Fetching
+                                commission records...</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -1481,24 +1631,30 @@
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                 <div>
                     <h3 style="font-size:20px;">Operational Expense Ledger</h3>
-                    <p style="color:var(--gray); font-size:13px;">Recurring office operations, utilities, rent, and general overhead.</p>
+                    <p style="color:var(--gray); font-size:13px;">Recurring office operations, utilities, rent, and
+                        general overhead.</p>
                 </div>
                 <button class="btn btn-gold" onclick="exportLedger('operations')">
                     <i class="fas fa-download"></i> EXPORT LEDGER
                 </button>
             </div>
-            <div style="background:var(--dark2); padding:16px 24px; border-radius:12px; border:1px solid var(--border); margin-bottom:24px; display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;">
+            <div
+                style="background:var(--dark2); padding:16px 24px; border-radius:12px; border:1px solid var(--border); margin-bottom:24px; display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;">
                 <div style="flex:1; min-width:200px;">
                     <label class="form-label">Search Office Ops</label>
-                    <input type="text" id="ops-search" class="form-input" placeholder="Search payee, category, or requester..." onkeyup="renderOperations(requestsData || [])">
+                    <input type="text" id="ops-search" class="form-input"
+                        placeholder="Search payee, category, or requester..."
+                        onkeyup="renderOperations(requestsData || [])">
                 </div>
                 <div>
                     <label class="form-label">Start Date</label>
-                    <input type="date" id="ops-start-date" class="form-input" onchange="renderOperations(requestsData || [])">
+                    <input type="date" id="ops-start-date" class="form-input"
+                        onchange="renderOperations(requestsData || [])">
                 </div>
                 <div>
                     <label class="form-label">End Date</label>
-                    <input type="date" id="ops-end-date" class="form-input" onchange="renderOperations(requestsData || [])">
+                    <input type="date" id="ops-end-date" class="form-input"
+                        onchange="renderOperations(requestsData || [])">
                 </div>
             </div>
             <div class="table-container">
@@ -1517,7 +1673,10 @@
                         </tr>
                     </thead>
                     <tbody id="operationsBody">
-                        <tr><td colspan="10" style="text-align:center; padding:40px; color:var(--gray);">Fetching operational records...</td></tr>
+                        <tr>
+                            <td colspan="10" style="text-align:center; padding:40px; color:var(--gray);">Fetching
+                                operational records...</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -1528,24 +1687,30 @@
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:20px;">
                 <div>
                     <h3 style="font-size:20px;">Partner & Vendor Ledger</h3>
-                    <p style="color:var(--gray); font-size:13px;">Professional external payments for contractors, corporate vendors, and corporate partners.</p>
+                    <p style="color:var(--gray); font-size:13px;">Professional external payments for contractors,
+                        corporate vendors, and corporate partners.</p>
                 </div>
                 <button class="btn btn-gold" onclick="exportLedger('vendors')">
                     <i class="fas fa-download"></i> EXPORT VENDORS
                 </button>
             </div>
-            <div style="background:var(--dark2); padding:16px 24px; border-radius:12px; border:1px solid var(--border); margin-bottom:24px; display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;">
+            <div
+                style="background:var(--dark2); padding:16px 24px; border-radius:12px; border:1px solid var(--border); margin-bottom:24px; display:flex; flex-wrap:wrap; gap:16px; align-items:flex-end;">
                 <div style="flex:1; min-width:200px;">
                     <label class="form-label">Search Vendors</label>
-                    <input type="text" id="external-search" class="form-input" placeholder="Search contractor name or company..." onkeyup="renderExternalLedger(requestsData || [])">
+                    <input type="text" id="external-search" class="form-input"
+                        placeholder="Search contractor name or company..."
+                        onkeyup="renderExternalLedger(requestsData || [])">
                 </div>
                 <div>
                     <label class="form-label">Start Date</label>
-                    <input type="date" id="external-start-date" class="form-input" onchange="renderExternalLedger(requestsData || [])">
+                    <input type="date" id="external-start-date" class="form-input"
+                        onchange="renderExternalLedger(requestsData || [])">
                 </div>
                 <div>
                     <label class="form-label">End Date</label>
-                    <input type="date" id="external-end-date" class="form-input" onchange="renderExternalLedger(requestsData || [])">
+                    <input type="date" id="external-end-date" class="form-input"
+                        onchange="renderExternalLedger(requestsData || [])">
                 </div>
             </div>
             <div class="table-container">
@@ -1565,7 +1730,10 @@
                         </tr>
                     </thead>
                     <tbody id="externalBody">
-                        <tr><td colspan="10" style="text-align:center; padding:40px; color:var(--gray);">Fetching external records...</td></tr>
+                        <tr>
+                            <td colspan="10" style="text-align:center; padding:40px; color:var(--gray);">Fetching
+                                external records...</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -1573,10 +1741,12 @@
 
         <!-- Analytics View -->
         <div id="analytics-view" class="view-content" style="display:none; padding-top:20px;">
-            <div style="background:var(--dark2); padding:24px; border-radius:16px; border:1px solid var(--border); margin-bottom:32px; display:flex; flex-wrap:wrap; gap:20px; align-items:flex-end;">
+            <div
+                style="background:var(--dark2); padding:24px; border-radius:16px; border:1px solid var(--border); margin-bottom:32px; display:flex; flex-wrap:wrap; gap:20px; align-items:flex-end;">
                 <div>
                     <label class="form-label">Analysis Period</label>
-                    <select id="stat-timeframe" class="form-input" style="width:200px;" onchange="handleTimeframeChange()">
+                    <select id="stat-timeframe" class="form-input" style="width:200px;"
+                        onchange="handleTimeframeChange()">
                         <option value="7">Last 7 Days</option>
                         <option value="30" selected>Last 30 Days</option>
                         <option value="90">Last 90 Days</option>
@@ -1597,7 +1767,9 @@
                     <button class="btn btn-gold" onclick="fetchStats()" style="padding: 10px 16px;">APPLY RANGE</button>
                 </div>
                 <div style="flex:1; text-align:right;">
-                    <div id="active-period-label" style="font-size:11px; color:var(--gray); text-transform:uppercase; font-weight:700;">Dashboard Metrics: Rolling 30 Days</div>
+                    <div id="active-period-label"
+                        style="font-size:11px; color:var(--gray); text-transform:uppercase; font-weight:700;">Dashboard
+                        Metrics: Rolling 30 Days</div>
                 </div>
             </div>
 
@@ -1662,14 +1834,19 @@
                 <div class="chart-card">
                     <h4>Top Spend by Requester (Staff)</h4>
                     <div style="height:300px; position:relative;">
-                        <div class="chart-loader" id="loader-requester"><i class="fas fa-circle-notch fa-spin"></i></div>
+                        <div class="chart-loader" id="loader-requester"><i class="fas fa-circle-notch fa-spin"></i>
+                        </div>
                         <canvas id="requesterChart"></canvas>
                     </div>
                 </div>
-                <div class="chart-card" style="display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
+                <div class="chart-card"
+                    style="display:flex; flex-direction:column; justify-content:center; align-items:center; text-align:center;">
                     <div style="color:var(--gold); font-size:48px; font-weight:800;" id="stat-avg-speed">0.0h</div>
-                    <div style="text-transform:uppercase; font-size:12px; font-weight:700; color:var(--gray); margin-top:8px;">Avg. Payout Velocity</div>
-                    <p style="font-size:11px; color:var(--gray); margin-top:12px; max-width:200px;">Time from request creation to payment confirmation.</p>
+                    <div
+                        style="text-transform:uppercase; font-size:12px; font-weight:700; color:var(--gray); margin-top:8px;">
+                        Avg. Payout Velocity</div>
+                    <p style="font-size:11px; color:var(--gray); margin-top:12px; max-width:200px;">Time from request
+                        creation to payment confirmation.</p>
                 </div>
             </div>
 
@@ -1884,22 +2061,37 @@
         <div class="modal-content">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:32px;">
                 <h2 style="font-family: 'Playfair Display', serif; font-size:24px;">Bill Verification</h2>
-                <button onclick="closeModal('verifyModal')" style="background:none; border:none; color:var(--gray); cursor:pointer;"><i class="fas fa-times fa-lg"></i></button>
+                <button onclick="closeModal('verifyModal')"
+                    style="background:none; border:none; color:var(--gray); cursor:pointer;"><i
+                        class="fas fa-times fa-lg"></i></button>
             </div>
-            
-            <div id="verifyDetails" style="margin-bottom:24px; padding:20px; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border);"></div>
 
-            <div style="margin-bottom:32px;">
+            <div id="verifyDetails"
+                style="margin-bottom:24px; padding:20px; background:rgba(255,255,255,0.02); border-radius:12px; border:1px solid var(--border);">
+            </div>
+
+            <div style="margin-bottom:24px;">
                 <label class="form-label" style="display:flex; align-items:center; gap:8px;">
                     <i class="far fa-calendar-alt"></i> Planned Due Date
                 </label>
                 <input type="date" id="verify-due-date" class="form-input" style="font-size:16px;">
-                <small style="color:var(--gray); font-size:11px; margin-top:8px; display:block;">Select the estimated date this bill should be paid.</small>
+                <small style="color:var(--gray); font-size:11px; margin-top:8px; display:block;">Select the estimated
+                    date this bill should be paid.</small>
+            </div>
+
+            <!-- REJECTION REASON (Hidden by default) -->
+            <div id="verify-rejection-container" class="hidden" style="margin-bottom:24px;">
+                <label class="form-label" style="color:var(--error);">Rejection Reason</label>
+                <textarea id="verify-rejection-reason" class="form-input" 
+                    style="height:80px; border-color:var(--error);" 
+                    placeholder="Provide a clear reason for the claimant..."></textarea>
             </div>
 
             <div style="display:grid; grid-template-columns: 1fr 1fr; gap:16px;">
-                <button class="btn btn-gold" style="justify-content:center; padding:18px;" onclick="submitVerification('pending')">VERIFY & SEND TO AUDIT</button>
-                <button class="btn" style="justify-content:center; border-color:var(--error); color:var(--error);" onclick="submitVerification('rejected')">REJECT BILL</button>
+                <button class="btn btn-gold" style="justify-content:center; padding:18px;"
+                    onclick="submitVerification('pending')">VERIFY & SEND TO AUDIT</button>
+                <button class="btn" style="justify-content:center; border-color:var(--error); color:var(--error);"
+                    onclick="submitVerification('rejected')">REJECT BILL</button>
             </div>
         </div>
     </div>
@@ -1910,21 +2102,26 @@
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:32px;">
                 <div>
                     <h2 style="font-family: 'Playfair Display', serif; font-size:24px;">FIRS Tax Remittance</h2>
-                    <p style="color:var(--gray); font-size:13px; margin-top:4px;">Select the paid liabilities you are clearing today.</p>
+                    <p style="color:var(--gray); font-size:13px; margin-top:4px;">Select the paid liabilities you are
+                        clearing today.</p>
                 </div>
-                <button onclick="closeModal('whtRemittanceModal')" style="background:none; border:none; color:var(--gray); cursor:pointer;"><i class="fas fa-times fa-lg"></i></button>
+                <button onclick="closeModal('whtRemittanceModal')"
+                    style="background:none; border:none; color:var(--gray); cursor:pointer;"><i
+                        class="fas fa-times fa-lg"></i></button>
             </div>
-            
+
             <div style="margin-bottom:24px;">
                 <label class="form-label">FIRS Remittance Receipt Number</label>
-                <input type="text" id="wht-receipt-ref" class="form-input" placeholder="e.g. FIRS-2026-0001" style="font-size:16px; font-weight:700;">
+                <input type="text" id="wht-receipt-ref" class="form-input" placeholder="e.g. FIRS-2026-0001"
+                    style="font-size:16px; font-weight:700;">
             </div>
 
             <div class="table-container" style="max-height: 400px; overflow-y:auto; margin-bottom: 24px;">
                 <table class="data-table">
                     <thead>
                         <tr>
-                            <th style="width:40px;"><input type="checkbox" id="wht-select-all" onclick="toggleAllWht(this)" style="accent-color:var(--gold);"></th>
+                            <th style="width:40px;"><input type="checkbox" id="wht-select-all"
+                                    onclick="toggleAllWht(this)" style="accent-color:var(--gold);"></th>
                             <th>Date Paid</th>
                             <th>Payee</th>
                             <th>Original Bill</th>
@@ -1936,13 +2133,16 @@
                     </tbody>
                 </table>
             </div>
-            
-            <div style="display:flex; justify-content:space-between; align-items:center; padding:20px; background:rgba(196,125,10,0.05); border-radius:12px; border:1px solid rgba(196,125,10,0.2);">
+
+            <div
+                style="display:flex; justify-content:space-between; align-items:center; padding:20px; background:rgba(196,125,10,0.05); border-radius:12px; border:1px solid rgba(196,125,10,0.2);">
                 <div>
-                    <span style="font-size:12px; color:var(--gray); text-transform:uppercase;">Selected Total To Clear</span>
+                    <span style="font-size:12px; color:var(--gray); text-transform:uppercase;">Selected Total To
+                        Clear</span>
                     <div id="wht-selected-total" style="font-size:24px; font-weight:800; color:var(--gold);">₦0.00</div>
                 </div>
-                <button class="btn btn-gold" onclick="submitWhtRemittance()" style="padding:16px 32px;"><i class="fas fa-check-double"></i> MARK AS REMITTED</button>
+                <button class="btn btn-gold" onclick="submitWhtRemittance()" style="padding:16px 32px;"><i
+                        class="fas fa-check-double"></i> MARK AS REMITTED</button>
             </div>
         </div>
     </div>
@@ -1952,7 +2152,9 @@
         <div class="modal-content" style="max-width:500px;">
             <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
                 <h2 style="font-family: 'Playfair Display', serif; font-size:20px;">Record New Asset</h2>
-                <button onclick="closeModal('addAssetModal')" style="background:none; border:none; color:var(--gray); cursor:pointer;"><i class="fas fa-times fa-lg"></i></button>
+                <button onclick="closeModal('addAssetModal')"
+                    style="background:none; border:none; color:var(--gray); cursor:pointer;"><i
+                        class="fas fa-times fa-lg"></i></button>
             </div>
             <form id="addAssetForm">
                 <div style="margin-bottom:16px;">
@@ -1983,12 +2185,14 @@
                     <label class="form-label">Purchase Date</label>
                     <input type="date" id="asset-date" class="form-input" required>
                 </div>
-                <div style="margin-bottom:24px; padding:12px; background:rgba(196,125,10,0.05); border-radius:8px; border:1px solid rgba(196,125,10,0.1);">
+                <div
+                    style="margin-bottom:24px; padding:12px; background:rgba(196,125,10,0.05); border-radius:8px; border:1px solid rgba(196,125,10,0.1);">
                     <label style="display:flex; align-items:center; gap:8px; cursor:pointer;">
                         <input type="checkbox" id="asset-auto-expense" style="accent-color:var(--gold);" checked>
                         <span style="font-weight:600; font-size:13px;">Automated Expense Sync</span>
                     </label>
-                    <p style="color:var(--gray); font-size:11px; margin-top:4px; margin-left:22px;">Automatically adds this purchase to your Operational Flow expenses.</p>
+                    <p style="color:var(--gray); font-size:11px; margin-top:4px; margin-left:22px;">Automatically adds
+                        this purchase to your Operational Flow expenses.</p>
                 </div>
                 <div style="display:flex; justify-content:flex-end; gap:12px;">
                     <button type="button" class="btn btn-ghost" onclick="closeModal('addAssetModal')">Cancel</button>
@@ -2003,27 +2207,37 @@
         <div class="modal-content" style="max-width:500px;">
             <div class="modal-header">
                 <h2 style="font-family: 'Playfair Display', serif; font-size:20px;">Partner Management</h2>
-                <button onclick="closeModal('editPartnerModal')" style="background:none; border:none; color:var(--gray); cursor:pointer;"><i class="fas fa-times fa-lg"></i></button>
+                <button onclick="closeModal('editPartnerModal')"
+                    style="background:none; border:none; color:var(--gray); cursor:pointer;"><i
+                        class="fas fa-times fa-lg"></i></button>
             </div>
-            <div id="partner-details-strip" style="margin-bottom:20px; padding:12px; background:rgba(255,255,255,0.03); border-radius:12px; border:1px solid var(--border);">
-                <div style="font-size:11px; color:var(--gray); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">Vendor Identity</div>
+            <div id="partner-details-strip"
+                style="margin-bottom:20px; padding:12px; background:rgba(255,255,255,0.03); border-radius:12px; border:1px solid var(--border);">
+                <div
+                    style="font-size:11px; color:var(--gray); text-transform:uppercase; letter-spacing:1px; margin-bottom:4px;">
+                    Vendor Identity</div>
                 <div id="edit-partner-name" style="font-size:16px; font-weight:700; color:#fff;">Vendor Name</div>
                 <div id="edit-partner-email" style="font-size:12px; color:var(--gray);">vendor@email.com</div>
             </div>
             <form id="editPartnerForm">
                 <input type="hidden" id="edit-partner-id">
-                
-                <div style="margin-bottom:24px; padding:16px; background:rgba(16,185,129,0.05); border-radius:12px; border:1px solid rgba(16,185,129,0.2);">
+
+                <div
+                    style="margin-bottom:24px; padding:16px; background:rgba(16,185,129,0.05); border-radius:12px; border:1px solid rgba(16,185,129,0.2);">
                     <label style="display:flex; align-items:center; gap:12px; cursor:pointer;">
-                        <input type="checkbox" id="is-commission-partner" style="accent-color:var(--success); transform:scale(1.2);">
+                        <input type="checkbox" id="is-commission-partner"
+                            style="accent-color:var(--success); transform:scale(1.2);">
                         <div>
-                            <div style="font-weight:700; font-size:14px; color:var(--success);">Active Commission Partner</div>
-                            <div style="font-size:11px; color:var(--gray); margin-top:2px;">Enables this vendor to claim sales commissions via the portal.</div>
+                            <div style="font-weight:700; font-size:14px; color:var(--success);">Active Commission
+                                Partner</div>
+                            <div style="font-size:11px; color:var(--gray); margin-top:2px;">Enables this vendor to claim
+                                sales commissions via the portal.</div>
                         </div>
                     </label>
                 </div>
 
-                <div id="partner-rate-config" style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px;">
+                <div id="partner-rate-config"
+                    style="display:grid; grid-template-columns:1fr 1fr; gap:16px; margin-bottom:24px;">
                     <div>
                         <label class="form-label">Gross Commission Rate (%)</label>
                         <input type="number" id="partner-gross-rate" class="form-input" step="0.1" value="15.0">
@@ -2058,7 +2272,8 @@
                     style="background:none; border:none; color:var(--gray); cursor:pointer;"><i
                         class="fas fa-times fa-lg"></i></button>
             </div>
-            <div id="docNavStrip" style="display:none; padding:12px 32px; background:rgba(255,255,255,0.02); border-bottom:1px solid var(--border); overflow-x:auto; gap:12px; align-items:center;">
+            <div id="docNavStrip"
+                style="display:none; padding:12px 32px; background:rgba(255,255,255,0.02); border-bottom:1px solid var(--border); overflow-x:auto; gap:12px; align-items:center;">
                 <!-- File tabs will be injected here -->
             </div>
             <div class="doc-preview-body">
@@ -2083,24 +2298,32 @@
         <div class="modal-content" style="max-width: 650px;">
             <div class="modal-header">
                 <div>
-                    <h2 style="font-family: 'Playfair Display', serif; font-size: 20px;">Document Commission Tax Payment</h2>
-                    <p style="color:var(--gray); font-size:11px; text-transform:uppercase; letter-spacing:1px; margin-top:4px;">Tax Authority Remittance Documentation</p>
+                    <h2 style="font-family: 'Playfair Display', serif; font-size: 20px;">Document Commission Tax Payment
+                    </h2>
+                    <p
+                        style="color:var(--gray); font-size:11px; text-transform:uppercase; letter-spacing:1px; margin-top:4px;">
+                        Tax Authority Remittance Documentation</p>
                 </div>
-                <button onclick="closeModal('commWhtModal')" style="background:none; border:none; color:var(--gray); cursor:pointer;"><i class="fas fa-times fa-lg"></i></button>
+                <button onclick="closeModal('commWhtModal')"
+                    style="background:none; border:none; color:var(--gray); cursor:pointer;"><i
+                        class="fas fa-times fa-lg"></i></button>
             </div>
-            
-            <div style="background:rgba(239,68,68,0.05); padding:15px; border-radius:12px; border:1px solid rgba(239,68,68,0.2); margin-bottom:20px;">
+
+            <div
+                style="background:rgba(239,68,68,0.05); padding:15px; border-radius:12px; border:1px solid rgba(239,68,68,0.2); margin-bottom:20px;">
                 <div style="display:flex; justify-content:space-between; align-items:center;">
                     <span style="color:var(--gray); font-size:12px;">Total Liability Selected:</span>
                     <strong id="comm-wht-total" style="color:var(--error); font-size:20px;">₦0.00</strong>
                 </div>
             </div>
 
-            <div style="max-height: 300px; overflow-y: auto; margin-bottom:20px; border:1px solid var(--border); border-radius:8px;">
+            <div
+                style="max-height: 300px; overflow-y: auto; margin-bottom:20px; border:1px solid var(--border); border-radius:8px;">
                 <table style="width: 100%; border-collapse: collapse; font-size: 11px;">
                     <thead style="position: sticky; top: 0; background: var(--bg-card); z-index: 10;">
                         <tr>
-                            <th style="padding:10px; text-align:left;"><input type="checkbox" id="comm-wht-select-all" onclick="toggleAllCommWht(this)"></th>
+                            <th style="padding:10px; text-align:left;"><input type="checkbox" id="comm-wht-select-all"
+                                    onclick="toggleAllCommWht(this)"></th>
                             <th style="padding:10px; text-align:left;">Partner</th>
                             <th style="padding:10px; text-align:left;">Invoice</th>
                             <th style="padding:10px; text-align:right;">WHT Amount</th>
@@ -2118,7 +2341,8 @@
             </div>
 
             <div style="text-align: right; margin-top: 20px;">
-                <button class="btn btn-gold" onclick="submitCommWhtRemittance()" style="padding:10px 25px;">DOCUMENT PAYMENT</button>
+                <button class="btn btn-gold" onclick="submitCommWhtRemittance()" style="padding:10px 25px;">DOCUMENT
+                    PAYMENT</button>
             </div>
         </div>
     </div>
@@ -2129,14 +2353,19 @@
             <div class="modal-header">
                 <div>
                     <h2 style="font-family: 'Playfair Display', serif; font-size: 20px;">Remit Commission</h2>
-                    <p style="color:var(--gray); font-size:11px; text-transform:uppercase; letter-spacing:1px; margin-top:4px;">Official Payout Processing</p>
+                    <p
+                        style="color:var(--gray); font-size:11px; text-transform:uppercase; letter-spacing:1px; margin-top:4px;">
+                        Official Payout Processing</p>
                 </div>
-                <button onclick="closeModal('payCommissionModal')" style="background:none; border:none; color:var(--gray); cursor:pointer;"><i class="fas fa-times fa-lg"></i></button>
+                <button onclick="closeModal('payCommissionModal')"
+                    style="background:none; border:none; color:var(--gray); cursor:pointer;"><i
+                        class="fas fa-times fa-lg"></i></button>
             </div>
-            
+
             <form id="commPayoutForm" onsubmit="processCommPayout(event)">
                 <input type="hidden" id="pay-comm-id">
-                <div class="form-group" style="background:rgba(255,255,255,0.02); padding:15px; border-radius:8px; margin-bottom:20px; border:1px dashed var(--border);">
+                <div class="form-group"
+                    style="background:rgba(255,255,255,0.02); padding:15px; border-radius:8px; margin-bottom:20px; border:1px dashed var(--border);">
                     <div style="display:flex; justify-content:space-between; margin-bottom:8px;">
                         <span style="color:var(--gray); font-size:12px;">Recipient:</span>
                         <strong id="pay-comm-rep" style="color:var(--white);">--</strong>
@@ -2160,11 +2389,13 @@
                 </div>
                 <div class="form-group">
                     <label class="form-label">Bank Reference / Narration</label>
-                    <input type="text" class="form-control" id="pay-comm-ref" placeholder="EXIMP-COMM-2024-XXXX" required>
+                    <input type="text" class="form-control" id="pay-comm-ref" placeholder="EXIMP-COMM-2024-XXXX"
+                        required>
                 </div>
 
                 <div style="margin-top:24px; display:flex; gap:12px;">
-                    <button type="button" class="btn btn-secondary" onclick="closeModal('payCommissionModal')" style="flex:1;">Cancel</button>
+                    <button type="button" class="btn btn-secondary" onclick="closeModal('payCommissionModal')"
+                        style="flex:1;">Cancel</button>
                     <button type="submit" class="btn btn-primary" style="flex:2;">Confirm Payout</button>
                 </div>
             </form>
@@ -2177,12 +2408,14 @@
             <div class="modal-header">
                 <div>
                     <h2 style="font-size:18px;">Commission & Tax Configuration</h2>
-                    <p style="color:var(--gray); font-size:12px;">Manage global defaults and partner-specific overrides.</p>
+                    <p style="color:var(--gray); font-size:12px;">Manage global defaults and partner-specific overrides.
+                    </p>
                 </div>
                 <button class="close-btn" onclick="closeModal('commissionSettingsModal')">&times;</button>
             </div>
-            
-            <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:30px; padding:20px; background:rgba(196,125,10,0.05); border-radius:12px; border:1px solid rgba(196,125,10,0.1);">
+
+            <div
+                style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:30px; padding:20px; background:rgba(196,125,10,0.05); border-radius:12px; border:1px solid rgba(196,125,10,0.1);">
                 <div>
                     <label class="form-label">Global Default Commission (%)</label>
                     <input type="number" id="default-comm-rate" class="form-input" step="0.01" placeholder="e.g. 10.00">
@@ -2192,10 +2425,12 @@
                     <input type="number" id="default-wht-rate" class="form-input" step="0.01" placeholder="e.g. 5.00">
                 </div>
                 <div style="grid-column: span 2; display:flex; justify-content:space-between; align-items:center;">
-                    <button class="btn" onclick="triggerTaxSync()" style="padding:8px 16px; font-size:11px; border-color:var(--gray); color:var(--gray);">
+                    <button class="btn" onclick="triggerTaxSync()"
+                        style="padding:8px 16px; font-size:11px; border-color:var(--gray); color:var(--gray);">
                         <i class="fas fa-history"></i> SYNC HISTORICAL TAX (9.5% → 10%)
                     </button>
-                    <button class="btn btn-gold" onclick="updateDefaultRates()" style="padding:8px 20px; font-size:12px;">UPDATE DEFAULTS</button>
+                    <button class="btn btn-gold" onclick="updateDefaultRates()"
+                        style="padding:8px 20px; font-size:12px;">UPDATE DEFAULTS</button>
                 </div>
             </div>
 
@@ -2210,7 +2445,10 @@
                         </tr>
                     </thead>
                     <tbody id="repRatesBody">
-                        <tr><td colspan="4" style="text-align:center; padding:20px; color:var(--gray);">Loading partner rates...</td></tr>
+                        <tr>
+                            <td colspan="4" style="text-align:center; padding:20px; color:var(--gray);">Loading partner
+                                rates...</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -2233,7 +2471,8 @@
                 <label class="form-label">Withholding Tax Rate (%)</label>
                 <input type="number" id="edit-rep-wht" class="form-input" step="0.01">
             </div>
-            <button class="btn btn-gold" onclick="saveRepRates()" style="width:100%; margin-top:20px;">SAVE CHANGES</button>
+            <button class="btn btn-gold" onclick="saveRepRates()" style="width:100%; margin-top:20px;">SAVE
+                CHANGES</button>
         </div>
     </div>
 
@@ -2253,7 +2492,8 @@
                     Commission Partner Status
                     <input type="checkbox" id="edit-partner-status" style="width:auto; margin:0;">
                 </label>
-                <p style="font-size:10px; color:var(--gray); margin-top:-8px;">Enable this to allow commission earnings for this vendor.</p>
+                <p style="font-size:10px; color:var(--gray); margin-top:-8px;">Enable this to allow commission earnings
+                    for this vendor.</p>
             </div>
             <div class="form-group" style="margin-top:15px;">
                 <label class="form-label">Gross Commission Rate (%)</label>
@@ -2263,7 +2503,8 @@
                 <label class="form-label">Withholding Tax Rate (%)</label>
                 <input type="number" id="edit-partner-wht" class="form-input" step="0.01">
             </div>
-            <button class="btn btn-gold" onclick="savePartnerRates()" style="width:100%; margin-top:20px;">SAVE PARTNER SETTINGS</button>
+            <button class="btn btn-gold" onclick="savePartnerRates()" style="width:100%; margin-top:20px;">SAVE PARTNER
+                SETTINGS</button>
         </div>
     </div>
 
@@ -2366,9 +2607,9 @@
 
                 if (!searchTerm) return true;
                 return (r.title || "").toLowerCase().includes(searchTerm) ||
-                       (r.vendors?.name || "").toLowerCase().includes(searchTerm) ||
-                       (r.admins?.full_name || "").toLowerCase().includes(searchTerm) ||
-                       (r.vendor_invoice_number || "").toLowerCase().includes(searchTerm);
+                    (r.vendors?.name || "").toLowerCase().includes(searchTerm) ||
+                    (r.admins?.full_name || "").toLowerCase().includes(searchTerm) ||
+                    (r.vendor_invoice_number || "").toLowerCase().includes(searchTerm);
             });
 
             if (opsData.length === 0) {
@@ -2412,8 +2653,8 @@
 
                 if (!searchTerm) return true;
                 return (r.title || "").toLowerCase().includes(searchTerm) ||
-                       (r.vendors?.name || "").toLowerCase().includes(searchTerm) ||
-                       (r.admins?.full_name || "").toLowerCase().includes(searchTerm);
+                    (r.vendors?.name || "").toLowerCase().includes(searchTerm) ||
+                    (r.admins?.full_name || "").toLowerCase().includes(searchTerm);
             });
 
             if (extData.length === 0) {
@@ -2424,14 +2665,14 @@
             body.innerHTML = extData.map(req => {
                 const typeLabel = req.vendors?.type === 'company' ? 'COMPANY' : 'PARTNER';
                 const typeColor = req.vendors?.type === 'company' ? 'var(--gold)' : 'var(--success)';
-                
+
                 return `
                 <tr>
                     <td>${new Date(req.created_at).toLocaleDateString()}</td>
                     <td>${req.admins?.full_name || 'System'}</td>
                     <td>
                         <div style="font-weight:700;">${req.title}</div>
-                        <small style="color:var(--gray)">Ref: ${req.vendor_invoice_number || req.id.slice(0,8)}</small>
+                        <small style="color:var(--gray)">Ref: ${req.vendor_invoice_number || req.id.slice(0, 8)}</small>
                     </td>
                     <td><strong>${req.vendors?.name || 'N/A'}</strong></td>
                     <td><span style="font-size:10px; font-weight:800; color:${typeColor}; border:1px solid ${typeColor}; padding:2px 6px; border-radius:4px;">${typeLabel}</span></td>
@@ -2465,7 +2706,7 @@
             const icon = btn.querySelector('i');
             icon.classList.add('fa-spin-once');
             toast("Syncing with ledger...", "info");
-            
+
             // Refresh all buckets
             await Promise.all([
                 fetchRequests(),
@@ -2474,7 +2715,7 @@
                 fetchCommissions(),
                 fetchStats()
             ]);
-            
+
             setTimeout(() => icon.classList.remove('fa-spin-once'), 800);
             toast("Data synced", "success");
         }
@@ -2499,14 +2740,14 @@
         function renderCommissions(data) {
             const body = document.getElementById('commissionBody');
             if (!body) return;
-            
+
             const searchTerm = (document.getElementById('comm-search')?.value || "").toLowerCase();
             const filteredData = data.filter(c => {
                 if (!searchTerm) return true;
                 return (c.sales_reps?.name || "").toLowerCase().includes(searchTerm) ||
-                       (c.clients?.full_name || "").toLowerCase().includes(searchTerm) ||
-                       (c.invoices?.invoice_number || "").toLowerCase().includes(searchTerm) ||
-                       (c.estate_name || "").toLowerCase().includes(searchTerm);
+                    (c.clients?.full_name || "").toLowerCase().includes(searchTerm) ||
+                    (c.invoices?.invoice_number || "").toLowerCase().includes(searchTerm) ||
+                    (c.estate_name || "").toLowerCase().includes(searchTerm);
             });
 
             if (filteredData.length === 0) {
@@ -2519,13 +2760,13 @@
                 const wht = c.wht_amount || (gross - net);
                 const rate = c.commission_rate || (gross / (c.payment_amount || 1) * 100);
                 const repName = c.sales_reps?.name || 'Unknown Rep';
-                
+
                 return `
                 <tr>
                     <td>${new Date(c.created_at).toLocaleDateString()}</td>
                     <td>
                         <div style="font-weight:700;">${repName}</div>
-                        <small style="color:var(--gray); text-transform:uppercase; font-size:9px;">${c.sales_rep_id.slice(0,8)}</small>
+                        <small style="color:var(--gray); text-transform:uppercase; font-size:9px;">${c.sales_rep_id.slice(0, 8)}</small>
                     </td>
                     <td>
                         <div style="font-weight:700;">${c.clients?.full_name || 'Legacy Client'}</div>
@@ -2559,13 +2800,13 @@
             document.getElementById('pay-comm-rep').innerText = name;
             document.getElementById('pay-comm-net').innerText = '₦' + net.toLocaleString();
             document.getElementById('pay-comm-wht').innerText = '₦' + wht.toLocaleString();
-            document.getElementById('pay-comm-ref').value = `COMM-PAY-${new Date().getFullYear()}-${id.slice(0,4).toUpperCase()}`;
+            document.getElementById('pay-comm-ref').value = `COMM-PAY-${new Date().getFullYear()}-${id.slice(0, 4).toUpperCase()}`;
             openModal('payCommissionModal');
         }
 
         async function triggerTaxSync() {
             if (!confirm("This will convert all legacy 9.5% records to the new 10% Gross / 5% Tax standard. Continue?")) return;
-            
+
             try {
                 const res = await apiFetch('/api/commission/migrate-legacy', { method: 'POST' });
                 const data = await res.json();
@@ -2633,7 +2874,7 @@
                 const res = await apiFetch('/api/commission/earnings');
                 const all = await res.json();
                 pendingCommWht = all.filter(c => c.is_paid && !c.is_wht_remitted && (c.wht_amount || 0) > 0);
-                
+
                 const body = document.getElementById('comm-wht-body');
                 if (pendingCommWht.length === 0) {
                     body.innerHTML = '<tr><td colspan="4" style="text-align:center; padding:30px; color:var(--gray);">No outstanding commission tax found.</td></tr>';
@@ -2667,9 +2908,9 @@
         async function submitCommWhtRemittance() {
             const ref = document.getElementById('comm-wht-ref').value.trim();
             const ids = Array.from(document.querySelectorAll('.comm-wht-cb:checked')).map(cb => cb.value);
-            
+
             if (!ref || ids.length === 0) return toast("Receipt Ref and Selection required", "error");
-            
+
             try {
                 const res = await apiFetch('/api/commission/remit-wht', {
                     method: 'POST',
@@ -2702,7 +2943,7 @@
             try {
                 const res = await apiFetch(`/api/commission/sales-reps/${id}/commission-config`, {
                     method: 'PATCH',
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                         gross_commission_rate: comm ? parseFloat(comm) : null,
                         wht_rate: wht ? parseFloat(wht) : null
                     })
@@ -2729,9 +2970,9 @@
                 // Pointing to the commission payout endpoint
                 const res = await apiFetch(`/api/commission/payout/${id}`, {
                     method: 'POST',
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                         payout_method: method,
-                        reference: ref 
+                        reference: ref
                     })
                 });
 
@@ -2788,9 +3029,9 @@
                     <td>${v.bank_name || 'N/A'}</td>
                     <td>${v.account_number || 'xxxxx'}<br><small style="color:var(--gray)">${v.account_name || ''}</small></td>
                     <td>
-                        ${v.is_commission_partner ? 
-                            '<span style="color:var(--success); font-weight:700; font-size:10px;"><i class="fas fa-check-circle"></i> PARTNER</span>' : 
-                            '<span style="color:var(--gray); font-size:10px;">STANDARD VENDOR</span>'}
+                        ${v.is_commission_partner ?
+                    '<span style="color:var(--success); font-weight:700; font-size:10px;"><i class="fas fa-check-circle"></i> PARTNER</span>' :
+                    '<span style="color:var(--gray); font-size:10px;">STANDARD VENDOR</span>'}
                         ${v.gross_commission_rate ? `<div style="font-size:9px; color:var(--gold); margin-top:2px;">Rate: ${v.gross_commission_rate}%</div>` : ''}
                     </td>
                     <td>${new Date(v.updated_at || Date.now()).toLocaleDateString()}</td>
@@ -2806,7 +3047,7 @@
         function openEditPartnerModal(id) {
             const vendor = vendorsData.find(v => v.id === id);
             if (!vendor) return;
-            
+
             document.getElementById('editPartnerRateModal').style.display = 'flex';
             document.getElementById('edit-partner-id').value = id;
             document.getElementById('edit-partner-name').innerText = `Edit Rates for ${vendor.name}`;
@@ -2820,11 +3061,11 @@
             const status = document.getElementById('is-commission-partner').checked;
             const comm = document.getElementById('partner-gross-rate').value;
             const wht = document.getElementById('partner-wht-rate').value;
-            
+
             try {
                 const res = await apiFetch(`/api/payouts/vendors/${id}/commission-config`, {
                     method: 'PATCH',
-                    body: JSON.stringify({ 
+                    body: JSON.stringify({
                         is_commission_partner: status,
                         gross_commission_rate: comm ? parseFloat(comm) : null,
                         wht_rate: wht ? parseFloat(wht) : null
@@ -2833,7 +3074,7 @@
                 if (res.ok) {
                     toast("Vendor partner status updated", "success");
                     closeModal('editPartnerModal');
-                    fetchVendors(); 
+                    fetchVendors();
                 } else {
                     const err = await res.json();
                     toast(err.detail || "Update failed", "error");
@@ -2850,7 +3091,7 @@
             }
             body.innerHTML = data.map(a => `
                 <tr>
-                    <td style="font-family:monospace; color:var(--gold)">${a.id.slice(0,8).toUpperCase()}</td>
+                    <td style="font-family:monospace; color:var(--gold)">${a.id.slice(0, 8).toUpperCase()}</td>
                     <td><strong>${a.name}</strong></td>
                     <td>${a.category || 'General'}</td>
                     <td style="font-weight:700;">₦${a.purchase_value.toLocaleString()}</td>
@@ -2902,10 +3143,10 @@
         function renderRequests(data) {
             const auditQueue = data.filter(r => r.status !== 'pending_verification' && r.status !== 'voided');
             const body = document.getElementById('payoutBody');
-            
+
             // Also update reimbursements view while we are looping
             renderReimbursements(data);
-            
+
             if (auditQueue.length === 0) {
                 body.innerHTML = '<tr><td colspan="11" style="text-align:center; padding:40px; color:var(--gray);">No transactions in audit stream.</td></tr>';
                 return;
@@ -2918,6 +3159,7 @@
                         <div style="font-weight:700;">${req.title}</div>
                         <small style="color:var(--gray)">${req.vendor_invoice_number ? 'Ref: ' + req.vendor_invoice_number : 'ID: ' + req.id.slice(0, 8)}</small>
                         ${req.status === 'voided' ? `<div style="color:var(--error); font-size:10px; font-weight:700;">VOIDED: ${req.void_reason || 'N/A'}</div>` : ''}
+                        ${req.status === 'rejected' ? `<div style="color:var(--error); font-size:10px; font-weight:700;">REJECTED: ${req.rejection_reason || 'N/A'}</div>` : ''}
                     </td>
                     <td>${req.vendors?.name || 'N/A'}</td>
                     <td>
@@ -2942,12 +3184,12 @@
                 })() : '<span style="color:var(--gray); font-size:11px;">—</span>'}
                     </td>
                     <td>
-                        ${req.company_assets && req.company_assets.length > 0 ? 
-                            '<span style="color:var(--gold); font-weight:700; font-size:10px;"><i class="fas fa-box"></i> ASSET</span>' : 
-                            req.payout_method === 'reimbursement' ? 
-                            '<span style="color:var(--success); font-weight:700; font-size:10px;"><i class="fas fa-user"></i> REIMB</span>' : 
-                            '<span style="color:var(--gray); font-weight:700; font-size:10px;"><i class="fas fa-file-invoice-dollar"></i> EXPENSE</span>'
-                        }
+                        ${req.company_assets && req.company_assets.length > 0 ?
+                    '<span style="color:var(--gold); font-weight:700; font-size:10px;"><i class="fas fa-box"></i> ASSET</span>' :
+                    req.payout_method === 'reimbursement' ?
+                        '<span style="color:var(--success); font-weight:700; font-size:10px;"><i class="fas fa-user"></i> REIMB</span>' :
+                        '<span style="color:var(--gray); font-weight:700; font-size:10px;"><i class="fas fa-file-invoice-dollar"></i> EXPENSE</span>'
+                }
                     </td>
                     <td><span class="status-pill ${(req.status === 'partially_paid' || req.status === 'paid') ? 'approved' : req.status}">${req.status.replace('_', ' ')}</span></td>
                     <td>
@@ -2965,7 +3207,7 @@
             const activeData = data.filter(r => r.status !== 'voided');
             const el = document.getElementById('stat-pending-count');
             if (el) el.innerText = activeData.filter(r => r.status === 'pending').length;
-            
+
             // Note: Total Expenditure and WHT are now driven by the fetchStats() API for better historical accuracy
             // across different timeframes.
         }
@@ -3059,13 +3301,38 @@
 
         function renderReviewSummary(req, whtAmt, netAmount) {
             const isCommission = req.payment_type || req.vendors?.type === 'staff';
-            
+
             document.getElementById('requestDetails').innerHTML = `
                 <div style="background:rgba(255,255,255,0.02); padding:20px; border-radius:16px; border:1px solid var(--border);">
                     <div style="display:grid; grid-template-columns:1fr 1fr; gap:20px; margin-bottom:15px;">
                         <div><p class="form-label">Payee</p><strong>${req.vendors?.name}</strong></div>
                         <div><p class="form-label">Total Gross</p><strong>₦${req.amount_gross.toLocaleString()}</strong></div>
                     </div>
+
+                    ${req.is_disputed ? `
+                    <div style="background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.3); border-radius:12px; padding:14px; margin-bottom:15px;">
+                        <div style="font-size:10px; font-weight:800; color:#F87171; letter-spacing:1px; text-transform:uppercase; margin-bottom:8px;">
+                            ⚠️ Rep Ownership Dispute
+                        </div>
+                        <p style="font-size:13px; color:var(--gray); line-height:1.5; margin:0;">
+                            <strong style="color:#F87171;">${req.vendors?.name}</strong> is disputing rep assignment on invoice <strong>${req.vendor_invoice_number || 'N/A'}</strong>.
+                        </p>
+                        ${req.dispute_reason ? `
+                        <div style="margin-top:10px; padding-top:10px; border-top:1px solid rgba(239,68,68,0.2);">
+                            <p class="form-label" style="font-size:9px; color:#F87171;">Claimant's Reason</p>
+                            <p style="font-size:13px; color:var(--gray); line-height:1.5; white-space:pre-wrap; margin:0;">${req.dispute_reason}</p>
+                        </div>` : ''}
+                    </div>
+                    ` : ''}
+
+                    ${req.is_high_risk && req.risk_notes ? `
+                    <div style="background:rgba(251,146,60,0.06); border:1px solid rgba(251,146,60,0.3); border-radius:12px; padding:14px; margin-bottom:15px;">
+                        <div style="font-size:10px; font-weight:800; color:#FB923C; letter-spacing:1px; text-transform:uppercase; margin-bottom:8px;">
+                            🚩 Risk Flags
+                        </div>
+                        <p style="font-size:12px; color:var(--gray); line-height:1.6; white-space:pre-wrap; margin:0;">${req.risk_notes}</p>
+                    </div>
+                    ` : ''}
                     
                     ${isCommission ? `
                     <div style="background:rgba(196,125,10,0.05); padding:15px; border-radius:12px; border:1px solid rgba(196,125,10,0.2); margin-bottom:15px;">
@@ -3081,6 +3348,20 @@
                         <p class="form-label">Objective / Description</p>
                         <p style="font-size:13px; color:var(--gray); line-height:1.5;">${req.description || 'No description provided'}</p>
                     </div>
+
+                    ${req.remarks ? `
+                    <div style="margin-top:15px; padding-bottom:15px; border-bottom:1px solid rgba(255,255,255,0.05);">
+                        <p class="form-label">Remarks / Comment</p>
+                        <p style="font-size:13px; color:var(--gray); line-height:1.5; white-space:pre-wrap;">${req.remarks}</p>
+                    </div>
+                    ` : ''}
+
+                    ${req.rejection_reason ? `
+                    <div style="margin-top:15px; padding-bottom:15px; border-bottom:1px solid rgba(239,68,68,0.1);">
+                        <p class="form-label" style="color:var(--error);">Rejection History</p>
+                        <p style="font-size:13px; color:var(--gray); line-height:1.5; white-space:pre-wrap;">${req.rejection_reason}</p>
+                    </div>
+                    ` : ''}
                     
                     ${(req.receipt_url || req.proforma_url) ? `
                         <button class="btn-view-doc" onclick="viewDocument('${req.id}')" style="margin: 15px 0;">
@@ -3117,7 +3398,8 @@
                         status: status,
                         apply_wht: applyWht,
                         manual_wht_rate: applyWht ? manualRate : null,
-                        rejection_reason: status === 'rejected' ? 'Manager Rejection' : exemptionReason
+                        rejection_reason: status === 'rejected' ? exemptionReason : null,
+                        wht_exemption_reason: status === 'approved' ? exemptionReason : req.wht_exemption_reason
                     })
                 });
 
@@ -3166,12 +3448,12 @@
         function renderVerifications(data) {
             const pendingVars = data.filter(r => r.status === 'pending_verification');
             const body = document.getElementById('verifBody');
-            
+
             document.getElementById('verif-badge').innerText = pendingVars.length;
             document.getElementById('verif-badge').style.display = pendingVars.length > 0 ? 'inline-block' : 'none';
 
             if (pendingVars.length === 0) {
-                body.innerHTML = '<tr><td colspan="7" style="text-align:center; padding:40px; color:var(--gray);">No bills pending verification.</td></tr>';
+                body.innerHTML = '<tr><td colspan="9" style="text-align:center; padding:40px; color:var(--gray);">No bills pending verification.</td></tr>';
                 return;
             }
             body.innerHTML = pendingVars.map(req => `
@@ -3179,8 +3461,15 @@
                     <td>${new Date(req.created_at).toLocaleDateString()}</td>
                     <td>${req.admins?.full_name || 'System'}</td>
                     <td>
-                        <div style="font-weight:700;">${req.title}</div>
-                        <small style="color:var(--gray)">${req.vendor_invoice_number ? 'Ref: ' + req.vendor_invoice_number : 'ID: ' + req.id.slice(0, 8)}</small>
+                        <div style="display:flex; align-items:center; gap:8px;">
+                            <div style="font-weight:700;">${req.title}</div>
+                            ${req.is_disputed ? '<span style="background:var(--error); color:#fff; font-size:9px; padding:2px 6px; border-radius:4px; font-weight:700;">DISPUTE</span>' : ''}
+                            ${req.is_high_risk ? '<span style="background:var(--warning); color:#000; font-size:9px; padding:2px 6px; border-radius:4px; font-weight:700;">RISK</span>' : ''}
+                        </div>
+                        <div style="display:flex; align-items:center; gap:8px; margin-top:2px;">
+                            <small style="color:var(--gray)">${req.vendor_invoice_number ? 'Ref: ' + req.vendor_invoice_number : 'ID: ' + req.id.slice(0, 8)}</small>
+                            ${req.remarks ? `<i class="fas fa-comment-dots" style="color:var(--gold); font-size:10px;" title="${req.remarks}"></i>` : ''}
+                        </div>
                     </td>
                     <td>${req.vendors?.name || 'N/A'}</td>
                     <td style="font-weight:700;">₦${req.amount_gross.toLocaleString()}</td>
@@ -3196,41 +3485,100 @@
         }
 
         // --- AP DASHBOARD REDESIGN: VERIFICATION, WHT, RECEIPTS ---
-        
+
         // 1. Bill Verification
         function openVerifyModal(id) {
             activeRequestId = id;
             const req = requestsData.find(r => r.id === id);
+            
+            // Bank details snapshot or vendor data
+            const bankName = req.bank_name_snapshot || req.vendors?.bank_name || 'N/A';
+            const accNum = req.account_number_snapshot || req.vendors?.account_number || 'N/A';
+            const accName = req.account_name_snapshot || req.vendors?.account_name || 'N/A';
+
             document.getElementById('verifyDetails').innerHTML = `
-                <div style="font-size:12px; color:var(--gray); margin-bottom:4px;">Vendor / Payee</div>
-                <div style="font-size:16px; font-weight:700; margin-bottom:12px; color:#fff;">${req.vendors?.name || 'N/A'}</div>
-                <div style="font-size:12px; color:var(--gray); margin-bottom:4px;">Bill Description</div>
-                <div style="font-size:14px; margin-bottom:12px; color:#fff;">${req.title}</div>
-                <div style="font-size:12px; color:var(--gray); margin-bottom:4px;">Gross Requested Amount</div>
-                <div style="font-size:20px; font-weight:800; color:var(--gold-bright);">₦${req.amount_gross.toLocaleString()}</div>
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:20px;">
+                    <div>
+                        <div style="font-size:11px; color:var(--gray); text-transform:uppercase; margin-bottom:4px;">Vendor / Payee</div>
+                        <div style="font-size:15px; font-weight:700; color:#fff;">${req.vendors?.name || 'N/A'}</div>
+                    </div>
+                    <div>
+                        <div style="font-size:11px; color:var(--gray); text-transform:uppercase; margin-bottom:4px;">Bank Details</div>
+                        <div style="font-size:13px; font-weight:600; color:var(--gold);">${bankName}</div>
+                        <div style="font-size:12px; color:#fff;">${accNum} (${accName})</div>
+                    </div>
+                </div>
+
+                <div style="margin-bottom:20px;">
+                    <div style="font-size:11px; color:var(--gray); text-transform:uppercase; margin-bottom:4px;">Bill Description</div>
+                    <div style="font-size:14px; color:#fff;">${req.title}</div>
+                </div>
+
+                <div style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:20px;">
+                    <div>
+                        <div style="font-size:11px; color:var(--gray); text-transform:uppercase; margin-bottom:4px;">Gross Requested</div>
+                        <div style="font-size:18px; font-weight:800; color:var(--gold-bright);">₦${req.amount_gross.toLocaleString()}</div>
+                    </div>
+                    <div>
+                        <div style="font-size:11px; color:var(--gray); text-transform:uppercase; margin-bottom:4px;">Category</div>
+                        <div style="font-size:14px; color:#fff;">${req.category || 'General'}</div>
+                    </div>
+                </div>
+
+                ${req.remarks ? `
+                <div style="margin-bottom:15px; padding:12px; background:rgba(196,125,10,0.05); border-radius:8px; border:1px solid rgba(196,125,10,0.1);">
+                    <div style="font-size:10px; font-weight:700; color:var(--gold); text-transform:uppercase; margin-bottom:4px;">Remarks</div>
+                    <div style="font-size:12px; color:var(--gray); line-height:1.4;">${req.remarks}</div>
+                </div>` : ''}
+
+                ${req.is_disputed ? `
+                <div style="margin-bottom:15px; padding:12px; background:rgba(239,68,68,0.05); border-radius:8px; border:1px solid rgba(239,68,68,0.2);">
+                    <div style="font-size:10px; font-weight:700; color:var(--error); text-transform:uppercase; margin-bottom:4px;">⚠️ Rep Dispute</div>
+                    <div style="font-size:12px; color:var(--gray); line-height:1.4;">${req.dispute_reason || 'Dispute raised via portal.'}</div>
+                </div>` : ''}
+
+                ${req.is_high_risk ? `
+                <div style="margin-bottom:15px; padding:12px; background:rgba(245,158,11,0.05); border-radius:8px; border:1px solid rgba(245,158,11,0.2);">
+                    <div style="font-size:10px; font-weight:700; color:var(--warning); text-transform:uppercase; margin-bottom:4px;">🚩 Risk Flags</div>
+                    <div style="font-size:12px; color:var(--gray); line-height:1.4;">${req.risk_notes || 'High risk transaction flags detected.'}</div>
+                </div>` : ''}
             `;
             // Default due date to today + 30 days
             const defaultDate = new Date();
             defaultDate.setDate(defaultDate.getDate() + 30);
             document.getElementById('verify-due-date').value = defaultDate.toISOString().split('T')[0];
-            
+
+            // Reset rejection UI
+            document.getElementById('verify-rejection-container').classList.add('hidden');
+            document.getElementById('verify-rejection-reason').value = '';
+
             document.getElementById('verifyModal').style.display = 'flex';
         }
 
         async function submitVerification(action) {
             const dueDate = document.getElementById('verify-due-date').value;
-            let reason = "";
-            if (action === 'rejected') {
-                reason = prompt("Please provide a reason for rejecting this bill:");
-                if (!reason) return;
+            const rejectionContainer = document.getElementById('verify-rejection-container');
+            const rejectionReason = document.getElementById('verify-rejection-reason').value.trim();
+
+            if (action === 'rejected' && rejectionContainer.classList.contains('hidden')) {
+                // First click on reject - show the reason field
+                rejectionContainer.classList.remove('hidden');
+                document.getElementById('verify-rejection-reason').focus();
+                toast("Please provide a rejection reason and click 'REJECT BILL' again.", "info");
+                return;
             }
-            
+
+            if (action === 'rejected' && !rejectionReason) {
+                toast("A rejection reason is mandatory.", "error");
+                return;
+            }
+
             try {
                 const res = await apiFetch(`/api/payouts/requests/${activeRequestId}/verify`, {
                     method: 'PATCH',
-                    body: JSON.stringify({ action: action, reason: reason, due_date: dueDate })
+                    body: JSON.stringify({ action: action, reason: action === 'rejected' ? rejectionReason : null, due_date: dueDate })
                 });
-                
+
                 if (res.ok) {
                     toast(action === 'pending' ? "Bill Verified & Sent to Audit" : "Bill Rejected", "success");
                     closeModal('verifyModal');
@@ -3246,10 +3594,10 @@
 
         // 2. WHT Remittance Checklist
         let whtPendingList = [];
-        
+
         function openWhtRemittanceModal() {
             whtPendingList = requestsData.filter(r => (r.status === 'paid' || r.status === 'partially_paid') && !r.is_wht_remitted && (r.wht_amount || 0) > 0);
-            
+
             const tbody = document.getElementById('wht-checklist-body');
             if (whtPendingList.length === 0) {
                 tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:30px; color:var(--gray);">No pending WHT liabilities found.</td></tr>';
@@ -3263,7 +3611,7 @@
                         <td>${req.paid_at ? new Date(req.paid_at).toLocaleDateString() : 'N/A'}</td>
                         <td style="font-weight:700;">${req.vendors?.name || 'N/A'}</td>
                         <td style="font-size:11px; color:var(--gray);">${req.title}</td>
-                        <td style="color:var(--error); font-weight:700;">₦${req.wht_amount.toLocaleString(undefined, {minimumFractionDigits: 2})}</td>
+                        <td style="color:var(--error); font-weight:700;">₦${req.wht_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     </tr>
                 `).join('');
             }
@@ -3282,7 +3630,7 @@
             const checkboxes = document.querySelectorAll('.wht-checkbox:checked');
             let total = 0;
             checkboxes.forEach(cb => total += parseFloat(cb.getAttribute('data-amount')));
-            document.getElementById('wht-selected-total').innerText = '₦' + total.toLocaleString(undefined, {minimumFractionDigits: 2});
+            document.getElementById('wht-selected-total').innerText = '₦' + total.toLocaleString(undefined, { minimumFractionDigits: 2 });
         }
 
         async function submitWhtRemittance() {
@@ -3292,21 +3640,21 @@
                 document.getElementById('wht-receipt-ref').focus();
                 return;
             }
-            
+
             const checkboxes = document.querySelectorAll('.wht-checkbox:checked');
             const ids = Array.from(checkboxes).map(cb => cb.value);
-            
+
             if (ids.length === 0) {
                 toast("Select at least one liability to clear.", "error");
                 return;
             }
-            
+
             try {
                 const res = await apiFetch(`/api/payouts/requests/remit-wht`, {
                     method: 'POST',
                     body: JSON.stringify({ receipt_reference: ref, request_ids: ids })
                 });
-                
+
                 if (res.ok) {
                     toast(`Successfully cleared ${ids.length} WHT liabilities`, "success");
                     closeModal('whtRemittanceModal');
@@ -3315,7 +3663,7 @@
                     const err = await res.json();
                     toast(err.detail || "Remittance Failed", "error");
                 }
-            } catch(e) {
+            } catch (e) {
                 toast("Network Error", "error");
             }
         }
@@ -3331,7 +3679,7 @@
                     const err = await res.json();
                     toast(err.detail || "Failed to send receipt", "error");
                 }
-            } catch(e) {
+            } catch (e) {
                 toast("Network Error while sending email", "error");
             }
         }
@@ -3567,7 +3915,7 @@
             event.stopPropagation();
             const parent = icon.closest('.stat-card') || icon.closest('.tab') || icon.closest('.chart-card');
             if (!parent) return;
-            
+
             const isHidden = parent.classList.toggle('hidden-element');
             if (isHidden) {
                 icon.classList.replace('fa-eye', 'fa-eye-slash');
@@ -3596,7 +3944,7 @@
             const isPresenting = document.body.classList.toggle('presentation-mode');
             const btn = document.getElementById('pres-btn');
             const configBtn = document.getElementById('manage-view-btn');
-            
+
             if (isPresenting) {
                 btn.classList.add('active-mode');
                 btn.innerHTML = '<i class="fas fa-compress-arrows-alt"></i><span class="btn-text">EXIT PRESENTATION</span>';
@@ -3651,9 +3999,9 @@
                 const tf = document.getElementById('stat-timeframe').value;
                 const start = document.getElementById('stat-start-date').value;
                 const end = document.getElementById('stat-end-date').value;
-                
+
                 let url = '/api/payouts/stats/summary';
-                
+
                 if (tf === 'custom') {
                     if (!start || !end) return;
                     url += `?start_date=${start}&end_date=${end}`;
@@ -3674,7 +4022,7 @@
 
                 const res = await apiFetch(url);
                 const data = await res.json();
-                
+
                 // 1. Update Global Overview
                 const ov = data.overview;
                 document.getElementById('stat-total-paid').innerText = '₦' + (ov.total_paid || 0).toLocaleString();
@@ -3684,21 +4032,21 @@
                 if (document.getElementById('stat-avg-speed')) document.getElementById('stat-avg-speed').innerText = (ov.avg_pay_hours || 0) + 'h';
                 const pendingEl = document.getElementById('stat-pending-count');
                 if (pendingEl) pendingEl.innerText = ov.active_requests || 0;
-                
+
                 // 2. Update Segment Pulses
                 const seg = data.segments || {};
                 if (document.getElementById('stat-comm-paid')) {
                     document.getElementById('stat-comm-paid').innerText = '₦' + (seg.commissions?.paid || 0).toLocaleString();
                     document.getElementById('stat-comm-owed').innerText = '₦' + (seg.commissions?.owed || 0).toLocaleString();
                 }
-                
+
                 if (document.getElementById('stat-ops-paid')) {
                     document.getElementById('stat-ops-paid').innerText = '₦' + (seg.ops?.paid || 0).toLocaleString();
                     document.getElementById('stat-ops-owed').innerText = '₦' + (seg.ops?.owed || 0).toLocaleString();
                     document.getElementById('stat-reimb-paid').innerText = '₦' + (seg.reimbursements?.paid || 0).toLocaleString();
                     document.getElementById('stat-reimb-owed').innerText = '₦' + (seg.reimbursements?.owed || 0).toLocaleString();
                 }
-                
+
                 renderCharts(data);
             } catch (e) {
                 console.error("Analytics Engine Error:", e);
@@ -3708,7 +4056,7 @@
 
         function renderCharts(data, attempt = 0) {
             console.log(`Intelligence Engine: Rendering Attempt ${attempt}`);
-            
+
             // Wait for Chart.js if it's still loading from fallback (max 10 attempts)
             if (typeof Chart === 'undefined') {
                 if (attempt < 10) {
@@ -3724,7 +4072,7 @@
 
             // Hide all loaders
             document.querySelectorAll('.chart-loader').forEach(l => l.classList.add('hidden'));
-            
+
             const ctx1 = document.getElementById('burnChart').getContext('2d');
             const ctx2 = document.getElementById('categoryChart').getContext('2d');
             const ctx3 = document.getElementById('payeeChart').getContext('2d');
@@ -3834,18 +4182,18 @@
                 type: 'bar',
                 data: {
                     labels: Object.keys(analytics.aging || {}),
-                    datasets: [{ 
-                        label: 'Owed Amount', 
-                        data: Object.values(analytics.aging || {}), 
+                    datasets: [{
+                        label: 'Owed Amount',
+                        data: Object.values(analytics.aging || {}),
                         backgroundColor: ['#10B981', '#FFC107', '#F59E0B', '#EF4444'],
-                        borderRadius: 4 
+                        borderRadius: 4
                     }]
                 },
                 options: barOptions
             });
 
             // 5. Tax Compliance
-            const tax = analytics.compliance || {remitted: 0, pending: 0};
+            const tax = analytics.compliance || { remitted: 0, pending: 0 };
             taxComplianceChart = new Chart(ctx7, {
                 type: 'doughnut',
                 data: {
@@ -3871,7 +4219,7 @@
             const start = document.getElementById('stat-start-date').value;
             const end = document.getElementById('stat-end-date').value;
             const tf = document.getElementById('stat-timeframe').value;
-            
+
             // Build query for dates
             let dateParams = "";
             if (tf === 'custom' && start && end) {
@@ -3912,8 +4260,8 @@
                 try {
                     const res = await apiFetch('/api/payouts/stats/send-email', {
                         method: 'POST',
-                        body: JSON.stringify({ 
-                            report_type: 'payout_audit', 
+                        body: JSON.stringify({
+                            report_type: 'payout_audit',
                             email: email,
                             start_date: start || null,
                             end_date: end || null
@@ -3926,7 +4274,7 @@
                 toast("Schedule automation: Saving configuration...", "info");
                 const email = prompt("Enter email for periodic reports:");
                 if (!email) return;
-                
+
                 try {
                     const res = await apiFetch('/api/payouts/stats/schedule', {
                         method: 'POST',
@@ -3937,7 +4285,7 @@
                         })
                     });
                     if (res.ok) toast("Automated schedule active", "success");
-                } catch(e) { toast("Schedule setup failed", "error"); }
+                } catch (e) { toast("Schedule setup failed", "error"); }
             }
         }
 
@@ -3958,7 +4306,7 @@
             try {
                 const listRes = await apiFetch(`/api/payouts/requests/${requestId}/proof-files`);
                 const fileInfo = await listRes.json();
-                
+
                 const docs = [];
                 (fileInfo.proforma_files || []).forEach((f, i) => {
                     docs.push({ docType: 'proforma', index: i, original: f });
@@ -4004,7 +4352,7 @@
                 // Fetch the file as a blob to include authorization headers
                 const fileRes = await apiFetch(docUrl);
                 if (!fileRes.ok) throw new Error("Could not retrieve secure document");
-                
+
                 const blob = await fileRes.blob();
                 activeDocUrl = URL.createObjectURL(blob);
 
@@ -4107,7 +4455,7 @@
 
         // --- PARTNER MANAGEMENT ---
         let vendorsData = [];
-        
+
         function openEditPartnerModal(vendorId) {
             const v = vendorsData.find(vend => vend.id === vendorId);
             if (!v) return;
@@ -4135,7 +4483,7 @@
         fetchVendors();
         fetchAssets();
         fetchCommissions();
-        
+
         // --- SMART POLLING (Option 1) ---
         let lastPulseFetch = Date.now();
         window.addEventListener('focus', () => {
