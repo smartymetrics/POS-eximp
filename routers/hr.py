@@ -93,12 +93,18 @@ class StaffProfileUpdate(BaseModel):
     exit_date: Optional[date] = None
     exit_reason: Optional[str] = None
 
-class StaffAssetCreate(BaseModel):
-    staff_id: str
+class CompanyAssetCreate(BaseModel):
     asset_name: str
+    asset_type: Optional[str] = "Equipment"
     serial_number: Optional[str] = None
-    condition: str = "Good"
-    assigned_at: date = date.today()
+    status: str = "Available"
+    purchase_cost: Optional[float] = None
+    notes: Optional[str] = None
+
+class AssetAssign(BaseModel):
+    staff_id: Optional[str] = None
+    status: str = "Assigned"
+    notes: Optional[str] = None
 
 class StaffQualificationCreate(BaseModel):
     staff_id: str
@@ -129,6 +135,7 @@ class ManualPayrollCreate(BaseModel):
     staff_id: str
     gross_pay: float
     tax: float
+    pension: Optional[float] = 0.0
     net_pay: float
     notes: Optional[str] = None
     period_start: date
@@ -490,22 +497,45 @@ async def upload_staff_document(doc: StaffDocumentCreate, current_admin: dict = 
     
     return res.data[0]
 
-@router.post("/assets", status_code=status.HTTP_201_CREATED)
-async def assign_staff_asset(asset: StaffAssetCreate, current_admin: dict = Depends(verify_token)):
-    """Assign a company asset to a staff member. HR only."""
+@router.get("/assets")
+async def get_company_assets(current_admin: dict = Depends(verify_token)):
+    """Fetch all company assets, including assignee details and financial links. HR only."""
     user_roles = current_admin.get("role", "").split(",")
     if "admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR only")
          
     db = get_db()
-    res = await db_execute(lambda: db.table("staff_assets").insert({
-        "staff_id": asset.staff_id,
-        "asset_name": asset.asset_name,
-        "serial_number": asset.serial_number,
-        "condition": asset.condition,
-        "assigned_at": asset.assigned_at.isoformat()
-    }).execute())
+    res = await db_execute(lambda: db.table("company_assets").select("*, admins!company_assets_assigned_to_fkey(full_name, department)").order("created_at", desc=True).execute())
+    return res.data
+
+@router.post("/assets", status_code=status.HTTP_201_CREATED)
+async def create_company_asset(asset: CompanyAssetCreate, current_admin: dict = Depends(verify_token)):
+    """Register a new company asset into the HR inventory."""
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+         raise HTTPException(status_code=403, detail="HR only")
+         
+    db = get_db()
+    res = await db_execute(lambda: db.table("company_assets").insert(asset.dict(exclude_unset=True)).execute())
+    return res.data[0]
+
+@router.patch("/assets/{asset_id}/assign")
+async def assign_company_asset(asset_id: str, assign_data: AssetAssign, current_admin: dict = Depends(verify_token)):
+    """Assign or reassign an asset to a staff member."""
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+         raise HTTPException(status_code=403, detail="HR only")
+         
+    db = get_db()
+    res = await db_execute(lambda: db.table("company_assets").update({
+        "assigned_to": assign_data.staff_id,
+        "status": assign_data.status,
+        "notes": assign_data.notes,
+        "updated_at": "now()"
+    }).eq("id", asset_id).execute())
     
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Asset not found")
     return res.data[0]
 
 @router.post("/leave", status_code=status.HTTP_201_CREATED)
@@ -824,16 +854,52 @@ async def run_payroll(current_admin: dict = Depends(verify_token)):
         p = s.get("staff_profiles", [{}])[0] if s.get("staff_profiles") else {}
         base = float(p.get("base_salary") or 0)
         
-        # Calculate simple tax (e.g. 10%)
-        tax = base * 0.1
-        net = base - tax
+        # Nigerian Tax Engine (PAYE / Pension)
+        monthly_tax = 0.0
+        monthly_pension = 0.0
+        monthly_cra = 0.0
+        
+        if base > 30000: # Minimum wage exemption
+            annual_gross = base * 12
+            annual_pension = annual_gross * 0.08
+            annual_cra = max(200000.0, annual_gross * 0.01) + (0.2 * annual_gross)
+            taxable_income = max(0.0, annual_gross - annual_pension - annual_cra)
+            
+            annual_tax = 0.0
+            brackets = [
+                (300000, 0.07),
+                (300000, 0.11),
+                (500000, 0.15),
+                (500000, 0.19),
+                (1600000, 0.21),
+                (float('inf'), 0.24)
+            ]
+            
+            rem_income = taxable_income
+            for limit, rate in brackets:
+                if rem_income <= 0:
+                    break
+                taxable_amount = min(rem_income, limit)
+                annual_tax += taxable_amount * rate
+                rem_income -= taxable_amount
+                
+            if annual_tax == 0 and taxable_income <= 0:
+                 annual_tax = annual_gross * 0.01 # Minimum tax 1%
+                 
+            monthly_tax = round(annual_tax / 12, 2)
+            monthly_pension = round(annual_pension / 12, 2)
+            monthly_cra = round(annual_cra / 12, 2)
+            
+        net = round(base - monthly_tax - monthly_pension, 2)
         
         payroll_inserts.append({
             "staff_id": s["id"],
             "period_start": month_start,
             "period_end": month_end,
             "gross_pay": base,
-            "tax": tax,
+            "tax": monthly_tax,
+            "pension": monthly_pension,
+            "cra": monthly_cra,
             "net_pay": net,
             "status": "pending",
             "processed_by": current_admin["sub"]
@@ -860,6 +926,7 @@ async def create_manual_payroll(nf: ManualPayrollCreate, current_admin: dict = D
         "period_end": nf.period_start.isoformat(), # Same day for manual entries
         "gross_pay": nf.gross_pay,
         "tax": nf.tax,
+        "pension": nf.pension,
         "net_pay": nf.net_pay,
         "status": "paid", # Manual entries usually reflect paid amounts
         "processed_by": current_admin["sub"]
@@ -1915,3 +1982,780 @@ async def upload_hr_file(request: Request, current_admin=Depends(verify_token)):
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
 
+
+
+# ─── RECRUITMENT / ATS ────────────────────────────────────────────────────────
+
+class JobRequisitionCreate(BaseModel):
+    title: str
+    department: str
+    employment_type: str
+    location: Optional[str] = None
+    status: str = "Open"
+    description: Optional[str] = None
+    requirements: Optional[str] = None
+    salary_range: Optional[str] = None
+
+class JobApplicationCreate(BaseModel):
+    job_id: Optional[str] = None
+    candidate_name: str
+    candidate_email: str
+    candidate_phone: Optional[str] = None
+    resume_url: Optional[str] = None
+    cover_letter: Optional[str] = None
+
+class InterviewCreate(BaseModel):
+    application_id: str
+    interviewer_id: str
+    scheduled_at: datetime
+
+@router.get("/recruitment/jobs")
+async def get_jobs():
+    db = get_db()
+    res = await db_execute(lambda: db.table("job_requisitions").select("*").order("created_at", desc=True).execute())
+    return res.data
+
+@router.post("/recruitment/jobs", status_code=status.HTTP_201_CREATED)
+async def create_job(job: JobRequisitionCreate, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+         raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    res = await db_execute(lambda: db.table("job_requisitions").insert(job.dict(exclude_unset=True)).execute())
+    return res.data[0]
+
+@router.patch("/recruitment/jobs/{job_id}")
+async def update_job(job_id: str, status_update: dict, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+         raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    res = await db_execute(lambda: db.table("job_requisitions").update({"status": status_update.get("status"), "updated_at": "now()"}).eq("id", job_id).execute())
+    return res.data[0] if res.data else None
+
+@router.get("/recruitment/applications")
+async def get_applications(job_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    query = db.table("job_applications").select("*, job_requisitions(title, department)")
+    if job_id: query = query.eq("job_id", job_id)
+    res = await db_execute(lambda: query.order("applied_at", desc=True).execute())
+    return res.data
+
+@router.post("/recruitment/applications", status_code=status.HTTP_201_CREATED)
+async def create_application(app: JobApplicationCreate):
+    # Could be public, no token required natively, but keeping simple
+    db = get_db()
+    res = await db_execute(lambda: db.table("job_applications").insert(app.dict(exclude_unset=True)).execute())
+    return res.data[0]
+
+@router.patch("/recruitment/applications/{app_id}")
+async def update_application_status(app_id: str, status_update: dict, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+         raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    res = await db_execute(lambda: db.table("job_applications").update({"status": status_update.get("status")}).eq("id", app_id).execute())
+    return res.data[0] if res.data else None
+
+@router.post("/recruitment/interviews", status_code=status.HTTP_201_CREATED)
+async def schedule_interview(interview: InterviewCreate, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+         raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    
+    # Must also move application status to "Interview"
+    await db_execute(lambda: db.table("job_applications").update({"status": "Interview"}).eq("id", interview.application_id).execute())
+    
+    # Needs isoformat for datetime
+    idata = interview.dict()
+    idata["scheduled_at"] = idata["scheduled_at"].isoformat()
+    
+    res = await db_execute(lambda: db.table("job_interviews").insert(idata).execute())
+    return res.data[0]
+
+
+
+# ─── ENGAGEMENT & CULTURE ─────────────────────────────────────────────────────
+
+class SurveyCreate(BaseModel):
+    title: str
+    description: Optional[str] = None
+    questions: list # list of strings
+
+class SurveyResponseSubmit(BaseModel):
+    answers: dict
+    is_anonymous: bool = True
+
+@router.get("/culture/surveys")
+async def get_surveys(current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    
+    # 1. Fetch active surveys
+    surveys = await db_execute(lambda: db.table("engagement_surveys").select("*").order("created_at", desc=True).execute())
+    
+    # 2. Fetch responses if HR to calculate completion rates
+    user_roles = current_admin.get("role", "").split(",")
+    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    
+    if is_hr:
+        responses = await db_execute(lambda: db.table("survey_responses").select("survey_id, answers").execute())
+        resp_map = {}
+        for r in responses.data:
+            sid = r["survey_id"]
+            if sid not in resp_map: resp_map[sid] = []
+            resp_map[sid].append(r["answers"])
+            
+        for s in surveys.data:
+            s["responses"] = resp_map.get(s["id"], [])
+    
+    return surveys.data
+
+@router.post("/culture/surveys", status_code=status.HTTP_201_CREATED)
+async def create_survey(survey: SurveyCreate, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+         raise HTTPException(status_code=403, detail="HR only")
+         
+    db = get_db()
+    res = await db_execute(lambda: db.table("engagement_surveys").insert({
+        "title": survey.title,
+        "description": survey.description,
+        "questions": survey.questions
+    }).execute())
+    return res.data[0]
+
+@router.post("/culture/surveys/{survey_id}/respond", status_code=status.HTTP_201_CREATED)
+async def submit_survey_response(survey_id: str, response: SurveyResponseSubmit, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    
+    # Check if already responded (if not anonymous, or strictly enforce one per staff)
+    # We will just allow it, but in a real app you'd enforce unique limits if not anonymous.
+    
+    payload = {
+        "survey_id": survey_id,
+        "answers": response.answers,
+        "is_anonymous": response.is_anonymous,
+        "staff_id": None if response.is_anonymous else current_admin["sub"]
+    }
+    
+    res = await db_execute(lambda: db.table("survey_responses").insert(payload).execute())
+    return res.data[0]
+
+# ============================================================
+# PASTE THIS AT THE END OF routers/hr.py
+# New routes for: task status, incident status, timesheets,
+# shifts, learning, announcements, recognition, work permits,
+# HR letters, grievances, audit logs, comp bands, bonuses
+# ============================================================
+
+# ─── TASK STATUS FIX ─────────────────────────────────────────
+class TaskStatusUpdate(BaseModel):
+    status: str
+    notes: Optional[str] = None
+
+@router.patch("/tasks/{task_id}")
+async def update_task_status(task_id: str, update: TaskStatusUpdate, current_admin: dict = Depends(verify_token)):
+    """Update task status to pending | in_progress | completed."""
+    if update.status not in ["pending", "in_progress", "completed"]:
+        raise HTTPException(status_code=400, detail="Invalid status")
+    db = get_db()
+    task_res = await db_execute(lambda: db.table("staff_tasks").select("*").eq("id", task_id).execute())
+    if not task_res.data:
+        raise HTTPException(status_code=404, detail="Task not found")
+    task = task_res.data[0]
+    user_roles = current_admin.get("role", "").split(",")
+    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_assignee = task.get("assigned_to") == current_admin.get("sub")
+    is_creator = task.get("created_by") == current_admin.get("sub")
+    if not (is_hr or is_assignee or is_creator):
+        raise HTTPException(status_code=403, detail="Not authorised")
+    update_data = {"status": update.status, "updated_at": datetime.utcnow().isoformat()}
+    if update.status == "completed":
+        update_data["completed_at"] = datetime.utcnow().isoformat()
+    if update.notes:
+        update_data["completion_notes"] = update.notes
+    res = await db_execute(lambda: db.table("staff_tasks").update(update_data).eq("id", task_id).execute())
+    return res.data[0] if res.data else {"message": "Updated"}
+
+# ─── INCIDENT STATUS FIX ─────────────────────────────────────
+class IncidentStatusUpdate(BaseModel):
+    status: str
+    resolution_notes: Optional[str] = None
+
+@router.patch("/incidents/{incident_id}")
+async def update_incident(incident_id: str, update: IncidentStatusUpdate, current_admin: dict = Depends(verify_token)):
+    """HR only: update incident status to open|under_review|resolved|dismissed."""
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin", "operations"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+    valid = ["open", "under_review", "resolved", "dismissed"]
+    if update.status not in valid:
+        raise HTTPException(status_code=400, detail=f"Status must be one of {valid}")
+    db = get_db()
+    update_data = {
+        "status": update.status,
+        "updated_at": datetime.utcnow().isoformat(),
+        "resolution_notes": update.resolution_notes,
+    }
+    if update.status in ["resolved", "dismissed"]:
+        update_data["resolved_by"] = current_admin.get("sub")
+        update_data["resolved_at"] = datetime.utcnow().isoformat()
+    res = await db_execute(lambda: db.table("disciplinary_records").update(update_data).eq("id", incident_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Incident not found")
+    return res.data[0]
+
+# ─── TIMESHEETS ───────────────────────────────────────────────
+class TimesheetCreate(BaseModel):
+    week_start: date
+    mon_hrs: float = 0; tue_hrs: float = 0; wed_hrs: float = 0
+    thu_hrs: float = 0; fri_hrs: float = 0
+    notes: Optional[str] = None
+
+class TimesheetApproval(BaseModel):
+    status: str
+    reviewer_notes: Optional[str] = None
+
+@router.get("/timesheets")
+async def get_timesheets(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    user_roles = current_admin.get("role", "").split(",")
+    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    query = db.table("timesheets").select("*, admins!timesheets_staff_id_fkey(full_name, department)")
+    if staff_id:
+        query = query.eq("staff_id", staff_id)
+    elif not is_hr:
+        query = query.eq("staff_id", current_admin["sub"])
+    res = await db_execute(lambda: query.order("week_start", desc=True).execute())
+    return res.data
+
+@router.post("/timesheets", status_code=201)
+async def submit_timesheet(ts: TimesheetCreate, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    total = ts.mon_hrs + ts.tue_hrs + ts.wed_hrs + ts.thu_hrs + ts.fri_hrs
+    res = await db_execute(lambda: db.table("timesheets").insert({
+        "staff_id": current_admin["sub"], "week_start": ts.week_start.isoformat(),
+        "mon_hrs": ts.mon_hrs, "tue_hrs": ts.tue_hrs, "wed_hrs": ts.wed_hrs,
+        "thu_hrs": ts.thu_hrs, "fri_hrs": ts.fri_hrs, "total_hrs": total,
+        "notes": ts.notes, "status": "pending", "created_at": datetime.utcnow().isoformat()
+    }).execute())
+    return res.data[0]
+
+@router.patch("/timesheets/{ts_id}")
+async def approve_timesheet(ts_id: str, approval: TimesheetApproval, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin", "line_manager", "operations"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="Manager or HR only")
+    db = get_db()
+    res = await db_execute(lambda: db.table("timesheets").update({
+        "status": approval.status, "reviewer_id": current_admin["sub"],
+        "reviewer_notes": approval.reviewer_notes, "reviewed_at": datetime.utcnow().isoformat()
+    }).eq("id", ts_id).execute())
+    return res.data[0] if res.data else {"message": "Updated"}
+
+# ─── SHIFT SCHEDULING ─────────────────────────────────────────
+class ShiftCreate(BaseModel):
+    staff_id: str; shift_date: date; start_time: str; end_time: str
+    shift_type: str = "Regular"; notes: Optional[str] = None
+
+@router.get("/shifts")
+async def get_shifts(staff_id: Optional[str] = None, week_start: Optional[str] = None, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    query = db.table("shifts").select("*, admins!shifts_staff_id_fkey(full_name, department)")
+    if staff_id:
+        query = query.eq("staff_id", staff_id)
+    if week_start:
+        week_end = (date.fromisoformat(week_start) + timedelta(days=6)).isoformat()
+        query = query.gte("shift_date", week_start).lte("shift_date", week_end)
+    res = await db_execute(lambda: query.order("shift_date").execute())
+    return res.data
+
+@router.post("/shifts", status_code=201)
+async def create_shift(shift: ShiftCreate, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin", "operations", "line_manager"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="Manager or HR only")
+    db = get_db()
+    res = await db_execute(lambda: db.table("shifts").insert({
+        "staff_id": shift.staff_id, "shift_date": shift.shift_date.isoformat(),
+        "start_time": shift.start_time, "end_time": shift.end_time,
+        "shift_type": shift.shift_type, "notes": shift.notes,
+        "created_by": current_admin["sub"]
+    }).execute())
+    return res.data[0]
+
+@router.delete("/shifts/{shift_id}")
+async def delete_shift(shift_id: str, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    await db_execute(lambda: db.table("shifts").delete().eq("id", shift_id).execute())
+    return {"message": "Deleted"}
+
+# ─── HOLIDAYS / CALENDAR ─────────────────────────────────────
+class HolidayCreate(BaseModel):
+    name: str; holiday_date: date; is_recurring: bool = True
+
+@router.get("/holidays")
+async def get_holidays(current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("public_holidays").select("*").order("holiday_date").execute())
+    return res.data
+
+@router.post("/holidays", status_code=201)
+async def add_holiday(h: HolidayCreate, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+    db = get_db()
+    res = await db_execute(lambda: db.table("public_holidays").insert({
+        "name": h.name, "holiday_date": h.holiday_date.isoformat(), "is_recurring": h.is_recurring
+    }).execute())
+    return res.data[0]
+
+# ─── LEAVE POLICIES & BALANCES ────────────────────────────────
+class LeavePolicyCreate(BaseModel):
+    leave_type: str; days_per_year: int; carry_over: bool = False
+    requires_proof: bool = False; description: Optional[str] = None
+
+@router.get("/leave-policies")
+async def get_leave_policies(current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("leave_policies").select("*").execute())
+    return res.data
+
+@router.post("/leave-policies", status_code=201)
+async def create_leave_policy(p: LeavePolicyCreate, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+    db = get_db()
+    res = await db_execute(lambda: db.table("leave_policies").insert(p.dict()).execute())
+    return res.data[0]
+
+@router.get("/leave-balances")
+async def get_leave_balances(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    user_roles = current_admin.get("role", "").split(",")
+    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    target = staff_id if (is_hr and staff_id) else current_admin["sub"]
+    profile = await db_execute(lambda: db.table("staff_profiles").select("leave_quota, leave_taken").eq("admin_id", target).execute())
+    leaves = await db_execute(lambda: db.table("leave_requests").select("days_count, leave_type").eq("staff_id", target).eq("status", "approved").execute())
+    quota = profile.data[0].get("leave_quota", 20) if profile.data else 20
+    used = sum(l.get("days_count", 0) for l in leaves.data)
+    by_type = {}
+    for l in leaves.data:
+        lt = l.get("leave_type", "Annual")
+        by_type[lt] = by_type.get(lt, 0) + l.get("days_count", 0)
+    return {"staff_id": target, "quota": quota, "used": used, "remaining": quota - used, "by_type": by_type}
+
+# ─── PERFORMANCE — IMPROVEMENT PLANS ─────────────────────────
+class PIPCreate(BaseModel):
+    staff_id: str; reason: str; goals: str; start_date: date
+    review_date: date; notes: Optional[str] = None
+
+@router.get("/pip")
+async def get_pips(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    query = db.table("performance_improvement_plans").select("*, admins!performance_improvement_plans_staff_id_fkey(full_name)")
+    if staff_id:
+        query = query.eq("staff_id", staff_id)
+    res = await db_execute(lambda: query.execute())
+    return res.data
+
+@router.post("/pip", status_code=201)
+async def create_pip(pip: PIPCreate, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin", "line_manager"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="Manager or HR only")
+    db = get_db()
+    res = await db_execute(lambda: db.table("performance_improvement_plans").insert({
+        **pip.dict(), "start_date": pip.start_date.isoformat(),
+        "review_date": pip.review_date.isoformat(), "status": "active",
+        "created_by": current_admin["sub"]
+    }).execute())
+    return res.data[0]
+
+# ─── LEARNING & GROWTH ────────────────────────────────────────
+class TrainingCreate(BaseModel):
+    title: str; training_type: str = "Internal"; description: Optional[str] = None
+    start_date: date; end_date: Optional[date] = None
+    trainer: Optional[str] = None; max_participants: Optional[int] = None
+
+class OnboardingChecklistCreate(BaseModel):
+    staff_id: str; items: List[str]
+
+@router.get("/trainings")
+async def get_trainings(current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("trainings").select("*, training_enrollments(staff_id)").order("start_date", desc=True).execute())
+    return res.data
+
+@router.post("/trainings", status_code=201)
+async def create_training(t: TrainingCreate, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    data = t.dict()
+    data["start_date"] = t.start_date.isoformat()
+    if t.end_date: data["end_date"] = t.end_date.isoformat()
+    data["created_by"] = current_admin["sub"]
+    res = await db_execute(lambda: db.table("trainings").insert(data).execute())
+    return res.data[0]
+
+@router.post("/trainings/{training_id}/enroll", status_code=201)
+async def enroll_in_training(training_id: str, staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    target = staff_id or current_admin["sub"]
+    res = await db_execute(lambda: db.table("training_enrollments").insert({
+        "training_id": training_id, "staff_id": target, "enrolled_at": datetime.utcnow().isoformat()
+    }).execute())
+    return res.data[0]
+
+@router.get("/onboarding/{staff_id}")
+async def get_onboarding_checklist(staff_id: str, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("onboarding_checklists").select("*").eq("staff_id", staff_id).execute())
+    return res.data
+
+@router.post("/onboarding", status_code=201)
+async def create_onboarding_checklist(oc: OnboardingChecklistCreate, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    inserts = [{"staff_id": oc.staff_id, "item": item, "completed": False, "created_by": current_admin["sub"]} for item in oc.items]
+    res = await db_execute(lambda: db.table("onboarding_checklists").insert(inserts).execute())
+    return res.data
+
+@router.patch("/onboarding/{item_id}")
+async def update_onboarding_item(item_id: str, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("onboarding_checklists").update({"completed": True, "completed_at": datetime.utcnow().isoformat()}).eq("id", item_id).execute())
+    return res.data[0] if res.data else {"message": "Updated"}
+
+# ─── PROBATION TRACKING ───────────────────────────────────────
+class ProbationReviewCreate(BaseModel):
+    staff_id: str; review_date: date; outcome: str; notes: Optional[str] = None
+
+@router.get("/probation")
+async def get_probation_reviews(current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("probation_reviews").select("*, admins!probation_reviews_staff_id_fkey(full_name, department)").execute())
+    return res.data
+
+@router.post("/probation", status_code=201)
+async def create_probation_review(pr: ProbationReviewCreate, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("probation_reviews").insert({
+        **pr.dict(), "review_date": pr.review_date.isoformat(), "reviewed_by": current_admin["sub"]
+    }).execute())
+    return res.data[0]
+
+# ─── COMPENSATION BANDS & BONUSES ─────────────────────────────
+class CompBandCreate(BaseModel):
+    role_title: str; department: str; min_salary: float
+    max_salary: float; currency: str = "NGN"
+
+class BonusCreate(BaseModel):
+    staff_id: str; bonus_type: str; amount: float
+    period: str; notes: Optional[str] = None
+
+@router.get("/comp-bands")
+async def get_comp_bands(current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("compensation_bands").select("*").execute())
+    return res.data
+
+@router.post("/comp-bands", status_code=201)
+async def create_comp_band(cb: CompBandCreate, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    res = await db_execute(lambda: db.table("compensation_bands").insert(cb.dict()).execute())
+    return res.data[0]
+
+@router.get("/bonuses")
+async def get_bonuses(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    user_roles = current_admin.get("role", "").split(",")
+    is_hr = any(r in ["admin", "hr_admin"] for r in user_roles)
+    query = db.table("bonuses").select("*, admins!bonuses_staff_id_fkey(full_name)")
+    if staff_id:
+        query = query.eq("staff_id", staff_id)
+    elif not is_hr:
+        query = query.eq("staff_id", current_admin["sub"])
+    res = await db_execute(lambda: query.execute())
+    return res.data
+
+@router.post("/bonuses", status_code=201)
+async def create_bonus(b: BonusCreate, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    res = await db_execute(lambda: db.table("bonuses").insert({**b.dict(), "created_by": current_admin["sub"]}).execute())
+    return res.data[0]
+
+# ─── ANNOUNCEMENTS ────────────────────────────────────────────
+class AnnouncementCreate(BaseModel):
+    title: str; body: str; priority: str = "Normal"
+    target_department: Optional[str] = None
+
+@router.get("/announcements")
+async def get_announcements(current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("announcements").select("*, admins!announcements_created_by_fkey(full_name)").order("created_at", desc=True).execute())
+    return res.data
+
+@router.post("/announcements", status_code=201)
+async def create_announcement(a: AnnouncementCreate, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin", "operations"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    res = await db_execute(lambda: db.table("announcements").insert({
+        **a.dict(), "created_by": current_admin["sub"], "created_at": datetime.utcnow().isoformat()
+    }).execute())
+    return res.data[0]
+
+# ─── RECOGNITION (KUDOS) ──────────────────────────────────────
+class RecognitionCreate(BaseModel):
+    recipient_id: str; message: str; badge_type: str = "Kudos"
+
+@router.get("/recognition")
+async def get_recognition(current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("recognition").select("*, recipient:admins!recognition_recipient_id_fkey(full_name), giver:admins!recognition_giver_id_fkey(full_name)").order("created_at", desc=True).limit(50).execute())
+    return res.data
+
+@router.post("/recognition", status_code=201)
+async def give_recognition(r: RecognitionCreate, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("recognition").insert({
+        **r.dict(), "giver_id": current_admin["sub"], "created_at": datetime.utcnow().isoformat()
+    }).execute())
+    return res.data[0]
+
+# ─── SURVEYS ──────────────────────────────────────────────────
+class SurveyCreate(BaseModel):
+    title: str; description: Optional[str] = None
+    questions: List[str]; is_anonymous: bool = True
+
+class SurveyResponse(BaseModel):
+    answers: dict; is_anonymous: bool = True
+
+@router.get("/culture/surveys")
+async def list_surveys(current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("surveys").select("*").eq("is_active", True).execute())
+    return res.data
+
+@router.post("/culture/surveys", status_code=201)
+async def create_survey(s: SurveyCreate, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    res = await db_execute(lambda: db.table("surveys").insert({
+        **s.dict(), "is_active": True, "created_by": current_admin["sub"]
+    }).execute())
+    return res.data[0]
+
+@router.post("/culture/surveys/{survey_id}/respond", status_code=201)
+async def respond_to_survey(survey_id: str, r: SurveyResponse, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("survey_responses").insert({
+        "survey_id": survey_id,
+        "answers": r.answers,
+        "is_anonymous": r.is_anonymous,
+        "respondent_id": None if r.is_anonymous else current_admin["sub"],
+        "created_at": datetime.utcnow().isoformat()
+    }).execute())
+    return res.data[0]
+
+# ─── WORK PERMITS ─────────────────────────────────────────────
+class WorkPermitCreate(BaseModel):
+    staff_id: str; permit_type: str; permit_number: str
+    issue_date: date; expiry_date: date; issuing_authority: Optional[str] = None
+
+@router.get("/work-permits")
+async def get_work_permits(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    query = db.table("work_permits").select("*, admins!work_permits_staff_id_fkey(full_name)")
+    if staff_id:
+        query = query.eq("staff_id", staff_id)
+    res = await db_execute(lambda: query.execute())
+    return res.data
+
+@router.post("/work-permits", status_code=201)
+async def create_work_permit(wp: WorkPermitCreate, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    data = wp.dict()
+    data["issue_date"] = wp.issue_date.isoformat()
+    data["expiry_date"] = wp.expiry_date.isoformat()
+    today = date.today()
+    data["status"] = "Active" if wp.expiry_date >= today else "Expired"
+    res = await db_execute(lambda: db.table("work_permits").insert(data).execute())
+    return res.data[0]
+
+# ─── HR LETTERS ───────────────────────────────────────────────
+class HRLetterCreate(BaseModel):
+    staff_id: str; letter_type: str; content: str; date_issued: date
+
+@router.get("/hr-letters")
+async def get_hr_letters(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    user_roles = current_admin.get("role", "").split(",")
+    is_hr = any(r in ["admin", "hr_admin"] for r in user_roles)
+    query = db.table("hr_letters").select("*, admins!hr_letters_staff_id_fkey(full_name)")
+    if staff_id:
+        query = query.eq("staff_id", staff_id)
+    elif not is_hr:
+        query = query.eq("staff_id", current_admin["sub"])
+    res = await db_execute(lambda: query.order("date_issued", desc=True).execute())
+    return res.data
+
+@router.post("/hr-letters", status_code=201)
+async def create_hr_letter(l: HRLetterCreate, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    res = await db_execute(lambda: db.table("hr_letters").insert({
+        **l.dict(), "date_issued": l.date_issued.isoformat(), "issued_by": current_admin["sub"]
+    }).execute())
+    return res.data[0]
+
+# ─── GRIEVANCES ───────────────────────────────────────────────
+class GrievanceCreate(BaseModel):
+    subject: str; description: str
+    is_anonymous: bool = True; against_staff_id: Optional[str] = None
+
+@router.get("/grievances")
+async def get_grievances(current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    res = await db_execute(lambda: db.table("grievances").select("*").order("created_at", desc=True).execute())
+    return res.data
+
+@router.post("/grievances", status_code=201)
+async def submit_grievance(g: GrievanceCreate, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("grievances").insert({
+        **g.dict(),
+        "filed_by": None if g.is_anonymous else current_admin["sub"],
+        "status": "open",
+        "created_at": datetime.utcnow().isoformat()
+    }).execute())
+    return {"message": "Grievance submitted successfully"}
+
+# ─── AUDIT LOGS ───────────────────────────────────────────────
+@router.get("/audit-logs")
+async def get_audit_logs(limit: int = 100, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="Super Admin only")
+    db = get_db()
+    res = await db_execute(lambda: db.table("audit_logs").select("*, admins!audit_logs_actor_id_fkey(full_name)").order("created_at", desc=True).limit(limit).execute())
+    return res.data
+
+# ─── HR REPORTS ───────────────────────────────────────────────
+@router.get("/reports/headcount")
+async def report_headcount(current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    staff = await db_execute(lambda: db.table("admins").select("id, department, role, is_active, created_at").execute())
+    active = [s for s in staff.data if s.get("is_active")]
+    by_dept = {}
+    for s in active:
+        d = s.get("department") or "Unassigned"
+        by_dept[d] = by_dept.get(d, 0) + 1
+    thirty_ago = (datetime.utcnow() - timedelta(days=30)).isoformat()
+    new_hires = [s for s in active if s.get("created_at", "") >= thirty_ago]
+    return {"total": len(active), "by_department": by_dept, "new_hires_30d": len(new_hires)}
+
+@router.get("/departments")
+async def get_departments(current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("departments").select("*").execute())
+    if not res.data:
+        # Fallback: derive from admins table
+        staff = await db_execute(lambda: db.table("admins").select("department").execute())
+        depts = list(set(s["department"] for s in staff.data if s.get("department")))
+        return [{"name": d} for d in sorted(depts)]
+    return res.data
+@router.get("/recruitment/interviews")
+async def get_interviews(current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles and "manager" not in user_roles:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    db = get_db()
+    res = await db_execute(lambda: db.table("job_interviews").select("*").execute())
+    return res.data if res.data else []
+
+@router.get("/calendar-events")
+async def get_calendar_events(current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("calendar_events").select("*").execute())
+    return res.data if res.data else []
+
+@router.post("/calendar-events", status_code=status.HTTP_201_CREATED)
+async def create_calendar_event(request: Request, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+        raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    data = await request.json()
+    res = await db_execute(lambda: db.table("calendar_events").insert(data).execute())
+    return res.data[0] if res.data else None
+
+@router.get("/expenses")
+async def get_expenses(current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("expenses").select("*, staff:admins(full_name, department)").execute())
+    return res.data if res.data else []
+
+@router.post("/expenses", status_code=status.HTTP_201_CREATED)
+async def submit_expense(request: Request, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    data = await request.json()
+    if "staff_id" not in data or not data["staff_id"]:
+        data["staff_id"] = current_admin.get("id")
+    res = await db_execute(lambda: db.table("expenses").insert(data).execute())
+    return res.data[0] if res.data else None
+
+@router.patch("/expenses/{expense_id}")
+async def update_expense(expense_id: str, request: Request, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles and "manager" not in user_roles:
+        raise HTTPException(status_code=403, detail="HR/Managers only")
+    db = get_db()
+    data = await request.json()
+    res = await db_execute(lambda: db.table("expenses").update({"status": data.get("status")}).eq("id", expense_id).execute())
+    return res.data[0] if res.data else None
+
+@router.get("/peer-reviews")
+async def get_peer_reviews(current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("peer_reviews").select("*").execute())
+    return res.data if res.data else []
+
+@router.post("/peer-reviews", status_code=status.HTTP_201_CREATED)
+async def launch_peer_review(request: Request, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles and "manager" not in user_roles:
+        raise HTTPException(status_code=403, detail="HR/Managers only")
+    db = get_db()
+    data = await request.json()
+    res = await db_execute(lambda: db.table("peer_reviews").insert(data).execute())
+    return res.data[0] if res.data else None
+
+@router.patch("/peer-reviews/{review_id}")
+async def update_peer_review(review_id: str, request: Request, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    data = await request.json()
+    res = await db_execute(lambda: db.table("peer_reviews").update({"status": data.get("status")}).eq("id", review_id).execute())
+    return res.data[0] if res.data else None
