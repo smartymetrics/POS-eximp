@@ -7698,7 +7698,7 @@ function JobsBoard() {
   const [deptFilter, setDeptFilter] = useState("All");
   const [showNew, setShowNew] = useState(false);
   const [viewJob, setViewJob] = useState(null);
-  const [form, setForm] = useState({ title: "", department: "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", description: "", requirements: "" });
+  const [form, setForm] = useState({ title: "", department: "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", description: "", responsibilities: "", requirements: "" });
 
   const depts = ["All", ...new Set(jobs.map(j => j.department).filter(Boolean))];
   const filtered = jobs.filter(j =>
@@ -7710,7 +7710,7 @@ function JobsBoard() {
     if (!form.title) return alert("Job title required");
     try {
       await apiFetch(`${API_BASE}/hr/recruitment/jobs`, { method: "POST", body: JSON.stringify(form) });
-      setShowNew(false); setForm({ title: "", department: "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", description: "", requirements: "" }); refresh();
+      setShowNew(false); setForm({ title: "", department: "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", description: "", responsibilities: "", requirements: "" }); refresh();
     } catch (e) { alert(e.message); }
   };
 
@@ -7771,6 +7771,7 @@ function JobsBoard() {
         <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}><span className="tg" style={statusStyle(viewJob.status || "Open")}>{viewJob.status || "Open"}</span><span className="tg tm">{viewJob.employment_type}</span><span className="tg tm">{viewJob.department}</span></div>
         <div className="g2" style={{ gap: 10, marginBottom: 18 }}><Field label="Location" value={viewJob.location} /><Field label="Salary Range" value={viewJob.salary_range || "Not disclosed"} /></div>
         {viewJob.description && <div style={{ marginBottom: 16 }}><Lbl>Job Description</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10, border: `1px solid ${T.gold}18` }}>{viewJob.description}</div></div>}
+        {viewJob.responsibilities && <div style={{ marginBottom: 16 }}><Lbl>Key Responsibilities</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10, border: `1px solid ${T.gold}18` }}>{viewJob.responsibilities}</div></div>}
         {viewJob.requirements && <div><Lbl>Requirements</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10, border: `1px solid ${T.gold}18` }}>{viewJob.requirements}</div></div>}
       </Modal>)}
       {showNew && (<Modal onClose={() => setShowNew(false)} title="Post New Job" width={600}>
@@ -7784,7 +7785,8 @@ function JobsBoard() {
             <div><Lbl>Location</Lbl><input className="inp" value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} /></div>
             <div><Lbl>Salary Range</Lbl><input className="inp" value={form.salary_range} onChange={e => setForm(f => ({ ...f, salary_range: e.target.value }))} placeholder="e.g. ₦180k – ₦300k" /></div>
           </div>
-          <div><Lbl>Job Description</Lbl><textarea className="inp" rows={4} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
+          <div><Lbl>Job Description</Lbl><textarea className="inp" rows={3} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
+          <div><Lbl>Key Responsibilities</Lbl><textarea className="inp" rows={3} value={form.responsibilities} onChange={e => setForm(f => ({ ...f, responsibilities: e.target.value }))} /></div>
           <div><Lbl>Requirements</Lbl><textarea className="inp" rows={3} value={form.requirements} onChange={e => setForm(f => ({ ...f, requirements: e.target.value }))} /></div>
           <button className="bp" onClick={create} style={{ padding: 14 }}>Post Job</button>
         </div>
@@ -7798,7 +7800,7 @@ function JobRequisitions() {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const { jobs, loading, refresh } = useRecruitmentData();
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ title: "", department: "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", headcount: 1, justification: "", approved_by: "" });
+  const [form, setForm] = useState({ title: "", department: "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", headcount: 1, justification: "", responsibilities: "", approved_by: "" });
 
   const toggleApproval = async (j) => {
     try { await apiFetch(`${API_BASE}/hr/recruitment/jobs/${j.id}`, { method: "PATCH", body: JSON.stringify({ status: "Approved" }) }); refresh(); } catch (e) { alert(e.message); }
@@ -7872,7 +7874,8 @@ function JobRequisitions() {
             <div><Lbl>Employment Type</Lbl><select className="inp" value={form.employment_type} onChange={e => setForm(f => ({ ...f, employment_type: e.target.value }))}><option>Full-time</option><option>Part-time</option><option>Contract</option></select></div>
             <div><Lbl>Proposed Salary Range</Lbl><input className="inp" value={form.salary_range} onChange={e => setForm(f => ({ ...f, salary_range: e.target.value }))} placeholder="₦200k – ₦350k" /></div>
           </div>
-          <div><Lbl>Business Justification *</Lbl><textarea className="inp" rows={4} value={form.justification} onChange={e => setForm(f => ({ ...f, justification: e.target.value }))} placeholder="Why is this role needed?" /></div>
+          <div><Lbl>Business Justification *</Lbl><textarea className="inp" rows={3} value={form.justification} onChange={e => setForm(f => ({ ...f, justification: e.target.value }))} placeholder="Why is this role needed?" /></div>
+          <div><Lbl>Key Responsibilities</Lbl><textarea className="inp" rows={3} value={form.responsibilities} onChange={e => setForm(f => ({ ...f, responsibilities: e.target.value }))} /></div>
           <div><Lbl>Requested Approval From</Lbl><input className="inp" value={form.approved_by || ""} onChange={e => setForm(f => ({ ...f, approved_by: e.target.value }))} placeholder="Name of approving manager" /></div>
           <button className="bp" onClick={create} style={{ padding: 14 }}>{form.id ? "Save Changes" : "Submit for Approval"}</button>
         </div>
