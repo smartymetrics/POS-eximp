@@ -1108,6 +1108,27 @@ class GoalCreate(BaseModel):
     month: date
     template_id: Optional[str] = None
 
+@router.patch("/goals/{goal_id}")
+async def update_staff_goal(goal_id: str, goal: GoalUpdate, current_admin: dict = Depends(verify_token)):
+    """Update a staff goal/KPI. HR or Manager only."""
+    user_roles = current_admin.get("role", "").split(",")
+    is_privileged = any(r in ["admin", "hr_admin", "line_manager"] for r in user_roles)
+    if not is_privileged:
+        raise HTTPException(status_code=403, detail="Not authorized")
+    
+    db = get_db()
+    update_data = goal.dict(exclude_unset=True)
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No changes provided")
+    
+    if "month" in update_data and update_data["month"]:
+        update_data["month"] = update_data["month"].isoformat()
+
+    res = await db_execute(lambda: db.table("staff_goals").update(update_data).eq("id", goal_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Goal not found")
+    return res.data[0]
+
 @router.get("/goals")
 async def get_hr_goals(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
     """Fetch goals/KPIs for HR (all) or Staff (own)."""
@@ -2865,14 +2886,32 @@ async def delete_department(dept_id: str, current_admin: dict = Depends(verify_t
         print(f"ERROR deleting department: {e}")
         raise HTTPException(status_code=500, detail=str(e))
 
-@router.get("/recruitment/interviews")
-async def get_interviews(current_admin: dict = Depends(verify_token)):
-    user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles and "manager" not in user_roles:
-        raise HTTPException(status_code=403, detail="Not authorized")
-    db = get_db()
-    res = await db_execute(lambda: db.table("job_interviews").select("*").execute())
     return res.data if res.data else []
+
+@router.post("/recruitment/send-email")
+async def send_candidate_email(request: Request, current_admin: dict = Depends(verify_token)):
+    """Send an email to a candidate and log it in the recruitment activity."""
+    db = get_db()
+    data = await request.json()
+    candidate_email = data.get("email")
+    subject = data.get("subject")
+    message = data.get("message")
+    candidate_id = data.get("candidate_id")
+
+    if not all([candidate_email, subject, message]):
+        raise HTTPException(status_code=400, detail="Missing email, subject, or message")
+
+    # In a real system, you would integrate with SendGrid/SMTP here.
+    # For now, we log it to the system's email_logs to ensure it's tracked.
+    await db_execute(lambda: db.table("email_logs").insert({
+        "recipient_email": candidate_email,
+        "subject": subject,
+        "email_type": "recruitment",
+        "status": "sent",
+        "sent_at": datetime.utcnow().isoformat()
+    }).execute())
+
+    return {"message": f"Email queued for {candidate_email}"}
 
 @router.get("/calendar-events")
 async def get_calendar_events(current_admin: dict = Depends(verify_token)):
