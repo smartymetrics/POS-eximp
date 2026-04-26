@@ -7890,7 +7890,7 @@ function ApplicationsTracker() {
   const [jobFilter, setJobFilter] = useState("All");
   const [viewApp, setViewApp] = useState(null);
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ job_id: "", candidate_name: "", candidate_email: "", candidate_phone: "", cover_letter: "", cv_url: "" });
+  const [form, setForm] = useState({ job_id: "", candidate_name: "", candidate_email: "", candidate_phone: "", cover_letter: "", resume_url: "" });
 
   const statuses = ["All", "Applied", "Screening", "Interview", "Offered", "Hired", "Rejected"];
   const stCol = { Applied: "#9CA3AF", Screening: "#60A5FA", Interview: T.gold, Offered: "#A78BFA", Hired: "#4ADE80", Rejected: "#F87171" };
@@ -7914,7 +7914,7 @@ function ApplicationsTracker() {
 
   const addApp = async () => {
     if (!form.job_id || !form.candidate_name) return alert("Job and candidate name required");
-    try { await apiFetch(`${API_BASE}/hr/recruitment/applications`, { method: "POST", body: JSON.stringify(form) }); setShowNew(false); setForm({ job_id: "", candidate_name: "", candidate_email: "", candidate_phone: "", cover_letter: "", cv_url: "" }); refresh(); } catch (e) { alert(e.message); }
+    try { await apiFetch(`${API_BASE}/hr/recruitment/applications`, { method: "POST", body: JSON.stringify(form) }); setShowNew(false); setForm({ job_id: "", candidate_name: "", candidate_email: "", candidate_phone: "", cover_letter: "", resume_url: "" }); refresh(); } catch (e) { alert(e.message); }
   };
 
   return (
@@ -7968,14 +7968,14 @@ function ApplicationsTracker() {
       {viewApp && (<Modal onClose={() => setViewApp(null)} title={viewApp.candidate_name} width={560}>
         <div style={{ display: "flex", gap: 8, marginBottom: 18 }}><span className="tg" style={{ background: `${stCol[viewApp.status] || C.muted}22`, color: stCol[viewApp.status] || C.muted }}>{viewApp.status}</span><span className="tg tm">{jobs.find(j => j.id === viewApp.job_id)?.title || "—"}</span></div>
         <div className="g2" style={{ gap: 10, marginBottom: 14 }}><Field label="Email" value={viewApp.candidate_email} /><Field label="Phone" value={viewApp.candidate_phone} /></div>
-        {viewApp.cv_url && <div style={{ marginBottom: 14 }}><a href={viewApp.cv_url} target="_blank" rel="noreferrer" className="bp" style={{ display: "inline-block", fontSize: 13, padding: "8px 18px" }}>📄 View CV</a></div>}
+        {viewApp.resume_url && <div style={{ marginBottom: 14 }}><a href={viewApp.resume_url} target="_blank" rel="noreferrer" className="bp" style={{ display: "inline-block", fontSize: 13, padding: "8px 18px" }}>📄 View CV</a></div>}
         {viewApp.cover_letter && <div><Lbl>Cover Letter</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10 }}>{viewApp.cover_letter}</div></div>}
       </Modal>)}
       {showNew && (<Modal onClose={() => setShowNew(false)} title="Add Application" width={560}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div><Lbl>Role *</Lbl><select className="inp" value={form.job_id} onChange={e => setForm(f => ({ ...f, job_id: e.target.value }))}><option value="">— Select Job —</option>{jobs.filter(j => j.status === "Open").map(j => <option key={j.id} value={j.id}>{j.title}</option>)}</select></div>
           <div className="g2" style={{ gap: 12 }}><div><Lbl>Candidate Name *</Lbl><input className="inp" value={form.candidate_name} onChange={e => setForm(f => ({ ...f, candidate_name: e.target.value }))} /></div><div><Lbl>Email</Lbl><input className="inp" type="email" value={form.candidate_email} onChange={e => setForm(f => ({ ...f, candidate_email: e.target.value }))} /></div></div>
-          <div className="g2" style={{ gap: 12 }}><div><Lbl>Phone</Lbl><input className="inp" value={form.candidate_phone} onChange={e => setForm(f => ({ ...f, candidate_phone: e.target.value }))} /></div><div><Lbl>CV URL</Lbl><input className="inp" value={form.cv_url} onChange={e => setForm(f => ({ ...f, cv_url: e.target.value }))} placeholder="https://…" /></div></div>
+          <div className="g2" style={{ gap: 12 }}><div><Lbl>Phone</Lbl><input className="inp" value={form.candidate_phone} onChange={e => setForm(f => ({ ...f, candidate_phone: e.target.value }))} /></div><div><Lbl>CV URL</Lbl><input className="inp" value={form.resume_url} onChange={e => setForm(f => ({ ...f, resume_url: e.target.value }))} placeholder="https://…" /></div></div>
           <div><Lbl>Cover Letter / Notes</Lbl><textarea className="inp" rows={4} value={form.cover_letter} onChange={e => setForm(f => ({ ...f, cover_letter: e.target.value }))} /></div>
           <button className="bp" onClick={addApp} style={{ padding: 14 }}>Add Application</button>
         </div>
@@ -8272,7 +8272,7 @@ function TalentPool() {
   const [form, setForm] = useState({ name: "", email: "", phone: "", source: "LinkedIn", skills: "", notes: "", role_interest: "" });
 
   useEffect(() => {
-    const candidates = apps.filter(a => ["Hired", "Rejected"].includes(a.status) || a.cv_url).map(a => ({ id: a.id, name: a.candidate_name, email: a.candidate_email, phone: a.candidate_phone, status: a.status, role: jobs.find(j => j.id === a.job_id)?.title || "—", source: "Applied", date: a.created_at, cv_url: a.cv_url }));
+    const candidates = apps.filter(a => ["Hired", "Rejected"].includes(a.status) || a.resume_url).map(a => ({ id: a.id, name: a.candidate_name, email: a.candidate_email, phone: a.candidate_phone, status: a.status, role: jobs.find(j => j.id === a.job_id)?.title || "—", source: "Applied", date: a.created_at, resume_url: a.resume_url }));
     setPool(candidates);
   }, [apps, jobs]);
 
@@ -8320,7 +8320,7 @@ function TalentPool() {
                 <span style={{ fontSize: 11, color: C.muted }}>{sourceEmoji[p.source] || "👤"} {p.source || "—"}</span>
                 <div style={{ display: "flex", gap: 6 }}>
                   {p.email && <a href={`mailto:${p.email}`} className="bg" style={{ fontSize: 11, padding: "4px 10px" }}>Email</a>}
-                  {p.cv_url && <a href={p.cv_url} target="_blank" rel="noreferrer" className="bg" style={{ fontSize: 11, padding: "4px 10px" }}>CV</a>}
+                  {p.resume_url && <a href={p.resume_url} target="_blank" rel="noreferrer" className="bg" style={{ fontSize: 11, padding: "4px 10px" }}>CV</a>}
                 </div>
               </div>
             </div>);
