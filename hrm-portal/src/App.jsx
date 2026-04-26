@@ -414,11 +414,10 @@ function Topbar({ title, user }) {
 
 
 // ─── GOAL FORM MODAL CONTENT ─────────────────────────────────────────────────
-function GoalForm({ onSave, staffList = [], templates = [], initialGoal = null }) {
+function GoalForm({ onSave, staffList = [], templates = [], initialGoal = null, departments = [] }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const defaultForm = { uid: "", department: "", template_id: "", kpi: "", target: "", unit: "", period: new Date().toLocaleDateString(undefined, { month: 'short', year: 'numeric' }), status: "Published" };
   const [f, setF] = useState(defaultForm);
-  const departmentAlias = { Sales: "Sales & Acquisitions", HR: "Human Resources" };
 
   const [selectedTemplate, setSelectedTemplate] = useState(null);
 
@@ -443,14 +442,9 @@ function GoalForm({ onSave, staffList = [], templates = [], initialGoal = null }
   }, [initialGoal, templates]);
 
   const selUser = staffList.find(u => u.id === f.uid);
-  const departmentKey = selUser ? (departmentAlias[selUser.department] || selUser.department) : f.department;
+  const departmentKey = selUser ? selUser.department : f.department;
   const suggestedTemplates = departmentKey ? templates.filter(t => t.department === departmentKey && t.is_active) : [];
   const hasSuggestedKpis = suggestedTemplates.length > 0;
-
-  const departments = Array.from(new Set([
-    ...staffList.map(u => departmentAlias[u.department] || u.department).filter(Boolean),
-    ...templates.map(t => t.department).filter(Boolean)
-  ])).sort();
 
   const save = () => {
     if ((!f.uid && !f.department) || !f.kpi || !f.target) return;
@@ -485,7 +479,7 @@ function GoalForm({ onSave, staffList = [], templates = [], initialGoal = null }
             setSelectedTemplate(null);
           }} disabled={!!f.uid}>
             <option value="">— Select Department —</option>
-            {departments.map(d => <option key={d} value={d}>{d}</option>)}
+            {departments.map(d => <option key={d.id || d} value={d.name || d}>{d.name || d}</option>)}
           </select>
         </div>
       </div>
@@ -581,7 +575,7 @@ function GoalForm({ onSave, staffList = [], templates = [], initialGoal = null }
   );
 }
 
-function KpiTemplateManager({ templates = [], onSave, onUpdate, onClose }) {
+function KpiTemplateManager({ departments = [], templates = [], onSave, onUpdate, onClose }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [editId, setEditId] = useState("");
   const [form, setForm] = useState({ name: "", department: "", category: "", description: "", is_active: true, measurement_source: "manual", default_unit: "count" });
@@ -692,7 +686,7 @@ function KpiTemplateManager({ templates = [], onSave, onUpdate, onClose }) {
             <div><Lbl>Target Department *</Lbl>
               <select className="inp" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}>
                 <option value="">— Select —</option>
-                {["General", "Sales & Acquisitions", "Human Resources", "Operations", "Finance", "Legal"].map(d => <option key={d}>{d}</option>)}
+                {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
               </select>
             </div>
           </div>
@@ -767,6 +761,7 @@ function LeaveForm({ onSave, currentUserId }) {
 
 function Goals({ viewOnly, userId, canManageKpiTemplates = false }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const { jobs, apps, departments, loading: recruitmentLoading, refresh: refreshRecruitment } = useRecruitmentData();
   const [goals, setGoals] = useState([]);
   const [staff, setStaff] = useState([]);
   const [templates, setTemplates] = useState([]);
@@ -1038,13 +1033,14 @@ function Goals({ viewOnly, userId, canManageKpiTemplates = false }) {
 
       {showNew && (
         <Modal onClose={() => { setShowNew(false); setEditingGoal(null); }} title={editingGoal ? "Edit Goal" : "Set New Goal"}>
-          <GoalForm staffList={staff} templates={templates} initialGoal={editingGoal} onSave={saveGoal} />
+          <GoalForm staffList={staff} templates={templates} initialGoal={editingGoal} onSave={saveGoal} departments={departments} />
         </Modal>
       )}
 
       {showTemplateManager && (
         <Modal onClose={() => setShowTemplateManager(false)} title="Manage KPI Library">
           <KpiTemplateManager
+            departments={departments}
             templates={templates}
             onSave={saveTemplate}
             onUpdate={updateTemplate}
@@ -3897,6 +3893,7 @@ function OrgChartView({ staff }) {
 // ─── MODULE: STAFF DIRECTORY ─────────────────────────────────────────────────
 function StaffDirectory({ authRole }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const { departments } = useRecruitmentData();
   const viewOnly = authRole !== "hr";
   const [tab, setTab] = useState("full");
   const [view, setView] = useState(null);
@@ -3904,7 +3901,7 @@ function StaffDirectory({ authRole }) {
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
-  const [newStaff, setNewStaff] = useState({ full_name: "", email: "", password: "", confirm_password: "", roles: ["staff"], primary_role: "staff", staff_type: "full", department: "", line_manager_id: null });
+  const [newStaff, setNewStaff] = useState({ full_name: "", email: "", password: "", confirm_password: "", roles: ["staff"], primary_role: "staff", staff_type: "full", department: departments[0]?.name || "", line_manager_id: null });
   const [saving, setSaving] = useState(false);
   const [editMode, setEditMode] = useState(false);
   const [draftView, setDraftView] = useState({});
@@ -4294,7 +4291,12 @@ function StaffDirectory({ authRole }) {
                   <option value="onsite">Onsite / Labourer</option>
                 </select>
               </div>
-              <div><Lbl>Department</Lbl><input className="inp" placeholder="e.g. Sales & Acquisitions" value={newStaff.department} onChange={e => setNewStaff(s => ({ ...s, department: e.target.value }))} /></div>
+              <div><Lbl>Department</Lbl>
+                <select className="inp" value={newStaff.department} onChange={e => setNewStaff(s => ({ ...s, department: e.target.value }))}>
+                  {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                  {departments.length === 0 && <option>Sales & Acquisitions</option>}
+                </select>
+              </div>
               <div style={{ gridColumn: '1 / -1' }}>
                 <Lbl>Line Manager</Lbl>
                 <select className="inp" value={newStaff.line_manager_id || ""} onChange={e => setNewStaff(s => ({ ...s, line_manager_id: e.target.value || null }))}>
@@ -4376,7 +4378,10 @@ function StaffDirectory({ authRole }) {
                   </div>
                   <div>
                     <Lbl>Department</Lbl>
-                    <input className="inp" value={draftView.department} onChange={e => setDraftView(d => ({ ...d, department: e.target.value }))} />
+                    <select className="inp" value={draftView.department} onChange={e => setDraftView(d => ({ ...d, department: e.target.value }))}>
+                      <option value="">— Select —</option>
+                      {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                    </select>
                   </div>
                   <div>
                     <Lbl>Phone</Lbl>
@@ -6540,23 +6545,41 @@ function HRReports() {
 // ─── HUB: DEPARTMENTS ─────────────────────────────────────────────────────────
 function DepartmentsView() {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
-  const [depts, setDepts] = useState([]); const [loading, setLoading] = useState(true);
+  const [depts, setDepts] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-  useEffect(() => {
+  const refresh = () => {
+    setLoading(true);
     apiFetch(`${API_BASE}/hr/departments`).then(d => setDepts(d || [])).catch(() => { }).finally(() => setLoading(false));
-  }, []);
+  };
+
+  useEffect(() => { refresh(); }, []);
 
   return (
     <div className="fade">
-      <div style={{ marginBottom: 22 }}><div className="ho" style={{ fontSize: 22 }}>Departments</div><div style={{ fontSize: 13, color: C.sub }}>Organisational units and department management.</div></div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 22 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 22 }}>Departments</div>
+          <div style={{ fontSize: 13, color: C.sub }}>Organisational units and department management.</div>
+        </div>
+      </div>
+
+      <div className="gc" style={{ padding: 24, marginBottom: 24 }}>
+        <div style={{ fontSize: 14, fontWeight: 800, marginBottom: 16 }}>Manage Units</div>
+        <DepartmentManager departments={depts} onRefresh={refresh} />
+      </div>
+
       {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : (
-        <div className="g3">{depts.map((d, i) => (
-          <div key={i} className="gc" style={{ padding: 20 }}>
-            <div style={{ fontSize: 28, marginBottom: 10 }}>🏢</div>
-            <div style={{ fontWeight: 800, color: C.text, fontSize: 14 }}>{d.name || d}</div>
-            <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Department</div>
-          </div>
-        ))}</div>
+        <div className="g3">
+          {depts.map((d, i) => (
+            <div key={i} className="gc" style={{ padding: 20, position: "relative" }}>
+              <div style={{ fontSize: 28, marginBottom: 10 }}>🏢</div>
+              <div style={{ fontWeight: 800, color: C.text, fontSize: 14 }}>{d.name || d}</div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Active Department</div>
+            </div>
+          ))}
+          {depts.length === 0 && <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: C.muted }}>No departments configured. Add one above.</div>}
+        </div>
       )}
     </div>
   );
@@ -7674,31 +7697,70 @@ function useRecruitmentData() {
   const [jobs, setJobs] = useState([]);
   const [apps, setApps] = useState([]);
   const [interviews, setInterviews] = useState([]);
+  const [departments, setDepartments] = useState([]);
   const [loading, setLoading] = useState(true);
   const refresh = async () => {
     setLoading(true);
     try {
-      const [j, a, iv] = await Promise.all([
+      const [j, a, iv, d] = await Promise.all([
         apiFetch(`${API_BASE}/hr/recruitment/jobs`).catch(() => []),
         apiFetch(`${API_BASE}/hr/recruitment/applications`).catch(() => []),
         apiFetch(`${API_BASE}/hr/recruitment/interviews`).catch(() => []),
+        apiFetch(`${API_BASE}/hr/departments`).catch(() => []),
       ]);
-      setJobs(j || []); setApps(a || []); setInterviews(iv || []);
+      setJobs(j || []); setApps(a || []); setInterviews(iv || []); setDepartments(d || []);
     } catch (e) { console.error(e); } finally { setLoading(false); }
   };
   useEffect(() => { refresh(); }, []);
-  return { jobs, apps, interviews, loading, refresh };
+  return { jobs, apps, interviews, departments, loading, refresh };
+}
+
+function DepartmentManager({ departments = [], onRefresh }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [name, setName] = useState("");
+  const [saving, setSaving] = useState(false);
+  const handleAdd = async () => {
+    if (!name) return; setSaving(true);
+    try { await apiFetch(`${API_BASE}/hr/departments`, { method: "POST", body: JSON.stringify({ name }) }); setName(""); onRefresh(); }
+    catch (e) { alert(e.message); } finally { setSaving(false); }
+  };
+  const handleDelete = async (id) => {
+    if (!window.confirm("Delete this department?")) return;
+    try { await apiFetch(`${API_BASE}/hr/departments/${id}`, { method: "DELETE" }); onRefresh(); }
+    catch (e) { alert(e.message); }
+  };
+  return (
+    <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+      <div style={{ display: "flex", gap: 10 }}>
+        <input className="inp" value={name} onChange={e => setName(e.target.value)} placeholder="New Department Name..." />
+        <button className="bp" onClick={handleAdd} disabled={saving}>{saving ? "Adding..." : "Add"}</button>
+      </div>
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 8 }}>
+        {departments.map(d => (
+          <div key={d.id} style={{ display: "flex", alignItems: "center", gap: 8, padding: "6px 12px", background: d.is_system ? `${C.border}44` : `${T.gold}11`, borderRadius: 8, border: `1px solid ${d.is_system ? C.border : T.gold + "22"}` }}>
+            <span style={{ fontSize: 13, fontWeight: 700, opacity: d.is_system ? 0.6 : 1 }}>{d.name}</span>
+            {d.is_system ? (
+              <span style={{ fontSize: 9, color: C.muted, fontWeight: 800, textTransform: "uppercase" }}>Staff Linked</span>
+            ) : (
+              <button onClick={() => handleDelete(d.id)} style={{ background: "none", border: "none", color: "#F87171", cursor: "pointer", fontSize: 14 }}>×</button>
+            )}
+          </div>
+        ))}
+      </div>
+    </div>
+  );
 }
 
 // ─── 1. JOBS BOARD ────────────────────────────────────────────────────────────
 function JobsBoard() {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
-  const { jobs, apps, loading, refresh } = useRecruitmentData();
+  const { jobs, apps, departments, loading, refresh } = useRecruitmentData();
   const [search, setSearch] = useState("");
   const [deptFilter, setDeptFilter] = useState("All");
   const [showNew, setShowNew] = useState(false);
+  const [showDepts, setShowDepts] = useState(false);
   const [viewJob, setViewJob] = useState(null);
-  const [form, setForm] = useState({ title: "", department: "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", description: "", responsibilities: "", requirements: "" });
+  const [form, setForm] = useState({ title: "", department: departments[0]?.name || "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", description: "", responsibilities: "", requirements: "" });
 
   const depts = ["All", ...new Set(jobs.map(j => j.department).filter(Boolean))];
   const filtered = jobs.filter(j =>
@@ -7710,7 +7772,7 @@ function JobsBoard() {
     if (!form.title) return alert("Job title required");
     try {
       await apiFetch(`${API_BASE}/hr/recruitment/jobs`, { method: "POST", body: JSON.stringify(form) });
-      setShowNew(false); setForm({ title: "", department: "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", description: "", responsibilities: "", requirements: "" }); refresh();
+      setShowNew(false); setForm({ title: "", department: departments[0]?.name || "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", description: "", responsibilities: "", requirements: "" }); refresh();
     } catch (e) { alert(e.message); }
   };
 
@@ -7725,8 +7787,12 @@ function JobsBoard() {
     <div className="fade">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
         <div><div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Jobs</div><div style={{ fontSize: 13, color: C.sub }}>Active job openings. Manage listings, track applicant counts, open and close roles.</div></div>
-        <button className="bp" onClick={() => setShowNew(true)}>+ Post New Job</button>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button className="bg" onClick={() => setShowDepts(true)}>Manage Departments</button>
+          <button className="bp" onClick={() => setShowNew(true)}>+ Post New Job</button>
+        </div>
       </div>
+      {showDepts && <Modal title="Manage Departments" onClose={() => setShowDepts(false)} width={480}><DepartmentManager departments={departments} onRefresh={refresh} /></Modal>}
       <div className="g4" style={{ marginBottom: 22 }}>
         <StatCard label="Open Roles" value={jobs.filter(j => j.status === "Open" || j.status === "Approved").length} col="#4ADE80" />
         <StatCard label="Closed Roles" value={jobs.filter(j => j.status !== "Open" && j.status !== "Approved").length} col="#F87171" />
@@ -7778,7 +7844,12 @@ function JobsBoard() {
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div><Lbl>Job Title *</Lbl><input className="inp" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Senior Property Executive" /></div>
           <div className="g2" style={{ gap: 12 }}>
-            <div><Lbl>Department</Lbl><select className="inp" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}><option>Sales & Acquisitions</option><option>Finance</option><option>Operations</option><option>Human Resources</option><option>Legal</option><option>Marketing</option><option>IT</option></select></div>
+            <div><Lbl>Department</Lbl>
+              <select className="inp" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}>
+                {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                {departments.length === 0 && <option>Sales & Acquisitions</option>}
+              </select>
+            </div>
             <div><Lbl>Employment Type</Lbl><select className="inp" value={form.employment_type} onChange={e => setForm(f => ({ ...f, employment_type: e.target.value }))}><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Internship</option></select></div>
           </div>
           <div className="g2" style={{ gap: 12 }}>
@@ -7798,9 +7869,9 @@ function JobsBoard() {
 // ─── 2. JOB REQUISITIONS ──────────────────────────────────────────────────────
 function JobRequisitions() {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
-  const { jobs, loading, refresh } = useRecruitmentData();
+  const { jobs, departments, loading, refresh } = useRecruitmentData();
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ title: "", department: "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", headcount: 1, justification: "", responsibilities: "", approved_by: "" });
+  const [form, setForm] = useState({ title: "", department: departments[0]?.name || "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", headcount: 1, justification: "", responsibilities: "", approved_by: "" });
 
   const toggleApproval = async (j) => {
     try { await apiFetch(`${API_BASE}/hr/recruitment/jobs/${j.id}`, { method: "PATCH", body: JSON.stringify({ status: "Approved" }) }); refresh(); } catch (e) { alert(e.message); }
@@ -7867,7 +7938,12 @@ function JobRequisitions() {
         <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
           <div><Lbl>Position Title *</Lbl><input className="inp" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Property Acquisition Manager" /></div>
           <div className="g2" style={{ gap: 12 }}>
-            <div><Lbl>Department</Lbl><select className="inp" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}><option>Sales & Acquisitions</option><option>Finance</option><option>Operations</option><option>Human Resources</option><option>Legal</option></select></div>
+            <div><Lbl>Department</Lbl>
+              <select className="inp" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}>
+                {departments.map(d => <option key={d.id} value={d.name}>{d.name}</option>)}
+                {departments.length === 0 && <option>Sales & Acquisitions</option>}
+              </select>
+            </div>
             <div><Lbl>Headcount Requested</Lbl><input type="number" min="1" className="inp" value={form.headcount} onChange={e => setForm(f => ({ ...f, headcount: +e.target.value }))} /></div>
           </div>
           <div className="g2" style={{ gap: 12 }}>

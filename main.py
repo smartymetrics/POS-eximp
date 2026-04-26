@@ -99,7 +99,7 @@ app.include_router(scheduling.router, prefix="/api/scheduling", tags=["schedulin
 app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
 app.include_router(ws_support.router, prefix="/api", tags=["live-chat"])
 app.include_router(subscriptions.router, tags=["subscriptions"])
-app.include_router(hr.router, tags=["hr"])
+app.include_router(hr.router, prefix="/api/hr", tags=["hr"])
 app.include_router(hr_legal.router, prefix="/api/hr-legal", tags=["hr-legal"])
 
 

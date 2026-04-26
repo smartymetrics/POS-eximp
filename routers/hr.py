@@ -12,7 +12,7 @@ from models import (
     StaffQualificationCreate, IncidentCreate
 )
 
-router = APIRouter(prefix="/api/hr", tags=["HR Management"])
+router = APIRouter()
 
 # ─── MODELS ───────────────────────────────────────────────────────────────────
 
@@ -2754,13 +2754,63 @@ async def report_headcount(current_admin: dict = Depends(verify_token)):
 @router.get("/departments")
 async def get_departments(current_admin: dict = Depends(verify_token)):
     db = get_db()
-    res = await db_execute(lambda: db.table("departments").select("*").execute())
-    if not res.data:
-        # Fallback: derive from admins table
-        staff = await db_execute(lambda: db.table("admins").select("department").execute())
-        depts = list(set(s["department"] for s in staff.data if s.get("department")))
-        return [{"name": d} for d in sorted(depts)]
-    return res.data
+    try:
+        # 1. Fetch official departments
+        res = await db_execute(lambda: db.table("departments").select("*").execute())
+        db_depts = res.data or []
+        db_names = {d["name"].lower() for d in db_depts}
+        
+        # 2. Fetch staff-derived departments
+        staff_res = await db_execute(lambda: db.table("admins").select("department").execute())
+        staff_depts = list(set(s["department"] for s in (staff_res.data or []) if s.get("department")))
+        
+        # 3. Merge: Only add staff departments that aren't already in the DB
+        merged = [d for d in db_depts]
+        for sd in sorted(staff_depts):
+            if sd.lower() not in db_names:
+                merged.append({"id": f"sys-{sd}", "name": sd, "is_system": True})
+        
+        print(f"Merged {len(merged)} departments (DB: {len(db_depts)}, Sys: {len(merged)-len(db_depts)})")
+        return merged
+        
+    except Exception as e:
+        print(f"ERROR in get_departments: {e}")
+        # Final safety fallback
+        return [{"id": "err", "name": "Error loading departments", "is_system": True}]
+
+class DepartmentCreate(BaseModel):
+    name: str
+
+@router.post("/departments", status_code=status.HTTP_201_CREATED)
+async def create_department(dept: DepartmentCreate, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+         raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    try:
+        print(f"Creating department: {dept.name}")
+        res = await db_execute(lambda: db.table("departments").insert({"name": dept.name}).execute())
+        print(f"Created department response: {res.data}")
+        return res.data[0]
+    except Exception as e:
+        print(f"ERROR creating department: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/departments/{dept_id}")
+async def delete_department(dept_id: str, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+         raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    try:
+        print(f"Deleting department ID: {dept_id}")
+        res = await db_execute(lambda: db.table("departments").delete().eq("id", dept_id).execute())
+        print(f"Delete response: {res.data}")
+        return {"message": "Deleted", "data": res.data}
+    except Exception as e:
+        print(f"ERROR deleting department: {e}")
+        raise HTTPException(status_code=500, detail=str(e))
+
 @router.get("/recruitment/interviews")
 async def get_interviews(current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
