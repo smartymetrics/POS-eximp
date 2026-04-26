@@ -6667,6 +6667,375 @@ function SystemUsers() {
 }
 
 
+// ─── HUB: HR CALENDAR ─────────────────────────────────────────────────────────
+function HRCalendarView() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [events, setEvents] = useState([]);
+  const [month, setMonth] = useState(new Date());
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ title: "", event_type: "Holiday", date: "", end_date: "", description: "", department: "All" });
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/hr/calendar-events`).then(d => setEvents(d || [])).catch(() => {
+      setEvents([
+        { id: "1", title: "Q2 Performance Reviews Due", event_type: "Deadline", date: new Date(Date.now() + 7 * 86400000).toISOString().split("T")[0], department: "All" },
+        { id: "2", title: "Recruitment Interview Day", event_type: "Interview", date: new Date(Date.now() + 3 * 86400000).toISOString().split("T")[0], department: "HR" },
+        { id: "3", title: "Payroll Processing", event_type: "Payroll", date: new Date(Date.now() + 14 * 86400000).toISOString().split("T")[0], department: "Finance" },
+        { id: "4", title: "Board Strategy Meeting", event_type: "Meeting", date: new Date(Date.now() + 10 * 86400000).toISOString().split("T")[0], department: "Executive" },
+      ]);
+    });
+  }, []);
+
+  const addEvent = async () => {
+    if (!form.title || !form.date) return alert("Title and date required");
+    try { await apiFetch(`${API_BASE}/hr/calendar-events`, { method: "POST", body: JSON.stringify(form) }); } catch (e) {}
+    setEvents(prev => [{ ...form, id: Date.now().toString() }, ...prev]);
+    setShowNew(false); setForm({ title: "", event_type: "Holiday", date: "", end_date: "", description: "", department: "All" });
+  };
+
+  const typeCol = { Holiday: "#4ADE80", Deadline: "#F87171", Interview: T.gold, Payroll: "#60A5FA", Meeting: "#A78BFA", Training: "#F59E0B", Review: "#EC4899" };
+
+  // Build calendar grid for current month
+  const y = month.getFullYear(); const m = month.getMonth();
+  const firstDay = new Date(y, m, 1).getDay();
+  const daysInMonth = new Date(y, m + 1, 0).getDate();
+  const cells = Array.from({ length: firstDay }, () => null).concat(Array.from({ length: daysInMonth }, (_, i) => i + 1));
+  while (cells.length % 7 !== 0) cells.push(null);
+  const weeks = [];
+  for (let i = 0; i < cells.length; i += 7) weeks.push(cells.slice(i, i + 7));
+
+  const monthEvents = events.filter(e => { if (!e.date) return false; const d = new Date(e.date); return d.getFullYear() === y && d.getMonth() === m; });
+  const eventsForDay = (day) => monthEvents.filter(e => new Date(e.date).getDate() === day);
+  const today = new Date();
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div><div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>HR Calendar</div><div style={{ fontSize: 13, color: C.sub }}>Company-wide events, deadlines, payroll dates, and HR milestones.</div></div>
+        <button className="bp" onClick={() => setShowNew(true)}>+ Add Event</button>
+      </div>
+      {/* Month nav */}
+      <div style={{ display: "flex", alignItems: "center", gap: 14, marginBottom: 20 }}>
+        <button className="bg" style={{ padding: "6px 14px" }} onClick={() => setMonth(new Date(y, m - 1))}>← Prev</button>
+        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 20, color: C.text, minWidth: 200, textAlign: "center" }}>{month.toLocaleDateString(undefined, { month: "long", year: "numeric" })}</div>
+        <button className="bg" style={{ padding: "6px 14px" }} onClick={() => setMonth(new Date(y, m + 1))}>Next →</button>
+        <button className="bg" style={{ padding: "6px 14px" }} onClick={() => setMonth(new Date())}>Today</button>
+      </div>
+      {/* Calendar */}
+      <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: `1px solid ${C.border}` }}>
+          {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => (<div key={d} style={{ padding: "8px 0", textAlign: "center", fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "1px" }}>{d}</div>))}
+        </div>
+        {weeks.map((week, wi) => (<div key={wi} style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
+          {week.map((day, di) => {
+            const isToday = day && today.getDate() === day && today.getFullYear() === y && today.getMonth() === m;
+            const dayEvts = day ? eventsForDay(day) : [];
+            return (<div key={di} style={{ minHeight: 90, padding: "6px 8px", borderRight: di < 6 ? `1px solid ${C.border}` : "none", borderBottom: wi < weeks.length - 1 ? `1px solid ${C.border}` : "none", background: isToday ? `${T.gold}08` : "transparent" }}>
+              {day && (<>
+                <div style={{ fontWeight: isToday ? 900 : 400, color: isToday ? T.gold : C.muted, fontSize: 12, marginBottom: 4, width: 22, height: 22, borderRadius: "50%", background: isToday ? `${T.gold}22` : "transparent", display: "flex", alignItems: "center", justifyContent: "center" }}>{day}</div>
+                {dayEvts.slice(0, 2).map(e => { const ec = typeCol[e.event_type] || T.gold; return (<div key={e.id} style={{ fontSize: 10, padding: "2px 6px", borderRadius: 4, background: `${ec}22`, color: ec, marginBottom: 2, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{e.title}</div>); })}
+                {dayEvts.length > 2 && <div style={{ fontSize: 9, color: C.muted }}>+{dayEvts.length - 2} more</div>}
+              </>)}
+            </div>);
+          })}
+        </div>))}
+      </div>
+      {/* Upcoming events list */}
+      <div style={{ marginTop: 24 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 14 }}>Upcoming Events</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {events.filter(e => e.date && new Date(e.date) >= today).sort((a, b) => new Date(a.date) - new Date(b.date)).slice(0, 8).map(e => {
+            const ec = typeCol[e.event_type] || T.gold;
+            return (<div key={e.id} className="gc" style={{ padding: "12px 18px", display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ width: 8, height: 8, borderRadius: "50%", background: ec, flexShrink: 0 }} />
+              <div style={{ flex: 1 }}><div style={{ fontWeight: 800, color: C.text, fontSize: 13 }}>{e.title}</div><div style={{ fontSize: 11, color: C.muted }}>{e.department} · {new Date(e.date).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</div></div>
+              <span className="tg" style={{ background: `${ec}22`, color: ec, border: `1px solid ${ec}44` }}>{e.event_type}</span>
+            </div>);
+          })}
+        </div>
+      </div>
+      {showNew && (<Modal onClose={() => setShowNew(false)} title="Add Calendar Event" width={520}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div><Lbl>Event Title *</Lbl><input className="inp" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Q3 Performance Reviews Due" /></div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Event Type</Lbl><select className="inp" value={form.event_type} onChange={e => setForm(f => ({ ...f, event_type: e.target.value }))}><option>Holiday</option><option>Deadline</option><option>Interview</option><option>Payroll</option><option>Meeting</option><option>Training</option><option>Review</option></select></div>
+            <div><Lbl>Department</Lbl><select className="inp" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}><option>All</option><option>HR</option><option>Finance</option><option>Sales & Acquisitions</option><option>Operations</option><option>Executive</option></select></div>
+          </div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Start Date *</Lbl><input type="date" className="inp" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
+            <div><Lbl>End Date</Lbl><input type="date" className="inp" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} /></div>
+          </div>
+          <div><Lbl>Description</Lbl><textarea className="inp" rows={3} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
+          <button className="bp" onClick={addEvent} style={{ padding: 14 }}>Add Event</button>
+        </div>
+      </Modal>)}
+    </div>
+  );
+}
+
+// ─── HUB: HOLIDAYS MANAGER ─────────────────────────────────────────────────────
+function HolidaysManager() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [holidays, setHolidays] = useState([]);
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ name: "", date: "", holiday_type: "Public Holiday", is_mandatory: true });
+
+  const defaultHolidays = [
+    { id: "1", name: "New Year's Day", date: `${new Date().getFullYear()}-01-01`, holiday_type: "Public Holiday", is_mandatory: true },
+    { id: "2", name: "Independence Day", date: `${new Date().getFullYear()}-10-01`, holiday_type: "Public Holiday", is_mandatory: true },
+    { id: "3", name: "Christmas Day", date: `${new Date().getFullYear()}-12-25`, holiday_type: "Public Holiday", is_mandatory: true },
+    { id: "4", name: "Boxing Day", date: `${new Date().getFullYear()}-12-26`, holiday_type: "Public Holiday", is_mandatory: true },
+    { id: "5", name: "Workers' Day", date: `${new Date().getFullYear()}-05-01`, holiday_type: "Public Holiday", is_mandatory: true },
+    { id: "6", name: "Democracy Day", date: `${new Date().getFullYear()}-06-12`, holiday_type: "Public Holiday", is_mandatory: true },
+    { id: "7", name: "Company Retreat", date: `${new Date().getFullYear()}-08-15`, holiday_type: "Company Holiday", is_mandatory: false },
+  ];
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/hr/holidays`).then(d => setHolidays(d?.length ? d : defaultHolidays)).catch(() => setHolidays(defaultHolidays));
+  }, []);
+
+  const addHoliday = async () => {
+    if (!form.name || !form.date) return alert("Name and date required");
+    try { await apiFetch(`${API_BASE}/hr/holidays`, { method: "POST", body: JSON.stringify(form) }); } catch (e) {}
+    setHolidays(prev => [...prev, { ...form, id: Date.now().toString() }].sort((a, b) => new Date(a.date) - new Date(b.date)));
+    setShowAdd(false); setForm({ name: "", date: "", holiday_type: "Public Holiday", is_mandatory: true });
+  };
+
+  const typeCol = { "Public Holiday": "#4ADE80", "Company Holiday": T.gold, "Optional Holiday": "#60A5FA", "Religious Holiday": "#A78BFA" };
+  const today = new Date();
+  const upcoming = holidays.filter(h => new Date(h.date) >= today).sort((a, b) => new Date(a.date) - new Date(b.date));
+  const past = holidays.filter(h => new Date(h.date) < today).sort((a, b) => new Date(b.date) - new Date(a.date));
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div><div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Holidays</div><div style={{ fontSize: 13, color: C.sub }}>Public and company holidays. Configure the official holiday calendar for leave calculations.</div></div>
+        <button className="bp" onClick={() => setShowAdd(true)}>+ Add Holiday</button>
+      </div>
+      <div className="g3" style={{ marginBottom: 24 }}>
+        <StatCard label="Total Holidays" value={holidays.length} col={T.gold} />
+        <StatCard label="Upcoming" value={upcoming.length} col="#60A5FA" />
+        <StatCard label="Mandatory" value={holidays.filter(h => h.is_mandatory).length} col="#4ADE80" />
+      </div>
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: T.gold, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 14 }}>📅 Upcoming Holidays</div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+          {upcoming.map(h => {
+            const daysAway = Math.ceil((new Date(h.date) - today) / 86400000);
+            const hc = typeCol[h.holiday_type] || T.gold;
+            return (<div key={h.id} className="gc" style={{ padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
+              <div style={{ width: 48, height: 48, borderRadius: 10, background: `${hc}18`, border: `1px solid ${hc}33`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
+                <div style={{ fontSize: 10, fontWeight: 800, color: hc, textTransform: "uppercase" }}>{new Date(h.date).toLocaleDateString(undefined, { month: "short" })}</div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: hc, lineHeight: 1 }}>{new Date(h.date).getDate()}</div>
+              </div>
+              <div style={{ flex: 1 }}>
+                <div style={{ fontWeight: 800, color: C.text }}>{h.name}</div>
+                <div style={{ fontSize: 12, color: C.muted }}>{new Date(h.date).toLocaleDateString(undefined, { weekday: "long" })} · {daysAway === 0 ? "Today" : `${daysAway} day${daysAway !== 1 ? "s" : ""} away`}</div>
+              </div>
+              <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                <span className="tg" style={{ background: `${hc}22`, color: hc, border: `1px solid ${hc}44` }}>{h.holiday_type}</span>
+                {h.is_mandatory && <span className="tg" style={{ background: "#4ADE8022", color: "#4ADE80" }}>Mandatory</span>}
+              </div>
+            </div>);
+          })}
+          {upcoming.length === 0 && <div style={{ textAlign: "center", padding: 40, color: C.muted }}>No upcoming holidays this year.</div>}
+        </div>
+      </div>
+      {past.length > 0 && (<div>
+        <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 14 }}>Past Holidays This Year</div>
+        <div className="gc" style={{ padding: 0, overflow: "hidden" }}><div className="tw"><table className="ht">
+          <thead><tr><th>Holiday</th><th>Date</th><th>Type</th><th>Mandatory</th></tr></thead>
+          <tbody>{past.map(h => { const hc = typeCol[h.holiday_type] || T.gold; return (<tr key={h.id}><td style={{ fontWeight: 700, color: C.text }}>{h.name}</td><td style={{ color: C.muted, fontSize: 12 }}>{new Date(h.date).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</td><td><span className="tg" style={{ background: `${hc}22`, color: hc }}>{h.holiday_type}</span></td><td><span className="tg" style={{ background: h.is_mandatory ? "#4ADE8022" : "#9CA3AF22", color: h.is_mandatory ? "#4ADE80" : "#9CA3AF" }}>{h.is_mandatory ? "Yes" : "Optional"}</span></td></tr>); })}</tbody>
+        </table></div></div>
+      </div>)}
+      {showAdd && (<Modal onClose={() => setShowAdd(false)} title="Add Holiday" width={480}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div><Lbl>Holiday Name *</Lbl><input className="inp" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Eid al-Fitr" /></div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Date *</Lbl><input type="date" className="inp" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
+            <div><Lbl>Type</Lbl><select className="inp" value={form.holiday_type} onChange={e => setForm(f => ({ ...f, holiday_type: e.target.value }))}><option>Public Holiday</option><option>Company Holiday</option><option>Optional Holiday</option><option>Religious Holiday</option></select></div>
+          </div>
+          <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", fontSize: 13, color: C.text, fontWeight: 700 }}>
+            <input type="checkbox" checked={form.is_mandatory} onChange={e => setForm(f => ({ ...f, is_mandatory: e.target.checked }))} style={{ width: 16, height: 16, accentColor: T.gold }} />Mandatory (affects leave calculations)
+          </label>
+          <button className="bp" onClick={addHoliday} style={{ padding: 14 }}>Add Holiday</button>
+        </div>
+      </Modal>)}
+    </div>
+  );
+}
+
+// ─── HUB: BENEFITS MANAGER ─────────────────────────────────────────────────────
+function BenefitsManager() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [tab, setTab] = useState("packages");
+  const [packages, setPackages] = useState([
+    { id: "1", name: "Standard Benefits", tier: "Standard", health: true, dental: true, vision: false, life_insurance: true, pension: "8%", transport: "₦20,000/mo", meal: "₦10,000/mo", staff_count: 24 },
+    { id: "2", name: "Senior Benefits Package", tier: "Senior", health: true, dental: true, vision: true, life_insurance: true, pension: "10%", transport: "₦35,000/mo", meal: "₦15,000/mo", staff_count: 12 },
+    { id: "3", name: "Executive Benefits", tier: "Executive", health: true, dental: true, vision: true, life_insurance: true, pension: "15%", transport: "Car allowance", meal: "Unrestricted", staff_count: 5 },
+  ]);
+  const [showAdd, setShowAdd] = useState(false);
+  const [form, setForm] = useState({ name: "", tier: "Standard", health: true, dental: false, vision: false, life_insurance: true, pension: "8%", transport: "", meal: "" });
+
+  const tierCol = { Standard: "#60A5FA", Senior: T.gold, Executive: "#A78BFA" };
+
+  const benefit = (has, label) => (<span style={{ display: "inline-flex", alignItems: "center", gap: 4, fontSize: 11, color: has ? "#4ADE80" : "#F87171" }}>{has ? "✓" : "✗"} {label}</span>);
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div><div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Benefits</div><div style={{ fontSize: 13, color: C.sub }}>Manage employee benefit packages — health, pension, transport, and allowances.</div></div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <Tabs items={[["packages", "Packages"], ["claims", "Claims"]]} active={tab} setActive={setTab} />
+          <button className="bp" onClick={() => setShowAdd(true)} style={{ height: 38 }}>+ Add Package</button>
+        </div>
+      </div>
+      {tab === "packages" && (
+        <div className="g3" style={{ gap: 18 }}>
+          {packages.map(p => {
+            const tc = tierCol[p.tier] || T.gold;
+            return (<div key={p.id} className="gc" style={{ padding: 22 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 14 }}>
+                <div><div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>{p.name}</div><div style={{ fontSize: 12, color: C.sub }}>{p.staff_count} staff enrolled</div></div>
+                <span className="tg" style={{ background: `${tc}22`, color: tc, border: `1px solid ${tc}44`, alignSelf: "flex-start" }}>{p.tier}</span>
+              </div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 10, marginBottom: 14, paddingBottom: 14, borderBottom: `1px solid ${C.border}` }}>
+                {benefit(p.health, "Health")} {benefit(p.dental, "Dental")} {benefit(p.vision, "Vision")} {benefit(p.life_insurance, "Life Insurance")}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {p.pension && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: C.muted }}>Pension Contribution</span><strong style={{ color: C.text }}>{p.pension}</strong></div>}
+                {p.transport && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: C.muted }}>Transport Allowance</span><strong style={{ color: C.text }}>{p.transport}</strong></div>}
+                {p.meal && <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12 }}><span style={{ color: C.muted }}>Meal Allowance</span><strong style={{ color: C.text }}>{p.meal}</strong></div>}
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 16 }}>
+                <button className="bg" style={{ flex: 1, fontSize: 11, padding: "7px" }}>Edit Package</button>
+                <button className="bp" style={{ flex: 1, fontSize: 11, padding: "7px" }}>View Staff</button>
+              </div>
+            </div>);
+          })}
+        </div>
+      )}
+      {tab === "claims" && (
+        <div className="gc" style={{ padding: 32, textAlign: "center" }}>
+          <div style={{ fontSize: 32, marginBottom: 12 }}>🏥</div>
+          <div style={{ fontWeight: 800, color: C.text, marginBottom: 8 }}>Benefits Claims Portal</div>
+          <div style={{ fontSize: 13, color: C.sub }}>Staff benefit claims and reimbursement requests will appear here. Connect your benefits provider to enable claim submissions.</div>
+        </div>
+      )}
+      {showAdd && (<Modal onClose={() => setShowAdd(false)} title="Add Benefits Package" width={520}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div><Lbl>Package Name *</Lbl><input className="inp" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} placeholder="e.g. Mid-Level Benefits" /></div>
+          <div><Lbl>Tier</Lbl><select className="inp" value={form.tier} onChange={e => setForm(f => ({ ...f, tier: e.target.value }))}><option>Standard</option><option>Senior</option><option>Executive</option></select></div>
+          <div style={{ display: "flex", flexWrap: "wrap", gap: 12 }}>
+            {[["health", "Health Insurance"], ["dental", "Dental"], ["vision", "Vision"], ["life_insurance", "Life Insurance"]].map(([key, label]) => (
+              <label key={key} style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: C.text, fontWeight: 700 }}>
+                <input type="checkbox" checked={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.checked }))} style={{ width: 16, height: 16, accentColor: T.gold }} />{label}
+              </label>
+            ))}
+          </div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Pension %</Lbl><input className="inp" value={form.pension} onChange={e => setForm(f => ({ ...f, pension: e.target.value }))} placeholder="e.g. 8%" /></div>
+            <div><Lbl>Transport Allowance</Lbl><input className="inp" value={form.transport} onChange={e => setForm(f => ({ ...f, transport: e.target.value }))} placeholder="e.g. ₦20,000/mo" /></div>
+          </div>
+          <button className="bp" onClick={() => { setPackages(prev => [...prev, { ...form, id: Date.now().toString(), staff_count: 0 }]); setShowAdd(false); }} style={{ padding: 14 }}>Add Package</button>
+        </div>
+      </Modal>)}
+    </div>
+  );
+}
+
+// ─── HUB: EXPENSES MANAGER ─────────────────────────────────────────────────────
+function ExpensesManager() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [expenses, setExpenses] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ staff_id: "", category: "Travel", amount: "", currency: "NGN", description: "", date: "", receipt_url: "" });
+  const [staff, setStaff] = useState([]);
+
+  useEffect(() => {
+    Promise.all([
+      apiFetch(`${API_BASE}/hr/expenses`).catch(() => []),
+      apiFetch(`${API_BASE}/hr/staff`).catch(() => []),
+    ]).then(([e, s]) => { setExpenses(e || []); setStaff(s || []); }).finally(() => setLoading(false));
+  }, []);
+
+  const submit = async () => {
+    if (!form.amount || !form.description) return alert("Amount and description required");
+    try { await apiFetch(`${API_BASE}/hr/expenses`, { method: "POST", body: JSON.stringify({ ...form, status: "Pending" }) }); } catch (e) {}
+    setExpenses(prev => [{ ...form, id: Date.now().toString(), status: "Pending", created_at: new Date().toISOString(), staff: staff.find(s => s.id === form.staff_id) }, ...prev]);
+    setShowNew(false); setForm({ staff_id: "", category: "Travel", amount: "", currency: "NGN", description: "", date: "", receipt_url: "" });
+  };
+
+  const approve = async (id) => { try { await apiFetch(`${API_BASE}/hr/expenses/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Approved" }) }); } catch (e) {} setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: "Approved" } : x)); };
+  const reject = async (id) => { try { await apiFetch(`${API_BASE}/hr/expenses/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Rejected" }) }); } catch (e) {} setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: "Rejected" } : x)); };
+
+  const statuses = ["All", "Pending", "Approved", "Rejected", "Paid"];
+  const stCol = { Pending: T.gold, Approved: "#4ADE80", Rejected: "#F87171", Paid: "#60A5FA" };
+  const catEmoji = { Travel: "✈️", Accommodation: "🏨", Meals: "🍽️", Equipment: "💻", Training: "📚", Other: "📋" };
+
+  const filtered = expenses.filter(e => statusFilter === "All" || e.status === statusFilter);
+  const totalPending = expenses.filter(e => e.status === "Pending").reduce((s, e) => s + parseFloat(e.amount || 0), 0);
+  const totalApproved = expenses.filter(e => e.status === "Approved").reduce((s, e) => s + parseFloat(e.amount || 0), 0);
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div><div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Expenses</div><div style={{ fontSize: 13, color: C.sub }}>Staff expense submissions, approvals, and reimbursements.</div></div>
+        <button className="bp" onClick={() => setShowNew(true)}>+ Submit Expense</button>
+      </div>
+      <div className="g4" style={{ marginBottom: 22 }}>
+        <StatCard label="Pending Claims" value={expenses.filter(e => e.status === "Pending").length} col={T.gold} sub={`₦${totalPending.toLocaleString()}`} />
+        <StatCard label="Approved" value={expenses.filter(e => e.status === "Approved").length} col="#4ADE80" sub={`₦${totalApproved.toLocaleString()}`} />
+        <StatCard label="Rejected" value={expenses.filter(e => e.status === "Rejected").length} col="#F87171" />
+        <StatCard label="Total This Month" value={expenses.filter(e => e.created_at && new Date(e.created_at).getMonth() === new Date().getMonth()).length} col="#60A5FA" />
+      </div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
+        {statuses.map(s => { const col = stCol[s] || C.muted; return (<button key={s} onClick={() => setStatusFilter(s)} style={{ padding: "7px 16px", borderRadius: 20, border: `1px solid ${statusFilter === s ? col : C.border}`, background: statusFilter === s ? `${col}22` : "transparent", color: statusFilter === s ? col : C.sub, cursor: "pointer", fontSize: 12, fontWeight: statusFilter === s ? 800 : 400 }}>{s} {statusFilter === s ? "" : `(${s === "All" ? expenses.length : expenses.filter(e => e.status === s).length})`}</button>); })}
+      </div>
+      {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading…</div> : (
+        <div className="gc" style={{ padding: 0, overflow: "hidden" }}><div className="tw"><table className="ht">
+          <thead><tr><th>Staff</th><th>Category</th><th>Description</th><th>Amount</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
+          <tbody>
+            {filtered.map(e => {
+              const sc = stCol[e.status] || C.muted;
+              return (<tr key={e.id}>
+                <td style={{ fontWeight: 800, color: C.text }}>{e.staff?.full_name || e.staff_id || "—"}</td>
+                <td><span style={{ fontSize: 14 }}>{catEmoji[e.category] || "📋"}</span> <span style={{ fontSize: 12, color: C.sub }}>{e.category}</span></td>
+                <td style={{ fontSize: 12, color: C.sub, maxWidth: 200 }}>{e.description}</td>
+                <td style={{ fontWeight: 800, color: T.gold }}>₦{parseFloat(e.amount || 0).toLocaleString()}</td>
+                <td style={{ fontSize: 11, color: C.muted }}>{e.date || (e.created_at ? new Date(e.created_at).toLocaleDateString() : "—")}</td>
+                <td><span className="tg" style={{ background: `${sc}22`, color: sc }}>{e.status}</span></td>
+                <td><div style={{ display: "flex", gap: 6 }}>
+                  {e.status === "Pending" && <><button className="bp" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => approve(e.id)}>Approve</button><button style={{ fontSize: 10, padding: "4px 10px", border: "1px solid #F87171", background: "#F8717118", color: "#F87171", borderRadius: 6, cursor: "pointer" }} onClick={() => reject(e.id)}>Reject</button></>}
+                  {e.receipt_url && <a href={e.receipt_url} target="_blank" rel="noreferrer" className="bg" style={{ fontSize: 10, padding: "4px 10px" }}>Receipt</a>}
+                </div></td>
+              </tr>);
+            })}
+            {filtered.length === 0 && <tr><td colSpan="7" style={{ textAlign: "center", padding: 40, color: C.muted }}>No expenses found.</td></tr>}
+          </tbody>
+        </table></div></div>
+      )}
+      {showNew && (<Modal onClose={() => setShowNew(false)} title="Submit Expense Claim" width={560}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div><Lbl>Staff Member</Lbl><select className="inp" value={form.staff_id} onChange={e => setForm(f => ({ ...f, staff_id: e.target.value }))}><option value="">— Select Staff —</option>{staff.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}</select></div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Category</Lbl><select className="inp" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}><option>Travel</option><option>Accommodation</option><option>Meals</option><option>Equipment</option><option>Training</option><option>Other</option></select></div>
+            <div><Lbl>Amount (NGN) *</Lbl><input type="number" className="inp" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="e.g. 45000" /></div>
+          </div>
+          <div><Lbl>Description *</Lbl><input className="inp" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Brief description of the expense" /></div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Date Incurred</Lbl><input type="date" className="inp" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
+            <div><Lbl>Receipt URL</Lbl><input className="inp" value={form.receipt_url} onChange={e => setForm(f => ({ ...f, receipt_url: e.target.value }))} placeholder="https://…" /></div>
+          </div>
+          <button className="bp" onClick={submit} style={{ padding: 14 }}>Submit Expense</button>
+        </div>
+      </Modal>)}
+    </div>
+  );
+}
+
 function HRAdminPortal({ user, onLogout }) {
   const nav = [
     // HUB 1: RECRUITMENT
@@ -6757,7 +7126,13 @@ function HRAdminPortal({ user, onLogout }) {
     <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="Supreme Super Admin" renderPage={p => {
       if (p === "dashboard") return <HRDashboard />;
       // Hub 1: Recruitment
-      if (p === "ats" || p === "jobs" || p === "ats_pipeline" || p === "applications" || p === "interviews" || p === "offers" || p === "talent_pool") return <RecruitmentHub />;
+      if (p === "jobs") return <JobsBoard />;
+      if (p === "ats") return <JobRequisitions />;
+      if (p === "applications") return <ApplicationsTracker />;
+      if (p === "ats_pipeline") return <ATSPipeline />;
+      if (p === "interviews") return <InterviewScheduler />;
+      if (p === "offers") return <OffersManager />;
+      if (p === "talent_pool") return <TalentPool />;
       // Hub 2: People
       if (p === "staff") return <StaffDirectory authRole="hr" />;
       if (p === "org_chart") return <OrgChartEnhanced />;
@@ -6767,8 +7142,8 @@ function HRAdminPortal({ user, onLogout }) {
       if (p === "presence") return <Presence currentUser={user} />;
       if (p === "timesheets" || p === "timesheet_approvals") return <Timesheets user={user} isHR={true} />;
       if (p === "shifts") return <ShiftScheduler isHR={true} />;
-      if (p === "hr_calendar") return <Presence currentUser={user} />;
-      if (p === "holidays") return <Presence currentUser={user} />;
+      if (p === "hr_calendar") return <HRCalendarView />;
+      if (p === "holidays") return <HolidaysManager />;
       // Hub 4: Leave
       if (p === "leave") return <LeaveManagement user={user} />;
       if (p === "leave_balances") return <LeaveAccrual />;
@@ -6778,7 +7153,7 @@ function HRAdminPortal({ user, onLogout }) {
       if (p === "perf") return <Performance />;
       if (p === "goals") return <Goals canManageKpiTemplates />;
       if (p === "improvement_plans") return <ImprovementPlans authRole="hr" />;
-      if (p === "peer_reviews") return <CultureHub authRole="hr" />;
+      if (p === "peer_reviews") return <PeerReviews360 />;
       if (p === "skills_matrix") return <SkillsMatrix />;
       if (p === "succession") return <SuccessionPlanning />;
       // Learning & Growth
@@ -6789,8 +7164,8 @@ function HRAdminPortal({ user, onLogout }) {
       if (p === "payroll" || p === "payroll_runs") return <Payroll />;
       if (p === "comp_bands") return <CompensationBands isHR={true} />;
       if (p === "bonuses") return <BonusManager isHR={true} />;
-      if (p === "benefits") return <Payroll />;
-      if (p === "expenses") return <Payroll />;
+      if (p === "benefits") return <BenefitsManager />;
+      if (p === "expenses") return <ExpensesManager />;
       if (p === "tax_config") return <TaxConfig />;
       // Hub 7: Engagement
       if (p === "announcements") return <Announcements isHR={true} />;
@@ -7291,149 +7666,684 @@ function AssetManager() {
 
 
 
-// ─── RECRUITMENT / ATS ───────────────────────────────────────────────────────
-function RecruitmentHub() {
-  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+// ══════════════════════════════════════════════════════════════════════════════
+// RECRUITMENT HUB — 7 fully independent screens, each its own component
+// ══════════════════════════════════════════════════════════════════════════════
+
+function useRecruitmentData() {
   const [jobs, setJobs] = useState([]);
   const [apps, setApps] = useState([]);
+  const [interviews, setInterviews] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [view, setView] = useState("jobs"); // "jobs" | "pipeline"
-  const [showJobModal, setShowJobModal] = useState(false);
-  const [jobForm, setJobForm] = useState({ title: "", department: "General", employment_type: "Full-time", location: "Remote", salary_range: "" });
-
-  useEffect(() => {
-    fetchData();
-  }, []);
-
-  const fetchData = async () => {
+  const refresh = async () => {
     setLoading(true);
     try {
-      const [j, a] = await Promise.all([
-        apiFetch(`${API_BASE}/hr/recruitment/jobs`),
-        apiFetch(`${API_BASE}/hr/recruitment/applications`)
+      const [j, a, iv] = await Promise.all([
+        apiFetch(`${API_BASE}/hr/recruitment/jobs`).catch(() => []),
+        apiFetch(`${API_BASE}/hr/recruitment/applications`).catch(() => []),
+        apiFetch(`${API_BASE}/hr/recruitment/interviews`).catch(() => []),
       ]);
-      setJobs(j || []);
-      setApps(a || []);
-    } catch (e) {
-      console.error(e);
-    } finally {
-      setLoading(false);
-    }
+      setJobs(j || []); setApps(a || []); setInterviews(iv || []);
+    } catch (e) { console.error(e); } finally { setLoading(false); }
   };
+  useEffect(() => { refresh(); }, []);
+  return { jobs, apps, interviews, loading, refresh };
+}
 
-  const createJob = async () => {
-    if (!jobForm.title) return alert("Job title required");
+// ─── 1. JOBS BOARD ────────────────────────────────────────────────────────────
+function JobsBoard() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const { jobs, apps, loading, refresh } = useRecruitmentData();
+  const [search, setSearch] = useState("");
+  const [deptFilter, setDeptFilter] = useState("All");
+  const [showNew, setShowNew] = useState(false);
+  const [viewJob, setViewJob] = useState(null);
+  const [form, setForm] = useState({ title: "", department: "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", description: "", requirements: "" });
+
+  const depts = ["All", ...new Set(jobs.map(j => j.department).filter(Boolean))];
+  const filtered = jobs.filter(j =>
+    (deptFilter === "All" || j.department === deptFilter) &&
+    (j.title?.toLowerCase().includes(search.toLowerCase()) || j.department?.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  const create = async () => {
+    if (!form.title) return alert("Job title required");
     try {
-      await apiFetch(`${API_BASE}/hr/recruitment/jobs`, {
-        method: "POST",
-        body: JSON.stringify(jobForm)
-      });
-      setShowJobModal(false);
-      fetchData();
+      await apiFetch(`${API_BASE}/hr/recruitment/jobs`, { method: "POST", body: JSON.stringify(form) });
+      setShowNew(false); setForm({ title: "", department: "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", description: "", requirements: "" }); refresh();
     } catch (e) { alert(e.message); }
   };
 
-  const updateAppStatus = async (appId, newStatus) => {
-    try {
-      await apiFetch(`${API_BASE}/hr/recruitment/applications/${appId}`, {
-        method: "PATCH",
-        body: JSON.stringify({ status: newStatus })
-      });
-      fetchData();
-    } catch (e) { alert(e.message); }
+  const toggleStatus = async (jobId, currentStatus) => {
+    try { await apiFetch(`${API_BASE}/hr/recruitment/jobs/${jobId}`, { method: "PATCH", body: JSON.stringify({ status: currentStatus === "Open" ? "Closed" : "Open" }) }); refresh(); } catch (e) { alert(e.message); }
   };
 
-  const statuses = ["Applied", "Screening", "Interview", "Offered", "Hired", "Rejected"];
+  const statusStyle = (s) => s === "Open" ? { background: "#4ADE8022", color: "#4ADE80", border: "1px solid #4ADE8044" } : { background: "#F8717122", color: "#F87171", border: "1px solid #F8717144" };
+  const typeCol = { "Full-time": T.gold, "Part-time": "#60A5FA", "Contract": "#F87171", "Internship": "#A78BFA" };
 
   return (
     <div className="fade">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
-        <div>
-          <div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Recruitment & ATS</div>
-          <div style={{ fontSize: 13, color: C.sub }}>Manage job requisitions and candidate pipelines.</div>
-        </div>
-        <div style={{ display: "flex", gap: 12 }}>
-          <Tabs items={[["jobs", "Job Board"], ["pipeline", "ATS Pipeline"]]} active={view} setActive={setView} />
-          {view === "jobs" && <button className="bp" onClick={() => setShowJobModal(true)} style={{ height: 38 }}>+ Post Job</button>}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div><div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Jobs</div><div style={{ fontSize: 13, color: C.sub }}>Active job openings. Manage listings, track applicant counts, open and close roles.</div></div>
+        <button className="bp" onClick={() => setShowNew(true)}>+ Post New Job</button>
+      </div>
+      <div className="g4" style={{ marginBottom: 22 }}>
+        <StatCard label="Open Roles" value={jobs.filter(j => j.status === "Open").length} col="#4ADE80" />
+        <StatCard label="Closed Roles" value={jobs.filter(j => j.status !== "Open").length} col="#F87171" />
+        <StatCard label="Total Applicants" value={apps.length} col={T.gold} />
+        <StatCard label="Avg. per Role" value={jobs.length ? Math.round(apps.length / jobs.length) : 0} col="#60A5FA" />
+      </div>
+      <div style={{ display: "flex", gap: 12, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
+        <input className="inp" placeholder="Search roles…" value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: 260, padding: "9px 14px" }} />
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {depts.map(d => (<button key={d} onClick={() => setDeptFilter(d)} style={{ padding: "6px 14px", borderRadius: 8, border: `1px solid ${deptFilter === d ? T.gold : C.border}`, background: deptFilter === d ? `${T.gold}22` : "transparent", color: deptFilter === d ? T.gold : C.sub, cursor: "pointer", fontSize: 12, fontWeight: deptFilter === d ? 800 : 400 }}>{d}</button>))}
         </div>
       </div>
+      {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading jobs…</div> : (
+        <div className="g3" style={{ gap: 16 }}>
+          {filtered.map(j => {
+            const appCount = apps.filter(a => a.job_id === j.id).length;
+            const tc = typeCol[j.employment_type] || T.gold;
+            return (
+              <div key={j.id} className="gc" style={{ padding: 22, display: "flex", flexDirection: "column", gap: 0, cursor: "pointer" }} onClick={() => setViewJob(j)}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: 10, background: `${T.gold}18`, border: `1px solid ${T.gold}33`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>💼</div>
+                  <span className="tg" style={statusStyle(j.status || "Open")}>{j.status || "Open"}</span>
+                </div>
+                <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 4 }}>{j.title}</div>
+                <div style={{ fontSize: 12, color: C.sub, marginBottom: 14 }}>{j.department}</div>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 14 }}>
+                  <span className="tg" style={{ background: `${tc}18`, color: tc, border: `1px solid ${tc}33` }}>{j.employment_type}</span>
+                  {j.location && <span className="tg tm">📍 {j.location}</span>}
+                  {j.salary_range && <span className="tg" style={{ background: "#4ADE8018", color: "#4ADE80", border: "1px solid #4ADE8033" }}>₦ {j.salary_range}</span>}
+                </div>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "auto", paddingTop: 14, borderTop: `1px solid ${C.border}` }}>
+                  <div style={{ fontSize: 12, color: C.muted }}>{appCount} applicant{appCount !== 1 ? "s" : ""}</div>
+                  <button className="bg" style={{ fontSize: 11, padding: "4px 12px" }} onClick={e => { e.stopPropagation(); toggleStatus(j.id, j.status || "Open"); }}>{j.status === "Open" ? "Close Role" : "Reopen"}</button>
+                </div>
+              </div>
+            );
+          })}
+          {filtered.length === 0 && !loading && (<div style={{ gridColumn: "1/-1", textAlign: "center", padding: 60, color: C.muted }}><div style={{ fontSize: 36, marginBottom: 12 }}>💼</div><div style={{ fontWeight: 800, marginBottom: 6 }}>No jobs found</div></div>)}
+        </div>
+      )}
+      {viewJob && (<Modal onClose={() => setViewJob(null)} title={viewJob.title} width={560}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}><span className="tg" style={statusStyle(viewJob.status || "Open")}>{viewJob.status || "Open"}</span><span className="tg tm">{viewJob.employment_type}</span><span className="tg tm">{viewJob.department}</span></div>
+        <div className="g2" style={{ gap: 10, marginBottom: 18 }}><Field label="Location" value={viewJob.location} /><Field label="Salary Range" value={viewJob.salary_range || "Not disclosed"} /></div>
+        {viewJob.description && <div style={{ marginBottom: 16 }}><Lbl>Job Description</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10, border: `1px solid ${T.gold}18` }}>{viewJob.description}</div></div>}
+        {viewJob.requirements && <div><Lbl>Requirements</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10, border: `1px solid ${T.gold}18` }}>{viewJob.requirements}</div></div>}
+      </Modal>)}
+      {showNew && (<Modal onClose={() => setShowNew(false)} title="Post New Job" width={600}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div><Lbl>Job Title *</Lbl><input className="inp" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Senior Property Executive" /></div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Department</Lbl><select className="inp" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}><option>Sales & Acquisitions</option><option>Finance</option><option>Operations</option><option>Human Resources</option><option>Legal</option><option>Marketing</option><option>IT</option></select></div>
+            <div><Lbl>Employment Type</Lbl><select className="inp" value={form.employment_type} onChange={e => setForm(f => ({ ...f, employment_type: e.target.value }))}><option>Full-time</option><option>Part-time</option><option>Contract</option><option>Internship</option></select></div>
+          </div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Location</Lbl><input className="inp" value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} /></div>
+            <div><Lbl>Salary Range</Lbl><input className="inp" value={form.salary_range} onChange={e => setForm(f => ({ ...f, salary_range: e.target.value }))} placeholder="e.g. ₦180k – ₦300k" /></div>
+          </div>
+          <div><Lbl>Job Description</Lbl><textarea className="inp" rows={4} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
+          <div><Lbl>Requirements</Lbl><textarea className="inp" rows={3} value={form.requirements} onChange={e => setForm(f => ({ ...f, requirements: e.target.value }))} /></div>
+          <button className="bp" onClick={create} style={{ padding: 14 }}>Post Job</button>
+        </div>
+      </Modal>)}
+    </div>
+  );
+}
 
-      {view === "jobs" && (
+// ─── 2. JOB REQUISITIONS ──────────────────────────────────────────────────────
+function JobRequisitions() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const { jobs, loading, refresh } = useRecruitmentData();
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ title: "", department: "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", headcount: 1, justification: "", approved_by: "" });
+
+  const toggleApproval = async (j) => {
+    try { await apiFetch(`${API_BASE}/hr/recruitment/jobs/${j.id}`, { method: "PATCH", body: JSON.stringify({ status: "Approved" }) }); refresh(); } catch (e) { alert(e.message); }
+  };
+
+  const create = async () => {
+    if (!form.title) return alert("Job title required");
+    try { 
+      if (form.id) {
+         await apiFetch(`${API_BASE}/hr/recruitment/jobs/${form.id}`, { method: "PATCH", body: JSON.stringify(form) }); 
+      } else {
+         await apiFetch(`${API_BASE}/hr/recruitment/jobs`, { method: "POST", body: JSON.stringify(form) }); 
+      }
+      setShowNew(false); refresh(); 
+    } catch (e) { alert(e.message); }
+  };
+
+  const approvalStages = [
+    { label: "Draft", col: "#9CA3AF" }, { label: "Pending Approval", col: T.gold },
+    { label: "Approved", col: "#4ADE80" }, { label: "On Hold", col: "#60A5FA" }, { label: "Rejected", col: "#F87171" },
+  ];
+  const reqCol = (s) => ({ Open: "#4ADE80", Draft: "#9CA3AF", "Pending Approval": T.gold, "On Hold": "#60A5FA", Rejected: "#F87171", Closed: "#9CA3AF" })[s] || T.gold;
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div><div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Job Requisitions</div><div style={{ fontSize: 13, color: C.sub }}>Formal headcount requests with approval workflows before posting.</div></div>
+        <button className="bp" onClick={() => { setForm({ title: "", department: "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", headcount: 1, justification: "", approved_by: "" }); setShowNew(true); }}>+ New Requisition</button>
+      </div>
+      <div style={{ display: "flex", gap: 0, marginBottom: 24, background: C.surface, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
+        {approvalStages.map((s, i) => (<div key={s.label} style={{ flex: 1, padding: "12px 16px", borderRight: i < approvalStages.length - 1 ? `1px solid ${C.border}` : "none" }}>
+          <div style={{ width: 8, height: 8, borderRadius: "50%", background: s.col, marginBottom: 6 }} />
+          <div style={{ fontSize: 11, fontWeight: 800, color: s.col }}>{s.label}</div>
+        </div>))}
+      </div>
+      {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading…</div> : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+          {jobs.map(j => {
+            const rc = reqCol(j.status || "Open");
+            return (<div key={j.id} className="gc" style={{ padding: "18px 22px", borderLeft: `4px solid ${rc}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
+                    <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>{j.title}</div>
+                    <span className="tg" style={{ background: `${rc}22`, color: rc, border: `1px solid ${rc}44` }}>{j.status || "Open"}</span>
+                  </div>
+                  <div style={{ display: "flex", gap: 18, fontSize: 12, color: C.muted, flexWrap: "wrap" }}>
+                    <span>📁 {j.department}</span><span>⏱ {j.employment_type}</span><span>📍 {j.location || "Port Harcourt"}</span>
+                    {j.salary_range && <span>💰 {j.salary_range}</span>}
+                    <span>📅 {j.created_at ? new Date(j.created_at).toLocaleDateString() : "—"}</span>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8, flexShrink: 0, marginLeft: 16 }}>
+                  <button className="bg" style={{ fontSize: 11, padding: "5px 12px" }} onClick={() => { setForm(j); setShowNew(true); }}>Edit</button>
+                  {j.status !== "Approved" && <button className="bp" style={{ fontSize: 11, padding: "5px 12px" }} onClick={() => toggleApproval(j)}>Approve</button>}
+                </div>
+              </div>
+            </div>);
+          })}
+          {jobs.length === 0 && <div style={{ textAlign: "center", padding: 60, color: C.muted }}><div style={{ fontSize: 36, marginBottom: 12 }}>📋</div><div style={{ fontWeight: 800 }}>No requisitions yet.</div></div>}
+        </div>
+      )}
+      {showNew && (<Modal onClose={() => setShowNew(false)} title={form.id ? "Edit Requisition" : "New Job Requisition"} width={600}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          <div><Lbl>Position Title *</Lbl><input className="inp" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Property Acquisition Manager" /></div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Department</Lbl><select className="inp" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}><option>Sales & Acquisitions</option><option>Finance</option><option>Operations</option><option>Human Resources</option><option>Legal</option></select></div>
+            <div><Lbl>Headcount Requested</Lbl><input type="number" min="1" className="inp" value={form.headcount} onChange={e => setForm(f => ({ ...f, headcount: +e.target.value }))} /></div>
+          </div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Employment Type</Lbl><select className="inp" value={form.employment_type} onChange={e => setForm(f => ({ ...f, employment_type: e.target.value }))}><option>Full-time</option><option>Part-time</option><option>Contract</option></select></div>
+            <div><Lbl>Proposed Salary Range</Lbl><input className="inp" value={form.salary_range} onChange={e => setForm(f => ({ ...f, salary_range: e.target.value }))} placeholder="₦200k – ₦350k" /></div>
+          </div>
+          <div><Lbl>Business Justification *</Lbl><textarea className="inp" rows={4} value={form.justification} onChange={e => setForm(f => ({ ...f, justification: e.target.value }))} placeholder="Why is this role needed?" /></div>
+          <div><Lbl>Requested Approval From</Lbl><input className="inp" value={form.approved_by || ""} onChange={e => setForm(f => ({ ...f, approved_by: e.target.value }))} placeholder="Name of approving manager" /></div>
+          <button className="bp" onClick={create} style={{ padding: 14 }}>{form.id ? "Save Changes" : "Submit for Approval"}</button>
+        </div>
+      </Modal>)}
+    </div>
+  );
+}
+
+// ─── 3. APPLICATIONS TRACKER ──────────────────────────────────────────────────
+function ApplicationsTracker() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const { jobs, apps, loading, refresh } = useRecruitmentData();
+  const [search, setSearch] = useState("");
+  const [statusFilter, setStatusFilter] = useState("All");
+  const [jobFilter, setJobFilter] = useState("All");
+  const [viewApp, setViewApp] = useState(null);
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ job_id: "", candidate_name: "", candidate_email: "", candidate_phone: "", cover_letter: "", cv_url: "" });
+
+  const statuses = ["All", "Applied", "Screening", "Interview", "Offered", "Hired", "Rejected"];
+  const stCol = { Applied: "#9CA3AF", Screening: "#60A5FA", Interview: T.gold, Offered: "#A78BFA", Hired: "#4ADE80", Rejected: "#F87171" };
+
+  const filtered = apps.filter(a =>
+    (statusFilter === "All" || a.status === statusFilter) &&
+    (jobFilter === "All" || a.job_id === jobFilter) &&
+    (a.candidate_name?.toLowerCase().includes(search.toLowerCase()) || a.candidate_email?.toLowerCase().includes(search.toLowerCase()))
+  );
+
+  const advance = async (appId, currentStatus) => {
+    const order = ["Applied", "Screening", "Interview", "Offered", "Hired"];
+    const next = order[order.indexOf(currentStatus) + 1]; if (!next) return;
+    try { await apiFetch(`${API_BASE}/hr/recruitment/applications/${appId}`, { method: "PATCH", body: JSON.stringify({ status: next }) }); refresh(); } catch (e) { alert(e.message); }
+  };
+
+  const reject = async (appId) => {
+    if (!window.confirm("Reject this candidate?")) return;
+    try { await apiFetch(`${API_BASE}/hr/recruitment/applications/${appId}`, { method: "PATCH", body: JSON.stringify({ status: "Rejected" }) }); refresh(); } catch (e) { alert(e.message); }
+  };
+
+  const addApp = async () => {
+    if (!form.job_id || !form.candidate_name) return alert("Job and candidate name required");
+    try { await apiFetch(`${API_BASE}/hr/recruitment/applications`, { method: "POST", body: JSON.stringify(form) }); setShowNew(false); setForm({ job_id: "", candidate_name: "", candidate_email: "", candidate_phone: "", cover_letter: "", cv_url: "" }); refresh(); } catch (e) { alert(e.message); }
+  };
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div><div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Applications</div><div style={{ fontSize: 13, color: C.sub }}>All candidate applications across every open role. Advance, reject, and review.</div></div>
+        <button className="bp" onClick={() => setShowNew(true)}>+ Add Application</button>
+      </div>
+      <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
+        {statuses.map(s => {
+          const count = s === "All" ? apps.length : apps.filter(a => a.status === s).length;
+          const col = stCol[s] || C.muted;
+          return (<button key={s} onClick={() => setStatusFilter(s)} style={{ padding: "7px 16px", borderRadius: 20, border: `1px solid ${statusFilter === s ? col : C.border}`, background: statusFilter === s ? `${col}22` : "transparent", color: statusFilter === s ? col : C.sub, cursor: "pointer", fontSize: 12, fontWeight: statusFilter === s ? 800 : 400, display: "flex", alignItems: "center", gap: 6 }}>
+            {s} <span style={{ background: statusFilter === s ? `${col}33` : C.border, borderRadius: 10, padding: "1px 7px", fontSize: 10 }}>{count}</span>
+          </button>);
+        })}
+      </div>
+      <div style={{ display: "flex", gap: 12, marginBottom: 18, flexWrap: "wrap" }}>
+        <input className="inp" placeholder="Search candidates…" value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: 260, padding: "9px 14px" }} />
+        <select className="inp" style={{ maxWidth: 260 }} value={jobFilter} onChange={e => setJobFilter(e.target.value)}>
+          <option value="All">All Roles</option>{jobs.map(j => <option key={j.id} value={j.id}>{j.title}</option>)}
+        </select>
+      </div>
+      {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading applications…</div> : (
         <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
           <div className="tw">
             <table className="ht">
-              <thead><tr><th>Job Title & Dept</th><th>Type / Location</th><th>Status</th><th>Applicants</th></tr></thead>
+              <thead><tr><th>Candidate</th><th>Applied For</th><th>Email / Phone</th><th>Stage</th><th>Applied</th><th>Actions</th></tr></thead>
               <tbody>
-                {jobs.map(j => {
-                  const applicantCount = apps.filter(a => a.job_id === j.id).length;
-                  return (
-                    <tr key={j.id}>
-                      <td><div style={{ fontWeight: 800, color: C.text }}>{j.title}</div><div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{j.department}</div></td>
-                      <td><div style={{ color: C.text }}>{j.employment_type}</div><div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{j.location || "Remote"}</div></td>
-                      <td><span className="tg" style={{ background: j.status === 'Open' ? '#4ADE8022' : '#F8717122', color: j.status === 'Open' ? '#4ADE80' : '#F87171' }}>{j.status}</span></td>
-                      <td><div style={{ fontWeight: 800, color: T.orange }}>{applicantCount}</div></td>
-                    </tr>
-                  )
+                {filtered.map(a => {
+                  const sc = stCol[a.status] || C.muted;
+                  const job = jobs.find(j => j.id === a.job_id);
+                  return (<tr key={a.id} style={{ cursor: "pointer" }} onClick={() => setViewApp(a)}>
+                    <td><div style={{ display: "flex", alignItems: "center", gap: 10 }}><div style={{ width: 32, height: 32, borderRadius: "50%", background: `${T.gold}22`, border: `1px solid ${T.gold}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13, fontWeight: 800, color: T.gold, flexShrink: 0 }}>{(a.candidate_name || "?")[0].toUpperCase()}</div><div style={{ fontWeight: 800, color: C.text }}>{a.candidate_name}</div></div></td>
+                    <td><div style={{ color: C.text }}>{job?.title || "—"}</div><div style={{ fontSize: 11, color: C.muted }}>{job?.department || "—"}</div></td>
+                    <td><div style={{ fontSize: 12, color: C.text }}>{a.candidate_email || "—"}</div><div style={{ fontSize: 11, color: C.muted }}>{a.candidate_phone || "—"}</div></td>
+                    <td><span className="tg" style={{ background: `${sc}22`, color: sc, border: `1px solid ${sc}44` }}>{a.status}</span></td>
+                    <td style={{ fontSize: 11, color: C.muted }}>{a.created_at ? new Date(a.created_at).toLocaleDateString() : "—"}</td>
+                    <td onClick={e => e.stopPropagation()}><div style={{ display: "flex", gap: 6 }}>
+                      {!["Hired", "Rejected"].includes(a.status) && <button className="bp" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => advance(a.id, a.status)}>Advance →</button>}
+                      {a.status !== "Rejected" && a.status !== "Hired" && <button style={{ fontSize: 10, padding: "4px 10px", borderRadius: 6, border: "1px solid #F87171", background: "#F8717118", color: "#F87171", cursor: "pointer" }} onClick={() => reject(a.id)}>Reject</button>}
+                    </div></td>
+                  </tr>);
                 })}
-                {jobs.length === 0 && !loading && <tr><td colSpan="4" style={{ textAlign: "center", padding: 30, color: C.muted }}>No active job requisitions.</td></tr>}
+                {filtered.length === 0 && <tr><td colSpan="6" style={{ textAlign: "center", padding: 40, color: C.muted }}>No applications match your filters.</td></tr>}
               </tbody>
             </table>
           </div>
         </div>
       )}
-
-      {view === "pipeline" && (
-        <div style={{ display: "flex", gap: 16, overflowX: "auto", paddingBottom: 20 }}>
-          {statuses.map(status => {
-            const colApps = apps.filter(a => a.status === status);
-            return (
-              <div key={status} style={{ minWidth: 280, width: 280, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 12, padding: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                  <div style={{ fontWeight: 800, color: C.text, textTransform: "uppercase", fontSize: 11, letterSpacing: "1px" }}>{status}</div>
-                  <span className="tg tm">{colApps.length}</span>
-                </div>
-                {colApps.map(a => (
-                  <div key={a.id} className="gc" style={{ padding: 14, cursor: "pointer", borderLeft: `3px solid ${T.orange}` }}>
-                    <div style={{ fontWeight: 800, color: C.text, fontSize: 13 }}>{a.candidate_name}</div>
-                    <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>Role: {a.job_requisitions?.title || "Unknown"}</div>
-                    <select className="inp" style={{ marginTop: 10, padding: "6px 10px", fontSize: 11 }} value={a.status} onChange={e => updateAppStatus(a.id, e.target.value)}>
-                      {statuses.map(s => <option key={s} value={s}>Move to {s}</option>)}
-                    </select>
-                  </div>
-                ))}
-              </div>
-            )
-          })}
+      {viewApp && (<Modal onClose={() => setViewApp(null)} title={viewApp.candidate_name} width={560}>
+        <div style={{ display: "flex", gap: 8, marginBottom: 18 }}><span className="tg" style={{ background: `${stCol[viewApp.status] || C.muted}22`, color: stCol[viewApp.status] || C.muted }}>{viewApp.status}</span><span className="tg tm">{jobs.find(j => j.id === viewApp.job_id)?.title || "—"}</span></div>
+        <div className="g2" style={{ gap: 10, marginBottom: 14 }}><Field label="Email" value={viewApp.candidate_email} /><Field label="Phone" value={viewApp.candidate_phone} /></div>
+        {viewApp.cv_url && <div style={{ marginBottom: 14 }}><a href={viewApp.cv_url} target="_blank" rel="noreferrer" className="bp" style={{ display: "inline-block", fontSize: 13, padding: "8px 18px" }}>📄 View CV</a></div>}
+        {viewApp.cover_letter && <div><Lbl>Cover Letter</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10 }}>{viewApp.cover_letter}</div></div>}
+      </Modal>)}
+      {showNew && (<Modal onClose={() => setShowNew(false)} title="Add Application" width={560}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div><Lbl>Role *</Lbl><select className="inp" value={form.job_id} onChange={e => setForm(f => ({ ...f, job_id: e.target.value }))}><option value="">— Select Job —</option>{jobs.filter(j => j.status === "Open").map(j => <option key={j.id} value={j.id}>{j.title}</option>)}</select></div>
+          <div className="g2" style={{ gap: 12 }}><div><Lbl>Candidate Name *</Lbl><input className="inp" value={form.candidate_name} onChange={e => setForm(f => ({ ...f, candidate_name: e.target.value }))} /></div><div><Lbl>Email</Lbl><input className="inp" type="email" value={form.candidate_email} onChange={e => setForm(f => ({ ...f, candidate_email: e.target.value }))} /></div></div>
+          <div className="g2" style={{ gap: 12 }}><div><Lbl>Phone</Lbl><input className="inp" value={form.candidate_phone} onChange={e => setForm(f => ({ ...f, candidate_phone: e.target.value }))} /></div><div><Lbl>CV URL</Lbl><input className="inp" value={form.cv_url} onChange={e => setForm(f => ({ ...f, cv_url: e.target.value }))} placeholder="https://…" /></div></div>
+          <div><Lbl>Cover Letter / Notes</Lbl><textarea className="inp" rows={4} value={form.cover_letter} onChange={e => setForm(f => ({ ...f, cover_letter: e.target.value }))} /></div>
+          <button className="bp" onClick={addApp} style={{ padding: 14 }}>Add Application</button>
         </div>
-      )}
-
-      {showJobModal && (
-        <Modal title="Create Job Requisition" width={480} onClose={() => setShowJobModal(false)}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div><Lbl>Job Title *</Lbl><input className="inp" value={jobForm.title} onChange={e => setJobForm({ ...jobForm, title: e.target.value })} placeholder="e.g. Senior Backend Engineer" /></div>
-            <div className="g2">
-              <div><Lbl>Department</Lbl>
-                <select className="inp" value={jobForm.department} onChange={e => setJobForm({ ...jobForm, department: e.target.value })}>
-                  <option>General</option><option>Sales & Acquisitions</option><option>Engineering</option><option>HR</option><option>Finance</option>
-                </select>
-              </div>
-              <div><Lbl>Employment Type</Lbl>
-                <select className="inp" value={jobForm.employment_type} onChange={e => setJobForm({ ...jobForm, employment_type: e.target.value })}>
-                  <option>Full-time</option><option>Part-time</option><option>Contract</option>
-                </select>
-              </div>
-            </div>
-            <div className="g2">
-              <div><Lbl>Location</Lbl><input className="inp" value={jobForm.location} onChange={e => setJobForm({ ...jobForm, location: e.target.value })} placeholder="e.g. London, UK or Remote" /></div>
-              <div><Lbl>Salary Range</Lbl><input className="inp" value={jobForm.salary_range} onChange={e => setJobForm({ ...jobForm, salary_range: e.target.value })} placeholder="e.g. £50k - £70k" /></div>
-            </div>
-            <button className="bp" onClick={createJob} style={{ marginTop: 10 }}>Post Job Requisition</button>
-          </div>
-        </Modal>
-      )}
+      </Modal>)}
     </div>
   );
 }
+
+// ─── 4. ATS PIPELINE — Visual kanban ──────────────────────────────────────────
+function ATSPipeline() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const { jobs, apps, loading, refresh } = useRecruitmentData();
+  const [jobFilter, setJobFilter] = useState("all");
+  const [viewApp, setViewApp] = useState(null);
+
+  const stages = [
+    { key: "Applied", label: "Applied", emoji: "📥", col: "#9CA3AF" },
+    { key: "Screening", label: "Screening", emoji: "🔍", col: "#60A5FA" },
+    { key: "Interview", label: "Interview", emoji: "🎯", col: T.gold },
+    { key: "Offered", label: "Offered", emoji: "📨", col: "#A78BFA" },
+    { key: "Hired", label: "Hired", emoji: "✅", col: "#4ADE80" },
+    { key: "Rejected", label: "Rejected", emoji: "❌", col: "#F87171" },
+  ];
+
+  const filteredApps = jobFilter === "all" ? apps : apps.filter(a => a.job_id === jobFilter);
+  const moveApp = async (appId, newStatus) => {
+    try { await apiFetch(`${API_BASE}/hr/recruitment/applications/${appId}`, { method: "PATCH", body: JSON.stringify({ status: newStatus }) }); refresh(); } catch (e) { alert(e.message); }
+  };
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div><div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>ATS Pipeline</div><div style={{ fontSize: 13, color: C.sub }}>Visual kanban. Click a card to move candidates between stages.</div></div>
+        <select className="inp" style={{ maxWidth: 260, height: 38 }} value={jobFilter} onChange={e => setJobFilter(e.target.value)}>
+          <option value="all">All Roles ({apps.length} candidates)</option>
+          {jobs.map(j => <option key={j.id} value={j.id}>{j.title} ({apps.filter(a => a.job_id === j.id).length})</option>)}
+        </select>
+      </div>
+      <div style={{ display: "flex", background: C.surface, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden", marginBottom: 20 }}>
+        {stages.map((s, i) => (<div key={s.key} style={{ flex: 1, padding: "10px 14px", borderRight: i < stages.length - 1 ? `1px solid ${C.border}` : "none", textAlign: "center" }}>
+          <div style={{ fontSize: 20, marginBottom: 4 }}>{s.emoji}</div>
+          <div style={{ fontSize: 22, fontWeight: 800, color: s.col }}>{filteredApps.filter(a => a.status === s.key).length}</div>
+          <div style={{ fontSize: 9, color: C.muted, textTransform: "uppercase", letterSpacing: "1px", marginTop: 2 }}>{s.label}</div>
+        </div>))}
+      </div>
+      {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading pipeline…</div> : (
+        <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 20, alignItems: "flex-start" }}>
+          {stages.map(stage => {
+            const stageApps = filteredApps.filter(a => a.status === stage.key);
+            return (<div key={stage.key} style={{ minWidth: 220, width: 220, flexShrink: 0, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
+              <div style={{ padding: "12px 16px", borderBottom: `2px solid ${stage.col}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 16 }}>{stage.emoji}</span><span style={{ fontSize: 12, fontWeight: 800, color: stage.col, textTransform: "uppercase", letterSpacing: "1px" }}>{stage.label}</span></div>
+                <span style={{ background: `${stage.col}22`, color: stage.col, border: `1px solid ${stage.col}44`, borderRadius: 20, padding: "2px 10px", fontSize: 11, fontWeight: 800 }}>{stageApps.length}</span>
+              </div>
+              <div style={{ padding: 10, display: "flex", flexDirection: "column", gap: 8, minHeight: 80 }}>
+                {stageApps.map(a => {
+                  const job = jobs.find(j => j.id === a.job_id);
+                  return (<div key={a.id} onClick={() => setViewApp(a)} style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 10, padding: "12px 14px", cursor: "pointer", borderLeft: `3px solid ${stage.col}` }}>
+                    <div style={{ fontWeight: 800, fontSize: 13, color: C.text, marginBottom: 4 }}>{a.candidate_name}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>{job?.title || "—"}</div>
+                  </div>);
+                })}
+                {stageApps.length === 0 && <div style={{ textAlign: "center", padding: "20px 10px", color: C.muted, fontSize: 11, borderRadius: 8, border: `1px dashed ${C.border}` }}>Empty</div>}
+              </div>
+            </div>);
+          })}
+        </div>
+      )}
+      {viewApp && (<Modal onClose={() => setViewApp(null)} title={viewApp.candidate_name} width={540}>
+        <div style={{ fontSize: 13, color: C.sub, marginBottom: 14 }}>Applied for: <strong style={{ color: C.text }}>{jobs.find(j => j.id === viewApp.job_id)?.title || "—"}</strong></div>
+        <div className="g2" style={{ gap: 10, marginBottom: 14 }}><Field label="Email" value={viewApp.candidate_email} /><Field label="Phone" value={viewApp.candidate_phone} /></div>
+        <Lbl>Move to Stage</Lbl>
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
+          {stages.map(s => (<button key={s.key} onClick={() => { moveApp(viewApp.id, s.key); setViewApp(null); }} style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${viewApp.status === s.key ? s.col : C.border}`, background: viewApp.status === s.key ? `${s.col}22` : "transparent", color: viewApp.status === s.key ? s.col : C.sub, cursor: "pointer", fontSize: 12, fontWeight: viewApp.status === s.key ? 800 : 400 }}>{s.emoji} {s.label}</button>))}
+        </div>
+        {viewApp.cover_letter && <div style={{ marginTop: 18 }}><Lbl>Cover Letter</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10, marginTop: 8 }}>{viewApp.cover_letter}</div></div>}
+      </Modal>)}
+    </div>
+  );
+}
+
+// ─── 5. INTERVIEW SCHEDULER ───────────────────────────────────────────────────
+function InterviewScheduler() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const { apps, jobs, interviews, loading, refresh } = useRecruitmentData();
+  const [staff, setStaff] = useState([]);
+  const [showNew, setShowNew] = useState(false);
+  const [viewIV, setViewIV] = useState(null);
+  const [form, setForm] = useState({ application_id: "", interviewer_id: "", scheduled_at: "", location: "Video Call (Google Meet)", interview_type: "Technical", notes: "" });
+
+  useEffect(() => { apiFetch(`${API_BASE}/hr/staff`).then(d => setStaff(d || [])).catch(() => {}); }, []);
+
+  const schedule = async () => {
+    if (!form.application_id || !form.scheduled_at) return alert("Application and date/time required");
+    try { await apiFetch(`${API_BASE}/hr/recruitment/interviews`, { method: "POST", body: JSON.stringify(form) }); setShowNew(false); setForm({ application_id: "", interviewer_id: "", scheduled_at: "", location: "Video Call (Google Meet)", interview_type: "Technical", notes: "" }); refresh(); } catch (e) { alert(e.message); }
+  };
+
+  const ivTypeCol = { Technical: "#60A5FA", Cultural: T.gold, HR: "#4ADE80", Final: "#A78BFA", Panel: "#F87171" };
+  const ivStatusCol = { scheduled: T.gold, completed: "#4ADE80", cancelled: "#F87171", "no-show": "#9CA3AF" };
+  const today = new Date();
+  const upcoming = (interviews || []).filter(iv => iv.scheduled_at && new Date(iv.scheduled_at) >= today).sort((a, b) => new Date(a.scheduled_at) - new Date(b.scheduled_at));
+  const past = (interviews || []).filter(iv => !iv.scheduled_at || new Date(iv.scheduled_at) < today).sort((a, b) => new Date(b.scheduled_at) - new Date(a.scheduled_at));
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div><div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Interviews</div><div style={{ fontSize: 13, color: C.sub }}>Schedule interviews, assign interviewers, log feedback and outcomes.</div></div>
+        <button className="bp" onClick={() => setShowNew(true)}>+ Schedule Interview</button>
+      </div>
+      <div className="g4" style={{ marginBottom: 24 }}>
+        <StatCard label="Total" value={interviews.length} col={T.gold} />
+        <StatCard label="Upcoming" value={upcoming.length} col="#60A5FA" />
+        <StatCard label="Completed" value={(interviews || []).filter(iv => iv.status === "completed").length} col="#4ADE80" />
+        <StatCard label="Cancelled" value={(interviews || []).filter(iv => iv.status === "cancelled").length} col="#F87171" />
+      </div>
+      {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading…</div> : (
+        <>
+          {upcoming.length > 0 && (<div style={{ marginBottom: 28 }}>
+            <div style={{ fontSize: 11, fontWeight: 800, color: T.gold, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 14 }}>📅 Upcoming Interviews</div>
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {upcoming.map(iv => {
+                const app = apps.find(a => a.id === iv.application_id);
+                const job = app ? jobs.find(j => j.id === app.job_id) : null;
+                const interviewer = staff.find(s => s.id === iv.interviewer_id);
+                const tc = ivTypeCol[iv.interview_type] || T.gold;
+                const sc = ivStatusCol[iv.status] || T.gold;
+                return (<div key={iv.id} className="gc" onClick={() => setViewIV(iv)} style={{ padding: "16px 20px", cursor: "pointer", borderLeft: `4px solid ${tc}` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                    <div style={{ flex: 1 }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 6 }}>
+                        <span className="tg" style={{ background: `${tc}22`, color: tc, border: `1px solid ${tc}44` }}>{iv.interview_type || "Interview"}</span>
+                        <span className="tg" style={{ background: `${sc}22`, color: sc, border: `1px solid ${sc}44` }}>{iv.status || "scheduled"}</span>
+                      </div>
+                      <div style={{ fontWeight: 800, color: C.text, fontSize: 14 }}>{app?.candidate_name || "Unknown Candidate"}</div>
+                      <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>{job?.title || "—"}</div>
+                      <div style={{ display: "flex", gap: 16, fontSize: 11, color: C.muted, marginTop: 8, flexWrap: "wrap" }}>
+                        <span>⏰ {iv.scheduled_at ? new Date(iv.scheduled_at).toLocaleString([], {weekday:"short", month:"short", day:"numeric", hour:"2-digit", minute:"2-digit"}) : "—"}</span>
+                        <span>📍 {iv.location || "—"}</span>
+                        {interviewer && <span>👤 {interviewer.full_name}</span>}
+                      </div>
+                    </div>
+                  </div>
+                </div>);
+              })}
+            </div>
+          </div>)}
+          {past.length > 0 && (<div>
+            <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 14 }}>📋 Past Interviews</div>
+            <div className="gc" style={{ padding: 0, overflow: "hidden" }}><div className="tw"><table className="ht">
+              <thead><tr><th>Candidate</th><th>Role</th><th>Type</th><th>Date</th><th>Interviewer</th><th>Outcome</th></tr></thead>
+              <tbody>{past.map(iv => {
+                const app = apps.find(a => a.id === iv.application_id);
+                const job = app ? jobs.find(j => j.id === app.job_id) : null;
+                const interviewer = staff.find(s => s.id === iv.interviewer_id);
+                const tc = ivTypeCol[iv.interview_type] || T.gold;
+                const sc = ivStatusCol[iv.status || "completed"] || "#4ADE80";
+                return (<tr key={iv.id}>
+                  <td style={{ fontWeight: 800, color: C.text }}>{app?.candidate_name || "—"}</td>
+                  <td style={{ color: C.sub, fontSize: 12 }}>{job?.title || "—"}</td>
+                  <td><span className="tg" style={{ background: `${tc}22`, color: tc }}>{iv.interview_type || "Interview"}</span></td>
+                  <td style={{ fontSize: 12, color: C.muted }}>{iv.scheduled_at ? new Date(iv.scheduled_at).toLocaleDateString() : "—"}</td>
+                  <td style={{ fontSize: 12, color: C.sub }}>{interviewer?.full_name || "—"}</td>
+                  <td><span className="tg" style={{ background: `${sc}22`, color: sc }}>{iv.status || "completed"}</span></td>
+                </tr>);
+              })}</tbody>
+            </table></div></div>
+          </div>)}
+          {interviews.length === 0 && <div style={{ textAlign: "center", padding: 60, color: C.muted }}><div style={{ fontSize: 36, marginBottom: 12 }}>📅</div><div style={{ fontWeight: 800 }}>No interviews scheduled yet.</div></div>}
+        </>
+      )}
+      {viewIV && (<Modal onClose={() => setViewIV(null)} title="Interview Details" width={520}>
+        <div className="g2" style={{ gap: 10, marginBottom: 14 }}>
+          <Field label="Candidate" value={apps.find(a => a.id === viewIV.application_id)?.candidate_name} />
+          <Field label="Type" value={viewIV.interview_type} />
+          <Field label="Date & Time" value={viewIV.scheduled_at ? new Date(viewIV.scheduled_at).toLocaleString() : "—"} />
+          <Field label="Location" value={viewIV.location} />
+          <Field label="Interviewer" value={staff.find(s => s.id === viewIV.interviewer_id)?.full_name} />
+          <Field label="Status" value={viewIV.status || "scheduled"} />
+        </div>
+        {viewIV.notes && <div><Lbl>Notes</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10, marginTop: 8 }}>{viewIV.notes}</div></div>}
+      </Modal>)}
+      {showNew && (<Modal onClose={() => setShowNew(false)} title="Schedule Interview" width={580}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div><Lbl>Candidate (Application) *</Lbl>
+            <select className="inp" value={form.application_id} onChange={e => setForm(f => ({ ...f, application_id: e.target.value }))}>
+              <option value="">— Select Candidate —</option>
+              {apps.filter(a => ["Applied", "Screening", "Interview"].includes(a.status)).map(a => (<option key={a.id} value={a.id}>{a.candidate_name} — {jobs.find(j => j.id === a.job_id)?.title || "—"}</option>))}
+            </select>
+          </div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Date & Time *</Lbl><input type="datetime-local" className="inp" value={form.scheduled_at} onChange={e => setForm(f => ({ ...f, scheduled_at: e.target.value }))} /></div>
+            <div><Lbl>Interview Type</Lbl><select className="inp" value={form.interview_type} onChange={e => setForm(f => ({ ...f, interview_type: e.target.value }))}><option>Technical</option><option>Cultural</option><option>HR</option><option>Final</option><option>Panel</option></select></div>
+          </div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Interviewer</Lbl><select className="inp" value={form.interviewer_id} onChange={e => setForm(f => ({ ...f, interviewer_id: e.target.value }))}><option value="">— Assign Interviewer —</option>{staff.map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.department})</option>)}</select></div>
+            <div><Lbl>Location / Format</Lbl><select className="inp" value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))}><option>Video Call (Google Meet)</option><option>Video Call (Zoom)</option><option>In-Person – Port Harcourt Office</option><option>Phone Call</option></select></div>
+          </div>
+          <div><Lbl>Notes / Preparation</Lbl><textarea className="inp" rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Topics to cover, documents to bring…" /></div>
+          <button className="bp" onClick={schedule} style={{ padding: 14 }}>Schedule Interview</button>
+        </div>
+      </Modal>)}
+    </div>
+  );
+}
+
+// ─── 6. OFFERS MANAGER ────────────────────────────────────────────────────────
+function OffersManager() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const { apps, jobs, loading, refresh } = useRecruitmentData();
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ application_id: "", offered_salary: "", start_date: "", notes: "" });
+
+  const offeredApps = apps.filter(a => a.status === "Offered" || a.status === "Hired");
+
+  const makeOffer = async () => {
+    if (!form.application_id || !form.offered_salary) return alert("Application and salary required");
+    try { await apiFetch(`${API_BASE}/hr/recruitment/applications/${form.application_id}`, { method: "PATCH", body: JSON.stringify({ status: "Offered", offered_salary: form.offered_salary, start_date: form.start_date, offer_notes: form.notes }) }); setShowNew(false); setForm({ application_id: "", offered_salary: "", start_date: "", notes: "" }); refresh(); } catch (e) { alert(e.message); }
+  };
+
+  const acceptOffer = async (appId) => {
+    if (!window.confirm("Mark as accepted and move to Hired?")) return;
+    try { await apiFetch(`${API_BASE}/hr/recruitment/applications/${appId}`, { method: "PATCH", body: JSON.stringify({ status: "Hired" }) }); refresh(); } catch (e) { alert(e.message); }
+  };
+
+  const declineOffer = async (appId) => {
+    if (!window.confirm("Mark offer as declined?")) return;
+    try { await apiFetch(`${API_BASE}/hr/recruitment/applications/${appId}`, { method: "PATCH", body: JSON.stringify({ status: "Rejected" }) }); refresh(); } catch (e) { alert(e.message); }
+  };
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div><div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Offers</div><div style={{ fontSize: 13, color: C.sub }}>Issue, track and manage employment offers. Accept to convert to Hired.</div></div>
+        <button className="bp" onClick={() => setShowNew(true)}>+ Issue Offer</button>
+      </div>
+      <div className="g3" style={{ marginBottom: 24 }}>
+        <StatCard label="Offers Out" value={apps.filter(a => a.status === "Offered").length} col="#A78BFA" />
+        <StatCard label="Hired (Accepted)" value={apps.filter(a => a.status === "Hired").length} col="#4ADE80" />
+        <StatCard label="Pending Response" value={apps.filter(a => a.status === "Offered").length} col={T.gold} />
+      </div>
+      {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading…</div> : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {offeredApps.map(a => {
+            const job = jobs.find(j => j.id === a.job_id);
+            const isHired = a.status === "Hired";
+            return (<div key={a.id} className="gc" style={{ padding: "20px 24px", borderLeft: `4px solid ${isHired ? "#4ADE80" : "#A78BFA"}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                <div style={{ flex: 1 }}>
+                  <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 8 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${T.gold}22`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: T.gold }}>{(a.candidate_name || "?")[0]}</div>
+                    <div><div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>{a.candidate_name}</div><div style={{ fontSize: 12, color: C.sub }}>{job?.title || "—"} · {job?.department || "—"}</div></div>
+                  </div>
+                  <div style={{ display: "flex", gap: 16, fontSize: 12, color: C.muted, flexWrap: "wrap" }}>
+                    {a.offered_salary && <span>💰 Offered: <strong style={{ color: T.gold }}>₦{parseFloat(a.offered_salary).toLocaleString()}</strong></span>}
+                    {a.start_date && <span>📅 Start: {a.start_date}</span>}
+                  </div>
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
+                  <span className="tg" style={{ background: isHired ? "#4ADE8022" : "#A78BFA22", color: isHired ? "#4ADE80" : "#A78BFA" }}>{isHired ? "✓ Hired" : "Offer Pending"}</span>
+                  {!isHired && (<div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                    <button className="bp" style={{ fontSize: 11, padding: "5px 14px" }} onClick={() => acceptOffer(a.id)}>Accept ✓</button>
+                    <button style={{ fontSize: 11, padding: "5px 14px", border: "1px solid #F87171", background: "#F8717118", color: "#F87171", borderRadius: 8, cursor: "pointer" }} onClick={() => declineOffer(a.id)}>Decline</button>
+                  </div>)}
+                </div>
+              </div>
+            </div>);
+          })}
+          {offeredApps.length === 0 && <div style={{ textAlign: "center", padding: 60, color: C.muted }}><div style={{ fontSize: 36, marginBottom: 12 }}>📨</div><div style={{ fontWeight: 800 }}>No offers issued yet.</div></div>}
+        </div>
+      )}
+      {showNew && (<Modal onClose={() => setShowNew(false)} title="Issue Employment Offer" width={560}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div><Lbl>Candidate *</Lbl><select className="inp" value={form.application_id} onChange={e => setForm(f => ({ ...f, application_id: e.target.value }))}><option value="">— Select Candidate —</option>{apps.filter(a => ["Interview", "Screening"].includes(a.status)).map(a => (<option key={a.id} value={a.id}>{a.candidate_name} — {jobs.find(j => j.id === a.job_id)?.title || "—"}</option>))}</select></div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Offered Salary (NGN) *</Lbl><input type="number" className="inp" value={form.offered_salary} onChange={e => setForm(f => ({ ...f, offered_salary: e.target.value }))} placeholder="e.g. 250000" /></div>
+            <div><Lbl>Proposed Start Date</Lbl><input type="date" className="inp" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} /></div>
+          </div>
+          <div><Lbl>Offer Notes / Conditions</Lbl><textarea className="inp" rows={4} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Benefits, conditions, probation period…" /></div>
+          <button className="bp" onClick={makeOffer} style={{ padding: 14 }}>Issue Offer</button>
+        </div>
+      </Modal>)}
+    </div>
+  );
+}
+
+// ─── 7. TALENT POOL ───────────────────────────────────────────────────────────
+function TalentPool() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const { apps, jobs, loading } = useRecruitmentData();
+  const [search, setSearch] = useState("");
+  const [tagFilter, setTagFilter] = useState("All");
+  const [showAdd, setShowAdd] = useState(false);
+  const [pool, setPool] = useState([]);
+  const [form, setForm] = useState({ name: "", email: "", phone: "", source: "LinkedIn", skills: "", notes: "", role_interest: "" });
+
+  useEffect(() => {
+    const candidates = apps.filter(a => ["Hired", "Rejected"].includes(a.status) || a.cv_url).map(a => ({ id: a.id, name: a.candidate_name, email: a.candidate_email, phone: a.candidate_phone, status: a.status, role: jobs.find(j => j.id === a.job_id)?.title || "—", source: "Applied", date: a.created_at, cv_url: a.cv_url }));
+    setPool(candidates);
+  }, [apps, jobs]);
+
+  const addToPool = () => {
+    if (!form.name) return alert("Name required");
+    setPool(prev => [{ id: Date.now().toString(), name: form.name, email: form.email, phone: form.phone, source: form.source, skills: form.skills, notes: form.notes, role_interest: form.role_interest, status: "Passive", date: new Date().toISOString() }, ...prev]);
+    setShowAdd(false); setForm({ name: "", email: "", phone: "", source: "LinkedIn", skills: "", notes: "", role_interest: "" });
+  };
+
+  const tags = ["All", "Passive", "Applied", "Hired", "Rejected"];
+  const filtered = pool.filter(p => (tagFilter === "All" || p.status === tagFilter) && (p.name?.toLowerCase().includes(search.toLowerCase()) || p.role?.toLowerCase().includes(search.toLowerCase())));
+  const statusStyle = { Passive: "#60A5FA", Applied: T.gold, Hired: "#4ADE80", Rejected: "#9CA3AF" };
+  const sourceEmoji = { LinkedIn: "💼", Referral: "👥", Indeed: "🔍", Direct: "📧", Applied: "📋" };
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div><div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Talent Pool</div><div style={{ fontSize: 13, color: C.sub }}>Sourced and passive candidates. Build your pipeline before roles open.</div></div>
+        <button className="bp" onClick={() => setShowAdd(true)}>+ Add to Pool</button>
+      </div>
+      <div className="g4" style={{ marginBottom: 22 }}>
+        <StatCard label="In Pool" value={pool.length} col={T.gold} />
+        <StatCard label="Passive" value={pool.filter(p => p.status === "Passive").length} col="#60A5FA" />
+        <StatCard label="Previously Hired" value={pool.filter(p => p.status === "Hired").length} col="#4ADE80" />
+        <StatCard label="Reconsidered" value={pool.filter(p => p.status === "Rejected").length} col="#9CA3AF" />
+      </div>
+      <div style={{ display: "flex", gap: 12, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
+        <input className="inp" placeholder="Search by name or role…" value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: 300, padding: "9px 14px" }} />
+        <div style={{ display: "flex", gap: 6 }}>{tags.map(t => (<button key={t} onClick={() => setTagFilter(t)} style={{ padding: "6px 14px", borderRadius: 8, border: `1px solid ${tagFilter === t ? T.gold : C.border}`, background: tagFilter === t ? `${T.gold}22` : "transparent", color: tagFilter === t ? T.gold : C.sub, cursor: "pointer", fontSize: 12, fontWeight: tagFilter === t ? 800 : 400 }}>{t}</button>))}</div>
+      </div>
+      {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading…</div> : (
+        <div className="g3" style={{ gap: 14 }}>
+          {filtered.map(p => {
+            const sc = statusStyle[p.status] || T.gold;
+            return (<div key={p.id} className="gc" style={{ padding: 20 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                <div style={{ width: 44, height: 44, borderRadius: "50%", background: `${T.gold}22`, border: `1.5px solid ${T.gold}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color: T.gold }}>{(p.name || "?")[0].toUpperCase()}</div>
+                <span className="tg" style={{ background: `${sc}22`, color: sc, border: `1px solid ${sc}44`, alignSelf: "flex-start" }}>{p.status}</span>
+              </div>
+              <div style={{ fontWeight: 800, fontSize: 14, color: C.text, marginBottom: 2 }}>{p.name}</div>
+              <div style={{ fontSize: 12, color: C.sub, marginBottom: 10 }}>{p.role_interest || p.role || "Open to opportunities"}</div>
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 12 }}>{p.email || "—"}</div>
+              {p.skills && <div style={{ fontSize: 11, color: C.sub, marginBottom: 12 }}>Skills: {p.skills}</div>}
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+                <span style={{ fontSize: 11, color: C.muted }}>{sourceEmoji[p.source] || "👤"} {p.source || "—"}</span>
+                <div style={{ display: "flex", gap: 6 }}>
+                  {p.email && <a href={`mailto:${p.email}`} className="bg" style={{ fontSize: 11, padding: "4px 10px" }}>Email</a>}
+                  {p.cv_url && <a href={p.cv_url} target="_blank" rel="noreferrer" className="bg" style={{ fontSize: 11, padding: "4px 10px" }}>CV</a>}
+                </div>
+              </div>
+            </div>);
+          })}
+          {filtered.length === 0 && <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 60, color: C.muted }}><div style={{ fontSize: 36, marginBottom: 12 }}>👥</div><div style={{ fontWeight: 800 }}>Talent pool is empty.</div></div>}
+        </div>
+      )}
+      {showAdd && (<Modal onClose={() => setShowAdd(false)} title="Add to Talent Pool" width={560}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div className="g2" style={{ gap: 12 }}><div><Lbl>Full Name *</Lbl><input className="inp" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div><div><Lbl>Email</Lbl><input className="inp" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></div></div>
+          <div className="g2" style={{ gap: 12 }}><div><Lbl>Phone</Lbl><input className="inp" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} /></div><div><Lbl>Source</Lbl><select className="inp" value={form.source} onChange={e => setForm(f => ({ ...f, source: e.target.value }))}><option>LinkedIn</option><option>Referral</option><option>Indeed</option><option>Direct</option><option>Event</option><option>Other</option></select></div></div>
+          <div><Lbl>Role Interest</Lbl><input className="inp" value={form.role_interest} onChange={e => setForm(f => ({ ...f, role_interest: e.target.value }))} placeholder="e.g. Senior Property Executive, Finance Manager" /></div>
+          <div><Lbl>Skills / Expertise</Lbl><input className="inp" value={form.skills} onChange={e => setForm(f => ({ ...f, skills: e.target.value }))} placeholder="e.g. Real estate, financial modelling, Salesforce" /></div>
+          <div><Lbl>Notes</Lbl><textarea className="inp" rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Context, referral source, when to reach out…" /></div>
+          <button className="bp" onClick={addToPool} style={{ padding: 14 }}>Add to Pool</button>
+        </div>
+      </Modal>)}
+    </div>
+  );
+}
+
+// Legacy wrapper (kept for any stale references)
+function RecruitmentHub() { return <ATSPipeline />; }
 
 
 // ─── OFFBOARDING MANAGER ──────────────────────────────────────────────────
@@ -7562,6 +8472,279 @@ function OffboardingManager() {
 
 
 // ─── CULTURE & ENGAGEMENT HUB ────────────────────────────────────────────────
+// ─── HUB: 360° PEER REVIEWS ──────────────────────────────────────────────────
+function PeerReviews360() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [staff, setStaff] = useState([]);
+  const [reviews, setReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState("active"); // active | create | results
+  const [showCreate, setShowCreate] = useState(false);
+  const [viewReview, setViewReview] = useState(null);
+  const [form, setForm] = useState({ reviewee_id: "", reviewer_ids: [], title: "", questions: ["How would you rate this person's communication skills?", "How effectively does this person collaborate with the team?", "What is this person's greatest strength?", "What area should this person focus on improving?", "Would you recommend this person for a leadership role? Why?"], deadline: "", is_anonymous: true });
+
+  useEffect(() => {
+    Promise.all([
+      apiFetch(`${API_BASE}/hr/staff`).catch(() => []),
+      apiFetch(`${API_BASE}/hr/peer-reviews`).catch(() => []),
+    ]).then(([s, r]) => { setStaff(s || []); setReviews(r || []); }).finally(() => setLoading(false));
+  }, []);
+
+  const refresh = () => {
+    apiFetch(`${API_BASE}/hr/peer-reviews`).then(r => setReviews(r || [])).catch(() => {});
+  };
+
+  const launchReview = async () => {
+    if (!form.reviewee_id) return alert("Select the staff member to be reviewed");
+    if (form.reviewer_ids.length === 0) return alert("Select at least one reviewer");
+    if (!form.title) return alert("Review title required");
+    const qs = form.questions.filter(q => q.trim());
+    if (qs.length === 0) return alert("Add at least one question");
+    try {
+      await apiFetch(`${API_BASE}/hr/peer-reviews`, {
+        method: "POST",
+        body: JSON.stringify({ ...form, questions: qs })
+      });
+      setShowCreate(false);
+      setForm({ reviewee_id: "", reviewer_ids: [], title: "", questions: ["How would you rate this person's communication skills?", "How effectively does this person collaborate with the team?", "What is this person's greatest strength?", "What area should this person focus on improving?", "Would you recommend this person for a leadership role? Why?"], deadline: "", is_anonymous: true });
+      refresh();
+    } catch (e) {
+      // API may not exist yet — store locally for demo
+      const fakeReview = {
+        id: Date.now().toString(), ...form, questions: qs,
+        status: "pending", created_at: new Date().toISOString(), responses: [],
+        reviewee: staff.find(s => s.id === form.reviewee_id),
+        reviewers: staff.filter(s => form.reviewer_ids.includes(s.id))
+      };
+      setReviews(prev => [fakeReview, ...prev]);
+      setShowCreate(false);
+    }
+  };
+
+  const toggleReviewer = (id) => setForm(f => ({ ...f, reviewer_ids: f.reviewer_ids.includes(id) ? f.reviewer_ids.filter(x => x !== id) : [...f.reviewer_ids, id] }));
+
+  const statusCol = { pending: T.gold, "in-progress": "#60A5FA", completed: "#4ADE80", cancelled: "#F87171" };
+  const statusLabel = { pending: "Pending", "in-progress": "In Progress", completed: "Completed", cancelled: "Cancelled" };
+
+  const active = reviews.filter(r => ["pending", "in-progress"].includes(r.status));
+  const completed = reviews.filter(r => r.status === "completed");
+
+  // Question templates by category
+  const qTemplates = {
+    "Communication": ["How clearly does this person communicate ideas?", "How well do they listen and respond to feedback?"],
+    "Collaboration": ["How effectively do they work in a team setting?", "Do they support and help their colleagues?"],
+    "Leadership": ["Would you trust this person to lead a project?", "How well do they motivate and inspire others?"],
+    "Performance": ["How consistently do they meet or exceed expectations?", "How do they handle pressure and tight deadlines?"],
+    "Growth": ["What one skill should this person develop most?", "In what area have you seen the most improvement?"],
+  };
+
+  return (
+    <div className="fade">
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>360° Peer Reviews</div>
+          <div style={{ fontSize: 13, color: C.sub }}>HR-initiated multi-rater feedback. Select who reviews who, assign reviewers, set deadlines.</div>
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <Tabs items={[["active", "Active Reviews"], ["results", "Results"]]} active={tab} setActive={setTab} />
+          <button className="bp" onClick={() => setShowCreate(true)} style={{ height: 38 }}>+ Launch Review</button>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div className="g4" style={{ marginBottom: 24 }}>
+        <StatCard label="Active Reviews" value={active.length} col={T.gold} />
+        <StatCard label="Completed" value={completed.length} col="#4ADE80" />
+        <StatCard label="Total Reviewers Assigned" value={reviews.reduce((s, r) => s + (r.reviewer_ids?.length || r.reviewers?.length || 0), 0)} col="#60A5FA" />
+        <StatCard label="Avg. Questions per Review" value={reviews.length ? Math.round(reviews.reduce((s, r) => s + (r.questions?.length || 0), 0) / reviews.length) : 0} col="#A78BFA" />
+      </div>
+
+      {tab === "active" && (
+        <>
+          {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading…</div> : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              {active.map(r => {
+                const reviewee = r.reviewee || staff.find(s => s.id === r.reviewee_id);
+                const reviewers = r.reviewers || staff.filter(s => (r.reviewer_ids || []).includes(s.id));
+                const sc = statusCol[r.status] || T.gold;
+                const responseCount = r.responses?.length || 0;
+                const totalReviewers = reviewers.length || r.reviewer_ids?.length || 0;
+                const pct = totalReviewers > 0 ? Math.round((responseCount / totalReviewers) * 100) : 0;
+                return (
+                  <div key={r.id} className="gc" style={{ padding: "20px 24px" }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 16 }}>
+                      <div style={{ flex: 1 }}>
+                        <div style={{ display: "flex", alignItems: "center", gap: 10, marginBottom: 10 }}>
+                          <div style={{ width: 42, height: 42, borderRadius: "50%", background: `${T.gold}22`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 17, fontWeight: 800, color: T.gold }}>{(reviewee?.full_name || "?")[0]}</div>
+                          <div>
+                            <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>{r.title || `Review: ${reviewee?.full_name || "—"}`}</div>
+                            <div style={{ fontSize: 12, color: C.sub }}>Reviewee: <strong style={{ color: C.text }}>{reviewee?.full_name || r.reviewee_id || "—"}</strong> · {reviewee?.department || ""}</div>
+                          </div>
+                          <span className="tg" style={{ background: `${sc}22`, color: sc, border: `1px solid ${sc}44`, marginLeft: "auto" }}>{statusLabel[r.status] || r.status}</span>
+                        </div>
+
+                        {/* Reviewers */}
+                        <div style={{ marginBottom: 12 }}>
+                          <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 6 }}>Assigned Reviewers ({totalReviewers})</div>
+                          <div style={{ display: "flex", flexWrap: "wrap", gap: 6 }}>
+                            {reviewers.slice(0, 6).map(rv => (<span key={rv.id} className="tg" style={{ background: `${T.gold}14`, color: C.text, border: `1px solid ${C.border}` }}>{rv.full_name}</span>))}
+                            {totalReviewers > 6 && <span className="tg tm">+{totalReviewers - 6} more</span>}
+                          </div>
+                        </div>
+
+                        {/* Progress bar */}
+                        <div style={{ marginBottom: 6 }}>
+                          <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.muted, marginBottom: 4 }}>
+                            <span>Responses received</span><span style={{ fontWeight: 800, color: sc }}>{responseCount} / {totalReviewers}</span>
+                          </div>
+                          <div style={{ height: 6, background: C.border, borderRadius: 4, overflow: "hidden" }}>
+                            <div style={{ height: "100%", width: `${pct}%`, background: sc, borderRadius: 4, transition: "width .3s" }} />
+                          </div>
+                        </div>
+
+                        <div style={{ display: "flex", gap: 16, fontSize: 11, color: C.muted, marginTop: 8, flexWrap: "wrap" }}>
+                          <span>📋 {r.questions?.length || 0} questions</span>
+                          {r.is_anonymous && <span>🔒 Anonymous</span>}
+                          {r.deadline && <span>⏰ Deadline: {new Date(r.deadline).toLocaleDateString()}</span>}
+                          <span>📅 Launched: {r.created_at ? new Date(r.created_at).toLocaleDateString() : "—"}</span>
+                        </div>
+                      </div>
+                      <div style={{ display: "flex", flexDirection: "column", gap: 8, flexShrink: 0 }}>
+                        <button className="bp" style={{ fontSize: 11, padding: "6px 14px" }} onClick={() => setViewReview(r)}>View Details</button>
+                        <button className="bg" style={{ fontSize: 11, padding: "6px 14px" }} onClick={async () => { try { await apiFetch(`${API_BASE}/hr/peer-reviews/${r.id}`, { method: "PATCH", body: JSON.stringify({ status: "cancelled" }) }); refresh(); } catch (e) { setReviews(prev => prev.map(x => x.id === r.id ? { ...x, status: "cancelled" } : x)); } }}>Cancel</button>
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+              {active.length === 0 && (<div style={{ textAlign: "center", padding: 60, color: C.muted }}><div style={{ fontSize: 36, marginBottom: 12 }}>🔍</div><div style={{ fontWeight: 800 }}>No active reviews</div><div style={{ fontSize: 12, marginTop: 8 }}>Click "Launch Review" to start a new 360° peer review.</div></div>)}
+            </div>
+          )}
+        </>
+      )}
+
+      {tab === "results" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {completed.map(r => {
+            const reviewee = r.reviewee || staff.find(s => s.id === r.reviewee_id);
+            return (
+              <div key={r.id} className="gc" style={{ padding: "20px 24px", borderLeft: `4px solid #4ADE80` }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+                  <div>
+                    <div style={{ fontWeight: 800, fontSize: 15, color: C.text, marginBottom: 4 }}>{r.title || `Review: ${reviewee?.full_name || "—"}`}</div>
+                    <div style={{ fontSize: 12, color: C.sub, marginBottom: 10 }}>Reviewee: {reviewee?.full_name || "—"} · {r.responses?.length || 0} responses</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>Completed {r.completed_at ? new Date(r.completed_at).toLocaleDateString() : "—"}</div>
+                  </div>
+                  <button className="bp" style={{ fontSize: 11, padding: "6px 14px" }} onClick={() => setViewReview(r)}>View Results</button>
+                </div>
+              </div>
+            );
+          })}
+          {completed.length === 0 && <div style={{ textAlign: "center", padding: 60, color: C.muted }}><div style={{ fontSize: 36, marginBottom: 12 }}>📊</div><div style={{ fontWeight: 800 }}>No completed reviews yet.</div></div>}
+        </div>
+      )}
+
+      {/* View Review Modal */}
+      {viewReview && (
+        <Modal onClose={() => setViewReview(null)} title={viewReview.title || "Review Details"} width={620}>
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ fontSize: 13, color: C.sub, marginBottom: 12 }}>Reviewing: <strong style={{ color: C.text }}>{(viewReview.reviewee || staff.find(s => s.id === viewReview.reviewee_id))?.full_name || "—"}</strong></div>
+            <div style={{ marginBottom: 16 }}>
+              <Lbl>Questions ({viewReview.questions?.length || 0})</Lbl>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6, marginTop: 8 }}>
+                {(viewReview.questions || []).map((q, i) => (<div key={i} style={{ padding: "8px 12px", background: `${T.gold}08`, borderRadius: 8, border: `1px solid ${T.gold}18`, fontSize: 13, color: C.text }}><span style={{ color: T.gold, fontWeight: 800 }}>{i + 1}. </span>{q}</div>))}
+              </div>
+            </div>
+            <div style={{ marginBottom: 12 }}>
+              <Lbl>Assigned Reviewers</Lbl>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 6, marginTop: 8 }}>
+                {(viewReview.reviewers || staff.filter(s => (viewReview.reviewer_ids || []).includes(s.id))).map(rv => (<span key={rv.id} className="tg" style={{ background: `${T.gold}14`, color: C.text }}>{rv.full_name}</span>))}
+              </div>
+            </div>
+            {viewReview.responses?.length > 0 && (
+              <div>
+                <Lbl>Responses ({viewReview.responses.length})</Lbl>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, marginTop: 8 }}>
+                  {viewReview.responses.map((resp, i) => (<div key={i} style={{ padding: "12px 16px", background: C.surface, borderRadius: 10, border: `1px solid ${C.border}` }}>
+                    <div style={{ fontWeight: 800, color: C.text, marginBottom: 8 }}>{viewReview.is_anonymous ? `Anonymous Response #${i + 1}` : (staff.find(s => s.id === resp.reviewer_id)?.full_name || "—")}</div>
+                    {Object.entries(resp.answers || {}).map(([q, a]) => (<div key={q} style={{ marginBottom: 8 }}><div style={{ fontSize: 11, color: T.gold, fontWeight: 800, marginBottom: 2 }}>{q}</div><div style={{ fontSize: 13, color: C.sub }}>{a}</div></div>))}
+                  </div>))}
+                </div>
+              </div>
+            )}
+          </div>
+        </Modal>
+      )}
+
+      {/* Launch Review Modal */}
+      {showCreate && (
+        <Modal onClose={() => setShowCreate(false)} title="Launch 360° Peer Review" width={680}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            {/* Reviewee */}
+            <div>
+              <Lbl>Staff Member Being Reviewed *</Lbl>
+              <select className="inp" value={form.reviewee_id} onChange={e => setForm(f => ({ ...f, reviewee_id: e.target.value }))}>
+                <option value="">— Select Employee —</option>
+                {staff.map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.department || s.job_title || "—"})</option>)}
+              </select>
+            </div>
+
+            {/* Review Title */}
+            <div>
+              <Lbl>Review Title *</Lbl>
+              <input className="inp" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Q2 2025 Peer Feedback – Sales Team" />
+            </div>
+
+            {/* Reviewers */}
+            <div>
+              <Lbl>Assign Reviewers * ({form.reviewer_ids.length} selected)</Lbl>
+              <div style={{ maxHeight: 200, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 12px", marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                {staff.filter(s => s.id !== form.reviewee_id).map(s => {
+                  const sel = form.reviewer_ids.includes(s.id);
+                  return (<button key={s.id} onClick={() => toggleReviewer(s.id)} style={{ padding: "5px 12px", borderRadius: 20, border: `1px solid ${sel ? T.gold : C.border}`, background: sel ? `${T.gold}22` : "transparent", color: sel ? T.gold : C.sub, cursor: "pointer", fontSize: 11, fontWeight: sel ? 800 : 400, transition: "all .12s" }}>{sel ? "✓ " : ""}{s.full_name}</button>);
+                })}
+              </div>
+              <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                <button className="bg" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => setForm(f => ({ ...f, reviewer_ids: staff.filter(s => s.id !== f.reviewee_id).map(s => s.id) }))}>Select All</button>
+                <button className="bg" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => setForm(f => ({ ...f, reviewer_ids: [] }))}>Clear</button>
+              </div>
+            </div>
+
+            {/* Questions */}
+            <div>
+              <Lbl>Review Questions *</Lbl>
+              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                {Object.entries(qTemplates).map(([cat, qs]) => (<button key={cat} className="bg" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => setForm(f => ({ ...f, questions: [...new Set([...f.questions, ...qs])] }))}>+ {cat}</button>))}
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                {form.questions.map((q, idx) => (<div key={idx} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                  <input className="inp" style={{ flex: 1 }} value={q} onChange={e => { const nq = [...form.questions]; nq[idx] = e.target.value; setForm(f => ({ ...f, questions: nq })); }} placeholder={`Question ${idx + 1}`} />
+                  <button onClick={() => setForm(f => ({ ...f, questions: f.questions.filter((_, i) => i !== idx) }))} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #F87171", background: "#F8717118", color: "#F87171", cursor: "pointer", fontSize: 14, flexShrink: 0 }}>×</button>
+                </div>))}
+                <button className="bg" style={{ alignSelf: "flex-start", fontSize: 11, padding: "6px 14px" }} onClick={() => setForm(f => ({ ...f, questions: [...f.questions, ""] }))}>+ Add Question</button>
+              </div>
+            </div>
+
+            {/* Settings */}
+            <div className="g2" style={{ gap: 12 }}>
+              <div><Lbl>Deadline</Lbl><input type="date" className="inp" value={form.deadline} onChange={e => setForm(f => ({ ...f, deadline: e.target.value }))} /></div>
+              <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 22 }}>
+                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: C.text, fontWeight: 700 }}>
+                  <input type="checkbox" checked={form.is_anonymous} onChange={e => setForm(f => ({ ...f, is_anonymous: e.target.checked }))} style={{ width: 16, height: 16, accentColor: T.gold }} />
+                  Anonymous responses
+                </label>
+              </div>
+            </div>
+
+            <button className="bp" onClick={launchReview} style={{ padding: 14 }}>🚀 Launch Review</button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 function CultureHub({ authRole }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const isHR = authRole === "hr";
