@@ -7810,7 +7810,7 @@ function JobRequisitions() {
       if (form.id) {
          await apiFetch(`${API_BASE}/hr/recruitment/jobs/${form.id}`, { method: "PATCH", body: JSON.stringify(form) }); 
       } else {
-         await apiFetch(`${API_BASE}/hr/recruitment/jobs`, { method: "POST", body: JSON.stringify(form) }); 
+         await apiFetch(`${API_BASE}/hr/recruitment/jobs`, { method: "POST", body: JSON.stringify({ ...form, status: "Pending Approval" }) }); 
       }
       setShowNew(false); refresh(); 
     } catch (e) { alert(e.message); }
