@@ -4,6 +4,37 @@ import { apiFetch, API_BASE } from "./api";
 const ThemeCtx = createContext({ dark: true, toggle: () => { } });
 const useTheme = () => useContext(ThemeCtx);
 
+// ─── DEPARTMENT ALIAS MAP ─────────────────────────────────────────────────────
+// Maps staff department strings to their canonical KPI department names
+const departmentAlias = {
+  "Sales": "Sales & Acquisitions",
+  "Acquisitions": "Sales & Acquisitions",
+  "Sales and Acquisitions": "Sales & Acquisitions",
+  "HR": "Human Resources",
+  "H.R.": "Human Resources",
+  "Ops": "Operations",
+  "IT": "Information Technology",
+  "Finance & Accounts": "Finance",
+  "Accounts": "Finance",
+};
+
+// ─── SHARED DEPARTMENTS HOOK ──────────────────────────────────────────────────
+// Single source of truth for departments — avoids loading through recruitmentData
+// for components that don't need jobs/apps/interviews.
+function useDepartments() {
+  const [departments, setDepartments] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const refresh = useCallback(async () => {
+    setLoading(true);
+    try {
+      const d = await apiFetch(`${API_BASE}/hr/departments`).catch(() => []);
+      setDepartments(Array.isArray(d) ? d : []);
+    } catch { setDepartments([]); } finally { setLoading(false); }
+  }, []);
+  useEffect(() => { refresh(); }, [refresh]);
+  return { departments, loading, refresh };
+}
+
 function SecurityManager() {
   const [data, setData] = useState({ current: "", new: "", confirm: "" });
   const [loading, setLoading] = useState(false);
@@ -761,7 +792,7 @@ function LeaveForm({ onSave, currentUserId }) {
 
 function Goals({ viewOnly, userId, canManageKpiTemplates = false }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
-  const { jobs, apps, departments, loading: recruitmentLoading, refresh: refreshRecruitment } = useRecruitmentData();
+  const { departments } = useDepartments();
   const [goals, setGoals] = useState([]);
   const [staff, setStaff] = useState([]);
   const [templates, setTemplates] = useState([]);
@@ -770,6 +801,10 @@ function Goals({ viewOnly, userId, canManageKpiTemplates = false }) {
   const [showTemplateManager, setShowTemplateManager] = useState(false);
   const [editingGoal, setEditingGoal] = useState(null);
   const [syncing, setSyncing] = useState(false);
+  // For manual/auto goal progress update
+  const [updateGoal, setUpdateGoal] = useState(null);
+  const [updateValue, setUpdateValue] = useState("");
+  const [updateSaving, setUpdateSaving] = useState(false);
 
   useEffect(() => {
     setLoading(true);
@@ -870,6 +905,32 @@ function Goals({ viewOnly, userId, canManageKpiTemplates = false }) {
     } catch (e) {
       alert("Error updating template: " + e.message);
     }
+  };
+
+  // Mark a manual goal as fully completed (sets actual_value = target_value)
+  const markGoalComplete = async (g) => {
+    if (!window.confirm(`Mark "${g.kpi_name}" as Achieved? This will set actual to target (${g.target_value} ${g.unit}).`)) return;
+    try {
+      await apiFetch(`${API_BASE}/hr/goals/${g.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ actual_value: g.target_value, status: "Achieved" })
+      });
+      refresh();
+    } catch (e) { alert("Error: " + e.message); }
+  };
+
+  // Update actual progress value for manual or auto goals
+  const submitUpdateProgress = async () => {
+    if (!updateGoal || updateValue === "") return;
+    setUpdateSaving(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/goals/${updateGoal.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({ actual_value: parseFloat(updateValue) })
+      });
+      setUpdateGoal(null); setUpdateValue("");
+      refresh();
+    } catch (e) { alert("Error: " + e.message); } finally { setUpdateSaving(false); }
   };
 
   return (
@@ -1018,17 +1079,82 @@ function Goals({ viewOnly, userId, canManageKpiTemplates = false }) {
                 </div>
 
                 {isAuto && (
-                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", opacity: 0.7 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", opacity: 0.7, marginBottom: 10 }}>
                     <div style={{ fontSize: 11, color: C.muted }}>
                       Last Updated: <b>{g.last_synced_at ? new Date(g.last_synced_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : "Waiting for sync..."}</b>
                     </div>
                     <span style={{ fontSize: 12 }}>⚡</span>
                   </div>
                 )}
+
+                {/* ── Goal Action Buttons ── */}
+                {status !== "Achieved" && (
+                  <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                    {!isAuto && (
+                      <button
+                        className="bp"
+                        onClick={() => markGoalComplete(g)}
+                        style={{ flex: 1, padding: "8px 12px", fontSize: 12, background: "#10B981", border: "none", borderRadius: 10 }}
+                      >
+                        ✅ Mark as Achieved
+                      </button>
+                    )}
+                    <button
+                      className="bg"
+                      onClick={() => { setUpdateGoal(g); setUpdateValue(String(g.actual_value || 0)); }}
+                      style={{ flex: 1, padding: "8px 12px", fontSize: 12, borderRadius: 10 }}
+                    >
+                      {isAuto ? "⚙️ Override Progress" : "✏️ Update Progress"}
+                    </button>
+                  </div>
+                )}
+                {status === "Achieved" && (
+                  <div style={{ textAlign: "center", fontSize: 12, color: "#10B981", fontWeight: 700, marginTop: 4 }}>
+                    🏆 Goal Achieved
+                  </div>
+                )}
               </div>
             );
           })}
         </div>
+      )}
+
+      {/* ── Update Progress Modal ── */}
+      {updateGoal && (
+        <Modal onClose={() => { setUpdateGoal(null); setUpdateValue(""); }} title={`Update Progress — ${updateGoal.kpi_name}`}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            <div style={{ fontSize: 13, color: dark ? "#9CA3AF" : "#6B7280" }}>
+              {updateGoal.measurement_source && updateGoal.measurement_source !== "manual"
+                ? "⚙️ This goal is auto-tracked. Override the synced value if needed (e.g. manual corrections)."
+                : "✍️ Enter the current actual value for this manual goal."}
+            </div>
+            <div>
+              <Lbl>Current Actual Value ({updateGoal.unit})</Lbl>
+              <div style={{ display: "flex", gap: 12, alignItems: "center" }}>
+                <input
+                  className="inp"
+                  type="number"
+                  min="0"
+                  value={updateValue}
+                  onChange={e => setUpdateValue(e.target.value)}
+                  style={{ flex: 1 }}
+                  autoFocus
+                />
+                <span style={{ fontSize: 12, color: dark ? "#9CA3AF" : "#6B7280", whiteSpace: "nowrap" }}>
+                  Target: {updateGoal.target_value} {updateGoal.unit}
+                </span>
+              </div>
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button className="bp" onClick={submitUpdateProgress} disabled={updateSaving} style={{ flex: 1, padding: 12 }}>
+                {updateSaving ? "Saving..." : "Save Progress"}
+              </button>
+              <button className="bg" onClick={() => { setUpdateGoal(null); setUpdateValue(""); }} style={{ flex: 1, padding: 12 }}>
+                Cancel
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
 
       {showNew && (
@@ -3893,7 +4019,7 @@ function OrgChartView({ staff }) {
 // ─── MODULE: STAFF DIRECTORY ─────────────────────────────────────────────────
 function StaffDirectory({ authRole }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
-  const { departments } = useRecruitmentData();
+  const { departments } = useDepartments();
   const viewOnly = authRole !== "hr";
   const [tab, setTab] = useState("full");
   const [view, setView] = useState(null);
@@ -5585,21 +5711,130 @@ function ImprovementPlans({ viewOnly, userId, authRole }) {
 // ─── HUB: SUCCESSION PLANNING ────────────────────────────────────────────────
 function SuccessionPlanning() {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [plans, setPlans] = useState([]); const [staff, setStaff] = useState([]); const [loading, setLoading] = useState(true);
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ critical_role: "", successor_id: "", readiness: "6-12 months", development_notes: "" });
+  const [saving, setSaving] = useState(false);
+
+  const READINESS = ["Ready Now", "6-12 months", "12-24 months", "Development Needed"];
+  const readinessCol = { "Ready Now": "#4ADE80", "6-12 months": T.gold, "12-24 months": "#60A5FA", "Development Needed": "#F87171" };
+
+  useEffect(() => {
+    Promise.all([
+      apiFetch(`${API_BASE}/hr/succession-plans`).catch(() => []),
+      apiFetch(`${API_BASE}/hr/staff`).catch(() => [])
+    ]).then(([p, s]) => { setPlans(Array.isArray(p) ? p : []); setStaff(Array.isArray(s) ? s : []); }).finally(() => setLoading(false));
+  }, []);
+
+  const refresh = () => apiFetch(`${API_BASE}/hr/succession-plans`).catch(() => []).then(p => setPlans(Array.isArray(p) ? p : []));
+
+  const save = async () => {
+    if (!form.critical_role || !form.successor_id) return alert("Role and successor required.");
+    setSaving(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/succession-plans`, { method: "POST", body: JSON.stringify(form) });
+      setShowNew(false); setForm({ critical_role: "", successor_id: "", readiness: "6-12 months", development_notes: "" });
+      refresh();
+    } catch (e) { alert("Error: " + e.message); } finally { setSaving(false); }
+  };
+
+  const del = async (id) => {
+    if (!window.confirm("Remove this succession plan?")) return;
+    try { await apiFetch(`${API_BASE}/hr/succession-plans/${id}`, { method: "DELETE" }); refresh(); }
+    catch (e) { alert(e.message); }
+  };
+
   return (
     <div className="fade">
-      <div style={{ marginBottom: 22 }}><div className="ho" style={{ fontSize: 22 }}>Succession Planning</div><div style={{ fontSize: 13, color: C.sub }}>Identify high-potential employees and map their growth trajectory.</div></div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 22 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 22 }}>Succession Planning</div>
+          <div style={{ fontSize: 13, color: C.sub }}>Map high-potential staff to critical roles and track readiness.</div>
+        </div>
+        <button className="bp" onClick={() => setShowNew(true)}>+ Add Succession Plan</button>
+      </div>
+
       <div className="g2" style={{ marginBottom: 22 }}>
-        {[["Identify Successors", "Map staff to critical roles they can fill in 6–18 months.", "#4ADE80"], ["Skills Gap Analysis", "Compare current skills with role requirements.", "#60A5FA"], ["Career Path Mapping", "Define growth trajectories per department.", T.gold], ["Retention Risk Alerts", "Flag top performers with low engagement scores.", "#F87171"]].map(([t, d, c]) => (
+        {[["Identify Successors", "Map staff to critical roles they can fill in 6–24 months.", "#4ADE80"],
+        ["Retention Risk", "Top performers in succession plans are flagged as high-retention priority.", "#F87171"],
+        ["Readiness Levels", "Track each candidate's development stage towards role readiness.", T.gold],
+        ["Career Paths", "Define growth trajectories to motivate and retain talent.", "#60A5FA"]].map(([t, d, c]) => (
           <div key={t} className="gc" style={{ padding: 20, borderLeft: `3px solid ${c}` }}>
             <div style={{ fontWeight: 800, color: c, marginBottom: 8 }}>{t}</div>
             <div style={{ fontSize: 13, color: C.sub }}>{d}</div>
           </div>
         ))}
       </div>
-      <div className="gc" style={{ padding: 22, textAlign: "center", color: C.muted }}>
-        <div style={{ fontSize: 24, marginBottom: 8 }}>🔜</div>
-        <div style={{ fontSize: 13 }}>Full succession planning module launching Q3 2026. Data mapping in progress.</div>
-      </div>
+
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading succession plans…</div> : (
+        <>
+          {plans.length === 0 && !showNew ? (
+            <div className="gc" style={{ padding: 40, textAlign: "center" }}>
+              <div style={{ fontSize: 32, marginBottom: 12 }}>🎯</div>
+              <div style={{ fontWeight: 800, color: C.text, marginBottom: 8 }}>No succession plans yet</div>
+              <div style={{ fontSize: 13, color: C.muted, marginBottom: 20 }}>Identify key roles and map your high-potential staff as successors.</div>
+              <button className="bp" onClick={() => setShowNew(true)}>+ Create First Plan</button>
+            </div>
+          ) : (
+            <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(320px, 1fr))", gap: 20 }}>
+              {plans.map(p => {
+                const successor = staff.find(s => s.id === p.successor_id);
+                const rc = readinessCol[p.readiness] || T.gold;
+                return (
+                  <div key={p.id} className="gc fade-in" style={{ padding: 24, borderTop: `3px solid ${rc}` }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 16 }}>
+                      <div>
+                        <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", fontWeight: 700, marginBottom: 4 }}>Critical Role</div>
+                        <div style={{ fontWeight: 900, fontSize: 16, color: C.text }}>{p.critical_role}</div>
+                      </div>
+                      <button onClick={() => del(p.id)} style={{ background: "none", border: "none", color: "#F87171", cursor: "pointer", fontSize: 16 }}>×</button>
+                    </div>
+                    {successor && (
+                      <div style={{ display: "flex", alignItems: "center", gap: 12, padding: "12px 0", borderTop: `1px solid ${C.border}`, borderBottom: `1px solid ${C.border}`, marginBottom: 14 }}>
+                        <Av av={successor.full_name?.split(" ").map(n => n[0]).join("") || "??"} sz={36} />
+                        <div>
+                          <div style={{ fontWeight: 800, color: C.text }}>{successor.full_name}</div>
+                          <div style={{ fontSize: 11, color: C.muted }}>{successor.department}</div>
+                        </div>
+                      </div>
+                    )}
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: p.development_notes ? 12 : 0 }}>
+                      <span style={{ fontSize: 11, color: C.muted }}>Readiness</span>
+                      <span className="tg" style={{ background: `${rc}22`, color: rc, fontWeight: 700 }}>{p.readiness}</span>
+                    </div>
+                    {p.development_notes && (
+                      <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.5, background: dark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)", padding: 10, borderRadius: 8, marginTop: 4 }}>
+                        {p.development_notes}
+                      </div>
+                    )}
+                  </div>
+                );
+              })}
+            </div>
+          )}
+        </>
+      )}
+
+      {showNew && (
+        <Modal onClose={() => setShowNew(false)} title="Add Succession Plan">
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div><Lbl>Critical Role / Position *</Lbl><input className="inp" placeholder="e.g. Head of Operations" value={form.critical_role} onChange={e => setForm(f => ({ ...f, critical_role: e.target.value }))} /></div>
+            <div><Lbl>Successor *</Lbl>
+              <select className="inp" value={form.successor_id} onChange={e => setForm(f => ({ ...f, successor_id: e.target.value }))}>
+                <option value="">— Select Staff Member —</option>
+                {staff.filter(s => s.is_active).map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.department})</option>)}
+              </select>
+            </div>
+            <div><Lbl>Readiness Level</Lbl>
+              <select className="inp" value={form.readiness} onChange={e => setForm(f => ({ ...f, readiness: e.target.value }))}>
+                {READINESS.map(r => <option key={r}>{r}</option>)}
+              </select>
+            </div>
+            <div><Lbl>Development Notes</Lbl><textarea className="inp" rows={3} placeholder="What development steps are needed for this successor?" value={form.development_notes} onChange={e => setForm(f => ({ ...f, development_notes: e.target.value }))} /></div>
+            <button className="bp" onClick={save} disabled={saving}>{saving ? "Saving…" : "Create Plan"}</button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -5997,20 +6232,90 @@ function BonusManager({ isHR }) {
 // ─── HUB: TAX CONFIGURATION ──────────────────────────────────────────────────
 function TaxConfig() {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [config, setConfig] = useState({ paye_enabled: true, pension_employee_rate: 8, pension_employer_rate: 10, nhf_rate: 2.5, wht_default_rate: 5, wht_contractor_rate: 10 });
+  const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false);
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/hr/tax-config`).then(d => { if (d) setConfig(c => ({ ...c, ...d })); }).catch(() => { }).finally(() => setLoading(false));
+  }, []);
+
+  const save = async () => {
+    setSaving(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/tax-config`, { method: "POST", body: JSON.stringify(config) });
+      alert("Tax configuration saved successfully.");
+    } catch (e) { alert("Error: " + e.message); } finally { setSaving(false); }
+  };
+
+  const Field = ({ label, field, suffix = "%", step = "0.5", min = "0", max = "100" }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: `1px solid ${C.border}` }}>
+      <span style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>{label}</span>
+      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+        <input type="number" step={step} min={min} max={max} value={config[field]} onChange={e => setConfig(c => ({ ...c, [field]: parseFloat(e.target.value) }))}
+          style={{ width: 80, padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: dark ? "#1a1a2e" : "#f8f8f8", color: C.text, fontSize: 14, fontWeight: 800, textAlign: "right" }} />
+        <span style={{ fontSize: 12, color: C.muted, width: 20 }}>{suffix}</span>
+      </div>
+    </div>
+  );
+
   return (
     <div className="fade">
-      <div style={{ marginBottom: 22 }}><div className="ho" style={{ fontSize: 22 }}>Tax Configuration</div><div style={{ fontSize: 13, color: C.sub }}>Nigerian PAYE, Pension and NHF configuration.</div></div>
-      <div className="g2" style={{ marginBottom: 22 }}>
-        {[["PAYE (Pay As You Earn)", "Progressive rate: 7–24% based on income band. Remitted monthly to FIRS.", "#F87171"], ["Pension Contribution", "Employee: 8% | Employer: 10% of gross. Remitted to PFAs.", "#60A5FA"], ["NHF (National Housing Fund)", "2.5% of basic salary for applicable staff. Remitted to FMBN.", T.gold], ["WHT (Withholding Tax)", "5–10% for contractors. Deducted at source before payment.", "#4ADE80"]].map(([t, d, c]) => (
-          <div key={t} className="gc" style={{ padding: 22, borderLeft: `3px solid ${c}` }}>
-            <div style={{ fontWeight: 800, color: c, marginBottom: 8, fontSize: 14 }}>{t}</div>
-            <div style={{ fontSize: 13, color: C.sub }}>{d}</div>
-          </div>
-        ))}
+      <div style={{ marginBottom: 22 }}>
+        <div className="ho" style={{ fontSize: 22 }}>Tax Configuration</div>
+        <div style={{ fontSize: 13, color: C.sub }}>Nigerian PAYE, Pension, NHF and WHT rates and settings.</div>
       </div>
-      <div className="gc" style={{ padding: 22, textAlign: "center", color: C.muted }}>
-        <div style={{ fontSize: 24, marginBottom: 8 }}>🔜</div>
-        <div style={{ fontSize: 13 }}>Automated PAYE/Pension calculation engine launching Q3 2026. Currently in compliance review with FIRS guidelines.</div>
+
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : (
+        <div className="g2">
+          {/* PAYE */}
+          <div className="gc" style={{ padding: 24 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+              <div style={{ fontWeight: 800, color: "#F87171", fontSize: 15 }}>PAYE (Pay As You Earn)</div>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
+                <span style={{ fontSize: 12, color: C.muted }}>Enabled</span>
+                <div onClick={() => setConfig(c => ({ ...c, paye_enabled: !c.paye_enabled }))} style={{ width: 40, height: 22, borderRadius: 11, background: config.paye_enabled ? "#4ADE80" : C.border, position: "relative", cursor: "pointer", transition: "background 0.2s" }}>
+                  <div style={{ position: "absolute", top: 3, left: config.paye_enabled ? 21 : 3, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
+                </div>
+              </label>
+            </div>
+            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 16 }}>Progressive rate: 7–24% based on income band per FIRS guidelines. Remitted monthly to FIRS.</div>
+            <div style={{ padding: 12, background: "#F8717111", borderRadius: 8, fontSize: 12 }}>
+              <div style={{ fontWeight: 800, color: "#F87171", marginBottom: 6 }}>PAYE Bands (Fixed — FIRS)</div>
+              {[["First ₦300,000", "7%"], ["Next ₦300,000", "11%"], ["Next ₦500,000", "15%"], ["Next ₦500,000", "19%"], ["Next ₦1,600,000", "21%"], ["Above ₦3,200,000", "24%"]].map(([band, rate]) => (
+                <div key={band} style={{ display: "flex", justifyContent: "space-between", color: C.sub, marginBottom: 3 }}>
+                  <span>{band}</span><span style={{ fontWeight: 700, color: "#F87171" }}>{rate}</span>
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Pension */}
+          <div className="gc" style={{ padding: 24 }}>
+            <div style={{ fontWeight: 800, color: "#60A5FA", fontSize: 15, marginBottom: 6 }}>Pension Contribution (PRA 2014)</div>
+            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 18 }}>Mandatory for all staff on payroll. Remitted to approved PFAs by the 7th of each month.</div>
+            <Field label="Employee Contribution" field="pension_employee_rate" />
+            <Field label="Employer Contribution" field="pension_employer_rate" />
+          </div>
+
+          {/* NHF */}
+          <div className="gc" style={{ padding: 24 }}>
+            <div style={{ fontWeight: 800, color: T.gold, fontSize: 15, marginBottom: 6 }}>NHF (National Housing Fund)</div>
+            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 18 }}>Applies to Nigerians earning ₦3,000/month or more. Remitted to FMBN.</div>
+            <Field label="NHF Rate (of basic salary)" field="nhf_rate" step="0.5" />
+          </div>
+
+          {/* WHT */}
+          <div className="gc" style={{ padding: 24 }}>
+            <div style={{ fontWeight: 800, color: "#4ADE80", fontSize: 15, marginBottom: 6 }}>WHT (Withholding Tax)</div>
+            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 18 }}>Deducted at source before contractor and professional fee payments.</div>
+            <Field label="Default WHT Rate" field="wht_default_rate" />
+            <Field label="Contractor WHT Rate" field="wht_contractor_rate" />
+          </div>
+        </div>
+      )}
+
+      <div style={{ marginTop: 24, display: "flex", justifyContent: "flex-end" }}>
+        <button className="bp" onClick={save} disabled={saving} style={{ padding: "12px 32px" }}>{saving ? "Saving…" : "Save Configuration"}</button>
       </div>
     </div>
   );
@@ -6157,21 +6462,80 @@ function RecognitionWall({ user }) {
 // ─── HUB: REMOTE WORK ────────────────────────────────────────────────────────
 function RemoteWork() {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [requests, setRequests] = useState([]); const [loading, setLoading] = useState(true);
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ work_date: "", reason: "", location: "" });
+  const [saving, setSaving] = useState(false);
+
+  const statusStyle = { pending: { bg: "#F59E0B22", col: "#F59E0B" }, approved: { bg: "#4ADE8022", col: "#4ADE80" }, rejected: { bg: "#F8717122", col: "#F87171" } };
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/hr/remote-work`).catch(() => []).then(d => setRequests(Array.isArray(d) ? d : [])).finally(() => setLoading(false));
+  }, []);
+
+  const submit = async () => {
+    if (!form.work_date) return alert("Please select a date.");
+    setSaving(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/remote-work`, { method: "POST", body: JSON.stringify(form) });
+      setShowNew(false); setForm({ work_date: "", reason: "", location: "" });
+      apiFetch(`${API_BASE}/hr/remote-work`).catch(() => []).then(d => setRequests(Array.isArray(d) ? d : []));
+    } catch (e) { alert("Error: " + e.message); } finally { setSaving(false); }
+  };
+
   return (
     <div className="fade">
-      <div style={{ marginBottom: 22 }}><div className="ho" style={{ fontSize: 22 }}>Remote Work</div><div style={{ fontSize: 13, color: C.sub }}>Remote work requests, approvals and location tracking.</div></div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 22 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 22 }}>Remote Work</div>
+          <div style={{ fontSize: 13, color: C.sub }}>Request and track work-from-home days.</div>
+        </div>
+        <button className="bp" onClick={() => setShowNew(true)}>+ Request WFH Day</button>
+      </div>
+
       <div className="g2" style={{ marginBottom: 22 }}>
-        {[["Remote Work Policy", "Staff may request up to 2 days remote work per week, subject to manager approval and role eligibility.", "#60A5FA"], ["Eligible Roles", "All non-client-facing roles. Sales & Acquisitions staff require manager approval for each day.", T.gold]].map(([t, d, c]) => (
+        {[["Remote Work Policy", "Up to 2 days WFH per week, subject to manager approval and role eligibility.", "#60A5FA"], ["Eligible Roles", "All non-client-facing roles. Sales & Acquisitions staff require manager approval for each day.", T.gold]].map(([t, d, c]) => (
           <div key={t} className="gc" style={{ padding: 22, borderLeft: `3px solid ${c}` }}>
             <div style={{ fontWeight: 800, color: c, marginBottom: 8 }}>{t}</div>
             <div style={{ fontSize: 13, color: C.sub }}>{d}</div>
           </div>
         ))}
       </div>
-      <div className="gc" style={{ padding: 22, textAlign: "center", color: C.muted }}>
-        <div style={{ fontSize: 24, marginBottom: 8 }}>🔜</div>
-        <div style={{ fontSize: 13 }}>Remote work request portal and location-based check-in launching soon. Currently, use the Leave Request module with type "Work From Home".</div>
+
+      <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, fontWeight: 800, fontSize: 14 }}>My WFH Requests</div>
+        {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : (
+          <div className="tw"><table className="ht">
+            <thead><tr><th>Date</th><th>Location</th><th>Reason</th><th>Status</th></tr></thead>
+            <tbody>
+              {requests.map(r => {
+                const ss = statusStyle[r.status] || statusStyle.pending;
+                return (
+                  <tr key={r.id}>
+                    <td style={{ fontWeight: 700, color: C.text }}>{new Date(r.work_date).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</td>
+                    <td style={{ fontSize: 12, color: C.sub }}>{r.location || "Home"}</td>
+                    <td style={{ fontSize: 12, color: C.sub }}>{r.reason || "—"}</td>
+                    <td><span className="tg" style={{ background: ss.bg, color: ss.col, textTransform: "capitalize" }}>{r.status || "pending"}</span></td>
+                  </tr>
+                );
+              })}
+              {requests.length === 0 && <tr><td colSpan="4" style={{ textAlign: "center", padding: 30, color: C.muted }}>No WFH requests yet. Submit one above.</td></tr>}
+            </tbody>
+          </table></div>
+        )}
       </div>
+
+      {showNew && (
+        <Modal onClose={() => setShowNew(false)} title="Request Work From Home Day">
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div><Lbl>Date *</Lbl><input className="inp" type="date" value={form.work_date} onChange={e => setForm(f => ({ ...f, work_date: e.target.value }))} /></div>
+            <div><Lbl>Work Location</Lbl><input className="inp" placeholder="e.g. Home, Client Site" value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} /></div>
+            <div><Lbl>Reason / Notes</Lbl><textarea className="inp" rows={3} placeholder="Brief reason for WFH…" value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} /></div>
+            <div style={{ padding: 12, background: `${T.gold}11`, borderRadius: 8, fontSize: 12, color: T.gold }}>⚠️ WFH requests are subject to manager approval. Ensure you are available for all scheduled meetings.</div>
+            <button className="bp" onClick={submit} disabled={saving}>{saving ? "Submitting…" : "Submit Request"}</button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -6179,35 +6543,108 @@ function RemoteWork() {
 // ─── HUB: POLICY LIBRARY ─────────────────────────────────────────────────────
 function PolicyLibrary({ isHR }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
-  const policies = [
-    { title: "Code of Conduct", category: "Compliance", updated: "Jan 2026", summary: "Standards of professional behaviour expected of all Eximp & Cloves staff." },
-    { title: "Leave & Absence Policy", category: "HR", updated: "Jan 2026", summary: "Entitlements, procedures and rules governing all types of leave." },
-    { title: "Anti-Bribery Policy", category: "Legal", updated: "Dec 2025", summary: "Zero tolerance for bribery and corrupt practices in all business dealings." },
-    { title: "Data Protection Policy", category: "Compliance", updated: "Feb 2026", summary: "How we collect, store and protect personal data under NDPR." },
-    { title: "Disciplinary Procedure", category: "HR", updated: "Jan 2026", summary: "4-tier disciplinary process from counselling to termination." },
-    { title: "IT Acceptable Use Policy", category: "IT", updated: "Mar 2026", summary: "Rules for use of company devices, networks and software." },
+  const [policies, setPolicies] = useState([]); const [loading, setLoading] = useState(true);
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ title: "", category: "HR", summary: "", document_url: "", effective_date: "" });
+  const [saving, setSaving] = useState(false);
+  const [search, setSearch] = useState(""); const [catFilter, setCatFilter] = useState("All");
+
+  const DEFAULTS = [
+    { id: "d1", title: "Code of Conduct", category: "Compliance", updated: "Jan 2026", summary: "Standards of professional behaviour expected of all Eximp & Cloves staff.", document_url: null },
+    { id: "d2", title: "Leave & Absence Policy", category: "HR", updated: "Jan 2026", summary: "Entitlements, procedures and rules governing all types of leave.", document_url: null },
+    { id: "d3", title: "Anti-Bribery Policy", category: "Legal", updated: "Dec 2025", summary: "Zero tolerance for bribery and corrupt practices in all business dealings.", document_url: null },
+    { id: "d4", title: "Data Protection Policy", category: "Compliance", updated: "Feb 2026", summary: "How we collect, store and protect personal data under NDPR.", document_url: null },
+    { id: "d5", title: "Disciplinary Procedure", category: "HR", updated: "Jan 2026", summary: "4-tier disciplinary process from counselling to termination.", document_url: null },
+    { id: "d6", title: "IT Acceptable Use Policy", category: "IT", updated: "Mar 2026", summary: "Rules for use of company devices, networks and software.", document_url: null },
   ];
-  const catCol = { Compliance: T.gold, HR: "#60A5FA", Legal: "#F87171", IT: "#4ADE80" };
+
+  const catCol = { Compliance: T.gold, HR: "#60A5FA", Legal: "#F87171", IT: "#4ADE80", Finance: "#A78BFA" };
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/hr/policies`).then(d => setPolicies(Array.isArray(d) && d.length > 0 ? d : DEFAULTS)).catch(() => setPolicies(DEFAULTS)).finally(() => setLoading(false));
+  }, []);
+
+  const add = async () => {
+    if (!form.title || !form.category) return alert("Title and category required.");
+    setSaving(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/policies`, { method: "POST", body: JSON.stringify(form) });
+      setShowNew(false); setForm({ title: "", category: "HR", summary: "", document_url: "", effective_date: "" });
+      apiFetch(`${API_BASE}/hr/policies`).then(d => setPolicies(Array.isArray(d) ? d : DEFAULTS));
+    } catch (e) { alert("Error: " + e.message); } finally { setSaving(false); }
+  };
+
+  const categories = ["All", ...new Set([...DEFAULTS, ...policies].map(p => p.category))];
+  const filtered = policies.filter(p => {
+    const matchCat = catFilter === "All" || p.category === catFilter;
+    const matchSearch = !search || p.title.toLowerCase().includes(search.toLowerCase()) || p.summary?.toLowerCase().includes(search.toLowerCase());
+    return matchCat && matchSearch;
+  });
+
   return (
     <div className="fade">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
         <div><div className="ho" style={{ fontSize: 22 }}>Policy Library</div><div style={{ fontSize: 13, color: C.sub }}>Company policies, procedures and handbooks.</div></div>
-        {isHR && <button className="bp">+ Upload Policy</button>}
+        {isHR && <button className="bp" onClick={() => setShowNew(true)}>+ Add Policy</button>}
       </div>
-      <div className="g2">{policies.map((p, i) => {
-        const cc = catCol[p.category] || T.gold;
-        return (
-          <div key={i} className="gc" style={{ padding: 20 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-              <span className="tg" style={{ background: `${cc}22`, color: cc }}>{p.category}</span>
-              <span style={{ fontSize: 11, color: C.muted }}>Updated {p.updated}</span>
+
+      {/* Filters */}
+      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+        <input className="inp" placeholder="Search policies…" value={search} onChange={e => setSearch(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
+        <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
+          {categories.map(cat => {
+            const cc = catCol[cat] || C.muted;
+            return (
+              <button key={cat} onClick={() => setCatFilter(cat)} style={{ padding: "6px 14px", borderRadius: 20, border: `1px solid ${catFilter === cat ? cc : C.border}`, background: catFilter === cat ? `${cc}22` : "transparent", color: catFilter === cat ? cc : C.muted, fontWeight: 700, fontSize: 12, cursor: "pointer" }}>
+                {cat}
+              </button>
+            );
+          })}
+        </div>
+      </div>
+
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading policies…</div> : (
+        <div className="g2">
+          {filtered.map((p, i) => {
+            const cc = catCol[p.category] || T.gold;
+            return (
+              <div key={p.id || i} className="gc" style={{ padding: 20 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+                  <span className="tg" style={{ background: `${cc}22`, color: cc }}>{p.category}</span>
+                  <span style={{ fontSize: 11, color: C.muted }}>Updated {p.updated || (p.effective_date ? new Date(p.effective_date).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "—")}</span>
+                </div>
+                <div style={{ fontWeight: 800, color: C.text, fontSize: 14, marginBottom: 8 }}>{p.title}</div>
+                <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 14 }}>{p.summary || "No description provided."}</div>
+                {p.document_url ? (
+                  <a href={p.document_url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
+                    <button className="bp" style={{ fontSize: 12, padding: "8px 16px" }}>📄 View Document</button>
+                  </a>
+                ) : (
+                  <button className="bg" style={{ fontSize: 12, padding: "8px 16px", opacity: 0.6 }} disabled>No file attached</button>
+                )}
+              </div>
+            );
+          })}
+          {filtered.length === 0 && <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: C.muted }}>No policies match your search.</div>}
+        </div>
+      )}
+
+      {showNew && (
+        <Modal onClose={() => setShowNew(false)} title="Add Policy Document">
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div><Lbl>Policy Title *</Lbl><input className="inp" placeholder="e.g. Remote Work Policy" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /></div>
+            <div><Lbl>Category *</Lbl>
+              <select className="inp" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}>
+                {["HR", "Compliance", "Legal", "IT", "Finance"].map(c => <option key={c}>{c}</option>)}
+              </select>
             </div>
-            <div style={{ fontWeight: 800, color: C.text, fontSize: 14, marginBottom: 8 }}>{p.title}</div>
-            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6 }}>{p.summary}</div>
-            <button className="bg" style={{ marginTop: 12, fontSize: 12, padding: "6px 14px" }}>View Document</button>
+            <div><Lbl>Summary</Lbl><textarea className="inp" rows={3} placeholder="Brief description of the policy…" value={form.summary} onChange={e => setForm(f => ({ ...f, summary: e.target.value }))} /></div>
+            <div><Lbl>Document URL (optional)</Lbl><input className="inp" placeholder="https://drive.google.com/…" value={form.document_url} onChange={e => setForm(f => ({ ...f, document_url: e.target.value }))} /></div>
+            <div><Lbl>Effective Date</Lbl><input className="inp" type="date" value={form.effective_date} onChange={e => setForm(f => ({ ...f, effective_date: e.target.value }))} /></div>
+            <button className="bp" onClick={add} disabled={saving}>{saving ? "Saving…" : "Add Policy"}</button>
           </div>
-        );
-      })}</div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -6382,17 +6819,128 @@ function HRLetters({ isHR }) {
 // ─── HUB: REQUESTS ────────────────────────────────────────────────────────────
 function HRRequests({ user, isHR }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [requests, setRequests] = useState([]); const [loading, setLoading] = useState(true);
+  const [showForm, setShowForm] = useState(null); // request type string when open
+  const [form, setForm] = useState({ request_type: "", description: "", priority: "Normal" });
+  const [saving, setSaving] = useState(false);
+  const [staff, setStaff] = useState([]);
+
+  const REQUEST_TYPES = [
+    { id: "Equipment Request", emoji: "📦", desc: "Request company hardware, peripherals or software licenses." },
+    { id: "System Access Request", emoji: "🔐", desc: "Request access to company systems or elevate permissions." },
+    { id: "Transfer Request", emoji: "🔄", desc: "Request a role or department transfer." },
+    { id: "Reference Request", emoji: "📄", desc: "Request an official employment reference letter." },
+  ];
+
+  const statusStyle = { pending: { bg: "#F59E0B22", col: "#F59E0B" }, approved: { bg: "#4ADE8022", col: "#4ADE80" }, rejected: { bg: "#F8717122", col: "#F87171" }, completed: { bg: "#60A5FA22", col: "#60A5FA" } };
+
+  useEffect(() => {
+    Promise.all([
+      apiFetch(`${API_BASE}/hr/requests`).catch(() => []),
+      isHR ? apiFetch(`${API_BASE}/hr/staff`).catch(() => []) : Promise.resolve([])
+    ]).then(([r, s]) => { setRequests(r || []); setStaff(s || []); }).finally(() => setLoading(false));
+  }, [isHR]);
+
+  const refresh = () => apiFetch(`${API_BASE}/hr/requests`).catch(() => []).then(r => setRequests(r || []));
+
+  const openForm = (type) => {
+    setForm({ request_type: type, description: "", priority: "Normal" });
+    setShowForm(type);
+  };
+
+  const submit = async () => {
+    if (!form.description.trim()) return alert("Please describe your request.");
+    setSaving(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/requests`, { method: "POST", body: JSON.stringify(form) });
+      setShowForm(null); refresh();
+    } catch (e) { alert("Error: " + e.message); } finally { setSaving(false); }
+  };
+
+  const updateStatus = async (id, status) => {
+    try {
+      await apiFetch(`${API_BASE}/hr/requests/${id}`, { method: "PATCH", body: JSON.stringify({ status }) });
+      refresh();
+    } catch (e) { alert(e.message); }
+  };
+
+  const myRequests = isHR ? requests : requests.filter(r => r.staff_id === user?.id);
+
   return (
     <div className="fade">
-      <div style={{ marginBottom: 22 }}><div className="ho" style={{ fontSize: 22 }}>HR Requests</div><div style={{ fontSize: 13, color: C.sub }}>Submit and track HR-related requests (equipment, access, transfers).</div></div>
-      <div className="g2">{[["Equipment Request", "Request company hardware, peripherals or software licenses.", "📦"], ["System Access Request", "Request access to company systems or elevate permissions.", "🔐"], ["Transfer Request", "Request a role or department transfer.", "🔄"], ["Reference Request", "Request an official employment reference.", "📄"]].map(([t, d, e]) => (
-        <div key={t} className="gc" style={{ padding: 20 }}>
-          <div style={{ fontSize: 28, marginBottom: 12 }}>{e}</div>
-          <div style={{ fontWeight: 800, color: C.text, marginBottom: 6 }}>{t}</div>
-          <div style={{ fontSize: 12, color: C.sub, marginBottom: 14 }}>{d}</div>
-          <button className="bg" style={{ fontSize: 12, padding: "8px 16px" }}>Submit Request</button>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 22 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 22 }}>HR Requests</div>
+          <div style={{ fontSize: 13, color: C.sub }}>Submit and track HR-related requests.</div>
         </div>
-      ))}</div>
+      </div>
+
+      {!isHR && (
+        <div className="g2" style={{ marginBottom: 28 }}>
+          {REQUEST_TYPES.map(({ id, emoji, desc }) => (
+            <div key={id} className="gc" style={{ padding: 20 }}>
+              <div style={{ fontSize: 28, marginBottom: 12 }}>{emoji}</div>
+              <div style={{ fontWeight: 800, color: C.text, marginBottom: 6 }}>{id}</div>
+              <div style={{ fontSize: 12, color: C.sub, marginBottom: 14 }}>{desc}</div>
+              <button className="bp" style={{ fontSize: 12, padding: "8px 16px" }} onClick={() => openForm(id)}>Submit Request</button>
+            </div>
+          ))}
+        </div>
+      )}
+
+      <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+        <div style={{ padding: "16px 20px", borderBottom: `1px solid ${C.border}`, fontWeight: 800, fontSize: 14 }}>
+          {isHR ? "All Staff Requests" : "My Requests"}
+        </div>
+        {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : (
+          <div className="tw"><table className="ht">
+            <thead><tr>
+              {isHR && <th>Staff Member</th>}
+              <th>Type</th><th>Description</th><th>Priority</th><th>Submitted</th><th>Status</th>
+              {isHR && <th>Actions</th>}
+            </tr></thead>
+            <tbody>
+              {myRequests.map(r => {
+                const ss = statusStyle[r.status] || statusStyle.pending;
+                return (
+                  <tr key={r.id}>
+                    {isHR && <td style={{ fontWeight: 700, color: C.text }}>{staff.find(s => s.id === r.staff_id)?.full_name || "Staff"}</td>}
+                    <td style={{ fontWeight: 700 }}>{r.request_type}</td>
+                    <td style={{ fontSize: 12, color: C.sub, maxWidth: 240 }}>{r.description}</td>
+                    <td><span className="tg" style={{ background: r.priority === "Urgent" ? "#F8717122" : `${C.border}44`, color: r.priority === "Urgent" ? "#F87171" : C.muted }}>{r.priority}</span></td>
+                    <td style={{ fontSize: 12, color: C.muted }}>{new Date(r.created_at).toLocaleDateString()}</td>
+                    <td><span className="tg" style={{ background: ss.bg, color: ss.col, textTransform: "capitalize" }}>{r.status || "pending"}</span></td>
+                    {isHR && (
+                      <td style={{ display: "flex", gap: 6 }}>
+                        {r.status === "pending" && <>
+                          <button className="bg" style={{ fontSize: 11, padding: "4px 10px", color: "#4ADE80" }} onClick={() => updateStatus(r.id, "approved")}>Approve</button>
+                          <button className="bg" style={{ fontSize: 11, padding: "4px 10px", color: "#F87171" }} onClick={() => updateStatus(r.id, "rejected")}>Reject</button>
+                        </>}
+                        {r.status === "approved" && <button className="bg" style={{ fontSize: 11, padding: "4px 10px" }} onClick={() => updateStatus(r.id, "completed")}>Mark Done</button>}
+                      </td>
+                    )}
+                  </tr>
+                );
+              })}
+              {myRequests.length === 0 && <tr><td colSpan="7" style={{ textAlign: "center", padding: 30, color: C.muted }}>No requests found.</td></tr>}
+            </tbody>
+          </table></div>
+        )}
+      </div>
+
+      {showForm && (
+        <Modal onClose={() => setShowForm(null)} title={`Submit: ${showForm}`}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div><Lbl>Details / Description *</Lbl>
+              <textarea className="inp" rows={4} placeholder="Describe what you need and why…" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
+            <div><Lbl>Priority</Lbl>
+              <select className="inp" value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}>
+                <option>Normal</option><option>Urgent</option>
+              </select></div>
+            <button className="bp" onClick={submit} disabled={saving}>{saving ? "Submitting…" : "Submit Request"}</button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -6588,21 +7136,106 @@ function DepartmentsView() {
 // ─── HUB: DIVERSITY & INCLUSION ───────────────────────────────────────────────
 function DiversityInclusion() {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [staff, setStaff] = useState([]); const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/hr/staff`).then(d => setStaff(d || [])).catch(() => setStaff([])).finally(() => setLoading(false));
+  }, []);
+
+  // Derive metrics from real staff data
+  const active = staff.filter(s => s.is_active);
+  const total = active.length;
+  const byDept = active.reduce((acc, s) => { acc[s.department || "Unassigned"] = (acc[s.department || "Unassigned"] || 0) + 1; return acc; }, {});
+  const byType = active.reduce((acc, s) => { const t = s.staff_type === "full" ? "Full-Time" : s.staff_type === "part" ? "Part-Time" : "Contractor"; acc[t] = (acc[t] || 0) + 1; return acc; }, {});
+  const byRole = active.reduce((acc, s) => { const r = s.role || "staff"; acc[r] = (acc[r] || 0) + 1; return acc; }, {});
+
+  const Bar = ({ pct, col }) => (
+    <div style={{ height: 8, background: dark ? "rgba(255,255,255,0.05)" : "rgba(0,0,0,0.05)", borderRadius: 8, overflow: "hidden" }}>
+      <div style={{ height: "100%", width: `${Math.min(pct, 100)}%`, background: col, borderRadius: 8, transition: "width 1s ease" }} />
+    </div>
+  );
+
+  const DEPT_COLORS = ["#F59E0B", "#60A5FA", "#4ADE80", "#F87171", "#A78BFA", "#EC4899", "#14B8A6", "#F97316"];
+
   return (
     <div className="fade">
-      <div style={{ marginBottom: 22 }}><div className="ho" style={{ fontSize: 22 }}>Diversity & Inclusion</div><div style={{ fontSize: 13, color: C.sub }}>Gender, ethnicity and inclusion metrics.</div></div>
+      <div style={{ marginBottom: 22 }}>
+        <div className="ho" style={{ fontSize: 22 }}>Diversity & Inclusion</div>
+        <div style={{ fontSize: 13, color: C.sub }}>Workforce composition metrics and inclusion overview.</div>
+      </div>
+
       <div className="g2" style={{ marginBottom: 22 }}>
-        {[["Gender Balance", "Supporting equitable gender representation across all levels.", T.gold], ["Equal Opportunity", "All hiring decisions are based solely on merit and role fit.", "#60A5FA"]].map(([t, d, c]) => (
-          <div key={t} className="gc" style={{ padding: 20, borderLeft: `3px solid ${c}` }}>
+        {[["Equal Opportunity", "All hiring decisions are based solely on merit and role fit. We comply with Nigerian Labour Act provisions on non-discrimination.", "#60A5FA"],
+        ["Zero Tolerance Policy", "Discrimination, harassment or exclusion of any kind is a disciplinary offence under our Code of Conduct.", "#4ADE80"]].map(([t, d, c]) => (
+          <div key={t} className="gc" style={{ padding: 22, borderLeft: `3px solid ${c}` }}>
             <div style={{ fontWeight: 800, color: c, marginBottom: 8 }}>{t}</div>
-            <div style={{ fontSize: 13, color: C.sub }}>{d}</div>
+            <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.6 }}>{d}</div>
           </div>
         ))}
       </div>
-      <div className="gc" style={{ padding: 22, textAlign: "center", color: C.muted }}>
-        <div style={{ fontSize: 24, marginBottom: 8 }}>🔜</div>
-        <div style={{ fontSize: 13 }}>D&I analytics dashboard launching Q3 2026 once sufficient staff demographic data is collected with consent.</div>
-      </div>
+
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading workforce data…</div> : (
+        <>
+          {/* Summary Cards */}
+          <div className="g3" style={{ marginBottom: 22 }}>
+            <div className="gc" style={{ padding: 22, textAlign: "center" }}>
+              <div style={{ fontSize: 36, fontWeight: 900, color: T.gold }}>{total}</div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Total Active Staff</div>
+            </div>
+            <div className="gc" style={{ padding: 22, textAlign: "center" }}>
+              <div style={{ fontSize: 36, fontWeight: 900, color: "#60A5FA" }}>{Object.keys(byDept).length}</div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Departments Represented</div>
+            </div>
+            <div className="gc" style={{ padding: 22, textAlign: "center" }}>
+              <div style={{ fontSize: 36, fontWeight: 900, color: "#4ADE80" }}>{byType["Full-Time"] || 0}</div>
+              <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Full-Time Employees</div>
+            </div>
+          </div>
+
+          <div className="g2" style={{ marginBottom: 22 }}>
+            {/* Department Distribution */}
+            <div className="gc" style={{ padding: 22 }}>
+              <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 16 }}>Headcount by Department</div>
+              {Object.entries(byDept).sort((a, b) => b[1] - a[1]).map(([dept, count], i) => (
+                <div key={dept} style={{ marginBottom: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.text, marginBottom: 5 }}>
+                    <span style={{ fontWeight: 700 }}>{dept}</span>
+                    <span style={{ color: DEPT_COLORS[i % DEPT_COLORS.length], fontWeight: 800 }}>{count} ({total > 0 ? Math.round((count / total) * 100) : 0}%)</span>
+                  </div>
+                  <Bar pct={total > 0 ? (count / total) * 100 : 0} col={DEPT_COLORS[i % DEPT_COLORS.length]} />
+                </div>
+              ))}
+            </div>
+
+            {/* Employment Type & Role */}
+            <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
+              <div className="gc" style={{ padding: 22 }}>
+                <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 16 }}>Employment Type</div>
+                {Object.entries(byType).map(([type, count]) => (
+                  <div key={type} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: C.text }}>{type}</span>
+                    <span className="tg" style={{ background: `${T.gold}22`, color: T.gold, fontWeight: 900 }}>{count}</span>
+                  </div>
+                ))}
+              </div>
+              <div className="gc" style={{ padding: 22 }}>
+                <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 16 }}>Role Distribution</div>
+                {Object.entries(byRole).sort((a, b) => b[1] - a[1]).map(([role, count]) => (
+                  <div key={role} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                    <span style={{ fontSize: 13, fontWeight: 700, color: C.text, textTransform: "capitalize" }}>{role.replace("_", " ")}</span>
+                    <span className="tg" style={{ background: "#60A5FA22", color: "#60A5FA", fontWeight: 900 }}>{count}</span>
+                  </div>
+                ))}
+              </div>
+            </div>
+          </div>
+
+          <div className="gc" style={{ padding: 22, borderLeft: `3px solid ${T.gold}` }}>
+            <div style={{ fontWeight: 800, color: T.gold, marginBottom: 6 }}>Gender & Ethnicity Tracking</div>
+            <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.6 }}>Gender and ethnicity data collection will be enabled with voluntary, consent-based staff surveys in Q3 2026. This ensures compliance with NDPR data privacy regulations.</div>
+          </div>
+        </>
+      )}
     </div>
   );
 }
@@ -6711,7 +7344,7 @@ function HRCalendarView() {
 
   const addEvent = async () => {
     if (!form.title || !form.date) return alert("Title and date required");
-    try { await apiFetch(`${API_BASE}/hr/calendar-events`, { method: "POST", body: JSON.stringify(form) }); } catch (e) {}
+    try { await apiFetch(`${API_BASE}/hr/calendar-events`, { method: "POST", body: JSON.stringify(form) }); } catch (e) { }
     setEvents(prev => [{ ...form, id: Date.now().toString() }, ...prev]);
     setShowNew(false); setForm({ title: "", event_type: "Holiday", date: "", end_date: "", description: "", department: "All" });
   };
@@ -6747,7 +7380,7 @@ function HRCalendarView() {
       {/* Calendar */}
       <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: `1px solid ${C.border}` }}>
-          {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => (<div key={d} style={{ padding: "8px 0", textAlign: "center", fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "1px" }}>{d}</div>))}
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => (<div key={d} style={{ padding: "8px 0", textAlign: "center", fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "1px" }}>{d}</div>))}
         </div>
         {weeks.map((week, wi) => (<div key={wi} style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
           {week.map((day, di) => {
@@ -6819,7 +7452,7 @@ function HolidaysManager() {
 
   const addHoliday = async () => {
     if (!form.name || !form.date) return alert("Name and date required");
-    try { await apiFetch(`${API_BASE}/hr/holidays`, { method: "POST", body: JSON.stringify(form) }); } catch (e) {}
+    try { await apiFetch(`${API_BASE}/hr/holidays`, { method: "POST", body: JSON.stringify(form) }); } catch (e) { }
     setHolidays(prev => [...prev, { ...form, id: Date.now().toString() }].sort((a, b) => new Date(a.date) - new Date(b.date)));
     setShowAdd(false); setForm({ name: "", date: "", holiday_type: "Public Holiday", is_mandatory: true });
   };
@@ -6986,13 +7619,13 @@ function ExpensesManager() {
 
   const submit = async () => {
     if (!form.amount || !form.description) return alert("Amount and description required");
-    try { await apiFetch(`${API_BASE}/hr/expenses`, { method: "POST", body: JSON.stringify({ ...form, status: "Pending" }) }); } catch (e) {}
+    try { await apiFetch(`${API_BASE}/hr/expenses`, { method: "POST", body: JSON.stringify({ ...form, status: "Pending" }) }); } catch (e) { }
     setExpenses(prev => [{ ...form, id: Date.now().toString(), status: "Pending", created_at: new Date().toISOString(), staff: staff.find(s => s.id === form.staff_id) }, ...prev]);
     setShowNew(false); setForm({ staff_id: "", category: "Travel", amount: "", currency: "NGN", description: "", date: "", receipt_url: "" });
   };
 
-  const approve = async (id) => { try { await apiFetch(`${API_BASE}/hr/expenses/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Approved" }) }); } catch (e) {} setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: "Approved" } : x)); };
-  const reject = async (id) => { try { await apiFetch(`${API_BASE}/hr/expenses/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Rejected" }) }); } catch (e) {} setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: "Rejected" } : x)); };
+  const approve = async (id) => { try { await apiFetch(`${API_BASE}/hr/expenses/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Approved" }) }); } catch (e) { } setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: "Approved" } : x)); };
+  const reject = async (id) => { try { await apiFetch(`${API_BASE}/hr/expenses/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Rejected" }) }); } catch (e) { } setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: "Rejected" } : x)); };
 
   const statuses = ["All", "Pending", "Approved", "Rejected", "Paid"];
   const stCol = { Pending: T.gold, Approved: "#4ADE80", Rejected: "#F87171", Paid: "#60A5FA" };
@@ -7879,13 +8512,13 @@ function JobRequisitions() {
 
   const create = async () => {
     if (!form.title) return alert("Job title required");
-    try { 
+    try {
       if (form.id) {
-         await apiFetch(`${API_BASE}/hr/recruitment/jobs/${form.id}`, { method: "PATCH", body: JSON.stringify(form) }); 
+        await apiFetch(`${API_BASE}/hr/recruitment/jobs/${form.id}`, { method: "PATCH", body: JSON.stringify(form) });
       } else {
-         await apiFetch(`${API_BASE}/hr/recruitment/jobs`, { method: "POST", body: JSON.stringify({ ...form, status: "Pending Approval" }) }); 
+        await apiFetch(`${API_BASE}/hr/recruitment/jobs`, { method: "POST", body: JSON.stringify({ ...form, status: "Pending Approval" }) });
       }
-      setShowNew(false); refresh(); 
+      setShowNew(false); refresh();
     } catch (e) { alert(e.message); }
   };
 
@@ -7984,10 +8617,10 @@ function ApplicationsTracker() {
 
   const hireApp = async (appId) => {
     if (!window.confirm("This will create an employee account and staff profile for this candidate. Proceed?")) return;
-    try { 
-      await apiFetch(`${API_BASE}/hr/recruitment/applications/${appId}/hire`, { method: "POST" }); 
+    try {
+      await apiFetch(`${API_BASE}/hr/recruitment/applications/${appId}/hire`, { method: "POST" });
       alert("Applicant successfully hired and onboarded!");
-      refresh(); 
+      refresh();
     } catch (e) { alert(e.message); }
   };
 
@@ -8061,11 +8694,11 @@ function ApplicationsTracker() {
         <div className="g2" style={{ gap: 10, marginBottom: 14 }}><Field label="Email" value={viewApp.candidate_email} /><Field label="Phone" value={viewApp.candidate_phone} /></div>
         {viewApp.resume_url && <div style={{ marginBottom: 14 }}><a href={viewApp.resume_url} target="_blank" rel="noreferrer" className="bp" style={{ display: "inline-block", fontSize: 13, padding: "8px 18px" }}>📄 View CV</a></div>}
         {viewApp.status === "Hired" && (
-            <button onClick={() => { hireApp(viewApp.id); setViewApp(null); }} style={{ marginTop: 12, width: "100%", padding: "10px", borderRadius: 10, background: "#4ADE80", color: "white", border: "none", fontWeight: 800, cursor: "pointer" }}>
-              Confirm Hire & Onboard Staff 👤
-            </button>
-          )}
-          {viewApp.cover_letter && <div><Lbl>Cover Letter</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10 }}>{viewApp.cover_letter}</div></div>}
+          <button onClick={() => { hireApp(viewApp.id); setViewApp(null); }} style={{ marginTop: 12, width: "100%", padding: "10px", borderRadius: 10, background: "#4ADE80", color: "white", border: "none", fontWeight: 800, cursor: "pointer" }}>
+            Confirm Hire & Onboard Staff 👤
+          </button>
+        )}
+        {viewApp.cover_letter && <div><Lbl>Cover Letter</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10 }}>{viewApp.cover_letter}</div></div>}
       </Modal>)}
       {showNew && (<Modal onClose={() => setShowNew(false)} title="Add Application" width={560}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -8148,11 +8781,11 @@ function ATSPipeline() {
           {stages.map(s => (<button key={s.key} onClick={() => { moveApp(viewApp.id, s.key); setViewApp(null); }} style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${viewApp.status === s.key ? s.col : C.border}`, background: viewApp.status === s.key ? `${s.col}22` : "transparent", color: viewApp.status === s.key ? s.col : C.sub, cursor: "pointer", fontSize: 12, fontWeight: viewApp.status === s.key ? 800 : 400 }}>{s.emoji} {s.label}</button>))}
         </div>
         {viewApp.status === "Hired" && (
-            <button onClick={() => { hireApp(viewApp.id); setViewApp(null); }} style={{ marginTop: 12, width: "100%", padding: "10px", borderRadius: 10, background: "#4ADE80", color: "white", border: "none", fontWeight: 800, cursor: "pointer" }}>
-              Confirm Hire & Onboard Staff 👤
-            </button>
-          )}
-          {viewApp.cover_letter && <div style={{ marginTop: 18 }}><Lbl>Cover Letter</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10, marginTop: 8 }}>{viewApp.cover_letter}</div></div>}
+          <button onClick={() => { hireApp(viewApp.id); setViewApp(null); }} style={{ marginTop: 12, width: "100%", padding: "10px", borderRadius: 10, background: "#4ADE80", color: "white", border: "none", fontWeight: 800, cursor: "pointer" }}>
+            Confirm Hire & Onboard Staff 👤
+          </button>
+        )}
+        {viewApp.cover_letter && <div style={{ marginTop: 18 }}><Lbl>Cover Letter</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10, marginTop: 8 }}>{viewApp.cover_letter}</div></div>}
       </Modal>)}
     </div>
   );
@@ -8167,7 +8800,7 @@ function InterviewScheduler() {
   const [viewIV, setViewIV] = useState(null);
   const [form, setForm] = useState({ application_id: "", interviewer_id: "", scheduled_at: "", location: "Video Call (Google Meet)", interview_type: "Technical", notes: "" });
 
-  useEffect(() => { apiFetch(`${API_BASE}/hr/staff`).then(d => setStaff(d || [])).catch(() => {}); }, []);
+  useEffect(() => { apiFetch(`${API_BASE}/hr/staff`).then(d => setStaff(d || [])).catch(() => { }); }, []);
 
   const schedule = async () => {
     if (!form.application_id || !form.scheduled_at) return alert("Application and date/time required");
@@ -8213,7 +8846,7 @@ function InterviewScheduler() {
                       <div style={{ fontWeight: 800, color: C.text, fontSize: 14 }}>{app?.candidate_name || "Unknown Candidate"}</div>
                       <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>{job?.title || "—"}</div>
                       <div style={{ display: "flex", gap: 16, fontSize: 11, color: C.muted, marginTop: 8, flexWrap: "wrap" }}>
-                        <span>⏰ {iv.scheduled_at ? new Date(iv.scheduled_at).toLocaleString([], {weekday:"short", month:"short", day:"numeric", hour:"2-digit", minute:"2-digit"}) : "—"}</span>
+                        <span>⏰ {iv.scheduled_at ? new Date(iv.scheduled_at).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}</span>
                         <span>📍 {iv.location || "—"}</span>
                         {interviewer && <span>👤 {interviewer.full_name}</span>}
                       </div>
@@ -8592,7 +9225,7 @@ function PeerReviews360() {
   }, []);
 
   const refresh = () => {
-    apiFetch(`${API_BASE}/hr/peer-reviews`).then(r => setReviews(r || [])).catch(() => {});
+    apiFetch(`${API_BASE}/hr/peer-reviews`).then(r => setReviews(r || [])).catch(() => { });
   };
 
   const launchReview = async () => {
