@@ -7874,8 +7874,10 @@ function JobRequisitions() {
             <div><Lbl>Employment Type</Lbl><select className="inp" value={form.employment_type} onChange={e => setForm(f => ({ ...f, employment_type: e.target.value }))}><option>Full-time</option><option>Part-time</option><option>Contract</option></select></div>
             <div><Lbl>Proposed Salary Range</Lbl><input className="inp" value={form.salary_range} onChange={e => setForm(f => ({ ...f, salary_range: e.target.value }))} placeholder="₦200k – ₦350k" /></div>
           </div>
-          <div><Lbl>Business Justification *</Lbl><textarea className="inp" rows={3} value={form.justification} onChange={e => setForm(f => ({ ...f, justification: e.target.value }))} placeholder="Why is this role needed?" /></div>
-          <div><Lbl>Key Responsibilities</Lbl><textarea className="inp" rows={3} value={form.responsibilities} onChange={e => setForm(f => ({ ...f, responsibilities: e.target.value }))} /></div>
+          <div><Lbl>Business Justification *</Lbl><textarea className="inp" rows={2} value={form.justification} onChange={e => setForm(f => ({ ...f, justification: e.target.value }))} placeholder="Why is this role needed?" /></div>
+          <div><Lbl>About the Role (Job Description)</Lbl><textarea className="inp" rows={2} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
+          <div><Lbl>Key Responsibilities</Lbl><textarea className="inp" rows={2} value={form.responsibilities} onChange={e => setForm(f => ({ ...f, responsibilities: e.target.value }))} /></div>
+          <div><Lbl>Requirements</Lbl><textarea className="inp" rows={2} value={form.requirements} onChange={e => setForm(f => ({ ...f, requirements: e.target.value }))} /></div>
           <div><Lbl>Requested Approval From</Lbl><input className="inp" value={form.approved_by || ""} onChange={e => setForm(f => ({ ...f, approved_by: e.target.value }))} placeholder="Name of approving manager" /></div>
           <button className="bp" onClick={create} style={{ padding: 14 }}>{form.id ? "Save Changes" : "Submit for Approval"}</button>
         </div>

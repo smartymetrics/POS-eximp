@@ -1991,10 +1991,13 @@ class JobRequisitionCreate(BaseModel):
     department: str
     employment_type: str
     location: Optional[str] = None
-    status: str = "Open"
-    description: Optional[str] = None
+    status: str = "Pending Approval"
+    description: Optional[str] = None # About the Role
     requirements: Optional[str] = None
+    responsibilities: Optional[str] = None
     salary_range: Optional[str] = None
+    headcount: int = 1
+    justification: Optional[str] = None
 
 class JobApplicationCreate(BaseModel):
     job_id: Optional[str] = None
