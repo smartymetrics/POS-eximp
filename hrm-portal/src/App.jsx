@@ -432,9 +432,10 @@ function Topbar({ title, user }) {
   return (
     <div style={{ height: 54, background: dark ? "#111317" : "#FFFFFF", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "space-between", padding: "0 28px", flexShrink: 0 }}>
       <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 17, color: T.gold }}>{title}</div>
-      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
         <span className="tg to" style={{ fontSize: 10 }}>{(user.staffType || user.role || "").toUpperCase()} ACCESS</span>
         <span style={{ fontSize: 12, color: C.muted }}>{new Date().toLocaleDateString(undefined, { weekday: "short", day: "numeric", month: "short", year: "numeric" })}</span>
+        {user?.id && <NotificationBell userId={user.id} />}
       </div>
     </div>
   );
@@ -6406,6 +6407,15 @@ function RecognitionWall({ user }) {
     if (!form.recipient_id || !form.message) return alert("Recipient and message required");
     try {
       await apiFetch(`${API_BASE}/hr/recognition`, { method: "POST", body: JSON.stringify(form) });
+      // Notify the recipient
+      await apiFetch(`${API_BASE}/hr/notifications`, {
+        method: "POST",
+        body: JSON.stringify({
+          staff_id: form.recipient_id,
+          type: "recognition",
+          message: `🏆 You received a "${form.badge_type}" recognition badge! Check the Recognition Wall.`
+        })
+      }).catch(() => { });
       setShowNew(false); setForm({ recipient_id: "", message: "", badge_type: "Kudos" });
       apiFetch(`${API_BASE}/hr/recognition`).then(d => setItems(d || []));
     } catch (e) { alert(e.message); }
@@ -6417,7 +6427,7 @@ function RecognitionWall({ user }) {
   return (
     <div className="fade">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
-        <div><div className="ho" style={{ fontSize: 22 }}>Recognition Wall</div><div style={{ fontSize: 13, color: C.sub }}>Celebrate achievements and give kudos to your colleagues.</div></div>
+        <div><div className="ho" style={{ fontSize: 22 }}>Recognition Wall</div><div style={{ fontSize: 13, color: C.sub }}>Celebrate achievements and give kudos to your colleagues. Any team member can give recognition!</div></div>
         <button className="bp" onClick={() => setShowNew(true)}>+ Give Recognition</button>
       </div>
       {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : (
@@ -6756,62 +6766,141 @@ function HRLetters({ isHR }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [letters, setLetters] = useState([]); const [staff, setStaff] = useState([]); const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
+  const [viewLetter, setViewLetter] = useState(null);
   const [form, setForm] = useState({ staff_id: "", letter_type: "Employment Confirmation", content: "", date_issued: new Date().toISOString().split("T")[0] });
+  const [saving, setSaving] = useState(false);
+
+  const refresh = () => apiFetch(`${API_BASE}/hr/hr-letters`).catch(() => []).then(d => setLetters(d || []));
 
   useEffect(() => {
     Promise.all([
       apiFetch(`${API_BASE}/hr/hr-letters`).catch(() => []),
-      isHR ? apiFetch(`${API_BASE}/hr/staff`) : Promise.resolve([])
+      isHR ? apiFetch(`${API_BASE}/hr/staff`).catch(() => []) : Promise.resolve([])
     ]).then(([l, s]) => { setLetters(l || []); setStaff(s || []); }).finally(() => setLoading(false));
   }, [isHR]);
 
   const save = async () => {
-    if (!form.staff_id || !form.content) return alert("Staff and letter content required");
+    if (!form.staff_id || !form.content) return alert("Staff and letter content required.");
+    setSaving(true);
     try {
+      // 1. Issue the letter
       await apiFetch(`${API_BASE}/hr/hr-letters`, { method: "POST", body: JSON.stringify(form) });
-      setShowNew(false); apiFetch(`${API_BASE}/hr/hr-letters`).then(d => setLetters(d || []));
-    } catch (e) { alert(e.message); }
+      // 2. Send notification to the staff member
+      const recipient = staff.find(s => s.id === form.staff_id);
+      await apiFetch(`${API_BASE}/hr/notifications`, {
+        method: "POST",
+        body: JSON.stringify({
+          staff_id: form.staff_id,
+          type: "letter_issued",
+          message: `📄 HR has issued you a "${form.letter_type}" letter. Log in to view it in HR Letters.`
+        })
+      }).catch(() => { }); // non-blocking — notification failure should not block letter issue
+      setShowNew(false);
+      setForm({ staff_id: "", letter_type: "Employment Confirmation", content: "", date_issued: new Date().toISOString().split("T")[0] });
+      refresh();
+      alert(`Letter issued to ${recipient?.full_name || "staff member"}. They have been notified.`);
+    } catch (e) { alert(e.message); } finally { setSaving(false); }
   };
+
+  const LETTER_TYPES = ["Employment Confirmation", "Salary Confirmation", "Experience Letter", "Reference Letter", "Warning Letter", "Promotion Letter", "Contract Renewal"];
+  const typeColor = { "Warning Letter": "#F87171", "Employment Confirmation": "#4ADE80", "Salary Confirmation": T.gold, "Promotion Letter": "#A78BFA" };
 
   return (
     <div className="fade">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
-        <div><div className="ho" style={{ fontSize: 22 }}>HR Letters</div><div style={{ fontSize: 13, color: C.sub }}>Issue and archive official HR letters and reference documents.</div></div>
+        <div><div className="ho" style={{ fontSize: 22 }}>HR Letters</div><div style={{ fontSize: 13, color: C.sub }}>Issue and archive official HR letters. Staff are notified automatically.</div></div>
         {isHR && <button className="bp" onClick={() => setShowNew(true)}>+ Issue Letter</button>}
       </div>
-      <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
-        <div className="tw"><table className="ht"><thead><tr><th>Staff Member</th><th>Letter Type</th><th>Date Issued</th><th>Action</th></tr></thead>
-          <tbody>{letters.map(l => (
-            <tr key={l.id}>
-              <td style={{ fontWeight: 800, color: C.text }}>{l.admins?.full_name || "—"}</td>
-              <td><span className="tg to">{l.letter_type}</span></td>
-              <td>{l.date_issued}</td>
-              <td><button className="bg" style={{ fontSize: 11, padding: "4px 12px" }}>View Letter</button></td>
-            </tr>
-          ))}
-            {letters.length === 0 && <tr><td colSpan="4" style={{ textAlign: "center", padding: 30, color: C.muted }}>No HR letters issued yet.</td></tr>}
-          </tbody>
-        </table></div>
-      </div>
-      {showNew && <Modal onClose={() => setShowNew(false)} title="Issue HR Letter">
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div className="g2" style={{ gap: 12 }}>
-            <div><Lbl>Staff Member *</Lbl>
-              <select className="inp" value={form.staff_id} onChange={e => setForm(f => ({ ...f, staff_id: e.target.value }))}>
-                <option value="">— Select —</option>{staff.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
-              </select>
+
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : (
+        <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+          <div className="tw"><table className="ht">
+            <thead><tr><th>Staff Member</th><th>Letter Type</th><th>Date Issued</th><th>Action</th></tr></thead>
+            <tbody>
+              {letters.map(l => {
+                const tc = typeColor[l.letter_type] || "#60A5FA";
+                return (
+                  <tr key={l.id}>
+                    <td style={{ fontWeight: 800, color: C.text }}>{l.admins?.full_name || "—"}</td>
+                    <td><span className="tg" style={{ background: `${tc}22`, color: tc }}>{l.letter_type}</span></td>
+                    <td style={{ fontSize: 12, color: C.sub }}>{l.date_issued}</td>
+                    <td>
+                      <button className="bg" style={{ fontSize: 11, padding: "4px 12px" }} onClick={() => setViewLetter(l)}>
+                        📄 View Letter
+                      </button>
+                    </td>
+                  </tr>
+                );
+              })}
+              {letters.length === 0 && <tr><td colSpan="4" style={{ textAlign: "center", padding: 30, color: C.muted }}>No HR letters issued yet.</td></tr>}
+            </tbody>
+          </table></div>
+        </div>
+      )}
+
+      {/* ── View Letter Modal ── */}
+      {viewLetter && (
+        <Modal onClose={() => setViewLetter(null)} title={viewLetter.letter_type} width={580}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {/* Letter Header */}
+            <div style={{ padding: 20, background: dark ? "rgba(255,255,255,0.03)" : "#f8f8f8", borderRadius: 10, borderLeft: `4px solid ${typeColor[viewLetter.letter_type] || "#60A5FA"}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 16 }}>
+                <div>
+                  <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", fontWeight: 700 }}>Issued To</div>
+                  <div style={{ fontWeight: 900, fontSize: 16, color: C.text, marginTop: 4 }}>{viewLetter.admins?.full_name || "Staff Member"}</div>
+                </div>
+                <div style={{ textAlign: "right" }}>
+                  <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", fontWeight: 700 }}>Date Issued</div>
+                  <div style={{ fontWeight: 700, color: C.text, marginTop: 4 }}>{viewLetter.date_issued}</div>
+                </div>
+              </div>
+              <div style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", fontWeight: 700, marginBottom: 4 }}>Letter Type</div>
+              <span className="tg" style={{ background: `${typeColor[viewLetter.letter_type] || "#60A5FA"}22`, color: typeColor[viewLetter.letter_type] || "#60A5FA" }}>
+                {viewLetter.letter_type}
+              </span>
             </div>
-            <div><Lbl>Letter Type</Lbl>
-              <select className="inp" value={form.letter_type} onChange={e => setForm(f => ({ ...f, letter_type: e.target.value }))}>
-                <option>Employment Confirmation</option><option>Salary Confirmation</option><option>Experience Letter</option><option>Reference Letter</option><option>Warning Letter</option>
-              </select>
+
+            {/* Letter Body */}
+            <div style={{ padding: 20, background: dark ? "rgba(255,255,255,0.02)" : "#fdfdfd", borderRadius: 10, border: `1px solid ${C.border}`, lineHeight: 1.8, fontSize: 13, color: C.text, whiteSpace: "pre-wrap", fontFamily: "Georgia, serif", minHeight: 200 }}>
+              {viewLetter.content || "No letter content found."}
+            </div>
+
+            <div style={{ display: "flex", justifyContent: "flex-end", gap: 10 }}>
+              <button className="bg" onClick={() => window.print()} style={{ fontSize: 12, padding: "8px 16px" }}>🖨️ Print</button>
+              <button className="bp" onClick={() => setViewLetter(null)} style={{ fontSize: 12, padding: "8px 16px" }}>Close</button>
             </div>
           </div>
-          <div><Lbl>Letter Content *</Lbl><textarea className="inp" rows={8} value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} /></div>
-          <div><Lbl>Date Issued</Lbl><input type="date" className="inp" value={form.date_issued} onChange={e => setForm(f => ({ ...f, date_issued: e.target.value }))} /></div>
-          <button className="bp" onClick={save}>Issue Letter</button>
-        </div>
-      </Modal>}
+        </Modal>
+      )}
+
+      {/* ── Issue New Letter Modal ── */}
+      {showNew && (
+        <Modal onClose={() => setShowNew(false)} title="Issue HR Letter">
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ padding: 12, background: "#60A5FA11", borderRadius: 8, fontSize: 12, color: "#60A5FA" }}>
+              🔔 The staff member will receive an automatic notification when this letter is issued.
+            </div>
+            <div className="g2" style={{ gap: 12 }}>
+              <div><Lbl>Staff Member *</Lbl>
+                <select className="inp" value={form.staff_id} onChange={e => setForm(f => ({ ...f, staff_id: e.target.value }))}>
+                  <option value="">— Select —</option>
+                  {staff.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+                </select>
+              </div>
+              <div><Lbl>Letter Type</Lbl>
+                <select className="inp" value={form.letter_type} onChange={e => setForm(f => ({ ...f, letter_type: e.target.value }))}>
+                  {LETTER_TYPES.map(t => <option key={t}>{t}</option>)}
+                </select>
+              </div>
+            </div>
+            <div><Lbl>Letter Content *</Lbl>
+              <textarea className="inp" rows={10} placeholder={`Dear [Name],\n\nThis letter is to confirm that...\n\nYours faithfully,\nHR Department`} value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} />
+            </div>
+            <div><Lbl>Date Issued</Lbl><input type="date" className="inp" value={form.date_issued} onChange={e => setForm(f => ({ ...f, date_issued: e.target.value }))} /></div>
+            <button className="bp" onClick={save} disabled={saving}>{saving ? "Issuing…" : "Issue Letter & Notify Staff"}</button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -6950,12 +7039,16 @@ function Grievances({ isHR }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [grievances, setGrievances] = useState([]); const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
+  const [viewItem, setViewItem] = useState(null);
   const [form, setForm] = useState({ subject: "", description: "", is_anonymous: true });
+  const [updatingId, setUpdatingId] = useState(null);
 
   useEffect(() => {
     if (isHR) apiFetch(`${API_BASE}/hr/grievances`).then(d => setGrievances(d || [])).catch(() => { }).finally(() => setLoading(false));
     else setLoading(false);
   }, [isHR]);
+
+  const refresh = () => apiFetch(`${API_BASE}/hr/grievances`).then(d => setGrievances(d || [])).catch(() => { });
 
   const submit = async () => {
     if (!form.subject || !form.description) return alert("Subject and description required");
@@ -6966,45 +7059,123 @@ function Grievances({ isHR }) {
     } catch (e) { alert(e.message); }
   };
 
+  const updateStatus = async (id, status) => {
+    setUpdatingId(id);
+    try {
+      await apiFetch(`${API_BASE}/hr/grievances/${id}`, { method: "PATCH", body: JSON.stringify({ status }) });
+      refresh();
+      if (viewItem?.id === id) setViewItem(v => ({ ...v, status }));
+    } catch (e) { alert(e.message); } finally { setUpdatingId(null); }
+  };
+
+  const statusStyle = { open: { bg: "#F59E0B22", col: "#F59E0B" }, "in-review": { bg: "#60A5FA22", col: "#60A5FA" }, resolved: { bg: "#4ADE8022", col: "#4ADE80" }, closed: { bg: "#33333344", col: "#9CA3AF" } };
+
   return (
     <div className="fade">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
         <div><div className="ho" style={{ fontSize: 22 }}>Grievances</div><div style={{ fontSize: 13, color: C.sub }}>Anonymous and confidential grievance submission and tracking.</div></div>
         <button className="bp" onClick={() => setShowNew(true)}>+ Submit Grievance</button>
       </div>
-      <div className="gc" style={{ padding: 22, marginBottom: 16, borderLeft: `3px solid #60A5FA` }}>
+      <div className="gc" style={{ padding: 22, marginBottom: 16, borderLeft: "3px solid #60A5FA" }}>
         <div style={{ fontWeight: 800, color: "#60A5FA", marginBottom: 6 }}>Your Grievance is Protected</div>
         <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.6 }}>All grievances are handled confidentially by HR. Anonymous submissions cannot be traced back to you. We have a strict no-retaliation policy.</div>
       </div>
+
       {isHR && (
         loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : (
           <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
-            <div className="tw"><table className="ht"><thead><tr><th>Subject</th><th>Submitted</th><th>Anonymous</th><th>Status</th></tr></thead>
-              <tbody>{grievances.map(g => (
-                <tr key={g.id}>
-                  <td style={{ fontWeight: 800, color: C.text }}>{g.subject}</td>
-                  <td>{new Date(g.created_at).toLocaleDateString()}</td>
-                  <td>{g.is_anonymous ? <span className="tg tg2">Anonymous</span> : <span className="tg tm">Named</span>}</td>
-                  <td><span className="tg" style={{ background: g.status === "resolved" ? "#4ADE8022" : "#F59E0B22", color: g.status === "resolved" ? "#4ADE80" : "#F59E0B", textTransform: "capitalize" }}>{g.status}</span></td>
-                </tr>
-              ))}
-                {grievances.length === 0 && <tr><td colSpan="4" style={{ textAlign: "center", padding: 30, color: C.muted }}>No grievances on record.</td></tr>}
+            <div className="tw"><table className="ht">
+              <thead><tr><th>Subject</th><th>Submitted</th><th>Type</th><th>Status</th><th>Action</th></tr></thead>
+              <tbody>
+                {grievances.map(g => {
+                  const ss = statusStyle[g.status] || statusStyle.open;
+                  return (
+                    <tr key={g.id}>
+                      <td style={{ fontWeight: 800, color: C.text, maxWidth: 220 }}>{g.subject}</td>
+                      <td style={{ fontSize: 12, color: C.muted }}>{new Date(g.created_at).toLocaleDateString()}</td>
+                      <td>{g.is_anonymous ? <span className="tg tg2">Anonymous</span> : <span className="tg tm">Named</span>}</td>
+                      <td>
+                        <select
+                          value={g.status || "open"}
+                          disabled={updatingId === g.id}
+                          onChange={e => updateStatus(g.id, e.target.value)}
+                          style={{ padding: "4px 8px", borderRadius: 8, border: `1px solid ${ss.col}`, background: ss.bg, color: ss.col, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                        >
+                          <option value="open">Open</option>
+                          <option value="in-review">In Review</option>
+                          <option value="resolved">Resolved</option>
+                          <option value="closed">Closed</option>
+                        </select>
+                      </td>
+                      <td>
+                        <button className="bg" style={{ fontSize: 11, padding: "4px 12px" }} onClick={() => setViewItem(g)}>
+                          Open ↗
+                        </button>
+                      </td>
+                    </tr>
+                  );
+                })}
+                {grievances.length === 0 && <tr><td colSpan="5" style={{ textAlign: "center", padding: 30, color: C.muted }}>No grievances on record.</td></tr>}
               </tbody>
             </table></div>
           </div>
         )
       )}
-      {showNew && <Modal onClose={() => setShowNew(false)} title="Submit a Grievance">
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div><Lbl>Subject *</Lbl><input className="inp" value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} /></div>
-          <div><Lbl>Description *</Lbl><textarea className="inp" rows={5} placeholder="Describe the issue in detail…" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
-          <label style={{ display: "flex", alignItems: "center", gap: 10, color: C.sub, fontSize: 13, cursor: "pointer" }}>
-            <input type="checkbox" checked={form.is_anonymous} onChange={e => setForm(f => ({ ...f, is_anonymous: e.target.checked }))} /> Submit anonymously (recommended)
-          </label>
-          <div style={{ padding: 12, background: `${T.gold}11`, borderRadius: 8, fontSize: 12, color: T.gold }}>⚠️ By submitting, this will be securely reviewed by HR management only.</div>
-          <button className="bp" onClick={submit}>Submit Grievance</button>
-        </div>
-      </Modal>}
+
+      {/* ── View Grievance Modal ── */}
+      {viewItem && (
+        <Modal onClose={() => setViewItem(null)} title="Grievance Details">
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start" }}>
+              <div>
+                <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", fontWeight: 700, marginBottom: 4 }}>Subject</div>
+                <div style={{ fontWeight: 900, fontSize: 16, color: C.text }}>{viewItem.subject}</div>
+              </div>
+              <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 6 }}>
+                <select
+                  value={viewItem.status || "open"}
+                  disabled={updatingId === viewItem.id}
+                  onChange={e => updateStatus(viewItem.id, e.target.value)}
+                  style={{ padding: "6px 10px", borderRadius: 8, border: `1px solid ${(statusStyle[viewItem.status] || statusStyle.open).col}`, background: (statusStyle[viewItem.status] || statusStyle.open).bg, color: (statusStyle[viewItem.status] || statusStyle.open).col, fontSize: 12, fontWeight: 700, cursor: "pointer" }}
+                >
+                  <option value="open">Open</option>
+                  <option value="in-review">In Review</option>
+                  <option value="resolved">Resolved</option>
+                  <option value="closed">Closed</option>
+                </select>
+                {viewItem.is_anonymous
+                  ? <span className="tg tg2" style={{ fontSize: 11 }}>Anonymous</span>
+                  : <span style={{ fontSize: 11, color: C.text, fontWeight: 700 }}>{viewItem.admins?.full_name || "Named Staff"}</span>}
+              </div>
+            </div>
+            <div>
+              <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", fontWeight: 700, marginBottom: 8 }}>Grievance Message</div>
+              <div style={{ padding: 18, background: dark ? "rgba(255,255,255,0.03)" : "#f8f8f8", borderRadius: 10, border: `1px solid ${C.border}`, lineHeight: 1.8, fontSize: 13, color: C.text, whiteSpace: "pre-wrap", minHeight: 120 }}>
+                {viewItem.description || "No description provided."}
+              </div>
+            </div>
+            <div style={{ fontSize: 11, color: C.muted }}>
+              Submitted: {new Date(viewItem.created_at).toLocaleString()}
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── Submit Grievance Modal ── */}
+      {showNew && (
+        <Modal onClose={() => setShowNew(false)} title="Submit a Grievance">
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div><Lbl>Subject *</Lbl><input className="inp" value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} placeholder="Brief summary of your concern" /></div>
+            <div><Lbl>Description *</Lbl><textarea className="inp" rows={6} placeholder="Describe the issue in detail. Include dates, people involved, and any supporting context…" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, color: C.sub, fontSize: 13, cursor: "pointer" }}>
+              <input type="checkbox" checked={form.is_anonymous} onChange={e => setForm(f => ({ ...f, is_anonymous: e.target.checked }))} />
+              Submit anonymously (recommended)
+            </label>
+            <div style={{ padding: 12, background: `${T.gold}11`, borderRadius: 8, fontSize: 12, color: T.gold }}>⚠️ By submitting, this will be securely reviewed by HR management only.</div>
+            <button className="bp" onClick={submit}>Submit Grievance</button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -7013,29 +7184,88 @@ function Grievances({ isHR }) {
 function AuditLogs() {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [logs, setLogs] = useState([]); const [loading, setLoading] = useState(true);
+  const [limit, setLimit] = useState(50); const [search, setSearch] = useState("");
 
-  useEffect(() => {
-    apiFetch(`${API_BASE}/hr/audit-logs?limit=100`).then(d => setLogs(d || [])).catch(() => setLogs([])).finally(() => setLoading(false));
+  const load = useCallback((lim) => {
+    setLoading(true);
+    // Primary: same activity endpoint used by the CRM/Sales dashboard
+    apiFetch(`${API_BASE}/analytics/activity?limit=${lim}`)
+      .catch(() => apiFetch(`${API_BASE}/hr/audit-logs?limit=${lim}`).catch(() => []))
+      .then(d => setLogs(Array.isArray(d) ? d : []))
+      .finally(() => setLoading(false));
   }, []);
 
-  const actionCol = { CREATE: "#4ADE80", UPDATE: T.gold, DELETE: "#F87171", VIEW: "#60A5FA" };
+  useEffect(() => { load(limit); }, [limit, load]);
+
+  const getActionMeta = (log) => {
+    const desc = (log.description || log.action || "").toLowerCase();
+    if (desc.includes("creat") || desc.includes("add") || desc.includes("new") || desc.includes("issu") || desc.includes("upload"))
+      return { label: "CREATE", col: "#4ADE80" };
+    if (desc.includes("updat") || desc.includes("edit") || desc.includes("chang") || desc.includes("patch") || desc.includes("modif") || desc.includes("approv") || desc.includes("mark"))
+      return { label: "UPDATE", col: T.gold };
+    if (desc.includes("delet") || desc.includes("remov") || desc.includes("archiv") || desc.includes("offboard") || desc.includes("terminat"))
+      return { label: "DELETE", col: "#F87171" };
+    if (desc.includes("login") || desc.includes("logout") || desc.includes("sign"))
+      return { label: "AUTH", col: "#A78BFA" };
+    if (desc.includes("view") || desc.includes("read") || desc.includes("download") || desc.includes("export"))
+      return { label: "VIEW", col: "#60A5FA" };
+    return { label: "ACTION", col: C.muted };
+  };
+
+  const filtered = search
+    ? logs.filter(l => `${l.performed_by_name || l.admins?.full_name || ""} ${l.description || l.action || ""} ${l.entity_type || ""}`.toLowerCase().includes(search.toLowerCase()))
+    : logs;
 
   return (
     <div className="fade">
-      <div style={{ marginBottom: 22 }}><div className="ho" style={{ fontSize: 22 }}>Audit Logs</div><div style={{ fontSize: 13, color: C.sub }}>Complete trail of all system actions for compliance and security.</div></div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 22 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 22 }}>Audit Logs</div>
+          <div style={{ fontSize: 13, color: C.sub }}>Complete trail of all system actions for compliance and security.</div>
+        </div>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <select className="inp" value={limit} onChange={e => setLimit(Number(e.target.value))} style={{ width: 130 }}>
+            <option value={25}>Last 25</option><option value={50}>Last 50</option>
+            <option value={100}>Last 100</option><option value={250}>Last 250</option>
+          </select>
+          <button className="bg" onClick={() => load(limit)} style={{ padding: "10px 14px", fontSize: 12 }}>↻ Refresh</button>
+        </div>
+      </div>
+      <div style={{ marginBottom: 16 }}>
+        <input className="inp" placeholder="Search logs by actor, action or entity…" value={search} onChange={e => setSearch(e.target.value)} />
+      </div>
       {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading audit trail…</div> : (
         <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
-          <div className="tw"><table className="ht"><thead><tr><th>Actor</th><th>Action</th><th>Entity</th><th>Timestamp</th></tr></thead>
-            <tbody>{logs.map((l, i) => {
-              const ac = actionCol[l.action?.toUpperCase().split(" ")[0]] || C.muted;
-              return (<tr key={l.id || i}>
-                <td style={{ fontWeight: 700, color: C.text }}>{l.admins?.full_name || "System"}</td>
-                <td><span className="tg" style={{ background: `${ac}22`, color: ac, textTransform: "uppercase", fontSize: 9 }}>{l.action}</span></td>
-                <td style={{ color: C.sub }}>{l.entity_type}: {l.entity_id || "—"}</td>
-                <td style={{ fontSize: 11, color: C.muted }}>{new Date(l.created_at).toLocaleString()}</td>
-              </tr>);
-            })}
-              {logs.length === 0 && <tr><td colSpan="4" style={{ textAlign: "center", padding: 30, color: C.muted }}>No audit logs found. Logs will appear as actions are taken.</td></tr>}
+          <div style={{ padding: "12px 20px", borderBottom: `1px solid ${C.border}`, fontSize: 12, color: C.muted, display: "flex", justifyContent: "space-between" }}>
+            <span>Showing {filtered.length} of {logs.length} entries</span>
+            <span>{new Date().toLocaleDateString()}</span>
+          </div>
+          <div className="tw"><table className="ht">
+            <thead><tr><th>Actor</th><th>Type</th><th>Description</th><th>Entity</th><th>Timestamp</th></tr></thead>
+            <tbody>
+              {filtered.map((l, i) => {
+                const { label, col } = getActionMeta(l);
+                const actor = l.performed_by_name || l.admins?.full_name || l.actor || "System";
+                const description = l.description || l.action || "—";
+                const entity = l.entity_type ? `${l.entity_type}${l.entity_id ? ` #${String(l.entity_id).slice(0, 8)}` : ""}` : "—";
+                return (
+                  <tr key={l.id || i}>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                        <Av av={actor.split(" ").map(n => n[0]).join("").slice(0, 2)} sz={28} />
+                        <span style={{ fontWeight: 700, color: C.text, fontSize: 13 }}>{actor}</span>
+                      </div>
+                    </td>
+                    <td><span className="tg" style={{ background: `${col}22`, color: col, fontSize: 10, fontWeight: 800 }}>{label}</span></td>
+                    <td style={{ fontSize: 12, color: C.sub, maxWidth: 300 }}>{description}</td>
+                    <td style={{ fontSize: 11, color: C.muted, fontFamily: "monospace" }}>{entity}</td>
+                    <td style={{ fontSize: 11, color: C.muted, whiteSpace: "nowrap" }}>{l.created_at ? new Date(l.created_at).toLocaleString() : "—"}</td>
+                  </tr>
+                );
+              })}
+              {filtered.length === 0 && <tr><td colSpan="5" style={{ textAlign: "center", padding: 40, color: C.muted }}>
+                {search ? "No logs match your search." : "No audit logs found. Logs appear as actions are taken in the system."}
+              </td></tr>}
             </tbody>
           </table></div>
         </div>
@@ -7048,22 +7278,75 @@ function AuditLogs() {
 function HRReports() {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [headcount, setHeadcount] = useState(null); const [loading, setLoading] = useState(true);
+  const [generating, setGenerating] = useState(null);
+  const [dateRange, setDateRange] = useState({ from: new Date(new Date().getFullYear(), new Date().getMonth(), 1).toISOString().split("T")[0], to: new Date().toISOString().split("T")[0] });
 
   useEffect(() => {
     apiFetch(`${API_BASE}/hr/reports/headcount`).then(setHeadcount).catch(() => { }).finally(() => setLoading(false));
   }, []);
 
+  const generateReport = async (type, endpoint) => {
+    setGenerating(type);
+    try {
+      const query = `?from=${dateRange.from}&to=${dateRange.to}&format=csv`;
+      // Try API endpoint first; fall back to downloading data as CSV from the HR data we already have
+      const res = await fetch(`${API_BASE}${endpoint}${query}`, {
+        headers: { "Authorization": `Bearer ${localStorage.getItem("ec_token")}`, "Accept": "text/csv,application/json" }
+      });
+      if (!res.ok) throw new Error(`Server returned ${res.status}`);
+      const contentType = res.headers.get("content-type") || "";
+      let blob;
+      if (contentType.includes("json")) {
+        // Server returned JSON — convert to CSV in browser
+        const data = await res.json();
+        const rows = Array.isArray(data) ? data : (data.rows || data.data || Object.entries(data).map(([k, v]) => ({ key: k, value: v })));
+        if (rows.length === 0) { alert("No data available for the selected date range."); return; }
+        const headers = Object.keys(rows[0]).join(",");
+        const csvRows = rows.map(r => Object.values(r).map(v => `"${String(v ?? "").replace(/"/g, '""')}"`).join(","));
+        blob = new Blob([headers + "\n" + csvRows.join("\n")], { type: "text/csv" });
+      } else {
+        blob = await res.blob();
+      }
+      const url = URL.createObjectURL(blob);
+      const a = document.createElement("a");
+      a.href = url; a.download = `${type.toLowerCase().replace(/ /g, "_")}_${dateRange.from}_to_${dateRange.to}.csv`;
+      document.body.appendChild(a); a.click(); document.body.removeChild(a); URL.revokeObjectURL(url);
+    } catch (e) {
+      alert(`Could not generate "${type}" report.\n\nError: ${e.message}\n\nEnsure the backend endpoint is active, or contact your system administrator.`);
+    } finally { setGenerating(null); }
+  };
+
+  const REPORTS = [
+    { title: "Attendance Report", desc: "Export attendance data with absence rates by department.", icon: "🕐", endpoint: "/hr/reports/attendance", col: "#60A5FA" },
+    { title: "Payroll Summary", desc: "Monthly payroll totals, tax deductions and net pay summary.", icon: "💰", endpoint: "/hr/reports/payroll", col: "#4ADE80" },
+    { title: "Performance Report", desc: "Scorecard distribution, Elite/Stable/PIP breakdown by department.", icon: "📊", endpoint: "/hr/reports/performance", col: "#A78BFA" },
+    { title: "Leave Report", desc: "Leave utilisation by type, department and individual.", icon: "📅", endpoint: "/hr/reports/leave", col: T.gold },
+    { title: "Headcount Report", desc: "Full staff roster with roles, departments, join dates and status.", icon: "👥", endpoint: "/hr/reports/headcount-full", col: "#F87171" },
+    { title: "Goals & KPI Report", desc: "Goal achievement rates and KPI scores by department.", icon: "🎯", endpoint: "/hr/reports/goals", col: "#F59E0B" },
+  ];
+
   return (
     <div className="fade">
-      <div style={{ marginBottom: 22 }}><div className="ho" style={{ fontSize: 22 }}>Reports & Analytics</div><div style={{ fontSize: 13, color: C.sub }}>Workforce data insights and exportable HR reports.</div></div>
-      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading reports…</div> : headcount && (
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 22 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 22 }}>Reports & Analytics</div>
+          <div style={{ fontSize: 13, color: C.sub }}>Workforce data insights and exportable HR reports.</div>
+        </div>
+        <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+          <div><div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>From</div><input className="inp" type="date" value={dateRange.from} onChange={e => setDateRange(r => ({ ...r, from: e.target.value }))} style={{ padding: "6px 10px" }} /></div>
+          <div><div style={{ fontSize: 10, color: C.muted, marginBottom: 4, textTransform: "uppercase" }}>To</div><input className="inp" type="date" value={dateRange.to} onChange={e => setDateRange(r => ({ ...r, to: e.target.value }))} style={{ padding: "6px 10px" }} /></div>
+        </div>
+      </div>
+
+      {/* Live Headcount Summary */}
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading data…</div> : headcount && (
         <>
           <div className="g3" style={{ marginBottom: 22 }}>
             <StatCard label="Total Active Staff" value={headcount.total} col={T.gold} />
             <StatCard label="New Hires (30d)" value={headcount.new_hires_30d} col="#4ADE80" />
             <StatCard label="Departments" value={Object.keys(headcount.by_department || {}).length} col="#60A5FA" />
           </div>
-          <div className="gc" style={{ padding: 22 }}>
+          <div className="gc" style={{ padding: 22, marginBottom: 22 }}>
             <div className="ho" style={{ fontSize: 14, marginBottom: 16 }}>Headcount by Department</div>
             {Object.entries(headcount.by_department || {}).sort((a, b) => b[1] - a[1]).map(([dept, count]) => (
               <div key={dept} style={{ marginBottom: 12 }}>
@@ -7077,12 +7360,25 @@ function HRReports() {
           </div>
         </>
       )}
-      <div className="g2" style={{ marginTop: 22 }}>
-        {[["Attendance Report", "Export attendance data with absence rates by department."], ["Payroll Summary", "Monthly payroll totals, tax deductions and net pay summary."], ["Performance Report", "Scorecard distribution, Elite/Stable/PIP breakdown."], ["Leave Report", "Leave utilisation by type, department and individual."]].map(([t, d]) => (
-          <div key={t} className="gc" style={{ padding: 20 }}>
-            <div style={{ fontWeight: 800, color: C.text, marginBottom: 6 }}>{t}</div>
-            <div style={{ fontSize: 12, color: C.sub, marginBottom: 14, lineHeight: 1.5 }}>{d}</div>
-            <button className="bg" style={{ fontSize: 12, padding: "8px 16px" }}>Generate Report</button>
+
+      {/* Report Cards */}
+      <div className="g2">
+        {REPORTS.map(({ title, desc, icon, endpoint, col }) => (
+          <div key={title} className="gc" style={{ padding: 22, borderTop: `3px solid ${col}` }}>
+            <div style={{ fontSize: 28, marginBottom: 12 }}>{icon}</div>
+            <div style={{ fontWeight: 800, color: C.text, marginBottom: 6 }}>{title}</div>
+            <div style={{ fontSize: 12, color: C.sub, marginBottom: 18, lineHeight: 1.6 }}>{desc}</div>
+            <div style={{ fontSize: 11, color: C.muted, marginBottom: 12 }}>
+              Period: {new Date(dateRange.from).toLocaleDateString()} – {new Date(dateRange.to).toLocaleDateString()}
+            </div>
+            <button
+              className="bp"
+              style={{ fontSize: 12, padding: "9px 16px", width: "100%", opacity: generating === title ? 0.7 : 1 }}
+              disabled={!!generating}
+              onClick={() => generateReport(title, endpoint)}
+            >
+              {generating === title ? "⏳ Generating…" : "⬇ Generate & Download CSV"}
+            </button>
           </div>
         ))}
       </div>
@@ -7694,6 +7990,10 @@ function ExpensesManager() {
 
 function HRAdminPortal({ user, onLogout }) {
   const nav = [
+    // ── Overview (auto-loads first) ──
+    { isHeader: true, label: "Overview" },
+    { id: "dashboard", icon: "dashboard", label: "HR Overview" },
+    { id: "tasks_hr", icon: "tasks", label: "Task Manager" },
     // HUB 1: RECRUITMENT
     { isHeader: true, label: "Recruitment" },
     { id: "jobs", icon: "briefcase", label: "Jobs" },
@@ -7705,7 +8005,6 @@ function HRAdminPortal({ user, onLogout }) {
     { id: "talent_pool", icon: "users", label: "Talent Pool" },
     // HUB 2: PEOPLE & ORG
     { isHeader: true, label: "People & Org" },
-    { id: "dashboard", icon: "dashboard", label: "HR Overview" },
     { id: "staff", icon: "users", label: "Employees" },
     { id: "org_chart", icon: "org", label: "Org Chart" },
     { id: "departments", icon: "home", label: "Departments" },
@@ -7770,7 +8069,7 @@ function HRAdminPortal({ user, onLogout }) {
     { isHeader: true, label: "Administration" },
     { id: "reports", icon: "chart", label: "Reports" },
     { id: "offboarding", icon: "exit", label: "Exit & Offboarding" },
-    { id: "offboarding2", icon: "exit", label: "Offboarding" },
+    { id: "offboarding2", icon: "exit", label: "Exit Interviews" },
     { id: "system_users", icon: "users", label: "Users" },
     { id: "audit_logs", icon: "log", label: "Audit Logs" },
     { id: "admin", icon: "settings", label: "Settings" },
@@ -7779,8 +8078,9 @@ function HRAdminPortal({ user, onLogout }) {
     { id: "myprofile", icon: "profile", label: "My Profile" },
   ];
   return (
-    <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="Supreme Super Admin" renderPage={p => {
+    <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="Supreme Super Admin" initialPage="dashboard" renderPage={p => {
       if (p === "dashboard") return <HRDashboard />;
+      if (p === "tasks_hr") return <Tasks currentUser={user} />;
       // Hub 1: Recruitment
       if (p === "jobs") return <JobsBoard />;
       if (p === "ats") return <JobRequisitions />;
@@ -7840,7 +8140,8 @@ function HRAdminPortal({ user, onLogout }) {
       if (p === "assets") return <AssetManager />;
       // Hub 9: Admin
       if (p === "reports") return <HRReports />;
-      if (p === "offboarding" || p === "offboarding2") return <OffboardingManager />;
+      if (p === "offboarding") return <OffboardingManager />;
+      if (p === "offboarding2") return <ExitInterviews />;
       if (p === "system_users") return <SystemUsers />;
       if (p === "audit_logs") return <AuditLogs />;
       if (p === "admin") return <Administration />;
@@ -8106,6 +8407,280 @@ function StaffPortal({ user, onLogout }) {
         </div>
       );
     }} />
+  );
+}
+
+// ─── EXIT INTERVIEWS ──────────────────────────────────────────────────────────
+// Distinct from OffboardingManager (which handles asset recovery + deactivation).
+// This tab focuses on capturing exit interview data and trends.
+function ExitInterviews() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [interviews, setInterviews] = useState([]); const [loading, setLoading] = useState(true);
+  const [showNew, setShowNew] = useState(false);
+  const [staff, setStaff] = useState([]);
+  const [form, setForm] = useState({ staff_id: "", exit_date: "", reason: "Resignation", overall_satisfaction: 3, highlights: "", concerns: "", would_recommend: true, notes: "" });
+  const [saving, setSaving] = useState(false);
+  const [viewItem, setViewItem] = useState(null);
+
+  const REASONS = ["Resignation", "Termination", "End of Contract", "Retirement", "Redundancy"];
+  const reasonCol = { Resignation: "#F59E0B", Termination: "#F87171", "End of Contract": "#60A5FA", Retirement: "#4ADE80", Redundancy: "#A78BFA" };
+
+  useEffect(() => {
+    Promise.all([
+      apiFetch(`${API_BASE}/hr/exit-interviews`).catch(() => []),
+      apiFetch(`${API_BASE}/hr/staff`).catch(() => [])
+    ]).then(([e, s]) => { setInterviews(Array.isArray(e) ? e : []); setStaff(s || []); }).finally(() => setLoading(false));
+  }, []);
+
+  const refresh = () => apiFetch(`${API_BASE}/hr/exit-interviews`).catch(() => []).then(d => setInterviews(Array.isArray(d) ? d : []));
+
+  const save = async () => {
+    if (!form.staff_id || !form.exit_date) return alert("Staff member and exit date required.");
+    setSaving(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/exit-interviews`, { method: "POST", body: JSON.stringify(form) });
+      setShowNew(false); setForm({ staff_id: "", exit_date: "", reason: "Resignation", overall_satisfaction: 3, highlights: "", concerns: "", would_recommend: true, notes: "" });
+      refresh();
+    } catch (e) { alert("Error: " + e.message); } finally { setSaving(false); }
+  };
+
+  const Stars = ({ val }) => (
+    <span>{[1, 2, 3, 4, 5].map(n => <span key={n} style={{ color: n <= val ? T.gold : "#333", fontSize: 16 }}>★</span>)}</span>
+  );
+
+  // Aggregate stats
+  const total = interviews.length;
+  const avgSat = total > 0 ? (interviews.reduce((s, i) => s + (i.overall_satisfaction || 3), 0) / total).toFixed(1) : "—";
+  const wouldRec = total > 0 ? Math.round((interviews.filter(i => i.would_recommend).length / total) * 100) : 0;
+  const byReason = interviews.reduce((acc, i) => { acc[i.reason || "Other"] = (acc[i.reason || "Other"] || 0) + 1; return acc; }, {});
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 22 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 22 }}>Exit Interviews</div>
+          <div style={{ fontSize: 13, color: C.sub }}>Capture and analyse feedback from departing employees.</div>
+        </div>
+        <button className="bp" onClick={() => setShowNew(true)}>+ Record Exit Interview</button>
+      </div>
+
+      {/* Stats */}
+      <div className="g3" style={{ marginBottom: 22 }}>
+        <div className="gc" style={{ padding: 22, textAlign: "center" }}>
+          <div style={{ fontSize: 36, fontWeight: 900, color: T.gold }}>{total}</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Exit Interviews Recorded</div>
+        </div>
+        <div className="gc" style={{ padding: 22, textAlign: "center" }}>
+          <div style={{ fontSize: 36, fontWeight: 900, color: "#60A5FA" }}>{avgSat}</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Avg Satisfaction (out of 5)</div>
+        </div>
+        <div className="gc" style={{ padding: 22, textAlign: "center" }}>
+          <div style={{ fontSize: 36, fontWeight: 900, color: "#4ADE80" }}>{wouldRec}%</div>
+          <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Would Recommend Company</div>
+        </div>
+      </div>
+
+      {/* Reason breakdown */}
+      {total > 0 && (
+        <div className="gc" style={{ padding: 22, marginBottom: 22 }}>
+          <div style={{ fontWeight: 800, fontSize: 14, marginBottom: 16 }}>Exits by Reason</div>
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap" }}>
+            {Object.entries(byReason).map(([reason, count]) => {
+              const rc = reasonCol[reason] || C.muted;
+              return (
+                <div key={reason} style={{ padding: "8px 16px", background: `${rc}18`, borderRadius: 20, border: `1px solid ${rc}40` }}>
+                  <span style={{ fontWeight: 800, color: rc }}>{count}</span>
+                  <span style={{ fontSize: 12, color: C.sub, marginLeft: 6 }}>{reason}</span>
+                </div>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* Interview List */}
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : (
+        <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+          <div className="tw"><table className="ht">
+            <thead><tr><th>Staff Member</th><th>Exit Date</th><th>Reason</th><th>Satisfaction</th><th>Would Recommend</th><th>Action</th></tr></thead>
+            <tbody>
+              {interviews.map(i => {
+                const rc = reasonCol[i.reason] || C.muted;
+                return (
+                  <tr key={i.id}>
+                    <td style={{ fontWeight: 800, color: C.text }}>{i.admins?.full_name || staff.find(s => s.id === i.staff_id)?.full_name || "—"}</td>
+                    <td style={{ fontSize: 12, color: C.sub }}>{i.exit_date ? new Date(i.exit_date).toLocaleDateString() : "—"}</td>
+                    <td><span className="tg" style={{ background: `${rc}22`, color: rc }}>{i.reason || "—"}</span></td>
+                    <td><Stars val={i.overall_satisfaction || 3} /></td>
+                    <td>{i.would_recommend ? <span className="tg tm">✓ Yes</span> : <span className="tg" style={{ background: "#F8717122", color: "#F87171" }}>✗ No</span>}</td>
+                    <td><button className="bg" style={{ fontSize: 11, padding: "4px 12px" }} onClick={() => setViewItem(i)}>View Details</button></td>
+                  </tr>
+                );
+              })}
+              {interviews.length === 0 && <tr><td colSpan="6" style={{ textAlign: "center", padding: 30, color: C.muted }}>No exit interviews recorded yet.</td></tr>}
+            </tbody>
+          </table></div>
+        </div>
+      )}
+
+      {/* View Interview Modal */}
+      {viewItem && (
+        <Modal onClose={() => setViewItem(null)} title="Exit Interview Details">
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div className="g2">
+              <div><span style={{ fontSize: 11, color: C.muted }}>Staff Member</span><div style={{ fontWeight: 800, marginTop: 4 }}>{viewItem.admins?.full_name || "—"}</div></div>
+              <div><span style={{ fontSize: 11, color: C.muted }}>Exit Date</span><div style={{ fontWeight: 800, marginTop: 4 }}>{viewItem.exit_date || "—"}</div></div>
+            </div>
+            <div className="g2">
+              <div><span style={{ fontSize: 11, color: C.muted }}>Reason</span><div style={{ marginTop: 4 }}><span className="tg" style={{ background: `${reasonCol[viewItem.reason] || C.muted}22`, color: reasonCol[viewItem.reason] || C.muted }}>{viewItem.reason}</span></div></div>
+              <div><span style={{ fontSize: 11, color: C.muted }}>Satisfaction</span><div style={{ marginTop: 4 }}><Stars val={viewItem.overall_satisfaction || 3} /></div></div>
+            </div>
+            {viewItem.highlights && <div style={{ padding: 14, background: "#4ADE8011", borderRadius: 8 }}><div style={{ fontSize: 11, color: "#4ADE80", fontWeight: 800, marginBottom: 6 }}>HIGHLIGHTS / POSITIVES</div><div style={{ fontSize: 13, color: C.sub }}>{viewItem.highlights}</div></div>}
+            {viewItem.concerns && <div style={{ padding: 14, background: "#F8717111", borderRadius: 8 }}><div style={{ fontSize: 11, color: "#F87171", fontWeight: 800, marginBottom: 6 }}>CONCERNS / AREAS TO IMPROVE</div><div style={{ fontSize: 13, color: C.sub }}>{viewItem.concerns}</div></div>}
+            {viewItem.notes && <div><span style={{ fontSize: 11, color: C.muted }}>Additional Notes</span><div style={{ fontSize: 13, color: C.sub, marginTop: 6, lineHeight: 1.6 }}>{viewItem.notes}</div></div>}
+          </div>
+        </Modal>
+      )}
+
+      {/* New Interview Modal */}
+      {showNew && (
+        <Modal onClose={() => setShowNew(false)} title="Record Exit Interview">
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div className="g2">
+              <div><Lbl>Departing Staff *</Lbl>
+                <select className="inp" value={form.staff_id} onChange={e => setForm(f => ({ ...f, staff_id: e.target.value }))}>
+                  <option value="">— Select —</option>
+                  {staff.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}
+                </select>
+              </div>
+              <div><Lbl>Exit Date *</Lbl><input className="inp" type="date" value={form.exit_date} onChange={e => setForm(f => ({ ...f, exit_date: e.target.value }))} /></div>
+            </div>
+            <div className="g2">
+              <div><Lbl>Exit Reason</Lbl>
+                <select className="inp" value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))}>
+                  {REASONS.map(r => <option key={r}>{r}</option>)}
+                </select>
+              </div>
+              <div><Lbl>Overall Satisfaction (1–5)</Lbl>
+                <input className="inp" type="number" min="1" max="5" value={form.overall_satisfaction} onChange={e => setForm(f => ({ ...f, overall_satisfaction: parseInt(e.target.value) }))} />
+              </div>
+            </div>
+            <div><Lbl>What did they appreciate most?</Lbl><textarea className="inp" rows={2} placeholder="Culture, team, learning opportunities…" value={form.highlights} onChange={e => setForm(f => ({ ...f, highlights: e.target.value }))} /></div>
+            <div><Lbl>Key concerns or reasons for leaving</Lbl><textarea className="inp" rows={2} placeholder="Compensation, growth, management…" value={form.concerns} onChange={e => setForm(f => ({ ...f, concerns: e.target.value }))} /></div>
+            <label style={{ display: "flex", alignItems: "center", gap: 10, fontSize: 13, color: C.sub, cursor: "pointer" }}>
+              <input type="checkbox" checked={form.would_recommend} onChange={e => setForm(f => ({ ...f, would_recommend: e.target.checked }))} />
+              Would recommend the company as a place to work
+            </label>
+            <div><Lbl>Additional Notes</Lbl><textarea className="inp" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
+            <button className="bp" onClick={save} disabled={saving}>{saving ? "Saving…" : "Save Exit Interview"}</button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+// ─── NOTIFICATION BELL SYSTEM ─────────────────────────────────────────────────
+// A global bell icon + dropdown that fetches /hr/notifications for the current user.
+// Notification types: letter_issued, task_assigned, grievance_update, request_update, goal_update, announcement
+function NotificationBell({ userId }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [notifs, setNotifs] = useState([]);
+  const [open, setOpen] = useState(false);
+  const [loading, setLoading] = useState(false);
+
+  const notifIcon = { letter_issued: "📄", task_assigned: "✅", grievance_update: "⚖️", request_update: "📦", goal_update: "🎯", announcement: "📢", recognition: "🏆", default: "🔔" };
+  const notifColor = { letter_issued: "#60A5FA", task_assigned: "#4ADE80", grievance_update: "#F87171", request_update: T.gold, goal_update: "#A78BFA", announcement: "#F59E0B", recognition: T.gold };
+
+  const fetch_ = useCallback(async () => {
+    setLoading(true);
+    try {
+      const d = await apiFetch(`${API_BASE}/hr/notifications?staff_id=${userId}&limit=30`).catch(() => []);
+      setNotifs(Array.isArray(d) ? d : []);
+    } catch { } finally { setLoading(false); }
+  }, [userId]);
+
+  useEffect(() => { fetch_(); const t = setInterval(fetch_, 60000); return () => clearInterval(t); }, [fetch_]);
+
+  const markRead = async (id) => {
+    try {
+      await apiFetch(`${API_BASE}/hr/notifications/${id}/read`, { method: "PATCH" });
+      setNotifs(ns => ns.map(n => n.id === id ? { ...n, is_read: true } : n));
+    } catch { }
+  };
+
+  const markAllRead = async () => {
+    try {
+      await apiFetch(`${API_BASE}/hr/notifications/read-all`, { method: "PATCH", body: JSON.stringify({ staff_id: userId }) });
+      setNotifs(ns => ns.map(n => ({ ...n, is_read: true })));
+    } catch { }
+  };
+
+  const unread = notifs.filter(n => !n.is_read).length;
+
+  return (
+    <div style={{ position: "relative" }}>
+      <button
+        onClick={() => { setOpen(o => !o); if (!open) fetch_(); }}
+        style={{ background: "none", border: "none", cursor: "pointer", position: "relative", padding: "6px 8px", borderRadius: 8, color: C.text }}
+        title="Notifications"
+      >
+        <span style={{ fontSize: 20 }}>🔔</span>
+        {unread > 0 && (
+          <span style={{ position: "absolute", top: 2, right: 2, background: "#F87171", color: "#fff", borderRadius: "50%", width: 16, height: 16, fontSize: 10, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
+            {unread > 9 ? "9+" : unread}
+          </span>
+        )}
+      </button>
+
+      {open && (
+        <>
+          <div onClick={() => setOpen(false)} style={{ position: "fixed", inset: 0, zIndex: 999 }} />
+          <div style={{
+            position: "absolute", top: "100%", right: 0, width: 360, maxHeight: 480, overflowY: "auto", zIndex: 1000,
+            background: dark ? "#1a1a2e" : "#fff", border: `1px solid ${C.border}`, borderRadius: 16,
+            boxShadow: "0 20px 60px rgba(0,0,0,0.4)", marginTop: 8
+          }}>
+            {/* Header */}
+            <div style={{ padding: "16px 18px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ fontWeight: 900, fontSize: 15, color: C.text }}>Notifications {unread > 0 && <span style={{ fontSize: 12, color: "#F87171", marginLeft: 4 }}>({unread} new)</span>}</div>
+              {unread > 0 && <button onClick={markAllRead} style={{ background: "none", border: "none", cursor: "pointer", fontSize: 11, color: T.gold, fontWeight: 700 }}>Mark all read</button>}
+            </div>
+
+            {loading && notifs.length === 0 ? (
+              <div style={{ padding: 30, textAlign: "center", color: C.muted, fontSize: 13 }}>Loading…</div>
+            ) : notifs.length === 0 ? (
+              <div style={{ padding: 40, textAlign: "center" }}>
+                <div style={{ fontSize: 28, marginBottom: 10 }}>🎉</div>
+                <div style={{ fontSize: 13, color: C.muted }}>You're all caught up!</div>
+              </div>
+            ) : (
+              notifs.map(n => {
+                const icon = notifIcon[n.type] || notifIcon.default;
+                const col = notifColor[n.type] || C.muted;
+                return (
+                  <div key={n.id}
+                    onClick={() => markRead(n.id)}
+                    style={{ padding: "14px 18px", borderBottom: `1px solid ${C.border}`, display: "flex", gap: 12, alignItems: "flex-start", cursor: "pointer", background: n.is_read ? "transparent" : (dark ? "rgba(255,255,255,0.03)" : "rgba(0,0,0,0.02)"), transition: "background 0.2s" }}
+                  >
+                    <div style={{ width: 34, height: 34, borderRadius: "50%", background: `${col}22`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, flexShrink: 0 }}>{icon}</div>
+                    <div style={{ flex: 1, minWidth: 0 }}>
+                      <div style={{ fontSize: 13, color: C.text, fontWeight: n.is_read ? 400 : 700, lineHeight: 1.4 }}>{n.message}</div>
+                      <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>{new Date(n.created_at).toLocaleString()}</div>
+                    </div>
+                    {!n.is_read && <div style={{ width: 8, height: 8, borderRadius: "50%", background: col, flexShrink: 0, marginTop: 3 }} />}
+                  </div>
+                );
+              })
+            )}
+
+            <div style={{ padding: "10px 18px", textAlign: "center", borderTop: `1px solid ${C.border}` }}>
+              <button onClick={() => setOpen(false)} style={{ background: "none", border: "none", color: C.muted, fontSize: 12, cursor: "pointer" }}>Close</button>
+            </div>
+          </div>
+        </>
+      )}
+    </div>
   );
 }
 
