@@ -7715,10 +7715,10 @@ function JobsBoard() {
   };
 
   const toggleStatus = async (jobId, currentStatus) => {
-    try { await apiFetch(`${API_BASE}/hr/recruitment/jobs/${jobId}`, { method: "PATCH", body: JSON.stringify({ status: currentStatus === "Open" ? "Closed" : "Open" }) }); refresh(); } catch (e) { alert(e.message); }
+    try { await apiFetch(`${API_BASE}/hr/recruitment/jobs/${jobId}`, { method: "PATCH", body: JSON.stringify({ status: (currentStatus === "Open" || currentStatus === "Approved") ? "Closed" : "Open" }) }); refresh(); } catch (e) { alert(e.message); }
   };
 
-  const statusStyle = (s) => s === "Open" ? { background: "#4ADE8022", color: "#4ADE80", border: "1px solid #4ADE8044" } : { background: "#F8717122", color: "#F87171", border: "1px solid #F8717144" };
+  const statusStyle = (s) => (s === "Open" || s === "Approved") ? { background: "#4ADE8022", color: "#4ADE80", border: "1px solid #4ADE8044" } : { background: "#F8717122", color: "#F87171", border: "1px solid #F8717144" };
   const typeCol = { "Full-time": T.gold, "Part-time": "#60A5FA", "Contract": "#F87171", "Internship": "#A78BFA" };
 
   return (
@@ -7728,8 +7728,8 @@ function JobsBoard() {
         <button className="bp" onClick={() => setShowNew(true)}>+ Post New Job</button>
       </div>
       <div className="g4" style={{ marginBottom: 22 }}>
-        <StatCard label="Open Roles" value={jobs.filter(j => j.status === "Open").length} col="#4ADE80" />
-        <StatCard label="Closed Roles" value={jobs.filter(j => j.status !== "Open").length} col="#F87171" />
+        <StatCard label="Open Roles" value={jobs.filter(j => j.status === "Open" || j.status === "Approved").length} col="#4ADE80" />
+        <StatCard label="Closed Roles" value={jobs.filter(j => j.status !== "Open" && j.status !== "Approved").length} col="#F87171" />
         <StatCard label="Total Applicants" value={apps.length} col={T.gold} />
         <StatCard label="Avg. per Role" value={jobs.length ? Math.round(apps.length / jobs.length) : 0} col="#60A5FA" />
       </div>
@@ -7759,7 +7759,7 @@ function JobsBoard() {
                 </div>
                 <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: "auto", paddingTop: 14, borderTop: `1px solid ${C.border}` }}>
                   <div style={{ fontSize: 12, color: C.muted }}>{appCount} applicant{appCount !== 1 ? "s" : ""}</div>
-                  <button className="bg" style={{ fontSize: 11, padding: "4px 12px" }} onClick={e => { e.stopPropagation(); toggleStatus(j.id, j.status || "Open"); }}>{j.status === "Open" ? "Close Role" : "Reopen"}</button>
+                  <button className="bg" style={{ fontSize: 11, padding: "4px 12px" }} onClick={e => { e.stopPropagation(); toggleStatus(j.id, j.status || "Open"); }}>{(j.status === "Open" || j.status === "Approved") ? "Close Role" : "Reopen"}</button>
                 </div>
               </div>
             );
