@@ -7904,6 +7904,15 @@ function ApplicationsTracker() {
     (a.candidate_name?.toLowerCase().includes(search.toLowerCase()) || a.candidate_email?.toLowerCase().includes(search.toLowerCase()))
   );
 
+  const hireApp = async (appId) => {
+    if (!window.confirm("This will create an employee account and staff profile for this candidate. Proceed?")) return;
+    try { 
+      await apiFetch(`${API_BASE}/hr/recruitment/applications/${appId}/hire`, { method: "POST" }); 
+      alert("Applicant successfully hired and onboarded!");
+      refresh(); 
+    } catch (e) { alert(e.message); }
+  };
+
   const advance = async (appId, currentStatus) => {
     const order = ["Applied", "Screening", "Interview", "Offered", "Hired"];
     const next = order[order.indexOf(currentStatus) + 1]; if (!next) return;
@@ -7957,6 +7966,7 @@ function ApplicationsTracker() {
                     <td><span className="tg" style={{ background: `${sc}22`, color: sc, border: `1px solid ${sc}44` }}>{a.status}</span></td>
                     <td style={{ fontSize: 11, color: C.muted }}>{a.created_at ? new Date(a.created_at).toLocaleDateString() : "—"}</td>
                     <td onClick={e => e.stopPropagation()}><div style={{ display: "flex", gap: 6 }}>
+                      {a.status === "Hired" && <button className="bp" style={{ fontSize: 10, padding: "4px 10px", background: "#4ADE80", borderColor: "#4ADE80" }} onClick={() => hireApp(a.id)}>Onboard 👤</button>}
                       {!["Hired", "Rejected"].includes(a.status) && <button className="bp" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => advance(a.id, a.status)}>Advance →</button>}
                       {a.status !== "Rejected" && a.status !== "Hired" && <button style={{ fontSize: 10, padding: "4px 10px", borderRadius: 6, border: "1px solid #F87171", background: "#F8717118", color: "#F87171", cursor: "pointer" }} onClick={() => reject(a.id)}>Reject</button>}
                     </div></td>
@@ -7972,7 +7982,12 @@ function ApplicationsTracker() {
         <div style={{ display: "flex", gap: 8, marginBottom: 18 }}><span className="tg" style={{ background: `${stCol[viewApp.status] || C.muted}22`, color: stCol[viewApp.status] || C.muted }}>{viewApp.status}</span><span className="tg tm">{jobs.find(j => j.id === viewApp.job_id)?.title || "—"}</span></div>
         <div className="g2" style={{ gap: 10, marginBottom: 14 }}><Field label="Email" value={viewApp.candidate_email} /><Field label="Phone" value={viewApp.candidate_phone} /></div>
         {viewApp.resume_url && <div style={{ marginBottom: 14 }}><a href={viewApp.resume_url} target="_blank" rel="noreferrer" className="bp" style={{ display: "inline-block", fontSize: 13, padding: "8px 18px" }}>📄 View CV</a></div>}
-        {viewApp.cover_letter && <div><Lbl>Cover Letter</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10 }}>{viewApp.cover_letter}</div></div>}
+        {viewApp.status === "Hired" && (
+            <button onClick={() => { hireApp(viewApp.id); setViewApp(null); }} style={{ marginTop: 12, width: "100%", padding: "10px", borderRadius: 10, background: "#4ADE80", color: "white", border: "none", fontWeight: 800, cursor: "pointer" }}>
+              Confirm Hire & Onboard Staff 👤
+            </button>
+          )}
+          {viewApp.cover_letter && <div><Lbl>Cover Letter</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10 }}>{viewApp.cover_letter}</div></div>}
       </Modal>)}
       {showNew && (<Modal onClose={() => setShowNew(false)} title="Add Application" width={560}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -8054,7 +8069,12 @@ function ATSPipeline() {
         <div style={{ display: "flex", gap: 8, flexWrap: "wrap", marginTop: 8 }}>
           {stages.map(s => (<button key={s.key} onClick={() => { moveApp(viewApp.id, s.key); setViewApp(null); }} style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${viewApp.status === s.key ? s.col : C.border}`, background: viewApp.status === s.key ? `${s.col}22` : "transparent", color: viewApp.status === s.key ? s.col : C.sub, cursor: "pointer", fontSize: 12, fontWeight: viewApp.status === s.key ? 800 : 400 }}>{s.emoji} {s.label}</button>))}
         </div>
-        {viewApp.cover_letter && <div style={{ marginTop: 18 }}><Lbl>Cover Letter</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10, marginTop: 8 }}>{viewApp.cover_letter}</div></div>}
+        {viewApp.status === "Hired" && (
+            <button onClick={() => { hireApp(viewApp.id); setViewApp(null); }} style={{ marginTop: 12, width: "100%", padding: "10px", borderRadius: 10, background: "#4ADE80", color: "white", border: "none", fontWeight: 800, cursor: "pointer" }}>
+              Confirm Hire & Onboard Staff 👤
+            </button>
+          )}
+          {viewApp.cover_letter && <div style={{ marginTop: 18 }}><Lbl>Cover Letter</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10, marginTop: 8 }}>{viewApp.cover_letter}</div></div>}
       </Modal>)}
     </div>
   );

@@ -2057,6 +2057,77 @@ async def update_application_status(app_id: str, status_update: dict, current_ad
     res = await db_execute(lambda: db.table("job_applications").update({"status": status_update.get("status")}).eq("id", app_id).execute())
     return res.data[0] if res.data else None
 
+@router.post("/recruitment/applications/{app_id}/hire")
+async def hire_applicant(app_id: str, current_admin: dict = Depends(verify_token)):
+    """Convert a successful applicant into a staff member."""
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+         raise HTTPException(status_code=403, detail="HR only")
+    
+    db = get_db()
+    
+    # 1. Fetch application details
+    app_res = await db_execute(lambda: db.table("job_applications").select("*, job_requisitions(title, department)").eq("id", app_id).execute())
+    if not app_res.data:
+        raise HTTPException(status_code=404, detail="Application not found")
+    app = app_res.data[0]
+    job = app.get("job_requisitions", {})
+    
+    # 2. Check if already has an admin account
+    existing = await db_execute(lambda: db.table("admins").select("id").eq("email", app["candidate_email"]).execute())
+    if existing.data:
+        # If they already exist, just link them to a profile if missing
+        admin_id = existing.data[0]["id"]
+    else:
+        # 3. Create Admin Account
+        import bcrypt
+        default_pwd = "Welcome@Eximp" + str(datetime.now().year)
+        pwd_hash = bcrypt.hashpw(default_pwd.encode(), bcrypt.gensalt()).decode()
+        
+        adm_res = await db_execute(lambda: db.table("admins").insert({
+            "full_name": app["candidate_name"],
+            "email": app["candidate_email"],
+            "password_hash": pwd_hash,
+            "role": "staff",
+            "primary_role": "staff",
+            "department": job.get("department", "Unassigned"),
+            "is_active": True
+        }).execute())
+        if not adm_res.data:
+            raise HTTPException(status_code=500, detail="Failed to create admin account")
+        admin_id = adm_res.data[0]["id"]
+
+    # 4. Create/Update Staff Profile
+    profile_data = {
+        "admin_id": admin_id,
+        "job_title": job.get("title", "Staff Member"),
+        "phone_number": app["candidate_phone"],
+        "date_joined": datetime.utcnow().date().isoformat(),
+        "staff_type": "full"
+    }
+    
+    # Use upsert logic or simple check
+    prof_exists = await db_execute(lambda: db.table("staff_profiles").select("id").eq("admin_id", admin_id).execute())
+    if prof_exists.data:
+        await db_execute(lambda: db.table("staff_profiles").update(profile_data).eq("admin_id", admin_id).execute())
+    else:
+        await db_execute(lambda: db.table("staff_profiles").insert(profile_data).execute())
+
+    # 5. Attach CV as a document if exists
+    if app["resume_url"]:
+        await db_execute(lambda: db.table("staff_documents").insert({
+            "staff_id": admin_id,
+            "doc_type": "CV",
+            "title": f"CV - {app['candidate_name']}",
+            "file_url": app["resume_url"],
+            "uploaded_by": current_admin["sub"]
+        }).execute())
+
+    # 6. Update Application Status to Hired
+    await db_execute(lambda: db.table("job_applications").update({"status": "Hired"}).eq("id", app_id).execute())
+    
+    return {"message": "Applicant successfully hired and onboarded", "admin_id": admin_id}
+
 @router.post("/recruitment/interviews", status_code=status.HTTP_201_CREATED)
 async def schedule_interview(interview: InterviewCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
