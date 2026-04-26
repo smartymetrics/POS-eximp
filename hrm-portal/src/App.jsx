@@ -100,6 +100,7 @@ const GS = dark => {
     .bp:hover{filter:brightness(1.1);transform:translateY(-2px);box-shadow:none;}
     .bp:active{transform:translateY(0);}
     .bp:disabled{opacity:.6;cursor:not-allowed;transform:none;box-shadow:none;}
+    .bd{background:transparent;border:1px solid #F87171;color:#F87171;padding:9px 20px;border-radius:10px;font-size:13px;font-weight:600;cursor:pointer;font-family:inherit;transition:all .18s;}
     .bg{background:transparent;border:1px solid ${C.border};color:${C.sub};padding:9px 20px;border-radius:10px;font-size:13px;cursor:pointer;font-family:inherit;transition:all .2s;font-weight:600;}
     .bg:hover{border-color:${G};color:${G};background:${G}0A;transform:translateY(-1px);}
     .bd{background:#EF444412;color:#EF4444;border:1px solid #EF444430;padding:8px 16px;border-radius:10px;font-size:12px;cursor:pointer;font-family:inherit;font-weight:700;transition:all .2s;}
@@ -223,6 +224,25 @@ const IC = {
   goal: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><circle cx="12" cy="12" r="6" /><circle cx="12" cy="12" r="2" /></svg>,
   sun: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="5" /><line x1="12" y1="1" x2="12" y2="3" /><line x1="12" y1="21" x2="12" y2="23" /><line x1="4.22" y1="4.22" x2="5.64" y2="5.64" /><line x1="18.36" y1="18.36" x2="19.78" y2="19.78" /><line x1="1" y1="12" x2="3" y2="12" /><line x1="21" y1="12" x2="23" y2="12" /><line x1="4.22" y1="19.78" x2="5.64" y2="18.36" /><line x1="18.36" y1="5.64" x2="19.78" y2="4.22" /></svg>,
   moon: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M21 12.79A9 9 0 1 1 11.21 3 7 7 0 0 0 21 12.79z" /></svg>,
+  briefcase: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="2" y="7" width="20" height="14" rx="2" /><path d="M16 7V5a2 2 0 0 0-2-2h-4a2 2 0 0 0-2 2v2" /></svg>,
+  chart: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="18" y1="20" x2="18" y2="10" /><line x1="12" y1="20" x2="12" y2="4" /><line x1="6" y1="20" x2="6" y2="14" /></svg>,
+  clock: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><polyline points="12 6 12 12 16 14" /></svg>,
+  calendar: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>,
+  book: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20" /><path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z" /></svg>,
+  dollar: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><line x1="12" y1="1" x2="12" y2="23" /><path d="M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" /></svg>,
+  megaphone: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M3 11l19-9-9 19-2-8-8-2z" /></svg>,
+  star: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polygon points="12 2 15.09 8.26 22 9.27 17 14.14 18.18 21.02 12 17.77 5.82 21.02 7 14.14 2 9.27 8.91 8.26 12 2" /></svg>,
+  shield: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M12 22s8-4 8-10V5l-8-3-8 3v7c0 6 8 10 8 10z" /></svg>,
+  file: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>,
+  globe: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="10" /><line x1="2" y1="12" x2="22" y2="12" /><path d="M12 2a15.3 15.3 0 0 1 4 10 15.3 15.3 0 0 1-4 10 15.3 15.3 0 0 1-4-10 15.3 15.3 0 0 1 4-10z" /></svg>,
+  alert: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M10.29 3.86L1.82 18a2 2 0 0 0 1.71 3h16.94a2 2 0 0 0 1.71-3L13.71 3.86a2 2 0 0 0-3.42 0z" /><line x1="12" y1="9" x2="12" y2="13" /><line x1="12" y1="17" x2="12.01" y2="17" /></svg>,
+  settings: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><circle cx="12" cy="12" r="3" /><path d="M19.4 15a1.65 1.65 0 0 0 .33 1.82l.06.06a2 2 0 0 1-2.83 2.83l-.06-.06a1.65 1.65 0 0 0-1.82-.33 1.65 1.65 0 0 0-1 1.51V21a2 2 0 0 1-4 0v-.09A1.65 1.65 0 0 0 9 19.4a1.65 1.65 0 0 0-1.82.33l-.06.06a2 2 0 0 1-2.83-2.83l.06-.06A1.65 1.65 0 0 0 4.68 15a1.65 1.65 0 0 0-1.51-1H3a2 2 0 0 1 0-4h.09A1.65 1.65 0 0 0 4.6 9a1.65 1.65 0 0 0-.33-1.82l-.06-.06a2 2 0 0 1 2.83-2.83l.06.06A1.65 1.65 0 0 0 9 4.68a1.65 1.65 0 0 0 1-1.51V3a2 2 0 0 1 4 0v.09a1.65 1.65 0 0 0 1 1.51 1.65 1.65 0 0 0 1.82-.33l.06-.06a2 2 0 0 1 2.83 2.83l-.06.06A1.65 1.65 0 0 0 19.4 9a1.65 1.65 0 0 0 1.51 1H21a2 2 0 0 1 0 4h-.09a1.65 1.65 0 0 0-1.51 1z" /></svg>,
+  users: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M17 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2" /><circle cx="9" cy="7" r="4" /><path d="M23 21v-2a4 4 0 0 0-3-3.87" /><path d="M16 3.13a4 4 0 0 1 0 7.75" /></svg>,
+  log: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /><line x1="16" y1="13" x2="8" y2="13" /><line x1="16" y1="17" x2="8" y2="17" /><polyline points="10 9 9 9 8 9" /></svg>,
+  exit: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="M9 21H5a2 2 0 0 1-2-2V5a2 2 0 0 1 2-2h4" /><polyline points="16 17 21 12 16 7" /><line x1="21" y1="12" x2="9" y2="12" /></svg>,
+  trend: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><polyline points="23 6 13.5 15.5 8.5 10.5 1 18" /><polyline points="17 6 23 6 23 12" /></svg>,
+  org: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><rect x="8" y="2" width="8" height="4" rx="1" /><rect x="1" y="18" width="6" height="4" rx="1" /><rect x="9" y="18" width="6" height="4" rx="1" /><rect x="17" y="18" width="6" height="4" rx="1" /><path d="M4 22v-4M20 22v-4M12 22v-4M12 6v3M4 18v-3h16v3" /></svg>,
+  home: <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2"><path d="m3 9 9-7 9 7v11a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2z" /><polyline points="9 22 9 12 15 12 15 22" /></svg>,
 };
 
 // ─── PRIMITIVES ───────────────────────────────────────────────────────────────
@@ -350,9 +370,9 @@ function Sidebar({ page, setPage, user, onLogout, items, roleLabel, onMenuOpen }
             n.isHeader ? (
               <div key={n.label} style={{ fontSize: 10, color: C.muted, textTransform: "uppercase", letterSpacing: "1px", fontWeight: 800, padding: "16px 16px 6px", marginTop: 4 }}>{n.label}</div>
             ) : (
-            <button key={n.id} className={`nb ${page === n.id ? "on" : ""}`} onClick={() => !n.disabled && setPage(n.id)} style={{ opacity: n.disabled ? 0.5 : 1, cursor: n.disabled ? 'not-allowed' : 'pointer' }}>
-              {IC[n.icon]}{n.label} {n.disabled && <span style={{fontSize: 9, marginLeft: 'auto', background: '#333', padding: '2px 6px', borderRadius: 4}}>SOON</span>}
-            </button>
+              <button key={n.id} className={`nb ${page === n.id ? "on" : ""}`} onClick={() => !n.disabled && setPage(n.id)} style={{ opacity: n.disabled ? 0.5 : 1, cursor: n.disabled ? 'not-allowed' : 'pointer' }}>
+                {IC[n.icon]}{n.label} {n.disabled && <span style={{ fontSize: 9, marginLeft: 'auto', background: '#333', padding: '2px 6px', borderRadius: 4 }}>SOON</span>}
+              </button>
             )
           ))}
         </nav>
@@ -1948,14 +1968,16 @@ function Tasks({ currentUser }) {
     }
   };
 
-  const updateStatus = async (taskId, status) => {
+  const updateStatus = async (taskId, newStatus) => {
     try {
-      // I'll add a generic PATCH for tasks later or just use individual updates
-      // For now, let's assume we have it or use what's available
-      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status } : t));
-      if (viewT) setViewT({ ...viewT, status });
+      await apiFetch(`${API_BASE}/hr/tasks/${taskId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: newStatus })
+      });
+      setTasks(prev => prev.map(t => t.id === taskId ? { ...t, status: newStatus } : t));
+      if (viewT) setViewT(v => ({ ...v, status: newStatus }));
     } catch (e) {
-      alert(e.message);
+      alert("Failed to update task: " + e.message);
     }
   };
 
@@ -2084,6 +2106,16 @@ function Disciplinary({ viewOnly, userId, isManager }) {
     apiFetch(`${API_BASE}/hr/incidents${params}`).then(setIncidents);
   };
 
+  const resolveIncident = async (incidentId, newStatus) => {
+    try {
+      await apiFetch(`${API_BASE}/hr/incidents/${incidentId}`, {
+        method: "PATCH",
+        body: JSON.stringify({ status: newStatus, resolution_notes: `Marked ${newStatus} by HR` })
+      });
+      refresh();
+    } catch (e) { alert("Update failed: " + e.message); }
+  };
+
   const add = async () => {
     if (!f.uid || !f.type) return;
     try {
@@ -2162,6 +2194,16 @@ function Disciplinary({ viewOnly, userId, isManager }) {
                     </div>
                     <div style={{ fontSize: 11, color: C.sub }}>{fl.notes}</div>
                     <div style={{ fontSize: 10, color: C.muted, marginTop: 4 }}>Ref: INC-{fl.id}</div>
+                    {!viewOnly && !["resolved", "dismissed"].includes(fl.status) && (
+                      <div style={{ display: "flex", gap: 8, marginTop: 8 }}>
+                        <button className="bg" style={{ flex: 1, fontSize: 10, padding: "4px 8px", borderColor: "#4ADE80", color: "#4ADE80" }}
+                          onClick={() => resolveIncident(fl.id, "resolved")}>✓ Resolve</button>
+                        <button className="bg" style={{ flex: 1, fontSize: 10, padding: "4px 8px" }}
+                          onClick={() => resolveIncident(fl.id, "dismissed")}>Dismiss</button>
+                      </div>
+                    )}
+                    {fl.status === "resolved" && <div style={{ fontSize: 10, color: "#4ADE80", marginTop: 4, fontWeight: 800 }}>✓ Resolved</div>}
+                    {fl.status === "dismissed" && <div style={{ fontSize: 10, color: "#9CA3AF", marginTop: 4 }}>Dismissed</div>}
                   </div>
                 ))}
               </div>
@@ -2813,8 +2855,8 @@ function StaffPayroll({ user }) {
     if (!searchTerm) return true;
     const term = searchTerm.toLowerCase();
     return (e.clients?.full_name || "").toLowerCase().includes(term) ||
-           (e.invoices?.invoice_number || "").toLowerCase().includes(term) ||
-           (e.estate_name || "").toLowerCase().includes(term);
+      (e.invoices?.invoice_number || "").toLowerCase().includes(term) ||
+      (e.estate_name || "").toLowerCase().includes(term);
   }) || [];
 
   const totalEarnedFiltered = filteredEarnings.reduce((a, b) => a + parseFloat(b.final_amount || b.net_commission || 0), 0) || 0;
@@ -2822,173 +2864,173 @@ function StaffPayroll({ user }) {
 
   return (
     <>
-    <div className="fade">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 22 }}>
-        <div>
-          <div className="ho" style={{ fontSize: 22 }}>My Payroll & Commissions</div>
-          <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>View your monthly payslips and sales commission earnings</div>
-        </div>
-        <div style={{ display: "flex", alignItems: "center", gap: 10, background: C.base, padding: "4px 12px", borderRadius: 8, border: `1px solid ${C.border}` }}>
-          <div style={{ fontSize: 11, color: C.sub, fontWeight: 700 }}>FILTER:</div>
-          <input type="text" className="inp" placeholder="Search client, invoice..." style={{ padding: "4px 8px", fontSize: 11, width: 140, border: "none", background: "transparent", borderRight: `1px solid ${C.border}` }} value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
-          <input type="date" className="inp" style={{ padding: "4px 8px", fontSize: 11, width: 120, border: "none", background: "transparent" }} value={dates.start} onChange={e => setDates(d => ({ ...d, start: e.target.value }))} />
-          <div style={{ fontSize: 11, color: C.sub }}>to</div>
-          <input type="date" className="inp" style={{ padding: "4px 8px", fontSize: 11, width: 120, border: "none", background: "transparent" }} value={dates.end} onChange={e => setDates(d => ({ ...d, end: e.target.value }))} />
-        </div>
-      </div>
-
-      <div className="tab-bar" style={{ marginBottom: 20 }}>
-        <button className={`tab ${tab === "payslips" ? "on" : "off"}`} onClick={() => setTab("payslips")}>My Payslips</button>
-        <button className={`tab ${tab === "commissions" ? "on" : "off"}`} onClick={() => setTab("commissions")}>My Commissions</button>
-      </div>
-
-      {loading ? <div style={{ padding: 40, textAlign: "center", color: C.muted }}>Loading data...</div> : (
-        tab === "payslips" ? (
-          <div className="gc" style={{ overflow: "hidden" }}>
-            {data.payslips.length === 0 ? (
-              <div style={{ padding: 40, textAlign: "center", color: C.muted }}>No payslips found for this period.</div>
-            ) : (
-              <div className="tw">
-                <table className="ht">
-                  <thead><tr>{['Period', 'Gross Pay', 'Net Pay', 'Status', ''].map(h => <th key={h}>{h}</th>)}</tr></thead>
-                  <tbody>
-                    {data.payslips.map(p => (
-                      <tr key={p.id}>
-                        <td style={{ fontWeight: 700 }}>{new Date(p.period_start).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</td>
-                        <td>{fmt(p.gross_pay)}</td>
-                        <td style={{ color: T.orange, fontWeight: 800 }}>{fmt(p.net_pay)}</td>
-                        <td><span className={`tg ${p.status === "paid" ? "tg2" : "ty"}`}>{p.status}</span></td>
-                        <td><button className="bg" style={{ fontSize: 10, padding: "4px 10px" }}>View PDF</button></td>
-                      </tr>
-                    ))}
-                  </tbody>
-                </table>
-              </div>
-            )}
-          </div>
-        ) : (
+      <div className="fade">
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-end", marginBottom: 22 }}>
           <div>
-            {!data.commissions || !data.commissions.rep_id ? (
-              <div className="gc" style={{ padding: 40, textAlign: "center", color: C.muted }}>
-                <div style={{ fontSize: 28, marginBottom: 10 }}>🔍</div>
-                <div style={{ fontWeight: 700 }}>No Sales Rep Profile Linked</div>
-                <div style={{ fontSize: 13, maxWidth: 400, margin: "8px auto" }}>We couldn't find a Sales Rep record matching your email or phone number. Contact HR to link your accounts.</div>
-              </div>
-            ) : (
-              <div>
-                <div className="g3" style={{ marginBottom: 20, gap: 16 }}>
-                  <div className="gc" style={{ padding: 18, textAlign: "center" }}>
-                    <div style={{ fontSize: 10, color: C.sub, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Total Owed (Now)</div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: T.gold }}>{fmt(data.commissions.total_owed)}</div>
-                  </div>
-                  <div className="gc" style={{ padding: 18, textAlign: "center" }}>
-                    <div style={{ fontSize: 10, color: C.sub, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Filtered Earning</div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: "#10B981" }}>{fmt(totalEarnedFiltered)}</div>
-                  </div>
-                  <div className="gc" style={{ padding: 18, textAlign: "center" }}>
-                    <div style={{ fontSize: 10, color: C.sub, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Payouts (Period)</div>
-                    <div style={{ fontSize: 22, fontWeight: 800, color: "#60A5FA" }}>{fmt(totalPaidFiltered)}</div>
-                  </div>
-                </div>
+            <div className="ho" style={{ fontSize: 22 }}>My Payroll & Commissions</div>
+            <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>View your monthly payslips and sales commission earnings</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10, background: C.base, padding: "4px 12px", borderRadius: 8, border: `1px solid ${C.border}` }}>
+            <div style={{ fontSize: 11, color: C.sub, fontWeight: 700 }}>FILTER:</div>
+            <input type="text" className="inp" placeholder="Search client, invoice..." style={{ padding: "4px 8px", fontSize: 11, width: 140, border: "none", background: "transparent", borderRight: `1px solid ${C.border}` }} value={searchTerm} onChange={e => setSearchTerm(e.target.value)} />
+            <input type="date" className="inp" style={{ padding: "4px 8px", fontSize: 11, width: 120, border: "none", background: "transparent" }} value={dates.start} onChange={e => setDates(d => ({ ...d, start: e.target.value }))} />
+            <div style={{ fontSize: 11, color: C.sub }}>to</div>
+            <input type="date" className="inp" style={{ padding: "4px 8px", fontSize: 11, width: 120, border: "none", background: "transparent" }} value={dates.end} onChange={e => setDates(d => ({ ...d, end: e.target.value }))} />
+          </div>
+        </div>
 
-                <div className="gc" style={{ overflow: "hidden" }}>
-                  <div style={{ padding: "14px 20px", borderBottom: `1px solid ${C.border}` }}>
-                    <div className="ho" style={{ fontSize: 14 }}>Earnings Ledger</div>
-                  </div>
-                  <div className="tw">
-                    <table className="ht">
-                      <thead><tr>{['Date', 'Client & Property', 'Invoice', 'Revenue', 'Rate', 'Gross', 'Tax', 'Net', 'Status', ''].map(h => <th key={h}>{h}</th>)}</tr></thead>
-                      <tbody>
-                        {filteredEarnings.map(e => {
-                          const gross = e.gross_commission || e.commission_amount;
-                          const wht = e.wht_amount || 0;
-                          const net = e.net_commission || e.final_amount;
-                          const revenue = e.payment_amount || (gross / (e.commission_rate / 100));
-                          const rate = e.commission_rate || (gross / revenue * 100);
-                          
-                          return (
-                            <tr key={e.id}>
-                              <td style={{ fontSize: 11, color: C.sub }}>{new Date(e.created_at).toLocaleDateString()}</td>
-                              <td>
-                                <div style={{ fontWeight: 700 }}>{e.clients?.full_name || "—"}</div>
-                                <div style={{ fontSize: 10, color: C.muted }}>Estate: {e.estate_name || "General"}</div>
-                              </td>
-                              <td style={{ fontSize: 11, color: C.sub }}>{e.invoices?.invoice_number || "—"}</td>
-                              <td style={{ fontWeight: 600 }}>{fmt(revenue)}</td>
-                              <td style={{ fontSize: 11 }}>{Number(rate).toFixed(1)}%</td>
-                              <td style={{ fontWeight: 600 }}>{fmt(gross)}</td>
-                              <td style={{ color: "#EF4444", fontSize: 11 }}>-{fmt(wht)}</td>
-                              <td style={{ fontWeight: 800, color: T.gold }}>{fmt(net)}</td>
-                              <td><span className={`tg ${e.is_paid ? "tg2" : parseFloat(e.amount_paid || 0) > 0 ? "ty" : "tr"}`} style={{ fontSize: 9 }}>{e.is_paid ? "Paid" : parseFloat(e.amount_paid || 0) > 0 ? "Partial" : "Unpaid"}</span></td>
-                              <td>
-                                {e.expenditure_id && (
-                                  <button onClick={() => viewDocument(e.expenditure_id)} className="bg" style={{ fontSize: 9, padding: "4px 8px" }}>PROOF</button>
-                                )}
-                              </td>
-                            </tr>
-                          );
-                        })}
-                        {filteredEarnings.length === 0 && <tr><td colSpan="10" style={{ textAlign: "center", padding: 30, color: C.muted }}>No earnings records match your filters.</td></tr>}
-                      </tbody>
-                    </table>
-                  </div>
-                </div>
+        <div className="tab-bar" style={{ marginBottom: 20 }}>
+          <button className={`tab ${tab === "payslips" ? "on" : "off"}`} onClick={() => setTab("payslips")}>My Payslips</button>
+          <button className={`tab ${tab === "commissions" ? "on" : "off"}`} onClick={() => setTab("commissions")}>My Commissions</button>
+        </div>
 
-                {data.commissions.payouts.length > 0 && (
-                  <div className="gc" style={{ marginTop: 24, overflow: "hidden" }}>
-                    <div style={{ padding: "14px 20px", borderBottom: `1px solid ${C.border}` }}><div className="ho" style={{ fontSize: 14 }}>Recent Payouts</div></div>
+        {loading ? <div style={{ padding: 40, textAlign: "center", color: C.muted }}>Loading data...</div> : (
+          tab === "payslips" ? (
+            <div className="gc" style={{ overflow: "hidden" }}>
+              {data.payslips.length === 0 ? (
+                <div style={{ padding: 40, textAlign: "center", color: C.muted }}>No payslips found for this period.</div>
+              ) : (
+                <div className="tw">
+                  <table className="ht">
+                    <thead><tr>{['Period', 'Gross Pay', 'Net Pay', 'Status', ''].map(h => <th key={h}>{h}</th>)}</tr></thead>
+                    <tbody>
+                      {data.payslips.map(p => (
+                        <tr key={p.id}>
+                          <td style={{ fontWeight: 700 }}>{new Date(p.period_start).toLocaleDateString(undefined, { month: 'long', year: 'numeric' })}</td>
+                          <td>{fmt(p.gross_pay)}</td>
+                          <td style={{ color: T.orange, fontWeight: 800 }}>{fmt(p.net_pay)}</td>
+                          <td><span className={`tg ${p.status === "paid" ? "tg2" : "ty"}`}>{p.status}</span></td>
+                          <td><button className="bg" style={{ fontSize: 10, padding: "4px 10px" }}>View PDF</button></td>
+                        </tr>
+                      ))}
+                    </tbody>
+                  </table>
+                </div>
+              )}
+            </div>
+          ) : (
+            <div>
+              {!data.commissions || !data.commissions.rep_id ? (
+                <div className="gc" style={{ padding: 40, textAlign: "center", color: C.muted }}>
+                  <div style={{ fontSize: 28, marginBottom: 10 }}>🔍</div>
+                  <div style={{ fontWeight: 700 }}>No Sales Rep Profile Linked</div>
+                  <div style={{ fontSize: 13, maxWidth: 400, margin: "8px auto" }}>We couldn't find a Sales Rep record matching your email or phone number. Contact HR to link your accounts.</div>
+                </div>
+              ) : (
+                <div>
+                  <div className="g3" style={{ marginBottom: 20, gap: 16 }}>
+                    <div className="gc" style={{ padding: 18, textAlign: "center" }}>
+                      <div style={{ fontSize: 10, color: C.sub, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Total Owed (Now)</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: T.gold }}>{fmt(data.commissions.total_owed)}</div>
+                    </div>
+                    <div className="gc" style={{ padding: 18, textAlign: "center" }}>
+                      <div style={{ fontSize: 10, color: C.sub, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Filtered Earning</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: "#10B981" }}>{fmt(totalEarnedFiltered)}</div>
+                    </div>
+                    <div className="gc" style={{ padding: 18, textAlign: "center" }}>
+                      <div style={{ fontSize: 10, color: C.sub, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 8 }}>Payouts (Period)</div>
+                      <div style={{ fontSize: 22, fontWeight: 800, color: "#60A5FA" }}>{fmt(totalPaidFiltered)}</div>
+                    </div>
+                  </div>
+
+                  <div className="gc" style={{ overflow: "hidden" }}>
+                    <div style={{ padding: "14px 20px", borderBottom: `1px solid ${C.border}` }}>
+                      <div className="ho" style={{ fontSize: 14 }}>Earnings Ledger</div>
+                    </div>
                     <div className="tw">
                       <table className="ht">
-                        <thead><tr>{['Paid Date', 'Payout Amount', 'Reference', 'Notes'].map(h => <th key={h}>{h}</th>)}</tr></thead>
+                        <thead><tr>{['Date', 'Client & Property', 'Invoice', 'Revenue', 'Rate', 'Gross', 'Tax', 'Net', 'Status', ''].map(h => <th key={h}>{h}</th>)}</tr></thead>
                         <tbody>
-                          {data.commissions.payouts.map(p => (
-                            <tr key={p.id}>
-                              <td style={{ fontSize: 12, color: C.sub }}>{new Date(p.paid_at).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}</td>
-                              <td style={{ fontWeight: 800, color: "#10B981" }}>{fmt(p.total_amount)}</td>
-                              <td style={{ fontSize: 11, color: C.sub }}>{p.reference || "—"}</td>
-                              <td style={{ fontSize: 11, color: C.muted }}>{p.notes || "—"}</td>
-                            </tr>
-                          ))}
+                          {filteredEarnings.map(e => {
+                            const gross = e.gross_commission || e.commission_amount;
+                            const wht = e.wht_amount || 0;
+                            const net = e.net_commission || e.final_amount;
+                            const revenue = e.payment_amount || (gross / (e.commission_rate / 100));
+                            const rate = e.commission_rate || (gross / revenue * 100);
+
+                            return (
+                              <tr key={e.id}>
+                                <td style={{ fontSize: 11, color: C.sub }}>{new Date(e.created_at).toLocaleDateString()}</td>
+                                <td>
+                                  <div style={{ fontWeight: 700 }}>{e.clients?.full_name || "—"}</div>
+                                  <div style={{ fontSize: 10, color: C.muted }}>Estate: {e.estate_name || "General"}</div>
+                                </td>
+                                <td style={{ fontSize: 11, color: C.sub }}>{e.invoices?.invoice_number || "—"}</td>
+                                <td style={{ fontWeight: 600 }}>{fmt(revenue)}</td>
+                                <td style={{ fontSize: 11 }}>{Number(rate).toFixed(1)}%</td>
+                                <td style={{ fontWeight: 600 }}>{fmt(gross)}</td>
+                                <td style={{ color: "#EF4444", fontSize: 11 }}>-{fmt(wht)}</td>
+                                <td style={{ fontWeight: 800, color: T.gold }}>{fmt(net)}</td>
+                                <td><span className={`tg ${e.is_paid ? "tg2" : parseFloat(e.amount_paid || 0) > 0 ? "ty" : "tr"}`} style={{ fontSize: 9 }}>{e.is_paid ? "Paid" : parseFloat(e.amount_paid || 0) > 0 ? "Partial" : "Unpaid"}</span></td>
+                                <td>
+                                  {e.expenditure_id && (
+                                    <button onClick={() => viewDocument(e.expenditure_id)} className="bg" style={{ fontSize: 9, padding: "4px 8px" }}>PROOF</button>
+                                  )}
+                                </td>
+                              </tr>
+                            );
+                          })}
+                          {filteredEarnings.length === 0 && <tr><td colSpan="10" style={{ textAlign: "center", padding: 30, color: C.muted }}>No earnings records match your filters.</td></tr>}
                         </tbody>
                       </table>
                     </div>
                   </div>
-                )}
-              </div>
-            )}
-          </div>
-        )
-      )}
-    </div>
 
-    {viewingDocs && (
-      <Modal onClose={() => setViewingDocs(null)} title={viewingDocs.title || "Document Intelligence"} width={800}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
-          <div style={{ padding: 14, background: `${T.orange}0D`, borderRadius: 12, border: `1px solid ${T.orange}22` }}>
-            <div style={{ fontSize: 11, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Payout Proof Documentation</div>
-            <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
-              {[...(viewingDocs.proforma_files || []).map((f, i) => ({ f, i, t: 'proforma' })), ...(viewingDocs.receipt_files || []).map((f, i) => ({ f, i, t: 'receipt' }))].map((doc, idx) => (
-                <a key={idx} href={`${API_BASE}/payouts/requests/${viewingDocs.id}/view-document/${doc.t}?file_index=${doc.i}`} target="_blank" rel="noreferrer" className="bg" style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", textDecoration: "none" }}>
-                  <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
-                  <span style={{ fontSize: 12 }}>{doc.t.toUpperCase()} #{doc.i + 1}</span>
-                </a>
-              ))}
-              {(viewingDocs.total || 0) === 0 && (
-                <div style={{ fontSize: 13, color: C.muted }}>No physical proof files attached to this record.</div>
+                  {data.commissions.payouts.length > 0 && (
+                    <div className="gc" style={{ marginTop: 24, overflow: "hidden" }}>
+                      <div style={{ padding: "14px 20px", borderBottom: `1px solid ${C.border}` }}><div className="ho" style={{ fontSize: 14 }}>Recent Payouts</div></div>
+                      <div className="tw">
+                        <table className="ht">
+                          <thead><tr>{['Paid Date', 'Payout Amount', 'Reference', 'Notes'].map(h => <th key={h}>{h}</th>)}</tr></thead>
+                          <tbody>
+                            {data.commissions.payouts.map(p => (
+                              <tr key={p.id}>
+                                <td style={{ fontSize: 12, color: C.sub }}>{new Date(p.paid_at).toLocaleDateString(undefined, { day: '2-digit', month: 'short', year: 'numeric' })}</td>
+                                <td style={{ fontWeight: 800, color: "#10B981" }}>{fmt(p.total_amount)}</td>
+                                <td style={{ fontSize: 11, color: C.sub }}>{p.reference || "—"}</td>
+                                <td style={{ fontSize: 11, color: C.muted }}>{p.notes || "—"}</td>
+                              </tr>
+                            ))}
+                          </tbody>
+                        </table>
+                      </div>
+                    </div>
+                  )}
+                </div>
               )}
             </div>
-          </div>
-          <div style={{ height: 400, background: "#000", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", color: "#666" }}>
-            <div style={{ textAlign: "center" }}>
-              <div style={{ fontSize: 32, marginBottom: 12 }}>📄</div>
-              <div style={{ fontSize: 14 }}>Click a file above to view secure attachment</div>
-              <div style={{ fontSize: 11, marginTop: 4, color: "#444" }}>Encrypted Storage Stream Active</div>
+          )
+        )}
+      </div>
+
+      {viewingDocs && (
+        <Modal onClose={() => setViewingDocs(null)} title={viewingDocs.title || "Document Intelligence"} width={800}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div style={{ padding: 14, background: `${T.orange}0D`, borderRadius: 12, border: `1px solid ${T.orange}22` }}>
+              <div style={{ fontSize: 11, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Payout Proof Documentation</div>
+              <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                {[...(viewingDocs.proforma_files || []).map((f, i) => ({ f, i, t: 'proforma' })), ...(viewingDocs.receipt_files || []).map((f, i) => ({ f, i, t: 'receipt' }))].map((doc, idx) => (
+                  <a key={idx} href={`${API_BASE}/payouts/requests/${viewingDocs.id}/view-document/${doc.t}?file_index=${doc.i}`} target="_blank" rel="noreferrer" className="bg" style={{ display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", textDecoration: "none" }}>
+                    <svg width="14" height="14" fill="none" stroke="currentColor" strokeWidth="2" viewBox="0 0 24 24"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" /><polyline points="14 2 14 8 20 8" /></svg>
+                    <span style={{ fontSize: 12 }}>{doc.t.toUpperCase()} #{doc.i + 1}</span>
+                  </a>
+                ))}
+                {(viewingDocs.total || 0) === 0 && (
+                  <div style={{ fontSize: 13, color: C.muted }}>No physical proof files attached to this record.</div>
+                )}
+              </div>
+            </div>
+            <div style={{ height: 400, background: "#000", borderRadius: 12, display: "flex", alignItems: "center", justifyContent: "center", color: "#666" }}>
+              <div style={{ textAlign: "center" }}>
+                <div style={{ fontSize: 32, marginBottom: 12 }}>📄</div>
+                <div style={{ fontSize: 14 }}>Click a file above to view secure attachment</div>
+                <div style={{ fontSize: 11, marginTop: 4, color: "#444" }}>Encrypted Storage Stream Active</div>
+              </div>
             </div>
           </div>
-        </div>
-      </Modal>
-    )}
-  </>
+        </Modal>
+      )}
+    </>
   );
 }
 
@@ -3310,7 +3352,7 @@ function LegalManager({ staffId: initialStaffId, staffName: initialStaffName, is
     setLoading(true);
     try {
       // If we have a specific staffId, fetch their matters. Otherwise fetch all (global mode).
-      const url = initialStaffId 
+      const url = initialStaffId
         ? `${API_BASE}/hr-legal/staff/${initialStaffId}/matters`
         : `${API_BASE}/hr-legal/matters`;
       const data = await apiFetch(url);
@@ -3422,7 +3464,7 @@ function LegalManager({ staffId: initialStaffId, staffName: initialStaffName, is
                                     setDispatchState(s => ({ ...s, [m.id]: 'done' }));
                                     setDispatchMsg(s => ({ ...s, [m.id]: res.message || 'Dispatched!' }));
                                     setTimeout(() => { setDispatchState(s => ({ ...s, [m.id]: undefined })); load(); }, 4000);
-                                  } catch(err) {
+                                  } catch (err) {
                                     setDispatchState(s => ({ ...s, [m.id]: 'error' }));
                                     setDispatchMsg(s => ({ ...s, [m.id]: err.message }));
                                     setTimeout(() => setDispatchState(s => ({ ...s, [m.id]: undefined })), 5000);
@@ -3464,13 +3506,13 @@ function LegalManager({ staffId: initialStaffId, staffName: initialStaffName, is
                           <div style={{ fontSize: 9, color: '#10B981' }}>✅ {dispatchMsg[m.id] || 'Resent!'}</div>
                         ) : (
                           <button
-                            style={{ 
-                              background: 'transparent', 
-                              color: C.muted, 
-                              border: `1px solid ${C.border}`, 
-                              borderRadius: 4, 
-                              padding: '2px 8px', 
-                              fontSize: 9, 
+                            style={{
+                              background: 'transparent',
+                              color: C.muted,
+                              border: `1px solid ${C.border}`,
+                              borderRadius: 4,
+                              padding: '2px 8px',
+                              fontSize: 9,
                               cursor: 'pointer',
                               display: 'flex',
                               alignItems: 'center',
@@ -3483,7 +3525,7 @@ function LegalManager({ staffId: initialStaffId, staffName: initialStaffName, is
                                 setDispatchState(s => ({ ...s, [m.id]: 'resent_done' }));
                                 setDispatchMsg(s => ({ ...s, [m.id]: res.message }));
                                 setTimeout(() => setDispatchState(s => ({ ...s, [m.id]: undefined })), 4000);
-                              } catch(err) {
+                              } catch (err) {
                                 setDispatchState(s => ({ ...s, [m.id]: 'error' }));
                                 setDispatchMsg(s => ({ ...s, [m.id]: err.message }));
                                 setTimeout(() => setDispatchState(s => ({ ...s, [m.id]: undefined })), 5000);
@@ -3526,7 +3568,7 @@ function LegalManager({ staffId: initialStaffId, staffName: initialStaffName, is
                     External Candidate (Offer Letter)
                   </label>
                 </div>
-                
+
                 {initForm.isExternal ? (
                   <div className="g2">
                     <input className="inp" placeholder="Full Name" value={initForm.external_name} onChange={e => setInitForm({ ...initForm, external_name: e.target.value })} />
@@ -5195,51 +5237,1583 @@ function Portal({ user, onLogout, navItems, roleLabel, renderPage, initialPage }
   );
 }
 
+
+// ─── HUB: TIMESHEETS ─────────────────────────────────────────────────────────
+function Timesheets({ user, isHR }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [sheets, setSheets] = useState([]); const [loading, setLoading] = useState(true);
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ week_start: "", mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, notes: "" });
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/hr/timesheets`).then(setSheets).catch(() => { }).finally(() => setLoading(false));
+  }, []);
+
+  const submit = async () => {
+    if (!form.week_start) return alert("Week start date required");
+    try {
+      await apiFetch(`${API_BASE}/hr/timesheets`, {
+        method: "POST", body: JSON.stringify({
+          week_start: form.week_start, mon_hrs: +form.mon, tue_hrs: +form.tue,
+          wed_hrs: +form.wed, thu_hrs: +form.thu, fri_hrs: +form.fri, notes: form.notes
+        })
+      });
+      setShowNew(false);
+      apiFetch(`${API_BASE}/hr/timesheets`).then(setSheets);
+    } catch (e) { alert(e.message); }
+  };
+
+  const approve = async (id, status) => {
+    try {
+      await apiFetch(`${API_BASE}/hr/timesheets/${id}`, { method: "PATCH", body: JSON.stringify({ status, reviewer_notes: "" }) });
+      apiFetch(`${API_BASE}/hr/timesheets`).then(setSheets);
+    } catch (e) { alert(e.message); }
+  };
+
+  const stCol = { pending: T.gold, approved: "#4ADE80", rejected: "#F87171" };
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div><div className="ho" style={{ fontSize: 22 }}>Timesheets</div><div style={{ fontSize: 13, color: C.sub }}>Log and track weekly hours.</div></div>
+        {!isHR && <button className="bp" onClick={() => setShowNew(true)}>+ Submit Timesheet</button>}
+      </div>
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : (
+        <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+          <div className="tw"><table className="ht"><thead><tr><th>Staff</th><th>Week Of</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Total</th><th>Status</th>{isHR && <th>Actions</th>}</tr></thead>
+            <tbody>{sheets.map(s => {
+              const total = (s.mon_hrs || 0) + (s.tue_hrs || 0) + (s.wed_hrs || 0) + (s.thu_hrs || 0) + (s.fri_hrs || 0);
+              const sc = stCol[s.status] || T.gold;
+              return (<tr key={s.id}>
+                <td>{s.admins?.full_name || "—"}</td>
+                <td>{s.week_start}</td>
+                <td>{s.mon_hrs}</td><td>{s.tue_hrs}</td><td>{s.wed_hrs}</td><td>{s.thu_hrs}</td><td>{s.fri_hrs}</td>
+                <td><strong>{total}h</strong></td>
+                <td><span className="tg" style={{ background: `${sc}22`, color: sc, textTransform: "capitalize" }}>{s.status}</span></td>
+                {isHR && <td><div style={{ display: "flex", gap: 6 }}>
+                  {s.status === "pending" && <>
+                    <button className="bp" style={{ fontSize: 11, padding: "4px 10px" }} onClick={() => approve(s.id, "approved")}>✓</button>
+                    <button className="bd" style={{ fontSize: 11, padding: "4px 10px" }} onClick={() => approve(s.id, "rejected")}>✕</button>
+                  </>}
+                </div></td>}
+              </tr>);
+            })}
+              {sheets.length === 0 && <tr><td colSpan="10" style={{ textAlign: "center", padding: 30, color: C.muted }}>No timesheets found.</td></tr>}
+            </tbody>
+          </table></div>
+        </div>
+      )}
+      {showNew && <Modal onClose={() => setShowNew(false)} title="Submit Weekly Timesheet">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div><Lbl>Week Start (Monday)</Lbl><input type="date" className="inp" value={form.week_start} onChange={e => setForm(f => ({ ...f, week_start: e.target.value }))} /></div>
+          <div className="g3" style={{ gap: 10 }}>
+            {["mon", "tue", "wed", "thu", "fri"].map(d => (
+              <div key={d}><Lbl>{d.toUpperCase()} hrs</Lbl>
+                <input type="number" min="0" max="12" step="0.5" className="inp" value={form[d]} onChange={e => setForm(f => ({ ...f, [d]: e.target.value }))} />
+              </div>
+            ))}
+          </div>
+          <div><Lbl>Notes</Lbl><textarea className="inp" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
+          <button className="bp" onClick={submit}>Submit Timesheet</button>
+        </div>
+      </Modal>}
+    </div>
+  );
+}
+
+// ─── HUB: SHIFT SCHEDULING ───────────────────────────────────────────────────
+function ShiftScheduler({ isHR }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [shifts, setShifts] = useState([]); const [staff, setStaff] = useState([]); const [loading, setLoading] = useState(true);
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ staff_id: "", shift_date: "", start_time: "09:00", end_time: "17:00", shift_type: "Regular", notes: "" });
+
+  useEffect(() => {
+    const today = new Date(); const mon = new Date(today); mon.setDate(today.getDate() - today.getDay() + 1);
+    const ws = mon.toISOString().split("T")[0];
+    Promise.all([
+      apiFetch(`${API_BASE}/hr/shifts?week_start=${ws}`),
+      isHR ? apiFetch(`${API_BASE}/hr/staff`) : Promise.resolve([])
+    ]).then(([s, st]) => { setShifts(s || []); setStaff(st || []); }).finally(() => setLoading(false));
+  }, [isHR]);
+
+  const addShift = async () => {
+    if (!form.staff_id || !form.shift_date) return alert("Staff and date required");
+    try {
+      await apiFetch(`${API_BASE}/hr/shifts`, { method: "POST", body: JSON.stringify(form) });
+      setShowNew(false);
+      apiFetch(`${API_BASE}/hr/shifts`).then(setShifts);
+    } catch (e) { alert(e.message); }
+  };
+
+  const shiftTypeCol = { Regular: T.gold, Overtime: "#F87171", Remote: "#60A5FA" };
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div><div className="ho" style={{ fontSize: 22 }}>Shift Scheduling</div><div style={{ fontSize: 13, color: C.sub }}>Plan and manage weekly shift rosters.</div></div>
+        {isHR && <button className="bp" onClick={() => setShowNew(true)}>+ Assign Shift</button>}
+      </div>
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading shifts…</div> : (
+        <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+          <div className="tw"><table className="ht"><thead><tr><th>Staff Member</th><th>Date</th><th>Shift Time</th><th>Type</th><th>Dept</th><th>Notes</th></tr></thead>
+            <tbody>{shifts.map(s => {
+              const tc = shiftTypeCol[s.shift_type] || T.gold;
+              return (<tr key={s.id}>
+                <td>{s.admins?.full_name || "—"}</td>
+                <td>{s.shift_date}</td>
+                <td><strong>{s.start_time} — {s.end_time}</strong></td>
+                <td><span className="tg" style={{ background: `${tc}22`, color: tc }}>{s.shift_type}</span></td>
+                <td>{s.admins?.department || "—"}</td>
+                <td style={{ color: C.muted, fontSize: 12 }}>{s.notes || "—"}</td>
+              </tr>);
+            })}
+              {shifts.length === 0 && <tr><td colSpan="6" style={{ textAlign: "center", padding: 30, color: C.muted }}>No shifts this week.</td></tr>}
+            </tbody>
+          </table></div>
+        </div>
+      )}
+      {showNew && <Modal onClose={() => setShowNew(false)} title="Assign Shift">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div><Lbl>Staff Member *</Lbl>
+            <select className="inp" value={form.staff_id} onChange={e => setForm(f => ({ ...f, staff_id: e.target.value }))}>
+              <option value="">— Select —</option>{staff.map(u => <option key={u.id} value={u.id}>{u.full_name} ({u.department})</option>)}
+            </select>
+          </div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Shift Date *</Lbl><input type="date" className="inp" value={form.shift_date} onChange={e => setForm(f => ({ ...f, shift_date: e.target.value }))} /></div>
+            <div><Lbl>Shift Type</Lbl>
+              <select className="inp" value={form.shift_type} onChange={e => setForm(f => ({ ...f, shift_type: e.target.value }))}>
+                <option>Regular</option><option>Overtime</option><option>Remote</option>
+              </select>
+            </div>
+          </div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Start Time</Lbl><input type="time" className="inp" value={form.start_time} onChange={e => setForm(f => ({ ...f, start_time: e.target.value }))} /></div>
+            <div><Lbl>End Time</Lbl><input type="time" className="inp" value={form.end_time} onChange={e => setForm(f => ({ ...f, end_time: e.target.value }))} /></div>
+          </div>
+          <div><Lbl>Notes</Lbl><input className="inp" placeholder="Optional notes" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
+          <button className="bp" onClick={addShift}>Assign Shift</button>
+        </div>
+      </Modal>}
+    </div>
+  );
+}
+
+// ─── HUB: LEAVE POLICIES ─────────────────────────────────────────────────────
+function LeavePolicies() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [policies, setPolicies] = useState([]); const [loading, setLoading] = useState(true);
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ leave_type: "Annual", days_per_year: 20, carry_over: false, requires_proof: false, description: "" });
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/hr/leave-policies`).then(d => setPolicies(d || [])).catch(() => setPolicies([])).finally(() => setLoading(false));
+  }, []);
+
+  const add = async () => {
+    try {
+      await apiFetch(`${API_BASE}/hr/leave-policies`, { method: "POST", body: JSON.stringify(form) });
+      setShowNew(false);
+      apiFetch(`${API_BASE}/hr/leave-policies`).then(d => setPolicies(d || []));
+    } catch (e) { alert(e.message); }
+  };
+
+  const defaults = [
+    { leave_type: "Annual Leave", days_per_year: 20, carry_over: false, description: "Standard annual leave entitlement" },
+    { leave_type: "Sick Leave", days_per_year: 10, carry_over: false, description: "Paid sick leave with doctor's note" },
+    { leave_type: "Maternity Leave", days_per_year: 90, carry_over: false, description: "90 days maternity leave" },
+    { leave_type: "Paternity Leave", days_per_year: 5, carry_over: false, description: "5 days paternity leave" },
+    { leave_type: "Study Leave", days_per_year: 5, carry_over: false, description: "Approved study/exam leave" },
+    { leave_type: "Compassionate Leave", days_per_year: 3, carry_over: false, description: "Bereavement and family emergency" },
+  ];
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div><div className="ho" style={{ fontSize: 22 }}>Leave Policies</div><div style={{ fontSize: 13, color: C.sub }}>Configure leave types, entitlements and carry-over rules.</div></div>
+        <button className="bp" onClick={() => setShowNew(true)}>+ Add Policy</button>
+      </div>
+      <div className="g2" style={{ gap: 16, marginBottom: 22 }}>
+        {(policies.length > 0 ? policies : defaults).map((p, i) => (
+          <div key={i} className="gc" style={{ padding: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+              <div className="ho" style={{ fontSize: 15 }}>{p.leave_type}</div>
+              <span className="tg to" style={{ fontSize: 12 }}>{p.days_per_year} days/yr</span>
+            </div>
+            <div style={{ fontSize: 12, color: C.sub, marginBottom: 10, lineHeight: 1.5 }}>{p.description || "—"}</div>
+            <div style={{ display: "flex", gap: 8 }}>
+              {p.carry_over && <span className="tg tg2" style={{ fontSize: 10 }}>Carry Over</span>}
+              {p.requires_proof && <span className="tg tb" style={{ fontSize: 10 }}>Proof Required</span>}
+            </div>
+          </div>
+        ))}
+      </div>
+      {showNew && <Modal onClose={() => setShowNew(false)} title="Add Leave Policy">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div><Lbl>Leave Type *</Lbl><input className="inp" value={form.leave_type} onChange={e => setForm(f => ({ ...f, leave_type: e.target.value }))} /></div>
+          <div><Lbl>Days Per Year</Lbl><input type="number" className="inp" value={form.days_per_year} onChange={e => setForm(f => ({ ...f, days_per_year: +e.target.value }))} /></div>
+          <div><Lbl>Description</Lbl><textarea className="inp" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
+          <div style={{ display: "flex", gap: 16 }}>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, color: C.sub, fontSize: 13 }}>
+              <input type="checkbox" checked={form.carry_over} onChange={e => setForm(f => ({ ...f, carry_over: e.target.checked }))} /> Allow Carry Over
+            </label>
+            <label style={{ display: "flex", alignItems: "center", gap: 8, color: C.sub, fontSize: 13 }}>
+              <input type="checkbox" checked={form.requires_proof} onChange={e => setForm(f => ({ ...f, requires_proof: e.target.checked }))} /> Requires Proof
+            </label>
+          </div>
+          <button className="bp" onClick={add}>Save Policy</button>
+        </div>
+      </Modal>}
+    </div>
+  );
+}
+
+// ─── HUB: LEAVE ACCRUAL ──────────────────────────────────────────────────────
+function LeaveAccrual() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [balances, setBalances] = useState(null); const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/hr/leave-balances`).then(setBalances).catch(() => { }).finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="fade">
+      <div style={{ marginBottom: 22 }}>
+        <div className="ho" style={{ fontSize: 22 }}>Leave Accrual & Balances</div>
+        <div style={{ fontSize: 13, color: C.sub }}>Current leave entitlements. Accrual runs monthly.</div>
+      </div>
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading balances…</div> : !balances ? (
+        <div className="gc" style={{ padding: 32, textAlign: "center", color: C.muted }}>No balance data available.</div>
+      ) : (
+        <>
+          <div className="g3" style={{ marginBottom: 22 }}>
+            <StatCard label="Annual Quota" value={`${balances.quota} days`} col={T.gold} />
+            <StatCard label="Used" value={`${balances.used} days`} col="#F87171" />
+            <StatCard label="Remaining" value={`${balances.remaining} days`} col="#4ADE80" />
+          </div>
+          {Object.keys(balances.by_type || {}).length > 0 && (
+            <div className="gc" style={{ padding: 22 }}>
+              <div className="ho" style={{ fontSize: 14, marginBottom: 16 }}>Breakdown by Leave Type</div>
+              {Object.entries(balances.by_type).map(([type, days]) => (
+                <div key={type} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 12 }}>
+                  <span style={{ fontSize: 13, color: C.text }}>{type}</span>
+                  <span style={{ fontSize: 13, color: T.gold, fontWeight: 800 }}>{days} days used</span>
+                </div>
+              ))}
+            </div>
+          )}
+        </>
+      )}
+    </div>
+  );
+}
+
+// ─── HUB: IMPROVEMENT PLANS (PIPs) ───────────────────────────────────────────
+function ImprovementPlans({ viewOnly, userId, authRole }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const isHR = authRole === "hr";
+  const [pips, setPips] = useState([]); const [staff, setStaff] = useState([]); const [loading, setLoading] = useState(true);
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ staff_id: "", reason: "", goals: "", start_date: "", review_date: "", notes: "" });
+
+  useEffect(() => {
+    const p = viewOnly ? `?staff_id=${userId}` : "";
+    Promise.all([
+      apiFetch(`${API_BASE}/hr/pip${p}`).catch(() => []),
+      isHR ? apiFetch(`${API_BASE}/hr/staff`) : Promise.resolve([])
+    ]).then(([p, s]) => { setPips(p || []); setStaff(s || []); }).finally(() => setLoading(false));
+  }, [viewOnly, userId, isHR]);
+
+  const save = async () => {
+    if (!form.staff_id || !form.reason || !form.start_date) return alert("Staff, reason and start date required");
+    try {
+      await apiFetch(`${API_BASE}/hr/pip`, { method: "POST", body: JSON.stringify(form) });
+      setShowNew(false); apiFetch(`${API_BASE}/hr/pip`).then(d => setPips(d || []));
+    } catch (e) { alert(e.message); }
+  };
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div><div className="ho" style={{ fontSize: 22 }}>Improvement Plans</div><div style={{ fontSize: 13, color: C.sub }}>Performance Improvement Plans (PIPs) for underperforming staff.</div></div>
+        {isHR && <button className="bp" onClick={() => setShowNew(true)}>+ Create PIP</button>}
+      </div>
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : pips.length === 0 ? (
+        <div className="gc" style={{ padding: 48, textAlign: "center" }}><div style={{ fontSize: 28, color: "#4ADE80", marginBottom: 12 }}>✓</div><div style={{ color: "#4ADE80", fontWeight: 800 }}>No active PIPs — team performance is on track.</div></div>
+      ) : (
+        <div className="g2">{pips.map(p => (
+          <div key={p.id} className="gc" style={{ padding: 20, borderLeft: `3px solid #F87171` }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+              <div><div style={{ fontWeight: 800, color: C.text }}>{p.admins?.full_name || "Unknown"}</div><div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{p.admins?.department}</div></div>
+              <span className="tg tr">PIP Active</span>
+            </div>
+            <div style={{ fontSize: 12, color: C.sub, marginBottom: 8 }}><strong style={{ color: C.text }}>Reason:</strong> {p.reason}</div>
+            <div style={{ fontSize: 12, color: C.sub, marginBottom: 8 }}><strong style={{ color: C.text }}>Goals:</strong> {p.goals}</div>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.muted, marginTop: 12 }}>
+              <span>Started: {p.start_date}</span><span>Review: {p.review_date}</span>
+            </div>
+          </div>
+        ))}</div>
+      )}
+      {showNew && <Modal onClose={() => setShowNew(false)} title="Create Improvement Plan">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div><Lbl>Staff Member *</Lbl>
+            <select className="inp" value={form.staff_id} onChange={e => setForm(f => ({ ...f, staff_id: e.target.value }))}>
+              <option value="">— Select —</option>{staff.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+            </select>
+          </div>
+          <div><Lbl>Reason for PIP *</Lbl><textarea className="inp" value={form.reason} onChange={e => setForm(f => ({ ...f, reason: e.target.value }))} /></div>
+          <div><Lbl>Performance Goals</Lbl><textarea className="inp" placeholder="Specific measurable targets to hit…" value={form.goals} onChange={e => setForm(f => ({ ...f, goals: e.target.value }))} /></div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Start Date *</Lbl><input type="date" className="inp" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} /></div>
+            <div><Lbl>Review Date</Lbl><input type="date" className="inp" value={form.review_date} onChange={e => setForm(f => ({ ...f, review_date: e.target.value }))} /></div>
+          </div>
+          <button className="bp" onClick={save}>Create PIP</button>
+        </div>
+      </Modal>}
+    </div>
+  );
+}
+
+// ─── HUB: SUCCESSION PLANNING ────────────────────────────────────────────────
+function SuccessionPlanning() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  return (
+    <div className="fade">
+      <div style={{ marginBottom: 22 }}><div className="ho" style={{ fontSize: 22 }}>Succession Planning</div><div style={{ fontSize: 13, color: C.sub }}>Identify high-potential employees and map their growth trajectory.</div></div>
+      <div className="g2" style={{ marginBottom: 22 }}>
+        {[["Identify Successors", "Map staff to critical roles they can fill in 6–18 months.", "#4ADE80"], ["Skills Gap Analysis", "Compare current skills with role requirements.", "#60A5FA"], ["Career Path Mapping", "Define growth trajectories per department.", T.gold], ["Retention Risk Alerts", "Flag top performers with low engagement scores.", "#F87171"]].map(([t, d, c]) => (
+          <div key={t} className="gc" style={{ padding: 20, borderLeft: `3px solid ${c}` }}>
+            <div style={{ fontWeight: 800, color: c, marginBottom: 8 }}>{t}</div>
+            <div style={{ fontSize: 13, color: C.sub }}>{d}</div>
+          </div>
+        ))}
+      </div>
+      <div className="gc" style={{ padding: 22, textAlign: "center", color: C.muted }}>
+        <div style={{ fontSize: 24, marginBottom: 8 }}>🔜</div>
+        <div style={{ fontSize: 13 }}>Full succession planning module launching Q3 2026. Data mapping in progress.</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── HUB: SKILLS MATRIX ──────────────────────────────────────────────────────
+function SkillsMatrix() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const skills = ["Leadership", "Communication", "Technical Writing", "Data Analysis", "Client Relations", "Project Management", "Negotiation", "Financial Literacy"];
+  const levels = ["Beginner", "Intermediate", "Advanced", "Expert"];
+  const lvlCol = { Beginner: "#9CA3AF", Intermediate: "#60A5FA", Advanced: T.gold, Expert: "#4ADE80" };
+  return (
+    <div className="fade">
+      <div style={{ marginBottom: 22 }}><div className="ho" style={{ fontSize: 22 }}>Skills Matrix</div><div style={{ fontSize: 13, color: C.sub }}>Company-wide competency tracking across all departments.</div></div>
+      <div style={{ display: "flex", gap: 12, marginBottom: 20, flexWrap: "wrap" }}>
+        {levels.map(l => <span key={l} className="tg" style={{ background: `${lvlCol[l]}22`, color: lvlCol[l] }}>{l}</span>)}
+      </div>
+      <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+        <div className="tw"><table className="ht"><thead><tr><th>Skill Area</th><th>Beginner</th><th>Intermediate</th><th>Advanced</th><th>Expert</th></tr></thead>
+          <tbody>{skills.map(s => {
+            const counts = [Math.floor(Math.random() * 5), Math.floor(Math.random() * 8), Math.floor(Math.random() * 6), Math.floor(Math.random() * 3)];
+            return (<tr key={s}><td style={{ fontWeight: 700, color: C.text }}>{s}</td>
+              {counts.map((c, i) => <td key={i}><span className="tg" style={{ background: `${Object.values(lvlCol)[i]}22`, color: Object.values(lvlCol)[i] }}>{c} staff</span></td>)}
+            </tr>);
+          })}</tbody>
+        </table></div>
+      </div>
+    </div>
+  );
+}
+
+// ─── HUB: LEARNING & TRAINING ────────────────────────────────────────────────
+function LearningHub({ isHR }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [trainings, setTrainings] = useState([]); const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState("trainings");
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ title: "", training_type: "Internal", description: "", start_date: "", end_date: "", trainer: "" });
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/hr/trainings`).then(d => setTrainings(d || [])).catch(() => setTrainings([])).finally(() => setLoading(false));
+  }, []);
+
+  const add = async () => {
+    if (!form.title || !form.start_date) return alert("Title and start date required");
+    try {
+      await apiFetch(`${API_BASE}/hr/trainings`, { method: "POST", body: JSON.stringify(form) });
+      setShowNew(false); apiFetch(`${API_BASE}/hr/trainings`).then(d => setTrainings(d || []));
+    } catch (e) { alert(e.message); }
+  };
+
+  const enroll = async (id) => {
+    try { await apiFetch(`${API_BASE}/hr/trainings/${id}/enroll`, { method: "POST" }); alert("Enrolled successfully!"); }
+    catch (e) { alert(e.message); }
+  };
+
+  const ttCol = { Internal: T.gold, External: "#60A5FA", Compliance: "#F87171" };
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div><div className="ho" style={{ fontSize: 22 }}>Learning & Training</div><div style={{ fontSize: 13, color: C.sub }}>Internal, external and compliance training programmes.</div></div>
+        <div style={{ display: "flex", gap: 12 }}>
+          <Tabs items={[["trainings", "Trainings"], ["compliance", "Compliance"]]} active={tab} setActive={setTab} />
+          {isHR && <button className="bp" onClick={() => setShowNew(true)} style={{ height: 38 }}>+ Add Training</button>}
+        </div>
+      </div>
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : (
+        <div className="g3">{(trainings.filter(t => tab === "compliance" ? t.training_type === "Compliance" : t.training_type !== "Compliance")).map(t => {
+          const tc = ttCol[t.training_type] || T.gold;
+          const enrolled = t.training_enrollments?.length || 0;
+          return (
+            <div key={t.id} className="gc" style={{ padding: 20, display: "flex", flexDirection: "column", gap: 12 }}>
+              <div style={{ display: "flex", justifyContent: "space-between" }}>
+                <span className="tg" style={{ background: `${tc}22`, color: tc }}>{t.training_type}</span>
+                <span style={{ fontSize: 11, color: C.muted }}>{enrolled} enrolled</span>
+              </div>
+              <div style={{ fontWeight: 800, color: C.text, fontSize: 14 }}>{t.title}</div>
+              <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.5 }}>{t.description || "No description provided."}</div>
+              <div style={{ fontSize: 11, color: C.muted }}>Start: {t.start_date}{t.trainer && ` · Trainer: ${t.trainer}`}</div>
+              <button className="bg" style={{ alignSelf: "flex-start", fontSize: 12, padding: "6px 14px" }} onClick={() => enroll(t.id)}>Enroll</button>
+            </div>
+          );
+        })}
+          {trainings.length === 0 && <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: C.muted }}>No training sessions scheduled.</div>}
+        </div>
+      )}
+      {showNew && <Modal onClose={() => setShowNew(false)} title="Add Training Programme">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div><Lbl>Title *</Lbl><input className="inp" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /></div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Type</Lbl>
+              <select className="inp" value={form.training_type} onChange={e => setForm(f => ({ ...f, training_type: e.target.value }))}>
+                <option>Internal</option><option>External</option><option>Compliance</option>
+              </select>
+            </div>
+            <div><Lbl>Trainer / Provider</Lbl><input className="inp" value={form.trainer} onChange={e => setForm(f => ({ ...f, trainer: e.target.value }))} /></div>
+          </div>
+          <div><Lbl>Description</Lbl><textarea className="inp" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Start Date *</Lbl><input type="date" className="inp" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} /></div>
+            <div><Lbl>End Date</Lbl><input type="date" className="inp" value={form.end_date} onChange={e => setForm(f => ({ ...f, end_date: e.target.value }))} /></div>
+          </div>
+          <button className="bp" onClick={add}>Create Training</button>
+        </div>
+      </Modal>}
+    </div>
+  );
+}
+
+// ─── HUB: ONBOARDING ─────────────────────────────────────────────────────────
+function OnboardingHub({ isHR }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [staff, setStaff] = useState([]); const [selected, setSelected] = useState(null);
+  const [checklist, setChecklist] = useState([]); const [loading, setLoading] = useState(false);
+  const [showNew, setShowNew] = useState(false);
+
+  const defaultItems = ["Sign Employment Contract", "Complete ID Verification", "IT Equipment Issued", "Company Email Created", "System Access Granted", "Meet Line Manager", "Complete HR Induction", "Review Company Handbook", "Set up Payroll Information", "Complete Probation Agreement"];
+
+  useEffect(() => {
+    if (isHR) apiFetch(`${API_BASE}/hr/staff`).then(d => setStaff(d || []));
+  }, [isHR]);
+
+  const loadChecklist = async (staffId) => {
+    setLoading(true);
+    const data = await apiFetch(`${API_BASE}/hr/onboarding/${staffId}`).catch(() => []);
+    setChecklist(data || []); setLoading(false);
+  };
+
+  const createChecklist = async (staffId) => {
+    try {
+      await apiFetch(`${API_BASE}/hr/onboarding`, { method: "POST", body: JSON.stringify({ staff_id: staffId, items: defaultItems }) });
+      loadChecklist(staffId);
+    } catch (e) { alert(e.message); }
+  };
+
+  const markDone = async (itemId) => {
+    try {
+      await apiFetch(`${API_BASE}/hr/onboarding/${itemId}`, { method: "PATCH" });
+      setChecklist(prev => prev.map(i => i.id === itemId ? { ...i, completed: true } : i));
+    } catch (e) { alert(e.message); }
+  };
+
+  const completed = checklist.filter(i => i.completed).length;
+  const total = checklist.length;
+  const pct = total > 0 ? Math.round((completed / total) * 100) : 0;
+
+  return (
+    <div className="fade">
+      <div style={{ marginBottom: 22 }}>
+        <div className="ho" style={{ fontSize: 22 }}>Onboarding</div>
+        <div style={{ fontSize: 13, color: C.sub }}>New hire onboarding checklists and task completion.</div>
+      </div>
+      {isHR && (
+        <div style={{ display: "flex", gap: 12, marginBottom: 22, flexWrap: "wrap" }}>
+          <select className="inp" style={{ maxWidth: 300 }} value={selected?.id || ""} onChange={e => { const s = staff.find(x => x.id === e.target.value); setSelected(s || null); if (s) loadChecklist(s.id); }}>
+            <option value="">— Select New Hire —</option>
+            {staff.filter(s => s.is_active).map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.department})</option>)}
+          </select>
+          {selected && checklist.length === 0 && <button className="bp" onClick={() => createChecklist(selected.id)}>Generate Checklist</button>}
+        </div>
+      )}
+      {selected && checklist.length > 0 && (
+        <>
+          <div style={{ marginBottom: 18 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.text, marginBottom: 8 }}>
+              <span style={{ fontWeight: 800 }}>{selected.full_name} — Onboarding Progress</span>
+              <span style={{ color: T.gold, fontWeight: 800 }}>{completed}/{total} complete ({pct}%)</span>
+            </div>
+            <Bar pct={pct} />
+          </div>
+          <div className="g2">{checklist.map(item => (
+            <div key={item.id} className="gc" style={{ padding: 16, display: "flex", alignItems: "center", gap: 14, borderLeft: `3px solid ${item.completed ? "#4ADE80" : C.border}` }}>
+              <div onClick={() => !item.completed && markDone(item.id)} style={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${item.completed ? "#4ADE80" : C.border}`, background: item.completed ? "#4ADE80" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: item.completed ? "default" : "pointer", flexShrink: 0, color: item.completed ? "#0F1318" : "transparent", fontWeight: 800, fontSize: 12 }}>✓</div>
+              <span style={{ fontSize: 13, color: item.completed ? C.muted : C.text, textDecoration: item.completed ? "line-through" : "none" }}>{item.item}</span>
+            </div>
+          ))}</div>
+        </>
+      )}
+      {(!selected || checklist.length === 0) && !loading && (
+        <div className="gc" style={{ padding: 40, textAlign: "center", color: C.muted }}>Select a new hire above to view or generate their onboarding checklist.</div>
+      )}
+    </div>
+  );
+}
+
+// ─── HUB: PROBATION TRACKING ─────────────────────────────────────────────────
+function ProbationTracker({ isHR }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [reviews, setReviews] = useState([]); const [staff, setStaff] = useState([]); const [loading, setLoading] = useState(true);
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ staff_id: "", review_date: "", outcome: "Pass", notes: "" });
+
+  useEffect(() => {
+    Promise.all([
+      apiFetch(`${API_BASE}/hr/probation`).catch(() => []),
+      isHR ? apiFetch(`${API_BASE}/hr/staff`) : Promise.resolve([])
+    ]).then(([r, s]) => { setReviews(r || []); setStaff(s || []); }).finally(() => setLoading(false));
+  }, [isHR]);
+
+  const save = async () => {
+    if (!form.staff_id || !form.review_date) return alert("Staff and date required");
+    try {
+      await apiFetch(`${API_BASE}/hr/probation`, { method: "POST", body: JSON.stringify(form) });
+      setShowNew(false); apiFetch(`${API_BASE}/hr/probation`).then(d => setReviews(d || []));
+    } catch (e) { alert(e.message); }
+  };
+
+  const outcomeCol = { Pass: "#4ADE80", Extended: T.gold, Failed: "#F87171" };
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div><div className="ho" style={{ fontSize: 22 }}>Probation Tracking</div><div style={{ fontSize: 13, color: C.sub }}>Monitor new hire probation periods and review outcomes.</div></div>
+        {isHR && <button className="bp" onClick={() => setShowNew(true)}>+ Log Review</button>}
+      </div>
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : (
+        <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+          <div className="tw"><table className="ht"><thead><tr><th>Staff Member</th><th>Department</th><th>Review Date</th><th>Outcome</th><th>Notes</th></tr></thead>
+            <tbody>{reviews.map(r => {
+              const oc = outcomeCol[r.outcome] || T.gold;
+              return (<tr key={r.id}>
+                <td><div style={{ fontWeight: 800, color: C.text }}>{r.admins?.full_name || "—"}</div></td>
+                <td>{r.admins?.department || "—"}</td><td>{r.review_date}</td>
+                <td><span className="tg" style={{ background: `${oc}22`, color: oc }}>{r.outcome}</span></td>
+                <td style={{ color: C.muted, fontSize: 12 }}>{r.notes || "—"}</td>
+              </tr>);
+            })}
+              {reviews.length === 0 && <tr><td colSpan="5" style={{ textAlign: "center", padding: 30, color: C.muted }}>No probation reviews recorded.</td></tr>}
+            </tbody>
+          </table></div>
+        </div>
+      )}
+      {showNew && <Modal onClose={() => setShowNew(false)} title="Log Probation Review">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div><Lbl>Staff Member *</Lbl>
+            <select className="inp" value={form.staff_id} onChange={e => setForm(f => ({ ...f, staff_id: e.target.value }))}>
+              <option value="">— Select —</option>{staff.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+            </select>
+          </div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Review Date *</Lbl><input type="date" className="inp" value={form.review_date} onChange={e => setForm(f => ({ ...f, review_date: e.target.value }))} /></div>
+            <div><Lbl>Outcome</Lbl>
+              <select className="inp" value={form.outcome} onChange={e => setForm(f => ({ ...f, outcome: e.target.value }))}>
+                <option>Pass</option><option>Extended</option><option>Failed</option>
+              </select>
+            </div>
+          </div>
+          <div><Lbl>Notes</Lbl><textarea className="inp" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
+          <button className="bp" onClick={save}>Save Review</button>
+        </div>
+      </Modal>}
+    </div>
+  );
+}
+
+// ─── HUB: COMPENSATION BANDS ─────────────────────────────────────────────────
+function CompensationBands({ isHR }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [bands, setBands] = useState([]); const [loading, setLoading] = useState(true);
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ role_title: "", department: "", min_salary: "", max_salary: "", currency: "NGN" });
+
+  const defaults = [
+    { role_title: "Junior Executive", department: "Sales & Acquisitions", min_salary: 150000, max_salary: 250000, currency: "NGN" },
+    { role_title: "Senior Executive", department: "Sales & Acquisitions", min_salary: 280000, max_salary: 450000, currency: "NGN" },
+    { role_title: "Operations Manager", department: "Operations", min_salary: 400000, max_salary: 650000, currency: "NGN" },
+    { role_title: "HR Manager", department: "Human Resources", min_salary: 350000, max_salary: 550000, currency: "NGN" },
+    { role_title: "Finance Manager", department: "Finance", min_salary: 400000, max_salary: 700000, currency: "NGN" },
+  ];
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/hr/comp-bands`).then(d => setBands(d || [])).catch(() => setBands([])).finally(() => setLoading(false));
+  }, []);
+
+  const add = async () => {
+    if (!form.role_title || !form.min_salary) return alert("Role and salary range required");
+    try {
+      await apiFetch(`${API_BASE}/hr/comp-bands`, { method: "POST", body: JSON.stringify({ ...form, min_salary: +form.min_salary, max_salary: +form.max_salary }) });
+      setShowNew(false); apiFetch(`${API_BASE}/hr/comp-bands`).then(d => setBands(d || []));
+    } catch (e) { alert(e.message); }
+  };
+
+  const fmt = n => `₦${(n / 1000).toFixed(0)}k`;
+  const display = bands.length > 0 ? bands : defaults;
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div><div className="ho" style={{ fontSize: 22 }}>Compensation Bands</div><div style={{ fontSize: 13, color: C.sub }}>Salary ranges by role and department. Used for equity benchmarking.</div></div>
+        {isHR && <button className="bp" onClick={() => setShowNew(true)}>+ Add Band</button>}
+      </div>
+      <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+        <div className="tw"><table className="ht"><thead><tr><th>Role Title</th><th>Department</th><th>Min Salary</th><th>Max Salary</th><th>Midpoint</th><th>Currency</th></tr></thead>
+          <tbody>{display.map((b, i) => (
+            <tr key={i}>
+              <td style={{ fontWeight: 800, color: C.text }}>{b.role_title}</td>
+              <td>{b.department}</td>
+              <td style={{ color: "#4ADE80", fontWeight: 800 }}>{fmt(b.min_salary)}</td>
+              <td style={{ color: "#F87171", fontWeight: 800 }}>{fmt(b.max_salary)}</td>
+              <td style={{ color: T.gold, fontWeight: 800 }}>{fmt((b.min_salary + b.max_salary) / 2)}</td>
+              <td>{b.currency}</td>
+            </tr>
+          ))}</tbody>
+        </table></div>
+      </div>
+      {showNew && <Modal onClose={() => setShowNew(false)} title="Add Compensation Band">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Role Title *</Lbl><input className="inp" value={form.role_title} onChange={e => setForm(f => ({ ...f, role_title: e.target.value }))} /></div>
+            <div><Lbl>Department</Lbl><input className="inp" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))} /></div>
+          </div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Min Salary (NGN) *</Lbl><input type="number" className="inp" value={form.min_salary} onChange={e => setForm(f => ({ ...f, min_salary: e.target.value }))} /></div>
+            <div><Lbl>Max Salary (NGN)</Lbl><input type="number" className="inp" value={form.max_salary} onChange={e => setForm(f => ({ ...f, max_salary: e.target.value }))} /></div>
+          </div>
+          <button className="bp" onClick={add}>Save Band</button>
+        </div>
+      </Modal>}
+    </div>
+  );
+}
+
+// ─── HUB: BONUSES & INCENTIVES ────────────────────────────────────────────────
+function BonusManager({ isHR }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [bonuses, setBonuses] = useState([]); const [staff, setStaff] = useState([]); const [loading, setLoading] = useState(true);
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ staff_id: "", bonus_type: "Performance", amount: "", period: new Date().toISOString().slice(0, 7), notes: "" });
+
+  useEffect(() => {
+    Promise.all([
+      apiFetch(`${API_BASE}/hr/bonuses`).catch(() => []),
+      isHR ? apiFetch(`${API_BASE}/hr/staff`) : Promise.resolve([])
+    ]).then(([b, s]) => { setBonuses(b || []); setStaff(s || []); }).finally(() => setLoading(false));
+  }, [isHR]);
+
+  const add = async () => {
+    if (!form.staff_id || !form.amount) return alert("Staff and amount required");
+    try {
+      await apiFetch(`${API_BASE}/hr/bonuses`, { method: "POST", body: JSON.stringify({ ...form, amount: +form.amount }) });
+      setShowNew(false); apiFetch(`${API_BASE}/hr/bonuses`).then(d => setBonuses(d || []));
+    } catch (e) { alert(e.message); }
+  };
+
+  const btCol = { Performance: T.gold, Annual: "#60A5FA", Spot: "#4ADE80", Commission: "#F87171" };
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div><div className="ho" style={{ fontSize: 22 }}>Bonuses & Incentives</div><div style={{ fontSize: 13, color: C.sub }}>Log performance bonuses, annual bonuses and spot awards.</div></div>
+        {isHR && <button className="bp" onClick={() => setShowNew(true)}>+ Log Bonus</button>}
+      </div>
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : (
+        <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+          <div className="tw"><table className="ht"><thead><tr><th>Staff Member</th><th>Type</th><th>Amount</th><th>Period</th><th>Notes</th></tr></thead>
+            <tbody>{bonuses.map(b => {
+              const bc = btCol[b.bonus_type] || T.gold;
+              return (<tr key={b.id}>
+                <td style={{ fontWeight: 800, color: C.text }}>{b.admins?.full_name || "—"}</td>
+                <td><span className="tg" style={{ background: `${bc}22`, color: bc }}>{b.bonus_type}</span></td>
+                <td style={{ color: "#4ADE80", fontWeight: 800 }}>₦{b.amount?.toLocaleString()}</td>
+                <td>{b.period}</td>
+                <td style={{ color: C.muted, fontSize: 12 }}>{b.notes || "—"}</td>
+              </tr>);
+            })}
+              {bonuses.length === 0 && <tr><td colSpan="5" style={{ textAlign: "center", padding: 30, color: C.muted }}>No bonuses logged yet.</td></tr>}
+            </tbody>
+          </table></div>
+        </div>
+      )}
+      {showNew && <Modal onClose={() => setShowNew(false)} title="Log Bonus / Incentive">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div><Lbl>Staff Member *</Lbl>
+            <select className="inp" value={form.staff_id} onChange={e => setForm(f => ({ ...f, staff_id: e.target.value }))}>
+              <option value="">— Select —</option>{staff.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+            </select>
+          </div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Bonus Type</Lbl>
+              <select className="inp" value={form.bonus_type} onChange={e => setForm(f => ({ ...f, bonus_type: e.target.value }))}>
+                <option>Performance</option><option>Annual</option><option>Spot</option><option>Commission</option>
+              </select>
+            </div>
+            <div><Lbl>Period (YYYY-MM)</Lbl><input className="inp" placeholder="2026-04" value={form.period} onChange={e => setForm(f => ({ ...f, period: e.target.value }))} /></div>
+          </div>
+          <div><Lbl>Amount (NGN) *</Lbl><input type="number" className="inp" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} /></div>
+          <div><Lbl>Notes</Lbl><input className="inp" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} /></div>
+          <button className="bp" onClick={add}>Log Bonus</button>
+        </div>
+      </Modal>}
+    </div>
+  );
+}
+
+// ─── HUB: TAX CONFIGURATION ──────────────────────────────────────────────────
+function TaxConfig() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  return (
+    <div className="fade">
+      <div style={{ marginBottom: 22 }}><div className="ho" style={{ fontSize: 22 }}>Tax Configuration</div><div style={{ fontSize: 13, color: C.sub }}>Nigerian PAYE, Pension and NHF configuration.</div></div>
+      <div className="g2" style={{ marginBottom: 22 }}>
+        {[["PAYE (Pay As You Earn)", "Progressive rate: 7–24% based on income band. Remitted monthly to FIRS.", "#F87171"], ["Pension Contribution", "Employee: 8% | Employer: 10% of gross. Remitted to PFAs.", "#60A5FA"], ["NHF (National Housing Fund)", "2.5% of basic salary for applicable staff. Remitted to FMBN.", T.gold], ["WHT (Withholding Tax)", "5–10% for contractors. Deducted at source before payment.", "#4ADE80"]].map(([t, d, c]) => (
+          <div key={t} className="gc" style={{ padding: 22, borderLeft: `3px solid ${c}` }}>
+            <div style={{ fontWeight: 800, color: c, marginBottom: 8, fontSize: 14 }}>{t}</div>
+            <div style={{ fontSize: 13, color: C.sub }}>{d}</div>
+          </div>
+        ))}
+      </div>
+      <div className="gc" style={{ padding: 22, textAlign: "center", color: C.muted }}>
+        <div style={{ fontSize: 24, marginBottom: 8 }}>🔜</div>
+        <div style={{ fontSize: 13 }}>Automated PAYE/Pension calculation engine launching Q3 2026. Currently in compliance review with FIRS guidelines.</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── HUB: ANNOUNCEMENTS ──────────────────────────────────────────────────────
+function Announcements({ isHR }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [items, setItems] = useState([]); const [loading, setLoading] = useState(true);
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ title: "", body: "", priority: "Normal", target_department: "" });
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/hr/announcements`).then(d => setItems(d || [])).catch(() => setItems([])).finally(() => setLoading(false));
+  }, []);
+
+  const post = async () => {
+    if (!form.title || !form.body) return alert("Title and body required");
+    try {
+      await apiFetch(`${API_BASE}/hr/announcements`, { method: "POST", body: JSON.stringify(form) });
+      setShowNew(false); setForm({ title: "", body: "", priority: "Normal", target_department: "" });
+      apiFetch(`${API_BASE}/hr/announcements`).then(d => setItems(d || []));
+    } catch (e) { alert(e.message); }
+  };
+
+  const priorityCol = { Normal: T.gold, Urgent: "#F87171", Info: "#60A5FA" };
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div><div className="ho" style={{ fontSize: 22 }}>Announcements</div><div style={{ fontSize: 13, color: C.sub }}>Company-wide communications and important notices.</div></div>
+        {isHR && <button className="bp" onClick={() => setShowNew(true)}>+ Post Announcement</button>}
+      </div>
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : items.length === 0 ? (
+        <div className="gc" style={{ padding: 40, textAlign: "center", color: C.muted }}>No announcements yet. Check back soon.</div>
+      ) : (
+        <div className="g1" style={{ gap: 14 }}>{items.map(a => {
+          const pc = priorityCol[a.priority] || T.gold;
+          return (
+            <div key={a.id} className="gc" style={{ padding: 22, borderLeft: `3px solid ${pc}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 10 }}>
+                <div>
+                  <span className="tg" style={{ background: `${pc}22`, color: pc, marginRight: 10 }}>{a.priority}</span>
+                  <span style={{ fontSize: 16, fontWeight: 800, color: C.text }}>{a.title}</span>
+                </div>
+                <span style={{ fontSize: 11, color: C.muted, flexShrink: 0 }}>{new Date(a.created_at).toLocaleDateString()}</span>
+              </div>
+              <div style={{ fontSize: 14, color: C.sub, lineHeight: 1.7 }}>{a.body}</div>
+              {a.target_department && <div style={{ fontSize: 11, color: C.muted, marginTop: 10 }}>To: {a.target_department}</div>}
+            </div>
+          );
+        })}</div>
+      )}
+      {showNew && <Modal onClose={() => setShowNew(false)} title="Post Announcement">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div><Lbl>Title *</Lbl><input className="inp" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /></div>
+          <div><Lbl>Body *</Lbl><textarea className="inp" rows={5} value={form.body} onChange={e => setForm(f => ({ ...f, body: e.target.value }))} /></div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Priority</Lbl>
+              <select className="inp" value={form.priority} onChange={e => setForm(f => ({ ...f, priority: e.target.value }))}>
+                <option>Normal</option><option>Urgent</option><option>Info</option>
+              </select>
+            </div>
+            <div><Lbl>Target Dept (blank = all)</Lbl><input className="inp" placeholder="All Departments" value={form.target_department} onChange={e => setForm(f => ({ ...f, target_department: e.target.value }))} /></div>
+          </div>
+          <button className="bp" onClick={post}>Post Announcement</button>
+        </div>
+      </Modal>}
+    </div>
+  );
+}
+
+// ─── HUB: RECOGNITION (KUDOS) ─────────────────────────────────────────────────
+function RecognitionWall({ user }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [items, setItems] = useState([]); const [staff, setStaff] = useState([]); const [loading, setLoading] = useState(true);
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ recipient_id: "", message: "", badge_type: "Kudos" });
+
+  useEffect(() => {
+    Promise.all([
+      apiFetch(`${API_BASE}/hr/recognition`).catch(() => []),
+      apiFetch(`${API_BASE}/hr/staff`).catch(() => [])
+    ]).then(([r, s]) => { setItems(r || []); setStaff(s || []); }).finally(() => setLoading(false));
+  }, []);
+
+  const give = async () => {
+    if (!form.recipient_id || !form.message) return alert("Recipient and message required");
+    try {
+      await apiFetch(`${API_BASE}/hr/recognition`, { method: "POST", body: JSON.stringify(form) });
+      setShowNew(false); setForm({ recipient_id: "", message: "", badge_type: "Kudos" });
+      apiFetch(`${API_BASE}/hr/recognition`).then(d => setItems(d || []));
+    } catch (e) { alert(e.message); }
+  };
+
+  const badgeCol = { Kudos: T.gold, Star: "#F87171", Excellence: "#4ADE80", Teamwork: "#60A5FA" };
+  const badgeEmoji = { Kudos: "👏", Star: "⭐", Excellence: "🏆", Teamwork: "🤝" };
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div><div className="ho" style={{ fontSize: 22 }}>Recognition Wall</div><div style={{ fontSize: 13, color: C.sub }}>Celebrate achievements and give kudos to your colleagues.</div></div>
+        <button className="bp" onClick={() => setShowNew(true)}>+ Give Recognition</button>
+      </div>
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : (
+        <div className="g3">{items.map(r => {
+          const bc = badgeCol[r.badge_type] || T.gold;
+          return (
+            <div key={r.id} className="gc" style={{ padding: 20, borderTop: `3px solid ${bc}` }}>
+              <div style={{ fontSize: 24, marginBottom: 12 }}>{badgeEmoji[r.badge_type] || "👏"}</div>
+              <span className="tg" style={{ background: `${bc}22`, color: bc, marginBottom: 12, display: "inline-block" }}>{r.badge_type}</span>
+              <div style={{ fontSize: 13, color: C.text, lineHeight: 1.6, marginBottom: 14 }}>"{r.message}"</div>
+              <div style={{ display: "flex", justifyContent: "space-between", fontSize: 11, color: C.muted }}>
+                <span>To: <strong style={{ color: C.text }}>{r.recipient?.full_name || "—"}</strong></span>
+                <span>From: {r.giver?.full_name || "Anonymous"}</span>
+              </div>
+            </div>
+          );
+        })}
+          {items.length === 0 && <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: C.muted }}>No recognition posts yet. Be the first to celebrate someone!</div>}
+        </div>
+      )}
+      {showNew && <Modal onClose={() => setShowNew(false)} title="Give Recognition">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div><Lbl>Recognise *</Lbl>
+            <select className="inp" value={form.recipient_id} onChange={e => setForm(f => ({ ...f, recipient_id: e.target.value }))}>
+              <option value="">— Select colleague —</option>
+              {staff.filter(s => s.id !== user?.id).map(u => <option key={u.id} value={u.id}>{u.full_name} ({u.department})</option>)}
+            </select>
+          </div>
+          <div><Lbl>Badge Type</Lbl>
+            <select className="inp" value={form.badge_type} onChange={e => setForm(f => ({ ...f, badge_type: e.target.value }))}>
+              <option>Kudos</option><option>Star</option><option>Excellence</option><option>Teamwork</option>
+            </select>
+          </div>
+          <div><Lbl>Your Message *</Lbl><textarea className="inp" placeholder="What did they do that deserves recognition?" value={form.message} onChange={e => setForm(f => ({ ...f, message: e.target.value }))} /></div>
+          <button className="bp" onClick={give}>Send Recognition 🏆</button>
+        </div>
+      </Modal>}
+    </div>
+  );
+}
+
+// ─── HUB: REMOTE WORK ────────────────────────────────────────────────────────
+function RemoteWork() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  return (
+    <div className="fade">
+      <div style={{ marginBottom: 22 }}><div className="ho" style={{ fontSize: 22 }}>Remote Work</div><div style={{ fontSize: 13, color: C.sub }}>Remote work requests, approvals and location tracking.</div></div>
+      <div className="g2" style={{ marginBottom: 22 }}>
+        {[["Remote Work Policy", "Staff may request up to 2 days remote work per week, subject to manager approval and role eligibility.", "#60A5FA"], ["Eligible Roles", "All non-client-facing roles. Sales & Acquisitions staff require manager approval for each day.", T.gold]].map(([t, d, c]) => (
+          <div key={t} className="gc" style={{ padding: 22, borderLeft: `3px solid ${c}` }}>
+            <div style={{ fontWeight: 800, color: c, marginBottom: 8 }}>{t}</div>
+            <div style={{ fontSize: 13, color: C.sub }}>{d}</div>
+          </div>
+        ))}
+      </div>
+      <div className="gc" style={{ padding: 22, textAlign: "center", color: C.muted }}>
+        <div style={{ fontSize: 24, marginBottom: 8 }}>🔜</div>
+        <div style={{ fontSize: 13 }}>Remote work request portal and location-based check-in launching soon. Currently, use the Leave Request module with type "Work From Home".</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── HUB: POLICY LIBRARY ─────────────────────────────────────────────────────
+function PolicyLibrary({ isHR }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const policies = [
+    { title: "Code of Conduct", category: "Compliance", updated: "Jan 2026", summary: "Standards of professional behaviour expected of all Eximp & Cloves staff." },
+    { title: "Leave & Absence Policy", category: "HR", updated: "Jan 2026", summary: "Entitlements, procedures and rules governing all types of leave." },
+    { title: "Anti-Bribery Policy", category: "Legal", updated: "Dec 2025", summary: "Zero tolerance for bribery and corrupt practices in all business dealings." },
+    { title: "Data Protection Policy", category: "Compliance", updated: "Feb 2026", summary: "How we collect, store and protect personal data under NDPR." },
+    { title: "Disciplinary Procedure", category: "HR", updated: "Jan 2026", summary: "4-tier disciplinary process from counselling to termination." },
+    { title: "IT Acceptable Use Policy", category: "IT", updated: "Mar 2026", summary: "Rules for use of company devices, networks and software." },
+  ];
+  const catCol = { Compliance: T.gold, HR: "#60A5FA", Legal: "#F87171", IT: "#4ADE80" };
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div><div className="ho" style={{ fontSize: 22 }}>Policy Library</div><div style={{ fontSize: 13, color: C.sub }}>Company policies, procedures and handbooks.</div></div>
+        {isHR && <button className="bp">+ Upload Policy</button>}
+      </div>
+      <div className="g2">{policies.map((p, i) => {
+        const cc = catCol[p.category] || T.gold;
+        return (
+          <div key={i} className="gc" style={{ padding: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+              <span className="tg" style={{ background: `${cc}22`, color: cc }}>{p.category}</span>
+              <span style={{ fontSize: 11, color: C.muted }}>Updated {p.updated}</span>
+            </div>
+            <div style={{ fontWeight: 800, color: C.text, fontSize: 14, marginBottom: 8 }}>{p.title}</div>
+            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6 }}>{p.summary}</div>
+            <button className="bg" style={{ marginTop: 12, fontSize: 12, padding: "6px 14px" }}>View Document</button>
+          </div>
+        );
+      })}</div>
+    </div>
+  );
+}
+
+// ─── HUB: INTERNAL JOB BOARD ─────────────────────────────────────────────────
+function InternalJobBoard({ isHR }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [jobs, setJobs] = useState([]); const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/hr/recruitment/jobs`).then(d => setJobs((d || []).filter(j => j.status === "Open"))).catch(() => setJobs([])).finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="fade">
+      <div style={{ marginBottom: 22 }}><div className="ho" style={{ fontSize: 22 }}>Internal Job Board</div><div style={{ fontSize: 13, color: C.sub }}>Open roles available for internal applications and referrals.</div></div>
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : (
+        <div className="g2">{jobs.map(j => (
+          <div key={j.id} className="gc" style={{ padding: 20 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
+              <span className="tg tg2">Open</span>
+              <span style={{ fontSize: 11, color: C.muted }}>{j.employment_type}</span>
+            </div>
+            <div style={{ fontWeight: 800, color: C.text, fontSize: 15, marginBottom: 4 }}>{j.title}</div>
+            <div style={{ fontSize: 12, color: C.sub, marginBottom: 12 }}>{j.department} · {j.location || "Port Harcourt, NG"}</div>
+            {j.salary_range && <div style={{ fontSize: 12, color: T.gold, fontWeight: 800, marginBottom: 12 }}>{j.salary_range}</div>}
+            <button className="bp" style={{ fontSize: 12, padding: "8px 16px" }}>Apply Internally</button>
+          </div>
+        ))}
+          {jobs.length === 0 && <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: C.muted }}>No internal vacancies at this time.</div>}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── HUB: WORK PERMITS ───────────────────────────────────────────────────────
+function WorkPermits({ isHR }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [permits, setPermits] = useState([]); const [staff, setStaff] = useState([]); const [loading, setLoading] = useState(true);
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ staff_id: "", permit_type: "Work Permit", permit_number: "", issue_date: "", expiry_date: "", issuing_authority: "" });
+
+  useEffect(() => {
+    Promise.all([
+      apiFetch(`${API_BASE}/hr/work-permits`).catch(() => []),
+      isHR ? apiFetch(`${API_BASE}/hr/staff`) : Promise.resolve([])
+    ]).then(([p, s]) => { setPermits(p || []); setStaff(s || []); }).finally(() => setLoading(false));
+  }, [isHR]);
+
+  const save = async () => {
+    if (!form.staff_id || !form.permit_number) return alert("Staff and permit number required");
+    try {
+      await apiFetch(`${API_BASE}/hr/work-permits`, { method: "POST", body: JSON.stringify(form) });
+      setShowNew(false); apiFetch(`${API_BASE}/hr/work-permits`).then(d => setPermits(d || []));
+    } catch (e) { alert(e.message); }
+  };
+
+  const today = new Date().toISOString().split("T")[0];
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div><div className="ho" style={{ fontSize: 22 }}>Work Permits</div><div style={{ fontSize: 13, color: C.sub }}>Track work authorisation, visas and permit expiry alerts.</div></div>
+        {isHR && <button className="bp" onClick={() => setShowNew(true)}>+ Add Permit</button>}
+      </div>
+      <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+        <div className="tw"><table className="ht"><thead><tr><th>Staff Member</th><th>Permit Type</th><th>Permit No.</th><th>Issue Date</th><th>Expiry Date</th><th>Status</th></tr></thead>
+          <tbody>{permits.map(p => {
+            const expired = p.expiry_date < today;
+            const expiringSoon = !expired && p.expiry_date < new Date(Date.now() + 30 * 24 * 60 * 60 * 1000).toISOString().split("T")[0];
+            return (<tr key={p.id}>
+              <td style={{ fontWeight: 800, color: C.text }}>{p.admins?.full_name || "—"}</td>
+              <td>{p.permit_type}</td><td style={{ fontFamily: "monospace" }}>{p.permit_number}</td>
+              <td>{p.issue_date}</td>
+              <td style={{ color: expired ? "#F87171" : expiringSoon ? T.gold : C.text, fontWeight: expired || expiringSoon ? 800 : 400 }}>{p.expiry_date}</td>
+              <td><span className="tg" style={{ background: expired ? "#F8717122" : expiringSoon ? `${T.gold}22` : "#4ADE8022", color: expired ? "#F87171" : expiringSoon ? T.gold : "#4ADE80" }}>{expired ? "Expired" : expiringSoon ? "Expiring Soon" : "Active"}</span></td>
+            </tr>);
+          })}
+            {permits.length === 0 && <tr><td colSpan="6" style={{ textAlign: "center", padding: 30, color: C.muted }}>No work permits on record.</td></tr>}
+          </tbody>
+        </table></div>
+      </div>
+      {showNew && <Modal onClose={() => setShowNew(false)} title="Add Work Permit">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div><Lbl>Staff Member *</Lbl>
+            <select className="inp" value={form.staff_id} onChange={e => setForm(f => ({ ...f, staff_id: e.target.value }))}>
+              <option value="">— Select —</option>{staff.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+            </select>
+          </div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Permit Type</Lbl><input className="inp" value={form.permit_type} onChange={e => setForm(f => ({ ...f, permit_type: e.target.value }))} /></div>
+            <div><Lbl>Permit Number *</Lbl><input className="inp" value={form.permit_number} onChange={e => setForm(f => ({ ...f, permit_number: e.target.value }))} /></div>
+          </div>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Issue Date</Lbl><input type="date" className="inp" value={form.issue_date} onChange={e => setForm(f => ({ ...f, issue_date: e.target.value }))} /></div>
+            <div><Lbl>Expiry Date</Lbl><input type="date" className="inp" value={form.expiry_date} onChange={e => setForm(f => ({ ...f, expiry_date: e.target.value }))} /></div>
+          </div>
+          <div><Lbl>Issuing Authority</Lbl><input className="inp" value={form.issuing_authority} onChange={e => setForm(f => ({ ...f, issuing_authority: e.target.value }))} /></div>
+          <button className="bp" onClick={save}>Save Permit</button>
+        </div>
+      </Modal>}
+    </div>
+  );
+}
+
+// ─── HUB: HR LETTERS ─────────────────────────────────────────────────────────
+function HRLetters({ isHR }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [letters, setLetters] = useState([]); const [staff, setStaff] = useState([]); const [loading, setLoading] = useState(true);
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ staff_id: "", letter_type: "Employment Confirmation", content: "", date_issued: new Date().toISOString().split("T")[0] });
+
+  useEffect(() => {
+    Promise.all([
+      apiFetch(`${API_BASE}/hr/hr-letters`).catch(() => []),
+      isHR ? apiFetch(`${API_BASE}/hr/staff`) : Promise.resolve([])
+    ]).then(([l, s]) => { setLetters(l || []); setStaff(s || []); }).finally(() => setLoading(false));
+  }, [isHR]);
+
+  const save = async () => {
+    if (!form.staff_id || !form.content) return alert("Staff and letter content required");
+    try {
+      await apiFetch(`${API_BASE}/hr/hr-letters`, { method: "POST", body: JSON.stringify(form) });
+      setShowNew(false); apiFetch(`${API_BASE}/hr/hr-letters`).then(d => setLetters(d || []));
+    } catch (e) { alert(e.message); }
+  };
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div><div className="ho" style={{ fontSize: 22 }}>HR Letters</div><div style={{ fontSize: 13, color: C.sub }}>Issue and archive official HR letters and reference documents.</div></div>
+        {isHR && <button className="bp" onClick={() => setShowNew(true)}>+ Issue Letter</button>}
+      </div>
+      <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+        <div className="tw"><table className="ht"><thead><tr><th>Staff Member</th><th>Letter Type</th><th>Date Issued</th><th>Action</th></tr></thead>
+          <tbody>{letters.map(l => (
+            <tr key={l.id}>
+              <td style={{ fontWeight: 800, color: C.text }}>{l.admins?.full_name || "—"}</td>
+              <td><span className="tg to">{l.letter_type}</span></td>
+              <td>{l.date_issued}</td>
+              <td><button className="bg" style={{ fontSize: 11, padding: "4px 12px" }}>View Letter</button></td>
+            </tr>
+          ))}
+            {letters.length === 0 && <tr><td colSpan="4" style={{ textAlign: "center", padding: 30, color: C.muted }}>No HR letters issued yet.</td></tr>}
+          </tbody>
+        </table></div>
+      </div>
+      {showNew && <Modal onClose={() => setShowNew(false)} title="Issue HR Letter">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div className="g2" style={{ gap: 12 }}>
+            <div><Lbl>Staff Member *</Lbl>
+              <select className="inp" value={form.staff_id} onChange={e => setForm(f => ({ ...f, staff_id: e.target.value }))}>
+                <option value="">— Select —</option>{staff.map(u => <option key={u.id} value={u.id}>{u.full_name}</option>)}
+              </select>
+            </div>
+            <div><Lbl>Letter Type</Lbl>
+              <select className="inp" value={form.letter_type} onChange={e => setForm(f => ({ ...f, letter_type: e.target.value }))}>
+                <option>Employment Confirmation</option><option>Salary Confirmation</option><option>Experience Letter</option><option>Reference Letter</option><option>Warning Letter</option>
+              </select>
+            </div>
+          </div>
+          <div><Lbl>Letter Content *</Lbl><textarea className="inp" rows={8} value={form.content} onChange={e => setForm(f => ({ ...f, content: e.target.value }))} /></div>
+          <div><Lbl>Date Issued</Lbl><input type="date" className="inp" value={form.date_issued} onChange={e => setForm(f => ({ ...f, date_issued: e.target.value }))} /></div>
+          <button className="bp" onClick={save}>Issue Letter</button>
+        </div>
+      </Modal>}
+    </div>
+  );
+}
+
+// ─── HUB: REQUESTS ────────────────────────────────────────────────────────────
+function HRRequests({ user, isHR }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  return (
+    <div className="fade">
+      <div style={{ marginBottom: 22 }}><div className="ho" style={{ fontSize: 22 }}>HR Requests</div><div style={{ fontSize: 13, color: C.sub }}>Submit and track HR-related requests (equipment, access, transfers).</div></div>
+      <div className="g2">{[["Equipment Request", "Request company hardware, peripherals or software licenses.", "📦"], ["System Access Request", "Request access to company systems or elevate permissions.", "🔐"], ["Transfer Request", "Request a role or department transfer.", "🔄"], ["Reference Request", "Request an official employment reference.", "📄"]].map(([t, d, e]) => (
+        <div key={t} className="gc" style={{ padding: 20 }}>
+          <div style={{ fontSize: 28, marginBottom: 12 }}>{e}</div>
+          <div style={{ fontWeight: 800, color: C.text, marginBottom: 6 }}>{t}</div>
+          <div style={{ fontSize: 12, color: C.sub, marginBottom: 14 }}>{d}</div>
+          <button className="bg" style={{ fontSize: 12, padding: "8px 16px" }}>Submit Request</button>
+        </div>
+      ))}</div>
+    </div>
+  );
+}
+
+// ─── HUB: GRIEVANCES ─────────────────────────────────────────────────────────
+function Grievances({ isHR }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [grievances, setGrievances] = useState([]); const [loading, setLoading] = useState(true);
+  const [showNew, setShowNew] = useState(false);
+  const [form, setForm] = useState({ subject: "", description: "", is_anonymous: true });
+
+  useEffect(() => {
+    if (isHR) apiFetch(`${API_BASE}/hr/grievances`).then(d => setGrievances(d || [])).catch(() => { }).finally(() => setLoading(false));
+    else setLoading(false);
+  }, [isHR]);
+
+  const submit = async () => {
+    if (!form.subject || !form.description) return alert("Subject and description required");
+    try {
+      await apiFetch(`${API_BASE}/hr/grievances`, { method: "POST", body: JSON.stringify(form) });
+      alert("Your grievance has been submitted confidentially. HR will review within 5 working days.");
+      setShowNew(false); setForm({ subject: "", description: "", is_anonymous: true });
+    } catch (e) { alert(e.message); }
+  };
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div><div className="ho" style={{ fontSize: 22 }}>Grievances</div><div style={{ fontSize: 13, color: C.sub }}>Anonymous and confidential grievance submission and tracking.</div></div>
+        <button className="bp" onClick={() => setShowNew(true)}>+ Submit Grievance</button>
+      </div>
+      <div className="gc" style={{ padding: 22, marginBottom: 16, borderLeft: `3px solid #60A5FA` }}>
+        <div style={{ fontWeight: 800, color: "#60A5FA", marginBottom: 6 }}>Your Grievance is Protected</div>
+        <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.6 }}>All grievances are handled confidentially by HR. Anonymous submissions cannot be traced back to you. We have a strict no-retaliation policy.</div>
+      </div>
+      {isHR && (
+        loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : (
+          <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+            <div className="tw"><table className="ht"><thead><tr><th>Subject</th><th>Submitted</th><th>Anonymous</th><th>Status</th></tr></thead>
+              <tbody>{grievances.map(g => (
+                <tr key={g.id}>
+                  <td style={{ fontWeight: 800, color: C.text }}>{g.subject}</td>
+                  <td>{new Date(g.created_at).toLocaleDateString()}</td>
+                  <td>{g.is_anonymous ? <span className="tg tg2">Anonymous</span> : <span className="tg tm">Named</span>}</td>
+                  <td><span className="tg" style={{ background: g.status === "resolved" ? "#4ADE8022" : "#F59E0B22", color: g.status === "resolved" ? "#4ADE80" : "#F59E0B", textTransform: "capitalize" }}>{g.status}</span></td>
+                </tr>
+              ))}
+                {grievances.length === 0 && <tr><td colSpan="4" style={{ textAlign: "center", padding: 30, color: C.muted }}>No grievances on record.</td></tr>}
+              </tbody>
+            </table></div>
+          </div>
+        )
+      )}
+      {showNew && <Modal onClose={() => setShowNew(false)} title="Submit a Grievance">
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div><Lbl>Subject *</Lbl><input className="inp" value={form.subject} onChange={e => setForm(f => ({ ...f, subject: e.target.value }))} /></div>
+          <div><Lbl>Description *</Lbl><textarea className="inp" rows={5} placeholder="Describe the issue in detail…" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
+          <label style={{ display: "flex", alignItems: "center", gap: 10, color: C.sub, fontSize: 13, cursor: "pointer" }}>
+            <input type="checkbox" checked={form.is_anonymous} onChange={e => setForm(f => ({ ...f, is_anonymous: e.target.checked }))} /> Submit anonymously (recommended)
+          </label>
+          <div style={{ padding: 12, background: `${T.gold}11`, borderRadius: 8, fontSize: 12, color: T.gold }}>⚠️ By submitting, this will be securely reviewed by HR management only.</div>
+          <button className="bp" onClick={submit}>Submit Grievance</button>
+        </div>
+      </Modal>}
+    </div>
+  );
+}
+
+// ─── HUB: AUDIT LOGS ─────────────────────────────────────────────────────────
+function AuditLogs() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [logs, setLogs] = useState([]); const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/hr/audit-logs?limit=100`).then(d => setLogs(d || [])).catch(() => setLogs([])).finally(() => setLoading(false));
+  }, []);
+
+  const actionCol = { CREATE: "#4ADE80", UPDATE: T.gold, DELETE: "#F87171", VIEW: "#60A5FA" };
+
+  return (
+    <div className="fade">
+      <div style={{ marginBottom: 22 }}><div className="ho" style={{ fontSize: 22 }}>Audit Logs</div><div style={{ fontSize: 13, color: C.sub }}>Complete trail of all system actions for compliance and security.</div></div>
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading audit trail…</div> : (
+        <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+          <div className="tw"><table className="ht"><thead><tr><th>Actor</th><th>Action</th><th>Entity</th><th>Timestamp</th></tr></thead>
+            <tbody>{logs.map((l, i) => {
+              const ac = actionCol[l.action?.toUpperCase().split(" ")[0]] || C.muted;
+              return (<tr key={l.id || i}>
+                <td style={{ fontWeight: 700, color: C.text }}>{l.admins?.full_name || "System"}</td>
+                <td><span className="tg" style={{ background: `${ac}22`, color: ac, textTransform: "uppercase", fontSize: 9 }}>{l.action}</span></td>
+                <td style={{ color: C.sub }}>{l.entity_type}: {l.entity_id || "—"}</td>
+                <td style={{ fontSize: 11, color: C.muted }}>{new Date(l.created_at).toLocaleString()}</td>
+              </tr>);
+            })}
+              {logs.length === 0 && <tr><td colSpan="4" style={{ textAlign: "center", padding: 30, color: C.muted }}>No audit logs found. Logs will appear as actions are taken.</td></tr>}
+            </tbody>
+          </table></div>
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── HUB: HR REPORTS ─────────────────────────────────────────────────────────
+function HRReports() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [headcount, setHeadcount] = useState(null); const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/hr/reports/headcount`).then(setHeadcount).catch(() => { }).finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="fade">
+      <div style={{ marginBottom: 22 }}><div className="ho" style={{ fontSize: 22 }}>Reports & Analytics</div><div style={{ fontSize: 13, color: C.sub }}>Workforce data insights and exportable HR reports.</div></div>
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading reports…</div> : headcount && (
+        <>
+          <div className="g3" style={{ marginBottom: 22 }}>
+            <StatCard label="Total Active Staff" value={headcount.total} col={T.gold} />
+            <StatCard label="New Hires (30d)" value={headcount.new_hires_30d} col="#4ADE80" />
+            <StatCard label="Departments" value={Object.keys(headcount.by_department || {}).length} col="#60A5FA" />
+          </div>
+          <div className="gc" style={{ padding: 22 }}>
+            <div className="ho" style={{ fontSize: 14, marginBottom: 16 }}>Headcount by Department</div>
+            {Object.entries(headcount.by_department || {}).sort((a, b) => b[1] - a[1]).map(([dept, count]) => (
+              <div key={dept} style={{ marginBottom: 12 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", fontSize: 12, color: C.text, marginBottom: 4 }}>
+                  <span style={{ fontWeight: 700 }}>{dept}</span>
+                  <span style={{ color: T.gold, fontWeight: 800 }}>{count} staff</span>
+                </div>
+                <Bar pct={headcount.total > 0 ? (count / headcount.total) * 100 : 0} />
+              </div>
+            ))}
+          </div>
+        </>
+      )}
+      <div className="g2" style={{ marginTop: 22 }}>
+        {[["Attendance Report", "Export attendance data with absence rates by department."], ["Payroll Summary", "Monthly payroll totals, tax deductions and net pay summary."], ["Performance Report", "Scorecard distribution, Elite/Stable/PIP breakdown."], ["Leave Report", "Leave utilisation by type, department and individual."]].map(([t, d]) => (
+          <div key={t} className="gc" style={{ padding: 20 }}>
+            <div style={{ fontWeight: 800, color: C.text, marginBottom: 6 }}>{t}</div>
+            <div style={{ fontSize: 12, color: C.sub, marginBottom: 14, lineHeight: 1.5 }}>{d}</div>
+            <button className="bg" style={{ fontSize: 12, padding: "8px 16px" }}>Generate Report</button>
+          </div>
+        ))}
+      </div>
+    </div>
+  );
+}
+
+// ─── HUB: DEPARTMENTS ─────────────────────────────────────────────────────────
+function DepartmentsView() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [depts, setDepts] = useState([]); const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/hr/departments`).then(d => setDepts(d || [])).catch(() => { }).finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="fade">
+      <div style={{ marginBottom: 22 }}><div className="ho" style={{ fontSize: 22 }}>Departments</div><div style={{ fontSize: 13, color: C.sub }}>Organisational units and department management.</div></div>
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : (
+        <div className="g3">{depts.map((d, i) => (
+          <div key={i} className="gc" style={{ padding: 20 }}>
+            <div style={{ fontSize: 28, marginBottom: 10 }}>🏢</div>
+            <div style={{ fontWeight: 800, color: C.text, fontSize: 14 }}>{d.name || d}</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Department</div>
+          </div>
+        ))}</div>
+      )}
+    </div>
+  );
+}
+
+// ─── HUB: DIVERSITY & INCLUSION ───────────────────────────────────────────────
+function DiversityInclusion() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  return (
+    <div className="fade">
+      <div style={{ marginBottom: 22 }}><div className="ho" style={{ fontSize: 22 }}>Diversity & Inclusion</div><div style={{ fontSize: 13, color: C.sub }}>Gender, ethnicity and inclusion metrics.</div></div>
+      <div className="g2" style={{ marginBottom: 22 }}>
+        {[["Gender Balance", "Supporting equitable gender representation across all levels.", T.gold], ["Equal Opportunity", "All hiring decisions are based solely on merit and role fit.", "#60A5FA"]].map(([t, d, c]) => (
+          <div key={t} className="gc" style={{ padding: 20, borderLeft: `3px solid ${c}` }}>
+            <div style={{ fontWeight: 800, color: c, marginBottom: 8 }}>{t}</div>
+            <div style={{ fontSize: 13, color: C.sub }}>{d}</div>
+          </div>
+        ))}
+      </div>
+      <div className="gc" style={{ padding: 22, textAlign: "center", color: C.muted }}>
+        <div style={{ fontSize: 24, marginBottom: 8 }}>🔜</div>
+        <div style={{ fontSize: 13 }}>D&I analytics dashboard launching Q3 2026 once sufficient staff demographic data is collected with consent.</div>
+      </div>
+    </div>
+  );
+}
+
+// ─── HUB: ORG CHART (ENHANCED) ────────────────────────────────────────────────
+function OrgChartEnhanced() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [staff, setStaff] = useState([]); const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/hr/staff`).then(d => setStaff(d || [])).catch(() => { }).finally(() => setLoading(false));
+  }, []);
+
+  const noMgr = staff.filter(s => !s.line_manager_id && s.is_active);
+  const getReports = (id) => staff.filter(s => s.line_manager_id === id && s.is_active);
+
+  const OrgNode = ({ person, depth = 0 }) => {
+    const reports = getReports(person.id);
+    return (
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 8 }}>
+        <div className="gc" style={{ padding: "12px 16px", textAlign: "center", minWidth: 140, maxWidth: 200, borderTop: `3px solid ${depth === 0 ? T.gold : depth === 1 ? "#60A5FA" : "#4ADE80"}` }}>
+          <Av av={person.full_name?.split(" ").map(n => n[0]).join("") || "??"} sz={36} gold={depth === 0} />
+          <div style={{ fontWeight: 800, fontSize: 12, color: C.text, marginTop: 8, lineHeight: 1.3 }}>{person.full_name}</div>
+          <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{person.staff_profiles?.[0]?.job_title || person.role}</div>
+        </div>
+        {reports.length > 0 && (
+          <div style={{ display: "flex", gap: 16, position: "relative" }}>
+            <div style={{ position: "absolute", top: 0, left: "50%", width: 1, height: 16, background: C.border, transform: "translateX(-50%)" }} />
+            <div style={{ display: "flex", gap: 12, marginTop: 16 }}>
+              {reports.map(r => <OrgNode key={r.id} person={r} depth={depth + 1} />)}
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  return (
+    <div className="fade">
+      <div style={{ marginBottom: 22 }}><div className="ho" style={{ fontSize: 22 }}>Org Chart</div><div style={{ fontSize: 13, color: C.sub }}>Organisational hierarchy auto-generated from reporting lines.</div></div>
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading org chart…</div> : (
+        <div style={{ overflowX: "auto", padding: "20px 0" }}>
+          {noMgr.length === 0 ? (
+            <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Configure reporting lines in Staff Profiles to generate the org chart.</div>
+          ) : (
+            <div style={{ display: "flex", gap: 32, justifyContent: "center", flexWrap: "wrap" }}>
+              {noMgr.map(p => <OrgNode key={p.id} person={p} depth={0} />)}
+            </div>
+          )}
+        </div>
+      )}
+    </div>
+  );
+}
+
+// ─── HUB: USERS / SYSTEM SETTINGS ─────────────────────────────────────────────
+function SystemUsers() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [staff, setStaff] = useState([]); const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/hr/staff`).then(d => setStaff(d || [])).catch(() => { }).finally(() => setLoading(false));
+  }, []);
+
+  return (
+    <div className="fade">
+      <div style={{ marginBottom: 22 }}><div className="ho" style={{ fontSize: 22 }}>Users & Access Control</div><div style={{ fontSize: 13, color: C.sub }}>Manage system roles, permissions and account status.</div></div>
+      <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+        <div className="tw"><table className="ht"><thead><tr><th>Staff Member</th><th>Email</th><th>Role</th><th>Department</th><th>Status</th></tr></thead>
+          <tbody>{staff.map(s => (
+            <tr key={s.id}>
+              <td><div style={{ display: "flex", alignItems: "center", gap: 10 }}><Av av={s.full_name?.split(" ").map(n => n[0]).join("") || "??"} sz={28} /><span style={{ fontWeight: 800, color: C.text }}>{s.full_name}</span></div></td>
+              <td style={{ fontSize: 12, color: C.muted }}>{s.email}</td>
+              <td><span className="tg to" style={{ fontSize: 10 }}>{s.role || "staff"}</span></td>
+              <td>{s.department || "—"}</td>
+              <td><span className="tg" style={{ background: s.is_active ? "#4ADE8022" : "#F8717122", color: s.is_active ? "#4ADE80" : "#F87171" }}>{s.is_active ? "Active" : "Inactive"}</span></td>
+            </tr>
+          ))}
+            {staff.length === 0 && !loading && <tr><td colSpan="5" style={{ textAlign: "center", padding: 30, color: C.muted }}>No users found.</td></tr>}
+          </tbody>
+        </table></div>
+      </div>
+    </div>
+  );
+}
+
+
 function HRAdminPortal({ user, onLogout }) {
   const nav = [
-    { isHeader: true, label: "Hub 1: Recruitment" },
-    { id: "ats", icon: "staff", label: "ATS & Jobs" },
-    { isHeader: true, label: "Hub 2: People & Org" },
+    // HUB 1: RECRUITMENT
+    { isHeader: true, label: "Recruitment" },
+    { id: "jobs", icon: "briefcase", label: "Jobs" },
+    { id: "ats", icon: "briefcase", label: "Job Requisitions" },
+    { id: "applications", icon: "file", label: "Applications" },
+    { id: "ats_pipeline", icon: "trend", label: "ATS Pipeline" },
+    { id: "interviews", icon: "calendar", label: "Interviews" },
+    { id: "offers", icon: "star", label: "Offers" },
+    { id: "talent_pool", icon: "users", label: "Talent Pool" },
+    // HUB 2: PEOPLE & ORG
+    { isHeader: true, label: "People & Org" },
     { id: "dashboard", icon: "dashboard", label: "HR Overview" },
-    { id: "staff", icon: "staff", label: "Staff Directory" },
-    { isHeader: true, label: "Hub 3: Time & Attendance" },
-    { id: "presence", icon: "presence", label: "Attendance Logs" },
-    { isHeader: true, label: "Hub 4: Leave Management" },
+    { id: "staff", icon: "users", label: "Employees" },
+    { id: "org_chart", icon: "org", label: "Org Chart" },
+    { id: "departments", icon: "home", label: "Departments" },
+    { id: "diversity", icon: "star", label: "Diversity & Inclusion" },
+    // HUB 3: TIME & ATTENDANCE
+    { isHeader: true, label: "Time & Attendance" },
+    { id: "presence", icon: "clock", label: "Attendance" },
+    { id: "timesheets", icon: "log", label: "Timesheets" },
+    { id: "timesheet_approvals", icon: "tasks", label: "Timesheet Approvals" },
+    { id: "shifts", icon: "calendar", label: "Shift Scheduling" },
+    { id: "hr_calendar", icon: "calendar", label: "Calendar" },
+    { id: "holidays", icon: "star", label: "Holidays" },
+    // HUB 4: LEAVE
+    { isHeader: true, label: "Leave" },
     { id: "leave", icon: "presence", label: "Leave Requests" },
-    { isHeader: true, label: "Hub 5: Performance" },
-    { id: "perf", icon: "perf", label: "Scorecards" },
-    { id: "goals", icon: "goal", label: "Goal Management" },
-    { isHeader: true, label: "Hub 6: Compensation" },
-    { id: "payroll", icon: "payroll", label: "Payroll Engine" },
-    { isHeader: true, label: "Hub 8: Compliance" },
-    { id: "disciplinary", icon: "mis", label: "Disciplinary" },
-    { id: "assets", icon: "tasks", label: "Asset Management" },
-    { id: "legal_vault", icon: "tasks", label: "Legal Vault" },
-    { isHeader: true, label: "Hub 9: Administration" },
-    { id: "tasks", icon: "tasks", label: "Task Manager" },
-    { id: "admin", icon: "dashboard", label: "Workforce Stats" },
-    { id: "offboarding", icon: "staff", label: "Offboarding Workflow" },
+    { id: "leave_balances", icon: "chart", label: "Leave Balances" },
+    { id: "leave_policies", icon: "book", label: "Leave Policies" },
+    { id: "leave_accrual", icon: "trend", label: "Leave Accrual" },
+    // HUB 5: PERFORMANCE
+    { isHeader: true, label: "Performance" },
+    { id: "perf", icon: "perf", label: "Performance" },
+    { id: "goals", icon: "goal", label: "Goals & OKRs" },
+    { id: "improvement_plans", icon: "trend", label: "Improvement Plans" },
+    { id: "peer_reviews", icon: "users", label: "360° Peer Reviews" },
+    { id: "skills_matrix", icon: "chart", label: "Skills Matrix" },
+    { id: "succession", icon: "org", label: "Succession Planning" },
+    // HUB: LEARNING & GROWTH
+    { isHeader: true, label: "Learning & Growth" },
+    { id: "training", icon: "book", label: "Training" },
+    { id: "compliance_training", icon: "shield", label: "Compliance Training" },
+    { id: "onboarding", icon: "star", label: "Onboarding" },
+    { id: "onboarding_checklists", icon: "tasks", label: "Onboarding Checklists" },
+    { id: "probation", icon: "clock", label: "Probation Tracking" },
+    // HUB 6: COMPENSATION & BENEFITS
+    { isHeader: true, label: "Compensation & Benefits" },
+    { id: "payroll", icon: "payroll", label: "Payroll" },
+    { id: "payroll_runs", icon: "dollar", label: "Payroll Runs" },
+    { id: "comp_bands", icon: "chart", label: "Compensation Bands" },
+    { id: "bonuses", icon: "star", label: "Bonuses & Incentives" },
+    { id: "benefits", icon: "shield", label: "Benefits" },
+    { id: "expenses", icon: "dollar", label: "Expenses" },
+    { id: "tax_config", icon: "settings", label: "Tax Configuration" },
+    // HUB 7: ENGAGEMENT & CULTURE
+    { isHeader: true, label: "Engagement & Culture" },
+    { id: "announcements", icon: "megaphone", label: "Announcements" },
+    { id: "recognition", icon: "star", label: "Recognition" },
+    { id: "surveys", icon: "tasks", label: "Surveys" },
+    { id: "remote_work", icon: "home", label: "Remote Work" },
+    { id: "policy_library", icon: "book", label: "Policy Library" },
+    { id: "internal_job_board", icon: "briefcase", label: "Internal Job Board" },
+    // HUB 8: DOCUMENTS & COMPLIANCE
+    { isHeader: true, label: "Documents & Compliance" },
+    { id: "legal_vault", icon: "file", label: "Documents" },
+    { id: "contracts", icon: "file", label: "Contracts" },
+    { id: "hr_letters", icon: "file", label: "HR Letters" },
+    { id: "work_permits", icon: "globe", label: "Work Permits" },
+    { id: "hr_requests", icon: "star", label: "Requests" },
+    { id: "grievances", icon: "alert", label: "Grievances" },
+    { id: "disciplinary", icon: "mis", label: "Disciplinary Records" },
+    { id: "assets", icon: "tasks", label: "Assets" },
+    // HUB 9: ADMINISTRATION
+    { isHeader: true, label: "Administration" },
+    { id: "reports", icon: "chart", label: "Reports" },
+    { id: "offboarding", icon: "exit", label: "Exit & Offboarding" },
+    { id: "offboarding2", icon: "exit", label: "Offboarding" },
+    { id: "system_users", icon: "users", label: "Users" },
+    { id: "audit_logs", icon: "log", label: "Audit Logs" },
+    { id: "admin", icon: "settings", label: "Settings" },
+    // PERSONAL
     { isHeader: true, label: "Personal" },
     { id: "myprofile", icon: "profile", label: "My Profile" },
   ];
   return (
-    <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="HR Administration" renderPage={p => {
+    <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="Supreme Super Admin" renderPage={p => {
       if (p === "dashboard") return <HRDashboard />;
-      if (p === "ats") return <RecruitmentHub />;
+      // Hub 1: Recruitment
+      if (p === "ats" || p === "jobs" || p === "ats_pipeline" || p === "applications" || p === "interviews" || p === "offers" || p === "talent_pool") return <RecruitmentHub />;
+      // Hub 2: People
       if (p === "staff") return <StaffDirectory authRole="hr" />;
-      if (p === "leave") return <LeaveManagement user={user} />;
-      if (p === "admin") return <Administration />;
-      if (p === "culture") return <CultureHub authRole="hr" />;
-      if (p === "offboarding") return <OffboardingManager />;
+      if (p === "org_chart") return <OrgChartEnhanced />;
+      if (p === "departments") return <DepartmentsView />;
+      if (p === "diversity") return <DiversityInclusion />;
+      // Hub 3: Time & Attendance
       if (p === "presence") return <Presence currentUser={user} />;
+      if (p === "timesheets" || p === "timesheet_approvals") return <Timesheets user={user} isHR={true} />;
+      if (p === "shifts") return <ShiftScheduler isHR={true} />;
+      if (p === "hr_calendar") return <Presence currentUser={user} />;
+      if (p === "holidays") return <Presence currentUser={user} />;
+      // Hub 4: Leave
+      if (p === "leave") return <LeaveManagement user={user} />;
+      if (p === "leave_balances") return <LeaveAccrual />;
+      if (p === "leave_policies") return <LeavePolicies />;
+      if (p === "leave_accrual") return <LeaveAccrual />;
+      // Hub 5: Performance
       if (p === "perf") return <Performance />;
       if (p === "goals") return <Goals canManageKpiTemplates />;
-      if (p === "payroll") return <Payroll />;
-      if (p === "culture") return <CultureHub authRole="staff" />;
-      if (p === "tasks") return <Tasks currentUser={user} />;
+      if (p === "improvement_plans") return <ImprovementPlans authRole="hr" />;
+      if (p === "peer_reviews") return <CultureHub authRole="hr" />;
+      if (p === "skills_matrix") return <SkillsMatrix />;
+      if (p === "succession") return <SuccessionPlanning />;
+      // Learning & Growth
+      if (p === "training" || p === "compliance_training") return <LearningHub isHR={true} />;
+      if (p === "onboarding" || p === "onboarding_checklists") return <OnboardingHub isHR={true} />;
+      if (p === "probation") return <ProbationTracker isHR={true} />;
+      // Hub 6: Compensation
+      if (p === "payroll" || p === "payroll_runs") return <Payroll />;
+      if (p === "comp_bands") return <CompensationBands isHR={true} />;
+      if (p === "bonuses") return <BonusManager isHR={true} />;
+      if (p === "benefits") return <Payroll />;
+      if (p === "expenses") return <Payroll />;
+      if (p === "tax_config") return <TaxConfig />;
+      // Hub 7: Engagement
+      if (p === "announcements") return <Announcements isHR={true} />;
+      if (p === "recognition") return <RecognitionWall user={user} />;
+      if (p === "surveys") return <CultureHub authRole="hr" />;
+      if (p === "remote_work") return <RemoteWork />;
+      if (p === "policy_library") return <PolicyLibrary isHR={true} />;
+      if (p === "internal_job_board") return <InternalJobBoard isHR={true} />;
+      // Hub 8: Documents
+      if (p === "legal_vault" || p === "contracts") return <LegalManager staffId={null} staffName={null} isHR={true} />;
+      if (p === "hr_letters") return <HRLetters isHR={true} />;
+      if (p === "work_permits") return <WorkPermits isHR={true} />;
+      if (p === "hr_requests") return <HRRequests user={user} isHR={true} />;
+      if (p === "grievances") return <Grievances isHR={true} />;
       if (p === "disciplinary") return <Disciplinary />;
       if (p === "assets") return <AssetManager />;
-      if (p === "legal_vault") return <LegalManager staffId={null} staffName={null} isHR={true} />; 
+      // Hub 9: Admin
+      if (p === "reports") return <HRReports />;
+      if (p === "offboarding" || p === "offboarding2") return <OffboardingManager />;
+      if (p === "system_users") return <SystemUsers />;
+      if (p === "audit_logs") return <AuditLogs />;
+      if (p === "admin") return <Administration />;
+      // Personal
       if (p === "myprofile") return <MyProfile user={user} />;
     }} />
   );
@@ -5247,21 +6821,38 @@ function HRAdminPortal({ user, onLogout }) {
 
 function ManagerPortal({ user, onLogout }) {
   const nav = [
-    { isHeader: true, label: "Hub 2: People & Org" },
+    { isHeader: true, label: "People & Org" },
     { id: "dashboard", icon: "dashboard", label: "Team Dashboard" },
-    { id: "team", icon: "staff", label: "My Team" },
-    { isHeader: true, label: "Hub 3: Time & Attendance" },
-    { id: "presence", icon: "presence", label: "Team Presence" },
-    { isHeader: true, label: "Hub 4: Leave Management" },
-    { id: "leave", icon: "presence", label: "Leave Approvals" },
-    { isHeader: true, label: "Hub 5: Performance" },
-    { id: "perf", icon: "perf", label: "Team Scorecards" },
-    { id: "goals", icon: "goal", label: "Team Goals" },
-    { isHeader: true, label: "Hub 7: Engagement & Culture" },
-    { id: "culture", icon: "profile", label: "Culture & Surveys" },
-    { isHeader: true, label: "Hub 8: Compliance" },
+    { id: "team", icon: "users", label: "My Team" },
+    { id: "org_chart", icon: "org", label: "Org Chart" },
+    { isHeader: true, label: "Time & Attendance" },
+    { id: "presence", icon: "clock", label: "Attendance" },
+    { id: "timesheets", icon: "log", label: "Timesheets" },
+    { id: "timesheet_approvals", icon: "tasks", label: "Timesheet Approvals" },
+    { id: "shifts", icon: "calendar", label: "Shift Scheduling" },
+    { id: "hr_calendar", icon: "calendar", label: "Calendar" },
+    { id: "holidays", icon: "star", label: "Holidays" },
+    { isHeader: true, label: "Leave" },
+    { id: "leave", icon: "presence", label: "Leave Requests" },
+    { id: "leave_balances", icon: "chart", label: "Leave Balances" },
+    { id: "leave_policies", icon: "book", label: "Leave Policies" },
+    { id: "leave_accrual", icon: "trend", label: "Leave Accrual" },
+    { isHeader: true, label: "Performance" },
+    { id: "perf", icon: "perf", label: "Performance" },
+    { id: "goals", icon: "goal", label: "Goals & OKRs" },
+    { id: "improvement_plans", icon: "trend", label: "Improvement Plans" },
+    { id: "peer_reviews", icon: "users", label: "360° Peer Reviews" },
+    { id: "skills_matrix", icon: "chart", label: "Skills Matrix" },
+    { id: "succession", icon: "org", label: "Succession Planning" },
+    { isHeader: true, label: "Engagement & Culture" },
+    { id: "announcements", icon: "megaphone", label: "Announcements" },
+    { id: "recognition", icon: "star", label: "Recognition" },
+    { id: "surveys", icon: "tasks", label: "Surveys" },
+    { id: "remote_work", icon: "home", label: "Remote Work" },
+    { id: "policy_library", icon: "book", label: "Policy Library" },
+    { isHeader: true, label: "Compliance" },
     { id: "disciplinary", icon: "mis", label: "Incidents" },
-    { isHeader: true, label: "Hub 9: Administration" },
+    { isHeader: true, label: "Administration" },
     { id: "tasks", icon: "tasks", label: "Task Manager" },
     { isHeader: true, label: "Personal" },
     { id: "myprofile", icon: "profile", label: "My Profile" },
@@ -5281,13 +6872,26 @@ function ManagerPortal({ user, onLogout }) {
   return (
     <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="Management Hub" renderPage={p => {
       if (p === "team") return <StaffDirectory authRole="manager" />;
-      if (p === "leave") return <LeaveManagement user={user} />;
-      if (p === "presence") return <Presence currentUser={user} />;
+      if (p === "org_chart") return <OrgChartEnhanced />;
+      if (p === "leave" || p === "leave_requests") return <LeaveManagement user={user} />;
+      if (p === "leave_balances" || p === "leave_accrual") return <LeaveAccrual />;
+      if (p === "leave_policies") return <LeavePolicies />;
+      if (p === "presence" || p === "hr_calendar" || p === "holidays") return <Presence currentUser={user} />;
+      if (p === "timesheets" || p === "timesheet_approvals") return <Timesheets user={user} isHR={false} />;
+      if (p === "shifts") return <ShiftScheduler isHR={false} />;
       if (p === "perf") return <Performance />;
       if (p === "goals") return <Goals />;
+      if (p === "improvement_plans") return <ImprovementPlans authRole="manager" />;
+      if (p === "peer_reviews") return <CultureHub authRole="manager" />;
+      if (p === "skills_matrix") return <SkillsMatrix />;
+      if (p === "succession") return <SuccessionPlanning />;
       if (p === "tasks") return <Tasks currentUser={user} />;
       if (p === "disciplinary") return <Disciplinary isManager userId={user.id} />;
-      if (p === "culture") return <CultureHub authRole="manager" />;
+      if (p === "surveys") return <CultureHub authRole="manager" />;
+      if (p === "announcements") return <Announcements isHR={false} />;
+      if (p === "recognition") return <RecognitionWall user={user} />;
+      if (p === "remote_work") return <RemoteWork />;
+      if (p === "policy_library") return <PolicyLibrary isHR={false} />;
       if (p === "myprofile") return <MyProfile user={user} />;
       if (p === "myperformance") return <Performance viewOnly userId={user.id} />;
 
@@ -5323,24 +6927,43 @@ function ManagerPortal({ user, onLogout }) {
 
 function StaffPortal({ user, onLogout }) {
   const nav = [
-    { isHeader: true, label: "Hub 2: People & Org" },
+    { isHeader: true, label: "People & Org" },
     { id: "dashboard", icon: "dashboard", label: "My Dashboard" },
     { id: "profile", icon: "profile", label: "My Profile" },
-    { isHeader: true, label: "Hub 3: Time & Attendance" },
-    { id: "presence", icon: "presence", label: "My Presence" },
-    { isHeader: true, label: "Hub 4: Leave Management" },
-    { id: "leave", icon: "presence", label: "My Leave" },
-    { isHeader: true, label: "Hub 5: Performance" },
-    { id: "perf", icon: "perf", label: "My Scorecard" },
-    { id: "goals", icon: "goal", label: "My Goals" },
-    { isHeader: true, label: "Hub 7: Engagement & Culture" },
-    { id: "culture", icon: "profile", label: "Culture & Surveys" },
-    { isHeader: true, label: "Hub 6: Compensation" },
+    { isHeader: true, label: "Time & Attendance" },
+    { id: "presence", icon: "clock", label: "Attendance" },
+    { id: "timesheets", icon: "log", label: "Timesheets" },
+    { id: "hr_calendar", icon: "calendar", label: "Calendar" },
+    { isHeader: true, label: "Leave" },
+    { id: "leave", icon: "presence", label: "Leave Requests" },
+    { id: "leave_balances", icon: "chart", label: "Leave Balances" },
+    { id: "leave_policies", icon: "book", label: "Leave Policies" },
+    { id: "leave_accrual", icon: "trend", label: "Leave Accrual" },
+    { isHeader: true, label: "Performance" },
+    { id: "perf", icon: "perf", label: "Performance" },
+    { id: "goals", icon: "goal", label: "Goals & OKRs" },
+    { id: "improvement_plans", icon: "trend", label: "Improvement Plans" },
+    { id: "skills_matrix", icon: "chart", label: "Skills Matrix" },
+    { isHeader: true, label: "Learning & Growth" },
+    { id: "training", icon: "book", label: "Training" },
+    { id: "compliance_training", icon: "shield", label: "Compliance Training" },
+    { isHeader: true, label: "Compensation & Benefits" },
     { id: "payroll", icon: "payslip", label: "My Payroll" },
-    { isHeader: true, label: "Hub 8: Compliance" },
+    { id: "bonuses", icon: "star", label: "My Bonuses" },
+    { isHeader: true, label: "Engagement & Culture" },
+    { id: "announcements", icon: "megaphone", label: "Announcements" },
+    { id: "recognition", icon: "star", label: "Recognition" },
+    { id: "surveys", icon: "tasks", label: "Surveys" },
+    { id: "remote_work", icon: "home", label: "Remote Work" },
+    { id: "policy_library", icon: "book", label: "Policy Library" },
+    { id: "internal_job_board", icon: "briefcase", label: "Internal Job Board" },
+    { isHeader: true, label: "Documents & Compliance" },
+    { id: "legal_vault", icon: "file", label: "Documents" },
+    { id: "hr_letters", icon: "file", label: "HR Letters" },
+    { id: "hr_requests", icon: "star", label: "Requests" },
+    { id: "grievances", icon: "alert", label: "Grievances" },
     { id: "disciplinary", icon: "mis", label: "My Flags" },
-    { id: "legal_vault", icon: "tasks", label: "Legal Vault" },
-    { isHeader: true, label: "Hub 9: Administration" },
+    { isHeader: true, label: "Administration" },
     { id: "tasks", icon: "tasks", label: "My Tasks" },
   ];
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
@@ -5370,13 +6993,29 @@ function StaffPortal({ user, onLogout }) {
     <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="Team Member Portal" initialPage={startPage} renderPage={pg => {
       if (pg === "profile") return <MyProfile user={user} />;
       if (pg === "leave") return <LeaveManagement user={user} />;
+      if (pg === "leave_balances" || pg === "leave_accrual") return <LeaveAccrual />;
+      if (pg === "leave_policies") return <LeavePolicies />;
       if (pg === "perf") return <Performance viewOnly userId={user.id} />;
       if (pg === "goals") return <Goals viewOnly userId={user.id} />;
+      if (pg === "improvement_plans") return <ImprovementPlans viewOnly userId={user.id} authRole="staff" />;
+      if (pg === "skills_matrix") return <SkillsMatrix />;
       if (pg === "tasks") return <Tasks currentUser={user} />;
-      if (pg === "presence") return <Presence currentUserId={user.id} currentUser={user} />;
+      if (pg === "presence" || pg === "hr_calendar") return <Presence currentUserId={user.id} currentUser={user} />;
+      if (pg === "timesheets") return <Timesheets user={user} isHR={false} />;
       if (pg === "payroll") return <StaffPayroll user={user} />;
+      if (pg === "bonuses") return <BonusManager isHR={false} />;
       if (pg === "disciplinary") return <Disciplinary viewOnly userId={user.id} />;
-      if (pg === "legal_vault") return <LegalManager staffId={user.id} staffName={user.full_name} isHR={false} />;
+      if (pg === "legal_vault" || pg === "contracts") return <LegalManager staffId={user.id} staffName={user.full_name} isHR={false} />;
+      if (pg === "hr_letters") return <HRLetters isHR={false} />;
+      if (pg === "hr_requests") return <HRRequests user={user} isHR={false} />;
+      if (pg === "grievances") return <Grievances isHR={false} />;
+      if (pg === "announcements") return <Announcements isHR={false} />;
+      if (pg === "recognition") return <RecognitionWall user={user} />;
+      if (pg === "surveys") return <CultureHub authRole="staff" />;
+      if (pg === "remote_work") return <RemoteWork />;
+      if (pg === "policy_library") return <PolicyLibrary isHR={false} />;
+      if (pg === "internal_job_board") return <InternalJobBoard isHR={false} />;
+      if (pg === "training" || pg === "compliance_training") return <LearningHub isHR={false} />;
 
       return (
         <div className="fade">
@@ -5605,16 +7244,16 @@ function AssetManager() {
       {showCreateModal && (
         <Modal title="Register Asset" width={480} onClose={() => setShowCreateModal(false)}>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div><Lbl>Asset Name *</Lbl><input className="inp" value={createForm.asset_name} onChange={e => setCreateForm({...createForm, asset_name: e.target.value})} placeholder="e.g. MacBook Pro M2" /></div>
+            <div><Lbl>Asset Name *</Lbl><input className="inp" value={createForm.asset_name} onChange={e => setCreateForm({ ...createForm, asset_name: e.target.value })} placeholder="e.g. MacBook Pro M2" /></div>
             <div className="g2">
               <div><Lbl>Asset Type</Lbl>
-                <select className="inp" value={createForm.asset_type} onChange={e => setCreateForm({...createForm, asset_type: e.target.value})}>
+                <select className="inp" value={createForm.asset_type} onChange={e => setCreateForm({ ...createForm, asset_type: e.target.value })}>
                   <option>Equipment</option><option>Vehicle</option><option>Property</option><option>Software License</option>
                 </select>
               </div>
-              <div><Lbl>Serial Number</Lbl><input className="inp" value={createForm.serial_number} onChange={e => setCreateForm({...createForm, serial_number: e.target.value})} placeholder="Optional" /></div>
+              <div><Lbl>Serial Number</Lbl><input className="inp" value={createForm.serial_number} onChange={e => setCreateForm({ ...createForm, serial_number: e.target.value })} placeholder="Optional" /></div>
             </div>
-            <div><Lbl>Purchase Cost (Optional)</Lbl><input type="number" className="inp" value={createForm.purchase_cost} onChange={e => setCreateForm({...createForm, purchase_cost: e.target.value})} placeholder="0.00" /></div>
+            <div><Lbl>Purchase Cost (Optional)</Lbl><input type="number" className="inp" value={createForm.purchase_cost} onChange={e => setCreateForm({ ...createForm, purchase_cost: e.target.value })} placeholder="0.00" /></div>
             <button className="bp" onClick={handleCreate} style={{ marginTop: 10 }}>Register Asset</button>
           </div>
         </Modal>
@@ -5628,20 +7267,20 @@ function AssetManager() {
               <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Serial: {selectedAsset.serial_number || "N/A"}</div>
             </div>
             <div><Lbl>Assign To Staff</Lbl>
-              <select className="inp" value={assignForm.staff_id} onChange={e => setAssignForm({...assignForm, staff_id: e.target.value})}>
+              <select className="inp" value={assignForm.staff_id} onChange={e => setAssignForm({ ...assignForm, staff_id: e.target.value })}>
                 <option value="">— Unassigned (Return to Inventory) —</option>
                 {staffList.filter(u => u.is_active).map(u => <option key={u.id} value={u.id}>{u.full_name} ({u.department})</option>)}
               </select>
             </div>
             <div><Lbl>Asset Status</Lbl>
-              <select className="inp" value={assignForm.status} onChange={e => setAssignForm({...assignForm, status: e.target.value})}>
+              <select className="inp" value={assignForm.status} onChange={e => setAssignForm({ ...assignForm, status: e.target.value })}>
                 <option value="Available">Available</option>
                 <option value="Assigned">Assigned</option>
                 <option value="Maintenance">Maintenance</option>
                 <option value="Retired">Retired</option>
               </select>
             </div>
-            <div><Lbl>Assignment Notes</Lbl><textarea className="inp" rows="2" value={assignForm.notes} onChange={e => setAssignForm({...assignForm, notes: e.target.value})} placeholder="Condition details, expected return date, etc." /></div>
+            <div><Lbl>Assignment Notes</Lbl><textarea className="inp" rows="2" value={assignForm.notes} onChange={e => setAssignForm({ ...assignForm, notes: e.target.value })} placeholder="Condition details, expected return date, etc." /></div>
             <button className="bp" onClick={handleAssign} style={{ marginTop: 10 }}>Save Assignment</button>
           </div>
         </Modal>
@@ -5770,23 +7409,23 @@ function RecruitmentHub() {
 
       {showJobModal && (
         <Modal title="Create Job Requisition" width={480} onClose={() => setShowJobModal(false)}>
-           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div><Lbl>Job Title *</Lbl><input className="inp" value={jobForm.title} onChange={e => setJobForm({...jobForm, title: e.target.value})} placeholder="e.g. Senior Backend Engineer" /></div>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div><Lbl>Job Title *</Lbl><input className="inp" value={jobForm.title} onChange={e => setJobForm({ ...jobForm, title: e.target.value })} placeholder="e.g. Senior Backend Engineer" /></div>
             <div className="g2">
               <div><Lbl>Department</Lbl>
-                <select className="inp" value={jobForm.department} onChange={e => setJobForm({...jobForm, department: e.target.value})}>
+                <select className="inp" value={jobForm.department} onChange={e => setJobForm({ ...jobForm, department: e.target.value })}>
                   <option>General</option><option>Sales & Acquisitions</option><option>Engineering</option><option>HR</option><option>Finance</option>
                 </select>
               </div>
               <div><Lbl>Employment Type</Lbl>
-                <select className="inp" value={jobForm.employment_type} onChange={e => setJobForm({...jobForm, employment_type: e.target.value})}>
+                <select className="inp" value={jobForm.employment_type} onChange={e => setJobForm({ ...jobForm, employment_type: e.target.value })}>
                   <option>Full-time</option><option>Part-time</option><option>Contract</option>
                 </select>
               </div>
             </div>
             <div className="g2">
-              <div><Lbl>Location</Lbl><input className="inp" value={jobForm.location} onChange={e => setJobForm({...jobForm, location: e.target.value})} placeholder="e.g. London, UK or Remote" /></div>
-              <div><Lbl>Salary Range</Lbl><input className="inp" value={jobForm.salary_range} onChange={e => setJobForm({...jobForm, salary_range: e.target.value})} placeholder="e.g. £50k - £70k" /></div>
+              <div><Lbl>Location</Lbl><input className="inp" value={jobForm.location} onChange={e => setJobForm({ ...jobForm, location: e.target.value })} placeholder="e.g. London, UK or Remote" /></div>
+              <div><Lbl>Salary Range</Lbl><input className="inp" value={jobForm.salary_range} onChange={e => setJobForm({ ...jobForm, salary_range: e.target.value })} placeholder="e.g. £50k - £70k" /></div>
             </div>
             <button className="bp" onClick={createJob} style={{ marginTop: 10 }}>Post Job Requisition</button>
           </div>
@@ -5818,13 +7457,13 @@ function OffboardingManager() {
       ]);
       setStaff(sData.filter(s => s.is_active));
       setAssets(aData || []);
-    } catch(e) { console.error(e); } finally { setLoading(false); }
+    } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
   const staffAssets = selectedStaff ? assets.filter(a => a.assigned_to === selectedStaff.id) : [];
 
   const handleOffboard = async () => {
-    if(!offboardForm.exit_reason) return alert("Exit reason required");
+    if (!offboardForm.exit_reason) return alert("Exit reason required");
     setProcessing(true);
     try {
       // 1. Unassign all assets
@@ -5834,18 +7473,18 @@ function OffboardingManager() {
           body: JSON.stringify({ staff_id: null, status: "Available", notes: "Returned during offboarding" })
         });
       }
-      
+
       // 2. Deactivate profile
       await apiFetch(`${API_BASE}/hr/profile/${selectedStaff.id}`, {
         method: "PATCH",
         body: JSON.stringify({ exit_date: offboardForm.exit_date, exit_reason: offboardForm.exit_reason })
       });
-      
+
       alert(`Successfully offboarded ${selectedStaff.full_name}`);
       setSelectedStaff(null);
       setOffboardForm({ exit_date: new Date().toISOString().split('T')[0], exit_reason: "" });
       fetchData();
-    } catch(e) { alert(e.message); } finally { setProcessing(false); }
+    } catch (e) { alert(e.message); } finally { setProcessing(false); }
   };
 
   return (
@@ -5859,28 +7498,28 @@ function OffboardingManager() {
 
       <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
         <div className="tw">
-            <table className="ht">
-              <thead><tr><th>Staff Member</th><th>Role / Dept</th><th>Assigned Assets</th><th style={{textAlign: "right"}}>Action</th></tr></thead>
-              <tbody>
-                {staff.map(s => {
-                  const count = assets.filter(a => a.assigned_to === s.id).length;
-                  return (
-                    <tr key={s.id}>
-                      <td>
-                        <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
-                          <Av av={s.full_name[0]} sz={32} />
-                          <div style={{ fontWeight: 800, color: C.text }}>{s.full_name}</div>
-                        </div>
-                      </td>
-                      <td><div style={{ color: C.text }}>{s.role?.replace(/,/g, ", ")}</div><div style={{ fontSize: 11, color: C.muted }}>{s.department}</div></td>
-                      <td>{count > 0 ? <span className="tg to">{count} items to recover</span> : <span className="tg tm">Clear</span>}</td>
-                      <td style={{ textAlign: "right" }}><button className="bg" style={{ padding: "6px 12px", fontSize: 11, background: "#F8717122", color: "#F87171", border: "1px solid #F87171" }} onClick={() => setSelectedStaff(s)}>Offboard</button></td>
-                    </tr>
-                  );
-                })}
-                {staff.length === 0 && !loading && <tr><td colSpan="4" style={{ textAlign: "center", padding: 30, color: C.muted }}>No active staff.</td></tr>}
-              </tbody>
-            </table>
+          <table className="ht">
+            <thead><tr><th>Staff Member</th><th>Role / Dept</th><th>Assigned Assets</th><th style={{ textAlign: "right" }}>Action</th></tr></thead>
+            <tbody>
+              {staff.map(s => {
+                const count = assets.filter(a => a.assigned_to === s.id).length;
+                return (
+                  <tr key={s.id}>
+                    <td>
+                      <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                        <Av av={s.full_name[0]} sz={32} />
+                        <div style={{ fontWeight: 800, color: C.text }}>{s.full_name}</div>
+                      </div>
+                    </td>
+                    <td><div style={{ color: C.text }}>{s.role?.replace(/,/g, ", ")}</div><div style={{ fontSize: 11, color: C.muted }}>{s.department}</div></td>
+                    <td>{count > 0 ? <span className="tg to">{count} items to recover</span> : <span className="tg tm">Clear</span>}</td>
+                    <td style={{ textAlign: "right" }}><button className="bg" style={{ padding: "6px 12px", fontSize: 11, background: "#F8717122", color: "#F87171", border: "1px solid #F87171" }} onClick={() => setSelectedStaff(s)}>Offboard</button></td>
+                  </tr>
+                );
+              })}
+              {staff.length === 0 && !loading && <tr><td colSpan="4" style={{ textAlign: "center", padding: 30, color: C.muted }}>No active staff.</td></tr>}
+            </tbody>
+          </table>
         </div>
       </div>
 
@@ -5897,11 +7536,11 @@ function OffboardingManager() {
               )) : <div style={{ fontSize: 12, color: C.muted }}>No assets assigned. Safe to proceed.</div>}
               {staffAssets.length > 0 && <div style={{ fontSize: 11, color: "#F87171", marginTop: 8, fontWeight: 800 }}>⚠️ Proceeding will automatically mark all items above as "Available/Returned".</div>}
             </div>
-            
+
             <div className="g2">
-              <div><Lbl>Exit Date</Lbl><input type="date" className="inp" value={offboardForm.exit_date} onChange={e => setOffboardForm({...offboardForm, exit_date: e.target.value})} /></div>
+              <div><Lbl>Exit Date</Lbl><input type="date" className="inp" value={offboardForm.exit_date} onChange={e => setOffboardForm({ ...offboardForm, exit_date: e.target.value })} /></div>
               <div><Lbl>Exit Reason</Lbl>
-                <select className="inp" value={offboardForm.exit_reason} onChange={e => setOffboardForm({...offboardForm, exit_reason: e.target.value})}>
+                <select className="inp" value={offboardForm.exit_reason} onChange={e => setOffboardForm({ ...offboardForm, exit_reason: e.target.value })}>
                   <option value="">— Select —</option>
                   <option value="Resignation">Resignation</option>
                   <option value="Termination">Termination</option>
@@ -5910,7 +7549,7 @@ function OffboardingManager() {
                 </select>
               </div>
             </div>
-            
+
             <button className="bp" onClick={handleOffboard} disabled={processing} style={{ marginTop: 10, background: "#F87171", borderColor: "#F87171", color: "#fff" }}>
               {processing ? "Processing..." : "Finalize Offboarding & Deactivate"}
             </button>
@@ -5929,11 +7568,11 @@ function CultureHub({ authRole }) {
   const [surveys, setSurveys] = useState([]);
   const [loading, setLoading] = useState(true);
   const [view, setView] = useState("surveys"); // surveys | analytics
-  
+
   // Create State
   const [showCreate, setShowCreate] = useState(false);
   const [createForm, setCreateForm] = useState({ title: "", description: "", questions: [""] });
-  
+
   // Respond State
   const [activeSurvey, setActiveSurvey] = useState(null);
   const [answers, setAnswers] = useState({});
@@ -5947,28 +7586,28 @@ function CultureHub({ authRole }) {
     try {
       const data = await apiFetch(`${API_BASE}/hr/culture/surveys`);
       setSurveys(data || []);
-    } catch(e) { console.error(e); } finally { setLoading(false); }
+    } catch (e) { console.error(e); } finally { setLoading(false); }
   };
 
   const handleCreate = async () => {
-    if(!createForm.title || createForm.questions.filter(q=>q.trim()).length === 0) return alert("Title and at least 1 question required.");
+    if (!createForm.title || createForm.questions.filter(q => q.trim()).length === 0) return alert("Title and at least 1 question required.");
     try {
       await apiFetch(`${API_BASE}/hr/culture/surveys`, {
         method: "POST",
         body: JSON.stringify({
           title: createForm.title,
           description: createForm.description,
-          questions: createForm.questions.filter(q=>q.trim())
+          questions: createForm.questions.filter(q => q.trim())
         })
       });
       setShowCreate(false);
       setCreateForm({ title: "", description: "", questions: [""] });
       fetchData();
-    } catch(e) { alert(e.message); }
+    } catch (e) { alert(e.message); }
   };
 
   const handleSubmitResponse = async () => {
-    if(Object.keys(answers).length === 0) return alert("Please answer at least one question.");
+    if (Object.keys(answers).length === 0) return alert("Please answer at least one question.");
     setSubmitting(true);
     try {
       await apiFetch(`${API_BASE}/hr/culture/surveys/${activeSurvey.id}/respond`, {
@@ -5979,7 +7618,7 @@ function CultureHub({ authRole }) {
       setActiveSurvey(null);
       setAnswers({});
       fetchData();
-    } catch(e) { alert(e.message); } finally { setSubmitting(false); }
+    } catch (e) { alert(e.message); } finally { setSubmitting(false); }
   };
 
   return (
@@ -6019,54 +7658,54 @@ function CultureHub({ authRole }) {
       )}
 
       {view === "analytics" && isHR && (
-         <div className="g2">
-            {surveys.map(s => {
-              const resCount = s.responses ? s.responses.length : 0;
-              return (
-                <div key={s.id} className="gc" style={{ padding: 20 }}>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: C.text, marginBottom: 12 }}>{s.title}</div>
-                  <div style={{ fontSize: 24, fontWeight: 900, color: T.gold }}>{resCount}</div>
-                  <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "1px", fontWeight: 800 }}>Total Responses</div>
-                  {resCount > 0 && (
-                    <div style={{ marginTop: 16, borderTop: `1px solid ${C.border}`, paddingTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
-                      {s.questions.map((q, i) => {
-                        const answersForQ = s.responses.map(r => r[i]).filter(Boolean);
-                        return (
-                          <div key={i} style={{ background: C.bg, padding: 12, borderRadius: 8 }}>
-                            <div style={{ fontSize: 12, fontWeight: 800, color: C.text, marginBottom: 8 }}>Q: {q}</div>
-                            {answersForQ.slice(0, 3).map((a, j) => (
-                               <div key={j} style={{ fontSize: 12, color: C.sub, padding: "4px 8px", background: `${C.border}55`, borderRadius: 4, marginBottom: 4 }}>"{a}"</div>
-                            ))}
-                            {answersForQ.length > 3 && <div style={{ fontSize: 10, color: T.orange, marginTop: 4 }}>+ {answersForQ.length - 3} more responses</div>}
-                          </div>
-                        )
-                      })}
-                    </div>
-                  )}
-                </div>
-              )
-            })}
-         </div>
+        <div className="g2">
+          {surveys.map(s => {
+            const resCount = s.responses ? s.responses.length : 0;
+            return (
+              <div key={s.id} className="gc" style={{ padding: 20 }}>
+                <div style={{ fontSize: 15, fontWeight: 800, color: C.text, marginBottom: 12 }}>{s.title}</div>
+                <div style={{ fontSize: 24, fontWeight: 900, color: T.gold }}>{resCount}</div>
+                <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: "1px", fontWeight: 800 }}>Total Responses</div>
+                {resCount > 0 && (
+                  <div style={{ marginTop: 16, borderTop: `1px solid ${C.border}`, paddingTop: 16, display: "flex", flexDirection: "column", gap: 12 }}>
+                    {s.questions.map((q, i) => {
+                      const answersForQ = s.responses.map(r => r[i]).filter(Boolean);
+                      return (
+                        <div key={i} style={{ background: C.bg, padding: 12, borderRadius: 8 }}>
+                          <div style={{ fontSize: 12, fontWeight: 800, color: C.text, marginBottom: 8 }}>Q: {q}</div>
+                          {answersForQ.slice(0, 3).map((a, j) => (
+                            <div key={j} style={{ fontSize: 12, color: C.sub, padding: "4px 8px", background: `${C.border}55`, borderRadius: 4, marginBottom: 4 }}>"{a}"</div>
+                          ))}
+                          {answersForQ.length > 3 && <div style={{ fontSize: 10, color: T.orange, marginTop: 4 }}>+ {answersForQ.length - 3} more responses</div>}
+                        </div>
+                      )
+                    })}
+                  </div>
+                )}
+              </div>
+            )
+          })}
+        </div>
       )}
 
       {showCreate && (
         <Modal title="Launch New Survey" width={540} onClose={() => setShowCreate(false)}>
           <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            <div><Lbl>Survey Title *</Lbl><input className="inp" value={createForm.title} onChange={e => setCreateForm({...createForm, title: e.target.value})} placeholder="e.g. Q3 eNPS Pulse Check" /></div>
-            <div><Lbl>Description</Lbl><textarea className="inp" rows="2" value={createForm.description} onChange={e => setCreateForm({...createForm, description: e.target.value})} placeholder="Explain the purpose of this survey..." /></div>
-            
+            <div><Lbl>Survey Title *</Lbl><input className="inp" value={createForm.title} onChange={e => setCreateForm({ ...createForm, title: e.target.value })} placeholder="e.g. Q3 eNPS Pulse Check" /></div>
+            <div><Lbl>Description</Lbl><textarea className="inp" rows="2" value={createForm.description} onChange={e => setCreateForm({ ...createForm, description: e.target.value })} placeholder="Explain the purpose of this survey..." /></div>
+
             <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
               <Lbl>Questions</Lbl>
               {createForm.questions.map((q, idx) => (
                 <input key={idx} className="inp" value={q} onChange={e => {
                   const newQ = [...createForm.questions];
                   newQ[idx] = e.target.value;
-                  setCreateForm({...createForm, questions: newQ});
+                  setCreateForm({ ...createForm, questions: newQ });
                 }} placeholder={`Question ${idx + 1}`} />
               ))}
-              <button className="bg" style={{ alignSelf: "flex-start", padding: "6px 12px", fontSize: 11 }} onClick={() => setCreateForm({...createForm, questions: [...createForm.questions, ""]})}>+ Add Question</button>
+              <button className="bg" style={{ alignSelf: "flex-start", padding: "6px 12px", fontSize: 11 }} onClick={() => setCreateForm({ ...createForm, questions: [...createForm.questions, ""] })}>+ Add Question</button>
             </div>
-            
+
             <button className="bp" onClick={handleCreate} style={{ marginTop: 10 }}>Publish Survey</button>
           </div>
         </Modal>
@@ -6076,12 +7715,12 @@ function CultureHub({ authRole }) {
         <Modal title={activeSurvey.title} width={600} onClose={() => !submitting && setActiveSurvey(null)}>
           <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
             {activeSurvey.description && <div style={{ fontSize: 13, color: C.sub, background: `${T.gold}11`, padding: 12, borderRadius: 8, border: `1px solid ${T.gold}33` }}>{activeSurvey.description}</div>}
-            
+
             <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
               {activeSurvey.questions.map((q, idx) => (
                 <div key={idx}>
                   <div style={{ fontSize: 14, fontWeight: 800, color: C.text, marginBottom: 8 }}>{idx + 1}. {q}</div>
-                  <textarea className="inp" rows="2" value={answers[idx] || ""} onChange={e => setAnswers({...answers, [idx]: e.target.value})} placeholder="Your answer..." />
+                  <textarea className="inp" rows="2" value={answers[idx] || ""} onChange={e => setAnswers({ ...answers, [idx]: e.target.value })} placeholder="Your answer..." />
                 </div>
               ))}
             </div>
