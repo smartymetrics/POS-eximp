@@ -1,0 +1,14 @@
+node_modules/
+pos-eximp/
+dist/
+App_old*.jsx
+App_v*.jsx
+*.pdf
+old*.html
+tmp_*.html
+test_js.js
+po
+.git/
+*.log
+__pycache__/
+.aider*

@@ -468,7 +468,10 @@ function GoalForm({ onSave, staffList = [], templates = [], initialGoal = null, 
       kpi: initialGoal.kpi_name || "",
       target: initialGoal.target_value != null ? String(initialGoal.target_value) : "",
       unit: initialGoal.unit || "",
-      period: initialGoal.month ? new Date(initialGoal.month).toLocaleDateString(undefined, { month: 'short', year: 'numeric' }) : defaultForm.period,
+      period: initialGoal.month ? (() => {
+        const d = new Date(initialGoal.month.includes('T') ? initialGoal.month : initialGoal.month + 'T12:00:00');
+        return d.toLocaleDateString(undefined, { month: 'short', year: 'numeric' });
+      })() : defaultForm.period,
       status: initialGoal.status || "Published"
     });
   }, [initialGoal, templates]);
@@ -479,8 +482,17 @@ function GoalForm({ onSave, staffList = [], templates = [], initialGoal = null, 
   const hasSuggestedKpis = suggestedTemplates.length > 0;
 
   const save = () => {
-    if ((!f.uid && !f.department) || !f.kpi || !f.target) return;
-    onSave({ ...f, department: departmentKey || f.department, target: parseFloat(f.target), actual: 0 });
+    if (!f.uid && !f.department) return alert("Please assign this goal to a staff member or department.");
+    if (!f.kpi) return alert("Please enter or select a KPI / goal name.");
+    if (!f.target || isNaN(parseFloat(f.target))) return alert("Please enter a valid target value.");
+
+    // Provide visual feedback during save
+    onSave({
+      ...f,
+      department: departmentKey || f.department,
+      target: parseFloat(f.target),
+      actual: initialGoal?.actual_value || 0
+    });
   };
 
   return (
@@ -847,7 +859,15 @@ function Goals({ viewOnly, userId, canManageKpiTemplates = false }) {
 
   const saveGoal = async (g) => {
     try {
-      const month = g.period ? new Date(`${g.period} 1`).toISOString().split('T')[0] : new Date().toISOString().split('T')[0];
+      // Parse "Apr 2026" → "2026-04-01", avoiding timezone issues by building the date explicitly
+      const parsePeriod = (period) => {
+        if (!period) return new Date().toISOString().split('T')[0];
+        const months = { Jan: 1, Feb: 2, Mar: 3, Apr: 4, May: 5, Jun: 6, Jul: 7, Aug: 8, Sep: 9, Oct: 10, Nov: 11, Dec: 12 };
+        const parts = period.split(' ');
+        const m = String(months[parts[0]] || 1).padStart(2, '0');
+        return `${parts[1]}-${m}-01`;
+      };
+      const month = parsePeriod(g.period);
       const payload = {
         kpi_name: g.kpi,
         target_value: g.target,
@@ -5375,14 +5395,24 @@ function StaffTimesheet() {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [sheets, setSheets] = useState([]); const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ week_start: "", mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, notes: "" });
+  const [viewSheet, setViewSheet] = useState(null);
 
-  useEffect(() => {
-    apiFetch(`${API_BASE}/hr/timesheets`).then(setSheets).catch(() => { }).finally(() => setLoading(false));
-  }, []);
+  // Default week = current Monday
+  const getMonday = (d = new Date()) => {
+    const dt = new Date(d); const day = dt.getDay();
+    dt.setDate(dt.getDate() - (day === 0 ? 6 : day - 1));
+    return dt.toISOString().split('T')[0];
+  };
+  const [form, setForm] = useState({ week_start: getMonday(), mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 0, notes: "" });
+  const [syncing, setSyncing] = useState(false);
+
+  const load = () => { setLoading(true); apiFetch(`${API_BASE}/hr/timesheets`).then(d => setSheets(d || [])).catch(() => { }).finally(() => setLoading(false)); };
+  useEffect(load, []);
 
   const submit = async () => {
     if (!form.week_start) return alert("Week start date required");
+    const total = +form.mon + +form.tue + +form.wed + +form.thu + +form.fri + +form.sat;
+    if (total === 0) return alert("Please log at least some hours before submitting.");
     try {
       await apiFetch(`${API_BASE}/hr/timesheets`, {
         method: "POST", body: JSON.stringify({
@@ -5390,52 +5420,200 @@ function StaffTimesheet() {
           wed_hrs: +form.wed, thu_hrs: +form.thu, fri_hrs: +form.fri, notes: form.notes
         })
       });
-      setShowNew(false);
-      apiFetch(`${API_BASE}/hr/timesheets`).then(setSheets);
+      setShowNew(false); setForm({ week_start: getMonday(), mon: 0, tue: 0, wed: 0, thu: 0, fri: 0, sat: 0, notes: "" }); load();
     } catch (e) { alert(e.message); }
   };
 
+  const syncFromAttendance = async () => {
+    if (!form.week_start) return alert("Please select a week starting date first.");
+    const start = new Date(form.week_start);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 5); // mon to sat
+    
+    const startStr = form.week_start;
+    const endStr = end.toISOString().split('T')[0];
+    
+    try {
+      setSyncing(true);
+      const data = await apiFetch(`${API_BASE}/hr/presence/attendance?start_date=${startStr}&end_date=${endStr}`);
+      if (!data || data.length === 0) {
+        alert("No attendance records found for this week.");
+        return;
+      }
+      
+      const newForm = { ...form };
+      data.forEach(rec => {
+        if (rec.check_in && rec.check_out) {
+          const cin = new Date(rec.check_in);
+          const cout = new Date(rec.check_out);
+          const diffHrs = Math.max(0, Math.round((cout - cin) / (1000 * 60 * 60) * 2) / 2);
+          
+          const dDate = new Date(rec.date);
+          const dayMap = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
+          const dayKey = dayMap[dDate.getDay()];
+          if (newForm.hasOwnProperty(dayKey)) {
+            newForm[dayKey] = diffHrs;
+          }
+        }
+      });
+      setForm(newForm);
+      alert("Successfully synced hours from your attendance records!");
+    } catch (e) {
+      alert("Sync failed: " + e.message);
+    } finally {
+      setSyncing(false);
+    }
+  };
+
   const stCol = { pending: T.gold, approved: "#4ADE80", rejected: "#F87171" };
+  const days = ["mon", "tue", "wed", "thu", "fri", "sat"];
+  const dayLabels = { mon: "Mon", tue: "Tue", wed: "Wed", thu: "Thu", fri: "Fri", sat: "Sat" };
+
+  const totalHrs = (s) => (s.mon_hrs || 0) + (s.tue_hrs || 0) + (s.wed_hrs || 0) + (s.thu_hrs || 0) + (s.fri_hrs || 0);
+  const formTotal = +form.mon + +form.tue + +form.wed + +form.thu + +form.fri + +form.sat;
+  const targetHrs = 40;
+  const pending = sheets.filter(s => s.status === "pending").length;
+  const approved = sheets.filter(s => s.status === "approved").length;
+  const avgHrs = sheets.length ? Math.round(sheets.reduce((a, s) => a + totalHrs(s), 0) / sheets.length) : 0;
 
   return (
     <div className="fade">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
-        <div><div className="ho" style={{ fontSize: 22 }}>My Timesheets</div><div style={{ fontSize: 13, color: C.sub }}>Record and track your weekly working hours.</div></div>
-        <button className="bp" onClick={() => setShowNew(true)}>+ New Timesheet</button>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>My Timesheets</div>
+          <div style={{ fontSize: 13, color: C.sub }}>Log and track your weekly working hours. Submitted timesheets go to your manager for approval.</div>
+        </div>
+        <button className="bp" onClick={() => setShowNew(true)}>+ Log This Week</button>
       </div>
-      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : (
-        <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
-          <div className="tw"><table className="ht"><thead><tr><th>Week Starting</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Total</th><th>Status</th><th>Submitted</th></tr></thead>
-            <tbody>{sheets.map(s => {
-              const total = (s.mon_hrs || 0) + (s.tue_hrs || 0) + (s.wed_hrs || 0) + (s.thu_hrs || 0) + (s.fri_hrs || 0);
-              const sc = stCol[s.status] || T.gold;
-              return (<tr key={s.id}>
-                <td>{s.week_start}</td>
-                <td>{s.mon_hrs}</td><td>{s.tue_hrs}</td><td>{s.wed_hrs}</td><td>{s.thu_hrs}</td><td>{s.fri_hrs}</td>
-                <td><strong>{total}h</strong></td>
-                <td><span className="tg" style={{ background: `${sc}22`, color: sc, textTransform: "capitalize" }}>{s.status}</span></td>
-                <td style={{ fontSize: 11, color: C.sub }}>{new Date(s.created_at).toLocaleDateString()}</td>
-              </tr>);
-            })}
-              {sheets.length === 0 && <tr><td colSpan="9" style={{ textAlign: "center", padding: 30, color: C.muted }}>You haven't submitted any timesheets yet.</td></tr>}
-            </tbody>
-          </table></div>
-        </div>
+
+      {/* Stats Row */}
+      <div className="g4" style={{ marginBottom: 24 }}>
+        <StatCard label="Total Submissions" value={sheets.length} col={T.gold} />
+        <StatCard label="Pending Approval" value={pending} col={T.gold} />
+        <StatCard label="Approved" value={approved} col="#4ADE80" />
+        <StatCard label="Avg Hours / Week" value={`${avgHrs}h`} col="#60A5FA" />
+      </div>
+
+      {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading…</div> : (
+        <>
+          {/* Timesheet history as cards */}
+          {sheets.length > 0 ? (
+            <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+              {sheets.map(s => {
+                const total = totalHrs(s);
+                const sc = stCol[s.status] || T.gold;
+                const pct = Math.min((total / targetHrs) * 100, 100);
+                const isOver = total > targetHrs;
+                return (
+                  <div key={s.id} className="gc" style={{ padding: "18px 22px", cursor: "pointer" }} onClick={() => setViewSheet(s)}>
+                    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
+                      <div>
+                        <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>Week of {new Date(s.week_start + "T12:00:00").toLocaleDateString(undefined, { weekday: "long", month: "short", day: "numeric", year: "numeric" })}</div>
+                        <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>Submitted {new Date(s.created_at).toLocaleDateString()}</div>
+                      </div>
+                      <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                        <div style={{ textAlign: "right" }}>
+                          <div style={{ fontSize: 22, fontWeight: 900, color: isOver ? "#F87171" : T.gold }}>{total}h</div>
+                          <div style={{ fontSize: 11, color: C.muted }}>{isOver ? `+${total - targetHrs}h overtime` : `of ${targetHrs}h target`}</div>
+                        </div>
+                        <span className="tg" style={{ background: `${sc}22`, color: sc, textTransform: "capitalize", fontSize: 12 }}>{s.status}</span>
+                      </div>
+                    </div>
+                    {/* Day breakdown bar */}
+                    <div style={{ display: "flex", gap: 4, marginBottom: 10 }}>
+                      {[["Mon", s.mon_hrs], ["Tue", s.tue_hrs], ["Wed", s.wed_hrs], ["Thu", s.thu_hrs], ["Fri", s.fri_hrs]].map(([label, hrs]) => {
+                        const h = hrs || 0;
+                        const dc = h === 0 ? C.border : h > 8 ? "#F87171" : h >= 7 ? "#4ADE80" : T.gold;
+                        return (
+                          <div key={label} style={{ flex: 1, textAlign: "center" }}>
+                            <div style={{ fontSize: 10, color: C.muted, marginBottom: 4 }}>{label}</div>
+                            <div style={{ height: 32, borderRadius: 6, background: `${dc}22`, border: `1px solid ${dc}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 12, fontWeight: 700, color: dc }}>{h || "—"}</div>
+                          </div>
+                        );
+                      })}
+                    </div>
+                    {/* Progress bar toward 40h target */}
+                    <div style={{ height: 4, background: C.border, borderRadius: 4, overflow: "hidden" }}>
+                      <div style={{ height: "100%", width: `${pct}%`, background: isOver ? "#F87171" : "#4ADE80", borderRadius: 4, transition: "width .4s" }} />
+                    </div>
+                    {s.notes && <div style={{ fontSize: 12, color: C.sub, marginTop: 10, fontStyle: "italic" }}>"{s.notes}"</div>}
+                  </div>
+                );
+              })}
+            </div>
+          ) : (
+            <div style={{ textAlign: "center", padding: 60, color: C.muted }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>🕐</div>
+              <div style={{ fontWeight: 800 }}>No timesheets submitted yet.</div>
+              <div style={{ fontSize: 13, marginTop: 6 }}>Click "+ Log This Week" to record your first week.</div>
+            </div>
+          )}
+        </>
       )}
-      {showNew && <Modal onClose={() => setShowNew(false)} title="Submit Weekly Timesheet">
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div><Lbl>Week Start (Monday)</Lbl><input type="date" className="inp" value={form.week_start} onChange={e => setForm(f => ({ ...f, week_start: e.target.value }))} /></div>
-          <div className="g3" style={{ gap: 10 }}>
-            {["mon", "tue", "wed", "thu", "fri"].map(d => (
-              <div key={d}><Lbl>{d.toUpperCase()} hrs</Lbl>
-                <input type="number" min="0" max="12" step="0.5" className="inp" value={form[d]} onChange={e => setForm(f => ({ ...f, [d]: e.target.value }))} />
-              </div>
-            ))}
+
+      {/* View Detail Modal */}
+      {viewSheet && (
+        <Modal onClose={() => setViewSheet(null)} title={`Timesheet — Week of ${viewSheet.week_start}`} width={500}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div className="g2" style={{ gap: 10 }}>
+              {[["Mon", viewSheet.mon_hrs], ["Tue", viewSheet.tue_hrs], ["Wed", viewSheet.wed_hrs], ["Thu", viewSheet.thu_hrs], ["Fri", viewSheet.fri_hrs]].map(([d, h]) => {
+                const hrs = h || 0; const col = hrs === 0 ? C.muted : hrs > 8 ? "#F87171" : "#4ADE80";
+                return <div key={d} style={{ textAlign: "center", padding: "12px 0", background: `${col}11`, borderRadius: 10, border: `1px solid ${col}33` }}>
+                  <div style={{ fontSize: 11, color: C.muted, marginBottom: 4 }}>{d}</div>
+                  <div style={{ fontSize: 22, fontWeight: 900, color: col }}>{hrs}h</div>
+                </div>;
+              })}
+            </div>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "14px 18px", background: `${T.gold}0A`, borderRadius: 10, border: `1px solid ${T.gold}22` }}>
+              <span style={{ fontWeight: 700 }}>Total Hours</span>
+              <span style={{ fontWeight: 900, color: T.gold, fontSize: 18 }}>{totalHrs(viewSheet)}h</span>
+            </div>
+            {viewSheet.notes && <div><Lbl>Notes</Lbl><div style={{ fontSize: 13, color: C.sub, marginTop: 6 }}>{viewSheet.notes}</div></div>}
+            {viewSheet.reviewer_notes && <div><Lbl>Manager Feedback</Lbl><div style={{ fontSize: 13, color: C.sub, marginTop: 6 }}>{viewSheet.reviewer_notes}</div></div>}
+            <Field label="Status" value={viewSheet.status?.toUpperCase()} />
           </div>
-          <div><Lbl>Notes</Lbl><textarea className="inp" value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any details about your week..." /></div>
-          <button className="bp" onClick={submit} style={{ padding: 14 }}>Submit to Manager</button>
-        </div>
-      </Modal>}
+        </Modal>
+      )}
+
+      {/* Submit Timesheet Modal */}
+      {showNew && (
+        <Modal onClose={() => setShowNew(false)} title="Log Weekly Hours" width={560}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+            <div style={{ display: "flex", gap: 12, alignItems: "flex-end" }}>
+              <div style={{ flex: 1 }}><Lbl>Week Starting (Monday)</Lbl><input type="date" className="inp" value={form.week_start} onChange={e => setForm(f => ({ ...f, week_start: e.target.value }))} /></div>
+              <button className="bg" onClick={syncFromAttendance} disabled={syncing} style={{ padding: "11px 16px", marginBottom: 0, display: "flex", alignItems: "center", gap: 8, height: 44 }}>
+                {syncing ? "⌛ Syncing..." : "🔄 Sync from Attendance"}
+              </button>
+            </div>
+            {/* Visual day grid */}
+            <div>
+              <Lbl>Daily Hours</Lbl>
+              <div style={{ display: "grid", gridTemplateColumns: "repeat(5, 1fr)", gap: 8, marginTop: 8 }}>
+                {days.slice(0, 5).map(d => {
+                  const h = +form[d]; const col = h === 0 ? C.border : h > 8 ? "#F87171" : h >= 7 ? "#4ADE80" : T.gold;
+                  return (
+                    <div key={d}>
+                      <div style={{ textAlign: "center", fontSize: 11, color: C.muted, marginBottom: 6 }}>{dayLabels[d]}</div>
+                      <input type="number" min="0" max="14" step="0.5" className="inp"
+                        value={form[d]}
+                        onChange={e => setForm(f => ({ ...f, [d]: e.target.value }))}
+                        style={{ textAlign: "center", fontWeight: 800, fontSize: 16, color: col, borderColor: col, padding: "10px 6px" }}
+                      />
+                    </div>
+                  );
+                })}
+              </div>
+            </div>
+            {/* Running total */}
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 18px", background: `${formTotal > 40 ? "#F87171" : T.gold}0A`, borderRadius: 10, border: `1px solid ${formTotal > 40 ? "#F87171" : T.gold}22` }}>
+              <span style={{ fontWeight: 700, color: C.text }}>Total this week</span>
+              <span style={{ fontWeight: 900, fontSize: 20, color: formTotal > 40 ? "#F87171" : T.gold }}>{formTotal}h {formTotal > 40 ? "(Overtime)" : `/ ${targetHrs}h target`}</span>
+            </div>
+            <div><Lbl>Notes (optional)</Lbl><textarea className="inp" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Any details about this week…" /></div>
+            <button className="bp" onClick={submit} style={{ padding: 14 }}>Submit for Approval</button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
@@ -5444,59 +5622,164 @@ function TimesheetApprovalCenter() {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [sheets, setSheets] = useState([]); const [loading, setLoading] = useState(true);
   const [filter, setFilter] = useState("pending");
+  const [reviewing, setReviewing] = useState(null);
+  const [reviewNotes, setReviewNotes] = useState("");
+  const [saving, setSaving] = useState(false);
 
-  useEffect(() => {
-    apiFetch(`${API_BASE}/hr/timesheets`).then(setSheets).catch(() => { }).finally(() => setLoading(false));
-  }, []);
+  const load = () => { setLoading(true); apiFetch(`${API_BASE}/hr/timesheets`).then(d => setSheets(d || [])).catch(() => { }).finally(() => setLoading(false)); };
+  useEffect(load, []);
 
-  const approve = async (id, status) => {
+  const review = async (id, status) => {
+    setSaving(true);
     try {
-      await apiFetch(`${API_BASE}/hr/timesheets/${id}`, { method: "PATCH", body: JSON.stringify({ status, reviewer_notes: "" }) });
-      apiFetch(`${API_BASE}/hr/timesheets`).then(setSheets);
-    } catch (e) { alert(e.message); }
+      await apiFetch(`${API_BASE}/hr/timesheets/${id}`, { method: "PATCH", body: JSON.stringify({ status, reviewer_notes: reviewNotes }) });
+      setReviewing(null); setReviewNotes(""); load();
+    } catch (e) { alert(e.message); } finally { setSaving(false); }
   };
 
-  const filtered = sheets.filter(s => filter === "all" || s.status === filter);
+  const bulkApprove = async () => {
+    const pending = sheets.filter(s => s.status === "pending");
+    if (!pending.length) return;
+    if (!window.confirm(`Approve all ${pending.length} pending timesheets?`)) return;
+    setSaving(true);
+    try {
+      await Promise.all(pending.map(s => apiFetch(`${API_BASE}/hr/timesheets/${s.id}`, { method: "PATCH", body: JSON.stringify({ status: "approved", reviewer_notes: "Bulk approved" }) })));
+      load();
+    } catch (e) { alert(e.message); } finally { setSaving(false); }
+  };
+
+  const totalHrs = (s) => (s.mon_hrs || 0) + (s.tue_hrs || 0) + (s.wed_hrs || 0) + (s.thu_hrs || 0) + (s.fri_hrs || 0);
   const stCol = { pending: T.gold, approved: "#4ADE80", rejected: "#F87171" };
+  const filtered = sheets.filter(s => filter === "all" || s.status === filter);
+  const pendingCount = sheets.filter(s => s.status === "pending").length;
+  const approvedCount = sheets.filter(s => s.status === "approved").length;
+  const rejectedCount = sheets.filter(s => s.status === "rejected").length;
+  const totalHrsAll = sheets.reduce((a, s) => a + totalHrs(s), 0);
 
   return (
     <div className="fade">
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
-        <div><div className="ho" style={{ fontSize: 22 }}>Timesheet Approval</div><div style={{ fontSize: 13, color: C.sub }}>Review and approve staff weekly hours.</div></div>
-        <div style={{ display: "flex", gap: 6 }}>
-           {["pending", "approved", "rejected", "all"].map(f => (
-             <button key={f} className={filter === f ? "bp" : "bg"} style={{ fontSize: 11, padding: "6px 12px", textTransform: "capitalize" }} onClick={() => setFilter(f)}>{f}</button>
-           ))}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Timesheet Approvals</div>
+          <div style={{ fontSize: 13, color: C.sub }}>Review and approve staff weekly hour submissions. Add feedback on rejection.</div>
         </div>
+        {pendingCount > 0 && (
+          <button className="bp" onClick={bulkApprove} disabled={saving} style={{ background: "#4ADE8022", color: "#4ADE80", border: "1px solid #4ADE8044" }}>
+            ✓ Approve All Pending ({pendingCount})
+          </button>
+        )}
       </div>
-      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : (
-        <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
-          <div className="tw"><table className="ht"><thead><tr><th>Staff Member</th><th>Dept</th><th>Week</th><th>Mon</th><th>Tue</th><th>Wed</th><th>Thu</th><th>Fri</th><th>Total</th><th>Status</th><th>Actions</th></tr></thead>
-            <tbody>{filtered.map(s => {
-              const total = (s.mon_hrs || 0) + (s.tue_hrs || 0) + (s.wed_hrs || 0) + (s.thu_hrs || 0) + (s.fri_hrs || 0);
-              const sc = stCol[s.status] || T.gold;
-              return (<tr key={s.id}>
-                <td style={{ fontWeight: 800 }}>{s.admins?.full_name || "—"}</td>
-                <td>{s.admins?.department || "—"}</td>
-                <td>{s.week_start}</td>
-                <td>{s.mon_hrs}</td><td>{s.tue_hrs}</td><td>{s.wed_hrs}</td><td>{s.thu_hrs}</td><td>{s.fri_hrs}</td>
-                <td><strong style={{ color: T.gold }}>{total}h</strong></td>
-                <td><span className="tg" style={{ background: `${sc}22`, color: sc, textTransform: "capitalize" }}>{s.status}</span></td>
-                <td>
-                  <div style={{ display: "flex", gap: 6 }}>
-                    {s.status === "pending" && <>
-                      <button className="bp" style={{ fontSize: 11, padding: "4px 10px" }} title="Approve" onClick={() => approve(s.id, "approved")}>✓</button>
-                      <button className="bd" style={{ fontSize: 11, padding: "4px 10px" }} title="Reject" onClick={() => approve(s.id, "rejected")}>✕</button>
-                    </>}
-                    {s.notes && <button className="bg" style={{ fontSize: 11, padding: "4px 10px" }} onClick={() => alert(`Notes: ${s.notes}`)}>Notes</button>}
+
+      {/* Stats */}
+      <div className="g4" style={{ marginBottom: 24 }}>
+        <StatCard label="Pending Review" value={pendingCount} col={T.gold} />
+        <StatCard label="Approved" value={approvedCount} col="#4ADE80" />
+        <StatCard label="Rejected" value={rejectedCount} col="#F87171" />
+        <StatCard label="Total Hours Logged" value={`${totalHrsAll}h`} col="#60A5FA" />
+      </div>
+
+      {/* Filter tabs */}
+      <div style={{ display: "flex", gap: 6, marginBottom: 18 }}>
+        {[["pending", T.gold], ["approved", "#4ADE80"], ["rejected", "#F87171"], ["all", C.sub]].map(([f, col]) => (
+          <button key={f} onClick={() => setFilter(f)} style={{
+            padding: "7px 16px", borderRadius: 8, cursor: "pointer", fontSize: 12, fontWeight: 700, textTransform: "capitalize",
+            background: filter === f ? `${col}22` : "transparent",
+            color: filter === f ? col : C.muted,
+            border: `1px solid ${filter === f ? col : C.border}`,
+          }}>
+            {f} {f !== "all" && `(${sheets.filter(s => s.status === f).length})`}
+          </button>
+        ))}
+      </div>
+
+      {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading…</div> : (
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          {filtered.map(s => {
+            const total = totalHrs(s);
+            const sc = stCol[s.status] || T.gold;
+            const name = s.admins?.full_name || "Unknown Staff";
+            const dept = s.admins?.department || "—";
+            const isOver = total > 40;
+            return (
+              <div key={s.id} className="gc" style={{ padding: "16px 20px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  {/* Left: staff info */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 14, flex: 1 }}>
+                    <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${T.gold}22`, border: `1.5px solid ${T.gold}44`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: T.gold, flexShrink: 0 }}>{name[0]}</div>
+                    <div>
+                      <div style={{ fontWeight: 800, color: C.text }}>{name}</div>
+                      <div style={{ fontSize: 12, color: C.sub }}>{dept} · Week of {new Date(s.week_start + "T12:00:00").toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}</div>
+                    </div>
                   </div>
-                </td>
-              </tr>);
-            })}
-              {filtered.length === 0 && <tr><td colSpan="11" style={{ textAlign: "center", padding: 40, color: C.muted }}>No timesheets matching filter.</td></tr>}
-            </tbody>
-          </table></div>
+                  {/* Middle: day pills */}
+                  <div style={{ display: "flex", gap: 4, flex: 1, justifyContent: "center" }}>
+                    {[["M", s.mon_hrs], ["T", s.tue_hrs], ["W", s.wed_hrs], ["T", s.thu_hrs], ["F", s.fri_hrs]].map(([label, h], i) => {
+                      const hrs = h || 0; const dc = hrs === 0 ? C.border : hrs > 8 ? "#F87171" : "#4ADE80";
+                      return <div key={i} style={{ textAlign: "center", minWidth: 36 }}>
+                        <div style={{ fontSize: 9, color: C.muted }}>{label}</div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: dc }}>{hrs}h</div>
+                      </div>;
+                    })}
+                  </div>
+                  {/* Right: total + status + actions */}
+                  <div style={{ display: "flex", alignItems: "center", gap: 12, flexShrink: 0 }}>
+                    <div style={{ textAlign: "right" }}>
+                      <div style={{ fontSize: 20, fontWeight: 900, color: isOver ? "#F87171" : T.gold }}>{total}h</div>
+                      {isOver && <div style={{ fontSize: 10, color: "#F87171" }}>+{total - 40}h OT</div>}
+                    </div>
+                    <span className="tg" style={{ background: `${sc}22`, color: sc, textTransform: "capitalize", fontSize: 11 }}>{s.status}</span>
+                    <button className="bg" onClick={() => { setReviewing(s); setReviewNotes(s.reviewer_notes || ""); }} style={{ fontSize: 11, padding: "6px 12px" }}>Review</button>
+                  </div>
+                </div>
+                {s.notes && <div style={{ fontSize: 12, color: C.sub, marginTop: 10, paddingTop: 10, borderTop: `1px solid ${C.border}`, fontStyle: "italic" }}>Staff note: "{s.notes}"</div>}
+                {s.reviewer_notes && s.status !== "pending" && <div style={{ fontSize: 12, color: C.muted, marginTop: 6 }}>Manager feedback: "{s.reviewer_notes}"</div>}
+              </div>
+            );
+          })}
+          {filtered.length === 0 && (
+            <div style={{ textAlign: "center", padding: 60, color: C.muted }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>📋</div>
+              <div style={{ fontWeight: 800 }}>No timesheets in this category.</div>
+            </div>
+          )}
         </div>
+      )}
+
+      {/* Review Modal */}
+      {reviewing && (
+        <Modal onClose={() => { setReviewing(null); setReviewNotes(""); }} title={`Review — ${reviewing.admins?.full_name || "Staff"}`} width={520}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", padding: "10px 14px", background: `${T.gold}08`, borderRadius: 10, border: `1px solid ${T.gold}22` }}>
+              <span style={{ color: C.sub, fontSize: 13 }}>Week of {reviewing.week_start}</span>
+              <span style={{ fontWeight: 900, color: T.gold }}>{totalHrs(reviewing)}h total</span>
+            </div>
+            <div className="g3" style={{ gap: 8 }}>
+              {[["Mon", reviewing.mon_hrs], ["Tue", reviewing.tue_hrs], ["Wed", reviewing.wed_hrs], ["Thu", reviewing.thu_hrs], ["Fri", reviewing.fri_hrs]].map(([d, h]) => {
+                const hrs = h || 0; const col = hrs === 0 ? C.muted : hrs > 8 ? "#F87171" : "#4ADE80";
+                return <div key={d} style={{ textAlign: "center", padding: "10px 0", background: `${col}11`, borderRadius: 8, border: `1px solid ${col}33` }}>
+                  <div style={{ fontSize: 10, color: C.muted }}>{d}</div>
+                  <div style={{ fontSize: 18, fontWeight: 900, color: col }}>{hrs}h</div>
+                </div>;
+              })}
+            </div>
+            {reviewing.notes && <div style={{ fontSize: 13, color: C.sub, fontStyle: "italic" }}>Staff note: "{reviewing.notes}"</div>}
+            <div>
+              <Lbl>Reviewer Notes (required for rejection)</Lbl>
+              <textarea className="inp" rows={3} value={reviewNotes} onChange={e => setReviewNotes(e.target.value)} placeholder="Add feedback or reason for rejection…" style={{ marginTop: 8 }} />
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button className="bp" onClick={() => review(reviewing.id, "approved")} disabled={saving} style={{ flex: 1, padding: 12, background: "#4ADE8022", color: "#4ADE80", border: "1px solid #4ADE8044" }}>
+                ✓ Approve
+              </button>
+              <button onClick={() => {
+                if (!reviewNotes.trim()) return alert("Please add a note explaining the rejection.");
+                review(reviewing.id, "rejected");
+              }} disabled={saving} style={{ flex: 1, padding: 12, background: "#F8717122", color: "#F87171", border: "1px solid #F8717144", borderRadius: 10, cursor: "pointer", fontWeight: 700 }}>
+                ✕ Reject
+              </button>
+            </div>
+          </div>
+        </Modal>
       )}
     </div>
   );
@@ -5582,7 +5865,7 @@ function ShiftScheduler({ isHR }) {
 }
 
 // ─── HUB: LEAVE POLICIES ─────────────────────────────────────────────────────
-function LeavePolicies() {
+function LeavePolicies({ isHR }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [policies, setPolicies] = useState([]); const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
@@ -5613,7 +5896,7 @@ function LeavePolicies() {
     <div className="fade">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
         <div><div className="ho" style={{ fontSize: 22 }}>Leave Policies</div><div style={{ fontSize: 13, color: C.sub }}>Configure leave types, entitlements and carry-over rules.</div></div>
-        <button className="bp" onClick={() => setShowNew(true)}>+ Add Policy</button>
+        {isHR && <button className="bp" onClick={() => setShowNew(true)}>+ Add Policy</button>}
       </div>
       <div className="g2" style={{ gap: 16, marginBottom: 22 }}>
         {(policies.length > 0 ? policies : defaults).map((p, i) => (
@@ -5677,7 +5960,7 @@ function LeaveBalancesOverview() {
           <div className="gc" style={{ padding: 22 }}>
             <div className="ho" style={{ fontSize: 14, marginBottom: 16 }}>Detailed Breakdown</div>
             <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-               {Object.entries(balances.by_type || {}).map(([type, days]) => (
+              {Object.entries(balances.by_type || {}).map(([type, days]) => (
                 <div key={type} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}44` }}>
                   <div>
                     <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{type} Leave</div>
@@ -5714,7 +5997,7 @@ function LeaveAccrualConfig() {
             <div style={{ fontSize: 12, color: C.sub }}>Staff earn 1.67 days per month (20 days/year).</div>
           </div>
         </div>
-        
+
         <div className="ho" style={{ fontSize: 14, marginBottom: 14 }}>System Logic</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
           {[
@@ -5729,7 +6012,7 @@ function LeaveAccrualConfig() {
             </div>
           ))}
         </div>
-        
+
         <div style={{ marginTop: 24, fontSize: 11, color: C.muted, textAlign: "center", fontStyle: "italic" }}>
           Contact HR Admin to modify these global accrual configurations.
         </div>
@@ -5853,9 +6136,9 @@ function SuccessionPlanning() {
 
       <div className="g2" style={{ marginBottom: 22 }}>
         {[["Identify Successors", "Map staff to critical roles they can fill in 6–24 months.", "#4ADE80"],
-          ["Retention Risk", "Top performers in succession plans are flagged as high-retention priority.", "#F87171"],
-          ["Readiness Levels", "Track each candidate's development stage towards role readiness.", T.gold],
-          ["Career Paths", "Define growth trajectories to motivate and retain talent.", "#60A5FA"]].map(([t, d, c]) => (
+        ["Retention Risk", "Top performers in succession plans are flagged as high-retention priority.", "#F87171"],
+        ["Readiness Levels", "Track each candidate's development stage towards role readiness.", T.gold],
+        ["Career Paths", "Define growth trajectories to motivate and retain talent.", "#60A5FA"]].map(([t, d, c]) => (
           <div key={t} className="gc" style={{ padding: 20, borderLeft: `3px solid ${c}` }}>
             <div style={{ fontWeight: 800, color: c, marginBottom: 8 }}>{t}</div>
             <div style={{ fontSize: 13, color: C.sub }}>{d}</div>
@@ -6758,34 +7041,429 @@ function PolicyLibrary({ isHR }) {
 // ─── HUB: INTERNAL JOB BOARD ─────────────────────────────────────────────────
 function InternalJobBoard({ isHR }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
-  const [jobs, setJobs] = useState([]); const [loading, setLoading] = useState(true);
+  const [jobs, setJobs] = useState([]); const [apps, setApps] = useState([]); const [loading, setLoading] = useState(true);
+  const [tab, setTab] = useState(isHR ? "manage" : "browse");
+  const [showPost, setShowPost] = useState(false);
+  const [showApply, setShowApply] = useState(null);
+  const [showDetails, setShowDetails] = useState(null);
+  const [viewApps, setViewApps] = useState(null);
+  const [form, setForm] = useState({ title: "", department: "", employment_type: "Full-Time", location: "Port Harcourt, NG", salary_range: "", description: "", requirements: "", closing_date: "" });
+  const [applyForm, setApplyForm] = useState({ cover_letter: "", years_experience: "", current_role: "", reason: "" });
+  const [saving, setSaving] = useState(false);
+  const { departments } = useDepartments();
 
-  useEffect(() => {
-    apiFetch(`${API_BASE}/hr/recruitment/jobs`).then(d => setJobs((d || []).filter(j => j.status === "Open"))).catch(() => setJobs([])).finally(() => setLoading(false));
-  }, []);
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [j, a] = await Promise.all([
+        apiFetch(`${API_BASE}/hr/recruitment/jobs`).catch(() => []),
+        apiFetch(`${API_BASE}/hr/recruitment/applications`).catch(() => [])
+      ]);
+      setJobs((j || []).filter(x => x.status === "Open" || isHR));
+      setApps(a || []);
+    } finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const postJob = async () => {
+    if (!form.title || !form.department) return alert("Title and department are required.");
+    setSaving(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/recruitment/jobs`, { method: "POST", body: JSON.stringify({ ...form, status: "Open" }) });
+      setShowPost(false); setForm({ title: "", department: "", employment_type: "Full-Time", location: "Port Harcourt, NG", salary_range: "", description: "", requirements: "", closing_date: "" }); load();
+    } catch (e) { alert(e.message); } finally { setSaving(false); }
+  };
+
+  const applyInternal = async () => {
+    if (!applyForm.cover_letter) return alert("Please write a brief cover letter.");
+    setSaving(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/recruitment/applications`, {
+        method: "POST",
+        body: JSON.stringify({
+          job_id: showApply.id,
+          candidate_name: "Internal Applicant",
+          cover_letter: `[INTERNAL APPLICATION]\n\nCurrent Role: ${applyForm.current_role}\nExperience: ${applyForm.years_experience} years\nReason: ${applyForm.reason}\n\n${applyForm.cover_letter}`
+        })
+      });
+      alert("Your application has been submitted!"); setShowApply(null); setApplyForm({ cover_letter: "", years_experience: "", current_role: "", reason: "" }); load();
+    } catch (e) { alert(e.message); } finally { setSaving(false); }
+  };
+
+  const closeJob = async (id) => {
+    if (!window.confirm("Close this vacancy?")) return;
+    try { await apiFetch(`${API_BASE}/hr/recruitment/jobs/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Closed" }) }); load(); } catch (e) { alert(e.message); }
+  };
+
+  const jobApps = (jobId) => apps.filter(a => a.job_id === jobId);
+  const typeCol = { "Full-Time": "#4ADE80", "Part-Time": "#60A5FA", "Contract": T.gold, "Internship": "#A78BFA" };
 
   return (
     <div className="fade">
-      <div style={{ marginBottom: 22 }}><div className="ho" style={{ fontSize: 22 }}>Internal Job Board</div><div style={{ fontSize: 13, color: C.sub }}>Open roles available for internal applications and referrals.</div></div>
-      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : (
-        <div className="g2">{jobs.map(j => (
-          <div key={j.id} className="gc" style={{ padding: 20 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
-              <span className="tg tg2">Open</span>
-              <span style={{ fontSize: 11, color: C.muted }}>{j.employment_type}</span>
-            </div>
-            <div style={{ fontWeight: 800, color: C.text, fontSize: 15, marginBottom: 4 }}>{j.title}</div>
-            <div style={{ fontSize: 12, color: C.sub, marginBottom: 12 }}>{j.department} · {j.location || "Port Harcourt, NG"}</div>
-            {j.salary_range && <div style={{ fontSize: 12, color: T.gold, fontWeight: 800, marginBottom: 12 }}>{j.salary_range}</div>}
-            <button className="bp" style={{ fontSize: 12, padding: "8px 16px" }}>Apply Internally</button>
-          </div>
-        ))}
-          {jobs.length === 0 && <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 40, color: C.muted }}>No internal vacancies at this time.</div>}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div><div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Internal Job Board</div><div style={{ fontSize: 13, color: C.sub }}>Open internal vacancies. Staff can apply directly — no external application needed.</div></div>
+        {isHR && <button className="bp" onClick={() => setShowPost(true)}>+ Post Internal Role</button>}
+      </div>
+
+      {isHR && (
+        <div style={{ display: "flex", gap: 6, marginBottom: 22 }}>
+          {[["browse", "📋 Open Roles"], ["manage", "⚙️ Manage Postings"], ["applications", "📥 All Applications"]].map(([t, label]) => (
+            <button key={t} onClick={() => setTab(t)} style={{ padding: "8px 18px", borderRadius: 10, cursor: "pointer", fontSize: 12, fontWeight: 700, background: tab === t ? `${T.gold}22` : "transparent", color: tab === t ? T.gold : C.muted, border: `1px solid ${tab === t ? T.gold : C.border}` }}>{label}</button>
+          ))}
         </div>
+      )}
+
+      <div className="g4" style={{ marginBottom: 22 }}>
+        <StatCard label="Open Roles" value={jobs.filter(j => j.status === "Open").length} col={T.gold} />
+        <StatCard label="Applications" value={apps.length} col="#60A5FA" />
+        <StatCard label="Departments Hiring" value={[...new Set(jobs.filter(j => j.status === "Open").map(j => j.department))].length} col="#4ADE80" />
+        <StatCard label="Hired This Month" value={apps.filter(a => a.status === "Hired").length} col="#A78BFA" />
+      </div>
+
+      {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading…</div> : (<>
+        {(tab === "browse" || !isHR) && (
+          <div className="g2" style={{ gap: 16 }}>
+            {jobs.filter(j => j.status === "Open").map(j => {
+              const tc = typeCol[j.employment_type] || T.gold;
+              return (
+                <div key={j.id} className="gc fade-in" style={{ padding: 22, cursor: "pointer" }} onClick={() => setShowDetails(j)}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
+                    <div>
+                      <div style={{ fontWeight: 900, fontSize: 16, color: C.text, marginBottom: 6 }}>{j.title}</div>
+                      <div style={{ display: "flex", gap: 8 }}>
+                        <span className="tg" style={{ background: `${tc}22`, color: tc, fontSize: 11 }}>{j.employment_type}</span>
+                        <span className="tg tg2" style={{ fontSize: 11 }}>Internal</span>
+                      </div>
+                    </div>
+                    <div style={{ fontSize: 11, color: C.muted }}>{jobApps(j.id).length} applied</div>
+                  </div>
+                  <div style={{ display: "flex", gap: 14, fontSize: 12, color: C.sub, marginBottom: 10, flexWrap: "wrap" }}>
+                    <span>🏢 {j.department}</span>
+                    <span>📍 {j.location || "Port Harcourt, NG"}</span>
+                    {j.salary_range && <span style={{ color: T.gold, fontWeight: 700 }}>💰 {j.salary_range}</span>}
+                  </div>
+                  {j.description && <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.6, marginBottom: 12 }}>{j.description.slice(0, 140)}{j.description.length > 140 ? "…" : ""}</div>}
+                  <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ fontSize: 11, color: T.gold, fontWeight: 800 }}>VIEW DETAILS →</div>
+                    <button className="bp" onClick={(e) => { e.stopPropagation(); setShowApply(j); }} style={{ padding: "8px 16px", fontSize: 12 }}>Quick Apply</button>
+                  </div>
+                </div>
+              );
+            })}
+            {jobs.filter(j => j.status === "Open").length === 0 && <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 60, color: C.muted }}><div style={{ fontSize: 36, marginBottom: 12 }}>🔍</div><div style={{ fontWeight: 800 }}>No internal vacancies at this time.</div></div>}
+          </div>
+        )}
+
+        {tab === "manage" && isHR && (
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {jobs.map(j => {
+              const tc = typeCol[j.employment_type] || T.gold; const count = jobApps(j.id).length;
+              return (<div key={j.id} className="gc" style={{ padding: "16px 20px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 800, color: C.text, fontSize: 14, marginBottom: 4 }}>{j.title}</div>
+                    <div style={{ display: "flex", gap: 10, fontSize: 12, color: C.sub }}>
+                      <span>🏢 {j.department}</span><span className="tg" style={{ background: `${tc}22`, color: tc, fontSize: 10 }}>{j.employment_type}</span>
+                      {j.status === "Closed" && <span style={{ color: "#F87171", fontWeight: 800 }}>[CLOSED]</span>}
+                      {j.closing_date && <span>Closes {j.closing_date}</span>}
+                    </div>
+                  </div>
+                  <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                    <div style={{ textAlign: "right" }}><div style={{ fontSize: 18, fontWeight: 900, color: T.gold }}>{count}</div><div style={{ fontSize: 10, color: C.muted }}>applicants</div></div>
+                    <button className="bg" onClick={() => setViewApps(j)} style={{ fontSize: 11, padding: "7px 14px" }}>View Applications</button>
+                    {j.status === "Open" && <button onClick={() => closeJob(j.id)} style={{ fontSize: 11, padding: "7px 14px", background: "#F8717122", color: "#F87171", border: "1px solid #F8717144", borderRadius: 8, cursor: "pointer", fontWeight: 700 }}>Close Role</button>}
+                  </div>
+                </div>
+              </div>);
+            })}
+            {jobs.length === 0 && <div style={{ textAlign: "center", padding: 40, color: C.muted }}>No active postings. Use "+ Post Internal Role" to create one.</div>}
+          </div>
+        )}
+
+        {tab === "applications" && isHR && (
+          <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+            <div className="tw"><table className="ht"><thead><tr><th>Candidate</th><th>Role Applied</th><th>Status</th><th>Applied</th></tr></thead>
+              <tbody>
+                {apps.map(a => {
+                  const job = jobs.find(j => j.id === a.job_id);
+                  const sc = { Applied: T.gold, Screening: "#60A5FA", Interview: "#A78BFA", Hired: "#4ADE80", Rejected: "#F87171" }[a.status] || C.muted;
+                  return (<tr key={a.id}><td style={{ fontWeight: 700 }}>{a.candidate_name}</td><td>{job?.title || "—"}</td><td><span className="tg" style={{ background: `${sc}22`, color: sc }}>{a.status}</span></td><td style={{ fontSize: 12, color: C.muted }}>{new Date(a.created_at).toLocaleDateString()}</td></tr>);
+                })}
+                {apps.length === 0 && <tr><td colSpan="4" style={{ textAlign: "center", padding: 30, color: C.muted }}>No applications yet.</td></tr>}
+              </tbody>
+            </table></div>
+          </div>
+        )}
+      </>)}
+
+      {showApply && (
+        <Modal onClose={() => { setShowApply(null); setApplyForm({ cover_letter: "", years_experience: "", current_role: "", reason: "" }); }} title={`Apply — ${showApply.title}`} width={560}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ padding: "12px 16px", background: `${T.gold}0A`, borderRadius: 10, border: `1px solid ${T.gold}22` }}>
+              <div style={{ fontWeight: 800, color: C.text }}>{showApply.title}</div>
+              <div style={{ fontSize: 12, color: C.sub }}>{showApply.department} · {showApply.location}</div>
+              {showApply.salary_range && <div style={{ fontSize: 12, color: T.gold, fontWeight: 700, marginTop: 2 }}>{showApply.salary_range}</div>}
+            </div>
+            <div className="g2" style={{ gap: 12 }}>
+              <div><Lbl>Current Role</Lbl><input className="inp" value={applyForm.current_role} onChange={e => setApplyForm(f => ({ ...f, current_role: e.target.value }))} placeholder="e.g. Sales Executive" /></div>
+              <div><Lbl>Years of Experience</Lbl><input className="inp" type="number" min="0" value={applyForm.years_experience} onChange={e => setApplyForm(f => ({ ...f, years_experience: e.target.value }))} /></div>
+            </div>
+            <div><Lbl>Why are you interested? *</Lbl><textarea className="inp" rows={3} value={applyForm.reason} onChange={e => setApplyForm(f => ({ ...f, reason: e.target.value }))} placeholder="How does this align with your career goals?" /></div>
+            <div><Lbl>Cover Letter *</Lbl><textarea className="inp" rows={5} value={applyForm.cover_letter} onChange={e => setApplyForm(f => ({ ...f, cover_letter: e.target.value }))} placeholder="Highlight your relevant skills and experience…" /></div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button className="bp" onClick={applyInternal} disabled={saving} style={{ flex: 1, padding: 13 }}>{saving ? "Submitting…" : "Submit Application"}</button>
+              <button className="bg" onClick={() => setShowApply(null)} style={{ flex: 1, padding: 13 }}>Cancel</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {showDetails && (
+        <Modal onClose={() => setShowDetails(null)} title="Job Details" width={640}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+            <div>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                <div>
+                  <div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>{showDetails.title}</div>
+                  <div style={{ display: "flex", gap: 10, fontSize: 14, color: C.sub }}>
+                    <span>🏢 {showDetails.department}</span>
+                    <span>📍 {showDetails.location}</span>
+                  </div>
+                </div>
+                <span className="tg to" style={{ padding: "8px 16px", borderRadius: 10 }}>{showDetails.employment_type}</span>
+              </div>
+              <div className="g2" style={{ gap: 16, marginTop: 16 }}>
+                <div className="field">
+                  <div className="fl">Salary Range</div>
+                  <div className="fv">{showDetails.salary_range || "Negotiable"}</div>
+                </div>
+                <div className="field">
+                  <div className="fl">Closing Date</div>
+                  <div className="fv">{showDetails.closing_date ? new Date(showDetails.closing_date + "T12:00:00").toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }) : "Open Until Filled"}</div>
+                </div>
+              </div>
+            </div>
+
+            <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 20 }}>
+              <div className="ho" style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Role Description</div>
+              <div style={{ fontSize: 14, color: C.sub, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{showDetails.description || "No description provided."}</div>
+            </div>
+
+            {showDetails.requirements && (
+              <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 20 }}>
+                <div className="ho" style={{ fontSize: 14, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Requirements & Skills</div>
+                <div style={{ fontSize: 14, color: C.sub, lineHeight: 1.7, whiteSpace: "pre-wrap" }}>{showDetails.requirements}</div>
+              </div>
+            )}
+
+            <div style={{ display: "flex", gap: 12, marginTop: 10 }}>
+              <button className="bp" onClick={() => { setShowDetails(null); setShowApply(showDetails); }} style={{ flex: 1, padding: 14, fontSize: 14 }}>Apply for this Role Now</button>
+              <button className="bg" onClick={() => setShowDetails(null)} style={{ padding: 14 }}>Close</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {viewApps && (
+        <Modal onClose={() => setViewApps(null)} title={`Applications — ${viewApps.title}`} width={600}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {jobApps(viewApps.id).length === 0
+              ? <div style={{ textAlign: "center", padding: 30, color: C.muted }}>No applications for this role yet.</div>
+              : jobApps(viewApps.id).map(a => {
+                const sc = { Applied: T.gold, Screening: "#60A5FA", Interview: "#A78BFA", Hired: "#4ADE80", Rejected: "#F87171" }[a.status] || C.muted;
+                return (<div key={a.id} style={{ padding: "14px 16px", background: `${sc}08`, borderRadius: 10, border: `1px solid ${sc}22` }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 8 }}>
+                    <div style={{ fontWeight: 800, color: C.text }}>{a.candidate_name}</div>
+                    <span className="tg" style={{ background: `${sc}22`, color: sc, fontSize: 11 }}>{a.status}</span>
+                  </div>
+                  {a.cover_letter && <div style={{ fontSize: 12, color: C.sub, whiteSpace: "pre-wrap", lineHeight: 1.6 }}>{a.cover_letter}</div>}
+                  <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>Applied {new Date(a.created_at).toLocaleDateString()}</div>
+                </div>);
+              })}
+          </div>
+        </Modal>
+      )}
+
+      {showPost && (
+        <Modal onClose={() => setShowPost(false)} title="Post Internal Role" width={580}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div className="g2" style={{ gap: 12 }}>
+              <div><Lbl>Job Title *</Lbl><input className="inp" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Senior Property Executive" /></div>
+              <div><Lbl>Department *</Lbl><select className="inp" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}><option value="">— Select —</option>{departments.map(d => <option key={d.id || d} value={d.name || d}>{d.name || d}</option>)}</select></div>
+            </div>
+            <div className="g2" style={{ gap: 12 }}>
+              <div><Lbl>Employment Type</Lbl><select className="inp" value={form.employment_type} onChange={e => setForm(f => ({ ...f, employment_type: e.target.value }))}><option>Full-Time</option><option>Part-Time</option><option>Contract</option><option>Internship</option></select></div>
+              <div><Lbl>Location</Lbl><input className="inp" value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))} /></div>
+            </div>
+            <div className="g2" style={{ gap: 12 }}>
+              <div><Lbl>Salary Range</Lbl><input className="inp" value={form.salary_range} onChange={e => setForm(f => ({ ...f, salary_range: e.target.value }))} placeholder="e.g. ₦350,000 – ₦500,000" /></div>
+              <div><Lbl>Application Deadline</Lbl><input type="date" className="inp" value={form.closing_date} onChange={e => setForm(f => ({ ...f, closing_date: e.target.value }))} /></div>
+            </div>
+            <div><Lbl>Job Description</Lbl><textarea className="inp" rows={3} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Role overview and responsibilities…" /></div>
+            <div><Lbl>Requirements</Lbl><textarea className="inp" rows={3} value={form.requirements} onChange={e => setForm(f => ({ ...f, requirements: e.target.value }))} placeholder="Skills, qualifications, experience needed…" /></div>
+            <button className="bp" onClick={postJob} disabled={saving} style={{ padding: 14 }}>{saving ? "Posting…" : "Post Role to Internal Board"}</button>
+          </div>
+        </Modal>
       )}
     </div>
   );
 }
+
+
+// ─── HUB: DOCUMENTS VAULT ───────────────────────────────────────────────────
+function DocumentsVault({ isHR, userId }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [docs, setDocs] = useState([]); const [staff, setStaff] = useState([]); const [loading, setLoading] = useState(true);
+  const [showUpload, setShowUpload] = useState(false);
+  const [filterStaff, setFilterStaff] = useState(userId || "");
+  const [filterType, setFilterType] = useState("All");
+  const [form, setForm] = useState({ staff_id: userId || "", doc_type: "ID", title: "", notes: "" });
+  const [file, setFile] = useState(null);
+  const [saving, setSaving] = useState(false);
+  const docTypes = ["ID", "Certificate", "Contract Copy", "Tax Document", "Insurance", "Policy Acknowledgement", "Offer Letter", "Background Check", "Medical", "Other"];
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const url = isHR ? `${API_BASE}/hr/documents` : `${API_BASE}/hr/staff/${userId}/documents`;
+      const [d, s] = await Promise.all([
+        apiFetch(url).catch(() => []),
+        isHR ? apiFetch(`${API_BASE}/hr/staff`).catch(() => []) : Promise.resolve([])
+      ]);
+      setDocs(d || []); setStaff(s || []);
+    } finally { setLoading(false); }
+  };
+  useEffect(() => { load(); }, []);
+
+  const upload = async () => {
+    if (!form.title || !file) return alert("Title and file are required.");
+    if (isHR && !form.staff_id) return alert("Please select a staff member.");
+    setSaving(true);
+    try {
+      // 1. Upload to Storage
+      const formData = new FormData();
+      formData.append("file", file);
+      const upRes = await fetch(`${API_BASE}/hr/upload`, {
+        method: "POST",
+        headers: { "Authorization": `Bearer ${localStorage.getItem("ec_token")}` },
+        body: formData
+      });
+      if (!upRes.ok) throw new Error("File upload failed");
+      const upData = await upRes.json();
+
+      // 2. Save Meta
+      await apiFetch(`${API_BASE}/hr/documents`, {
+        method: "POST",
+        body: JSON.stringify({
+          staff_id: form.staff_id || userId,
+          doc_type: form.doc_type,
+          title: form.title,
+          file_url: upData.url,
+          notes: form.notes
+        })
+      });
+      setShowUpload(false);
+      setForm({ staff_id: userId || "", doc_type: "ID", title: "", notes: "" });
+      setFile(null);
+      load();
+    } catch (e) { alert(e.message); } finally { setSaving(false); }
+  };
+
+  const deleteDoc = async (id) => {
+    if (!window.confirm("Delete this document?")) return;
+    try { await apiFetch(`${API_BASE}/hr/documents/${id}`, { method: "DELETE" }); load(); } catch (e) { alert(e.message); }
+  };
+
+  const typeColors = { ID: "#60A5FA", Certificate: "#4ADE80", "Contract Copy": T.gold, "Tax Document": "#F59E0B", Insurance: "#A78BFA", "Policy Acknowledgement": "#34D399", "Offer Letter": T.orange, "Background Check": "#F87171", Medical: "#EC4899", Other: "#9CA3AF" };
+  const typeIcon = { ID: "🪪", Certificate: "🎓", "Contract Copy": "📄", "Tax Document": "🧾", Insurance: "🛡️", "Policy Acknowledgement": "✅", "Offer Letter": "📩", "Background Check": "🔍", Medical: "🏥", Other: "📎" };
+
+  const filtered = docs.filter(d => (filterType === "All" || d.doc_type === filterType) && (!filterStaff || d.staff_id === filterStaff));
+  const byType = docTypes.reduce((acc, t) => { acc[t] = docs.filter(d => d.doc_type === t).length; return acc; }, {});
+
+  return (
+    <div className="fade">
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+        <div><div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Document Vault</div><div style={{ fontSize: 13, color: C.sub }}>{isHR ? "Manage and store all staff HR documents securely." : "Your HR documents on file."}</div></div>
+        <button className="bp" onClick={() => setShowUpload(true)}>+ Upload Document</button>
+      </div>
+
+      <div className="g4" style={{ marginBottom: 24 }}>
+        <StatCard label="Total Documents" value={docs.length} col={T.gold} />
+        <StatCard label="IDs & Certs" value={(byType["ID"] || 0) + (byType["Certificate"] || 0)} col="#60A5FA" />
+        <StatCard label="Contracts & Offers" value={(byType["Contract Copy"] || 0) + (byType["Offer Letter"] || 0)} col="#4ADE80" />
+        <StatCard label="Tax & Compliance" value={(byType["Tax Document"] || 0) + (byType["Policy Acknowledgement"] || 0)} col="#A78BFA" />
+      </div>
+
+      <div style={{ display: "flex", gap: 10, marginBottom: 20, flexWrap: "wrap", alignItems: "center" }}>
+        {isHR && <select className="inp" value={filterStaff} onChange={e => setFilterStaff(e.target.value)} style={{ maxWidth: 220, padding: "8px 12px" }}><option value="">All Staff</option>{staff.map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.department})</option>)}</select>}
+        <div style={{ display: "flex", gap: 6, flexWrap: "wrap" }}>
+          {["All", ...docTypes].map(t => (
+            <button key={t} onClick={() => setFilterType(t)} style={{
+              padding: "6px 12px", borderRadius: 8, cursor: "pointer", fontSize: 11, fontWeight: 700,
+              background: filterType === t ? `${typeColors[t] || T.gold}22` : "transparent",
+              color: filterType === t ? (typeColors[t] || T.gold) : C.muted,
+              border: `1px solid ${filterType === t ? (typeColors[t] || T.gold) : C.border}`
+            }}>{t === "All" ? "All" : `${typeIcon[t] || "📎"} ${t}`}</button>
+          ))}
+        </div>
+      </div>
+
+      {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading documents…</div> : filtered.length === 0 ? (
+        <div style={{ textAlign: "center", padding: 60, color: C.muted }}><div style={{ fontSize: 36, marginBottom: 12 }}>🗂️</div><div style={{ fontWeight: 800 }}>No documents found.</div></div>
+      ) : (
+        <div className="g3" style={{ gap: 12 }}>
+          {filtered.map(d => {
+            const tc = typeColors[d.doc_type] || T.gold;
+            const sm = staff.find(s => s.id === d.staff_id);
+            return (<div key={d.id} className="gc" style={{ padding: 18 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 12 }}>
+                <div style={{ width: 40, height: 40, borderRadius: 10, background: `${tc}22`, border: `1.5px solid ${tc}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20 }}>{typeIcon[d.doc_type] || "📎"}</div>
+                <span className="tg" style={{ background: `${tc}22`, color: tc, fontSize: 10 }}>{d.doc_type}</span>
+              </div>
+              <div style={{ fontWeight: 800, color: C.text, marginBottom: 4, fontSize: 14 }}>{d.title}</div>
+              {isHR && sm && <div style={{ fontSize: 12, color: C.sub, marginBottom: 6 }}>{sm.full_name} · {sm.department}</div>}
+              {d.notes && <div style={{ fontSize: 11, color: C.muted, marginBottom: 10, fontStyle: "italic" }}>{d.notes}</div>}
+              <div style={{ fontSize: 11, color: C.muted, marginBottom: 14 }}>Added {new Date(d.created_at).toLocaleDateString()}</div>
+              <div style={{ display: "flex", gap: 8, paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+                <a href={d.file_url} target="_blank" rel="noreferrer" className="bp" style={{ flex: 1, textAlign: "center", fontSize: 11, padding: "7px 0", textDecoration: "none", display: "flex", alignItems: "center", justifyContent: "center", gap: 5 }}>
+                  <span>👁️</span> View
+                </a>
+                {isHR && <button onClick={() => deleteDoc(d.id)} className="bd" style={{ fontSize: 11, padding: "7px 12px" }}>Delete</button>}
+              </div>
+            </div>);
+          })}
+        </div>
+      )}
+
+      {showUpload && (
+        <Modal onClose={() => { setShowUpload(false); setFile(null); }} title="Upload Official Document" width={520}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            {isHR && <div><Lbl>Staff Member *</Lbl><select className="inp" value={form.staff_id} onChange={e => setForm(f => ({ ...f, staff_id: e.target.value }))}><option value="">— Select Staff —</option>{staff.map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.department})</option>)}</select></div>}
+            <div className="g2" style={{ gap: 12 }}>
+              <div>
+                <Lbl>Document Type</Lbl>
+                <select className="inp" value={form.doc_type} onChange={e => setForm(f => ({ ...f, doc_type: e.target.value }))}>
+                  {docTypes.filter(t => isHR || !docs.some(d => d.doc_type === t)).map(t => <option key={t}>{t}</option>)}
+                </select>
+              </div>
+              <div><Lbl>Title *</Lbl><input className="inp" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. National ID Card" /></div>
+            </div>
+            <div>
+              <Lbl>Select File *</Lbl>
+              <input type="file" className="inp" style={{ padding: 8 }} onChange={e => setFile(e.target.files[0])} />
+              {file && <div style={{ fontSize: 10, color: T.gold, marginTop: 4 }}>Ready: {file.name} ({(file.size / 1024).toFixed(0)} KB)</div>}
+            </div>
+            <div><Lbl>Notes</Lbl><textarea className="inp" rows={2} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Optional context or expiry info…" /></div>
+            <button className="bp" onClick={upload} disabled={saving} style={{ padding: 14 }}>
+              {saving ? "Processing Upload..." : "Securely Upload Document"}
+            </button>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
 
 // ─── HUB: WORK PERMITS ───────────────────────────────────────────────────────
 function WorkPermits({ isHR }) {
@@ -7558,7 +8236,7 @@ function DiversityInclusion() {
 
       <div className="g2" style={{ marginBottom: 22 }}>
         {[["Equal Opportunity", "All hiring decisions are based solely on merit and role fit. We comply with Nigerian Labour Act provisions on non-discrimination.", "#60A5FA"],
-          ["Zero Tolerance Policy", "Discrimination, harassment or exclusion of any kind is a disciplinary offence under our Code of Conduct.", "#4ADE80"]].map(([t, d, c]) => (
+        ["Zero Tolerance Policy", "Discrimination, harassment or exclusion of any kind is a disciplinary offence under our Code of Conduct.", "#4ADE80"]].map(([t, d, c]) => (
           <div key={t} className="gc" style={{ padding: 22, borderLeft: `3px solid ${c}` }}>
             <div style={{ fontWeight: 800, color: c, marginBottom: 8 }}>{t}</div>
             <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.6 }}>{d}</div>
@@ -7736,7 +8414,7 @@ function HRCalendarView() {
 
   const addEvent = async () => {
     if (!form.title || !form.date) return alert("Title and date required");
-    try { await apiFetch(`${API_BASE}/hr/calendar-events`, { method: "POST", body: JSON.stringify(form) }); } catch (e) {}
+    try { await apiFetch(`${API_BASE}/hr/calendar-events`, { method: "POST", body: JSON.stringify(form) }); } catch (e) { }
     setEvents(prev => [{ ...form, id: Date.now().toString() }, ...prev]);
     setShowNew(false); setForm({ title: "", event_type: "Holiday", date: "", end_date: "", description: "", department: "All" });
   };
@@ -7772,7 +8450,7 @@ function HRCalendarView() {
       {/* Calendar */}
       <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
         <div style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)", borderBottom: `1px solid ${C.border}` }}>
-          {["Sun","Mon","Tue","Wed","Thu","Fri","Sat"].map(d => (<div key={d} style={{ padding: "8px 0", textAlign: "center", fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "1px" }}>{d}</div>))}
+          {["Sun", "Mon", "Tue", "Wed", "Thu", "Fri", "Sat"].map(d => (<div key={d} style={{ padding: "8px 0", textAlign: "center", fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "1px" }}>{d}</div>))}
         </div>
         {weeks.map((week, wi) => (<div key={wi} style={{ display: "grid", gridTemplateColumns: "repeat(7, 1fr)" }}>
           {week.map((day, di) => {
@@ -7844,7 +8522,7 @@ function HolidaysManager() {
 
   const addHoliday = async () => {
     if (!form.name || !form.date) return alert("Name and date required");
-    try { await apiFetch(`${API_BASE}/hr/holidays`, { method: "POST", body: JSON.stringify(form) }); } catch (e) {}
+    try { await apiFetch(`${API_BASE}/hr/holidays`, { method: "POST", body: JSON.stringify(form) }); } catch (e) { }
     setHolidays(prev => [...prev, { ...form, id: Date.now().toString() }].sort((a, b) => new Date(a.date) - new Date(b.date)));
     setShowAdd(false); setForm({ name: "", date: "", holiday_type: "Public Holiday", is_mandatory: true });
   };
@@ -8011,13 +8689,13 @@ function ExpensesManager() {
 
   const submit = async () => {
     if (!form.amount || !form.description) return alert("Amount and description required");
-    try { await apiFetch(`${API_BASE}/hr/expenses`, { method: "POST", body: JSON.stringify({ ...form, status: "Pending" }) }); } catch (e) {}
+    try { await apiFetch(`${API_BASE}/hr/expenses`, { method: "POST", body: JSON.stringify({ ...form, status: "Pending" }) }); } catch (e) { }
     setExpenses(prev => [{ ...form, id: Date.now().toString(), status: "Pending", created_at: new Date().toISOString(), staff: staff.find(s => s.id === form.staff_id) }, ...prev]);
     setShowNew(false); setForm({ staff_id: "", category: "Travel", amount: "", currency: "NGN", description: "", date: "", receipt_url: "" });
   };
 
-  const approve = async (id) => { try { await apiFetch(`${API_BASE}/hr/expenses/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Approved" }) }); } catch (e) {} setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: "Approved" } : x)); };
-  const reject = async (id) => { try { await apiFetch(`${API_BASE}/hr/expenses/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Rejected" }) }); } catch (e) {} setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: "Rejected" } : x)); };
+  const approve = async (id) => { try { await apiFetch(`${API_BASE}/hr/expenses/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Approved" }) }); } catch (e) { } setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: "Approved" } : x)); };
+  const reject = async (id) => { try { await apiFetch(`${API_BASE}/hr/expenses/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Rejected" }) }); } catch (e) { } setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: "Rejected" } : x)); };
 
   const statuses = ["All", "Pending", "Approved", "Rejected", "Paid"];
   const stCol = { Pending: T.gold, Approved: "#4ADE80", Rejected: "#F87171", Paid: "#60A5FA" };
@@ -8192,14 +8870,15 @@ function HRAdminPortal({ user, onLogout }) {
       if (p === "diversity") return <DiversityInclusion />;
       // Hub 3: Time & Attendance
       if (p === "presence") return <Presence currentUser={user} />;
-      if (p === "timesheets" || p === "timesheet_approvals") return <TimesheetApprovalCenter />;
+      if (p === "timesheets") return <StaffTimesheet />;
+      if (p === "timesheet_approvals") return <TimesheetApprovalCenter />;
       if (p === "shifts") return <ShiftScheduler isHR={true} />;
       if (p === "hr_calendar") return <HRCalendarView />;
       if (p === "holidays") return <HolidaysManager />;
       // Hub 4: Leave
       if (p === "leave") return <LeaveManagement user={user} />;
       if (p === "leave_balances") return <LeaveBalancesOverview />;
-      if (p === "leave_policies") return <LeavePolicies />;
+      if (p === "leave_policies") return <LeavePolicies isHR={true} />;
       if (p === "leave_accrual") return <LeaveAccrualConfig />;
       // Hub 5: Performance
       if (p === "perf") return <Performance />;
@@ -8227,7 +8906,8 @@ function HRAdminPortal({ user, onLogout }) {
       if (p === "policy_library") return <PolicyLibrary isHR={true} />;
       if (p === "internal_job_board") return <InternalJobBoard isHR={true} />;
       // Hub 8: Documents
-      if (p === "legal_vault" || p === "contracts") return <LegalManager staffId={null} staffName={null} isHR={true} />;
+      if (p === "legal_vault") return <DocumentsVault isHR={true} />;
+      if (p === "contracts") return <LegalManager staffId={null} staffName={null} isHR={true} />;
       if (p === "hr_letters") return <HRLetters isHR={true} />;
       if (p === "work_permits") return <WorkPermits isHR={true} />;
       if (p === "hr_requests") return <HRRequests user={user} isHR={true} />;
@@ -8304,9 +8984,10 @@ function ManagerPortal({ user, onLogout }) {
       if (p === "leave" || p === "leave_requests") return <LeaveManagement user={user} />;
       if (p === "leave_balances") return <LeaveBalancesOverview />;
       if (p === "leave_accrual") return <LeaveAccrualConfig />;
-      if (p === "leave_policies") return <LeavePolicies />;
+      if (p === "leave_policies") return <LeavePolicies isHR={false} />;
       if (p === "presence" || p === "hr_calendar" || p === "holidays") return <Presence currentUser={user} />;
-      if (p === "timesheets" || p === "timesheet_approvals") return <TimesheetApprovalCenter />;
+      if (p === "timesheets") return <StaffTimesheet />;
+      if (p === "timesheet_approvals") return <TimesheetApprovalCenter />;
       if (p === "shifts") return <ShiftScheduler isHR={false} />;
       if (p === "perf") return <Performance />;
       if (p === "goals") return <Goals />;
@@ -8424,7 +9105,7 @@ function StaffPortal({ user, onLogout }) {
       if (pg === "leave") return <LeaveManagement user={user} />;
       if (pg === "leave_balances") return <LeaveBalancesOverview />;
       if (pg === "leave_accrual") return <LeaveAccrualConfig />;
-      if (pg === "leave_policies") return <LeavePolicies />;
+      if (pg === "leave_policies") return <LeavePolicies isHR={false} />;
       if (pg === "perf") return <Performance viewOnly userId={user.id} />;
       if (pg === "goals") return <Goals viewOnly userId={user.id} />;
       if (pg === "improvement_plans") return <ImprovementPlans viewOnly userId={user.id} authRole="staff" />;
@@ -8435,7 +9116,8 @@ function StaffPortal({ user, onLogout }) {
       if (pg === "payroll") return <StaffPayroll user={user} />;
       if (pg === "bonuses") return <BonusManager isHR={false} />;
       if (pg === "disciplinary") return <Disciplinary viewOnly userId={user.id} />;
-      if (pg === "legal_vault" || pg === "contracts") return <LegalManager staffId={user.id} staffName={user.full_name} isHR={false} />;
+      if (pg === "legal_vault") return <DocumentsVault isHR={false} userId={user.id} />;
+      if (pg === "contracts") return <LegalManager staffId={user.id} staffName={user.full_name} isHR={false} />;
       if (pg === "hr_letters") return <HRLetters isHR={false} />;
       if (pg === "hr_requests") return <HRRequests user={user} isHR={false} />;
       if (pg === "grievances") return <Grievances isHR={false} />;
@@ -8687,18 +9369,18 @@ function NotificationBell({ userId }) {
   const [open, setOpen] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  const notifIcon = { letter_issued: "📄", task_assigned: "✅", grievance_update: "⚖️", request_update: "📦", goal_update: "🎯", announcement: "📢", recognition: "🏆", default: "🔔" };
-  const notifColor = { letter_issued: "#60A5FA", task_assigned: "#4ADE80", grievance_update: "#F87171", request_update: T.gold, goal_update: "#A78BFA", announcement: "#F59E0B", recognition: T.gold };
+  const notifIcon = { letter_issued: "📄", task_assigned: "✅", grievance_update: "⚖️", request_update: "📦", goal_update: "🎯", announcement: "📢", recognition: "🏆", remote_work_update: "🏠", default: "🔔" };
+  const notifColor = { letter_issued: "#60A5FA", task_assigned: "#4ADE80", grievance_update: "#F87171", request_update: T.gold, goal_update: "#A78BFA", announcement: "#F59E0B", recognition: T.gold, remote_work_update: T.gold };
 
   const fetch_ = useCallback(async () => {
     setLoading(true);
     try {
-      const d = await apiFetch(`${API_BASE}/hr/notifications?staff_id=${userId}&limit=30`).catch(() => []);
+      const d = await apiFetch(`${API_BASE}/hr/notifications?limit=30`).catch(() => []);
       setNotifs(Array.isArray(d) ? d : []);
     } catch { } finally { setLoading(false); }
   }, [userId]);
 
-  useEffect(() => { fetch_(); const t = setInterval(fetch_, 60000); return () => clearInterval(t); }, [fetch_]);
+  useEffect(() => { fetch_(); const t = setInterval(fetch_, 300000); return () => clearInterval(t); }, [fetch_]);
 
   const markRead = async (id) => {
     try {
@@ -8709,7 +9391,7 @@ function NotificationBell({ userId }) {
 
   const markAllRead = async () => {
     try {
-      await apiFetch(`${API_BASE}/hr/notifications/read-all`, { method: "PATCH", body: JSON.stringify({ staff_id: userId }) });
+      await apiFetch(`${API_BASE}/hr/notifications/read-all`, { method: "PATCH" });
       setNotifs(ns => ns.map(n => ({ ...n, is_read: true })));
     } catch { }
   };
@@ -8723,9 +9405,14 @@ function NotificationBell({ userId }) {
         style={{ background: "none", border: "none", cursor: "pointer", position: "relative", padding: "6px 8px", borderRadius: 8, color: C.text }}
         title="Notifications"
       >
-        <span style={{ fontSize: 20 }}>🔔</span>
+        <span style={{ fontSize: 20 }}>{unread > 0 ? "🔔" : "🔕"}</span>
         {unread > 0 && (
-          <span style={{ position: "absolute", top: 2, right: 2, background: "#F87171", color: "#fff", borderRadius: "50%", width: 16, height: 16, fontSize: 10, fontWeight: 900, display: "flex", alignItems: "center", justifyContent: "center", lineHeight: 1 }}>
+          <span className="fade-in" style={{
+            position: "absolute", top: 2, right: 2, background: "#F87171", color: "#fff",
+            borderRadius: "50%", width: 18, height: 18, fontSize: 10, fontWeight: 900,
+            display: "flex", alignItems: "center", justifyContent: "center",
+            boxShadow: "0 0 10px rgba(248,113,113,0.6)", border: "2px solid #fff"
+          }}>
             {unread > 9 ? "9+" : unread}
           </span>
         )}
@@ -8754,8 +9441,9 @@ function NotificationBell({ userId }) {
               </div>
             ) : (
               notifs.map(n => {
-                const icon = notifIcon[n.type] || notifIcon.default;
-                const col = notifColor[n.type] || C.muted;
+                const type = n.notification_type || n.type;
+                const icon = notifIcon[type] || notifIcon.default;
+                const col = notifColor[type] || C.muted;
                 return (
                   <div key={n.id}
                     onClick={() => markRead(n.id)}
@@ -9185,13 +9873,13 @@ function JobRequisitions() {
 
   const create = async () => {
     if (!form.title) return alert("Job title required");
-    try { 
+    try {
       if (form.id) {
-         await apiFetch(`${API_BASE}/hr/recruitment/jobs/${form.id}`, { method: "PATCH", body: JSON.stringify(form) }); 
+        await apiFetch(`${API_BASE}/hr/recruitment/jobs/${form.id}`, { method: "PATCH", body: JSON.stringify(form) });
       } else {
-         await apiFetch(`${API_BASE}/hr/recruitment/jobs`, { method: "POST", body: JSON.stringify({ ...form, status: "Pending Approval" }) }); 
+        await apiFetch(`${API_BASE}/hr/recruitment/jobs`, { method: "POST", body: JSON.stringify({ ...form, status: "Pending Approval" }) });
       }
-      setShowNew(false); refresh(); 
+      setShowNew(false); refresh();
     } catch (e) { alert(e.message); }
   };
 
@@ -9290,10 +9978,10 @@ function ApplicationsTracker() {
 
   const hireApp = async (appId) => {
     if (!window.confirm("This will create an employee account and staff profile for this candidate. Proceed?")) return;
-    try { 
-      await apiFetch(`${API_BASE}/hr/recruitment/applications/${appId}/hire`, { method: "POST" }); 
+    try {
+      await apiFetch(`${API_BASE}/hr/recruitment/applications/${appId}/hire`, { method: "POST" });
       alert("Applicant successfully hired and onboarded!");
-      refresh(); 
+      refresh();
     } catch (e) { alert(e.message); }
   };
 
@@ -9367,11 +10055,11 @@ function ApplicationsTracker() {
         <div className="g2" style={{ gap: 10, marginBottom: 14 }}><Field label="Email" value={viewApp.candidate_email} /><Field label="Phone" value={viewApp.candidate_phone} /></div>
         {viewApp.resume_url && <div style={{ marginBottom: 14 }}><a href={viewApp.resume_url} target="_blank" rel="noreferrer" className="bp" style={{ display: "inline-block", fontSize: 13, padding: "8px 18px" }}>📄 View CV</a></div>}
         {viewApp.status === "Hired" && (
-            <button onClick={() => { hireApp(viewApp.id); setViewApp(null); }} style={{ marginTop: 12, width: "100%", padding: "10px", borderRadius: 10, background: "#4ADE80", color: "white", border: "none", fontWeight: 800, cursor: "pointer" }}>
-              Confirm Hire & Onboard Staff 👤
-            </button>
-          )}
-          {viewApp.cover_letter && <div><Lbl>Cover Letter</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10 }}>{viewApp.cover_letter}</div></div>}
+          <button onClick={() => { hireApp(viewApp.id); setViewApp(null); }} style={{ marginTop: 12, width: "100%", padding: "10px", borderRadius: 10, background: "#4ADE80", color: "white", border: "none", fontWeight: 800, cursor: "pointer" }}>
+            Confirm Hire & Onboard Staff 👤
+          </button>
+        )}
+        {viewApp.cover_letter && <div><Lbl>Cover Letter</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10 }}>{viewApp.cover_letter}</div></div>}
       </Modal>)}
       {showNew && (<Modal onClose={() => setShowNew(false)} title="Add Application" width={560}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
@@ -9454,11 +10142,11 @@ function ATSPipeline() {
           {stages.map(s => (<button key={s.key} onClick={() => { moveApp(viewApp.id, s.key); setViewApp(null); }} style={{ padding: "7px 14px", borderRadius: 8, border: `1px solid ${viewApp.status === s.key ? s.col : C.border}`, background: viewApp.status === s.key ? `${s.col}22` : "transparent", color: viewApp.status === s.key ? s.col : C.sub, cursor: "pointer", fontSize: 12, fontWeight: viewApp.status === s.key ? 800 : 400 }}>{s.emoji} {s.label}</button>))}
         </div>
         {viewApp.status === "Hired" && (
-            <button onClick={() => { hireApp(viewApp.id); setViewApp(null); }} style={{ marginTop: 12, width: "100%", padding: "10px", borderRadius: 10, background: "#4ADE80", color: "white", border: "none", fontWeight: 800, cursor: "pointer" }}>
-              Confirm Hire & Onboard Staff 👤
-            </button>
-          )}
-          {viewApp.cover_letter && <div style={{ marginTop: 18 }}><Lbl>Cover Letter</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10, marginTop: 8 }}>{viewApp.cover_letter}</div></div>}
+          <button onClick={() => { hireApp(viewApp.id); setViewApp(null); }} style={{ marginTop: 12, width: "100%", padding: "10px", borderRadius: 10, background: "#4ADE80", color: "white", border: "none", fontWeight: 800, cursor: "pointer" }}>
+            Confirm Hire & Onboard Staff 👤
+          </button>
+        )}
+        {viewApp.cover_letter && <div style={{ marginTop: 18 }}><Lbl>Cover Letter</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10, marginTop: 8 }}>{viewApp.cover_letter}</div></div>}
       </Modal>)}
     </div>
   );
@@ -9473,7 +10161,7 @@ function InterviewScheduler() {
   const [viewIV, setViewIV] = useState(null);
   const [form, setForm] = useState({ application_id: "", interviewer_id: "", scheduled_at: "", location: "Video Call (Google Meet)", interview_type: "Technical", notes: "" });
 
-  useEffect(() => { apiFetch(`${API_BASE}/hr/staff`).then(d => setStaff(d || [])).catch(() => {}); }, []);
+  useEffect(() => { apiFetch(`${API_BASE}/hr/staff`).then(d => setStaff(d || [])).catch(() => { }); }, []);
 
   const schedule = async () => {
     if (!form.application_id || !form.scheduled_at) return alert("Application and date/time required");
@@ -9519,7 +10207,7 @@ function InterviewScheduler() {
                       <div style={{ fontWeight: 800, color: C.text, fontSize: 14 }}>{app?.candidate_name || "Unknown Candidate"}</div>
                       <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>{job?.title || "—"}</div>
                       <div style={{ display: "flex", gap: 16, fontSize: 11, color: C.muted, marginTop: 8, flexWrap: "wrap" }}>
-                        <span>⏰ {iv.scheduled_at ? new Date(iv.scheduled_at).toLocaleString([], {weekday:"short", month:"short", day:"numeric", hour:"2-digit", minute:"2-digit"}) : "—"}</span>
+                        <span>⏰ {iv.scheduled_at ? new Date(iv.scheduled_at).toLocaleString([], { weekday: "short", month: "short", day: "numeric", hour: "2-digit", minute: "2-digit" }) : "—"}</span>
                         <span>📍 {iv.location || "—"}</span>
                         {interviewer && <span>👤 {interviewer.full_name}</span>}
                       </div>
@@ -9664,6 +10352,22 @@ function TalentPool() {
   const [showAdd, setShowAdd] = useState(false);
   const [pool, setPool] = useState([]);
   const [form, setForm] = useState({ name: "", email: "", phone: "", source: "LinkedIn", skills: "", notes: "", role_interest: "" });
+  const [emailing, setEmailing] = useState(null);
+  const [emailForm, setEmailForm] = useState({ subject: "", message: "" });
+  const [sending, setSending] = useState(false);
+
+  const sendEmail = async () => {
+    if (!emailForm.subject || !emailForm.message) return alert("Subject and message are required.");
+    setSending(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/recruitment/send-email`, {
+        method: "POST",
+        body: JSON.stringify({ email: emailing.email, subject: emailForm.subject, message: emailForm.message, candidate_id: emailing.id })
+      });
+      alert(`Email sent to ${emailing.name} successfully.`);
+      setEmailing(null); setEmailForm({ subject: "", message: "" });
+    } catch (e) { alert("Failed to send email: " + e.message); } finally { setSending(false); }
+  };
 
   useEffect(() => {
     const candidates = apps.filter(a => ["Hired", "Rejected"].includes(a.status) || a.resume_url).map(a => ({ id: a.id, name: a.candidate_name, email: a.candidate_email, phone: a.candidate_phone, status: a.status, role: jobs.find(j => j.id === a.job_id)?.title || "—", source: "Applied", date: a.created_at, resume_url: a.resume_url }));
@@ -9713,7 +10417,15 @@ function TalentPool() {
               <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
                 <span style={{ fontSize: 11, color: C.muted }}>{sourceEmoji[p.source] || "👤"} {p.source || "—"}</span>
                 <div style={{ display: "flex", gap: 6 }}>
-                  {p.email && <a href={`mailto:${p.email}`} className="bg" style={{ fontSize: 11, padding: "4px 10px" }}>Email</a>}
+                  {p.email && <button onClick={() => {
+                    setEmailing(p); setEmailForm({
+                      subject: `Opportunity at Eximp & Cloves — ${p.role_interest || "Role"}`, message: `Dear ${p.name},
+
+We came across your profile and would love to discuss an exciting opportunity with you at Eximp & Cloves.
+
+Warm regards,
+HR Team` });
+                  }} className="bg" style={{ fontSize: 11, padding: "4px 10px" }}>Email</button>}
                   {p.resume_url && <a href={p.resume_url} target="_blank" rel="noreferrer" className="bg" style={{ fontSize: 11, padding: "4px 10px" }}>CV</a>}
                 </div>
               </div>
@@ -9722,6 +10434,18 @@ function TalentPool() {
           {filtered.length === 0 && <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 60, color: C.muted }}><div style={{ fontSize: 36, marginBottom: 12 }}>👥</div><div style={{ fontWeight: 800 }}>Talent pool is empty.</div></div>}
         </div>
       )}
+      {emailing && (<Modal onClose={() => { setEmailing(null); setEmailForm({ subject: "", message: "" }); }} title={`Email ${emailing.name}`} width={540}>
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          <div style={{ fontSize: 13, color: C.sub }}>To: <strong>{emailing.email}</strong></div>
+          <div><Lbl>Subject *</Lbl><input className="inp" value={emailForm.subject} onChange={e => setEmailForm(f => ({ ...f, subject: e.target.value }))} placeholder="e.g. Exciting Opportunity at Eximp & Cloves" /></div>
+          <div><Lbl>Message *</Lbl><textarea className="inp" rows={8} value={emailForm.message} onChange={e => setEmailForm(f => ({ ...f, message: e.target.value }))} placeholder="Write your outreach message..." /></div>
+          <div style={{ display: "flex", gap: 10 }}>
+            <button className="bp" onClick={sendEmail} disabled={sending} style={{ flex: 1, padding: 13 }}>{sending ? "Sending…" : "Send Email ✉️"}</button>
+            <button className="bg" onClick={() => { setEmailing(null); setEmailForm({ subject: "", message: "" }); }} style={{ flex: 1, padding: 13 }}>Cancel</button>
+          </div>
+          <div style={{ fontSize: 11, color: C.muted, textAlign: "center" }}>Sent via Eximp Resend email service. Delivery is logged automatically.</div>
+        </div>
+      </Modal>)}
       {showAdd && (<Modal onClose={() => setShowAdd(false)} title="Add to Talent Pool" width={560}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div className="g2" style={{ gap: 12 }}><div><Lbl>Full Name *</Lbl><input className="inp" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div><div><Lbl>Email</Lbl><input className="inp" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></div></div>
@@ -9885,7 +10609,7 @@ function PeerReviews360() {
   }, []);
 
   const refresh = () => {
-    apiFetch(`${API_BASE}/hr/peer-reviews`).then(r => setReviews(r || [])).catch(() => {});
+    apiFetch(`${API_BASE}/hr/peer-reviews`).then(r => setReviews(r || [])).catch(() => { });
   };
 
   const launchReview = async () => {

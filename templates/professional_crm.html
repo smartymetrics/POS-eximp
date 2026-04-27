@@ -2040,6 +2040,9 @@
                                     <button onclick="event.stopPropagation(); initiateLeadChat('${lead.id}', '${lead.full_name}')" title="Start Chat" style="color: var(--gold); background: rgba(196,125,10,0.1); width: 28px; height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; border:0;">
                                         <i class="fas fa-comment-dots" style="font-size:10px;"></i>
                                     </button>
+                                    <button onclick="event.stopPropagation(); logDailyActivity('${lead.id}')" title="Log Activity" style="color: #fff; background: rgba(255,255,255,0.05); width: 28px; height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; border: 1px solid #333;">
+                                        <i class="fas fa-pen" style="font-size:10px;"></i>
+                                    </button>
                                 </div>
                                 <div style="font-size: 9px; color: #444; font-weight: 700; text-transform: uppercase;">ID: ${lead.id.split('-')[0]}</div>
                             </div>
@@ -2102,7 +2105,7 @@
                     if (filterContainer) filterContainer.style.display = "none";
                 }
                 
-                const html = docs.map(doc => {
+                const html = docs.map((doc, index) => {
                     let badgeStyle = "background: rgba(255,255,255,0.05); color: #888;";
                     let badgeText = "Pending";
                     let actionBtn = "";

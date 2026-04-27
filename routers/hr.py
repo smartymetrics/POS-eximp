@@ -14,6 +14,34 @@ from models import (
 
 router = APIRouter()
 
+async def send_notification(admin_id: str, title: str, message: str, notification_type: str = "general"):
+    """Creates a notification record in the database using standard schema."""
+    db = get_db()
+    try:
+        await db_execute(lambda: db.table("notifications").insert({
+            "admin_id": admin_id,
+            "title": title,
+            "message": message,
+            "notification_type": notification_type,
+            "is_read": False,
+            "created_at": datetime.utcnow().isoformat()
+        }).execute())
+    except Exception as e:
+        print(f"NOTIFICATION ERROR: {e}")
+
+async def notify_hr_admins(title: str, message: str, notification_type: str = "hr_alert"):
+    """Sends a notification to all active HR and Admin users."""
+    db = get_db()
+    try:
+        # Fetch admins whose role or primary_role contains 'admin' or 'hr_admin'
+        res = await db_execute(lambda: db.table("admins").select("id").or_("role.ilike.*admin*,role.ilike.*hr_admin*,primary_role.ilike.*admin*,primary_role.ilike.*hr_admin*").eq("is_active", True).execute())
+        if res.data:
+            for admin in res.data:
+                await send_notification(admin["id"], title, message, notification_type)
+    except Exception as e:
+        print(f"HR NOTIFICATION ERROR: {e}")
+
+
 # ─── MODELS ───────────────────────────────────────────────────────────────────
 
 # ─── MODELS ───────────────────────────────────────────────────────────────────
@@ -1084,7 +1112,6 @@ async def get_hr_tasks(staff_id: Optional[str] = None, current_admin: dict = Dep
         
     res = await db_execute(lambda: query.execute())
     return res.data
-
 @router.post("/tasks", status_code=status.HTTP_201_CREATED)
 async def create_hr_task(task: TaskCreate, current_admin: dict = Depends(verify_token)):
     """Assign a task. HR or Manager only."""
@@ -1097,6 +1124,10 @@ async def create_hr_task(task: TaskCreate, current_admin: dict = Depends(verify_
         "status": "pending",
         "created_by": current_admin["sub"]
     }).execute())
+    
+    if res.data:
+        await send_notification(task.assigned_to, "New Task Assigned", f"You have been assigned a new task: {task.title}", "task_assigned")
+        
     return res.data[0]
 
 class GoalCreate(BaseModel):
@@ -1432,15 +1463,6 @@ async def get_dashboard_stats(current_admin: dict = Depends(verify_token)):
         }
     }
 
-"""
-Paste this block into routers/hr.py
-
-Place the Pydantic models near the top with your other models.
-Place the two route handlers alongside your other attendance routes.
-
-Requires: pip install httpx  (already likely installed)
-"""
-
 # ── ADD TO MODELS SECTION ────────────────────────────────────────────────────
 
 from fastapi import Request  # add to existing fastapi import
@@ -1723,6 +1745,8 @@ async def request_leave(req: LeaveRequestCreate, current_admin: dict = Depends(v
     res = await db_execute(lambda: db.table("leave_requests").insert(data).execute())
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to submit leave request.")
+    
+    await notify_hr_admins("New Leave Request", f"A new leave request has been submitted by {current_admin.get('name', 'Staff')}.", "request_update")
     return res.data[0]
 
 @router.get("/leave-requests", tags=["HR Suite"])
@@ -1770,10 +1794,24 @@ async def update_leave_status(req_id: str, up: LeaveRequestUpdate, current_admin
             "p_staff_id": req["staff_id"],
             "p_days": req["days_count"]
         }).execute())
+    
+    if res.data:
+        await send_notification(req["staff_id"], "Leave Request Update", f"Your leave request has been {up.status}.", "request_update")
         
     return res.data[0]
 
 # ─── DOCUMENTS & QUALIFICATIONS ──────────────────────────────────────────────
+
+@router.get("/documents", tags=["HR Suite"])
+async def get_all_documents(current_admin: dict = Depends(verify_token)):
+    """HR-only: Fetch all staff documents."""
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only.")
+    
+    db = get_db()
+    res = await db_execute(lambda: db.table("staff_documents").select("*").order("created_at", desc=True).execute())
+    return res.data
 
 @router.post("/documents", tags=["HR Suite"])
 async def upload_staff_document(doc: StaffDocumentCreate, current_admin: dict = Depends(verify_token)):
@@ -1788,13 +1826,19 @@ async def upload_staff_document(doc: StaffDocumentCreate, current_admin: dict = 
     
     db = get_db()
     
-    # Duplicate check for non-HR
-    if not is_hr:
-        existing = await db_execute(lambda: db.table("staff_documents").select("id").eq("staff_id", doc.staff_id).eq("doc_type", doc.doc_type).execute())
-        if existing.data:
-            raise HTTPException(status_code=403, detail=f"You have already uploaded a document of type '{doc.doc_type}'. Please contact HR to update it.")
-    
     db = get_db()
+    
+    # Robust duplicate check: same staff, same type, same title
+    existing = await db_execute(lambda: db.table("staff_documents")
+        .select("id")
+        .eq("staff_id", doc.staff_id)
+        .eq("doc_type", doc.doc_type)
+        .eq("title", doc.title)
+        .execute())
+    
+    if existing.data:
+        raise HTTPException(status_code=400, detail=f"A document with this title and type already exists for this staff member.")
+    
     data = doc.dict()
     data["uploaded_by"] = current_admin["sub"]
     data["created_at"] = datetime.utcnow().isoformat()
@@ -2054,6 +2098,7 @@ class JobRequisitionCreate(BaseModel):
     employment_type: str
     location: Optional[str] = None
     status: str = "Pending Approval"
+    is_internal: bool = False
     description: Optional[str] = None # About the Role
     requirements: Optional[str] = None
     responsibilities: Optional[str] = None
@@ -2075,9 +2120,12 @@ class InterviewCreate(BaseModel):
     scheduled_at: datetime
 
 @router.get("/recruitment/jobs")
-async def get_jobs():
+async def get_jobs(is_internal: Optional[bool] = None):
     db = get_db()
-    res = await db_execute(lambda: db.table("job_requisitions").select("*").order("created_at", desc=True).execute())
+    query = db.table("job_requisitions").select("*").order("created_at", desc=True)
+    if is_internal is not None:
+        query = query.eq("is_internal", is_internal)
+    res = await db_execute(lambda: query.execute())
     return res.data
 
 @router.post("/recruitment/jobs", status_code=status.HTTP_201_CREATED)
@@ -2111,6 +2159,8 @@ async def create_application(app: JobApplicationCreate):
     # Could be public, no token required natively, but keeping simple
     db = get_db()
     res = await db_execute(lambda: db.table("job_applications").insert(app.dict(exclude_unset=True)).execute())
+    if res.data:
+        await notify_hr_admins("New Job Application", f"New application received from {app.candidate_name}", "request_update")
     return res.data[0]
 
 @router.patch("/recruitment/applications/{app_id}")
@@ -2419,6 +2469,9 @@ async def create_shift(shift: ShiftCreate, current_admin: dict = Depends(verify_
         "shift_type": shift.shift_type, "notes": shift.notes,
         "created_by": current_admin["sub"]
     }).execute())
+    
+    await send_notification(shift.staff_id, "New Shift Assigned", f"You have been assigned a shift on {shift.shift_date}.")
+    
     return res.data[0]
 
 @router.delete("/shifts/{shift_id}")
@@ -2651,6 +2704,13 @@ async def create_announcement(a: AnnouncementCreate, current_admin: dict = Depen
     res = await db_execute(lambda: db.table("announcements").insert({
         **a.dict(), "created_by": current_admin["sub"], "created_at": datetime.utcnow().isoformat()
     }).execute())
+    
+    if res.data:
+        staff_res = await db_execute(lambda: db.table("admins").select("id").eq("is_active", True).execute())
+        if staff_res.data:
+            for s in staff_res.data:
+                await send_notification(s["id"], f"New Announcement: {a.title}", a.body[:100] + "...", "announcement")
+
     return res.data[0]
 
 # ─── RECOGNITION (KUDOS) ──────────────────────────────────────
@@ -2762,6 +2822,10 @@ async def create_hr_letter(l: HRLetterCreate, current_admin: dict = Depends(veri
     res = await db_execute(lambda: db.table("hr_letters").insert({
         **l.dict(), "date_issued": l.date_issued.isoformat(), "issued_by": current_admin["sub"]
     }).execute())
+    
+    if res.data:
+        await send_notification(l.staff_id, "New HR Letter Issued", f"A new {l.letter_type} has been uploaded to your profile.", "letter_issued")
+        
     return res.data[0]
 
 # ─── GRIEVANCES ───────────────────────────────────────────────
@@ -2787,6 +2851,8 @@ async def submit_grievance(g: GrievanceCreate, current_admin: dict = Depends(ver
         "status": "open",
         "created_at": datetime.utcnow().isoformat()
     }).execute())
+    
+    await notify_hr_admins("New Grievance Filed", f"A new grievance has been filed: {g.subject}", "grievance_update")
     return {"message": "Grievance submitted successfully"}
 
 @router.patch("/grievances/{grievance_id}")
@@ -2800,6 +2866,10 @@ async def update_grievance_status(grievance_id: str, request: Request, current_a
         "status": data.get("status"),
         "resolved_by": current_admin["sub"]
     }).eq("id", grievance_id).execute())
+    
+    if res.data and res.data[0].get("filed_by"):
+        await send_notification(res.data[0]["filed_by"], "Grievance Status Update", f"Your grievance status has been updated to: {data.get('status')}", "grievance_update")
+
     return res.data[0] if res.data else {"message": "Updated"}
 
 # ─── AUDIT LOGS ───────────────────────────────────────────────
@@ -2990,7 +3060,7 @@ async def get_notifications(staff_id: Optional[str] = None, limit: int = 30, cur
              
     res = await db_execute(lambda: db.table("notifications")
         .select("*")
-        .eq("staff_id", target)
+        .eq("admin_id", target)
         .order("created_at", desc=True)
         .limit(limit)
         .execute())
@@ -2999,13 +3069,13 @@ async def get_notifications(staff_id: Optional[str] = None, limit: int = 30, cur
 @router.patch("/notifications/{notif_id}/read")
 async def mark_notification_read(notif_id: str, current_admin: dict = Depends(verify_token)):
     db = get_db()
-    res = await db_execute(lambda: db.table("notifications").update({"is_read": True}).eq("id", notif_id).eq("staff_id", current_admin["sub"]).execute())
+    res = await db_execute(lambda: db.table("notifications").update({"is_read": True}).eq("id", notif_id).eq("admin_id", current_admin["sub"]).execute())
     return {"success": True}
 
-@router.post("/notifications/read-all")
+@router.patch("/notifications/read-all")
 async def mark_all_notifications_read(current_admin: dict = Depends(verify_token)):
     db = get_db()
-    res = await db_execute(lambda: db.table("notifications").update({"is_read": True}).eq("staff_id", current_admin["sub"]).execute())
+    res = await db_execute(lambda: db.table("notifications").update({"is_read": True}).eq("admin_id", current_admin["sub"]).execute())
     return {"success": True}
 
 # ─── SUCCESSION PLANNING ─────────────────────────────────────
@@ -3056,7 +3126,7 @@ async def get_remote_work(staff_id: Optional[str] = None, current_admin: dict = 
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
     is_hr = any(r in ["admin", "hr_admin"] for r in user_roles)
-    query = db.table("remote_work_requests").select("*, admins(full_name, department)")
+    query = db.table("remote_work_requests").select("*, admins!remote_work_requests_staff_id_fkey(full_name, department)")
     if staff_id:
         query = query.eq("staff_id", staff_id)
     elif not is_hr:
@@ -3070,6 +3140,10 @@ async def request_remote_work(req: RemoteWorkCreate, current_admin: dict = Depen
     res = await db_execute(lambda: db.table("remote_work_requests").insert({
         **req.dict(), "staff_id": current_admin["sub"], "work_date": req.work_date.isoformat(), "status": "pending"
     }).execute())
+    
+    if res.data:
+        await notify_hr_admins("New Remote Work Request", f"New remote work request from {current_admin.get('full_name', 'staff')}.", "remote_work_update")
+        
     return res.data[0]
 
 @router.patch("/remote-work/{req_id}/status")
@@ -3081,6 +3155,11 @@ async def approve_remote_work(req_id: str, status_update: dict, current_admin: d
     res = await db_execute(lambda: db.table("remote_work_requests").update({
         "status": status_update.get("status"), "approved_by": current_admin["sub"]
     }).eq("id", req_id).execute())
+    
+    if res.data:
+        req_data = res.data[0]
+        await send_notification(req_data["staff_id"], "Remote Work Update", f"Your remote work request status has been updated to: {status_update.get('status')}", "remote_work_update")
+
     return res.data[0] if res.data else {"message": "Updated"}
 
 # ─── POLICY LIBRARY ──────────────────────────────────────────
@@ -3109,7 +3188,7 @@ async def get_exit_interviews(current_admin: dict = Depends(verify_token)):
     if not any(r in ["admin", "hr_admin"] for r in user_roles):
          raise HTTPException(status_code=403, detail="HR Admin only")
     db = get_db()
-    res = await db_execute(lambda: db.table("exit_interviews").select("*, admins(full_name, department)").execute())
+    res = await db_execute(lambda: db.table("exit_interviews").select("*, admins!exit_interviews_staff_id_fkey(full_name, department)").execute())
     return res.data
 
 @router.post("/exit-interviews", status_code=201)
@@ -3129,7 +3208,7 @@ async def get_hr_requests(staff_id: Optional[str] = None, current_admin: dict = 
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
     is_hr = any(r in ["admin", "hr_admin"] for r in user_roles)
-    query = db.table("hr_requests").select("*, admins(full_name, department)")
+    query = db.table("hr_requests").select("*, admins!hr_requests_staff_id_fkey(full_name, department)")
     if staff_id:
         query = query.eq("staff_id", staff_id)
     elif not is_hr:
@@ -3143,6 +3222,10 @@ async def create_hr_request(req: HRRequestCreate, current_admin: dict = Depends(
     res = await db_execute(lambda: db.table("hr_requests").insert({
         **req.dict(), "staff_id": current_admin["sub"], "status": "pending"
     }).execute())
+    
+    if (res.data):
+        await notify_hr_admins("New HR Request", f"New {req.request_type} request submitted.", "request_update")
+        
     return res.data[0]
 
 @router.patch("/requests/{req_id}/status")
@@ -3154,4 +3237,9 @@ async def update_request_status(req_id: str, status_update: dict, current_admin:
     res = await db_execute(lambda: db.table("hr_requests").update({
         "status": status_update.get("status"), "resolved_by": current_admin["sub"]
     }).eq("id", req_id).execute())
+    
+    if res.data:
+        req_data = res.data[0]
+        await send_notification(req_data["staff_id"], "HR Request Update", f"Your {req_data.get('request_type', 'request')} status has been updated to: {status_update.get('status')}", "request_update")
+
     return res.data[0] if res.data else {"message": "Updated"}
