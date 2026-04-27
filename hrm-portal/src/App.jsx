@@ -457,7 +457,7 @@ function Topbar({ title, user }) {
   );
 }
 
-// Authentication is now handled by the main platform.
+// ──────────────────────────────────────────────────uthentication is now handled by the main platform.
 // Redirection logic is in the App component.
 
 
@@ -5895,7 +5895,7 @@ function ShiftScheduler({ isHR }) {
   const addShift = async () => {
     if (!form.staff_id || !form.shift_date) return alert("Staff and date required");
     try {
-      await apiFetch(`${API_BASE}/hr/shifts`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/shifts`, { method: "POST", body: JSON.stringify({ name: form.name, holiday_date: form.date, is_recurring: form.is_mandatory }) });
       setShowNew(false);
       apiFetch(`${API_BASE}/hr/shifts`).then(setShifts);
     } catch (e) { alert(e.message); }
@@ -5968,7 +5968,7 @@ function LeavePolicies({ isHR }) {
 
   const add = async () => {
     try {
-      await apiFetch(`${API_BASE}/hr/leave-policies`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/leave-policies`, { method: "POST", body: JSON.stringify({ name: form.name, holiday_date: form.date, is_recurring: form.is_mandatory }) });
       setShowNew(false);
       apiFetch(`${API_BASE}/hr/leave-policies`).then(d => setPolicies(d || []));
     } catch (e) { alert(e.message); }
@@ -6131,7 +6131,7 @@ function ImprovementPlans({ viewOnly, userId, authRole }) {
   const save = async () => {
     if (!form.staff_id || !form.reason || !form.start_date) return alert("Staff, reason and start date required");
     try {
-      await apiFetch(`${API_BASE}/hr/pip`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/pip`, { method: "POST", body: JSON.stringify({ name: form.name, holiday_date: form.date, is_recurring: form.is_mandatory }) });
       setShowNew(false); apiFetch(`${API_BASE}/hr/pip`).then(d => setPips(d || []));
     } catch (e) { alert(e.message); }
   };
@@ -6203,7 +6203,7 @@ function SuccessionPlanning() {
     if (!form.critical_role || !form.successor_id) return alert("Role and successor required.");
     setSaving(true);
     try {
-      await apiFetch(`${API_BASE}/hr/succession-plans`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/succession-plans`, { method: "POST", body: JSON.stringify({ name: form.name, holiday_date: form.date, is_recurring: form.is_mandatory }) });
       setShowNew(false); setForm({ critical_role: "", successor_id: "", readiness: "6-12 months", development_notes: "" });
       refresh();
     } catch (e) { alert("Error: " + e.message); } finally { setSaving(false); }
@@ -6351,7 +6351,7 @@ function LearningHub({ isHR }) {
   const add = async () => {
     if (!form.title || !form.start_date) return alert("Title and start date required");
     try {
-      await apiFetch(`${API_BASE}/hr/trainings`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/trainings`, { method: "POST", body: JSON.stringify({ name: form.name, holiday_date: form.date, is_recurring: form.is_mandatory }) });
       setShowNew(false); apiFetch(`${API_BASE}/hr/trainings`).then(d => setTrainings(d || []));
     } catch (e) { alert(e.message); }
   };
@@ -6508,7 +6508,7 @@ function ProbationTracker({ isHR }) {
   const save = async () => {
     if (!form.staff_id || !form.review_date) return alert("Staff and date required");
     try {
-      await apiFetch(`${API_BASE}/hr/probation`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/probation`, { method: "POST", body: JSON.stringify({ name: form.name, holiday_date: form.date, is_recurring: form.is_mandatory }) });
       setShowNew(false); apiFetch(`${API_BASE}/hr/probation`).then(d => setReviews(d || []));
     } catch (e) { alert(e.message); }
   };
@@ -6806,7 +6806,7 @@ function Announcements({ isHR }) {
   const post = async () => {
     if (!form.title || !form.body) return alert("Title and body required");
     try {
-      await apiFetch(`${API_BASE}/hr/announcements`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/announcements`, { method: "POST", body: JSON.stringify({ name: form.name, holiday_date: form.date, is_recurring: form.is_mandatory }) });
       setShowNew(false); setForm({ title: "", body: "", priority: "Normal", target_department: "" });
       apiFetch(`${API_BASE}/hr/announcements`).then(d => setItems(d || []));
     } catch (e) { alert(e.message); }
@@ -6876,7 +6876,7 @@ function RecognitionWall({ user }) {
   const give = async () => {
     if (!form.recipient_id || !form.message) return alert("Recipient and message required");
     try {
-      await apiFetch(`${API_BASE}/hr/recognition`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/recognition`, { method: "POST", body: JSON.stringify({ name: form.name, holiday_date: form.date, is_recurring: form.is_mandatory }) });
       // Notify the recipient
       await apiFetch(`${API_BASE}/hr/notifications`, {
         method: "POST",
@@ -6957,7 +6957,7 @@ function RemoteWork() {
     if (!form.work_date) return alert("Please select a date.");
     setSaving(true);
     try {
-      await apiFetch(`${API_BASE}/hr/remote-work`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/remote-work`, { method: "POST", body: JSON.stringify({ name: form.name, holiday_date: form.date, is_recurring: form.is_mandatory }) });
       setShowNew(false); setForm({ work_date: "", reason: "", location: "" });
       apiFetch(`${API_BASE}/hr/remote-work`).catch(() => []).then(d => setRequests(Array.isArray(d) ? d : []));
     } catch (e) { alert("Error: " + e.message); } finally { setSaving(false); }
@@ -7059,7 +7059,7 @@ function PolicyLibrary({ isHR }) {
     setSaving(true);
     try {
       const url = editingId ? `${API_BASE}/hr/policies/${editingId}` : `${API_BASE}/hr/policies`;
-      await apiFetch(url, { method: editingId ? "PATCH" : "POST", body: JSON.stringify(form) });
+      await apiFetch(url, { method: editingId ? "PATCH" : "POST", body: JSON.stringify({ name: form.name, holiday_date: form.date, is_recurring: form.is_mandatory }) });
       setShowNew(false); setEditingId(null); setForm({ title: "", category: "HR", summary: "", document_url: "", effective_date: "" });
       loadPolicies();
     } catch (e) { alert("Error: " + e.message); } finally { setSaving(false); }
@@ -7649,7 +7649,7 @@ function WorkPermits({ isHR }) {
   const save = async () => {
     if (!form.staff_id || !form.permit_number) return alert("Staff and permit number required");
     try {
-      await apiFetch(`${API_BASE}/hr/work-permits`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/work-permits`, { method: "POST", body: JSON.stringify({ name: form.name, holiday_date: form.date, is_recurring: form.is_mandatory }) });
       setShowNew(false); apiFetch(`${API_BASE}/hr/work-permits`).then(d => setPermits(d || []));
     } catch (e) { alert(e.message); }
   };
@@ -7725,7 +7725,7 @@ function HRLetters({ isHR }) {
     setSaving(true);
     try {
       // 1. Issue the letter
-      await apiFetch(`${API_BASE}/hr/hr-letters`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/hr-letters`, { method: "POST", body: JSON.stringify({ name: form.name, holiday_date: form.date, is_recurring: form.is_mandatory }) });
       // 2. Send notification to the staff member
       const recipient = staff.find(s => s.id === form.staff_id);
       await apiFetch(`${API_BASE}/hr/notifications`, {
@@ -7882,7 +7882,7 @@ function HRRequests({ user, isHR }) {
     if (!form.description.trim()) return alert("Please describe your request.");
     setSaving(true);
     try {
-      await apiFetch(`${API_BASE}/hr/requests`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/requests`, { method: "POST", body: JSON.stringify({ name: form.name, holiday_date: form.date, is_recurring: form.is_mandatory }) });
       setShowForm(null); refresh();
     } catch (e) { alert("Error: " + e.message); } finally { setSaving(false); }
   };
@@ -7994,7 +7994,7 @@ function Grievances({ isHR }) {
   const submit = async () => {
     if (!form.subject || !form.description) return alert("Subject and description required");
     try {
-      await apiFetch(`${API_BASE}/hr/grievances`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/grievances`, { method: "POST", body: JSON.stringify({ name: form.name, holiday_date: form.date, is_recurring: form.is_mandatory }) });
       alert("Your grievance has been submitted confidentially. HR will review within 5 working days.");
       setShowNew(false); setForm({ subject: "", description: "", is_anonymous: true });
     } catch (e) { alert(e.message); }
@@ -8581,7 +8581,7 @@ function HRCalendarView() {
 
   const addEvent = async () => {
     if (!form.title || !form.date) return alert("Title and date required");
-    try { await apiFetch(`${API_BASE}/hr/calendar-events`, { method: "POST", body: JSON.stringify(form) }); } catch (e) { }
+    try { await apiFetch(`${API_BASE}/hr/calendar-events`, { method: "POST", body: JSON.stringify({ name: form.name, holiday_date: form.date, is_recurring: form.is_mandatory }) }); } catch (e) { }
     setEvents(prev => [{ ...form, id: Date.now().toString() }, ...prev]);
     setShowNew(false); setForm({ title: "", event_type: "Holiday", date: "", end_date: "", description: "", department: "All" });
   };
@@ -8637,7 +8637,7 @@ function HRCalendarView() {
       <div style={{ marginTop: 24 }}>
         <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 14 }}>Upcoming Events</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
-          {events.filter(e => e.date && new Date(e.date) >= today).sort((a, b) => new Date(a.date) - new Date(b.date)).slice(0, 8).map(e => {
+          {events.filter(e => e.date && new Date(e.date) >= today).sort((a, b) => new Date(a.holiday_date || a.date) - new Date(b.holiday_date || b.date)).slice(0, 8).map(e => {
             const ec = typeCol[e.event_type] || T.gold;
             return (<div key={e.id} className="gc" style={{ padding: "12px 18px", display: "flex", alignItems: "center", gap: 14 }}>
               <div style={{ width: 8, height: 8, borderRadius: "50%", background: ec, flexShrink: 0 }} />
@@ -8689,15 +8689,15 @@ function HolidaysManager() {
 
   const addHoliday = async () => {
     if (!form.name || !form.date) return alert("Name and date required");
-    try { await apiFetch(`${API_BASE}/hr/holidays`, { method: "POST", body: JSON.stringify(form) }); } catch (e) { }
-    setHolidays(prev => [...prev, { ...form, id: Date.now().toString() }].sort((a, b) => new Date(a.date) - new Date(b.date)));
+    try { await apiFetch(`${API_BASE}/hr/holidays`, { method: "POST", body: JSON.stringify({ name: form.name, holiday_date: form.date, is_recurring: form.is_mandatory }) }); } catch (e) { }
+    setHolidays(prev => [...prev, { ...form, holiday_date: form.date, id: Date.now().toString() }].sort((a, b) => new Date(a.holiday_date || a.date) - new Date(b.holiday_date || b.date)));
     setShowAdd(false); setForm({ name: "", date: "", holiday_type: "Public Holiday", is_mandatory: true });
   };
 
   const typeCol = { "Public Holiday": "#4ADE80", "Company Holiday": T.gold, "Optional Holiday": "#60A5FA", "Religious Holiday": "#A78BFA" };
   const today = new Date();
-  const upcoming = holidays.filter(h => new Date(h.date) >= today).sort((a, b) => new Date(a.date) - new Date(b.date));
-  const past = holidays.filter(h => new Date(h.date) < today).sort((a, b) => new Date(b.date) - new Date(a.date));
+  const upcoming = holidays.filter(h => new Date(h.holiday_date || h.date) >= today).sort((a, b) => new Date(a.holiday_date || a.date) - new Date(b.holiday_date || b.date));
+  const past = holidays.filter(h => new Date(h.holiday_date || h.date) < today).sort((a, b) => new Date(b.holiday_date || b.date) - new Date(a.holiday_date || a.date));
 
   return (
     <div className="fade">
@@ -8714,16 +8714,16 @@ function HolidaysManager() {
         <div style={{ fontSize: 11, fontWeight: 800, color: T.gold, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 14 }}>📅 Upcoming Holidays</div>
         <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
           {upcoming.map(h => {
-            const daysAway = Math.ceil((new Date(h.date) - today) / 86400000);
+            const daysAway = Math.ceil((new Date(h.holiday_date || h.date) - today) / 86400000);
             const hc = typeCol[h.holiday_type] || T.gold;
             return (<div key={h.id} className="gc" style={{ padding: "14px 20px", display: "flex", alignItems: "center", gap: 14 }}>
               <div style={{ width: 48, height: 48, borderRadius: 10, background: `${hc}18`, border: `1px solid ${hc}33`, display: "flex", flexDirection: "column", alignItems: "center", justifyContent: "center", flexShrink: 0 }}>
-                <div style={{ fontSize: 10, fontWeight: 800, color: hc, textTransform: "uppercase" }}>{new Date(h.date).toLocaleDateString(undefined, { month: "short" })}</div>
-                <div style={{ fontSize: 18, fontWeight: 900, color: hc, lineHeight: 1 }}>{new Date(h.date).getDate()}</div>
+                <div style={{ fontSize: 10, fontWeight: 800, color: hc, textTransform: "uppercase" }}>{new Date(h.holiday_date || h.date).toLocaleDateString(undefined, { month: "short" })}</div>
+                <div style={{ fontSize: 18, fontWeight: 900, color: hc, lineHeight: 1 }}>{new Date(h.holiday_date || h.date).getDate()}</div>
               </div>
               <div style={{ flex: 1 }}>
                 <div style={{ fontWeight: 800, color: C.text }}>{h.name}</div>
-                <div style={{ fontSize: 12, color: C.muted }}>{new Date(h.date).toLocaleDateString(undefined, { weekday: "long" })} · {daysAway === 0 ? "Today" : `${daysAway} day${daysAway !== 1 ? "s" : ""} away`}</div>
+                <div style={{ fontSize: 12, color: C.muted }}>{new Date(h.holiday_date || h.date).toLocaleDateString(undefined, { weekday: "long" })} · {daysAway === 0 ? "Today" : `${daysAway} day${daysAway !== 1 ? "s" : ""} away`}</div>
               </div>
               <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
                 <span className="tg" style={{ background: `${hc}22`, color: hc, border: `1px solid ${hc}44` }}>{h.holiday_type}</span>
@@ -8738,7 +8738,7 @@ function HolidaysManager() {
         <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: "1px", marginBottom: 14 }}>Past Holidays This Year</div>
         <div className="gc" style={{ padding: 0, overflow: "hidden" }}><div className="tw"><table className="ht">
           <thead><tr><th>Holiday</th><th>Date</th><th>Type</th><th>Mandatory</th></tr></thead>
-          <tbody>{past.map(h => { const hc = typeCol[h.holiday_type] || T.gold; return (<tr key={h.id}><td style={{ fontWeight: 700, color: C.text }}>{h.name}</td><td style={{ color: C.muted, fontSize: 12 }}>{new Date(h.date).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</td><td><span className="tg" style={{ background: `${hc}22`, color: hc }}>{h.holiday_type}</span></td><td><span className="tg" style={{ background: h.is_mandatory ? "#4ADE8022" : "#9CA3AF22", color: h.is_mandatory ? "#4ADE80" : "#9CA3AF" }}>{h.is_mandatory ? "Yes" : "Optional"}</span></td></tr>); })}</tbody>
+          <tbody>{past.map(h => { const hc = typeCol[h.holiday_type] || T.gold; return (<tr key={h.id}><td style={{ fontWeight: 700, color: C.text }}>{h.name}</td><td style={{ color: C.muted, fontSize: 12 }}>{new Date(h.holiday_date || h.date).toLocaleDateString(undefined, { weekday: "short", month: "short", day: "numeric" })}</td><td><span className="tg" style={{ background: `${hc}22`, color: hc }}>{h.holiday_type}</span></td><td><span className="tg" style={{ background: h.is_mandatory ? "#4ADE8022" : "#9CA3AF22", color: h.is_mandatory ? "#4ADE80" : "#9CA3AF" }}>{h.is_mandatory ? "Yes" : "Optional"}</span></td></tr>); })}</tbody>
         </table></div></div>
       </div>)}
       {showAdd && (<Modal onClose={() => setShowAdd(false)} title="Add Holiday" width={480}>
@@ -9445,7 +9445,7 @@ function ExitInterviews() {
     if (!form.staff_id || !form.exit_date) return alert("Staff member and exit date required.");
     setSaving(true);
     try {
-      await apiFetch(`${API_BASE}/hr/exit-interviews`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/exit-interviews`, { method: "POST", body: JSON.stringify({ name: form.name, holiday_date: form.date, is_recurring: form.is_mandatory }) });
       setShowNew(false); setForm({ staff_id: "", exit_date: "", reason: "Resignation", overall_satisfaction: 3, highlights: "", concerns: "", would_recommend: true, notes: "" });
       refresh();
     } catch (e) { alert("Error: " + e.message); } finally { setSaving(false); }
@@ -9455,7 +9455,7 @@ function ExitInterviews() {
     <span>{[1, 2, 3, 4, 5].map(n => <span key={n} style={{ color: n <= val ? T.gold : "#333", fontSize: 16 }}>★</span>)}</span>
   );
 
-  // Aggregate stats
+  // ──────────────────────────────────────────────────ggregate stats
   const total = interviews.length;
   const avgSat = total > 0 ? (interviews.reduce((s, i) => s + (i.overall_satisfaction || 3), 0) / total).toFixed(1) : "—";
   const wouldRec = total > 0 ? Math.round((interviews.filter(i => i.would_recommend).length / total) * 100) : 0;
@@ -10179,7 +10179,7 @@ function JobsBoard() {
   const create = async () => {
     if (!form.title) return alert("Job title required");
     try {
-      await apiFetch(`${API_BASE}/hr/recruitment/jobs`, { method: "POST", body: JSON.stringify(form) });
+      await apiFetch(`${API_BASE}/hr/recruitment/jobs`, { method: "POST", body: JSON.stringify({ name: form.name, holiday_date: form.date, is_recurring: form.is_mandatory }) });
       setShowNew(false); setForm({ title: "", department: departments[0]?.name || "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", description: "", responsibilities: "", requirements: "" }); refresh();
     } catch (e) { alert(e.message); }
   };
@@ -10289,7 +10289,7 @@ function JobRequisitions() {
     if (!form.title) return alert("Job title required");
     try {
       if (form.id) {
-        await apiFetch(`${API_BASE}/hr/recruitment/jobs/${form.id}`, { method: "PATCH", body: JSON.stringify(form) });
+        await apiFetch(`${API_BASE}/hr/recruitment/jobs/${form.id}`, { method: "PATCH", body: JSON.stringify({ name: form.name, holiday_date: form.date, is_recurring: form.is_mandatory }) });
       } else {
         await apiFetch(`${API_BASE}/hr/recruitment/jobs`, { method: "POST", body: JSON.stringify({ ...form, status: "Pending Approval" }) });
       }
@@ -10417,7 +10417,7 @@ function ApplicationsTracker() {
 
   const addApp = async () => {
     if (!form.job_id || !form.candidate_name) return alert("Job and candidate name required");
-    try { await apiFetch(`${API_BASE}/hr/recruitment/applications`, { method: "POST", body: JSON.stringify(form) }); setShowNew(false); setForm({ job_id: "", candidate_name: "", candidate_email: "", candidate_phone: "", cover_letter: "", resume_url: "" }); refresh(); } catch (e) { alert(e.message); }
+    try { await apiFetch(`${API_BASE}/hr/recruitment/applications`, { method: "POST", body: JSON.stringify({ name: form.name, holiday_date: form.date, is_recurring: form.is_mandatory }) }); setShowNew(false); setForm({ job_id: "", candidate_name: "", candidate_email: "", candidate_phone: "", cover_letter: "", resume_url: "" }); refresh(); } catch (e) { alert(e.message); }
   };
 
   return (
@@ -10589,7 +10589,7 @@ function InterviewScheduler() {
     try {
       const method = form.id ? "PATCH" : "POST";
       const url = form.id ? `${API_BASE}/hr/recruitment/interviews/${form.id}` : `${API_BASE}/hr/recruitment/interviews`;
-      await apiFetch(url, { method, body: JSON.stringify(form) });
+      await apiFetch(url, { method, body: JSON.stringify({ name: form.name, holiday_date: form.date, is_recurring: form.is_mandatory }) });
       setShowNew(false);
       setForm({ application_id: "", interviewer_id: "", scheduled_at: "", location: "Video Call (Google Meet)", interview_type: "Technical", notes: "" });
       refresh();
@@ -11100,7 +11100,7 @@ function PeerReviews360() {
       setForm({ reviewee_id: "", reviewer_ids: [], title: "", questions: ["How would you rate this person's communication skills?", "How effectively does this person collaborate with the team?", "What is this person's greatest strength?", "What area should this person focus on improving?", "Would you recommend this person for a leadership role? Why?"], deadline: "", is_anonymous: true });
       refresh();
     } catch (e) {
-      // API may not exist yet — store locally for demo
+      // ──────────────────────────────────────────────────PI may not exist yet — store locally for demo
       const fakeReview = {
         id: Date.now().toString(), ...form, questions: qs,
         status: "pending", created_at: new Date().toISOString(), responses: [],

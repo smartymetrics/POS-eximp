@@ -153,3 +153,15 @@ CREATE TABLE IF NOT EXISTS company_policies (
 ALTER TABLE company_policies ENABLE ROW LEVEL SECURITY;
 CREATE POLICY "Admins have full access to company_policies" ON company_policies FOR ALL TO authenticated USING (true);
 
+-- 8. Calendar Events
+CREATE TABLE IF NOT EXISTS calendar_events (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title TEXT NOT NULL,
+    event_type TEXT DEFAULT 'General',
+    date DATE NOT NULL,
+    department TEXT DEFAULT 'All',
+    created_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE calendar_events ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Authenticated access to calendar_events" ON calendar_events FOR ALL TO authenticated USING (true);

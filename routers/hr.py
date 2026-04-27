@@ -3401,19 +3401,27 @@ async def send_candidate_email(request: Request, current_admin: dict = Depends(v
 
 @router.get("/calendar-events")
 async def get_calendar_events(current_admin: dict = Depends(verify_token)):
-    db = get_db()
-    res = await db_execute(lambda: db.table("calendar_events").select("*").execute())
-    return res.data if res.data else []
+    try:
+        db = get_db()
+        res = await db_execute(lambda: db.table("calendar_events").select("*").execute())
+        return res.data if res.data else []
+    except Exception as e:
+        print(f"Error fetching calendar events: {e}")
+        return []
 
 @router.post("/calendar-events", status_code=status.HTTP_201_CREATED)
 async def create_calendar_event(request: Request, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
     if "admin" not in user_roles and "hr_admin" not in user_roles:
         raise HTTPException(status_code=403, detail="HR only")
-    db = get_db()
-    data = await request.json()
-    res = await db_execute(lambda: db.table("calendar_events").insert(data).execute())
-    return res.data[0] if res.data else None
+    try:
+        db = get_db()
+        data = await request.json()
+        res = await db_execute(lambda: db.table("calendar_events").insert(data).execute())
+        return res.data[0] if res.data else None
+    except Exception as e:
+        print(f"Error creating calendar event: {e}")
+        return None
 
 @router.get("/expenses")
 async def get_expenses(current_admin: dict = Depends(verify_token)):
@@ -3475,12 +3483,48 @@ async def launch_peer_review(request: Request, current_admin: dict = Depends(ver
             )
     return res.data[0] if res.data else None
 
+@router.get("/peer-reviews/my-assignments")
+async def get_my_peer_assignments(staff_id: str, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    # Find reviews where staff_id is in the reviewer_ids array
+    res = await db_execute(lambda: db.table("peer_reviews").select("*").contains("reviewer_ids", [staff_id]).execute())
+    return res.data if res.data else []
+
 @router.patch("/peer-reviews/{review_id}")
 async def update_peer_review(review_id: str, request: Request, current_admin: dict = Depends(verify_token)):
     db = get_db()
     data = await request.json()
     res = await db_execute(lambda: db.table("peer_reviews").update({"status": data.get("status")}).eq("id", review_id).execute())
     return res.data[0] if res.data else None
+
+@router.post("/peer-reviews/{review_id}/respond")
+async def respond_peer_review(review_id: str, request: Request, current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    data = await request.json()
+    
+    # Get current review to fetch existing responses
+    res = await db_execute(lambda: db.table("peer_reviews").select("*").eq("id", review_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Review not found")
+    
+    review = res.data[0]
+    responses = review.get("responses") or []
+    if not isinstance(responses, list):
+        responses = []
+        
+    # Add new response with reviewer_id (if not anonymous) and timestamp
+    new_response = {
+        "answers": data.get("answers"),
+        "submitted_at": datetime.now().isoformat(),
+        "reviewer_id": current_admin["sub"] if not review.get("is_anonymous") else "Anonymous"
+    }
+    responses.append(new_response)
+    
+    # Update the review
+    update_data = {"responses": responses}
+    # If all reviewers responded, we could mark as completed, but for now just update
+    res_update = await db_execute(lambda: db.table("peer_reviews").update(update_data).eq("id", review_id).execute())
+    return res_update.data[0] if res_update.data else None
 
 # ─── NOTIFICATIONS ───────────────────────────────────────────
 @router.get("/notifications")
