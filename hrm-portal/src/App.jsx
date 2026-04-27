@@ -5618,6 +5618,64 @@ function StaffTimesheet() {
   );
 }
 
+function TimesheetAuditSection({ sheet, C }) {
+  const [audit, setAudit] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    if (!sheet) return;
+    const start = new Date(sheet.week_start);
+    const end = new Date(start);
+    end.setDate(start.getDate() + 5);
+    const startStr = sheet.week_start;
+    const endStr = end.toISOString().split('T')[0];
+
+    apiFetch(`${API_BASE}/hr/presence/attendance?staff_id=${sheet.staff_id}&start_date=${startStr}&end_date=${endStr}`)
+      .then(data => {
+        let totalAttendance = 0;
+        data.forEach(r => {
+          if (r.check_in && r.check_out) {
+            const cin = new Date(r.check_in);
+            const cout = new Date(r.check_out);
+            const hrs = Math.max(0, Math.round((cout - cin) / (1000 * 60 * 60) * 2) / 2);
+            totalAttendance += hrs;
+          }
+        });
+        const sheetTotal = (sheet.mon_hrs||0)+(sheet.tue_hrs||0)+(sheet.wed_hrs||0)+(sheet.thu_hrs||0)+(sheet.fri_hrs||0);
+        const diff = sheetTotal - totalAttendance;
+        setAudit({ totalAttendance, sheetTotal, diff });
+      })
+      .catch(() => { })
+      .finally(() => setLoading(false));
+  }, [sheet]);
+
+  if (loading) return <div style={{ fontSize: 11, color: C.muted, padding: "10px 0" }}>🔍 Verifying against attendance logs...</div>;
+  if (!audit) return null;
+
+  const isVerified = Math.abs(audit.diff) <= 1; 
+  const statusCol = isVerified ? "#4ADE80" : audit.diff > 0 ? "#F87171" : T.gold;
+
+  return (
+    <div style={{ padding: "12px 14px", borderRadius: 10, background: `${statusCol}08`, border: `1px solid ${statusCol}33` }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 6 }}>
+        <div style={{ fontSize: 11, fontWeight: 800, color: statusCol, textTransform: "uppercase", display: "flex", alignItems: "center", gap: 5 }}>
+          <span>{isVerified ? "✅" : audit.diff > 0 ? "⚠️" : "ℹ️"}</span>
+          {isVerified ? "Verified: Matches Logs" : audit.diff > 0 ? "Audit Warning: Mismatch" : "Logs exceed claim"}
+        </div>
+        <div style={{ fontSize: 11, color: C.muted, fontWeight: 700 }}>Logs: {audit.totalAttendance}h</div>
+      </div>
+      {!isVerified && audit.diff > 0 && (
+        <div style={{ fontSize: 11, color: C.sub, lineHeight: 1.4 }}>
+          Claim is <b>{audit.diff}h</b> more than the physical attendance clock for this week.
+        </div>
+      )}
+      {isVerified && (
+        <div style={{ fontSize: 10, color: C.muted }}>Timesheet is consistent with clock-in/out records.</div>
+      )}
+    </div>
+  );
+}
+
 function TimesheetApprovalCenter() {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [sheets, setSheets] = useState([]); const [loading, setLoading] = useState(true);
@@ -5762,6 +5820,7 @@ function TimesheetApprovalCenter() {
                 </div>;
               })}
             </div>
+            <TimesheetAuditSection sheet={reviewing} C={C} />
             {reviewing.notes && <div style={{ fontSize: 13, color: C.sub, fontStyle: "italic" }}>Staff note: "{reviewing.notes}"</div>}
             <div>
               <Lbl>Reviewer Notes (required for rejection)</Lbl>
