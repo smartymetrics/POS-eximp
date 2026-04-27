@@ -96,10 +96,12 @@ const calcScore = p => {
 
 // ─── GLOBAL STYLES ──────────────────────────────────────────────────────────────
 const GS = dark => {
+    const scaleUp = `@keyframes scaleUp { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }`;
   const C = dark ? DARK : LIGHT;
   const G = T.gold;
   return `
     @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap');
+      ${scaleUp}
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;}
     ::-webkit-scrollbar{width:6px;height:6px;}
     ::-webkit-scrollbar-track{background:${C.bg};}
@@ -11072,6 +11074,8 @@ function PeerReviews360() {
   const [tab, setTab] = useState("active"); // active | create | results
   const [showCreate, setShowCreate] = useState(false);
   const [viewReview, setViewReview] = useState(null);
+    const [launching, setLaunching] = useState(false);
+    const [launched, setLaunched] = useState(false);
   const [form, setForm] = useState({ reviewee_id: "", reviewer_ids: [], title: "", questions: ["How would you rate this person's communication skills?", "How effectively does this person collaborate with the team?", "What is this person's greatest strength?", "What area should this person focus on improving?", "Would you recommend this person for a leadership role? Why?"], deadline: "", is_anonymous: true });
 
   useEffect(() => {
@@ -11367,7 +11371,14 @@ function PeerReviews360() {
       {/* Launch Review Modal */}
       {showCreate && (
         <Modal onClose={() => setShowCreate(false)} title="Launch 360° Peer Review" width={680}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {launched ? (
+              <div style={{ textAlign: "center", padding: "40px 0", animation: "scaleUp 0.5s ease" }}>
+                <div style={{ fontSize: 60, marginBottom: 16 }}>🚀</div>
+                <div style={{ fontSize: 20, fontWeight: 900, color: "#4ADE80" }}>Review Launched!</div>
+                <div style={{ fontSize: 13, color: C.sub, marginTop: 8 }}>Notifications have been sent to reviewers.</div>
+              </div>
+            ) : (
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
             {/* Reviewee */}
             <div>
               <Lbl>Staff Member Being Reviewed *</Lbl>
@@ -11426,6 +11437,7 @@ function PeerReviews360() {
 
             <button className="bp" onClick={launchReview} style={{ padding: 14 }}>🚀 Launch Review</button>
           </div>
+            )}
         </Modal>
       )}
     </div>
@@ -11434,56 +11446,33 @@ function PeerReviews360() {
 
 // ─── EMPLOYEE: MY PEER REVIEWS (submit assigned reviews) ─────────────────────
 function MyPeerReviews({ user }) {
-  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
-  const [assignedReviews, setAssignedReviews] = useState([]);
-  const [loading, setLoading] = useState(true);
-  const [activeReview, setActiveReview] = useState(null); // review being submitted
-  const [answers, setAnswers] = useState({});
-  const [submitting, setSubmitting] = useState(false);
-  const [submitted, setSubmitted] = useState({}); // reviewId -> true
+    const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+    const [assignedReviews, setAssignedReviews] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [activeReview, setActiveReview] = useState(null); 
+    const [answers, setAnswers] = useState({});
+    const [submitting, setSubmitting] = useState(false);
+    const [submitted, setSubmitted] = useState({});
 
-  useEffect(() => {
-    // Fetch all peer reviews where this user is a reviewer
-    Promise.all([
-      apiFetch(`${API_BASE}/hr/peer-reviews`).catch(() => []),
-      apiFetch(`${API_BASE}/hr/peer-reviews/my-assignments?staff_id=${user.id}`).catch(() => null),
-    ]).then(([all, myAssigned]) => {
-      if (myAssigned && Array.isArray(myAssigned)) {
-        setAssignedReviews(myAssigned);
-      } else if (Array.isArray(all)) {
-        // Fallback: filter from all reviews where user is in reviewer_ids
-        const mine = all.filter(r =>
-          ["pending", "in-progress"].includes(r.status) &&
-          (r.reviewer_ids || []).map(String).includes(String(user.id))
-        );
-        setAssignedReviews(mine);
-        // Mark already responded ones
+    useEffect(() => {
+      Promise.all([
+        apiFetch(`${API_BASE}/hr/peer-reviews`).catch(() => []),
+        apiFetch(`${API_BASE}/hr/peer-reviews/my-assignments?staff_id=${user.id}`).catch(() => null),
+      ]).then(([all, myAssigned]) => {
+        const reviews = (myAssigned && Array.isArray(myAssigned)) ? myAssigned : (Array.isArray(all) ? all.filter(r => (r.reviewer_ids || []).map(String).includes(String(user.id))) : []);
+        setAssignedReviews(reviews);
+        
         const done = {};
-        all.forEach(r => {
-          if ((r.responses || []).some(resp => String(resp.reviewer_id) === String(user.id))) {
+        reviews.forEach(r => {
+          if (r.submitted_by_me || (r.responses || []).some(resp => String(resp.reviewer_id) === String(user.id))) {
             done[r.id] = true;
           }
         });
         setSubmitted(done);
-      }
-    }).finally(() => setLoading(false));
-  }, [user.id]);
+      }).finally(() => setLoading(false));
+    }, [user.id]);
 
-  // When HR cancels a review, remove it from the employee's pending list immediately
-  useEffect(() => {
-    const handler = (e) => {
-      const cancelledId = e.detail?.id;
-      if (cancelledId) {
-        setAssignedReviews(prev => prev.filter(r => String(r.id) !== String(cancelledId)));
-        // Close modal if employee had that review open
-        setActiveReview(prev => (prev && String(prev.id) === String(cancelledId) ? null : prev));
-      }
-    };
-    window.addEventListener("peer-review-cancelled", handler);
-    return () => window.removeEventListener("peer-review-cancelled", handler);
-  }, []);
-
-  const openReview = (r) => {
+    const openReview = (r) => {
     setActiveReview(r);
     setAnswers({});
   };

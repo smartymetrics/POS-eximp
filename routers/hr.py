@@ -3486,9 +3486,19 @@ async def launch_peer_review(request: Request, current_admin: dict = Depends(ver
 @router.get("/peer-reviews/my-assignments")
 async def get_my_peer_assignments(staff_id: str, current_admin: dict = Depends(verify_token)):
     db = get_db()
-    # Find reviews where staff_id is in the reviewer_ids array
-    res = await db_execute(lambda: db.table("peer_reviews").select("*").contains("reviewer_ids", [staff_id]).execute())
-    return res.data if res.data else []
+    # Find reviews where staff_id is in the reviewer_ids array AND status is not cancelled
+    res = await db_execute(lambda: db.table("peer_reviews").select("*").contains("reviewer_ids", [staff_id]).neq("status", "cancelled").execute())
+    data = res.data if res.data else []
+    
+    # Add a flag for frontend to easily identify completed reviews
+    my_id = str(current_admin.get("sub", ""))
+    for r in data:
+        responses = r.get("responses") or []
+        if not isinstance(responses, list):
+            responses = []
+        r["submitted_by_me"] = any(str(resp.get("reviewer_id")) == my_id for resp in responses)
+        
+    return data
 
 @router.patch("/peer-reviews/{review_id}")
 async def update_peer_review(review_id: str, request: Request, current_admin: dict = Depends(verify_token)):
@@ -3512,19 +3522,30 @@ async def respond_peer_review(review_id: str, request: Request, current_admin: d
     if not isinstance(responses, list):
         responses = []
         
-    # Add new response with reviewer_id (if not anonymous) and timestamp
+    # Add new response with reviewer_id and timestamp
+    # Note: We ALWAYS store reviewer_id for HR tracking purposes.
+    # The frontend is responsible for hiding it if is_anonymous is true.
     new_response = {
         "answers": data.get("answers"),
         "submitted_at": datetime.now().isoformat(),
-        "reviewer_id": current_admin["sub"] if not review.get("is_anonymous") else "Anonymous"
+        "reviewer_id": current_admin["sub"]
     }
     responses.append(new_response)
     
-    # Update the review
+    # Update the review status to 'in-progress' if it was 'pending'
     update_data = {"responses": responses}
-    # If all reviewers responded, we could mark as completed, but for now just update
-    res_update = await db_execute(lambda: db.table("peer_reviews").update(update_data).eq("id", review_id).execute())
-    return res_update.data[0] if res_update.data else None
+    if review.get("status") == "pending":
+        update_data["status"] = "in-progress"
+        
+    try:
+        res_update = await db_execute(lambda: db.table("peer_reviews").update(update_data).eq("id", review_id).execute())
+        if not res_update or not res_update.data:
+            print(f"❌ Peer Review Update Failed: No data returned for ID {review_id}")
+            raise HTTPException(status_code=500, detail="Failed to save response to database")
+        return res_update.data[0]
+    except Exception as e:
+        print(f"❌ Peer Review POST Error: {str(e)}")
+        raise HTTPException(status_code=500, detail=str(e))
 
 # ─── NOTIFICATIONS ───────────────────────────────────────────
 @router.get("/notifications")
