@@ -1,7 +1,8 @@
 import math
 import os
 import logging
-from fastapi import APIRouter, Depends, HTTPException, status
+import uuid
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import date, datetime, timedelta
@@ -47,6 +48,20 @@ async def notify_hr_admins(title: str, message: str, notification_type: str = "h
 # ─── MODELS ───────────────────────────────────────────────────────────────────
 
 # ─── MODELS ───────────────────────────────────────────────────────────────────
+
+class PolicyCreate(BaseModel):
+    title: str
+    category: str = "HR"
+    summary: Optional[str] = None
+    document_url: Optional[str] = None
+    effective_date: Optional[str] = None
+
+class PolicyUpdate(BaseModel):
+    title: Optional[str] = None
+    category: Optional[str] = None
+    summary: Optional[str] = None
+    document_url: Optional[str] = None
+    effective_date: Optional[str] = None
 
 class GoalBase(BaseModel):
     kpi_name: str
@@ -3473,3 +3488,68 @@ async def update_request_status(req_id: str, status_update: dict, current_admin:
         await send_notification(req_data["staff_id"], "HR Request Update", f"Your {req_data.get('request_type', 'request')} status has been updated to: {status_update.get('status')}", "request_update")
 
     return res.data[0] if res.data else {"message": "Updated"}
+
+# ─── POLICY LIBRARY ENDPOINTS ──────────────────────────────────────────────────
+
+@router.get("/policies")
+async def get_policies(current_admin: dict = Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("company_policies").select("*").order("category").execute())
+    return res.data
+
+@router.post("/policies")
+async def create_policy(policy: PolicyCreate, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+         raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    res = await db_execute(lambda: db.table("company_policies").insert(policy.dict(exclude_unset=True)).execute())
+    return res.data[0] if res.data else None
+
+@router.patch("/policies/{policy_id}")
+async def update_policy(policy_id: str, policy: PolicyUpdate, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+         raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    
+    update_data = policy.dict(exclude_unset=True)
+    update_data["updated_at"] = datetime.utcnow().isoformat()
+    
+    res = await db_execute(lambda: db.table("company_policies").update(update_data).eq("id", policy_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Policy not found")
+    return res.data[0]
+
+@router.delete("/policies/{policy_id}")
+async def delete_policy(policy_id: str, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+         raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    
+    # Optional: fetch policy to delete file from storage if document_url exists
+    # For now, just delete the database record
+    res = await db_execute(lambda: db.table("company_policies").delete().eq("id", policy_id).execute())
+    return {"message": "Policy deleted"}
+
+@router.post("/policies/upload")
+async def upload_policy_document(file: UploadFile = File(...), current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+         raise HTTPException(status_code=403, detail="HR only")
+         
+    db = get_db()
+    file_bytes = await file.read()
+    file_ext = file.filename.split(".")[-1] if "." in file.filename else "pdf"
+    file_name = f"policy_{uuid.uuid4().hex}.{file_ext}"
+    
+    try:
+        # Uploading to the 'hr-documents' bucket specified by the user
+        db.storage.from_("hr-documents").upload(file_name, file_bytes, {"content-type": file.content_type})
+        from config import SUPABASE_URL
+        public_url = f"{SUPABASE_URL}/storage/v1/object/public/hr-documents/{file_name}"
+        return {"url": public_url}
+    except Exception as e:
+        logger.error(f"Policy upload failed: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to upload document to Supabase storage. Ensure bucket 'hr-documents' exists.")

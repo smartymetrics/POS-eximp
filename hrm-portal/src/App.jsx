@@ -6993,36 +6993,54 @@ function PolicyLibrary({ isHR }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [policies, setPolicies] = useState([]); const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
+  const [editingId, setEditingId] = useState(null);
   const [form, setForm] = useState({ title: "", category: "HR", summary: "", document_url: "", effective_date: "" });
   const [saving, setSaving] = useState(false);
+  const [uploading, setUploading] = useState(false);
   const [search, setSearch] = useState(""); const [catFilter, setCatFilter] = useState("All");
-
-  const DEFAULTS = [
-    { id: "d1", title: "Code of Conduct", category: "Compliance", updated: "Jan 2026", summary: "Standards of professional behaviour expected of all Eximp & Cloves staff.", document_url: null },
-    { id: "d2", title: "Leave & Absence Policy", category: "HR", updated: "Jan 2026", summary: "Entitlements, procedures and rules governing all types of leave.", document_url: null },
-    { id: "d3", title: "Anti-Bribery Policy", category: "Legal", updated: "Dec 2025", summary: "Zero tolerance for bribery and corrupt practices in all business dealings.", document_url: null },
-    { id: "d4", title: "Data Protection Policy", category: "Compliance", updated: "Feb 2026", summary: "How we collect, store and protect personal data under NDPR.", document_url: null },
-    { id: "d5", title: "Disciplinary Procedure", category: "HR", updated: "Jan 2026", summary: "4-tier disciplinary process from counselling to termination.", document_url: null },
-    { id: "d6", title: "IT Acceptable Use Policy", category: "IT", updated: "Mar 2026", summary: "Rules for use of company devices, networks and software.", document_url: null },
-  ];
 
   const catCol = { Compliance: T.gold, HR: "#60A5FA", Legal: "#F87171", IT: "#4ADE80", Finance: "#A78BFA" };
 
-  useEffect(() => {
-    apiFetch(`${API_BASE}/hr/policies`).then(d => setPolicies(Array.isArray(d) && d.length > 0 ? d : DEFAULTS)).catch(() => setPolicies(DEFAULTS)).finally(() => setLoading(false));
-  }, []);
+  const loadPolicies = () => {
+    apiFetch(`${API_BASE}/hr/policies`).then(d => setPolicies(Array.isArray(d) ? d : [])).catch(() => setPolicies([])).finally(() => setLoading(false));
+  };
 
-  const add = async () => {
+  useEffect(() => { loadPolicies(); }, []);
+
+  const handleFileUpload = async (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setUploading(true);
+    const fd = new FormData(); fd.append("file", file);
+    try {
+      const res = await fetch(`${API_BASE}/hr/policies/upload`, {
+        method: "POST", headers: { "Authorization": `Bearer ${localStorage.getItem("ec_token")}` }, body: fd
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const d = await res.json();
+      setForm(f => ({ ...f, document_url: d.url }));
+    } catch (err) { alert(err.message); } finally { setUploading(false); }
+  };
+
+  const save = async () => {
     if (!form.title || !form.category) return alert("Title and category required.");
     setSaving(true);
     try {
-      await apiFetch(`${API_BASE}/hr/policies`, { method: "POST", body: JSON.stringify(form) });
-      setShowNew(false); setForm({ title: "", category: "HR", summary: "", document_url: "", effective_date: "" });
-      apiFetch(`${API_BASE}/hr/policies`).then(d => setPolicies(Array.isArray(d) ? d : DEFAULTS));
+      const url = editingId ? `${API_BASE}/hr/policies/${editingId}` : `${API_BASE}/hr/policies`;
+      await apiFetch(url, { method: editingId ? "PATCH" : "POST", body: JSON.stringify(form) });
+      setShowNew(false); setEditingId(null); setForm({ title: "", category: "HR", summary: "", document_url: "", effective_date: "" });
+      loadPolicies();
     } catch (e) { alert("Error: " + e.message); } finally { setSaving(false); }
   };
 
-  const categories = ["All", ...new Set([...DEFAULTS, ...policies].map(p => p.category))];
+  const openEdit = (p) => { setForm({ title: p.title, category: p.category, summary: p.summary || "", document_url: p.document_url || "", effective_date: p.effective_date || "" }); setEditingId(p.id); setShowNew(true); };
+
+  const del = async (id) => {
+    if (!window.confirm("Are you sure you want to delete this policy?")) return;
+    try { await apiFetch(`${API_BASE}/hr/policies/${id}`, { method: "DELETE" }); loadPolicies(); } catch (e) { alert(e.message); }
+  };
+
+  const categories = ["All", "Compliance", "HR", "Legal", "IT", "Finance"];
   const filtered = policies.filter(p => {
     const matchCat = catFilter === "All" || p.category === catFilter;
     const matchSearch = !search || p.title.toLowerCase().includes(search.toLowerCase()) || p.summary?.toLowerCase().includes(search.toLowerCase());
@@ -7033,7 +7051,7 @@ function PolicyLibrary({ isHR }) {
     <div className="fade">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
         <div><div className="ho" style={{ fontSize: 22 }}>Policy Library</div><div style={{ fontSize: 13, color: C.sub }}>Company policies, procedures and handbooks.</div></div>
-        {isHR && <button className="bp" onClick={() => setShowNew(true)}>+ Add Policy</button>}
+        {isHR && <button className="bp" onClick={() => { setForm({ title: "", category: "HR", summary: "", document_url: "", effective_date: "" }); setEditingId(null); setShowNew(true); }}>+ Add Policy</button>}
       </div>
 
       {/* Filters */}
@@ -7059,17 +7077,25 @@ function PolicyLibrary({ isHR }) {
               <div key={p.id || i} className="gc" style={{ padding: 20 }}>
                 <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 10 }}>
                   <span className="tg" style={{ background: `${cc}22`, color: cc }}>{p.category}</span>
-                  <span style={{ fontSize: 11, color: C.muted }}>Updated {p.updated || (p.effective_date ? new Date(p.effective_date).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "—")}</span>
+                  <span style={{ fontSize: 11, color: C.muted }}>Updated {p.updated_at ? new Date(p.updated_at).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : (p.updated || "—")}</span>
                 </div>
                 <div style={{ fontWeight: 800, color: C.text, fontSize: 14, marginBottom: 8 }}>{p.title}</div>
                 <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 14 }}>{p.summary || "No description provided."}</div>
-                {p.document_url ? (
-                  <a href={p.document_url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
-                    <button className="bp" style={{ fontSize: 12, padding: "8px 16px" }}>📄 View Document</button>
-                  </a>
-                ) : (
-                  <button className="bg" style={{ fontSize: 12, padding: "8px 16px", opacity: 0.6 }} disabled>No file attached</button>
-                )}
+                <div style={{ display: "flex", gap: 8, flexWrap: "wrap", justifyContent: "space-between", alignItems: "center" }}>
+                  {p.document_url ? (
+                    <a href={p.document_url} target="_blank" rel="noopener noreferrer" style={{ textDecoration: "none" }}>
+                      <button className="bp" style={{ fontSize: 12, padding: "6px 14px" }}>📄 View Document</button>
+                    </a>
+                  ) : (
+                    <button className="bg" style={{ fontSize: 12, padding: "6px 14px", opacity: 0.6 }} disabled>No file attached</button>
+                  )}
+                  {isHR && (
+                    <div style={{ display: "flex", gap: 6 }}>
+                      <button className="bg" style={{ fontSize: 11, padding: "4px 10px" }} onClick={() => openEdit(p)}>Edit</button>
+                      <button className="bg" style={{ fontSize: 11, padding: "4px 10px", color: "#F87171", borderColor: "#F87171" }} onClick={() => del(p.id)}>Delete</button>
+                    </div>
+                  )}
+                </div>
               </div>
             );
           })}
@@ -7078,7 +7104,7 @@ function PolicyLibrary({ isHR }) {
       )}
 
       {showNew && (
-        <Modal onClose={() => setShowNew(false)} title="Add Policy Document">
+        <Modal onClose={() => setShowNew(false)} title={editingId ? "Edit Policy" : "Add Policy Document"}>
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div><Lbl>Policy Title *</Lbl><input className="inp" placeholder="e.g. Remote Work Policy" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} /></div>
             <div><Lbl>Category *</Lbl>
@@ -7087,9 +7113,23 @@ function PolicyLibrary({ isHR }) {
               </select>
             </div>
             <div><Lbl>Summary</Lbl><textarea className="inp" rows={3} placeholder="Brief description of the policy…" value={form.summary} onChange={e => setForm(f => ({ ...f, summary: e.target.value }))} /></div>
-            <div><Lbl>Document URL (optional)</Lbl><input className="inp" placeholder="https://drive.google.com/…" value={form.document_url} onChange={e => setForm(f => ({ ...f, document_url: e.target.value }))} /></div>
+            
+            <div style={{ padding: 16, background: C.border, borderRadius: 8 }}>
+              <Lbl>Policy Document File</Lbl>
+              {form.document_url && (
+                <div style={{ marginBottom: 10, fontSize: 12, color: "#4ADE80", display: "flex", alignItems: "center", gap: 6 }}>
+                  <span>✓ File attached</span> <a href={form.document_url} target="_blank" rel="noopener noreferrer" style={{ color: "#4ADE80", textDecoration: "underline" }}>(View current)</a>
+                </div>
+              )}
+              <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                <input type="file" className="inp" onChange={handleFileUpload} disabled={uploading} style={{ padding: 8 }} />
+                {uploading && <span style={{ fontSize: 12, color: T.gold }}>Uploading...</span>}
+              </div>
+              <div style={{ fontSize: 11, color: C.muted, marginTop: 6 }}>Uploading a new file will overwrite the existing one.</div>
+            </div>
+
             <div><Lbl>Effective Date</Lbl><input className="inp" type="date" value={form.effective_date} onChange={e => setForm(f => ({ ...f, effective_date: e.target.value }))} /></div>
-            <button className="bp" onClick={add} disabled={saving}>{saving ? "Saving…" : "Add Policy"}</button>
+            <button className="bp" onClick={save} disabled={saving || uploading}>{saving ? "Saving…" : (editingId ? "Update Policy" : "Add Policy")}</button>
           </div>
         </Modal>
       )}

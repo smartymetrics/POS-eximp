@@ -137,3 +137,19 @@ CREATE TABLE IF NOT EXISTS hr_letters (
     issued_by UUID REFERENCES admins(id),
     created_at TIMESTAMPTZ DEFAULT NOW()
 );
+
+-- 7. Policy Library
+CREATE TABLE IF NOT EXISTS company_policies (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    title TEXT NOT NULL,
+    category TEXT DEFAULT 'HR',
+    summary TEXT,
+    document_url TEXT,
+    effective_date DATE,
+    created_at TIMESTAMPTZ DEFAULT NOW(),
+    updated_at TIMESTAMPTZ DEFAULT NOW()
+);
+
+ALTER TABLE company_policies ENABLE ROW LEVEL SECURITY;
+CREATE POLICY "Admins have full access to company_policies" ON company_policies FOR ALL TO authenticated USING (true);
+
