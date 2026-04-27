@@ -1,5 +1,6 @@
 import math
 import os
+import logging
 from fastapi import APIRouter, Depends, HTTPException, status
 from typing import List, Optional
 from pydantic import BaseModel
@@ -13,6 +14,7 @@ from models import (
 )
 
 router = APIRouter()
+logger = logging.getLogger(__name__)
 
 async def send_notification(admin_id: str, title: str, message: str, notification_type: str = "general"):
     """Creates a notification record in the database using standard schema."""
@@ -2105,6 +2107,11 @@ class JobRequisitionCreate(BaseModel):
     salary_range: Optional[str] = None
     headcount: int = 1
     justification: Optional[str] = None
+    closing_date: Optional[str] = None  # Application deadline date (YYYY-MM-DD)
+
+class OfferResponse(BaseModel):
+    action: str # "accept" or "decline"
+    reason: Optional[str] = None
 
 class JobApplicationCreate(BaseModel):
     job_id: Optional[str] = None
@@ -2116,8 +2123,19 @@ class JobApplicationCreate(BaseModel):
 
 class InterviewCreate(BaseModel):
     application_id: str
-    interviewer_id: str
+    interviewer_id: Optional[str] = None
     scheduled_at: datetime
+    interview_type: Optional[str] = "Technical"
+    location: Optional[str] = None
+    notes: Optional[str] = None
+
+class InterviewUpdate(BaseModel):
+    scheduled_at: Optional[datetime] = None
+    interview_type: Optional[str] = None
+    location: Optional[str] = None
+    notes: Optional[str] = None
+    status: Optional[str] = None # scheduled, completed, cancelled, no-show
+    outcome: Optional[str] = None
 
 @router.get("/recruitment/jobs")
 async def get_jobs(is_internal: Optional[bool] = None):
@@ -2164,13 +2182,47 @@ async def create_application(app: JobApplicationCreate):
     return res.data[0]
 
 @router.patch("/recruitment/applications/{app_id}")
-async def update_application_status(app_id: str, status_update: dict, current_admin: dict = Depends(verify_token)):
+async def update_application_status(app_id: str, update_data: dict, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
     if "admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
-    res = await db_execute(lambda: db.table("job_applications").update({"status": status_update.get("status")}).eq("id", app_id).execute())
-    return res.data[0] if res.data else None
+    
+    # 1. Update the application record
+    # Filter allowed fields to prevent arbitrary column updates
+    allowed_fields = ["status", "offered_salary", "start_date", "notes"]
+    filtered_update = {k: v for k, v in update_data.items() if k in allowed_fields}
+    
+    res = await db_execute(lambda: db.table("job_applications").update(filtered_update).eq("id", app_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Application not found")
+    
+    app_record = res.data[0]
+    
+    # 2. If status is "Offered", send the offer email
+    if update_data.get("status") == "Offered":
+        try:
+            from email_service import send_employment_offer_email
+            
+            # Fetch job title
+            job_title = "the role"
+            job_res = await db_execute(lambda: db.table("job_requisitions").select("title").eq("id", app_record["job_id"]).execute())
+            if job_res.data:
+                job_title = job_res.data[0].get("title", "the role")
+            
+            await send_employment_offer_email(
+                candidate_email=app_record.get("candidate_email", ""),
+                candidate_name=app_record.get("candidate_name", "Candidate"),
+                job_title=job_title,
+                salary=update_data.get("offered_salary", app_record.get("offered_salary", "0")),
+                start_date=update_data.get("start_date", app_record.get("start_date", "")),
+                notes=update_data.get("notes", app_record.get("notes", "")),
+                app_id=app_id
+            )
+        except Exception as email_err:
+            logger.warning(f"Failed to send offer email (non-fatal): {email_err}")
+
+    return app_record
 
 @router.post("/recruitment/applications/{app_id}/hire")
 async def hire_applicant(app_id: str, current_admin: dict = Depends(verify_token)):
@@ -2212,6 +2264,19 @@ async def hire_applicant(app_id: str, current_admin: dict = Depends(verify_token
             raise HTTPException(status_code=500, detail="Failed to create admin account")
         admin_id = adm_res.data[0]["id"]
 
+        # ── Send onboarding email ─────────────────────────────────────────────
+        try:
+            from email_service import send_staff_onboarding_email
+            await send_staff_onboarding_email(
+                name=app["candidate_name"],
+                email=app["candidate_email"],
+                password=default_pwd,
+                job_title=job.get("title", "Staff Member"),
+                department=job.get("department", "Unassigned")
+            )
+        except Exception as onboarding_err:
+            logger.warning(f"Onboarding email failed (non-fatal): {onboarding_err}")
+
     # 4. Create/Update Staff Profile
     profile_data = {
         "admin_id": admin_id,
@@ -2243,23 +2308,188 @@ async def hire_applicant(app_id: str, current_admin: dict = Depends(verify_token
     
     return {"message": "Applicant successfully hired and onboarded", "admin_id": admin_id}
 
+@router.get("/recruitment/interviews")
+async def get_interviews(
+    application_id: Optional[str] = None,
+    current_admin: dict = Depends(verify_token)
+):
+    """Fetch scheduled interviews. Optionally filter by application_id."""
+    db = get_db()
+    query = db.table("job_interviews").select("*").order("scheduled_at", desc=True)
+    if application_id:
+        query = query.eq("application_id", application_id)
+    res = await db_execute(lambda: query.execute())
+    return res.data
+
 @router.post("/recruitment/interviews", status_code=status.HTTP_201_CREATED)
 async def schedule_interview(interview: InterviewCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
     if "admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
-    
-    # Must also move application status to "Interview"
-    await db_execute(lambda: db.table("job_applications").update({"status": "Interview"}).eq("id", interview.application_id).execute())
-    
-    # Needs isoformat for datetime
-    idata = interview.dict()
-    idata["scheduled_at"] = idata["scheduled_at"].isoformat()
-    
-    res = await db_execute(lambda: db.table("job_interviews").insert(idata).execute())
-    return res.data[0]
 
+    # Move application status to "Interview"
+    await db_execute(lambda: db.table("job_applications").update({"status": "Interview"}).eq("id", interview.application_id).execute())
+
+    # Build insert data — exclude None values to avoid FK issues
+    idata = {k: v for k, v in interview.dict().items() if v is not None}
+    idata["scheduled_at"] = interview.scheduled_at.isoformat()
+
+    res = await db_execute(lambda: db.table("job_interviews").insert(idata).execute())
+    record = res.data[0]
+
+    # ── Send interview invitation email to candidate ──────────────────────────
+    try:
+        from email_service import send_interview_invitation_email
+        # Fetch application + job details
+        app_res = await db_execute(lambda: db.table("job_applications").select("candidate_name, candidate_email, job_id").eq("id", interview.application_id).execute())
+        if app_res.data:
+            app = app_res.data[0]
+            job_title = "the role"
+            job_res = await db_execute(lambda: db.table("job_requisitions").select("title").eq("id", app["job_id"]).execute())
+            if job_res.data:
+                job_title = job_res.data[0].get("title", "the role")
+
+            # Fetch interviewer name if provided
+            interviewer_name = ""
+            if interview.interviewer_id:
+                iv_res = await db_execute(lambda: db.table("admins").select("full_name").eq("id", interview.interviewer_id).execute())
+                if iv_res.data:
+                    interviewer_name = iv_res.data[0].get("full_name", "")
+
+            formatted_dt = interview.scheduled_at.strftime("%A, %d %B %Y at %I:%M %p")
+            await send_interview_invitation_email(
+                candidate_email=app.get("candidate_email", ""),
+                candidate_name=app.get("candidate_name", "Candidate"),
+                job_title=job_title,
+                interview_type=interview.interview_type or "Technical",
+                scheduled_at_str=formatted_dt,
+                location=interview.location or "",
+                interviewer_name=interviewer_name,
+                notes=interview.notes or ""
+            )
+    except Exception as email_err:
+        logger.warning(f"Interview invite email failed (non-fatal): {email_err}")
+
+    return record
+
+@router.patch("/recruitment/interviews/{iv_id}")
+async def update_interview(iv_id: str, update: InterviewUpdate, current_admin: dict = Depends(verify_token)):
+    user_roles = current_admin.get("role", "").split(",")
+    if "admin" not in user_roles and "hr_admin" not in user_roles:
+         raise HTTPException(status_code=403, detail="HR only")
+    db = get_db()
+    
+    # 1. Fetch existing interview to detect changes
+    old_res = await db_execute(lambda: db.table("job_interviews").select("*").eq("id", iv_id).execute())
+    if not old_res.data:
+        raise HTTPException(status_code=404, detail="Interview not found")
+    old_iv = old_res.data[0]
+
+    # 2. Perform the update
+    idata = {k: v for k, v in update.dict().items() if v is not None}
+    if "scheduled_at" in idata:
+        idata["scheduled_at"] = idata["scheduled_at"].isoformat()
+        
+    res = await db_execute(lambda: db.table("job_interviews").update(idata).eq("id", iv_id).execute())
+    new_iv = res.data[0]
+
+    # 3. Handle Email Notifications (Cancellation or Rescheduling)
+    try:
+        from email_service import send_interview_cancellation_email, send_interview_reschedule_email
+        
+        # Fetch application + job details for the email
+        app_res = await db_execute(lambda: db.table("job_applications").select("candidate_name, candidate_email, job_id").eq("id", old_iv["application_id"]).execute())
+        if app_res.data:
+            app = app_res.data[0]
+            job_title = "the role"
+            job_res = await db_execute(lambda: db.table("job_requisitions").select("title").eq("id", app["job_id"]).execute())
+            if job_res.data:
+                job_title = job_res.data[0].get("title", "the role")
+
+            # A. If status changed to 'cancelled'
+            if idata.get("status") == "cancelled" and old_iv.get("status") != "cancelled":
+                await send_interview_cancellation_email(
+                    candidate_email=app.get("candidate_email", ""),
+                    candidate_name=app.get("candidate_name", "Candidate"),
+                    job_title=job_title
+                )
+            
+            # B. If date or location changed (Reschedule)
+            elif (idata.get("scheduled_at") or idata.get("location")) and idata.get("status") != "cancelled":
+                # Only send if it's actually different from before
+                is_time_changed = idata.get("scheduled_at") and idata["scheduled_at"] != old_iv.get("scheduled_at")
+                is_loc_changed = idata.get("location") and idata["location"] != old_iv.get("location")
+                
+                if is_time_changed or is_loc_changed:
+                    # Fetch interviewer name
+                    interviewer_name = ""
+                    iv_id_to_check = idata.get("interviewer_id") or old_iv.get("interviewer_id")
+                    if iv_id_to_check:
+                        iv_res = await db_execute(lambda: db.table("admins").select("full_name").eq("id", iv_id_to_check).execute())
+                        if iv_res.data:
+                            interviewer_name = iv_res.data[0].get("full_name", "")
+
+                    formatted_dt = datetime.fromisoformat(new_iv["scheduled_at"]).strftime("%A, %d %B %Y at %I:%M %p")
+                    await send_interview_reschedule_email(
+                        candidate_email=app.get("candidate_email", ""),
+                        candidate_name=app.get("candidate_name", "Candidate"),
+                        job_title=job_title,
+                        interview_type=new_iv.get("interview_type", "Technical"),
+                        scheduled_at_str=formatted_dt,
+                        location=new_iv.get("location", ""),
+                        interviewer_name=interviewer_name,
+                        notes=new_iv.get("notes", "")
+                    )
+
+    except Exception as email_err:
+        logger.warning(f"Follow-up interview email failed (non-fatal): {email_err}")
+
+    return new_iv
+
+
+
+# ─── PUBLIC ENDPOINTS: OFFERS ────────────────────────────────────────────────
+
+@router.get("/public/offers/{app_id}")
+async def get_public_offer(app_id: str):
+    db = get_db()
+    res = await db_execute(lambda: db.table("job_applications").select("candidate_name, job_id, offered_salary, start_date, notes, status").eq("id", app_id).execute())
+    if not res.data: raise HTTPException(status_code=404, detail="Offer not found")
+    app = res.data[0]
+    
+    job_res = await db_execute(lambda: db.table("job_requisitions").select("title, department").eq("id", app["job_id"]).execute())
+    job = job_res.data[0] if job_res.data else {}
+    
+    return {
+        "candidate_name": app.get("candidate_name"),
+        "job_title": job.get("title", "the role"),
+        "department": job.get("department", ""),
+        "offered_salary": app.get("offered_salary"),
+        "start_date": app.get("start_date"),
+        "status": app.get("status"),
+        "notes": app.get("notes")
+    }
+
+@router.post("/public/offers/{app_id}/respond")
+async def respond_to_offer(app_id: str, payload: OfferResponse):
+    db = get_db()
+    res = await db_execute(lambda: db.table("job_applications").select("status, notes").eq("id", app_id).execute())
+    if not res.data: raise HTTPException(status_code=404, detail="Offer not found")
+    app = res.data[0]
+    
+    if app.get("status") not in ["Offered", "Offer Accepted", "Offer Declined"]:
+        raise HTTPException(status_code=400, detail="Offer is no longer active or has already been processed.")
+        
+    new_status = "Offer Accepted" if payload.action == "accept" else "Offer Declined"
+    
+    update_data = {"status": new_status}
+    if payload.reason and payload.action == "decline":
+        old_notes = app.get("notes") or ""
+        update_data["notes"] = f"{old_notes}\n\n[Candidate Decline Reason/Counter-Offer]: {payload.reason}".strip()
+        
+    res2 = await db_execute(lambda: db.table("job_applications").update(update_data).eq("id", app_id).execute())
+    return {"message": "Response recorded successfully", "status": new_status}
 
 
 # ─── ENGAGEMENT & CULTURE ─────────────────────────────────────────────────────

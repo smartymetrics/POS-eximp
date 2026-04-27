@@ -819,6 +819,288 @@ async def send_refund_receipt_email(invoice: dict, payment: dict, client: dict):
         )
         return None
 
+
+# ─── RECRUITMENT: INTERVIEW INVITATION ────────────────────────────────────────
+
+def _interview_invite_html(candidate_name, job_title, interview_type, scheduled_at, location, interviewer_name, notes):
+    notes_block = f'<div style="background:#fdf3e3;border-left:4px solid #F5A623;padding:16px;margin:20px 0;font-size:13px;color:#7d5a0a;"><strong>Preparation Notes:</strong><br>{notes}</div>' if notes else ""
+    return f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+      <div style="background:#1A1A1A;padding:24px;text-align:center;">
+        <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp &amp; Cloves" style="max-height:48px;display:block;margin:0 auto;">
+      </div>
+      <div style="background:#F5A623;padding:12px 24px;">
+        <h2 style="color:#1A1A1A;margin:0;font-size:16px;">&#128197; Interview Invitation &mdash; {job_title}</h2>
+      </div>
+      <div style="padding:32px 24px;background:#fff;border:1px solid #eee;">
+        <p style="color:#333;">Dear <strong>{candidate_name}</strong>,</p>
+        <p style="color:#555;">We are pleased to invite you to an interview for the position of <strong>{job_title}</strong> at Eximp &amp; Cloves Infrastructure Limited.</p>
+        <div style="background:#1A1A1A;border-radius:8px;padding:24px;margin:24px 0;">
+          <table style="width:100%;color:#ccc;font-size:14px;border-collapse:collapse;">
+            <tr><td style="padding:8px 0;border-bottom:1px solid #333;color:#aaa;">Interview Type</td><td style="padding:8px 0;border-bottom:1px solid #333;text-align:right;color:#F5A623;font-weight:bold;">{interview_type or "Interview"}</td></tr>
+            <tr><td style="padding:8px 0;border-bottom:1px solid #333;color:#aaa;">Date &amp; Time</td><td style="padding:8px 0;border-bottom:1px solid #333;text-align:right;color:#fff;font-weight:bold;">{scheduled_at}</td></tr>
+            <tr><td style="padding:8px 0;border-bottom:1px solid #333;color:#aaa;">Format / Venue</td><td style="padding:8px 0;border-bottom:1px solid #333;text-align:right;color:#fff;">{location or "To be confirmed"}</td></tr>
+            <tr><td style="padding:8px 0;color:#aaa;">Interviewer</td><td style="padding:8px 0;text-align:right;color:#fff;">{interviewer_name or "HR Team"}</td></tr>
+          </table>
+        </div>
+        {notes_block}
+        <p style="color:#555;font-size:13px;">Please confirm your attendance by replying to this email. If you need to reschedule, contact us at least 24 hours in advance.</p>
+        <p style="color:#555;margin-top:30px;">We look forward to speaking with you.<br>The Eximp &amp; Cloves HR Team</p>
+        <hr style="border-color:#eee;margin:24px 0;">
+        <p style="color:#999;font-size:12px;margin:0;">Eximp &amp; Cloves Infrastructure Limited | RC 8311800<br>57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383<br>
+          <a href="https://www.eximps-cloves.com" style="color:#999;text-decoration:none;">www.eximps-cloves.com</a></p>
+      </div>
+    </div>"""
+
+
+async def send_interview_invitation_email(
+    candidate_email: str,
+    candidate_name: str,
+    job_title: str,
+    interview_type: str = "Technical",
+    scheduled_at_str: str = "",
+    location: str = "",
+    interviewer_name: str = "",
+    notes: str = ""
+):
+    """Send an interview invitation email to a candidate via Resend."""
+    if not candidate_email:
+        logger.warning("No candidate email — skipping interview invite.")
+        return None
+    try:
+        res = await async_resend({
+            "from": "Eximp & Cloves HR <hr@mail.eximps-cloves.com>",
+            "to": [candidate_email],
+            "reply_to": "hr@eximps-cloves.com",
+            # "cc": ["operations@eximps-cloves.com"],
+            "subject": f"Interview Invitation — {job_title} | Eximp & Cloves",
+            "html": _interview_invite_html(candidate_name, job_title, interview_type, scheduled_at_str, location, interviewer_name, notes)
+        })
+        logger.info(f"Interview invite sent to {candidate_email}")
+        return res
+    except Exception as e:
+        logger.error(f"Failed to send interview invite to {candidate_email}: {e}")
+        return None
+
+
+# ─── RECRUITMENT: INTERVIEW CANCELLATION ──────────────────────────────────────
+
+def _interview_cancellation_html(candidate_name, job_title):
+    return f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+      <div style="background:#1A1A1A;padding:24px;text-align:center;">
+        <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp &amp; Cloves" style="max-height:48px;display:block;margin:0 auto;">
+      </div>
+      <div style="background:#F87171;padding:12px 24px;">
+        <h2 style="color:#fff;margin:0;font-size:16px;">&#10006; Interview Cancellation &mdash; {job_title}</h2>
+      </div>
+      <div style="padding:32px 24px;background:#fff;border:1px solid #eee;">
+        <p style="color:#333;">Dear <strong>{candidate_name}</strong>,</p>
+        <p style="color:#555;">This is to inform you that your scheduled interview for the position of <strong>{job_title}</strong> has been cancelled.</p>
+        <p style="color:#555;font-size:13px;">We apologize for any inconvenience this may cause. If you have any questions, please feel free to reach out to our recruitment team.</p>
+        <p style="color:#555;margin-top:30px;">Best regards,<br>The Eximp &amp; Cloves HR Team</p>
+        <hr style="border-color:#eee;margin:24px 0;">
+        <p style="color:#999;font-size:12px;margin:0;">Eximp &amp; Cloves Infrastructure Limited | RC 8311800<br>57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383<br>
+          <a href="https://www.eximps-cloves.com" style="color:#999;text-decoration:none;">www.eximps-cloves.com</a></p>
+      </div>
+    </div>"""
+
+async def send_interview_cancellation_email(candidate_email: str, candidate_name: str, job_title: str):
+    if not candidate_email: return None
+    try:
+        res = await async_resend({
+            "from": "Eximp & Cloves HR <hr@mail.eximps-cloves.com>",
+            "to": [candidate_email],
+            "reply_to": "hr@eximps-cloves.com",
+            # "cc": ["operations@eximps-cloves.com"],
+            "subject": f"Interview Cancellation — {job_title} | Eximp & Cloves",
+            "html": _interview_cancellation_html(candidate_name, job_title)
+        })
+        logger.info(f"Cancellation email sent to {candidate_email}")
+        return res
+    except Exception as e:
+        logger.error(f"Failed to send cancellation email to {candidate_email}: {e}")
+        return None
+
+
+# ─── RECRUITMENT: INTERVIEW RESCHEDULE ────────────────────────────────────────
+
+def _interview_reschedule_html(candidate_name, job_title, interview_type, scheduled_at, location, interviewer_name, notes):
+    notes_block = f'<div style="background:#fdf3e3;border-left:4px solid #F5A623;padding:16px;margin:20px 0;font-size:13px;color:#7d5a0a;"><strong>Updated Preparation Notes:</strong><br>{notes}</div>' if notes else ""
+    return f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+      <div style="background:#1A1A1A;padding:24px;text-align:center;">
+        <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp &amp; Cloves" style="max-height:48px;display:block;margin:0 auto;">
+      </div>
+      <div style="background:#F5A623;padding:12px 24px;">
+        <h2 style="color:#1A1A1A;margin:0;font-size:16px;">&#128197; Interview Rescheduled &mdash; {job_title}</h2>
+      </div>
+      <div style="padding:32px 24px;background:#fff;border:1px solid #eee;">
+        <p style="color:#333;">Dear <strong>{candidate_name}</strong>,</p>
+        <p style="color:#555;">Please be advised that your interview for the position of <strong>{job_title}</strong> has been rescheduled to the following new time:</p>
+        <div style="background:#1A1A1A;border-radius:8px;padding:24px;margin:24px 0;">
+          <table style="width:100%;color:#ccc;font-size:14px;border-collapse:collapse;">
+            <tr><td style="padding:8px 0;border-bottom:1px solid #333;color:#aaa;">Interview Type</td><td style="padding:8px 0;border-bottom:1px solid #333;text-align:right;color:#F5A623;font-weight:bold;">{interview_type or "Interview"}</td></tr>
+            <tr><td style="padding:8px 0;border-bottom:1px solid #333;color:#aaa;">NEW Date &amp; Time</td><td style="padding:8px 0;border-bottom:1px solid #333;text-align:right;color:#fff;font-weight:bold;">{scheduled_at}</td></tr>
+            <tr><td style="padding:8px 0;border-bottom:1px solid #333;color:#aaa;">Format / Venue</td><td style="padding:8px 0;border-bottom:1px solid #333;text-align:right;color:#fff;">{location or "To be confirmed"}</td></tr>
+            <tr><td style="padding:8px 0;color:#aaa;">Interviewer</td><td style="padding:8px 0;text-align:right;color:#fff;">{interviewer_name or "HR Team"}</td></tr>
+          </table>
+        </div>
+        {notes_block}
+        <p style="color:#555;font-size:13px;">Please confirm that you have received this update and are available for the new time.</p>
+        <p style="color:#555;margin-top:30px;">Best regards,<br>The Eximp &amp; Cloves HR Team</p>
+        <hr style="border-color:#eee;margin:24px 0;">
+        <p style="color:#999;font-size:12px;margin:0;">Eximp &amp; Cloves Infrastructure Limited | RC 8311800<br>57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383<br>
+          <a href="https://www.eximps-cloves.com" style="color:#999;text-decoration:none;">www.eximps-cloves.com</a></p>
+      </div>
+    </div>"""
+
+async def send_interview_reschedule_email(
+    candidate_email: str,
+    candidate_name: str,
+    job_title: str,
+    interview_type: str = "Technical",
+    scheduled_at_str: str = "",
+    location: str = "",
+    interviewer_name: str = "",
+    notes: str = ""
+):
+    if not candidate_email: return None
+    try:
+        res = await async_resend({
+            "from": "Eximp & Cloves HR <hr@mail.eximps-cloves.com>",
+            "to": [candidate_email],
+            "reply_to": "hr@eximps-cloves.com",
+            "subject": f"Interview Rescheduled — {job_title} | Eximp & Cloves",
+            "html": _interview_reschedule_html(candidate_name, job_title, interview_type, scheduled_at_str, location, interviewer_name, notes)
+        })
+        logger.info(f"Reschedule email sent to {candidate_email}")
+        return res
+    except Exception as e:
+        logger.error(f"Failed to send reschedule email to {candidate_email}: {e}")
+        return None
+
+
+# ─── RECRUITMENT: EMPLOYMENT OFFER ──────────────────────────────────────────
+
+def _offer_email_html(candidate_name, job_title, salary, start_date, notes, app_id):
+    notes_block = f'<div style="background:#f9f9f9;border-left:4px solid #4ADE80;padding:16px;margin:20px 0;font-size:13px;color:#333;"><strong>Offer Conditions & Notes:</strong><br>{notes}</div>' if notes else ""
+    return f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+      <div style="background:#1A1A1A;padding:24px;text-align:center;">
+        <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp &amp; Cloves" style="max-height:48px;display:block;margin:0 auto;">
+      </div>
+      <div style="background:#4ADE80;padding:12px 24px;">
+        <h2 style="color:#1A1A1A;margin:0;font-size:16px;">&#127881; Employment Offer &mdash; {job_title}</h2>
+      </div>
+      <div style="padding:32px 24px;background:#fff;border:1px solid #eee;">
+        <p style="color:#333;">Dear <strong>{candidate_name}</strong>,</p>
+        <p style="color:#555;">Congratulations! We are delighted to offer you the position of <strong>{job_title}</strong> at Eximp &amp; Cloves Infrastructure Limited.</p>
+        <div style="background:#1A1A1A;border-radius:8px;padding:24px;margin:24px 0;">
+          <table style="width:100%;color:#ccc;font-size:14px;border-collapse:collapse;">
+            <tr><td style="padding:8px 0;border-bottom:1px solid #333;color:#aaa;">Offered Salary</td><td style="padding:8px 0;border-bottom:1px solid #333;text-align:right;color:#4ADE80;font-weight:bold;">₦{float(salary):,.2f} / month</td></tr>
+            <tr><td style="padding:8px 0;border-bottom:1px solid #333;color:#aaa;">Proposed Start Date</td><td style="padding:8px 0;border-bottom:1px solid #333;text-align:right;color:#fff;">{start_date or "To be agreed"}</td></tr>
+          </table>
+        </div>
+        {notes_block}
+        <p style="color:#555;font-size:13px;">We believe your skills and experience will be a fantastic addition to our team. This offer is subject to satisfactory references and standard onboarding procedures.</p>
+        <div style="text-align:center;margin:32px 0;">
+          <a href="https://hrm.eximps-cloves.com/?offer={app_id}" style="display:inline-block;background:#4ADE80;color:#1A1A1A;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:bold;font-size:14px;">Review & Respond to Offer</a>
+        </div>
+        <p style="color:#555;font-size:13px;">Please let us know your decision by clicking the button above. We would love to have you on board!</p>
+        <p style="color:#555;margin-top:30px;">Best regards,<br>The Eximp &amp; Cloves HR Team</p>
+        <hr style="border-color:#eee;margin:24px 0;">
+        <p style="color:#999;font-size:12px;margin:0;">Eximp &amp; Cloves Infrastructure Limited | RC 8311800<br>57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383<br>
+          <a href="https://www.eximps-cloves.com" style="color:#999;text-decoration:none;">www.eximps-cloves.com</a></p>
+      </div>
+    </div>"""
+
+
+async def send_employment_offer_email(
+    candidate_email: str,
+    candidate_name: str,
+    job_title: str,
+    salary: str,
+    start_date: str = "",
+    notes: str = "",
+    app_id: str = ""
+):
+    """Send an employment offer email to a candidate via Resend."""
+    if not candidate_email:
+        logger.warning("No candidate email — skipping offer email.")
+        return None
+    try:
+        res = await async_resend({
+            "from": "Eximp & Cloves HR <hr@mail.eximps-cloves.com>",
+            "to": [candidate_email],
+            "reply_to": "hr@eximps-cloves.com",
+            "subject": f"Job Offer — {job_title} | Eximp & Cloves",
+            "html": _offer_email_html(candidate_name, job_title, salary, start_date, notes, app_id)
+        })
+        logger.info(f"Offer email sent to {candidate_email}")
+        return res
+    except Exception as e:
+        logger.error(f"Failed to send offer email to {candidate_email}: {e}")
+        return None
+
+
+# ─── RECRUITMENT: STAFF ONBOARDING ──────────────────────────────────────────
+
+def _staff_onboarding_html(name, email, password, job_title, department):
+    return f"""
+    <div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;">
+      <div style="background:#1A1A1A;padding:24px;text-align:center;">
+        <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp &amp; Cloves" style="max-height:48px;display:block;margin:0 auto;">
+      </div>
+      <div style="background:#F5A623;padding:12px 24px;">
+        <h2 style="color:#1A1A1A;margin:0;font-size:16px;">🎊 Welcome to the Team!</h2>
+      </div>
+      <div style="padding:32px 24px;background:#fff;border:1px solid #eee;">
+        <p style="color:#333;">Dear <strong>{name}</strong>,</p>
+        <p style="color:#555;">We are thrilled to officially welcome you to Eximp &amp; Cloves Infrastructure Limited as our new <strong>{job_title}</strong> in the <strong>{department}</strong> department.</p>
+        <p style="color:#333;font-weight:bold;margin-top:24px;">Your Portal Access Credentials:</p>
+        <div style="background:#f9f9f9;border-radius:8px;padding:20px;margin:12px 0;border:1px solid #eee;">
+          <table style="width:100%;font-size:14px;border-collapse:collapse;">
+            <tr><td style="padding:8px 0;color:#888;">Portal URL</td><td style="padding:8px 0;text-align:right;"><a href="https://hrm.eximps-cloves.com" style="color:#F5A623;font-weight:bold;text-decoration:none;">hrm.eximps-cloves.com</a></td></tr>
+            <tr><td style="padding:8px 0;color:#888;">Email Address</td><td style="padding:8px 0;text-align:right;font-weight:bold;">{email}</td></tr>
+            <tr><td style="padding:8px 0;color:#888;">Default Password</td><td style="padding:8px 0;text-align:right;font-family:monospace;background:#eee;padding:4px 8px;border-radius:4px;">{password}</td></tr>
+          </table>
+        </div>
+        <p style="color:#E74C3C;font-size:12px;margin-top:8px;">⚠️ Please change your password immediately upon your first login.</p>
+        <p style="color:#555;font-size:13px;margin-top:24px;">You can use the portal to manage your leave requests, view payslips, participate in performance reviews, and stay updated with company announcements.</p>
+        <p style="color:#555;margin-top:30px;">Once again, welcome aboard! We look forward to achieving great things together.</p>
+        <p style="color:#555;">Best regards,<br>The Eximp &amp; Cloves Team</p>
+        <hr style="border-color:#eee;margin:24px 0;">
+        <p style="color:#999;font-size:12px;margin:0;">Eximp &amp; Cloves Infrastructure Limited | RC 8311800<br>57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383<br>
+          <a href="https://www.eximps-cloves.com" style="color:#999;text-decoration:none;">www.eximps-cloves.com</a></p>
+      </div>
+    </div>"""
+
+
+async def send_staff_onboarding_email(
+    name: str,
+    email: str,
+    password: str,
+    job_title: str,
+    department: str
+):
+    """Send onboarding credentials to a new staff member via Resend."""
+    if not email:
+        return None
+    try:
+        res = await async_resend({
+            "from": "Eximp & Cloves HR <hr@mail.eximps-cloves.com>",
+            "to": [email],
+            "reply_to": "hr@eximps-cloves.com",
+            "subject": f"Welcome to Eximp & Cloves — Your Portal Access",
+            "html": _staff_onboarding_html(name, email, password, job_title, department)
+        })
+        logger.info(f"Onboarding email sent to {email}")
+        return res
+    except Exception as e:
+        logger.error(f"Failed to send onboarding email to {email}: {e}")
+        return None
+
 def _refund_receipt_html(invoice: dict, payment: dict, client: dict) -> str:
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee;">

@@ -5429,10 +5429,10 @@ function StaffTimesheet() {
     const start = new Date(form.week_start);
     const end = new Date(start);
     end.setDate(start.getDate() + 5); // mon to sat
-    
+
     const startStr = form.week_start;
     const endStr = end.toISOString().split('T')[0];
-    
+
     try {
       setSyncing(true);
       const data = await apiFetch(`${API_BASE}/hr/presence/attendance?start_date=${startStr}&end_date=${endStr}`);
@@ -5440,14 +5440,14 @@ function StaffTimesheet() {
         alert("No attendance records found for this week.");
         return;
       }
-      
+
       const newForm = { ...form };
       data.forEach(rec => {
         if (rec.check_in && rec.check_out) {
           const cin = new Date(rec.check_in);
           const cout = new Date(rec.check_out);
           const diffHrs = Math.max(0, Math.round((cout - cin) / (1000 * 60 * 60) * 2) / 2);
-          
+
           const dDate = new Date(rec.date);
           const dayMap = ["sun", "mon", "tue", "wed", "thu", "fri", "sat"];
           const dayKey = dayMap[dDate.getDay()];
@@ -5641,7 +5641,7 @@ function TimesheetAuditSection({ sheet, C }) {
             totalAttendance += hrs;
           }
         });
-        const sheetTotal = (sheet.mon_hrs||0)+(sheet.tue_hrs||0)+(sheet.wed_hrs||0)+(sheet.thu_hrs||0)+(sheet.fri_hrs||0);
+        const sheetTotal = (sheet.mon_hrs || 0) + (sheet.tue_hrs || 0) + (sheet.wed_hrs || 0) + (sheet.thu_hrs || 0) + (sheet.fri_hrs || 0);
         const diff = sheetTotal - totalAttendance;
         setAudit({ totalAttendance, sheetTotal, diff });
       })
@@ -5652,7 +5652,7 @@ function TimesheetAuditSection({ sheet, C }) {
   if (loading) return <div style={{ fontSize: 11, color: C.muted, padding: "10px 0" }}>🔍 Verifying against attendance logs...</div>;
   if (!audit) return null;
 
-  const isVerified = Math.abs(audit.diff) <= 1; 
+  const isVerified = Math.abs(audit.diff) <= 1;
   const statusCol = isVerified ? "#4ADE80" : audit.diff > 0 ? "#F87171" : T.gold;
 
   return (
@@ -7098,7 +7098,7 @@ function PolicyLibrary({ isHR }) {
 }
 
 // ─── HUB: INTERNAL JOB BOARD ─────────────────────────────────────────────────
-function InternalJobBoard({ isHR }) {
+function InternalJobBoard({ isHR, user }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [jobs, setJobs] = useState([]); const [apps, setApps] = useState([]); const [loading, setLoading] = useState(true);
   const [tab, setTab] = useState(isHR ? "manage" : "browse");
@@ -7115,7 +7115,7 @@ function InternalJobBoard({ isHR }) {
     setLoading(true);
     try {
       const [j, a] = await Promise.all([
-        apiFetch(`${API_BASE}/hr/recruitment/jobs`).catch(() => []),
+        apiFetch(`${API_BASE}/hr/recruitment/jobs?is_internal=true`).catch(() => []),
         apiFetch(`${API_BASE}/hr/recruitment/applications`).catch(() => [])
       ]);
       setJobs((j || []).filter(x => x.status === "Open" || isHR));
@@ -7128,7 +7128,7 @@ function InternalJobBoard({ isHR }) {
     if (!form.title || !form.department) return alert("Title and department are required.");
     setSaving(true);
     try {
-      await apiFetch(`${API_BASE}/hr/recruitment/jobs`, { method: "POST", body: JSON.stringify({ ...form, status: "Open" }) });
+      await apiFetch(`${API_BASE}/hr/recruitment/jobs`, { method: "POST", body: JSON.stringify({ ...form, status: "Open", is_internal: true }) });
       setShowPost(false); setForm({ title: "", department: "", employment_type: "Full-Time", location: "Port Harcourt, NG", salary_range: "", description: "", requirements: "", closing_date: "" }); load();
     } catch (e) { alert(e.message); } finally { setSaving(false); }
   };
@@ -7141,7 +7141,7 @@ function InternalJobBoard({ isHR }) {
         method: "POST",
         body: JSON.stringify({
           job_id: showApply.id,
-          candidate_name: "Internal Applicant",
+          candidate_name: user?.full_name || "Internal Applicant",
           cover_letter: `[INTERNAL APPLICATION]\n\nCurrent Role: ${applyForm.current_role}\nExperience: ${applyForm.years_experience} years\nReason: ${applyForm.reason}\n\n${applyForm.cover_letter}`
         })
       });
@@ -7184,14 +7184,21 @@ function InternalJobBoard({ isHR }) {
           <div className="g2" style={{ gap: 16 }}>
             {jobs.filter(j => j.status === "Open").map(j => {
               const tc = typeCol[j.employment_type] || T.gold;
+              const today = new Date(); today.setHours(0, 0, 0, 0);
+              const deadline = j.closing_date ? new Date(j.closing_date + "T23:59:59") : null;
+              const isExpired = deadline && deadline < new Date();
+              const daysLeft = deadline ? Math.ceil((deadline - today) / (1000 * 60 * 60 * 24)) : null;
+              const urgency = daysLeft !== null && daysLeft <= 3 && !isExpired;
               return (
-                <div key={j.id} className="gc fade-in" style={{ padding: 22, cursor: "pointer" }} onClick={() => setShowDetails(j)}>
+                <div key={j.id} className="gc fade-in" style={{ padding: 22, cursor: "pointer", opacity: isExpired ? 0.6 : 1 }} onClick={() => setShowDetails(j)}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 14 }}>
                     <div>
                       <div style={{ fontWeight: 900, fontSize: 16, color: C.text, marginBottom: 6 }}>{j.title}</div>
-                      <div style={{ display: "flex", gap: 8 }}>
+                      <div style={{ display: "flex", gap: 8, flexWrap: "wrap" }}>
                         <span className="tg" style={{ background: `${tc}22`, color: tc, fontSize: 11 }}>{j.employment_type}</span>
                         <span className="tg tg2" style={{ fontSize: 11 }}>Internal</span>
+                        {isExpired && <span className="tg" style={{ background: "#F8717122", color: "#F87171", fontSize: 11 }}>Deadline Passed</span>}
+                        {urgency && <span className="tg" style={{ background: "#F59E0B22", color: "#F59E0B", fontSize: 11 }}>⚡ {daysLeft}d left</span>}
                       </div>
                     </div>
                     <div style={{ fontSize: 11, color: C.muted }}>{jobApps(j.id).length} applied</div>
@@ -7200,11 +7207,19 @@ function InternalJobBoard({ isHR }) {
                     <span>🏢 {j.department}</span>
                     <span>📍 {j.location || "Port Harcourt, NG"}</span>
                     {j.salary_range && <span style={{ color: T.gold, fontWeight: 700 }}>💰 {j.salary_range}</span>}
+                    {deadline && (
+                      <span style={{ color: isExpired ? "#F87171" : urgency ? "#F59E0B" : C.muted, fontWeight: isExpired || urgency ? 700 : 400 }}>
+                        📅 {isExpired ? "Closed" : `Closes ${deadline.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`}
+                      </span>
+                    )}
                   </div>
                   {j.description && <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.6, marginBottom: 12 }}>{j.description.slice(0, 140)}{j.description.length > 140 ? "…" : ""}</div>}
                   <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div style={{ fontSize: 11, color: T.gold, fontWeight: 800 }}>VIEW DETAILS →</div>
-                    <button className="bp" onClick={(e) => { e.stopPropagation(); setShowApply(j); }} style={{ padding: "8px 16px", fontSize: 12 }}>Quick Apply</button>
+                    {isExpired
+                      ? <span style={{ fontSize: 12, color: "#F87171", fontWeight: 700 }}>Applications Closed</span>
+                      : <button className="bp" onClick={(e) => { e.stopPropagation(); setShowApply(j); }} style={{ padding: "8px 16px", fontSize: 12 }}>Quick Apply</button>
+                    }
                   </div>
                 </div>
               );
@@ -7255,27 +7270,42 @@ function InternalJobBoard({ isHR }) {
         )}
       </>)}
 
-      {showApply && (
-        <Modal onClose={() => { setShowApply(null); setApplyForm({ cover_letter: "", years_experience: "", current_role: "", reason: "" }); }} title={`Apply — ${showApply.title}`} width={560}>
-          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-            <div style={{ padding: "12px 16px", background: `${T.gold}0A`, borderRadius: 10, border: `1px solid ${T.gold}22` }}>
-              <div style={{ fontWeight: 800, color: C.text }}>{showApply.title}</div>
-              <div style={{ fontSize: 12, color: C.sub }}>{showApply.department} · {showApply.location}</div>
-              {showApply.salary_range && <div style={{ fontSize: 12, color: T.gold, fontWeight: 700, marginTop: 2 }}>{showApply.salary_range}</div>}
+      {showApply && (() => {
+        const applyDeadline = showApply.closing_date ? new Date(showApply.closing_date + "T23:59:59") : null;
+        const applyExpired = applyDeadline && applyDeadline < new Date();
+        return (
+          <Modal onClose={() => { setShowApply(null); setApplyForm({ cover_letter: "", years_experience: "", current_role: "", reason: "" }); }} title={`Apply — ${showApply.title}`} width={560}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ padding: "12px 16px", background: applyExpired ? "#F8717108" : `${T.gold}0A`, borderRadius: 10, border: `1px solid ${applyExpired ? "#F8717133" : `${T.gold}22`}` }}>
+                <div style={{ fontWeight: 800, color: C.text }}>{showApply.title}</div>
+                <div style={{ fontSize: 12, color: C.sub }}>{showApply.department} · {showApply.location}</div>
+                {showApply.salary_range && <div style={{ fontSize: 12, color: T.gold, fontWeight: 700, marginTop: 2 }}>{showApply.salary_range}</div>}
+                {applyDeadline && <div style={{ fontSize: 12, color: applyExpired ? "#F87171" : C.muted, fontWeight: 700, marginTop: 4 }}>📅 {applyExpired ? "Deadline Passed" : `Closes ${applyDeadline.toLocaleDateString(undefined, { month: "short", day: "numeric", year: "numeric" })}`}</div>}
+              </div>
+              {applyExpired ? (
+                <div style={{ textAlign: "center", padding: "24px 0" }}>
+                  <div style={{ fontSize: 36, marginBottom: 8 }}>🔒</div>
+                  <div style={{ fontWeight: 800, color: "#F87171", marginBottom: 4 }}>Applications Closed</div>
+                  <div style={{ fontSize: 13, color: C.muted }}>The deadline for this role has passed.</div>
+                </div>
+              ) : (
+                <>
+                  <div className="g2" style={{ gap: 12 }}>
+                    <div><Lbl>Current Role</Lbl><input className="inp" value={applyForm.current_role} onChange={e => setApplyForm(f => ({ ...f, current_role: e.target.value }))} placeholder="e.g. Sales Executive" /></div>
+                    <div><Lbl>Years of Experience</Lbl><input className="inp" type="number" min="0" value={applyForm.years_experience} onChange={e => setApplyForm(f => ({ ...f, years_experience: e.target.value }))} /></div>
+                  </div>
+                  <div><Lbl>Why are you interested? *</Lbl><textarea className="inp" rows={3} value={applyForm.reason} onChange={e => setApplyForm(f => ({ ...f, reason: e.target.value }))} placeholder="How does this align with your career goals?" /></div>
+                  <div><Lbl>Cover Letter *</Lbl><textarea className="inp" rows={5} value={applyForm.cover_letter} onChange={e => setApplyForm(f => ({ ...f, cover_letter: e.target.value }))} placeholder="Highlight your relevant skills and experience…" /></div>
+                  <div style={{ display: "flex", gap: 10 }}>
+                    <button className="bp" onClick={applyInternal} disabled={saving} style={{ flex: 1, padding: 13 }}>{saving ? "Submitting…" : "Submit Application"}</button>
+                    <button className="bg" onClick={() => setShowApply(null)} style={{ flex: 1, padding: 13 }}>Cancel</button>
+                  </div>
+                </>
+              )}
             </div>
-            <div className="g2" style={{ gap: 12 }}>
-              <div><Lbl>Current Role</Lbl><input className="inp" value={applyForm.current_role} onChange={e => setApplyForm(f => ({ ...f, current_role: e.target.value }))} placeholder="e.g. Sales Executive" /></div>
-              <div><Lbl>Years of Experience</Lbl><input className="inp" type="number" min="0" value={applyForm.years_experience} onChange={e => setApplyForm(f => ({ ...f, years_experience: e.target.value }))} /></div>
-            </div>
-            <div><Lbl>Why are you interested? *</Lbl><textarea className="inp" rows={3} value={applyForm.reason} onChange={e => setApplyForm(f => ({ ...f, reason: e.target.value }))} placeholder="How does this align with your career goals?" /></div>
-            <div><Lbl>Cover Letter *</Lbl><textarea className="inp" rows={5} value={applyForm.cover_letter} onChange={e => setApplyForm(f => ({ ...f, cover_letter: e.target.value }))} placeholder="Highlight your relevant skills and experience…" /></div>
-            <div style={{ display: "flex", gap: 10 }}>
-              <button className="bp" onClick={applyInternal} disabled={saving} style={{ flex: 1, padding: 13 }}>{saving ? "Submitting…" : "Submit Application"}</button>
-              <button className="bg" onClick={() => setShowApply(null)} style={{ flex: 1, padding: 13 }}>Cancel</button>
-            </div>
-          </div>
-        </Modal>
-      )}
+          </Modal>
+        );
+      })()}
 
       {showDetails && (
         <Modal onClose={() => setShowDetails(null)} title="Job Details" width={640}>
@@ -7297,8 +7327,14 @@ function InternalJobBoard({ isHR }) {
                   <div className="fv">{showDetails.salary_range || "Negotiable"}</div>
                 </div>
                 <div className="field">
-                  <div className="fl">Closing Date</div>
-                  <div className="fv">{showDetails.closing_date ? new Date(showDetails.closing_date + "T12:00:00").toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" }) : "Open Until Filled"}</div>
+                  <div className="fl">Application Deadline</div>
+                  {(() => {
+                    const dl = showDetails.closing_date ? new Date(showDetails.closing_date + "T23:59:59") : null;
+                    const exp = dl && dl < new Date();
+                    return <div className="fv" style={{ color: exp ? "#F87171" : dl && Math.ceil((dl - new Date()) / 86400000) <= 3 ? "#F59E0B" : undefined, fontWeight: exp ? 700 : undefined }}>
+                      {dl ? (exp ? "🔒 Closed" : `📅 ${dl.toLocaleDateString(undefined, { month: "long", day: "numeric", year: "numeric" })}`) : "Open Until Filled"}
+                    </div>;
+                  })()}
                 </div>
               </div>
             </div>
@@ -8963,7 +8999,7 @@ function HRAdminPortal({ user, onLogout }) {
       if (p === "surveys") return <CultureHub authRole="hr" />;
       if (p === "remote_work") return <RemoteWork />;
       if (p === "policy_library") return <PolicyLibrary isHR={true} />;
-      if (p === "internal_job_board") return <InternalJobBoard isHR={true} />;
+      if (p === "internal_job_board") return <InternalJobBoard isHR={true} user={user} />;
       // Hub 8: Documents
       if (p === "legal_vault") return <DocumentsVault isHR={true} />;
       if (p === "contracts") return <LegalManager staffId={null} staffName={null} isHR={true} />;
@@ -9185,7 +9221,7 @@ function StaffPortal({ user, onLogout }) {
       if (pg === "surveys") return <CultureHub authRole="staff" />;
       if (pg === "remote_work") return <RemoteWork />;
       if (pg === "policy_library") return <PolicyLibrary isHR={false} />;
-      if (pg === "internal_job_board") return <InternalJobBoard isHR={false} />;
+      if (pg === "internal_job_board") return <InternalJobBoard isHR={false} user={user} />;
       if (pg === "training" || pg === "compliance_training") return <LearningHub isHR={false} />;
 
       return (
@@ -9815,8 +9851,9 @@ function JobsBoard() {
   const [viewJob, setViewJob] = useState(null);
   const [form, setForm] = useState({ title: "", department: departments[0]?.name || "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", description: "", responsibilities: "", requirements: "" });
 
-  const depts = ["All", ...new Set(jobs.map(j => j.department).filter(Boolean))];
+  const depts = ["All", ...new Set(jobs.filter(j => !j.is_internal).map(j => j.department).filter(Boolean))];
   const filtered = jobs.filter(j =>
+    (!j.is_internal) &&
     (deptFilter === "All" || j.department === deptFilter) &&
     (j.title?.toLowerCase().includes(search.toLowerCase()) || j.department?.toLowerCase().includes(search.toLowerCase()))
   );
@@ -9924,7 +9961,7 @@ function JobRequisitions() {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const { jobs, departments, loading, refresh } = useRecruitmentData();
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ title: "", department: departments[0]?.name || "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", headcount: 1, justification: "", responsibilities: "", approved_by: "" });
+  const [form, setForm] = useState({ title: "", department: departments[0]?.name || "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", headcount: 1, justification: "", responsibilities: "", approved_by: "", is_internal: false });
 
   const toggleApproval = async (j) => {
     try { await apiFetch(`${API_BASE}/hr/recruitment/jobs/${j.id}`, { method: "PATCH", body: JSON.stringify({ status: "Approved" }) }); refresh(); } catch (e) { alert(e.message); }
@@ -9952,7 +9989,7 @@ function JobRequisitions() {
     <div className="fade">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
         <div><div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Job Requisitions</div><div style={{ fontSize: 13, color: C.sub }}>Formal headcount requests with approval workflows before posting.</div></div>
-        <button className="bp" onClick={() => { setForm({ title: "", department: "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", headcount: 1, justification: "", approved_by: "" }); setShowNew(true); }}>+ New Requisition</button>
+        <button className="bp" onClick={() => { setForm({ title: "", department: "Sales & Acquisitions", employment_type: "Full-time", location: "Port Harcourt, NG", salary_range: "", headcount: 1, justification: "", approved_by: "", is_internal: false }); setShowNew(true); }}>+ New Requisition</button>
       </div>
       <div style={{ display: "flex", gap: 0, marginBottom: 24, background: C.surface, borderRadius: 12, border: `1px solid ${C.border}`, overflow: "hidden" }}>
         {approvalStages.map((s, i) => (<div key={s.label} style={{ flex: 1, padding: "12px 16px", borderRight: i < approvalStages.length - 1 ? `1px solid ${C.border}` : "none" }}>
@@ -9970,6 +10007,7 @@ function JobRequisitions() {
                   <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 8 }}>
                     <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>{j.title}</div>
                     <span className="tg" style={{ background: `${rc}22`, color: rc, border: `1px solid ${rc}44` }}>{j.status || "Open"}</span>
+                    {j.is_internal && <span className="tg" style={{ background: `${T.gold}22`, color: T.gold, fontSize: 10 }}>Internal</span>}
                   </div>
                   <div style={{ display: "flex", gap: 18, fontSize: 12, color: C.muted, flexWrap: "wrap" }}>
                     <span>📁 {j.department}</span><span>⏱ {j.employment_type}</span><span>📍 {j.location || "Port Harcourt"}</span>
@@ -10008,6 +10046,10 @@ function JobRequisitions() {
           <div><Lbl>Key Responsibilities</Lbl><textarea className="inp" rows={2} value={form.responsibilities} onChange={e => setForm(f => ({ ...f, responsibilities: e.target.value }))} /></div>
           <div><Lbl>Requirements</Lbl><textarea className="inp" rows={2} value={form.requirements} onChange={e => setForm(f => ({ ...f, requirements: e.target.value }))} /></div>
           <div><Lbl>Requested Approval From</Lbl><input className="inp" value={form.approved_by || ""} onChange={e => setForm(f => ({ ...f, approved_by: e.target.value }))} placeholder="Name of approving manager" /></div>
+          <label style={{ display: "flex", alignItems: "center", gap: 10, cursor: "pointer", padding: "10px 0" }}>
+            <input type="checkbox" checked={form.is_internal} onChange={e => setForm(f => ({ ...f, is_internal: e.target.checked }))} style={{ width: 18, height: 18 }} />
+            <span style={{ fontSize: 14, fontWeight: 700, color: T.gold }}>Internal Listing Only (Staff Only)</span>
+          </label>
           <button className="bp" onClick={create} style={{ padding: 14 }}>{form.id ? "Save Changes" : "Submit for Approval"}</button>
         </div>
       </Modal>)}
@@ -10218,13 +10260,30 @@ function InterviewScheduler() {
   const [staff, setStaff] = useState([]);
   const [showNew, setShowNew] = useState(false);
   const [viewIV, setViewIV] = useState(null);
+  const [saving, setSaving] = useState(false);
   const [form, setForm] = useState({ application_id: "", interviewer_id: "", scheduled_at: "", location: "Video Call (Google Meet)", interview_type: "Technical", notes: "" });
 
   useEffect(() => { apiFetch(`${API_BASE}/hr/staff`).then(d => setStaff(d || [])).catch(() => { }); }, []);
 
   const schedule = async () => {
     if (!form.application_id || !form.scheduled_at) return alert("Application and date/time required");
-    try { await apiFetch(`${API_BASE}/hr/recruitment/interviews`, { method: "POST", body: JSON.stringify(form) }); setShowNew(false); setForm({ application_id: "", interviewer_id: "", scheduled_at: "", location: "Video Call (Google Meet)", interview_type: "Technical", notes: "" }); refresh(); } catch (e) { alert(e.message); }
+    setSaving(true);
+    try {
+      const method = form.id ? "PATCH" : "POST";
+      const url = form.id ? `${API_BASE}/hr/recruitment/interviews/${form.id}` : `${API_BASE}/hr/recruitment/interviews`;
+      await apiFetch(url, { method, body: JSON.stringify(form) });
+      setShowNew(false);
+      setForm({ application_id: "", interviewer_id: "", scheduled_at: "", location: "Video Call (Google Meet)", interview_type: "Technical", notes: "" });
+      refresh();
+    } catch (e) { alert(e.message); } finally { setSaving(false); }
+  };
+
+  const updateIV = async (id, data) => {
+    try {
+      await apiFetch(`${API_BASE}/hr/recruitment/interviews/${id}`, { method: "PATCH", body: JSON.stringify(data) });
+      setViewIV(null);
+      refresh();
+    } catch (e) { alert(e.message); }
   };
 
   const ivTypeCol = { Technical: "#60A5FA", Cultural: T.gold, HR: "#4ADE80", Final: "#A78BFA", Panel: "#F87171" };
@@ -10310,20 +10369,39 @@ function InterviewScheduler() {
           <Field label="Status" value={viewIV.status || "scheduled"} />
         </div>
         {viewIV.notes && <div><Lbl>Notes</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10, marginTop: 8 }}>{viewIV.notes}</div></div>}
+        {viewIV.outcome && <div style={{ marginTop: 14 }}><Lbl>Outcome / Feedback</Lbl><div style={{ fontSize: 13, color: "#4ADE80", fontWeight: 700, padding: "12px 16px", background: "#4ADE8010", borderRadius: 10, marginTop: 8 }}>{viewIV.outcome}</div></div>}
+        
+        {viewIV.status !== 'completed' && viewIV.status !== 'cancelled' && (
+          <div style={{ marginTop: 24, display: 'flex', gap: 10 }}>
+            <button className="bp" onClick={() => { setForm({ ...viewIV, scheduled_at: viewIV.scheduled_at?.substring(0,16) }); setShowNew(true); setViewIV(null); }} style={{ flex: 1 }}>Reschedule 📅</button>
+            <button className="bp" style={{ flex: 1, background: '#4ADE80', borderColor: '#4ADE80' }} onClick={() => { const out = window.prompt("Log Outcome / Rating (e.g. 4/5 - Strong Technical Skills):"); if(out) updateIV(viewIV.id, { status: 'completed', outcome: out }); }}>Complete & Rate ✅</button>
+            <button style={{ flex: 1, border: '1px solid #F87171', background: '#F8717118', color: '#F87171', borderRadius: 10, cursor: 'pointer', fontSize: 12, fontWeight: 700 }} onClick={() => { if(window.confirm("Cancel this interview?")) updateIV(viewIV.id, { status: 'cancelled' }); }}>Cancel ✕</button>
+          </div>
+        )}
       </Modal>)}
-      {showNew && (<Modal onClose={() => setShowNew(false)} title="Schedule Interview" width={580}>
+      {showNew && (<Modal onClose={() => { setShowNew(false); setForm({ application_id: "", interviewer_id: "", scheduled_at: "", location: "Video Call (Google Meet)", interview_type: "Technical", notes: "" }); }} title={form.id ? "Reschedule Interview" : "Schedule Interview"} width={580}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div><Lbl>Candidate *</Lbl><select className="inp" value={form.application_id} onChange={e => setForm(f => ({ ...f, application_id: e.target.value }))}><option value="">— Select Candidate —</option>{apps.filter(a => ["Applied", "Screening", "Interview"].includes(a.status)).map(a => (<option key={a.id} value={a.id}>{a.candidate_name} — {jobs.find(j => j.id === a.job_id)?.title || "—"}</option>))}</select></div>
+          <div><Lbl>Candidate *</Lbl><select className="inp" disabled={!!form.id} value={form.application_id} onChange={e => setForm(f => ({ ...f, application_id: e.target.value }))}><option value="">— Select Candidate —</option>{apps.filter(a => form.id ? a.id === form.application_id : ["Applied", "Screening", "Interview"].includes(a.status)).map(a => (<option key={a.id} value={a.id}>{a.candidate_name} — {jobs.find(j => j.id === a.job_id)?.title || "—"}</option>))}</select></div>
           <div className="g2" style={{ gap: 12 }}>
             <div><Lbl>Date & Time *</Lbl><input type="datetime-local" className="inp" value={form.scheduled_at} onChange={e => setForm(f => ({ ...f, scheduled_at: e.target.value }))} /></div>
-            <div><Lbl>Interview Type</Lbl><select className="inp" value={form.interview_type} onChange={e => setForm(f => ({ ...f, interview_type: e.target.value }))}><option>Technical</option><option>Cultural</option><option>HR</option><option>Final</option><option>Panel</option></select></div>
+            <div><Lbl>Interview Type</Lbl>
+              <select className="inp" value={form.interview_type === "Technical" || form.interview_type === "Cultural" || form.interview_type === "HR" || form.interview_type === "Final" || form.interview_type === "Panel" ? form.interview_type : "Custom"} onChange={e => setForm(f => ({ ...f, interview_type: e.target.value === "Custom" ? "" : e.target.value }))}>
+                <option>Technical</option><option>Cultural</option><option>HR</option><option>Final</option><option>Panel</option>
+                <option value="Custom">Other / Custom...</option>
+              </select>
+            </div>
           </div>
+          {!(["Technical", "Cultural", "HR", "Final", "Panel"].includes(form.interview_type)) && (
+            <div className="fade"><Lbl>Specify Custom Interview Type *</Lbl><input className="inp" value={form.interview_type} onChange={e => setForm(f => ({ ...f, interview_type: e.target.value }))} placeholder="e.g. Site Visit, CEO Chat..." /></div>
+          )}
           <div className="g2" style={{ gap: 12 }}>
             <div><Lbl>Interviewer</Lbl><select className="inp" value={form.interviewer_id} onChange={e => setForm(f => ({ ...f, interviewer_id: e.target.value }))}><option value="">— Assign Interviewer —</option>{staff.map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.department})</option>)}</select></div>
-            <div><Lbl>Location / Format</Lbl><select className="inp" value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))}><option>Video Call (Google Meet)</option><option>Video Call (Zoom)</option><option>In-Person – Port Harcourt Office</option><option>Phone Call</option></select></div>
+            <div><Lbl>Location / Format</Lbl><select className="inp" value={form.location} onChange={e => setForm(f => ({ ...f, location: e.target.value }))}><option>Video Call (Google Meet)</option><option>Video Call (Zoom)</option><option>In-Person – Office</option><option>Phone Call</option></select></div>
           </div>
           <div><Lbl>Notes / Preparation</Lbl><textarea className="inp" rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Topics to cover, documents to bring…" /></div>
-          <button className="bp" onClick={schedule} style={{ padding: 14 }}>Schedule Interview</button>
+          <button className="bp" onClick={schedule} disabled={saving} style={{ padding: 14, opacity: saving ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+            {saving ? <><div className="spin" style={{ width: 14, height: 14, borderTopColor: 'transparent' }}></div> Processing...</> : (form.id ? "Update Schedule" : "Schedule Interview")}
+          </button>
         </div>
       </Modal>)}
     </div>
@@ -10334,18 +10412,23 @@ function OffersManager() {
   const { apps, jobs, loading, refresh } = useRecruitmentData();
   const [showNew, setShowNew] = useState(false);
   const [form, setForm] = useState({ application_id: "", offered_salary: "", start_date: "", notes: "" });
+  const [saving, setSaving] = useState(false);
 
-  const offeredApps = apps.filter(a => a.status === "Offered" || a.status === "Hired");
+  const offeredApps = apps.filter(a => ["Offered", "Offer Accepted", "Offer Declined", "Hired", "Rejected"].includes(a.status) && a.offered_salary);
 
   const makeOffer = async () => {
     if (!form.application_id || !form.offered_salary) return alert("Candidate and salary required");
-    try { await apiFetch(`${API_BASE}/hr/recruitment/applications/${form.application_id}`, { method: "PATCH", body: JSON.stringify({ status: "Offered", offered_salary: form.offered_salary, start_date: form.start_date, notes: form.notes }) }); setShowNew(false); setForm({ application_id: "", offered_salary: "", start_date: "", notes: "" }); refresh(); } catch (e) { alert(e.message); }
+    setSaving(true);
+    try { await apiFetch(`${API_BASE}/hr/recruitment/applications/${form.application_id}`, { method: "PATCH", body: JSON.stringify({ status: "Offered", offered_salary: form.offered_salary, start_date: form.start_date, notes: form.notes }) }); setShowNew(false); setForm({ application_id: "", offered_salary: "", start_date: "", notes: "" }); refresh(); } catch (e) { alert(e.message); } finally { setSaving(false); }
   };
   const acceptOffer = async (id) => {
-    try { await apiFetch(`${API_BASE}/hr/recruitment/applications/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Hired" }) }); refresh(); } catch (e) { alert(e.message); }
+    try { await apiFetch(`${API_BASE}/hr/recruitment/applications/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Offer Accepted" }) }); refresh(); } catch (e) { alert(e.message); }
   };
   const declineOffer = async (id) => {
-    try { await apiFetch(`${API_BASE}/hr/recruitment/applications/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Rejected" }) }); refresh(); } catch (e) { alert(e.message); }
+    try { await apiFetch(`${API_BASE}/hr/recruitment/applications/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Offer Declined" }) }); refresh(); } catch (e) { alert(e.message); }
+  };
+  const hireApplicant = async (id) => {
+    try { await apiFetch(`${API_BASE}/hr/recruitment/applications/${id}/hire`, { method: "POST" }); refresh(); alert("Applicant successfully hired and onboarded!"); } catch (e) { alert(e.message); }
   };
 
   return (
@@ -10357,7 +10440,7 @@ function OffersManager() {
       <div className="g4" style={{ marginBottom: 24 }}>
         <StatCard label="Total Offers" value={offeredApps.length} col={T.gold} />
         <StatCard label="Hired" value={offeredApps.filter(a => a.status === "Hired").length} col="#4ADE80" />
-        <StatCard label="Pending" value={offeredApps.filter(a => a.status === "Offered").length} col="#A78BFA" />
+        <StatCard label="Pending / Accepted" value={offeredApps.filter(a => ["Offered", "Offer Accepted"].includes(a.status)).length} col="#A78BFA" />
       </div>
       {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading…</div> : (
         <div className="g3" style={{ gap: 14 }}>
@@ -10375,11 +10458,22 @@ function OffersManager() {
                   </div>
                 </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
-                  <span className="tg" style={{ background: isHired ? "#4ADE8022" : "#A78BFA22", color: isHired ? "#4ADE80" : "#A78BFA" }}>{isHired ? "✓ Hired" : "Offer Pending"}</span>
-                  {!isHired && (<div style={{ display: "flex", gap: 8, marginTop: 4 }}>
-                    <button className="bp" style={{ fontSize: 11, padding: "5px 14px" }} onClick={() => acceptOffer(a.id)}>Accept ✓</button>
-                    <button style={{ fontSize: 11, padding: "5px 14px", border: "1px solid #F87171", background: "#F8717118", color: "#F87171", borderRadius: 8, cursor: "pointer" }} onClick={() => declineOffer(a.id)}>Decline</button>
-                  </div>)}
+                  {a.status === "Hired" && <span className="tg" style={{ background: "#4ADE8022", color: "#4ADE80" }}>✓ Hired</span>}
+                  {a.status === "Offer Accepted" && <span className="tg" style={{ background: `${T.gold}22`, color: T.gold }}>🎉 Offer Accepted</span>}
+                  {(a.status === "Offer Declined" || a.status === "Rejected") && <span className="tg" style={{ background: "#F8717122", color: "#F87171" }}>❌ Declined</span>}
+                  {a.status === "Offered" && <span className="tg" style={{ background: "#A78BFA22", color: "#A78BFA" }}>⏳ Offer Pending</span>}
+                  
+                  <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
+                    {a.status === "Offer Accepted" && (
+                      <button className="bp" style={{ fontSize: 11, padding: "5px 14px", background: "#4ADE80", color: "#1A1A1A" }} onClick={() => hireApplicant(a.id)}>Hire & Onboard ✓</button>
+                    )}
+                    {a.status === "Offered" && (
+                      <>
+                        <button className="bg" style={{ fontSize: 11, padding: "5px 14px" }} onClick={() => acceptOffer(a.id)}>Force Accept</button>
+                        <button style={{ fontSize: 11, padding: "5px 14px", border: "1px solid #F87171", background: "#F8717118", color: "#F87171", borderRadius: 8, cursor: "pointer" }} onClick={() => declineOffer(a.id)}>Force Decline</button>
+                      </>
+                    )}
+                  </div>
                 </div>
               </div>
             </div>);
@@ -10395,7 +10489,9 @@ function OffersManager() {
             <div><Lbl>Proposed Start Date</Lbl><input type="date" className="inp" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} /></div>
           </div>
           <div><Lbl>Offer Notes / Conditions</Lbl><textarea className="inp" rows={4} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Benefits, conditions, probation period…" /></div>
-          <button className="bp" onClick={makeOffer} style={{ padding: 14 }}>Issue Offer</button>
+          <button className="bp" onClick={makeOffer} disabled={saving} style={{ padding: 14, opacity: saving ? 0.7 : 1, display: 'flex', alignItems: 'center', justifyContent: 'center', gap: 10 }}>
+            {saving ? <><div className="spin" style={{ width: 14, height: 14, borderTopColor: 'transparent' }}></div> Processing...</> : "Issue Offer"}
+          </button>
         </div>
       </Modal>)}
     </div>
@@ -11101,6 +11197,115 @@ function CultureHub({ authRole }) {
   );
 }
 
+// ─── PUBLIC OFFER PAGE ─────────────────────────────────────────────────────────
+function PublicOfferPage({ offerId }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [offer, setOffer] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
+  const [declineMode, setDeclineMode] = useState(false);
+  const [reason, setReason] = useState("");
+  const [submitting, setSubmitting] = useState(false);
+  const [done, setDone] = useState(null);
+
+  useEffect(() => {
+    fetch(`${API_BASE}/hr/public/offers/${offerId}`)
+      .then(res => { if (!res.ok) throw new Error("Offer not found"); return res.json(); })
+      .then(d => { setOffer(d); setLoading(false); })
+      .catch(e => { setError(e.message); setLoading(false); });
+  }, [offerId]);
+
+  const respond = async (action) => {
+    if (action === "decline" && !reason) return alert("Please provide a reason or counter-offer.");
+    setSubmitting(true);
+    try {
+      const res = await fetch(`${API_BASE}/hr/public/offers/${offerId}/respond`, {
+        method: "POST", headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ action, reason: action === "decline" ? reason : "" })
+      });
+      if (!res.ok) throw new Error("Failed to submit response");
+      setDone(action);
+    } catch (e) { alert(e.message); } finally { setSubmitting(false); }
+  };
+
+  if (loading) return <div style={{ padding: 40, textAlign: "center", color: C.muted }}>Loading Offer Details...</div>;
+  if (error) return <div style={{ padding: 40, textAlign: "center", color: "#F87171" }}>{error}</div>;
+  if (!offer) return null;
+
+  return (
+    <div style={{ minHeight: "100vh", display: "flex", flexDirection: "column", background: C.bg, color: C.text, fontFamily: "'Inter', sans-serif" }}>
+      <div style={{ padding: "24px 40px", borderBottom: `1px solid ${C.border}`, display: "flex", alignItems: "center", background: C.card }}>
+        <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style={{ height: 32 }} />
+      </div>
+      <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", padding: 40 }}>
+        <div className="gc" style={{ maxWidth: 500, width: "100%", padding: 32 }}>
+          {done ? (
+            <div style={{ textAlign: "center", padding: 20 }} className="fade">
+              <div style={{ fontSize: 40, marginBottom: 16 }}>{done === "accept" ? "🎉" : "📩"}</div>
+              <h2 style={{ margin: "0 0 12px 0", color: done === "accept" ? "#4ADE80" : C.text }}>{done === "accept" ? "Offer Accepted!" : "Response Received"}</h2>
+              <p style={{ color: C.sub, lineHeight: 1.6, fontSize: 14 }}>
+                {done === "accept" ? "Welcome aboard! Our HR team will be in touch shortly with your onboarding details." : "Thank you for letting us know. Our HR team has received your feedback."}
+              </p>
+            </div>
+          ) : (
+            <div className="fade">
+              <div style={{ textAlign: "center", marginBottom: 24 }}>
+                <h2 style={{ margin: "0 0 8px 0", fontSize: 24 }}>Employment Offer</h2>
+                <div style={{ color: C.sub }}>Eximp & Cloves Infrastructure Limited</div>
+              </div>
+              <div style={{ background: dark ? "#111" : "#f9f9f9", padding: 20, borderRadius: 12, marginBottom: 24, border: `1px solid ${C.border}` }}>
+                <div style={{ display: "flex", flexDirection: "column", gap: 12, fontSize: 14 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.sub }}>Candidate</span><strong style={{ textAlign: "right" }}>{offer.candidate_name}</strong></div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.sub }}>Position</span><strong style={{ textAlign: "right", color: T.gold }}>{offer.job_title}</strong></div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.sub }}>Department</span><strong style={{ textAlign: "right" }}>{offer.department}</strong></div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.sub }}>Offered Salary</span><strong style={{ textAlign: "right", color: "#4ADE80" }}>₦{parseFloat(offer.offered_salary).toLocaleString()} / annum</strong></div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.sub }}>Start Date</span><strong style={{ textAlign: "right" }}>{offer.start_date || "To be agreed"}</strong></div>
+                </div>
+              </div>
+              
+              {offer.notes && (
+                <div style={{ marginBottom: 24 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, marginBottom: 8, textTransform: "uppercase", letterSpacing: "1px" }}>Offer Conditions</div>
+                  <div style={{ fontSize: 13, lineHeight: 1.6, color: C.text, padding: 16, background: `${T.gold}11`, borderRadius: 8, borderLeft: `3px solid ${T.gold}` }}>
+                    {offer.notes}
+                  </div>
+                </div>
+              )}
+
+              {offer.status !== "Offered" ? (
+                <div style={{ textAlign: "center", padding: 16, background: C.border, borderRadius: 8, color: C.sub, fontWeight: 700 }}>
+                  This offer has already been processed ({offer.status}).
+                </div>
+              ) : (
+                <>
+                  {declineMode ? (
+                    <div className="fade" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                      <div><label style={{ fontSize: 12, fontWeight: 700, color: C.sub, display: "block", marginBottom: 8 }}>Reason for Decline or Counter-Offer</label>
+                      <textarea className="inp" rows={4} value={reason} onChange={e => setReason(e.target.value)} placeholder="Please let us know why you are declining, or state your counter-offer..." /></div>
+                      <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
+                        <button className="bg" style={{ flex: 1 }} onClick={() => setDeclineMode(false)} disabled={submitting}>Back</button>
+                        <button className="bp" style={{ flex: 1, background: "#EF4444" }} onClick={() => respond("decline")} disabled={submitting}>{submitting ? "Submitting..." : "Submit Decline"}</button>
+                      </div>
+                    </div>
+                  ) : (
+                    <div style={{ display: "flex", gap: 12 }}>
+                      <button className="bp" style={{ flex: 2, background: "#4ADE80", color: "#1A1A1A", fontSize: 15 }} onClick={() => respond("accept")} disabled={submitting}>
+                        {submitting ? "Processing..." : "Accept Offer"}
+                      </button>
+                      <button className="bg" style={{ flex: 1, borderColor: "#EF4444", color: "#EF4444" }} onClick={() => setDeclineMode(true)} disabled={submitting}>
+                        Decline...
+                      </button>
+                    </div>
+                  )}
+                </>
+              )}
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
 
 // ─── ROOT ────────────────────────────────────────────────────────────────────
 export default function App() {
@@ -11109,6 +11314,10 @@ export default function App() {
   const toggle = useCallback(() => setDark(d => !d), []);
 
   useEffect(() => {
+    // Check for public routes
+    const urlParams = new URLSearchParams(window.location.search);
+    if (urlParams.get("offer")) return;
+
     const savedToken = localStorage.getItem("ec_token");
     const savedUser = localStorage.getItem("admin"); // Main system stores user info in 'admin' key
 
@@ -11131,6 +11340,17 @@ export default function App() {
     localStorage.removeItem("admin");
     window.location.href = "/login";
   };
+
+  const urlParams = new URLSearchParams(window.location.search);
+  const offerId = urlParams.get("offer");
+  if (offerId) {
+    return (
+      <ThemeCtx.Provider value={{ dark, toggle }}>
+        <style>{GS(dark)}</style>
+        <PublicOfferPage offerId={offerId} />
+      </ThemeCtx.Provider>
+    );
+  }
 
   if (!user) return <div style={{ padding: 40, textAlign: "center", color: T.orange }}>Redirecting to login...</div>;
 
