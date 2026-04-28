@@ -6423,6 +6423,7 @@ function OnboardingHub({ isHR }) {
   const [staff, setStaff] = useState([]); const [selected, setSelected] = useState(null);
   const [checklist, setChecklist] = useState([]); const [loading, setLoading] = useState(false);
   const [showNew, setShowNew] = useState(false);
+  const [tab, setTab] = useState("progress");
 
   const defaultItems = ["Sign Employment Contract", "Complete ID Verification", "IT Equipment Issued", "Company Email Created", "System Access Granted", "Meet Line Manager", "Complete HR Induction", "Review Company Handbook", "Set up Payroll Information", "Complete Probation Agreement"];
 
@@ -6456,38 +6457,69 @@ function OnboardingHub({ isHR }) {
 
   return (
     <div className="fade">
-      <div style={{ marginBottom: 22 }}>
-        <div className="ho" style={{ fontSize: 22 }}>Onboarding</div>
-        <div style={{ fontSize: 13, color: C.sub }}>New hire onboarding checklists and task completion.</div>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div><div className="ho" style={{ fontSize: 22 }}>Onboarding Hub</div><div style={{ fontSize: 13, color: C.sub }}>Manage new hire onboarding and standard checklists.</div></div>
+        <Tabs items={[["progress", "Hire Progress"], ["master", "Master Checklist"]]} active={tab} setActive={setTab} />
       </div>
-      {isHR && (
-        <div style={{ display: "flex", gap: 12, marginBottom: 22, flexWrap: "wrap" }}>
-          <select className="inp" style={{ maxWidth: 300 }} value={selected?.id || ""} onChange={e => { const s = staff.find(x => x.id === e.target.value); setSelected(s || null); if (s) loadChecklist(s.id); }}>
-            <option value="">— Select New Hire —</option>
-            {staff.filter(s => s.is_active).map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.department})</option>)}
-          </select>
-          {selected && checklist.length === 0 && <button className="bp" onClick={() => createChecklist(selected.id)}>Generate Checklist</button>}
-        </div>
-      )}
-      {selected && checklist.length > 0 && (
+
+      {tab === "progress" ? (
         <>
-          <div style={{ marginBottom: 18 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.text, marginBottom: 8 }}>
-              <span style={{ fontWeight: 800 }}>{selected.full_name} — Onboarding Progress</span>
-              <span style={{ color: T.gold, fontWeight: 800 }}>{completed}/{total} complete ({pct}%)</span>
+          {isHR && (
+            <div style={{ display: "flex", gap: 12, marginBottom: 22, flexWrap: "wrap" }}>
+              <select className="inp" style={{ maxWidth: 300 }} value={selected?.id || ""} onChange={e => { const s = staff.find(x => x.id === e.target.value); setSelected(s || null); if (s) loadChecklist(s.id); }}>
+                <option value="">👤 Select New Hire 👤</option>
+                {staff.filter(s => s.is_active).map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.department})</option>)}
+              </select>
+              {selected && checklist.length === 0 && <button className="bp" onClick={() => createChecklist(selected.id)}>Generate Checklist</button>}
             </div>
-            <Bar pct={pct} />
-          </div>
-          <div className="g2">{checklist.map(item => (
-            <div key={item.id} className="gc" style={{ padding: 16, display: "flex", alignItems: "center", gap: 14, borderLeft: `3px solid ${item.completed ? "#4ADE80" : C.border}` }}>
-              <div onClick={() => !item.completed && markDone(item.id)} style={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${item.completed ? "#4ADE80" : C.border}`, background: item.completed ? "#4ADE80" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: item.completed ? "default" : "pointer", flexShrink: 0, color: item.completed ? "#0F1318" : "transparent", fontWeight: 800, fontSize: 12 }}>✓</div>
-              <span style={{ fontSize: 13, color: item.completed ? C.muted : C.text, textDecoration: item.completed ? "line-through" : "none" }}>{item.item}</span>
-            </div>
-          ))}</div>
+          )}
+          {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading...</div> : (
+            <>
+              {selected && checklist.length > 0 && (
+                <>
+                  <div style={{ marginBottom: 18 }}>
+                    <div style={{ display: "flex", justifyContent: "space-between", fontSize: 13, color: C.text, marginBottom: 8 }}>
+                      <span style={{ fontWeight: 800 }}>{selected.full_name} — Onboarding Progress</span>
+                      <span style={{ color: T.gold, fontWeight: 800 }}>{completed}/{total} complete ({pct}%)</span>
+                    </div>
+                    <Bar pct={pct} />
+                  </div>
+                  <div className="g2">{checklist.map(item => (
+                    <div key={item.id} className="gc" style={{ padding: 16, display: "flex", alignItems: "center", gap: 14, borderLeft: `3px solid ${item.completed ? "#4ADE80" : C.border}` }}>
+                      <div onClick={() => !item.completed && markDone(item.id)} style={{ width: 22, height: 22, borderRadius: "50%", border: `2px solid ${item.completed ? "#4ADE80" : C.border}`, background: item.completed ? "#4ADE80" : "transparent", display: "flex", alignItems: "center", justifyContent: "center", cursor: item.completed ? "default" : "pointer", flexShrink: 0, color: item.completed ? "#0F1318" : "transparent", fontWeight: 800, fontSize: 12 }}>✓</div>
+                      <span style={{ fontSize: 13, color: item.completed ? C.muted : C.text, textDecoration: item.completed ? "line-through" : "none" }}>{item.item}</span>
+                    </div>
+                  ))}</div>
+                </>
+              )}
+              {(!selected || checklist.length === 0) && !loading && (
+                <div className="gc" style={{ padding: 60, textAlign: "center", color: C.muted, background: C.card }}>
+                  <div style={{ fontSize: 32, marginBottom: 12 }}>👤</div>
+                  <div style={{ fontWeight: 800, color: C.sub }}>No Checklist Active</div>
+                  <div style={{ fontSize: 13 }}>Select a new hire above to view or generate their onboarding tasks.</div>
+                </div>
+              )}
+            </>
+          )}
         </>
-      )}
-      {(!selected || checklist.length === 0) && !loading && (
-        <div className="gc" style={{ padding: 40, textAlign: "center", color: C.muted }}>Select a new hire above to view or generate their onboarding checklist.</div>
+      ) : (
+        <div className="fade">
+          <div style={{ marginBottom: 20 }}>
+            <div style={{ fontWeight: 800, fontSize: 16, color: C.text, marginBottom: 4 }}>Master Onboarding Template</div>
+            <div style={{ fontSize: 13, color: C.sub }}>These items are automatically assigned to every new hire when their checklist is generated.</div>
+          </div>
+          <div className="g2">
+            {defaultItems.map((item, i) => (
+              <div key={i} className="gc" style={{ padding: "14px 18px", display: "flex", alignItems: "center", gap: 12, borderLeft: `3px solid ${T.gold}` }}>
+                <div style={{ width: 24, height: 24, borderRadius: "50%", background: `${T.gold}22`, color: T.gold, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800 }}>{i + 1}</div>
+                <span style={{ fontSize: 13, color: C.text }}>{item}</span>
+              </div>
+            ))}
+          </div>
+          <div style={{ marginTop: 20, padding: 16, background: `${T.gold}11`, borderRadius: 8, border: `1px dashed ${T.gold}44`, fontSize: 12, color: C.sub, textAlign: "center" }}>
+            Note: Master checklist is currently set globally. To modify these items, please contact the system administrator.
+          </div>
+        </div>
       )}
     </div>
   );
@@ -8978,11 +9010,7 @@ function HRAdminPortal({ user, onLogout }) {
     { id: "succession", icon: "org", label: "Succession Planning" },
     // HUB: LEARNING & GROWTH
     { isHeader: true, label: "Learning & Growth" },
-    { id: "training", icon: "book", label: "Training" },
-    { id: "compliance_training", icon: "shield", label: "Compliance Training" },
-    { id: "onboarding", icon: "star", label: "Onboarding" },
-    { id: "onboarding_checklists", icon: "tasks", label: "Onboarding Checklists" },
-    { id: "probation", icon: "clock", label: "Probation Tracking" },
+    { id: "training", icon: "book", label: "Training" },    { id: "onboarding", icon: "star", label: "Onboarding" },    { id: "probation", icon: "clock", label: "Probation Tracking" },
     // HUB 6: COMPENSATION & BENEFITS
     { isHeader: true, label: "Compensation & Benefits" },
     { id: "payroll", icon: "payroll", label: "Payroll" },
@@ -9281,9 +9309,7 @@ function StaffPortal({ user, onLogout }) {
     { id: "improvement_plans", icon: "trend", label: "Improvement Plans" },
     { id: "skills_matrix", icon: "chart", label: "Skills Matrix" },
     { isHeader: true, label: "Learning & Growth" },
-    { id: "training", icon: "book", label: "Training" },
-    { id: "compliance_training", icon: "shield", label: "Compliance Training" },
-    { isHeader: true, label: "Compensation & Benefits" },
+    { id: "training", icon: "book", label: "Training" },    { isHeader: true, label: "Compensation & Benefits" },
     { id: "payroll", icon: "payslip", label: "My Payroll" },
     { id: "bonuses", icon: "star", label: "My Bonuses" },
     { isHeader: true, label: "Engagement & Culture" },

@@ -2106,3 +2106,104 @@ async def send_personnel_executed_email(
         logger.info(f"Post-signing email sent to {signer_email} for matter {matter_id}")
     except Exception as e:
         logger.error(f"Error sending post-signing email to {signer_email}: {e}")
+
+# ─── Talent Pool Chat — Follow-up email ──────────────────────────────────────
+
+def _talent_chat_followup_html(name: str, chat_url: str) -> str:
+    return f"""
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;border-radius:8px;border:1px solid #ddd;overflow:hidden;">
+  <div style="background:#1A1A1A;padding:24px;text-align:center;">
+    <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style="max-height:48px;display:block;margin:0 auto;">
+  </div>
+  <div style="background:#C47D0A;padding:12px 24px;text-align:center;">
+    <h2 style="color:#1A1A1A;margin:0;font-size:18px;">💬 Message Waiting for You</h2>
+  </div>
+  <div style="padding:32px 24px;background:#fff;">
+    <p style="color:#333;font-size:16px;">Dear <strong>{name}</strong>,</p>
+    <p style="color:#555;line-height:1.6;margin:16px 0;">
+      Our HR team has sent you a message regarding your talent profile with 
+      <strong>Eximp &amp; Cloves</strong>, and we haven't heard back from you yet.
+    </p>
+    <p style="color:#555;line-height:1.6;margin:16px 0;">
+      It takes just a moment to reply — click below to open the private chat thread:
+    </p>
+    <div style="text-align:center;margin:35px 0;">
+      <a href="{chat_url}" 
+         style="background-color:#C47D0A;color:#ffffff;padding:14px 28px;text-decoration:none;border-radius:6px;font-weight:bold;font-size:16px;display:inline-block;">
+        Open Chat Conversation
+      </a>
+    </div>
+    <p style="color:#999;font-size:12px;line-height:1.5;">
+      This is a private, secure thread between you and our HR team. 
+      You can share files and documents directly in the chat.
+    </p>
+    <hr style="border-color:#eee;margin:30px 0;">
+    <p style="color:#999;font-size:12px;margin:0;text-align:center;">
+      Eximp &amp; Cloves Infrastructure Limited | RC 8311800<br>
+      57B, Isaac John Street, Yaba, Lagos<br>
+      <a href="https://www.eximps-cloves.com" style="color:#999;text-decoration:none;">www.eximps-cloves.com</a>
+    </p>
+  </div>
+</div>"""
+
+
+async def send_talent_chat_followup_email(email_addr: str, name: str, chat_url: str):
+    try:
+        await async_resend({
+            "from": f"Eximp & Cloves HR <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "reply_to": "hr@eximps-cloves.com",
+            "subject": "💬 You have an unread message from Eximp & Cloves HR",
+            "html": _talent_chat_followup_html(name, chat_url),
+        })
+        logger.info(f"Talent chat follow-up sent to {email_addr}")
+    except Exception as e:
+        logger.error(f"Failed to send talent chat follow-up to {email_addr}: {e}")
+
+
+async def send_talent_chat_invite_email(email_addr: str, name: str, chat_url: str, hr_name: str = "Our HR Team"):
+    """Sent when HR first opens a chat room and wants to invite the applicant."""
+    html = f"""
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;border-radius:8px;border:1px solid #ddd;overflow:hidden;">
+  <div style="background:#1A1A1A;padding:24px;text-align:center;">
+    <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style="max-height:48px;display:block;margin:0 auto;">
+  </div>
+  <div style="background:#C47D0A;padding:12px 24px;text-align:center;">
+    <h2 style="color:#1A1A1A;margin:0;font-size:18px;">🎉 HR Would Like to Chat With You</h2>
+  </div>
+  <div style="padding:32px 24px;background:#fff;">
+    <p style="color:#333;font-size:16px;">Dear <strong>{name}</strong>,</p>
+    <p style="color:#555;line-height:1.6;margin:16px 0;">
+      <strong>{hr_name}</strong> from <strong>Eximp &amp; Cloves</strong> has opened a private chat 
+      thread with you. This is a great opportunity to discuss potential roles and opportunities.
+    </p>
+    <p style="color:#555;line-height:1.6;">
+      You can send text messages and share files (CV, portfolio, certificates) directly in the chat.
+    </p>
+    <div style="text-align:center;margin:35px 0;">
+      <a href="{chat_url}" 
+         style="background-color:#C47D0A;color:#ffffff;padding:14px 28px;text-decoration:none;border-radius:6px;font-weight:bold;font-size:16px;display:inline-block;">
+        Open My Chat Thread
+      </a>
+    </div>
+    <p style="color:#999;font-size:12px;text-align:center;">
+      No account needed — your unique link is all you need to access this private conversation.
+    </p>
+    <hr style="border-color:#eee;margin:30px 0;">
+    <p style="color:#999;font-size:12px;margin:0;text-align:center;">
+      Eximp &amp; Cloves Infrastructure Limited | RC 8311800<br>
+      57B, Isaac John Street, Yaba, Lagos
+    </p>
+  </div>
+</div>"""
+    try:
+        await async_resend({
+            "from": f"Eximp & Cloves HR <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "reply_to": "hr@eximps-cloves.com",
+            "subject": f"💬 {hr_name} has started a chat with you — Eximp & Cloves",
+            "html": html,
+        })
+        logger.info(f"Talent chat invite sent to {email_addr}")
+    except Exception as e:
+        logger.error(f"Failed to send talent chat invite to {email_addr}: {e}")
