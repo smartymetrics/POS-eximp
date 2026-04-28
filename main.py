@@ -39,7 +39,8 @@ from routers import (
     hr,
     hr_legal,
     ws_support,
-    hrm_talent_chat
+    hrm_talent_chat,
+    biodata
 )
 from routers.auth import require_roles, resolve_admin_token
 from database import init_db
@@ -103,6 +104,7 @@ app.include_router(subscriptions.router, tags=["subscriptions"])
 app.include_router(hr.router, prefix="/api/hr", tags=["hr"])
 app.include_router(hr_legal.router, prefix="/api/hr-legal", tags=["hr-legal"])
 app.include_router(hrm_talent_chat.router, prefix="/api", tags=["talent-chat"])
+app.include_router(biodata.router, prefix="/api/biodata", tags=["biodata"])
 
 
 

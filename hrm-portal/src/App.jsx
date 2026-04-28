@@ -1,4 +1,4 @@
-import { useState, createContext, useContext, useCallback, useEffect } from "react";
+import { useState, createContext, useContext, useCallback, useEffect, useRef } from "react";
 import { apiFetch, API_BASE } from "./api";
 
 const ThemeCtx = createContext({ dark: true, toggle: () => { } });
@@ -7248,8 +7248,8 @@ function InternalJobBoard({ isHR, user }) {
         body: JSON.stringify({
           job_id: showApply.id,
           candidate_name: user?.full_name || "Internal Applicant",
-            candidate_email: user?.email || "internal@eximps-cloves.com",
-            cover_letter: `[INTERNAL APPLICATION]\n\nCurrent Role: ${applyForm.current_role}\nExperience: ${applyForm.years_experience} years\nReason: ${applyForm.reason}\n\n${applyForm.cover_letter}`
+          candidate_email: user?.email || "internal@eximps-cloves.com",
+          cover_letter: `[INTERNAL APPLICATION]\n\nCurrent Role: ${applyForm.current_role}\nExperience: ${applyForm.years_experience} years\nReason: ${applyForm.reason}\n\n${applyForm.cover_letter}`
         })
       });
       alert("Your application has been submitted!"); setShowApply(null); setApplyForm({ cover_letter: "", years_experience: "", current_role: "", reason: "" }); load();
@@ -8965,6 +8965,1045 @@ function ExpensesManager() {
   );
 }
 
+
+// ─── BIO DATA COMPONENTS (auto-injected) ────────────────────────────────────
+// ─── BIO DATA SYSTEM ─────────────────────────────────────────────────────────
+// Paste this entire block into App.jsx — anywhere before HRAdminPortal.
+// Requires: apiFetch, API_BASE, T, C (via dark), useTheme, DARK, LIGHT,
+//           Tabs, Lbl, Field, Av, Modal, StatCard (already in App.jsx)
+
+// ─── HR BIO DATA DASHBOARD ───────────────────────────────────────────────────
+function BiodataManager() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [tab, setTab] = useState("submissions");
+  const [settings, setSettings] = useState(null);
+  const [submissions, setSubmissions] = useState([]);
+  const [invites, setInvites] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [generalLink, setGeneralLink] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [togglingForm, setTogglingForm] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [s, subs, inv, gl] = await Promise.all([
+        apiFetch(`${API_BASE}/biodata/settings`),
+        apiFetch(`${API_BASE}/biodata/submissions`),
+        apiFetch(`${API_BASE}/biodata/invites`),
+        apiFetch(`${API_BASE}/biodata/general-link`),
+      ]);
+      setSettings(s);
+      setSubmissions(Array.isArray(subs) ? subs : []);
+      setInvites(Array.isArray(inv) ? inv : []);
+      setGeneralLink(gl.link || "");
+    } catch (e) {
+      console.error(e);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const toggleCollecting = async () => {
+    if (!settings) return;
+    setTogglingForm(true);
+    try {
+      const updated = await apiFetch(`${API_BASE}/biodata/settings`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_collecting: !settings.is_collecting }),
+      });
+      setSettings(updated);
+    } catch (e) { alert(e.message); }
+    finally { setTogglingForm(false); }
+  };
+
+  const sendInvite = async () => {
+    if (!inviteEmail.trim()) return;
+    setInviting(true);
+    try {
+      const res = await apiFetch(`${API_BASE}/biodata/invites`, {
+        method: "POST",
+        body: JSON.stringify({ email: inviteEmail.trim() }),
+      });
+      alert(`Invite sent to ${res.email}${res.staff_found ? " (existing staff recognised)" : " (email not in system — invite still sent)"}`);
+      setInviteEmail("");
+      load();
+    } catch (e) { alert(e.message); }
+    finally { setInviting(false); }
+  };
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(generalLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const filtered = filterStatus === "all" ? submissions : submissions.filter(s => s.status === filterStatus);
+
+  const stats = {
+    total: submissions.length,
+    pending: submissions.filter(s => s.status === "pending").length,
+    approved: submissions.filter(s => s.status === "approved").length,
+    rejected: submissions.filter(s => s.status === "rejected").length,
+  };
+
+  const statusColor = (st) => ({ pending: T.gold, approved: "#10B981", rejected: "#EF4444" }[st] || C.muted);
+  const statusBg = (st) => ({ pending: `${T.gold}18`, approved: "#10B98118", rejected: "#EF444418" }[st] || C.surface);
+
+  if (loading) return <div style={{ padding: 60, textAlign: "center", color: C.muted }}>Loading Bio Data System…</div>;
+
+  return (
+    <div className="fade">
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 28 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 26, fontWeight: 900, letterSpacing: -0.5 }}>Bio Data Collection</div>
+          <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>Manage employee bio data forms, invitations, and review submissions.</div>
+        </div>
+        {/* Form ON/OFF Toggle */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 18px" }}>
+          <div style={{ fontSize: 12, color: C.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Form {settings?.is_collecting ? "Active" : "Closed"}</div>
+          <div
+            onClick={!togglingForm ? toggleCollecting : undefined}
+            style={{
+              width: 52, height: 28, borderRadius: 14, cursor: "pointer",
+              background: settings?.is_collecting ? T.gold : C.border,
+              position: "relative", transition: "all 0.25s ease",
+              opacity: togglingForm ? 0.6 : 1,
+            }}
+          >
+            <div style={{
+              position: "absolute", top: 3, left: settings?.is_collecting ? 27 : 3,
+              width: 22, height: 22, borderRadius: "50%", background: "#fff",
+              transition: "left 0.25s ease", boxShadow: "0 1px 4px #0004",
+            }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 28 }}>
+        {[
+          { label: "Total Submissions", value: stats.total, col: C.text },
+          { label: "Pending Review", value: stats.pending, col: T.gold },
+          { label: "Approved", value: stats.approved, col: "#10B981" },
+          { label: "Rejected", value: stats.rejected, col: "#EF4444" },
+        ].map(({ label, value, col }) => (
+          <div key={label} className="gc" style={{ padding: "20px 24px" }}>
+            <div style={{ fontSize: 32, fontWeight: 900, color: col, lineHeight: 1 }}>{value}</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 6, fontWeight: 600, letterSpacing: 0.3 }}>{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tabs */}
+      <Tabs items={[["submissions", "Submissions"], ["invites", "Invitations"], ["settings", "Settings & Links"]]} active={tab} setActive={setTab} />
+
+      {/* ── SUBMISSIONS TAB ── */}
+      {tab === "submissions" && (
+        <div className="fade">
+          <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
+            {["all", "pending", "approved", "rejected"].map(st => (
+              <button key={st} onClick={() => setFilterStatus(st)}
+                style={{ padding: "6px 18px", borderRadius: 99, fontSize: 12, fontWeight: 700, cursor: "pointer", border: `1px solid ${filterStatus === st ? T.gold : C.border}`, background: filterStatus === st ? `${T.gold}18` : "transparent", color: filterStatus === st ? T.gold : C.muted, textTransform: "capitalize", letterSpacing: 0.3 }}>
+                {st} {st !== "all" && `(${stats[st] || 0})`}
+              </button>
+            ))}
+          </div>
+
+          {filtered.length === 0 ? (
+            <div style={{ padding: "60px 40px", textAlign: "center", color: C.muted, border: `2px dashed ${C.border}`, borderRadius: 14 }}>
+              <div style={{ fontSize: 40, marginBottom: 14 }}>📋</div>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>No {filterStatus !== "all" ? filterStatus : ""} submissions yet</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {filtered.map(sub => (
+                <div key={sub.id} className="gc" style={{ padding: "18px 22px", cursor: "pointer", transition: "all 0.2s" }}
+                  onClick={() => setSelected(sub)}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                      <div style={{ width: 44, height: 44, borderRadius: "50%", background: `${T.gold}20`, border: `2px solid ${T.gold}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: T.gold, flexShrink: 0 }}>
+                        {(sub.surname?.[0] || sub.email?.[0] || "?").toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{sub.surname} {sub.other_names}</div>
+                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{sub.email} · {sub.job_title}</div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                      <div style={{ fontSize: 11, color: C.muted }}>{sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}</div>
+                      <span style={{ background: statusBg(sub.status), color: statusColor(sub.status), border: `1px solid ${statusColor(sub.status)}33`, padding: "4px 14px", borderRadius: 99, fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5 }}>
+                        {sub.status}
+                      </span>
+                      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke={C.muted} strokeWidth="2"><path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" /></svg>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── INVITES TAB ── */}
+      {tab === "invites" && (
+        <div className="fade">
+          <div className="gc" style={{ padding: 24, marginBottom: 20 }}>
+            <div className="ho" style={{ fontSize: 14, marginBottom: 16 }}>Send Invitation by Email</div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <input className="inp" placeholder="staff@company.com" value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && sendInvite()}
+                style={{ flex: 1 }} />
+              <button className="bp" onClick={sendInvite} disabled={inviting || !inviteEmail.trim()}
+                style={{ whiteSpace: "nowrap" }}>
+                {inviting ? "Sending…" : "Send Invite"}
+              </button>
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>
+              If the email matches an existing staff member, they will be recognised automatically.
+            </div>
+          </div>
+
+          {invites.length === 0 ? (
+            <div style={{ padding: "40px", textAlign: "center", color: C.muted, border: `2px dashed ${C.border}`, borderRadius: 14 }}>No invitations sent yet.</div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {invites.map(inv => (
+                <div key={inv.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "14px 20px", background: C.card, border: `1px solid ${C.border}`, borderRadius: 12 }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{inv.email}</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
+                      Sent {new Date(inv.created_at).toLocaleDateString()} · Expires {new Date(inv.expires_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <span style={{ background: statusBg(inv.status), color: statusColor(inv.status), border: `1px solid ${statusColor(inv.status)}33`, padding: "4px 14px", borderRadius: 99, fontSize: 10, fontWeight: 800, textTransform: "uppercase" }}>
+                    {inv.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── SETTINGS & LINKS TAB ── */}
+      {tab === "settings" && (
+        <div className="fade" style={{ maxWidth: 600 }}>
+          <div className="gc" style={{ padding: 28, marginBottom: 20 }}>
+            <div className="ho" style={{ fontSize: 14, marginBottom: 6 }}>General Submission Link</div>
+            <div style={{ fontSize: 13, color: C.sub, marginBottom: 18, lineHeight: 1.6 }}>
+              Share this link with any staff member — no individual invite required.
+              When a staff enters their email, the system will recognise them if they exist in the system.
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <input className="inp" readOnly value={generalLink} style={{ flex: 1, fontSize: 12, color: C.muted }} />
+              <button className="bp" onClick={copyLink}>
+                {copied ? "✓ Copied!" : "Copy Link"}
+              </button>
+            </div>
+          </div>
+
+          <div className="gc" style={{ padding: 28 }}>
+            <div className="ho" style={{ fontSize: 14, marginBottom: 16 }}>Form Status</div>
+            <div style={{ display: "flex", alignItems: "center", justifyContent: "space-between", padding: "16px 20px", background: settings?.is_collecting ? `${T.gold}0D` : `${C.border}30`, border: `1px solid ${settings?.is_collecting ? T.gold + "30" : C.border}`, borderRadius: 10 }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Bio Data Collection</div>
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+                  {settings?.is_collecting ? "✓ Form is active — staff can submit their bio data." : "⊘ Form is closed — submission links will be rejected."}
+                </div>
+              </div>
+              <div
+                onClick={!togglingForm ? toggleCollecting : undefined}
+                style={{ width: 52, height: 28, borderRadius: 14, cursor: "pointer", background: settings?.is_collecting ? T.gold : C.border, position: "relative", transition: "all 0.25s ease", opacity: togglingForm ? 0.6 : 1, flexShrink: 0 }}
+              >
+                <div style={{ position: "absolute", top: 3, left: settings?.is_collecting ? 27 : 3, width: 22, height: 22, borderRadius: "50%", background: "#fff", transition: "left 0.25s ease", boxShadow: "0 1px 4px #0004" }} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── SUBMISSION DETAIL MODAL ── */}
+      {selected && (
+        <BiodataReviewModal sub={selected} onClose={() => setSelected(null)} onRefresh={() => { setSelected(null); load(); }} />
+      )}
+    </div>
+  );
+}
+
+// ─── BIO DATA REVIEW MODAL ────────────────────────────────────────────────────
+function BiodataReviewModal({ sub, onClose, onRefresh }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [full, setFull] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [reviewing, setReviewing] = useState(false);
+  const [rejReason, setRejReason] = useState("");
+  const [showRejInput, setShowRejInput] = useState(false);
+  const [certEmail, setCertEmail] = useState("");
+  const [sendingCert, setSendingCert] = useState(false);
+  const [downloadingCert, setDownloadingCert] = useState(false);
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/biodata/submissions/${sub.id}`)
+      .then(d => setFull(d))
+      .finally(() => setLoading(false));
+  }, [sub.id]);
+
+  const doReview = async (action) => {
+    if (action === "reject" && !rejReason.trim()) { setShowRejInput(true); return; }
+    setReviewing(true);
+    try {
+      await apiFetch(`${API_BASE}/biodata/submissions/${sub.id}/review`, {
+        method: "POST",
+        body: JSON.stringify({ action, rejection_reason: rejReason || null }),
+      });
+      onRefresh();
+    } catch (e) { alert(e.message); setReviewing(false); }
+  };
+
+  const emailCert = async () => {
+    if (!certEmail.trim()) return;
+    setSendingCert(true);
+    try {
+      await apiFetch(`${API_BASE}/biodata/submissions/${sub.id}/email-certificate`, {
+        method: "POST",
+        body: JSON.stringify({ to_email: certEmail, submission_id: sub.id }),
+      });
+      alert(`Certificate sent to ${certEmail}`);
+      setCertEmail("");
+    } catch (e) { alert(e.message); }
+    finally { setSendingCert(false); }
+  };
+
+  const downloadCert = () => {
+    // Build a printable HTML certificate in a new window
+    const s = full || sub;
+    const name = `${s.surname || ""} ${s.other_names || ""}`.trim();
+    const lat = s.coordinates_lat, lng = s.coordinates_lng;
+    const coords = lat && lng ? `${parseFloat(lat).toFixed(6)}, ${parseFloat(lng).toFixed(6)}` : "Not captured";
+    const html = `<!DOCTYPE html><html><head><title>Bio Data Certificate</title><style>
+      body{font-family:'Segoe UI',Arial,sans-serif;padding:40px;max-width:720px;margin:0 auto;}
+      h1{font-size:24px;color:#0B0C0F;margin-bottom:4px;}
+      .gold{color:#C47D0A;} .bar{width:60px;height:4px;background:#C47D0A;margin:12px 0 28px;}
+      table{width:100%;border-collapse:collapse;font-size:13px;margin:20px 0;}
+      td{padding:11px 14px;border-bottom:1px solid #E5E7EB;} tr:nth-child(odd){background:#F9FAFB;}
+      .label{color:#6B7280;font-weight:600;width:42%;} .val{color:#111827;}
+      .footer{margin-top:32px;padding-top:20px;border-top:2px solid #E5E7EB;font-size:11px;color:#9CA3AF;text-align:center;}
+      .sig-box{margin:20px 0;padding:16px;background:#F9FAFB;border-radius:8px;border:1px solid #E5E7EB;}
+      @media print{body{padding:20px;}}
+    </style></head><body>
+      <div style="background:#0B0C0F;padding:24px 32px;border-radius:10px;margin-bottom:32px;display:flex;align-items:center;gap:16px;">
+        <div style="width:40px;height:40px;background:#C47D0A;border-radius:8px;display:flex;align-items:center;justify-content:center;">
+          <span style="color:#fff;font-weight:900;font-size:20px;">E</span></div>
+        <div>
+          <div style="color:#fff;font-weight:800;font-size:16px;">Eximp &amp; Cloves Infrastructure Limited</div>
+          <div style="color:#9CA3AF;font-size:11px;">Human Resources · Official Document</div>
+        </div>
+      </div>
+      <div style="font-size:10px;letter-spacing:3px;color:#C47D0A;text-transform:uppercase;margin-bottom:6px;">Official Document</div>
+      <h1>Bio Data Authenticity Certificate</h1>
+      <div class="bar"></div>
+      <p style="color:#374151;font-size:13px;line-height:1.7;">This certifies that the following employee bio data was electronically submitted and verified through the Eximp &amp; Cloves HR System with the following authenticity metadata:</p>
+      <table>
+        <tr><td class="label">Employee Name</td><td class="val"><strong>${name}</strong></td></tr>
+        <tr><td class="label">Email Address</td><td class="val">${s.email || ""}</td></tr>
+        <tr><td class="label">Job Title</td><td class="val">${s.job_title || ""}</td></tr>
+        <tr><td class="label">Submission Timestamp</td><td class="val"><strong>${(s.submitted_at || "").slice(0, 19).replace("T", " ")}</strong></td></tr>
+        <tr><td class="label">IP Address</td><td class="val" style="font-family:monospace">${s.ip_address || "N/A"}</td></tr>
+        <tr><td class="label">Device Type</td><td class="val">${s.device_type || "N/A"}</td></tr>
+        <tr><td class="label">User Agent</td><td class="val" style="font-size:11px;word-break:break-all">${s.user_agent || "N/A"}</td></tr>
+        <tr><td class="label">GPS Coordinates</td><td class="val" style="font-family:monospace">${coords}</td></tr>
+        <tr><td class="label">Review Status</td><td class="val"><strong style="color:${s.status === "approved" ? "#065F46" : "#991B1B"}">${(s.status || "").toUpperCase()}</strong></td></tr>
+      </table>
+      ${s.signature_url ? `<div class="sig-box"><div style="font-size:11px;color:#6B7280;font-weight:700;letter-spacing:1px;text-transform:uppercase;margin-bottom:8px;">Employee Signature</div><img src="${s.signature_url}" style="max-height:80px;max-width:280px;" /></div>` : ""}
+      <div class="footer">Certificate ID: ${s.id}<br>Issued by: Eximp &amp; Cloves HR System · This is an electronically generated certificate valid without a physical signature.</div>
+      <script>window.print();</script>
+    </body></html>`;
+    const win = window.open("", "_blank");
+    win.document.write(html);
+    win.document.close();
+  };
+
+  const statusColor = (st) => ({ pending: T.gold, approved: "#10B981", rejected: "#EF4444" }[st] || C.muted);
+  const s = full || sub;
+
+  return (
+    <Modal onClose={onClose}>
+      <div style={{ maxWidth: 780, width: "100%", maxHeight: "90vh", overflow: "auto" }}>
+        {/* Modal Header */}
+        <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
+          <div>
+            <div className="ho" style={{ fontSize: 20, fontWeight: 900 }}>Bio Data Review</div>
+            <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>{s.surname} {s.other_names} · {s.email}</div>
+          </div>
+          <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+            <span style={{ background: `${statusColor(s.status)}18`, color: statusColor(s.status), border: `1px solid ${statusColor(s.status)}33`, padding: "5px 16px", borderRadius: 99, fontSize: 11, fontWeight: 800, textTransform: "uppercase" }}>
+              {s.status}
+            </span>
+            <button className="bg" onClick={onClose} style={{ padding: "6px 14px" }}>✕</button>
+          </div>
+        </div>
+
+        {loading ? (
+          <div style={{ padding: 60, textAlign: "center", color: C.muted }}>Loading submission…</div>
+        ) : (
+          <>
+            {/* Two-column layout */}
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20, marginBottom: 20 }}>
+              {/* Left: Personal Details */}
+              <div className="gc" style={{ padding: 22 }}>
+                <div className="ho" style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", marginBottom: 16 }}>Personal Information</div>
+                {[
+                  ["Surname", s.surname],
+                  ["Other Names", s.other_names],
+                  ["Email", s.email],
+                  ["Gender", s.gender],
+                  ["Marital Status", s.marital_status],
+                  ["Date of Birth", s.date_of_birth],
+                  ["Job Title", s.job_title],
+                  ["Joining Date", s.joining_date],
+                  ["Mobile Phone", s.mobile_phone],
+                  ["House Phone", s.house_phone],
+                  ["Home Address", s.present_home_address],
+                  ["Next of Kin", s.next_of_kin_name],
+                  ["NOK Phone", s.next_of_kin_phone],
+                ].map(([label, val]) => (
+                  <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}22`, fontSize: 13 }}>
+                    <span style={{ color: C.muted, fontWeight: 600, flexShrink: 0, width: "45%" }}>{label}</span>
+                    <span style={{ color: C.text, textAlign: "right", wordBreak: "break-word" }}>{val || <span style={{ color: C.border }}>—</span>}</span>
+                  </div>
+                ))}
+              </div>
+
+              {/* Right: Auth Metadata + Files */}
+              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+                {/* Passport Photo */}
+                <div className="gc" style={{ padding: 22 }}>
+                  <div className="ho" style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", marginBottom: 14 }}>Passport Photograph</div>
+                  {s.passport_photo_url ? (
+                    <div style={{ display: "flex", justifyContent: "center" }}>
+                      <img src={s.passport_photo_url} alt="Passport" style={{ width: 120, height: 140, objectFit: "cover", borderRadius: 10, border: `2px solid ${T.gold}40` }} />
+                    </div>
+                  ) : (
+                    <div style={{ padding: "20px 0", textAlign: "center", color: C.muted, fontSize: 13 }}>No photo uploaded</div>
+                  )}
+                </div>
+
+                {/* Signature */}
+                <div className="gc" style={{ padding: 22 }}>
+                  <div className="ho" style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", marginBottom: 14 }}>Employee Signature</div>
+                  {s.signature_url ? (
+                    <div style={{ background: "#fff", borderRadius: 8, padding: 12, display: "flex", justifyContent: "center" }}>
+                      <img src={s.signature_url} alt="Signature" style={{ maxHeight: 80, maxWidth: "100%" }} />
+                    </div>
+                  ) : (
+                    <div style={{ padding: "20px 0", textAlign: "center", color: C.muted, fontSize: 13 }}>No signature captured</div>
+                  )}
+                </div>
+
+                {/* Authenticity Metadata */}
+                <div className="gc" style={{ padding: 22, borderLeft: `3px solid ${T.gold}` }}>
+                  <div className="ho" style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", marginBottom: 14 }}>Authenticity Metadata</div>
+                  {[
+                    ["IP Address", s.ip_address],
+                    ["Device", s.device_type],
+                    ["GPS Coords", s.coordinates_lat && s.coordinates_lng ? `${parseFloat(s.coordinates_lat).toFixed(5)}, ${parseFloat(s.coordinates_lng).toFixed(5)}` : null],
+                    ["GPS Accuracy", s.coordinates_accuracy ? `±${parseFloat(s.coordinates_accuracy).toFixed(0)}m` : null],
+                    ["Timestamp", s.submitted_at ? new Date(s.submitted_at).toLocaleString() : null],
+                  ].map(([label, val]) => (
+                    <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: `1px solid ${C.border}22`, fontSize: 12 }}>
+                      <span style={{ color: C.muted, fontWeight: 700 }}>{label}</span>
+                      <span style={{ color: C.text, fontFamily: "monospace", fontSize: 11, textAlign: "right", maxWidth: "60%", wordBreak: "break-all" }}>{val || "—"}</span>
+                    </div>
+                  ))}
+                  <div style={{ marginTop: 10, padding: "10px 0", borderBottom: `1px solid ${C.border}22` }}>
+                    <div style={{ fontSize: 11, color: C.muted, fontWeight: 700, marginBottom: 6 }}>USER AGENT</div>
+                    <div style={{ fontSize: 10, color: C.text, wordBreak: "break-all", lineHeight: 1.5, fontFamily: "monospace" }}>{s.user_agent || "—"}</div>
+                  </div>
+                </div>
+              </div>
+            </div>
+
+            {/* Certificate Actions */}
+            <div className="gc" style={{ padding: 22, marginBottom: 20, background: `${T.gold}08`, borderColor: `${T.gold}30` }}>
+              <div className="ho" style={{ fontSize: 13, marginBottom: 14 }}>📜 Authenticity Certificate</div>
+              <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+                <button className="bp" onClick={downloadCert} style={{ fontSize: 12 }}>
+                  Download / Print Certificate
+                </button>
+                <input className="inp" placeholder="Email certificate to…" value={certEmail}
+                  onChange={e => setCertEmail(e.target.value)} style={{ flex: 1, minWidth: 200 }} />
+                <button className="bg" onClick={emailCert} disabled={sendingCert || !certEmail.trim()} style={{ fontSize: 12 }}>
+                  {sendingCert ? "Sending…" : "Email Certificate"}
+                </button>
+              </div>
+            </div>
+
+            {/* Review Actions */}
+            {s.status === "pending" && (
+              <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                {showRejInput && (
+                  <div>
+                    <div style={{ fontSize: 12, color: C.sub, marginBottom: 8, fontWeight: 700 }}>Rejection Reason (required)</div>
+                    <textarea className="inp" rows={3} placeholder="Explain what needs to be corrected…"
+                      value={rejReason} onChange={e => setRejReason(e.target.value)} />
+                  </div>
+                )}
+                <div style={{ display: "flex", gap: 12 }}>
+                  <button className="bp" onClick={() => doReview("approve")} disabled={reviewing}
+                    style={{ flex: 1, padding: 14, fontSize: 14 }}>
+                    ✓ Approve Submission
+                  </button>
+                  <button className="bd" onClick={() => showRejInput ? doReview("reject") : setShowRejInput(true)} disabled={reviewing}
+                    style={{ flex: 1, padding: 14, fontSize: 14 }}>
+                    {showRejInput ? "Confirm Rejection" : "✕ Reject & Request Changes"}
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {s.status === "approved" && (
+              <div style={{ padding: "14px 20px", background: "#10B98114", border: "1px solid #10B98130", borderRadius: 10, fontSize: 13, color: "#10B981", fontWeight: 700 }}>
+                ✓ This submission has been approved and the staff profile has been updated.
+              </div>
+            )}
+            {s.status === "rejected" && (
+              <div style={{ padding: "14px 20px", background: "#EF444414", border: "1px solid #EF444430", borderRadius: 10, fontSize: 13, color: "#EF4444" }}>
+                ✕ Rejected — {s.rejection_reason || "No reason provided."}
+              </div>
+            )}
+          </>
+        )}
+      </div>
+    </Modal>
+  );
+}
+
+// ─── STAFF: MY BIO DATA TAB ───────────────────────────────────────────────────
+function MyBiodata({ user }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [sub, setSub] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/biodata/my-submission`)
+      .then(d => setSub(d))
+      .catch(() => setSub(null))
+      .finally(() => setLoading(false));
+  }, []);
+
+  const statusColor = (st) => ({ pending: T.gold, approved: "#10B981", rejected: "#EF4444" }[st] || C.muted);
+
+  if (loading) return <div style={{ padding: 40, textAlign: "center", color: C.muted }}>Loading…</div>;
+
+  if (!sub) {
+    return (
+      <div style={{ padding: "60px 40px", textAlign: "center", border: `2px dashed ${C.border}`, borderRadius: 14 }}>
+        <div style={{ fontSize: 48, marginBottom: 16 }}>📋</div>
+        <div style={{ fontSize: 16, fontWeight: 800, color: C.text, marginBottom: 8 }}>No Bio Data Submitted Yet</div>
+        <div style={{ fontSize: 13, color: C.muted, maxWidth: 360, margin: "0 auto" }}>
+          Check your email for a bio data form invite from HR, or ask HR to send you a link.
+        </div>
+      </div>
+    );
+  }
+
+  const s = sub;
+  const name = `${s.surname || ""} ${s.other_names || ""}`.trim();
+
+  return (
+    <div className="fade" style={{ maxWidth: 720 }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 22, fontWeight: 900 }}>My Bio Data</div>
+          <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>Your submitted employee bio data form.</div>
+        </div>
+        <span style={{ background: `${statusColor(s.status)}18`, color: statusColor(s.status), border: `1px solid ${statusColor(s.status)}33`, padding: "6px 18px", borderRadius: 99, fontSize: 12, fontWeight: 800, textTransform: "uppercase" }}>
+          {s.status === "pending" ? "⏳ Awaiting Review" : s.status === "approved" ? "✓ Approved" : "✕ Rejected"}
+        </span>
+      </div>
+
+      {s.status === "rejected" && s.rejection_reason && (
+        <div style={{ padding: "14px 20px", background: "#EF444410", border: "1px solid #EF444430", borderRadius: 10, fontSize: 13, color: "#EF4444", marginBottom: 20 }}>
+          <strong>Reason for rejection:</strong> {s.rejection_reason}
+          <div style={{ fontSize: 12, marginTop: 6, color: "#EF4444AA" }}>Please contact HR for a new form link to resubmit.</div>
+        </div>
+      )}
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16, marginBottom: 16 }}>
+        <div className="gc" style={{ padding: 22 }}>
+          <div className="ho" style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", marginBottom: 16 }}>Personal Information</div>
+          {[
+            ["Full Name", name],
+            ["Gender", s.gender],
+            ["Marital Status", s.marital_status],
+            ["Date of Birth", s.date_of_birth],
+            ["Job Title", s.job_title],
+            ["Mobile", s.mobile_phone],
+            ["Address", s.present_home_address],
+            ["Next of Kin", s.next_of_kin_name],
+          ].map(([label, val]) => (
+            <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "7px 0", borderBottom: `1px solid ${C.border}22`, fontSize: 13 }}>
+              <span style={{ color: C.muted, fontWeight: 600 }}>{label}</span>
+              <span style={{ color: C.text }}>{val || "—"}</span>
+            </div>
+          ))}
+        </div>
+
+        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+          {s.passport_photo_url && (
+            <div className="gc" style={{ padding: 22 }}>
+              <div className="ho" style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>Passport Photo</div>
+              <img src={s.passport_photo_url} alt="Passport" style={{ width: 100, height: 120, objectFit: "cover", borderRadius: 8, border: `2px solid ${T.gold}40` }} />
+            </div>
+          )}
+          {s.signature_url && (
+            <div className="gc" style={{ padding: 22 }}>
+              <div className="ho" style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>My Signature</div>
+              <div style={{ background: "#fff", borderRadius: 6, padding: 10 }}>
+                <img src={s.signature_url} alt="Signature" style={{ maxHeight: 70, maxWidth: "100%" }} />
+              </div>
+            </div>
+          )}
+          <div className="gc" style={{ padding: 22 }}>
+            <div className="ho" style={{ fontSize: 12, letterSpacing: 1, textTransform: "uppercase", marginBottom: 12 }}>Submission Info</div>
+            <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.8 }}>
+              <div>Submitted: <span style={{ color: C.text }}>{s.submitted_at ? new Date(s.submitted_at).toLocaleString() : "—"}</span></div>
+              <div>Device: <span style={{ color: C.text }}>{s.device_type || "—"}</span></div>
+              {s.reviewed_at && <div>Reviewed: <span style={{ color: C.text }}>{new Date(s.reviewed_at).toLocaleDateString()}</span></div>}
+            </div>
+          </div>
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// ─── PUBLIC BIO DATA FORM (standalone, accessed via /biodata?token=xxx) ────────
+// This is rendered inside App.jsx when a ?token= URL param is detected.
+// It handles its own layout completely (no sidebar).
+function PublicBiodataForm() {
+  const [step, setStep] = useState("email"); // email → form → success
+  const [token, setToken] = useState("");
+  const [email, setEmail] = useState("");
+  const [staffInfo, setStaffInfo] = useState(null);
+  const [formMsg, setFormMsg] = useState("");
+  const [checking, setChecking] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [geoError, setGeoError] = useState("");
+  const [geoData, setGeoData] = useState({ lat: null, lng: null, accuracy: null });
+  const [ipAddress, setIpAddress] = useState("");
+
+  // Signature canvas
+  const sigCanvasRef = useRef(null);
+  const [sigDrawing, setSigDrawing] = useState(false);
+  const [sigHasData, setSigHasData] = useState(false);
+  const [sigCtx, setSigCtx] = useState(null);
+  const [lastPos, setLastPos] = useState(null);
+
+  // Form data
+  const [form, setForm] = useState({
+    surname: "", other_names: "", marital_status: "", gender: "",
+    job_title: "", date_of_birth: "", joining_date: "",
+    present_home_address: "", mobile_phone: "", house_phone: "",
+    next_of_kin_name: "", next_of_kin_phone: "",
+  });
+  const [passportFile, setPassportFile] = useState(null);
+  const [passportPreview, setPassportPreview] = useState("");
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get("token");
+    if (t) setToken(t);
+
+    // Get IP
+    fetch("https://api.ipify.org?format=json").then(r => r.json()).then(d => setIpAddress(d.ip)).catch(() => { });
+
+    // Get GPS
+    if (navigator.geolocation) {
+      navigator.geolocation.getCurrentPosition(
+        pos => setGeoData({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }),
+        err => setGeoError("Location access denied — this field is required for authenticity verification."),
+        { timeout: 10000 }
+      );
+    }
+
+    // Set up signature canvas after mount
+    setTimeout(() => initCanvas(), 100);
+  }, []);
+
+  const initCanvas = () => {
+    const canvas = sigCanvasRef.current;
+    if (!canvas) return;
+    const ctx = canvas.getContext("2d");
+    ctx.strokeStyle = "#1A1D24";
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    setSigCtx(ctx);
+  };
+
+  const getPos = (e, canvas) => {
+    const rect = canvas.getBoundingClientRect();
+    if (e.touches) {
+      return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+    }
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+
+  const sigStart = (e) => {
+    e.preventDefault();
+    const canvas = sigCanvasRef.current;
+    if (!canvas || !sigCtx) { initCanvas(); return; }
+    setSigDrawing(true);
+    setSigHasData(true);
+    const pos = getPos(e, canvas);
+    setLastPos(pos);
+    sigCtx.beginPath();
+    sigCtx.moveTo(pos.x, pos.y);
+  };
+
+  const sigMove = (e) => {
+    e.preventDefault();
+    if (!sigDrawing || !sigCtx) return;
+    const canvas = sigCanvasRef.current;
+    const pos = getPos(e, canvas);
+    sigCtx.lineTo(pos.x, pos.y);
+    sigCtx.stroke();
+    setLastPos(pos);
+  };
+
+  const sigEnd = () => setSigDrawing(false);
+
+  const clearSig = () => {
+    const canvas = sigCanvasRef.current;
+    if (!canvas || !sigCtx) return;
+    sigCtx.clearRect(0, 0, canvas.width, canvas.height);
+    setSigHasData(false);
+  };
+
+  const checkEmail = async () => {
+    if (!email.trim()) return;
+    setChecking(true);
+    try {
+      const res = await fetch(`${API_BASE}/biodata/public/check?token=${token}&email=${encodeURIComponent(email.trim())}`);
+      if (!res.ok) {
+        const err = await res.json();
+        alert(err.detail || "Error verifying token.");
+        setChecking(false);
+        return;
+      }
+      const data = await res.json();
+      setStaffInfo(data.staff_info);
+      setFormMsg(data.form_message || "");
+      if (data.staff_info) {
+        setForm(f => ({
+          ...f,
+          surname: data.staff_info.full_name?.split(" ")?.[0] || "",
+          other_names: data.staff_info.full_name?.split(" ")?.slice(1)?.join(" ") || "",
+          job_title: data.staff_info.job_title || "",
+        }));
+      }
+      setStep("form");
+    } catch (e) { alert("Connection error. Please try again."); }
+    finally { setChecking(false); }
+  };
+
+  const handlePassportChange = (e) => {
+    const file = e.target.files[0];
+    if (!file) return;
+    setPassportFile(file);
+    const reader = new FileReader();
+    reader.onloadend = () => setPassportPreview(reader.result);
+    reader.readAsDataURL(file);
+  };
+
+  const getDeviceType = () => {
+    const ua = navigator.userAgent;
+    if (/Mobi|Android/i.test(ua)) return "Mobile";
+    if (/Tablet|iPad/i.test(ua)) return "Tablet";
+    return "Desktop";
+  };
+
+  const handleSubmit = async () => {
+    // Validate
+    const required = ["surname", "other_names", "marital_status", "gender", "job_title", "date_of_birth", "joining_date", "present_home_address", "mobile_phone", "next_of_kin_name", "next_of_kin_phone"];
+    for (const f of required) {
+      if (!form[f]?.trim()) { alert(`Please fill in: ${f.replace(/_/g, " ")}`); return; }
+    }
+    if (!passportFile) { alert("Please upload your passport photograph."); return; }
+    if (!sigHasData) { alert("Please draw your signature."); return; }
+    if (!geoData.lat || !geoData.lng) { alert("GPS coordinates are required. Please allow location access and try again."); return; }
+    if (!ipAddress) { alert("Could not capture IP address. Please check your connection."); return; }
+
+    const canvas = sigCanvasRef.current;
+    const sigBase64 = canvas ? canvas.toDataURL("image/png") : "";
+
+    const fd = new FormData();
+    fd.append("token", token);
+    fd.append("email", email.trim());
+    Object.entries(form).forEach(([k, v]) => fd.append(k, v));
+    fd.append("ip_address", ipAddress);
+    fd.append("device_type", getDeviceType());
+    fd.append("user_agent", navigator.userAgent);
+    fd.append("coordinates_lat", String(geoData.lat));
+    fd.append("coordinates_lng", String(geoData.lng));
+    fd.append("coordinates_accuracy", String(geoData.accuracy || ""));
+    fd.append("submitted_at", new Date().toISOString());
+    fd.append("passport_photo", passportFile);
+    fd.append("signature_data", sigBase64);
+
+    setSubmitting(true);
+    try {
+      const ec_token = localStorage.getItem("ec_token");
+      const res = await fetch(`${API_BASE}/biodata/public/submit`, {
+        method: "POST",
+        body: fd,
+        headers: ec_token ? { Authorization: `Bearer ${ec_token}` } : {},
+      });
+      if (!res.ok) {
+        const err = await res.json();
+        throw new Error(err.detail || "Submission failed.");
+      }
+      setStep("success");
+    } catch (e) { alert(e.message); }
+    finally { setSubmitting(false); }
+  };
+
+  const inp = {
+    background: "#F8F9FB", border: "1px solid #DDE3EE", color: "#1A2130",
+    padding: "12px 16px", borderRadius: 10, fontSize: 14, outline: "none",
+    fontFamily: "inherit", width: "100%", boxSizing: "border-box",
+  };
+  const lbl = { fontSize: 12, fontWeight: 700, color: "#6B7280", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 6, display: "block" };
+  const G = "#C47D0A";
+
+  if (step === "success") {
+    return (
+      <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0B0C0F 0%, #1A1D24 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Segoe UI',Arial,sans-serif" }}>
+        <div style={{ background: "#fff", borderRadius: 20, padding: 60, maxWidth: 480, width: "100%", textAlign: "center", boxShadow: "0 24px 80px #00000044" }}>
+          <div style={{ width: 80, height: 80, background: "#D1FAE5", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px", fontSize: 36 }}>✓</div>
+          <div style={{ fontSize: 24, fontWeight: 900, color: "#0B0C0F", marginBottom: 12 }}>Form Submitted!</div>
+          <div style={{ fontSize: 14, color: "#6B7280", lineHeight: 1.7, marginBottom: 28 }}>
+            Your bio data has been submitted successfully and is now under review by the HR team.
+            You will receive an email notification once it has been approved.
+          </div>
+          <div style={{ padding: "16px 20px", background: "#FEF9EC", border: `1px solid ${G}30`, borderRadius: 10, fontSize: 13, color: "#92400E" }}>
+            Submitted at: <strong>{new Date().toLocaleString()}</strong>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  if (step === "email") {
+    return (
+      <div style={{ minHeight: "100vh", background: "linear-gradient(135deg, #0B0C0F 0%, #1A1D24 100%)", display: "flex", alignItems: "center", justifyContent: "center", padding: 24, fontFamily: "'Segoe UI',Arial,sans-serif" }}>
+        <div style={{ background: "#fff", borderRadius: 20, padding: 48, maxWidth: 460, width: "100%", boxShadow: "0 24px 80px #00000044" }}>
+          <div style={{ textAlign: "center", marginBottom: 36 }}>
+            <div style={{ width: 56, height: 56, background: G, borderRadius: 14, display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 16px", fontSize: 24, fontWeight: 900, color: "#fff" }}>E</div>
+            <div style={{ fontSize: 22, fontWeight: 900, color: "#0B0C0F" }}>Employee Bio Data Form</div>
+            <div style={{ fontSize: 13, color: "#6B7280", marginTop: 8 }}>Eximp & Cloves Infrastructure Limited</div>
+          </div>
+          <div style={{ marginBottom: 24 }}>
+            <label style={lbl}>Enter Your Work Email Address</label>
+            <input style={inp} type="email" placeholder="yourname@eximps-cloves.com"
+              value={email} onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && checkEmail()} autoFocus />
+            <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 8 }}>
+              Your email will be used to identify your staff record and pre-fill your details.
+            </div>
+          </div>
+          <button onClick={checkEmail} disabled={checking || !email.trim()} style={{
+            width: "100%", padding: 14, background: G, color: "#fff", border: "none",
+            borderRadius: 10, fontSize: 14, fontWeight: 700, cursor: "pointer", opacity: checking ? 0.7 : 1
+          }}>
+            {checking ? "Verifying…" : "Continue →"}
+          </button>
+        </div>
+      </div>
+    );
+  }
+
+  // step === "form"
+  return (
+    <div style={{ minHeight: "100vh", background: "#F0F2F6", fontFamily: "'Segoe UI',Arial,sans-serif", paddingBottom: 80 }}>
+      {/* Header */}
+      <div style={{ background: "#0B0C0F", padding: "20px 0", marginBottom: 32 }}>
+        <div style={{ maxWidth: 820, margin: "0 auto", padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+            <div style={{ width: 44, height: 44, background: G, borderRadius: 10, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 900, color: "#fff" }}>E</div>
+            <div>
+              <div style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>Eximp & Cloves</div>
+              <div style={{ color: "#9CA3AF", fontSize: 11 }}>Human Resources Department</div>
+            </div>
+          </div>
+          <div style={{ background: "#ffffff14", padding: "6px 16px", borderRadius: 8, fontSize: 12, color: G, fontWeight: 700, letterSpacing: 0.5 }}>EMPLOYEE BIO DATA FORM</div>
+        </div>
+      </div>
+
+      <div style={{ maxWidth: 820, margin: "0 auto", padding: "0 24px" }}>
+        {/* Staff recognition banner */}
+        {staffInfo && (
+          <div style={{ background: `${G}14`, border: `1px solid ${G}30`, borderRadius: 12, padding: "14px 20px", marginBottom: 24, display: "flex", gap: 12, alignItems: "center" }}>
+            <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${G}30`, border: `2px solid ${G}`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 900, color: G, flexShrink: 0 }}>
+              {staffInfo.full_name?.[0] || "?"}
+            </div>
+            <div>
+              <div style={{ fontSize: 14, fontWeight: 700, color: "#0B0C0F" }}>Welcome, {staffInfo.full_name}!</div>
+              <div style={{ fontSize: 12, color: "#6B7280" }}>Recognised as existing staff · {staffInfo.department} {staffInfo.job_title ? `· ${staffInfo.job_title}` : ""}</div>
+            </div>
+          </div>
+        )}
+
+        {formMsg && (
+          <div style={{ background: "#fff", border: "1px solid #DDE3EE", borderRadius: 12, padding: "16px 20px", marginBottom: 24, fontSize: 13, color: "#374151", lineHeight: 1.7 }}>{formMsg}</div>
+        )}
+
+        {/* Authenticity notice */}
+        <div style={{ background: "#FFF8ED", border: `1px solid ${G}40`, borderRadius: 12, padding: "16px 20px", marginBottom: 28, borderLeft: `4px solid ${G}` }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: "#92400E", marginBottom: 6 }}>📍 Proof of Authenticity Required</div>
+          <div style={{ fontSize: 12, color: "#92400E", lineHeight: 1.7 }}>
+            This form captures your <strong>IP address, device type, browser information, GPS coordinates, and submission timestamp</strong> as proof of authenticity.
+            These details are digitally recorded and form part of your official HR submission certificate. By submitting this form, you consent to this data collection.
+          </div>
+          <div style={{ marginTop: 12, display: "grid", gridTemplateColumns: "1fr 1fr", gap: 8 }}>
+            {[
+              ["IP Address", ipAddress || "Capturing…"],
+              ["Device", getDeviceType()],
+              ["GPS", geoData.lat ? `${geoData.lat.toFixed(4)}, ${geoData.lng.toFixed(4)}` : geoError ? "❌ " + geoError : "⏳ Requesting…"],
+              ["Time", new Date().toLocaleTimeString()],
+            ].map(([k, v]) => (
+              <div key={k} style={{ background: "#FFF", border: "1px solid #F5E0B0", borderRadius: 8, padding: "8px 12px" }}>
+                <div style={{ fontSize: 10, color: "#B45309", fontWeight: 700, letterSpacing: 0.5 }}>{k.toUpperCase()}</div>
+                <div style={{ fontSize: 11, color: "#374151", fontFamily: "monospace", marginTop: 2 }}>{v}</div>
+              </div>
+            ))}
+          </div>
+          {geoError && (
+            <div style={{ marginTop: 12, fontSize: 12, color: "#DC2626", fontWeight: 700 }}>
+              ⚠️ Location permission is required to submit this form.
+              <button onClick={() => navigator.geolocation?.getCurrentPosition(pos => { setGeoData({ lat: pos.coords.latitude, lng: pos.coords.longitude, accuracy: pos.coords.accuracy }); setGeoError(""); })}
+                style={{ marginLeft: 8, textDecoration: "underline", background: "none", border: "none", cursor: "pointer", color: "#DC2626", fontSize: 12 }}>
+                Retry Location
+              </button>
+            </div>
+          )}
+        </div>
+
+        {/* Main Form Card */}
+        <div style={{ background: "#fff", borderRadius: 16, padding: 36, marginBottom: 20, boxShadow: "0 4px 24px #0000000A", border: "1px solid #E5E7EB" }}>
+          <div style={{ fontSize: 18, fontWeight: 900, color: "#0B0C0F", marginBottom: 4 }}>Personal Information</div>
+          <div style={{ width: 48, height: 3, background: G, borderRadius: 2, marginBottom: 28 }} />
+
+          <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 20 }}>
+            {[
+              ["surname", "Surname *", "text"],
+              ["other_names", "Other Names *", "text"],
+              ["date_of_birth", "Date of Birth *", "date"],
+              ["joining_date", "Joining Date *", "date"],
+              ["mobile_phone", "Mobile Phone *", "tel"],
+              ["house_phone", "House Phone", "tel"],
+              ["next_of_kin_name", "Next of Kin Name *", "text"],
+              ["next_of_kin_phone", "Next of Kin Phone *", "tel"],
+            ].map(([key, label, type]) => (
+              <div key={key}>
+                <label style={lbl}>{label}</label>
+                <input style={inp} type={type} value={form[key]} onChange={e => setForm(f => ({ ...f, [key]: e.target.value }))} />
+              </div>
+            ))}
+
+            <div>
+              <label style={lbl}>Gender *</label>
+              <select style={inp} value={form.gender} onChange={e => setForm(f => ({ ...f, gender: e.target.value }))}>
+                <option value="">— Select —</option>
+                <option>Male</option><option>Female</option><option>Other</option>
+              </select>
+            </div>
+            <div>
+              <label style={lbl}>Marital Status *</label>
+              <select style={inp} value={form.marital_status} onChange={e => setForm(f => ({ ...f, marital_status: e.target.value }))}>
+                <option value="">— Select —</option>
+                <option>Single</option><option>Married</option><option>Divorced</option><option>Widowed</option>
+              </select>
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={lbl}>Job Title *</label>
+              <input style={inp} value={form.job_title} onChange={e => setForm(f => ({ ...f, job_title: e.target.value }))} />
+            </div>
+            <div style={{ gridColumn: "1 / -1" }}>
+              <label style={lbl}>Present Home Address *</label>
+              <textarea style={{ ...inp, resize: "vertical", minHeight: 72 }} value={form.present_home_address} onChange={e => setForm(f => ({ ...f, present_home_address: e.target.value }))} />
+            </div>
+          </div>
+        </div>
+
+        {/* Passport Photo Upload */}
+        <div style={{ background: "#fff", borderRadius: 16, padding: 36, marginBottom: 20, boxShadow: "0 4px 24px #0000000A", border: "1px solid #E5E7EB" }}>
+          <div style={{ fontSize: 18, fontWeight: 900, color: "#0B0C0F", marginBottom: 4 }}>Passport Photograph *</div>
+          <div style={{ width: 48, height: 3, background: G, borderRadius: 2, marginBottom: 20 }} />
+          <div style={{ fontSize: 13, color: "#6B7280", marginBottom: 20 }}>Upload a recent passport-size photograph. Accepted formats: JPG, PNG. Max 5MB.</div>
+
+          <div style={{ display: "flex", gap: 28, alignItems: "flex-start" }}>
+            <div style={{ width: 120, height: 140, borderRadius: 10, border: `2px dashed ${passportPreview ? G : "#DDE3EE"}`, display: "flex", alignItems: "center", justifyContent: "center", overflow: "hidden", flexShrink: 0, background: "#F9FAFB" }}>
+              {passportPreview ? (
+                <img src={passportPreview} alt="Passport preview" style={{ width: "100%", height: "100%", objectFit: "cover" }} />
+              ) : (
+                <div style={{ textAlign: "center", color: "#9CA3AF", fontSize: 12 }}>
+                  <div style={{ fontSize: 32, marginBottom: 6 }}>🖼</div>No photo
+                </div>
+              )}
+            </div>
+            <div>
+              <input type="file" accept="image/jpeg,image/png,image/webp" id="passport-upload" style={{ display: "none" }} onChange={handlePassportChange} />
+              <label htmlFor="passport-upload" style={{ display: "inline-block", padding: "12px 24px", background: G, color: "#fff", borderRadius: 10, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                {passportFile ? "Change Photo" : "Upload Photo"}
+              </label>
+              {passportFile && <div style={{ fontSize: 12, color: "#6B7280", marginTop: 8 }}>{passportFile.name}</div>}
+            </div>
+          </div>
+        </div>
+
+        {/* Signature */}
+        <div style={{ background: "#fff", borderRadius: 16, padding: 36, marginBottom: 20, boxShadow: "0 4px 24px #0000000A", border: "1px solid #E5E7EB" }}>
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 4 }}>
+            <div style={{ fontSize: 18, fontWeight: 900, color: "#0B0C0F" }}>Employee Signature *</div>
+            <button onClick={clearSig} style={{ fontSize: 12, color: "#EF4444", background: "#FEE2E2", border: "1px solid #FECACA", borderRadius: 8, padding: "5px 14px", cursor: "pointer", fontWeight: 700 }}>Clear</button>
+          </div>
+          <div style={{ width: 48, height: 3, background: G, borderRadius: 2, marginBottom: 16 }} />
+          <div style={{ fontSize: 13, color: "#6B7280", marginBottom: 16 }}>Please draw your signature in the box below using your mouse or finger.</div>
+
+          <canvas
+            ref={sigCanvasRef}
+            width={600} height={140}
+            onMouseDown={sigStart} onMouseMove={sigMove} onMouseUp={sigEnd} onMouseLeave={sigEnd}
+            onTouchStart={sigStart} onTouchMove={sigMove} onTouchEnd={sigEnd}
+            style={{ border: `2px solid ${sigHasData ? G : "#DDE3EE"}`, borderRadius: 10, cursor: "crosshair", background: "#FAFAFA", width: "100%", maxWidth: 600, display: "block", touchAction: "none" }}
+          />
+          {!sigHasData && <div style={{ fontSize: 12, color: "#9CA3AF", marginTop: 8 }}>↑ Draw your signature above</div>}
+        </div>
+
+        {/* Submit */}
+        <button onClick={handleSubmit} disabled={submitting || !geoData.lat}
+          style={{ width: "100%", padding: 18, background: submitting || !geoData.lat ? "#D1D5DB" : G, color: "#fff", border: "none", borderRadius: 12, fontSize: 16, fontWeight: 800, cursor: submitting || !geoData.lat ? "not-allowed" : "pointer", letterSpacing: 0.5 }}>
+          {submitting ? "Submitting…" : "Submit Bio Data Form →"}
+        </button>
+        {!geoData.lat && <div style={{ textAlign: "center", fontSize: 12, color: "#EF4444", marginTop: 10 }}>⚠️ GPS location required before submission</div>}
+      </div>
+    </div>
+  );
+}
+
+// ─────────────────────────────────────────────────────────────────────────────
+
 function HRAdminPortal({ user, onLogout }) {
   const nav = [
     // ── Overview (auto-loads first) ──
@@ -8983,6 +10022,7 @@ function HRAdminPortal({ user, onLogout }) {
     // HUB 2: PEOPLE & ORG
     { isHeader: true, label: "People & Org" },
     { id: "staff", icon: "users", label: "Employees" },
+    { id: "biodata", icon: "file", label: "Bio Data Collection" },
     { id: "org_chart", icon: "org", label: "Org Chart" },
     { id: "departments", icon: "home", label: "Departments" },
     { id: "diversity", icon: "star", label: "Diversity & Inclusion" },
@@ -9010,7 +10050,7 @@ function HRAdminPortal({ user, onLogout }) {
     { id: "succession", icon: "org", label: "Succession Planning" },
     // HUB: LEARNING & GROWTH
     { isHeader: true, label: "Learning & Growth" },
-    { id: "training", icon: "book", label: "Training" },    { id: "onboarding", icon: "star", label: "Onboarding" },    { id: "probation", icon: "clock", label: "Probation Tracking" },
+    { id: "training", icon: "book", label: "Training" }, { id: "onboarding", icon: "star", label: "Onboarding" }, { id: "probation", icon: "clock", label: "Probation Tracking" },
     // HUB 6: COMPENSATION & BENEFITS
     { isHeader: true, label: "Compensation & Benefits" },
     { id: "payroll", icon: "payroll", label: "Payroll" },
@@ -9064,6 +10104,7 @@ function HRAdminPortal({ user, onLogout }) {
       if (p === "talent_pool") return <TalentPool />;
       // Hub 2: People
       if (p === "staff") return <StaffDirectory authRole="hr" />;
+      if (p === "biodata") return <BiodataManager />;
       if (p === "org_chart") return <OrgChartEnhanced />;
       if (p === "departments") return <DepartmentsView />;
       if (p === "diversity") return <DiversityInclusion />;
@@ -9293,6 +10334,7 @@ function StaffPortal({ user, onLogout }) {
     { isHeader: true, label: "People & Org" },
     { id: "dashboard", icon: "dashboard", label: "My Dashboard" },
     { id: "profile", icon: "profile", label: "My Profile" },
+    { id: "my_biodata", icon: "file", label: "My Bio Data" },
     { isHeader: true, label: "Time & Attendance" },
     { id: "presence", icon: "clock", label: "Attendance" },
     { id: "timesheets", icon: "log", label: "Timesheets" },
@@ -9309,7 +10351,7 @@ function StaffPortal({ user, onLogout }) {
     { id: "improvement_plans", icon: "trend", label: "Improvement Plans" },
     { id: "skills_matrix", icon: "chart", label: "Skills Matrix" },
     { isHeader: true, label: "Learning & Growth" },
-    { id: "training", icon: "book", label: "Training" },    { isHeader: true, label: "Compensation & Benefits" },
+    { id: "training", icon: "book", label: "Training" }, { isHeader: true, label: "Compensation & Benefits" },
     { id: "payroll", icon: "payslip", label: "My Payroll" },
     { id: "bonuses", icon: "star", label: "My Bonuses" },
     { isHeader: true, label: "Engagement & Culture" },
@@ -9354,6 +10396,7 @@ function StaffPortal({ user, onLogout }) {
   return (
     <Portal user={user} onLogout={onLogout} navItems={nav} roleLabel="Team Member Portal" initialPage={startPage} renderPage={pg => {
       if (pg === "profile") return <MyProfile user={user} />;
+      if (pg === "my_biodata") return <MyBiodata user={user} />;
       if (pg === "leave") return <LeaveManagement user={user} />;
       if (pg === "leave_balances") return <LeaveBalancesOverview />;
       if (pg === "leave_accrual") return <LeaveAccrualConfig />;
@@ -10804,12 +11847,12 @@ function OffersManager() {
                     {a.offered_salary && <span>💰 Offered: <strong style={{ color: T.gold }}>₦{parseFloat(a.offered_salary).toLocaleString()}</strong></span>}
                     {a.start_date && <span>📅 Start: {a.start_date}</span>}
                   </div>
-                {a.notes && (
-                      <div style={{ marginTop: 12, fontSize: 12, color: C.sub, padding: "8px 12px", background: `${T.gold}11`, borderLeft: "3px solid ${T.gold}", borderRadius: 4, whiteSpace: "pre-wrap" }}>
-                        {a.notes}
-                      </div>
-                    )}
-                  </div>
+                  {a.notes && (
+                    <div style={{ marginTop: 12, fontSize: 12, color: C.sub, padding: "8px 12px", background: `${T.gold}11`, borderLeft: "3px solid ${T.gold}", borderRadius: 4, whiteSpace: "pre-wrap" }}>
+                      {a.notes}
+                    </div>
+                  )}
+                </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
                   {a.status === "Hired" && <span className="tg" style={{ background: "#4ADE8022", color: "#4ADE80" }}>✓ Hired</span>}
                   {a.status === "Offer Accepted" && <span className="tg" style={{ background: `${T.gold}22`, color: T.gold }}>🎉 Offer Accepted</span>}
@@ -11964,6 +13007,7 @@ export default function App() {
     // Check for public routes
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get("offer")) return;
+    if (urlParams.get("token")) return; // Bio data public form
 
     const savedToken = localStorage.getItem("ec_token");
     const savedUser = localStorage.getItem("admin"); // Main system stores user info in 'admin' key
@@ -11999,6 +13043,15 @@ export default function App() {
     );
   }
 
+  const biodataToken = urlParams.get("token");
+  if (biodataToken) {
+    return (
+      <ThemeCtx.Provider value={{ dark, toggle }}>
+        <PublicBiodataForm />
+      </ThemeCtx.Provider>
+    );
+  }
+
   if (!user) return <div style={{ padding: 40, textAlign: "center", color: T.orange }}>Redirecting to login...</div>;
 
   return (
@@ -12018,5 +13071,3 @@ export default function App() {
     </ThemeCtx.Provider>
   );
 }
-
-
