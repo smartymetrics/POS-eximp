@@ -3077,6 +3077,41 @@ function AgentCommissions() {
         </div>
       )}
 
+      {cTab === "requests" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 8 }}>
+          {commRequests.length === 0 ? (
+            <div style={{ textAlign: "center", padding: 40, color: C.muted, fontSize: 13 }}>No staff commission requests found.</div>
+          ) : commRequests.map(r => {
+            const isPending = r.status === "pending";
+            const stCol = { pending: T.gold, approved: "#4ADE80", rejected: "#F87171" };
+            const sc = stCol[r.status] || C.muted;
+            return (
+              <div key={r.id} className="gc" style={{ padding: "16px 18px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 800, fontSize: 14, color: C.text }}>{r.vendors?.name || "—"}</div>
+                    {r.remarks && <div style={{ fontSize: 12, color: C.sub, background: C.base, borderRadius: 6, padding: "6px 10px", marginTop: 6, lineHeight: 1.5 }}>{r.remarks}</div>}
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
+                      Ref: {r.vendor_invoice_number || r.id?.slice(0, 8)} · {new Date(r.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ fontWeight: 800, fontSize: 15, color: T.gold }}>₦{parseFloat(r.amount_gross || 0).toLocaleString()}</div>
+                    <span className="tg" style={{ background: `${sc}22`, color: sc, fontSize: 10, marginTop: 4, display: "inline-block" }}>{r.status}</span>
+                  </div>
+                </div>
+                {isPending && (
+                  <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                    <button className="bp" style={{ fontSize: 11, padding: "5px 14px" }} onClick={() => approveCommRequest(r.id)}>Approve</button>
+                    <button style={{ fontSize: 11, padding: "5px 14px", border: "1px solid #F87171", background: "#F8717118", color: "#F87171", borderRadius: 6, cursor: "pointer" }} onClick={() => rejectCommRequest(r.id)}>Reject</button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
+
       {/* MODAL: Global Rate */}
       {showRateModal && (
         <Modal onClose={() => setShowRateModal(false)} title="Global Default Commission Rate">
@@ -9354,40 +9389,6 @@ function ExpensesManager() {
           <button className="bp" onClick={submit} style={{ padding: 14 }}>Submit Expense</button>
         </div>
       </Modal>)}
-      {cTab === "requests" && (
-        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 8 }}>
-          {commRequests.length === 0 ? (
-            <div style={{ textAlign: "center", padding: 40, color: C.muted, fontSize: 13 }}>No staff commission requests found.</div>
-          ) : commRequests.map(r => {
-            const isPending = r.status === "pending";
-            const stCol = { pending: T.gold, approved: "#4ADE80", rejected: "#F87171" };
-            const sc = stCol[r.status] || C.muted;
-            return (
-              <div key={r.id} className="gc" style={{ padding: "16px 18px" }}>
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
-                  <div style={{ flex: 1 }}>
-                    <div style={{ fontWeight: 800, fontSize: 14, color: C.text }}>{r.vendors?.name || "—"}</div>
-                    {r.remarks && <div style={{ fontSize: 12, color: C.sub, background: C.base, borderRadius: 6, padding: "6px 10px", marginTop: 6, lineHeight: 1.5 }}>{r.remarks}</div>}
-                    <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
-                      Ref: {r.vendor_invoice_number || r.id?.slice(0, 8)} · {new Date(r.created_at).toLocaleDateString()}
-                    </div>
-                  </div>
-                  <div style={{ textAlign: "right", flexShrink: 0 }}>
-                    <div style={{ fontWeight: 800, fontSize: 15, color: T.gold }}>₦{parseFloat(r.amount_gross || 0).toLocaleString()}</div>
-                    <span className="tg" style={{ background: `${sc}22`, color: sc, fontSize: 10, marginTop: 4, display: "inline-block" }}>{r.status}</span>
-                  </div>
-                </div>
-                {isPending && (
-                  <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
-                    <button className="bp" style={{ fontSize: 11, padding: "5px 14px" }} onClick={() => approveCommRequest(r.id)}>Approve</button>
-                    <button style={{ fontSize: 11, padding: "5px 14px", border: "1px solid #F87171", background: "#F8717118", color: "#F87171", borderRadius: 6, cursor: "pointer" }} onClick={() => rejectCommRequest(r.id)}>Reject</button>
-                  </div>
-                )}
-              </div>
-            );
-          })}
-        </div>
-      )}
     </div>
   );
 }
