@@ -2736,6 +2736,8 @@ function AgentCommissions() {
   const [staff, setStaff] = useState([]);
   const [loading, setLoading] = useState(true);
   const [cTab, setCTab] = useState("owed");
+  const [commRequests, setCommRequests] = useState([]);
+  const [reqLoading, setReqLoading] = useState(false);
 
   // Global Rate
   const [showRateModal, setShowRateModal] = useState(false);
@@ -2788,22 +2790,38 @@ function AgentCommissions() {
   const loadDashboard = async () => {
     setLoading(true);
     try {
-      const [o, p, e, r, s] = await Promise.all([
+      const [o, p, e, r, s, cr] = await Promise.all([
         apiFetch(`${API_BASE}/commission/owed`),
         apiFetch(`${API_BASE}/commission/payouts`),
         apiFetch(`${API_BASE}/commission/earnings`),
         apiFetch(`${API_BASE}/sales-reps`),
-        apiFetch(`${API_BASE}/hr/staff`)
+        apiFetch(`${API_BASE}/hr/staff`),
+        apiFetch(`${API_BASE}/payouts/requests?vendor_type=staff&payment_type=staff_commission`).catch(() => []),
       ]);
       setOwed(Array.isArray(o) ? o : []);
       setPayouts(Array.isArray(p) ? p : []);
       setEarnings(Array.isArray(e) ? e : []);
       setReps(Array.isArray(r) ? r : []);
       setStaff(Array.isArray(s) ? s : []);
+      setCommRequests(Array.isArray(cr) ? cr : []);
     } catch (err) { console.error("Commission load error:", err); }
     finally { setLoading(false); }
   };
   useEffect(() => { loadDashboard(); }, []);
+
+  // Commission Request Approve/Reject
+  const approveCommRequest = async (id) => {
+    try {
+      await apiFetch(`${API_BASE}/payouts/requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'approved' }) });
+      setCommRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'approved' } : r));
+    } catch (e) { alert("Failed: " + e.message); }
+  };
+  const rejectCommRequest = async (id) => {
+    try {
+      await apiFetch(`${API_BASE}/payouts/requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'rejected' }) });
+      setCommRequests(prev => prev.map(r => r.id === id ? { ...r, status: 'rejected' } : r));
+    } catch (e) { alert("Failed: " + e.message); }
+  };
 
   // Global Rate
   const openRateModal = async () => {
@@ -2935,6 +2953,14 @@ function AgentCommissions() {
         <button className={`tab ${cTab === "owed" ? "on" : "off"}`} onClick={() => setCTab("owed")}>Pending Owed</button>
         <button className={`tab ${cTab === "payouts" ? "on" : "off"}`} onClick={() => setCTab("payouts")}>Payout History</button>
         <button className={`tab ${cTab === "earnings" ? "on" : "off"}`} onClick={() => setCTab("earnings")}>All Earnings</button>
+        <button className={`tab ${cTab === "requests" ? "on" : "off"}`} onClick={() => setCTab("requests")} style={{ position: "relative" }}>
+          Staff Requests
+          {commRequests.filter(r => r.status === "pending").length > 0 && (
+            <span style={{ position: "absolute", top: -4, right: -4, background: "#F87171", color: "#fff", fontSize: 9, fontWeight: 800, borderRadius: "50%", width: 16, height: 16, display: "flex", alignItems: "center", justifyContent: "center" }}>
+              {commRequests.filter(r => r.status === "pending").length}
+            </span>
+          )}
+        </button>
       </div>
 
       {/* Pending Owed */}
@@ -9177,25 +9203,65 @@ function ExpensesManager() {
   const [loading, setLoading] = useState(true);
   const [statusFilter, setStatusFilter] = useState("All");
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ staff_id: "", category: "Travel", amount: "", currency: "NGN", description: "", date: "", receipt_url: "" });
+  const [form, setForm] = useState({ staff_id: "", category: "Travel", amount: "", currency: "NGN", description: "", date: "", receipt_url: "", remarks: "" });
   const [staff, setStaff] = useState([]);
 
   useEffect(() => {
     Promise.all([
       apiFetch(`${API_BASE}/hr/expenses`).catch(() => []),
       apiFetch(`${API_BASE}/hr/staff`).catch(() => []),
-    ]).then(([e, s]) => { setExpenses(e || []); setStaff(s || []); }).finally(() => setLoading(false));
+      apiFetch(`${API_BASE}/payouts/requests?vendor_type=staff&payout_method=reimbursement`).catch(() => []),
+    ]).then(([e, s, pr]) => {
+      const internal = (Array.isArray(e) ? e : []).map(x => ({ ...x, source: 'INTERNAL' }));
+      const portal = (Array.isArray(pr) ? pr : []).map(r => ({
+        id: r.id,
+        staff_id: r.vendors?.id,
+        staff: { full_name: r.vendors?.name },
+        category: r.category || 'General',
+        description: r.title,
+        amount: r.amount_gross,
+        date: r.created_at,
+        created_at: r.created_at,
+        status: r.status,
+        receipt_url: null,
+        remarks: r.remarks,
+        source: 'PORTAL',
+      }));
+      const merged = [...internal, ...portal].sort((a, b) => new Date(b.created_at) - new Date(a.created_at));
+      setExpenses(merged);
+      setStaff(s || []);
+    }).finally(() => setLoading(false));
   }, []);
 
   const submit = async () => {
     if (!form.amount || !form.description) return alert("Amount and description required");
     try { await apiFetch(`${API_BASE}/hr/expenses`, { method: "POST", body: JSON.stringify({ ...form, status: "Pending" }) }); } catch (e) { }
-    setExpenses(prev => [{ ...form, id: Date.now().toString(), status: "Pending", created_at: new Date().toISOString(), staff: staff.find(s => s.id === form.staff_id) }, ...prev]);
-    setShowNew(false); setForm({ staff_id: "", category: "Travel", amount: "", currency: "NGN", description: "", date: "", receipt_url: "" });
+    setExpenses(prev => [{ ...form, id: Date.now().toString(), status: "Pending", created_at: new Date().toISOString(), staff: staff.find(s => s.id === form.staff_id), source: 'INTERNAL' }, ...prev]);
+    setShowNew(false); setForm({ staff_id: "", category: "Travel", amount: "", currency: "NGN", description: "", date: "", receipt_url: "", remarks: "" });
   };
 
-  const approve = async (id) => { try { await apiFetch(`${API_BASE}/hr/expenses/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Approved" }) }); } catch (e) { } setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: "Approved" } : x)); };
-  const reject = async (id) => { try { await apiFetch(`${API_BASE}/hr/expenses/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Rejected" }) }); } catch (e) { } setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: "Rejected" } : x)); };
+  const approve = async (id) => {
+    const exp = expenses.find(x => x.id === id);
+    try {
+      if (exp?.source === 'PORTAL') {
+        await apiFetch(`${API_BASE}/payouts/requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'approved' }) });
+      } else {
+        await apiFetch(`${API_BASE}/hr/expenses/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'Approved' }) });
+      }
+    } catch (e) { }
+    setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: exp?.source === 'PORTAL' ? 'approved' : 'Approved' } : x));
+  };
+  const reject = async (id) => {
+    const exp = expenses.find(x => x.id === id);
+    try {
+      if (exp?.source === 'PORTAL') {
+        await apiFetch(`${API_BASE}/payouts/requests/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'rejected' }) });
+      } else {
+        await apiFetch(`${API_BASE}/hr/expenses/${id}`, { method: 'PATCH', body: JSON.stringify({ status: 'Rejected' }) });
+      }
+    } catch (e) { }
+    setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: exp?.source === 'PORTAL' ? 'rejected' : 'Rejected' } : x));
+  };
   const [payingId, setPayingId] = useState(null);
   const markPaid = async (exp) => {
     if (!window.confirm(`Mark ₦${parseFloat(exp.amount || 0).toLocaleString()} reimbursement for ${exp.staff?.full_name || "staff"} as Paid and send to Payout Dashboard?`)) return;
@@ -9247,7 +9313,7 @@ function ExpensesManager() {
       </div>
       {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading…</div> : (
         <div className="gc" style={{ padding: 0, overflow: "hidden" }}><div className="tw"><table className="ht">
-          <thead><tr><th>Staff</th><th>Category</th><th>Description</th><th>Amount</th><th>Date</th><th>Status</th><th>Actions</th></tr></thead>
+          <thead><tr><th>Staff</th><th>Category</th><th>Description</th><th>Amount</th><th>Date</th><th>Remarks</th><th>Source</th><th>Status</th><th>Actions</th></tr></thead>
           <tbody>
             {filtered.map(e => {
               const sc = stCol[e.status] || C.muted;
@@ -9257,6 +9323,8 @@ function ExpensesManager() {
                 <td style={{ fontSize: 12, color: C.sub, maxWidth: 200 }}>{e.description}</td>
                 <td style={{ fontWeight: 800, color: T.gold }}>₦{parseFloat(e.amount || 0).toLocaleString()}</td>
                 <td style={{ fontSize: 11, color: C.muted }}>{e.date || (e.created_at ? new Date(e.created_at).toLocaleDateString() : "—")}</td>
+                <td style={{ fontSize: 12, color: C.sub, maxWidth: 180 }}>{e.remarks ? <span title={e.remarks}>{e.remarks.length > 60 ? e.remarks.slice(0, 60) + "…" : e.remarks}</span> : <span style={{ color: C.muted }}>—</span>}</td>
+                <td><span style={{ fontSize: 10, fontWeight: 800, padding: "3px 8px", borderRadius: 10, background: e.source === 'PORTAL' ? `${T.gold}22` : `${C.muted}22`, color: e.source === 'PORTAL' ? T.gold : C.muted }}>{e.source || 'INTERNAL'}</span></td>
                 <td><span className="tg" style={{ background: `${sc}22`, color: sc }}>{e.status}</span></td>
                 <td><div style={{ display: "flex", gap: 6 }}>
                   {e.status === "Pending" && <><button className="bp" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => approve(e.id)}>Approve</button><button style={{ fontSize: 10, padding: "4px 10px", border: "1px solid #F87171", background: "#F8717118", color: "#F87171", borderRadius: 6, cursor: "pointer" }} onClick={() => reject(e.id)}>Reject</button></>}
@@ -9266,7 +9334,7 @@ function ExpensesManager() {
                 </div></td>
               </tr>);
             })}
-            {filtered.length === 0 && <tr><td colSpan="7" style={{ textAlign: "center", padding: 40, color: C.muted }}>No expenses found.</td></tr>}
+            {filtered.length === 0 && <tr><td colSpan="9" style={{ textAlign: "center", padding: 40, color: C.muted }}>No expenses found.</td></tr>}
           </tbody>
         </table></div></div>
       )}
@@ -9282,9 +9350,44 @@ function ExpensesManager() {
             <div><Lbl>Date Incurred</Lbl><input type="date" className="inp" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
             <div><Lbl>Receipt URL</Lbl><input className="inp" value={form.receipt_url} onChange={e => setForm(f => ({ ...f, receipt_url: e.target.value }))} placeholder="https://…" /></div>
           </div>
+          <div><Lbl>Remarks / Notes</Lbl><textarea className="inp" value={form.remarks} onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))} placeholder="Any additional context for this expense claim..." style={{ minHeight: 72 }} /></div>
           <button className="bp" onClick={submit} style={{ padding: 14 }}>Submit Expense</button>
         </div>
       </Modal>)}
+      {cTab === "requests" && (
+        <div style={{ display: "flex", flexDirection: "column", gap: 14, marginTop: 8 }}>
+          {commRequests.length === 0 ? (
+            <div style={{ textAlign: "center", padding: 40, color: C.muted, fontSize: 13 }}>No staff commission requests found.</div>
+          ) : commRequests.map(r => {
+            const isPending = r.status === "pending";
+            const stCol = { pending: T.gold, approved: "#4ADE80", rejected: "#F87171" };
+            const sc = stCol[r.status] || C.muted;
+            return (
+              <div key={r.id} className="gc" style={{ padding: "16px 18px" }}>
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 12 }}>
+                  <div style={{ flex: 1 }}>
+                    <div style={{ fontWeight: 800, fontSize: 14, color: C.text }}>{r.vendors?.name || "—"}</div>
+                    {r.remarks && <div style={{ fontSize: 12, color: C.sub, background: C.base, borderRadius: 6, padding: "6px 10px", marginTop: 6, lineHeight: 1.5 }}>{r.remarks}</div>}
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 4 }}>
+                      Ref: {r.vendor_invoice_number || r.id?.slice(0, 8)} · {new Date(r.created_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <div style={{ textAlign: "right", flexShrink: 0 }}>
+                    <div style={{ fontWeight: 800, fontSize: 15, color: T.gold }}>₦{parseFloat(r.amount_gross || 0).toLocaleString()}</div>
+                    <span className="tg" style={{ background: `${sc}22`, color: sc, fontSize: 10, marginTop: 4, display: "inline-block" }}>{r.status}</span>
+                  </div>
+                </div>
+                {isPending && (
+                  <div style={{ display: "flex", gap: 8, marginTop: 12 }}>
+                    <button className="bp" style={{ fontSize: 11, padding: "5px 14px" }} onClick={() => approveCommRequest(r.id)}>Approve</button>
+                    <button style={{ fontSize: 11, padding: "5px 14px", border: "1px solid #F87171", background: "#F8717118", color: "#F87171", borderRadius: 6, cursor: "pointer" }} onClick={() => rejectCommRequest(r.id)}>Reject</button>
+                  </div>
+                )}
+              </div>
+            );
+          })}
+        </div>
+      )}
     </div>
   );
 }
@@ -11073,6 +11176,8 @@ const NOTIF_TYPE_TO_PAGE = {
   interview_scheduled: "interviews",
   expense_update: "expenses",
   survey_new: "surveys",
+  payout_reimbursement_request: "expenses",
+  payout_commission_request: "commissions",
 };
 
 function NotifProvider({ userId, children }) {
@@ -11153,6 +11258,8 @@ const NOTIF_META = {
   interview_scheduled: { icon: "🗓️", color: "#A78BFA", label: "Interview" },
   expense_update: { icon: "🧾", color: T.gold, label: "Expense" },
   survey_new: { icon: "📝", color: "#60A5FA", label: "Survey" },
+  payout_reimbursement_request: { icon: "🧾", color: T.gold, label: "Reimbursement Request" },
+  payout_commission_request: { icon: "💼", color: "#60A5FA", label: "Commission Request" },
   hr_alert: { icon: "🔔", color: "#F59E0B", label: "Alert" },
   general: { icon: "🔔", color: "#9CA3AF", label: "Notification" },
 };

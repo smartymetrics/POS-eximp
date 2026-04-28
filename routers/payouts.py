@@ -150,7 +150,7 @@ async def submit_payout_request(data: ExpenditureRequestCreate, current_admin=De
     return res.data[0]
 
 @router.get("/requests")
-async def list_expenditure_requests(status: Optional[str] = None, show_voided: bool = False, current_admin=Depends(require_roles(["admin", "super_admin"]))):
+async def list_expenditure_requests(status: Optional[str] = None, show_voided: bool = False, vendor_type: Optional[str] = None, payout_method: Optional[str] = None, payment_type: Optional[str] = None, current_admin=Depends(require_roles(["admin", "super_admin"]))):
     db = get_db()
     query = db.table("expenditure_requests").select("*, vendors(*), admins!requester_id(full_name), expenditure_payments(*), company_assets(*)")
     
@@ -159,9 +159,21 @@ async def list_expenditure_requests(status: Optional[str] = None, show_voided: b
     
     if not show_voided:
         query = query.neq("status", "voided")
+
+    if payout_method:
+        query = query.eq("payout_method", payout_method)
+
+    if payment_type:
+        query = query.eq("payment_type", payment_type)
         
     res = await db_execute(lambda: query.order("created_at", desc=True).execute())
-    return res.data
+    data = res.data
+
+    # Filter by vendor type in Python (vendors is a joined object, not a direct column)
+    if vendor_type:
+        data = [r for r in data if (r.get("vendors") or {}).get("type") == vendor_type]
+
+    return data
 
 @router.post("/requests/{request_id}/payments")
 async def record_payout_payment(request_id: str, data: PayoutPaymentData, bg_tasks: BackgroundTasks, current_admin=Depends(require_roles(["admin", "super_admin"]))):
@@ -997,6 +1009,22 @@ async def submit_payout_claim_from_portal(
 
     await db_execute(lambda: db.table("expenditure_requests").insert(payload).execute())
 
+    # Notify all HRM admins of new payout/commission submission
+    try:
+        from routers.hr import notify_hr_admins
+        is_commission_req = (type == "staff_commission")
+        notif_type = "payout_commission_request" if is_commission_req else "payout_reimbursement_request"
+        amount_str = f"₦{float(claim_amount):,.0f}" if claim_amount else "an amount"
+        if is_commission_req:
+            notif_title = "Commission Request Submitted"
+            notif_message = f"💼 Commission request: {payee_name} submitted a claim for {amount_str}. Review in Commissions."
+        else:
+            notif_title = "Reimbursement Request Submitted"
+            notif_message = f"🧾 Reimbursement request: {payee_name} submitted a claim for {amount_str}. Review in Expenses."
+        await notify_hr_admins(title=notif_title, message=notif_message, notification_type=notif_type)
+    except Exception as notif_err:
+        print(f"[WARN] Payout notification dispatch failed: {notif_err}")
+
     # 5. Auto-assign rep on uncontested claims (rep_status was "unassigned")
     #    Only assign if this is NOT a dispute and NOT already assigned.
     if linked_invoice_id and not is_dispute and not is_high_risk:
@@ -1021,6 +1049,24 @@ async def submit_payout_claim_from_portal(
         else "Record submitted successfully."
     )
     return {"status": "success", "message": status_message, "is_dispute": is_dispute}
+
+
+@router.patch("/requests/{request_id}")
+async def update_payout_request_status(request_id: str, body: dict, current_admin=Depends(require_roles(["admin", "super_admin"]))):
+    """Simple status update for payout requests (approve/reject from HRM portal)."""
+    db = get_db()
+    allowed = {"approved", "rejected", "pending"}
+    new_status = body.get("status")
+    if not new_status or new_status not in allowed:
+        raise HTTPException(status_code=400, detail=f"status must be one of: {', '.join(allowed)}")
+    req_res = await db_execute(lambda: db.table("expenditure_requests").select("id").eq("id", request_id).limit(1).execute())
+    if not req_res.data:
+        raise HTTPException(status_code=404, detail="Request not found")
+    await db_execute(lambda: db.table("expenditure_requests").update({
+        "status": new_status,
+        "updated_at": datetime.now(timezone.utc).isoformat(),
+    }).eq("id", request_id).execute())
+    return {"status": "ok", "new_status": new_status}
 
 @router.patch("/requests/{request_id}/void")
 async def void_payout_request(request_id: str, data: VoidExpenditureRequest, current_admin=Depends(require_roles(["admin", "super_admin"]))):

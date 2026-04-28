@@ -1510,7 +1510,7 @@
                         <tr>
                             <th>Submission</th>
                             <th>Staff Member</th>
-                            <th>Description</th>
+                            <th>Request / Remarks</th>
                             <th>Category</th>
                             <th>Gross Amount</th>
                             <th>Net Payout</th>
@@ -2082,8 +2082,8 @@
             <!-- REJECTION REASON (Hidden by default) -->
             <div id="verify-rejection-container" class="hidden" style="margin-bottom:24px;">
                 <label class="form-label" style="color:var(--error);">Rejection Reason</label>
-                <textarea id="verify-rejection-reason" class="form-input" 
-                    style="height:80px; border-color:var(--error);" 
+                <textarea id="verify-rejection-reason" class="form-input"
+                    style="height:80px; border-color:var(--error);"
                     placeholder="Provide a clear reason for the claimant..."></textarea>
             </div>
 
@@ -3130,7 +3130,10 @@
                 <tr>
                     <td>${new Date(req.created_at).toLocaleDateString()}</td>
                     <td><strong>${req.vendors?.name || 'Staff'}</strong></td>
-                    <td>${req.title}</td>
+                    <td>
+                      <div style="font-weight:700;">${req.title}</div>
+                      ${req.remarks ? `<div style="font-size:11px; color:var(--gray); margin-top:3px; line-height:1.4;">${req.remarks}</div>` : ''}
+                    </td>
                     <td><small style="color:var(--gold); font-weight:700; font-size:10px;">${req.category || 'General'}</small></td>
                     <td style="font-weight:700;">₦${req.amount_gross.toLocaleString()}</td>
                     <td style="font-weight:700; color:var(--success);">₦${req.net_payout_amount.toLocaleString()}</td>
@@ -3490,7 +3493,7 @@
         function openVerifyModal(id) {
             activeRequestId = id;
             const req = requestsData.find(r => r.id === id);
-            
+
             // Bank details snapshot or vendor data
             const bankName = req.bank_name_snapshot || req.vendors?.bank_name || 'N/A';
             const accNum = req.account_number_snapshot || req.vendors?.account_number || 'N/A';

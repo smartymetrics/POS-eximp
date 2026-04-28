@@ -572,7 +572,7 @@ async def review_submission(submission_id: str, body: ReviewAction, token=Depend
 
             # Upsert staff_profiles
             profile_update = {
-                "staff_id": staff_id,
+                "admin_id": staff_id,
                 "gender": sub.get("gender"),
                 "dob": sub.get("date_of_birth"),
                 "marital_status": sub.get("marital_status"),
@@ -585,9 +585,9 @@ async def review_submission(submission_id: str, body: ReviewAction, token=Depend
                 "updated_at": datetime.utcnow().isoformat(),
             }
             # Check existing profile
-            prof_res = await db_execute(lambda: db.table("staff_profiles").select("id").eq("staff_id", staff_id).limit(1).execute())
+            prof_res = await db_execute(lambda: db.table("staff_profiles").select("id").eq("admin_id", staff_id).limit(1).execute())
             if prof_res.data:
-                await db_execute(lambda: db.table("staff_profiles").update({k: v for k, v in profile_update.items() if k != "staff_id"}).eq("staff_id", staff_id).execute())
+                await db_execute(lambda: db.table("staff_profiles").update({k: v for k, v in profile_update.items() if k != "admin_id"}).eq("admin_id", staff_id).execute())
             else:
                 await db_execute(lambda: db.table("staff_profiles").insert(profile_update).execute())
         except Exception as e:
