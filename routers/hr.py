@@ -351,9 +351,31 @@ async def get_staff_profile(staff_id: str, current_admin: dict = Depends(verify_
         raise HTTPException(status_code=403, detail="Permission denied")
 
     # Fetch profile data
-    profile = await db_execute(lambda: db.table("admins").select("*, staff_profiles(*), staff_documents!staff_documents_staff_id_fkey(*), staff_qualifications(*)").eq("id", staff_id).execute())
+    profile_res = await db_execute(lambda: db.table("admins").select("*, staff_profiles(*), staff_documents!staff_documents_staff_id_fkey(*), staff_qualifications(*)").eq("id", staff_id).execute())
+    if not profile_res.data:
+        return None
+        
+    profile = profile_res.data[0]
     
-    return profile.data[0] if profile.data else None
+    # Refresh signed URLs for staff_profiles if paths exist
+    if profile.get("staff_profiles"):
+        sp = profile["staff_profiles"][0]
+        HR_BIODATA_BUCKET = "hr_documents"
+        if sp.get("passport_photo_path"):
+            try:
+                url_res = db.storage.from_(HR_BIODATA_BUCKET).create_signed_url(sp["passport_photo_path"], 3600)
+                if isinstance(url_res, dict):
+                    sp["passport_photo_url"] = url_res.get("signedURL") or url_res.get("signed_url", sp.get("passport_photo_url"))
+            except Exception: pass
+            
+        if sp.get("signature_path"):
+            try:
+                url_res = db.storage.from_(HR_BIODATA_BUCKET).create_signed_url(sp["signature_path"], 3600)
+                if isinstance(url_res, dict):
+                    sp["signature_url"] = url_res.get("signedURL") or url_res.get("signed_url", sp.get("signature_url"))
+            except Exception: pass
+
+    return profile
 
 @router.patch("/profile/{staff_id}")
 async def update_staff_profile(staff_id: str, update: StaffProfileUpdate, current_admin: dict = Depends(verify_token)):

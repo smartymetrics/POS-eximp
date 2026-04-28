@@ -265,7 +265,9 @@ async def public_check_token(token: str, email: str = None):
             raise HTTPException(404, "Invalid or expired link.")
         invite = inv_res.data[0]
         if invite["status"] == "submitted":
-            raise HTTPException(400, "You have already submitted this form.")
+            raise HTTPException(400, "Your submission is already under review. Please wait for HR approval.")
+        if invite["status"] == "approved":
+            raise HTTPException(400, "This invitation has already been approved. No further action is required.")
         if invite["expires_at"] and datetime.fromisoformat(invite["expires_at"].replace("Z", "+00:00")) < datetime.utcnow().astimezone():
             raise HTTPException(400, "This invite link has expired. Please request a new one.")
 
@@ -284,11 +286,19 @@ async def public_check_token(token: str, email: str = None):
                 "job_title": (s_data.get("staff_profiles") or [{}])[0].get("job_title"),
             }
 
+    # If rejected, fetch latest submission to pre-fill
+    previous_data = None
+    if invite and invite["status"] == "rejected":
+        prev_res = await db_execute(lambda: db.table("biodata_submissions").select("*").eq("invite_id", invite["id"]).order("created_at", desc=True).limit(1).execute())
+        if prev_res.data:
+            previous_data = prev_res.data[0]
+
     return {
         "valid": True,
         "is_general": is_general,
         "invite_email": invite["email"] if invite else None,
         "staff_info": staff_info,
+        "previous_data": previous_data,
         "form_message": s["form_message"],
     }
 
@@ -499,6 +509,10 @@ async def review_submission(submission_id: str, body: ReviewAction, token=Depend
         "updated_at": datetime.utcnow().isoformat(),
     }).eq("id", submission_id).execute())
 
+    # Update invite status so they can/cannot re-submit
+    if sub.get("invite_id"):
+        await db_execute(lambda: db.table("biodata_invites").update({"status": new_status}).eq("id", sub["invite_id"]).execute())
+
     # If approved → update staff profile
     if body.action == "approve" and sub.get("staff_id"):
         staff_id = sub["staff_id"]
@@ -520,6 +534,8 @@ async def review_submission(submission_id: str, body: ReviewAction, token=Depend
                 "phone_number": sub.get("mobile_phone"),
                 "address": sub.get("present_home_address"),
                 "emergency_contact": sub.get("next_of_kin_name"),
+                "passport_photo_path": sub.get("passport_photo_path"),
+                "signature_path": sub.get("signature_path"),
                 "updated_at": datetime.utcnow().isoformat(),
             }
             # Check existing profile

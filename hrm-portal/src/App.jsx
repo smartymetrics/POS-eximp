@@ -5235,6 +5235,25 @@ function MyProfile({ user }) {
                 <Field label="DOB" value={p.dob} />
                 <Field label="Nationality" value={p.nationality} />
                 <Field label="Marital Status" value={p.marital_status} />
+                <div style={{ gridColumn: "1 / -1", marginTop: 12, borderTop: `1px solid ${C.border}`, paddingTop: 16 }}>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, marginBottom: 12, textTransform: "uppercase" }}>Identity Verification Assets</div>
+                  <div style={{ display: "flex", gap: 30 }}>
+                    {p.passport_photo_url && (
+                      <div>
+                        <div style={{ fontSize: 11, color: C.sub, marginBottom: 6 }}>Passport Photo</div>
+                        <img src={p.passport_photo_url} alt="Passport" style={{ width: 100, height: 120, objectFit: "cover", borderRadius: 8, border: `1px solid ${C.border}` }} />
+                      </div>
+                    )}
+                    {p.signature_url && (
+                      <div>
+                        <div style={{ fontSize: 11, color: C.sub, marginBottom: 6 }}>Digital Signature</div>
+                        <div style={{ padding: 10, background: "#fff", borderRadius: 8, border: `1px solid ${C.border}`, display: "flex", alignItems: "center", justifyContent: "center" }}>
+                          <img src={p.signature_url} alt="Signature" style={{ maxHeight: 60, maxWidth: 200 }} />
+                        </div>
+                      </div>
+                    )}
+                  </div>
+                </div>
               </>
             )}
           </div>
@@ -9595,6 +9614,7 @@ function PublicBiodataForm() {
   const [token, setToken] = useState("");
   const [email, setEmail] = useState("");
   const [staffInfo, setStaffInfo] = useState(null);
+  const [previousData, setPreviousData] = useState(null);
   const [formMsg, setFormMsg] = useState("");
   const [checking, setChecking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
@@ -9710,6 +9730,13 @@ function PublicBiodataForm() {
           surname: data.staff_info.full_name?.split(" ")?.[0] || "",
           other_names: data.staff_info.full_name?.split(" ")?.slice(1)?.join(" ") || "",
           job_title: data.staff_info.job_title || "",
+        }));
+      }
+      if (data.previous_data) {
+        setPreviousData(data.previous_data);
+        setForm(f => ({
+          ...f,
+          ...data.previous_data
         }));
       }
       setStep("form");
@@ -9861,6 +9888,18 @@ function PublicBiodataForm() {
               <div style={{ fontSize: 14, fontWeight: 700, color: "#0B0C0F" }}>Welcome, {staffInfo.full_name}!</div>
               <div style={{ fontSize: 12, color: "#6B7280" }}>Recognised as existing staff · {staffInfo.department} {staffInfo.job_title ? `· ${staffInfo.job_title}` : ""}</div>
             </div>
+          </div>
+        )}
+
+        {previousData && (
+          <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 12, padding: "14px 20px", marginBottom: 24, fontSize: 13, color: "#991B1B", borderLeft: "4px solid #EF4444" }}>
+            <div style={{ fontWeight: 800, marginBottom: 4 }}>⚠️ REVISION REQUIRED</div>
+            <div>Your previous submission was not approved. Please review the feedback and update your details below.</div>
+            {previousData.rejection_reason && (
+              <div style={{ marginTop: 10, padding: 12, background: "#fff", borderRadius: 8, border: "1px solid #FCA5A5" }}>
+                <strong>HR Feedback:</strong> {previousData.rejection_reason}
+              </div>
+            )}
           </div>
         )}
 
