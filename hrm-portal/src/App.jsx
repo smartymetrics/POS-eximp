@@ -2101,7 +2101,7 @@ function Tasks({ currentUser }) {
     apiFetch(`${API_BASE}/hr/notifications`, {
       method: "POST",
       body: JSON.stringify({ staff_id: staffId, type, message })
-    }).catch(() => {});
+    }).catch(() => { });
 
   const refresh = () => {
     const params = isStaff ? `?staff_id=${currentUser.id}` : "";
@@ -7254,7 +7254,7 @@ function RemoteWork() {
       const roles = (payload.role || "").split(",");
       isHRUser = roles.some(r => ["admin", "hr_admin", "operations", "line_manager"].includes(r));
     }
-  } catch (_) {}
+  } catch (_) { }
 
   return (
     <div className="fade">
@@ -9198,24 +9198,26 @@ function ExpensesManager() {
   const reject = async (id) => { try { await apiFetch(`${API_BASE}/hr/expenses/${id}`, { method: "PATCH", body: JSON.stringify({ status: "Rejected" }) }); } catch (e) { } setExpenses(prev => prev.map(x => x.id === id ? { ...x, status: "Rejected" } : x)); };
   const [payingId, setPayingId] = useState(null);
   const markPaid = async (exp) => {
-    if (!window.confirm(`Mark ₦${parseFloat(exp.amount||0).toLocaleString()} reimbursement for ${exp.staff?.full_name || "staff"} as Paid and send to Payout Dashboard?`)) return;
+    if (!window.confirm(`Mark ₦${parseFloat(exp.amount || 0).toLocaleString()} reimbursement for ${exp.staff?.full_name || "staff"} as Paid and send to Payout Dashboard?`)) return;
     setPayingId(exp.id);
     try {
       // Push to HR expense as Paid
       await apiFetch(`${API_BASE}/hr/expenses/${exp.id}`, { method: "PATCH", body: JSON.stringify({ status: "Paid" }) });
       // Also create a payout record so it appears in the main payout dashboard
-      await apiFetch(`${API_BASE}/payouts/requests`, { method: "POST", body: JSON.stringify({
-        type: "expense_reimbursement",
-        staff_id: exp.staff_id,
-        staff_name: exp.staff?.full_name || exp.staff_id,
-        amount: parseFloat(exp.amount || 0),
-        currency: exp.currency || "NGN",
-        category: exp.category,
-        description: `Expense reimbursement: ${exp.description}`,
-        reference: `EXP-${exp.id}`,
-        status: "paid",
-        paid_at: new Date().toISOString(),
-      }) }).catch(() => {}); // Don't fail if payout endpoint doesn't exist yet
+      await apiFetch(`${API_BASE}/payouts/requests`, {
+        method: "POST", body: JSON.stringify({
+          type: "expense_reimbursement",
+          staff_id: exp.staff_id,
+          staff_name: exp.staff?.full_name || exp.staff_id,
+          amount: parseFloat(exp.amount || 0),
+          currency: exp.currency || "NGN",
+          category: exp.category,
+          description: `Expense reimbursement: ${exp.description}`,
+          reference: `EXP-${exp.id}`,
+          status: "paid",
+          paid_at: new Date().toISOString(),
+        })
+      }).catch(() => { }); // Don't fail if payout endpoint doesn't exist yet
       setExpenses(prev => prev.map(x => x.id === exp.id ? { ...x, status: "Paid" } : x));
     } catch (e) { alert("Error: " + e.message); } finally { setPayingId(null); }
   };
@@ -9237,7 +9239,7 @@ function ExpensesManager() {
       <div className="g4" style={{ marginBottom: 22 }}>
         <StatCard label="Pending Claims" value={expenses.filter(e => e.status === "Pending").length} col={T.gold} sub={`₦${totalPending.toLocaleString()}`} />
         <StatCard label="Approved" value={expenses.filter(e => e.status === "Approved").length} col="#4ADE80" sub={`₦${totalApproved.toLocaleString()}`} />
-        <StatCard label="Reimbursed (Paid)" value={expenses.filter(e => e.status === "Paid").length} col="#60A5FA" sub={`₦${expenses.filter(e=>e.status==="Paid").reduce((s,e)=>s+parseFloat(e.amount||0),0).toLocaleString()}`} />
+        <StatCard label="Reimbursed (Paid)" value={expenses.filter(e => e.status === "Paid").length} col="#60A5FA" sub={`₦${expenses.filter(e => e.status === "Paid").reduce((s, e) => s + parseFloat(e.amount || 0), 0).toLocaleString()}`} />
         <StatCard label="Rejected" value={expenses.filter(e => e.status === "Rejected").length} col="#F87171" />
       </div>
       <div style={{ display: "flex", gap: 8, marginBottom: 18, flexWrap: "wrap" }}>
@@ -9451,12 +9453,25 @@ function BiodataManager() {
                   onClick={() => setSelected(sub)}>
                   <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                     <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-                      <div style={{ width: 44, height: 44, borderRadius: "50%", background: `${T.gold}20`, border: `2px solid ${T.gold}40`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: T.gold, flexShrink: 0 }}>
+                      {/* Show passport photo if available, else initials avatar */}
+                      {sub.passport_photo_url ? (
+                        <img src={sub.passport_photo_url} alt="Passport"
+                          style={{ width: 44, height: 44, borderRadius: "50%", objectFit: "cover", border: `2px solid ${T.gold}40`, flexShrink: 0 }}
+                          onError={e => { e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }} />
+                      ) : null}
+                      <div style={{ width: 44, height: 44, borderRadius: "50%", background: `${T.gold}20`, border: `2px solid ${T.gold}40`, display: sub.passport_photo_url ? "none" : "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 800, color: T.gold, flexShrink: 0 }}>
                         {(sub.surname?.[0] || sub.email?.[0] || "?").toUpperCase()}
                       </div>
                       <div>
                         <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{sub.surname} {sub.other_names}</div>
                         <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{sub.email} · {sub.job_title}</div>
+                        {/* Signature preview indicator */}
+                        {sub.signature_url && (
+                          <div style={{ marginTop: 4 }}>
+                            <img src={sub.signature_url} alt="Sig" style={{ maxHeight: 28, maxWidth: 120, opacity: 0.85 }}
+                              onError={e => e.target.style.display = "none"} />
+                          </div>
+                        )}
                       </div>
                     </div>
                     <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
@@ -10160,7 +10175,7 @@ function PublicBiodataForm() {
         <div style={{ background: "#fff", borderRadius: 20, padding: 48, maxWidth: 460, width: "100%", boxShadow: "0 24px 80px #00000044" }}>
           <div style={{ textAlign: "center", marginBottom: 36 }}>
             <div style={{ margin: "0 auto 16px", textAlign: "center" }}>
-              <img src="/static/img/logo.svg" alt="Eximp & Cloves" style={{ height: 56, width: "auto", display: "block", margin: "0 auto" }} onError={e => { e.target.onerror=null; e.target.style.display="none"; e.target.nextSibling.style.display="flex"; }} />
+              <img src="/static/img/logo.svg" alt="Eximp & Cloves" style={{ height: 56, width: "auto", display: "block", margin: "0 auto" }} onError={e => { e.target.onerror = null; e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }} />
               <div style={{ width: 56, height: 56, background: G, borderRadius: 14, alignItems: "center", justifyContent: "center", fontSize: 24, fontWeight: 900, color: "#fff", display: "none", margin: "0 auto" }}>EC</div>
             </div>
             <div style={{ fontSize: 22, fontWeight: 900, color: "#0B0C0F" }}>Employee Bio Data Form</div>
@@ -10193,7 +10208,7 @@ function PublicBiodataForm() {
       <div style={{ background: "#0B0C0F", padding: "20px 0", marginBottom: 32 }}>
         <div style={{ maxWidth: 820, margin: "0 auto", padding: "0 24px", display: "flex", alignItems: "center", justifyContent: "space-between" }}>
           <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
-            <img src="/static/img/logo.svg" alt="Eximp & Cloves" style={{ height: 44, width: "auto", display: "block" }} onError={e => { e.target.onerror=null; e.target.style.display="none"; e.target.nextSibling.style.display="flex"; }} />
+            <img src="/static/img/logo.svg" alt="Eximp & Cloves" style={{ height: 44, width: "auto", display: "block" }} onError={e => { e.target.onerror = null; e.target.style.display = "none"; e.target.nextSibling.style.display = "flex"; }} />
             <div style={{ width: 44, height: 44, background: G, borderRadius: 10, alignItems: "center", justifyContent: "center", fontSize: 20, fontWeight: 900, color: "#fff", display: "none" }}>EC</div>
             <div>
               <div style={{ color: "#fff", fontWeight: 800, fontSize: 15 }}>Eximp & Cloves</div>
@@ -12271,116 +12286,553 @@ function OffersManager() {
 // ─── 7. TALENT POOL ───────────────────────────────────────────────────────────
 function TalentPool() {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
-  const { apps, jobs, loading } = useRecruitmentData();
+  const { apps, jobs, loading: appsLoading } = useRecruitmentData();
+  const { refresh: refreshNotifs } = useNotifs();
+
+  // ── Pool data (ATS + manual) ──────────────────────────────────────────────
+  const [pool, setPool] = useState([]);
+  const [loadingPool, setLoadingPool] = useState(false);
+
+  // ── Chat state ────────────────────────────────────────────────────────────
+  const [rooms, setRooms] = useState([]);          // talent_chat_rooms list
+  const [activeRoom, setActiveRoom] = useState(null);
+  const [messages, setMessages] = useState([]);
+  const [loadingMsgs, setLoadingMsgs] = useState(false);
+  const [msgText, setMsgText] = useState("");
+  const [sending, setSending] = useState(false);
+  const [wsRef, setWsRef] = useState(null);
+  const [typingIndicator, setTypingIndicator] = useState(false);
+  const [typingTimeout, setTypingTimeout] = useState(null);
+  const [isTyping, setIsTyping] = useState(false);
+  const [uploadProgress, setUploadProgress] = useState(null);
+
+  // ── UI state ──────────────────────────────────────────────────────────────
+  const [view, setView] = useState("list"); // "list" | "chat"
   const [search, setSearch] = useState("");
   const [tagFilter, setTagFilter] = useState("All");
   const [showAdd, setShowAdd] = useState(false);
-  const [pool, setPool] = useState([]);
-  const [form, setForm] = useState({ name: "", email: "", phone: "", source: "LinkedIn", skills: "", notes: "", role_interest: "" });
-  const [emailing, setEmailing] = useState(null);
+  const [showInviteModal, setShowInviteModal] = useState(false);
+  const [showEmailModal, setShowEmailModal] = useState(false);
+  const [emailingCandidate, setEmailingCandidate] = useState(null);
   const [emailForm, setEmailForm] = useState({ subject: "", message: "" });
-  const [sending, setSending] = useState(false);
+  const [emailSending, setEmailSending] = useState(false);
+  const [form, setForm] = useState({ name: "", email: "", phone: "", source: "LinkedIn", skills: "", notes: "", role_interest: "" });
 
-  const sendEmail = async () => {
-    if (!emailForm.subject || !emailForm.message) return alert("Subject and message are required.");
-    setSending(true);
+  const msgsEndRef = useState(null)[0] || { current: null };
+  const msgsContainerRef = { current: null };
+
+  // ── Load rooms ────────────────────────────────────────────────────────────
+  const fetchRooms = async () => {
     try {
-      await apiFetch(`${API_BASE}/hr/recruitment/send-email`, {
-        method: "POST",
-        body: JSON.stringify({ email: emailing.email, subject: emailForm.subject, message: emailForm.message, candidate_id: emailing.id })
-      });
-      alert(`Email sent to ${emailing.name} successfully.`);
-      setEmailing(null); setEmailForm({ subject: "", message: "" });
-    } catch (e) { alert("Failed to send email: " + e.message); } finally { setSending(false); }
+      const data = await apiFetch(`${API_BASE}/hr/talent-chat/rooms`);
+      setRooms(Array.isArray(data) ? data : []);
+    } catch (e) { console.error("fetch rooms", e); }
   };
 
+  // ── Build pool from ATS apps (unchanged logic) ───────────────────────────
   useEffect(() => {
-    const candidates = apps.filter(a => ["Hired", "Rejected"].includes(a.status) || a.resume_url).map(a => ({ id: a.id, name: a.candidate_name, email: a.candidate_email, phone: a.candidate_phone, status: a.status, role: jobs.find(j => j.id === a.job_id)?.title || "—", source: "Applied", date: a.created_at, resume_url: a.resume_url }));
+    const candidates = apps.filter(a =>
+      ["Hired", "Rejected"].includes(a.status) || a.resume_url
+    ).map(a => ({
+      id: a.id, name: a.candidate_name, email: a.candidate_email,
+      phone: a.candidate_phone, status: a.status,
+      role: jobs.find(j => j.id === a.job_id)?.title || "—",
+      source: "Applied", date: a.created_at, resume_url: a.resume_url,
+    }));
     setPool(candidates);
   }, [apps, jobs]);
 
+  useEffect(() => {
+    fetchRooms();
+    const t = setInterval(fetchRooms, 30000);
+    return () => clearInterval(t);
+  }, []);
+
+  // ── Open a chat for a candidate ───────────────────────────────────────────
+  const openChat = async (candidate) => {
+    try {
+      const room = await apiFetch(`${API_BASE}/hr/talent-chat/rooms`, {
+        method: "POST",
+        body: JSON.stringify({
+          candidate_name: candidate.name,
+          candidate_email: candidate.email,
+          candidate_phone: candidate.phone,
+          source: candidate.source,
+          role_interest: candidate.role_interest || candidate.role,
+        })
+      });
+      setActiveRoom(room);
+      setView("chat");
+      await loadMessages(room.id);
+      connectWS(room);
+      // mark HR read
+      apiFetch(`${API_BASE}/hr/talent-chat/rooms/${room.id}/read`, { method: "PATCH" }).catch(() => { });
+      await fetchRooms();
+    } catch (e) { alert("Failed to open chat: " + e.message); }
+  };
+
+  const openRoomDirect = async (room) => {
+    setActiveRoom(room);
+    setView("chat");
+    await loadMessages(room.id);
+    connectWS(room);
+    apiFetch(`${API_BASE}/hr/talent-chat/rooms/${room.id}/read`, { method: "PATCH" }).catch(() => { });
+    setRooms(prev => prev.map(r => r.id === room.id ? { ...r, hr_unread_count: 0 } : r));
+  };
+
+  // ── Load messages ─────────────────────────────────────────────────────────
+  const loadMessages = async (roomId) => {
+    setLoadingMsgs(true);
+    try {
+      const data = await apiFetch(`${API_BASE}/hr/talent-chat/rooms/${roomId}/messages`);
+      setMessages(Array.isArray(data) ? data : []);
+    } catch (e) { console.error(e); } finally { setLoadingMsgs(false); }
+  };
+
+  // ── WebSocket ─────────────────────────────────────────────────────────────
+  const connectWS = (room) => {
+    if (wsRef) { try { wsRef.close(); } catch (_) { } }
+    const token = localStorage.getItem("ec_token");
+    const proto = location.protocol === "https:" ? "wss" : "ws";
+    const ws = new WebSocket(`${proto}://${location.host}/api/ws/talent-chat/${room.id}?token=${token}`);
+    ws.onmessage = (e) => {
+      const data = JSON.parse(e.data);
+      if (data.type === "ping") return ws.send(JSON.stringify({ type: "pong" }));
+      if (data.type === "new_message") {
+        setMessages(prev => prev.find(m => m.id === data.message.id) ? prev : [...prev, data.message]);
+        setRooms(prev => prev.map(r => r.id === room.id ? { ...r, last_message_preview: data.message.message || `📎 ${data.message.file_name}`, last_message_at: data.message.created_at } : r));
+        refreshNotifs();
+        setTimeout(() => {
+          const el = document.getElementById("talent-msgs-end");
+          if (el) el.scrollIntoView({ behavior: "smooth" });
+        }, 50);
+        if (data.message.sender_type === "applicant") {
+          apiFetch(`${API_BASE}/hr/talent-chat/rooms/${room.id}/read`, { method: "PATCH" }).catch(() => { });
+        }
+      }
+      if (data.type === "typing" && data.sender_type === "applicant") {
+        setTypingIndicator(true);
+        clearTimeout(typingTimeout);
+        setTypingTimeout(setTimeout(() => setTypingIndicator(false), 2500));
+      }
+    };
+    ws.onclose = () => setTimeout(() => activeRoom && connectWS(activeRoom), 3000);
+    setWsRef(ws);
+  };
+
+  useEffect(() => {
+    return () => { if (wsRef) try { wsRef.close(); } catch (_) { } };
+  }, [wsRef]);
+
+  useEffect(() => {
+    const el = document.getElementById("talent-msgs-end");
+    if (el) el.scrollIntoView({ behavior: "instant" });
+  }, [messages]);
+
+  // ── Send message ──────────────────────────────────────────────────────────
+  const sendMessage = async () => {
+    if (!msgText.trim() || !activeRoom) return;
+    const text = msgText.trim();
+    setMsgText("");
+    setSending(true);
+    try {
+      const msg = await apiFetch(`${API_BASE}/hr/talent-chat/rooms/${activeRoom.id}/messages`, {
+        method: "POST",
+        body: JSON.stringify({ message: text })
+      });
+      setMessages(prev => prev.find(m => m.id === msg.id) ? prev : [...prev, msg]);
+    } catch (e) { alert("Failed to send: " + e.message); setMsgText(text); }
+    finally { setSending(false); }
+  };
+
+  // ── File upload ───────────────────────────────────────────────────────────
+  const uploadFile = async (file) => {
+    if (!activeRoom) return;
+    const fd = new FormData();
+    fd.append("file", file);
+    setUploadProgress(file.name);
+    try {
+      const res = await fetch(`/api/hr/talent-chat/rooms/${activeRoom.id}/upload`, {
+        method: "POST",
+        headers: { Authorization: `Bearer ${localStorage.getItem("ec_token")}` },
+        body: fd
+      });
+      if (!res.ok) throw new Error("Upload failed");
+      const msg = await res.json();
+      setMessages(prev => prev.find(m => m.id === msg.id) ? prev : [...prev, msg]);
+    } catch (e) { alert("Upload failed: " + e.message); }
+    finally { setUploadProgress(null); }
+  };
+
+  // ── Send legacy email ─────────────────────────────────────────────────────
+  const sendEmail = async () => {
+    if (!emailForm.subject || !emailForm.message) return alert("Subject and message are required.");
+    setEmailSending(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/recruitment/send-email`, {
+        method: "POST",
+        body: JSON.stringify({ email: emailingCandidate.email, subject: emailForm.subject, message: emailForm.message, candidate_id: emailingCandidate.id })
+      });
+      alert(`Email sent to ${emailingCandidate.name} successfully.`);
+      setShowEmailModal(false); setEmailingCandidate(null); setEmailForm({ subject: "", message: "" });
+    } catch (e) { alert("Failed to send email: " + e.message); } finally { setEmailSending(false); }
+  };
+
+  // ── Invite applicant to chat ──────────────────────────────────────────────
+  const inviteToChat = async () => {
+    if (!activeRoom) return;
+    try {
+      await apiFetch(`${API_BASE}/hr/recruitment/send-email`, {
+        method: "POST",
+        body: JSON.stringify({
+          email: activeRoom.candidate_email,
+          candidate_id: activeRoom.id,
+          subject: `💬 HR would like to chat with you — Eximp & Cloves`,
+          message: `Hi ${activeRoom.candidate_name},\n\nWe'd love to connect with you! Please use the link below to open our private chat thread:\n\n${window.location.origin}/api/talent-chat/portal/${activeRoom.applicant_token}\n\nWarm regards,\nHR Team`
+        })
+      });
+      alert("Invite sent to " + activeRoom.candidate_email);
+      setShowInviteModal(false);
+    } catch (e) { alert("Failed: " + e.message); }
+  };
+
+  // ── Add to pool manually ──────────────────────────────────────────────────
   const addToPool = () => {
     if (!form.name) return alert("Name required");
     setPool(prev => [{ id: Date.now().toString(), name: form.name, email: form.email, phone: form.phone, source: form.source, skills: form.skills, notes: form.notes, role_interest: form.role_interest, status: "Passive", date: new Date().toISOString() }, ...prev]);
     setShowAdd(false); setForm({ name: "", email: "", phone: "", source: "LinkedIn", skills: "", notes: "", role_interest: "" });
   };
 
+  // ── Helpers ───────────────────────────────────────────────────────────────
+  const totalUnread = rooms.reduce((s, r) => s + (r.hr_unread_count || 0), 0);
   const tags = ["All", "Passive", "Applied", "Hired", "Rejected"];
-  const filtered = pool.filter(p => (tagFilter === "All" || p.status === tagFilter) && (p.name?.toLowerCase().includes(search.toLowerCase()) || p.role?.toLowerCase().includes(search.toLowerCase())));
+  const filtered = pool.filter(p =>
+    (tagFilter === "All" || p.status === tagFilter) &&
+    (p.name?.toLowerCase().includes(search.toLowerCase()) || p.role?.toLowerCase().includes(search.toLowerCase()))
+  );
   const statusStyle = { Passive: "#60A5FA", Applied: T.gold, Hired: "#4ADE80", Rejected: "#9CA3AF" };
   const sourceEmoji = { LinkedIn: "💼", Referral: "👥", Indeed: "🔍", Direct: "📧", Applied: "📋" };
+  const fmtTime = (ts) => { if (!ts) return ""; const d = new Date(ts); const now = new Date(); const diff = now - d; if (diff < 86400000) return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" }); return d.toLocaleDateString([], { month: "short", day: "numeric" }); };
+  const fmtSize = (b) => { if (!b) return ""; if (b < 1024) return b + "B"; if (b < 1048576) return (b / 1024).toFixed(1) + "KB"; return (b / 1048576).toFixed(1) + "MB"; };
 
+  const renderFilePreview = (msg) => {
+    const mime = msg.file_mime || "";
+    if (mime.startsWith("image/")) return (
+      <img src={msg.file_url} alt={msg.file_name} onClick={() => window.open(msg.file_url, "_blank")}
+        style={{ maxWidth: 220, maxHeight: 180, borderRadius: 8, marginTop: 6, cursor: "pointer", objectFit: "cover", display: "block" }} />
+    );
+    if (mime === "application/pdf") return (
+      <div style={{ marginTop: 6 }}>
+        <embed src={msg.file_url} type="application/pdf" style={{ width: "100%", height: 300, borderRadius: 8, border: `1px solid ${C.border}` }} />
+        <a href={msg.file_url} target="_blank" rel="noreferrer"
+          style={{ display: "inline-flex", alignItems: "center", gap: 6, marginTop: 6, fontSize: 11, color: T.gold, textDecoration: "none" }}>⬇ Open PDF</a>
+      </div>
+    );
+    return (
+      <a href={msg.file_url} target="_blank" rel="noreferrer"
+        style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "8px 12px", background: C.bg, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 12, color: C.text, textDecoration: "none", marginTop: 6 }}>
+        <span>📎</span><span>{msg.file_name}</span><span style={{ color: C.muted }}>({fmtSize(msg.file_size)})</span>
+      </a>
+    );
+  };
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDER — Chat view (WhatsApp-style, 2-panel)
+  // ══════════════════════════════════════════════════════════════════════════
+  if (view === "chat") {
+    return (
+      <div className="fade" style={{ display: "flex", height: "calc(100vh - 110px)", minHeight: 500, borderRadius: 16, overflow: "hidden", border: `1px solid ${C.border}`, background: C.surface }}>
+        {/* ── LEFT: Contacts sidebar ─────────────────────────────────── */}
+        <div style={{ width: 300, borderRight: `1px solid ${C.border}`, display: "flex", flexDirection: "column", flexShrink: 0 }}>
+          {/* Sidebar header */}
+          <div style={{ padding: "14px 16px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+            <div style={{ fontWeight: 800, fontSize: 15, color: C.text }}>
+              Chats {totalUnread > 0 && <span style={{ background: T.gold, color: "#fff", borderRadius: "50%", fontSize: 11, padding: "2px 7px", marginLeft: 6, fontWeight: 800 }}>{totalUnread}</span>}
+            </div>
+            <button onClick={() => setView("list")} style={{ fontSize: 11, color: C.sub, background: "transparent", border: `1px solid ${C.border}`, borderRadius: 6, padding: "4px 10px", cursor: "pointer" }}>Pool View</button>
+          </div>
+          {/* Search */}
+          <div style={{ padding: "10px 12px", borderBottom: `1px solid ${C.border}` }}>
+            <input className="inp" placeholder="Search conversations…" style={{ padding: "8px 12px", fontSize: 12, width: "100%" }}
+              value={search} onChange={e => setSearch(e.target.value)} />
+          </div>
+          {/* Rooms list */}
+          <div style={{ flex: 1, overflowY: "auto" }}>
+            {rooms.filter(r => r.candidate_name?.toLowerCase().includes(search.toLowerCase()) || r.candidate_email?.toLowerCase().includes(search.toLowerCase())).map(room => (
+              <div key={room.id} onClick={() => openRoomDirect(room)}
+                style={{ padding: "12px 16px", cursor: "pointer", borderBottom: `1px solid ${C.border}`, background: activeRoom?.id === room.id ? `${T.gold}15` : "transparent", transition: "background .15s", display: "flex", gap: 12, alignItems: "center" }}>
+                <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${T.gold}22`, border: `1.5px solid ${activeRoom?.id === room.id ? T.gold : C.border}`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: T.gold, fontSize: 16, flexShrink: 0 }}>
+                  {(room.candidate_name || "?")[0].toUpperCase()}
+                </div>
+                <div style={{ flex: 1, minWidth: 0 }}>
+                  <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 2 }}>
+                    <span style={{ fontWeight: 700, fontSize: 13, color: C.text, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap" }}>{room.candidate_name}</span>
+                    <span style={{ fontSize: 10, color: C.muted, flexShrink: 0, marginLeft: 6 }}>{fmtTime(room.last_message_at)}</span>
+                  </div>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <span style={{ fontSize: 11, color: C.muted, overflow: "hidden", textOverflow: "ellipsis", whiteSpace: "nowrap", flex: 1 }}>{room.last_message_preview || "No messages yet"}</span>
+                    {(room.hr_unread_count > 0) && <span style={{ background: T.gold, color: "#fff", borderRadius: "50%", fontSize: 10, padding: "1px 6px", marginLeft: 6, fontWeight: 800, flexShrink: 0 }}>{room.hr_unread_count}</span>}
+                  </div>
+                </div>
+              </div>
+            ))}
+            {rooms.length === 0 && <div style={{ textAlign: "center", padding: 30, color: C.muted, fontSize: 12 }}>No chats yet.<br />Start from the pool view.</div>}
+          </div>
+          {/* Quick-add room button */}
+          <div style={{ padding: "12px 14px", borderTop: `1px solid ${C.border}` }}>
+            <button className="bp" onClick={() => { setView("list"); setShowAdd(true); }} style={{ width: "100%", padding: 10, fontSize: 12 }}>+ New Contact</button>
+          </div>
+        </div>
+
+        {/* ── RIGHT: Chat window ─────────────────────────────────────── */}
+        <div style={{ flex: 1, display: "flex", flexDirection: "column", minWidth: 0 }}>
+          {activeRoom ? (
+            <>
+              {/* Chat header */}
+              <div style={{ padding: "12px 20px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", background: C.card }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 12 }}>
+                  <div style={{ width: 40, height: 40, borderRadius: "50%", background: `${T.gold}22`, border: `1.5px solid ${T.gold}44`, display: "flex", alignItems: "center", justifyContent: "center", fontWeight: 800, color: T.gold, fontSize: 16 }}>
+                    {(activeRoom.candidate_name || "?")[0].toUpperCase()}
+                  </div>
+                  <div>
+                    <div style={{ fontWeight: 800, color: C.text, fontSize: 14 }}>{activeRoom.candidate_name}</div>
+                    <div style={{ fontSize: 11, color: C.muted }}>{activeRoom.candidate_email} {activeRoom.role_interest && `· ${activeRoom.role_interest}`}</div>
+                  </div>
+                </div>
+                <div style={{ display: "flex", gap: 8 }}>
+                  <button onClick={() => setShowInviteModal(true)} className="bg" style={{ fontSize: 11, padding: "6px 12px" }}>📨 Invite to Chat</button>
+                  <button onClick={() => { setEmailingCandidate({ id: activeRoom.id, name: activeRoom.candidate_name, email: activeRoom.candidate_email }); setEmailForm({ subject: `Opportunity at Eximp & Cloves — ${activeRoom.role_interest || "Role"}`, message: `Dear ${activeRoom.candidate_name},\n\nWe came across your profile and would love to discuss an exciting opportunity with you at Eximp & Cloves.\n\nWarm regards,\nHR Team` }); setShowEmailModal(true); }} className="bg" style={{ fontSize: 11, padding: "6px 12px" }}>✉️ Email</button>
+                  <a href={`/api/talent-chat/portal/${activeRoom.applicant_token}`} target="_blank" rel="noreferrer" className="bg" style={{ fontSize: 11, padding: "6px 12px", textDecoration: "none" }}>🔗 Portal Link</a>
+                </div>
+              </div>
+
+              {/* Messages area */}
+              <div style={{ flex: 1, overflowY: "auto", padding: 20, display: "flex", flexDirection: "column", gap: 10, background: dark ? "#0D0E12" : "#F4F6FA" }}>
+                {loadingMsgs && <div style={{ textAlign: "center", color: C.muted, fontSize: 13, padding: 30 }}>Loading…</div>}
+                {messages.map(msg => {
+                  const isHR = msg.sender_type === "hr";
+                  return (
+                    <div key={msg.id} style={{ display: "flex", justifyContent: isHR ? "flex-end" : "flex-start" }}>
+                      {!isHR && (
+                        <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#60A5FA22", border: "1px solid #60A5FA44", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, color: "#60A5FA", marginRight: 8, flexShrink: 0, alignSelf: "flex-end" }}>
+                          {(activeRoom.candidate_name || "?")[0].toUpperCase()}
+                        </div>
+                      )}
+                      <div style={{ maxWidth: "60%", padding: "10px 14px", borderRadius: isHR ? "14px 14px 4px 14px" : "14px 14px 14px 4px", background: isHR ? `${T.gold}25` : C.card, border: `1px solid ${isHR ? T.gold + "44" : C.border}`, position: "relative" }}>
+                        {!isHR && <div style={{ fontSize: 10, color: T.gold, fontWeight: 700, marginBottom: 4 }}>{msg.sender_name}</div>}
+                        {msg.message && <div style={{ fontSize: 13.5, color: C.text, lineHeight: 1.5, whiteSpace: "pre-wrap" }}>{msg.message}</div>}
+                        {msg.message_type === "file" && renderFilePreview(msg)}
+                        <div style={{ fontSize: 10, color: C.muted, marginTop: 6, textAlign: "right" }}>
+                          {fmtTime(msg.created_at)} {isHR && (msg.is_read_by_applicant ? "✓✓" : "✓")}
+                        </div>
+                      </div>
+                    </div>
+                  );
+                })}
+                {typingIndicator && (
+                  <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                    <div style={{ width: 28, height: 28, borderRadius: "50%", background: "#60A5FA22", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, color: "#60A5FA" }}>{(activeRoom.candidate_name || "?")[0].toUpperCase()}</div>
+                    <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: "12px 12px 12px 4px", padding: "10px 14px", fontSize: 12, color: C.muted, fontStyle: "italic" }}>
+                      typing…
+                    </div>
+                  </div>
+                )}
+                {uploadProgress && (
+                  <div style={{ display: "flex", justifyContent: "flex-end" }}>
+                    <div style={{ background: `${T.gold}20`, border: `1px solid ${T.gold}33`, borderRadius: 10, padding: "10px 16px", fontSize: 12, color: C.muted }}>
+                      📤 Uploading {uploadProgress}…
+                    </div>
+                  </div>
+                )}
+                <div id="talent-msgs-end" />
+              </div>
+
+              {/* Input bar */}
+              <div style={{ padding: "12px 16px", borderTop: `1px solid ${C.border}`, background: C.card, display: "flex", gap: 10, alignItems: "flex-end" }}>
+                <label htmlFor="talent-file-input" style={{ cursor: "pointer", padding: "8px 10px", background: "transparent", border: `1px solid ${C.border}`, borderRadius: 10, fontSize: 16, color: C.sub, flexShrink: 0, lineHeight: 1 }}>📎</label>
+                <input id="talent-file-input" type="file" accept="*/*" style={{ display: "none" }} onChange={e => { const f = e.target.files[0]; if (f) uploadFile(f); e.target.value = ""; }} />
+                <textarea
+                  className="inp"
+                  placeholder="Type a message…"
+                  value={msgText}
+                  onChange={e => {
+                    setMsgText(e.target.value);
+                    if (!isTyping && wsRef?.readyState === 1) {
+                      wsRef.send(JSON.stringify({ type: "typing", sender_type: "hr" }));
+                      setIsTyping(true);
+                      setTimeout(() => setIsTyping(false), 1500);
+                    }
+                  }}
+                  onKeyDown={e => { if (e.key === "Enter" && !e.shiftKey) { e.preventDefault(); sendMessage(); } }}
+                  rows={1}
+                  style={{ flex: 1, padding: "10px 14px", fontSize: 14, resize: "none", maxHeight: 120, overflow: "auto", borderRadius: 10 }}
+                />
+                <button className="bp" onClick={sendMessage} disabled={sending || !msgText.trim()} style={{ padding: "10px 20px", flexShrink: 0, borderRadius: 10 }}>
+                  {sending ? "…" : "Send"}
+                </button>
+              </div>
+            </>
+          ) : (
+            <div style={{ flex: 1, display: "flex", alignItems: "center", justifyContent: "center", flexDirection: "column", gap: 16, color: C.muted }}>
+              <div style={{ fontSize: 52 }}>💬</div>
+              <div style={{ fontWeight: 800, fontSize: 16, color: C.sub }}>Select a conversation</div>
+              <div style={{ fontSize: 13 }}>Pick from the list on the left or open a chat from the pool view.</div>
+            </div>
+          )}
+        </div>
+
+        {/* ── Invite modal ─────────────────────────────────────────────── */}
+        {showInviteModal && activeRoom && (
+          <Modal onClose={() => setShowInviteModal(false)} title={`Invite ${activeRoom.candidate_name} to Chat`} width={480}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.6 }}>
+                This will send an email to <strong>{activeRoom.candidate_email}</strong> with a secure link to the private chat thread. They can reply and share files without needing an account.
+              </div>
+              <div style={{ padding: 14, background: `${T.gold}10`, border: `1px dashed ${T.gold}44`, borderRadius: 10, fontSize: 12, color: C.muted, wordBreak: "break-all" }}>
+                🔗 {window.location.origin}/api/talent-chat/portal/{activeRoom.applicant_token}
+              </div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button className="bp" onClick={inviteToChat} style={{ flex: 1, padding: 13 }}>📨 Send Invite Email</button>
+                <button className="bg" onClick={() => { navigator.clipboard.writeText(`${window.location.origin}/api/talent-chat/portal/${activeRoom.applicant_token}`); alert("Link copied!"); }} style={{ flex: 1, padding: 13 }}>📋 Copy Link</button>
+              </div>
+            </div>
+          </Modal>
+        )}
+
+        {/* ── Email modal ──────────────────────────────────────────────── */}
+        {showEmailModal && emailingCandidate && (
+          <Modal onClose={() => { setShowEmailModal(false); setEmailingCandidate(null); }} title={`Email ${emailingCandidate.name}`} width={540}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+              <div style={{ fontSize: 13, color: C.sub }}>To: <strong>{emailingCandidate.email}</strong></div>
+              <div><Lbl>Subject *</Lbl><input className="inp" value={emailForm.subject} onChange={e => setEmailForm(f => ({ ...f, subject: e.target.value }))} /></div>
+              <div><Lbl>Message *</Lbl><textarea className="inp" rows={8} value={emailForm.message} onChange={e => setEmailForm(f => ({ ...f, message: e.target.value }))} /></div>
+              <div style={{ display: "flex", gap: 10 }}>
+                <button className="bp" onClick={sendEmail} disabled={emailSending} style={{ flex: 1, padding: 13 }}>{emailSending ? "Sending…" : "Send Email ✉️"}</button>
+                <button className="bg" onClick={() => { setShowEmailModal(false); setEmailingCandidate(null); }} style={{ flex: 1, padding: 13 }}>Cancel</button>
+              </div>
+            </div>
+          </Modal>
+        )}
+      </div>
+    );
+  }
+
+  // ══════════════════════════════════════════════════════════════════════════
+  // RENDER — Pool list view (original grid + chat action)
+  // ══════════════════════════════════════════════════════════════════════════
   return (
     <div className="fade">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 24 }}>
-        <div><div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Talent Pool</div><div style={{ fontSize: 13, color: C.sub }}>Sourced and passive candidates. Build your pipeline before roles open.</div></div>
-        <button className="bp" onClick={() => setShowAdd(true)}>+ Add to Pool</button>
+        <div>
+          <div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Talent Pool</div>
+          <div style={{ fontSize: 13, color: C.sub }}>Sourced and passive candidates. Build your pipeline before roles open.</div>
+        </div>
+        <div style={{ display: "flex", gap: 10 }}>
+          <button className="bg" onClick={() => setView("chat")} style={{ padding: "10px 18px", position: "relative" }}>
+            💬 Chats
+            {totalUnread > 0 && <span style={{ position: "absolute", top: -6, right: -6, background: T.gold, color: "#fff", borderRadius: "50%", fontSize: 10, padding: "2px 6px", fontWeight: 800 }}>{totalUnread}</span>}
+          </button>
+          <button className="bp" onClick={() => setShowAdd(true)}>+ Add to Pool</button>
+        </div>
       </div>
+
+      {/* Stats */}
       <div className="g4" style={{ marginBottom: 22 }}>
         <StatCard label="In Pool" value={pool.length} col={T.gold} />
         <StatCard label="Passive" value={pool.filter(p => p.status === "Passive").length} col="#60A5FA" />
         <StatCard label="Previously Hired" value={pool.filter(p => p.status === "Hired").length} col="#4ADE80" />
-        <StatCard label="Reconsidered" value={pool.filter(p => p.status === "Rejected").length} col="#9CA3AF" />
+        <StatCard label="Active Chats" value={rooms.length} col={T.gold} />
       </div>
+
+      {/* Filters */}
       <div style={{ display: "flex", gap: 12, marginBottom: 18, flexWrap: "wrap", alignItems: "center" }}>
         <input className="inp" placeholder="Search by name or role…" value={search} onChange={e => setSearch(e.target.value)} style={{ maxWidth: 300, padding: "9px 14px" }} />
-        <div style={{ display: "flex", gap: 6 }}>{tags.map(t => (<button key={t} onClick={() => setTagFilter(t)} style={{ padding: "6px 14px", borderRadius: 8, border: `1px solid ${tagFilter === t ? T.gold : C.border}`, background: tagFilter === t ? `${T.gold}22` : "transparent", color: tagFilter === t ? T.gold : C.sub, cursor: "pointer", fontSize: 12, fontWeight: tagFilter === t ? 800 : 400 }}>{t}</button>))}</div>
+        <div style={{ display: "flex", gap: 6 }}>
+          {tags.map(t => (
+            <button key={t} onClick={() => setTagFilter(t)} style={{ padding: "6px 14px", borderRadius: 8, border: `1px solid ${tagFilter === t ? T.gold : C.border}`, background: tagFilter === t ? `${T.gold}22` : "transparent", color: tagFilter === t ? T.gold : C.sub, cursor: "pointer", fontSize: 12, fontWeight: tagFilter === t ? 800 : 400 }}>{t}</button>
+          ))}
+        </div>
       </div>
-      {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading…</div> : (
+
+      {/* Candidate grid */}
+      {appsLoading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading…</div> : (
         <div className="g3" style={{ gap: 14 }}>
           {filtered.map(p => {
             const sc = statusStyle[p.status] || T.gold;
-            return (<div key={p.id} className="gc" style={{ padding: 20 }}>
-              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-                <div style={{ width: 44, height: 44, borderRadius: "50%", background: `${T.gold}22`, border: `1.5px solid ${T.gold}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color: T.gold }}>{(p.name || "?")[0].toUpperCase()}</div>
-                <span className="tg" style={{ background: `${sc}22`, color: sc, border: `1px solid ${sc}44`, alignSelf: "flex-start" }}>{p.status}</span>
-              </div>
-              <div style={{ fontWeight: 800, fontSize: 14, color: C.text, marginBottom: 2 }}>{p.name}</div>
-              <div style={{ fontSize: 12, color: C.sub, marginBottom: 10 }}>{p.role_interest || p.role || "Open to opportunities"}</div>
-              <div style={{ fontSize: 11, color: C.muted, marginBottom: 12 }}>{p.email || "—"}</div>
-              {p.skills && <div style={{ fontSize: 11, color: C.sub, marginBottom: 12 }}>Skills: {p.skills}</div>}
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
-                <span style={{ fontSize: 11, color: C.muted }}>{sourceEmoji[p.source] || "👤"} {p.source || "—"}</span>
-                <div style={{ display: "flex", gap: 6 }}>
-                  {p.email && <button onClick={() => {
-                    setEmailing(p); setEmailForm({
-                      subject: `Opportunity at Eximp & Cloves — ${p.role_interest || "Role"}`, message: `Dear ${p.name},
-
-We came across your profile and would love to discuss an exciting opportunity with you at Eximp & Cloves.
-
-Warm regards,
-HR Team` });
-                  }} className="bg" style={{ fontSize: 11, padding: "4px 10px" }}>Email</button>}
-                  {p.resume_url && <a href={p.resume_url} target="_blank" rel="noreferrer" className="bg" style={{ fontSize: 11, padding: "4px 10px" }}>CV</a>}
+            const hasRoom = rooms.find(r => r.candidate_email === p.email);
+            return (
+              <div key={p.id} className="gc" style={{ padding: 20 }}>
+                <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
+                  <div style={{ width: 44, height: 44, borderRadius: "50%", background: `${T.gold}22`, border: `1.5px solid ${T.gold}44`, display: "flex", alignItems: "center", justifyContent: "center", fontSize: 18, fontWeight: 800, color: T.gold }}>
+                    {(p.name || "?")[0].toUpperCase()}
+                  </div>
+                  <span className="tg" style={{ background: `${sc}22`, color: sc, border: `1px solid ${sc}44`, alignSelf: "flex-start" }}>{p.status}</span>
+                </div>
+                <div style={{ fontWeight: 800, fontSize: 14, color: C.text, marginBottom: 2 }}>{p.name}</div>
+                <div style={{ fontSize: 12, color: C.sub, marginBottom: 10 }}>{p.role_interest || p.role || "Open to opportunities"}</div>
+                <div style={{ fontSize: 11, color: C.muted, marginBottom: 12 }}>{p.email || "—"}</div>
+                {p.skills && <div style={{ fontSize: 11, color: C.sub, marginBottom: 12 }}>Skills: {p.skills}</div>}
+                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", paddingTop: 12, borderTop: `1px solid ${C.border}` }}>
+                  <span style={{ fontSize: 11, color: C.muted }}>{sourceEmoji[p.source] || "👤"} {p.source || "—"}</span>
+                  <div style={{ display: "flex", gap: 6 }}>
+                    {p.email && (
+                      <button onClick={() => openChat(p)} className="bp" style={{ fontSize: 11, padding: "4px 10px", position: "relative" }}>
+                        💬 Chat
+                        {hasRoom && (hasRoom.hr_unread_count > 0) && <span style={{ position: "absolute", top: -4, right: -4, background: T.gold, color: "#fff", borderRadius: "50%", fontSize: 9, padding: "1px 4px", fontWeight: 800 }}>{hasRoom.hr_unread_count}</span>}
+                      </button>
+                    )}
+                    {p.email && (
+                      <button onClick={() => { setEmailingCandidate(p); setEmailForm({ subject: `Opportunity at Eximp & Cloves — ${p.role_interest || "Role"}`, message: `Dear ${p.name},\n\nWe came across your profile and would love to discuss an exciting opportunity with you at Eximp & Cloves.\n\nWarm regards,\nHR Team` }); setShowEmailModal(true); }} className="bg" style={{ fontSize: 11, padding: "4px 10px" }}>✉️</button>
+                    )}
+                    {p.resume_url && <a href={p.resume_url} target="_blank" rel="noreferrer" className="bg" style={{ fontSize: 11, padding: "4px 10px" }}>CV</a>}
+                  </div>
                 </div>
               </div>
-            </div>);
+            );
           })}
-          {filtered.length === 0 && <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 60, color: C.muted }}><div style={{ fontSize: 36, marginBottom: 12 }}>👥</div><div style={{ fontWeight: 800 }}>Talent pool is empty.</div></div>}
+          {filtered.length === 0 && (
+            <div style={{ gridColumn: "1/-1", textAlign: "center", padding: 60, color: C.muted }}>
+              <div style={{ fontSize: 36, marginBottom: 12 }}>👥</div>
+              <div style={{ fontWeight: 800 }}>Talent pool is empty.</div>
+            </div>
+          )}
         </div>
       )}
-      {emailing && (<Modal onClose={() => { setEmailing(null); setEmailForm({ subject: "", message: "" }); }} title={`Email ${emailing.name}`} width={540}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div style={{ fontSize: 13, color: C.sub }}>To: <strong>{emailing.email}</strong></div>
-          <div><Lbl>Subject *</Lbl><input className="inp" value={emailForm.subject} onChange={e => setEmailForm(f => ({ ...f, subject: e.target.value }))} placeholder="e.g. Exciting Opportunity at Eximp & Cloves" /></div>
-          <div><Lbl>Message *</Lbl><textarea className="inp" rows={8} value={emailForm.message} onChange={e => setEmailForm(f => ({ ...f, message: e.target.value }))} placeholder="Write your outreach message..." /></div>
-          <div style={{ display: "flex", gap: 10 }}>
-            <button className="bp" onClick={sendEmail} disabled={sending} style={{ flex: 1, padding: 13 }}>{sending ? "Sending…" : "Send Email ✉️"}</button>
-            <button className="bg" onClick={() => { setEmailing(null); setEmailForm({ subject: "", message: "" }); }} style={{ flex: 1, padding: 13 }}>Cancel</button>
+
+      {/* Add to Pool modal */}
+      {showAdd && (
+        <Modal onClose={() => setShowAdd(false)} title="Add to Talent Pool" width={560}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div className="g2" style={{ gap: 12 }}>
+              <div><Lbl>Full Name *</Lbl><input className="inp" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div>
+              <div><Lbl>Email</Lbl><input className="inp" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></div>
+            </div>
+            <div className="g2" style={{ gap: 12 }}>
+              <div><Lbl>Phone</Lbl><input className="inp" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} /></div>
+              <div><Lbl>Source</Lbl><select className="inp" value={form.source} onChange={e => setForm(f => ({ ...f, source: e.target.value }))}><option>LinkedIn</option><option>Referral</option><option>Indeed</option><option>Direct</option><option>Event</option><option>Other</option></select></div>
+            </div>
+            <div><Lbl>Role Interest</Lbl><input className="inp" value={form.role_interest} onChange={e => setForm(f => ({ ...f, role_interest: e.target.value }))} placeholder="e.g. Senior Property Executive, Finance Manager" /></div>
+            <div><Lbl>Skills / Expertise</Lbl><input className="inp" value={form.skills} onChange={e => setForm(f => ({ ...f, skills: e.target.value }))} placeholder="e.g. Real estate, financial modelling, Salesforce" /></div>
+            <div><Lbl>Notes</Lbl><textarea className="inp" rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Context, referral source, when to reach out…" /></div>
+            <button className="bp" onClick={addToPool} style={{ padding: 14 }}>Add to Pool</button>
           </div>
-          <div style={{ fontSize: 11, color: C.muted, textAlign: "center" }}>Sent via Eximp email service. Delivery is logged automatically.</div>
-        </div>
-      </Modal>)}
-      {showAdd && (<Modal onClose={() => setShowAdd(false)} title="Add to Talent Pool" width={560}>
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div className="g2" style={{ gap: 12 }}><div><Lbl>Full Name *</Lbl><input className="inp" value={form.name} onChange={e => setForm(f => ({ ...f, name: e.target.value }))} /></div><div><Lbl>Email</Lbl><input className="inp" type="email" value={form.email} onChange={e => setForm(f => ({ ...f, email: e.target.value }))} /></div></div>
-          <div className="g2" style={{ gap: 12 }}><div><Lbl>Phone</Lbl><input className="inp" value={form.phone} onChange={e => setForm(f => ({ ...f, phone: e.target.value }))} /></div><div><Lbl>Source</Lbl><select className="inp" value={form.source} onChange={e => setForm(f => ({ ...f, source: e.target.value }))}><option>LinkedIn</option><option>Referral</option><option>Indeed</option><option>Direct</option><option>Event</option><option>Other</option></select></div></div>
-          <div><Lbl>Role Interest</Lbl><input className="inp" value={form.role_interest} onChange={e => setForm(f => ({ ...f, role_interest: e.target.value }))} placeholder="e.g. Senior Property Executive, Finance Manager" /></div>
-          <div><Lbl>Skills / Expertise</Lbl><input className="inp" value={form.skills} onChange={e => setForm(f => ({ ...f, skills: e.target.value }))} placeholder="e.g. Real estate, financial modelling, Salesforce" /></div>
-          <div><Lbl>Notes</Lbl><textarea className="inp" rows={3} value={form.notes} onChange={e => setForm(f => ({ ...f, notes: e.target.value }))} placeholder="Context, referral source, when to reach out…" /></div>
-          <button className="bp" onClick={addToPool} style={{ padding: 14 }}>Add to Pool</button>
-        </div>
-      </Modal>)}
+        </Modal>
+      )}
+
+      {/* Email modal (pool view) */}
+      {showEmailModal && emailingCandidate && (
+        <Modal onClose={() => { setShowEmailModal(false); setEmailingCandidate(null); setEmailForm({ subject: "", message: "" }); }} title={`Email ${emailingCandidate.name}`} width={540}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ fontSize: 13, color: C.sub }}>To: <strong>{emailingCandidate.email}</strong></div>
+            <div><Lbl>Subject *</Lbl><input className="inp" value={emailForm.subject} onChange={e => setEmailForm(f => ({ ...f, subject: e.target.value }))} /></div>
+            <div><Lbl>Message *</Lbl><textarea className="inp" rows={8} value={emailForm.message} onChange={e => setEmailForm(f => ({ ...f, message: e.target.value }))} /></div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button className="bp" onClick={sendEmail} disabled={emailSending} style={{ flex: 1, padding: 13 }}>{emailSending ? "Sending…" : "Send Email ✉️"}</button>
+              <button className="bg" onClick={() => { setShowEmailModal(false); setEmailingCandidate(null); setEmailForm({ subject: "", message: "" }); }} style={{ flex: 1, padding: 13 }}>Cancel</button>
+            </div>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }

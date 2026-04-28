@@ -50,7 +50,7 @@ router = APIRouter()
 # Reuse Supabase Storage if configured, else fall back to local /static/uploads
 SUPABASE_URL = os.getenv("SUPABASE_URL", "")
 SUPABASE_KEY = os.getenv("SUPABASE_SERVICE_KEY", os.getenv("SUPABASE_KEY", ""))
-TALENT_BUCKET = "hr_documents"
+TALENT_BUCKET = "hr-documents"
 LOCAL_UPLOAD_DIR = "static/uploads/talent_chat"
 
 os.makedirs(LOCAL_UPLOAD_DIR, exist_ok=True)

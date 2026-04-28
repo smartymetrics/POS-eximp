@@ -19,7 +19,7 @@ logger = logging.getLogger(__name__)
 
 APP_BASE_URL = os.getenv("APP_BASE_URL", "https://app.eximps-cloves.com")
 FROM_EMAIL = os.getenv("FROM_EMAIL", "hr@eximps-cloves.com")
-HR_BIODATA_BUCKET = "hr_documents"
+HR_BIODATA_BUCKET = "hr-documents"
 BIODATA_FOLDER = "bio_data"
 
 # ─── EMAIL HELPER ────────────────────────────────────────────────────────────
@@ -125,25 +125,85 @@ def _rejection_email_html(staff_name: str, reason: str) -> str:
 
 # ─── STORAGE HELPERS ─────────────────────────────────────────────────────────
 
+def _extract_signed_url(res) -> str | None:
+    """Robustly extract a signed URL string from any supabase-py response shape."""
+    if res is None:
+        return None
+    # dict shape: {"signedURL": "...", "error": null}
+    if isinstance(res, dict):
+        url = res.get("signedURL") or res.get("signed_url") or res.get("url") or res.get("publicUrl")
+        return url if url else None
+    # supabase-py v2 returns an object with .signed_url or .url attribute
+    for attr in ("signed_url", "signedURL", "url", "public_url"):
+        val = getattr(res, attr, None)
+        if val and isinstance(val, str) and val.startswith("http"):
+            return val
+    # Last resort: if it looks like a URL string
+    s = str(res)
+    if s.startswith("http"):
+        return s
+    logger.warning(f"Could not extract signed URL from response: {type(res)} — {s[:200]}")
+    return None
+
+
 def _upload_to_biodata(file_path_in_bucket: str, file_bytes: bytes, content_type: str) -> str | None:
-    """Upload to hr_documents/bio_data/ and return public/signed URL path."""
+    """Upload to hr_documents/bio_data/ and return a fresh signed URL."""
     try:
         db = get_db()
+        # upsert=true so re-submissions overwrite cleanly
         db.storage.from_(HR_BIODATA_BUCKET).upload(
             path=file_path_in_bucket,
             file=file_bytes,
             file_options={"content-type": content_type, "upsert": "true"},
         )
-        res = db.storage.from_(HR_BIODATA_BUCKET).create_signed_url(file_path_in_bucket, 3600 * 24 * 365)
-        if isinstance(res, dict):
-            return res.get("signedURL") or res.get("signed_url", "")
-        return str(res)
+        # Use a long TTL (10 years ≈ 315 360 000 s) so stored URL stays valid
+        res = db.storage.from_(HR_BIODATA_BUCKET).create_signed_url(file_path_in_bucket, 315_360_000)
+        url = _extract_signed_url(res)
+        if not url:
+            logger.error(f"Signed URL generation returned no URL for [{file_path_in_bucket}]: {res}")
+        return url
     except Exception as e:
         logger.error(f"Storage upload failed [{file_path_in_bucket}]: {e}")
         return None
 
 
+# ─── SIGNED-URL REFRESH HELPER ───────────────────────────────────────────────
+
+def _refresh_submission_urls(row: dict, ttl: int = 3600) -> dict:
+    """
+    Given a biodata_submissions row dict, refresh passport_photo_url and
+    signature_url from their stored storage paths.  Mutates and returns row.
+    Uses a short TTL (default 1 h) for list views; pass a longer TTL for
+    detail/email views.
+    """
+    db = get_db()
+    if row.get("passport_photo_path"):
+        try:
+            res = db.storage.from_(HR_BIODATA_BUCKET).create_signed_url(
+                row["passport_photo_path"], ttl
+            )
+            url = _extract_signed_url(res)
+            if url:
+                row["passport_photo_url"] = url
+        except Exception as e:
+            logger.warning(f"Could not refresh passport URL for {row.get('id')}: {e}")
+
+    if row.get("signature_path"):
+        try:
+            res = db.storage.from_(HR_BIODATA_BUCKET).create_signed_url(
+                row["signature_path"], ttl
+            )
+            url = _extract_signed_url(res)
+            if url:
+                row["signature_url"] = url
+        except Exception as e:
+            logger.warning(f"Could not refresh signature URL for {row.get('id')}: {e}")
+
+    return row
+
+
 # ─── PYDANTIC MODELS ─────────────────────────────────────────────────────────
+
 
 class SettingsUpdate(BaseModel):
     is_collecting: Optional[bool] = None
@@ -452,7 +512,11 @@ async def list_submissions(status: str = None, token=Depends(verify_token)):
     if status:
         q = q.eq("status", status)
     res = await db_execute(lambda: q.execute())
-    return res.data or []
+    rows = res.data or []
+    # Refresh signed URLs so passport photos and signatures are always viewable
+    for row in rows:
+        _refresh_submission_urls(row, ttl=7200)  # 2-hour TTL is enough for list view
+    return rows
 
 
 @router.get("/submissions/{submission_id}")
@@ -463,26 +527,8 @@ async def get_submission(submission_id: str, token=Depends(verify_token)):
         raise HTTPException(404, "Submission not found")
 
     row = res.data[0]
-
-    # Refresh signed URLs if we have storage paths
-    if row.get("passport_photo_path"):
-        try:
-            db2 = get_db()
-            url_res = db2.storage.from_(HR_BIODATA_BUCKET).create_signed_url(row["passport_photo_path"], 3600)
-            if isinstance(url_res, dict):
-                row["passport_photo_url"] = url_res.get("signedURL") or url_res.get("signed_url", row.get("passport_photo_url"))
-        except Exception:
-            pass
-
-    if row.get("signature_path"):
-        try:
-            db3 = get_db()
-            url_res = db3.storage.from_(HR_BIODATA_BUCKET).create_signed_url(row["signature_path"], 3600)
-            if isinstance(url_res, dict):
-                row["signature_url"] = url_res.get("signedURL") or url_res.get("signed_url", row.get("signature_url"))
-        except Exception:
-            pass
-
+    # Refresh with a longer TTL (24 h) so the modal never shows broken images
+    _refresh_submission_urls(row, ttl=86400)
     return row
 
 
@@ -568,15 +614,8 @@ async def email_certificate(submission_id: str, body: EmailCertificate, token=De
         raise HTTPException(404, "Not found")
     sub = sub_res.data[0]
 
-    # Ensure signature URL is active (use long-lived signed URL for email)
-    if sub.get("signature_path"):
-        try:
-            db_s = get_db()
-            url_res = db_s.storage.from_(HR_BIODATA_BUCKET).create_signed_url(sub["signature_path"], 604800) # 7 days
-            if isinstance(url_res, dict):
-                sub["signature_url"] = url_res.get("signedURL") or url_res.get("signed_url", sub.get("signature_url"))
-        except Exception:
-            pass
+    # Refresh both passport photo and signature with a 7-day TTL for email delivery
+    _refresh_submission_urls(sub, ttl=604800)
 
     cert_html = _build_certificate_html(sub)
     await _send_email(

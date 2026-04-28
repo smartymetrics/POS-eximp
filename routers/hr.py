@@ -86,6 +86,7 @@ class GoalBase(BaseModel):
     unit: str
     weight: float
     status: str = "Draft"
+    actual_value: Optional[float] = 0
 
 class GoalCreate(GoalBase):
     staff_id: Optional[str] = None
@@ -103,6 +104,7 @@ class GoalUpdate(BaseModel):
     template_id: Optional[str] = None
     staff_id: Optional[str] = None
     department: Optional[str] = None
+    actual_value: Optional[float] = None
 
 class KPITemplateBase(BaseModel):
     name: str
@@ -360,7 +362,7 @@ async def get_staff_profile(staff_id: str, current_admin: dict = Depends(verify_
     # Refresh signed URLs for staff_profiles if paths exist
     if profile.get("staff_profiles"):
         sp = profile["staff_profiles"][0]
-        HR_BIODATA_BUCKET = "hr_documents"
+        HR_BIODATA_BUCKET = "hr-documents"
         if sp.get("passport_photo_path"):
             try:
                 url_res = db.storage.from_(HR_BIODATA_BUCKET).create_signed_url(sp["passport_photo_path"], 3600)
@@ -2685,8 +2687,8 @@ class TaskStatusUpdate(BaseModel):
 
 @router.patch("/tasks/{task_id}")
 async def update_task_status(task_id: str, update: TaskStatusUpdate, current_admin: dict = Depends(verify_token)):
-    """Update task status to pending | in_progress | completed."""
-    if update.status not in ["pending", "in_progress", "completed"]:
+    """Update task status to pending | in_progress | pending_approval | completed."""
+    if update.status not in ["pending", "in_progress", "pending_approval", "completed"]:
         raise HTTPException(status_code=400, detail="Invalid status")
     db = get_db()
     task_res = await db_execute(lambda: db.table("staff_tasks").select("*").eq("id", task_id).execute())
@@ -2705,6 +2707,18 @@ async def update_task_status(task_id: str, update: TaskStatusUpdate, current_adm
     if update.notes:
         update_data["completion_notes"] = update.notes
     res = await db_execute(lambda: db.table("staff_tasks").update(update_data).eq("id", task_id).execute())
+    # Notify reviewer when employee submits for approval
+    if update.status == "pending_approval":
+        assigner_id = task.get("assigned_by") or task.get("created_by")
+        employee_name = current_admin.get("full_name", "A staff member")
+        task_title = task.get("title", "a task")
+        if assigner_id and assigner_id != current_admin.get("sub"):
+            await send_notification(
+                assigner_id,
+                "Task Awaiting Approval ⏳",
+                f"{employee_name} has marked \"{task_title}\" as done — please review and approve or send back.",
+                "task_assigned_hr"
+            )
     # Notify task creator if task is completed (and creator != current user)
     if update.status == "completed":
         creator_id = task.get("created_by")
