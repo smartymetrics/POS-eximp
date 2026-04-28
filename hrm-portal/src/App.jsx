@@ -13879,7 +13879,7 @@ function PublicOfferPage({ offerId }) {
                   <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.sub }}>Candidate</span><strong style={{ textAlign: "right" }}>{offer.candidate_name}</strong></div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.sub }}>Position</span><strong style={{ textAlign: "right", color: T.gold }}>{offer.job_title}</strong></div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.sub }}>Department</span><strong style={{ textAlign: "right" }}>{offer.department}</strong></div>
-                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.sub }}>Offered Salary</span><strong style={{ textAlign: "right", color: "#4ADE80" }}>₦{parseFloat(offer.offered_salary).toLocaleString()} / annum</strong></div>
+                  <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.sub }}>Offered Salary</span><strong style={{ textAlign: "right", color: "#4ADE80" }}>₦{parseFloat(offer.offered_salary).toLocaleString()} / month</strong></div>
                   <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.sub }}>Start Date</span><strong style={{ textAlign: "right" }}>{offer.start_date || "To be agreed"}</strong></div>
                 </div>
               </div>
