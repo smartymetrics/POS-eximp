@@ -1005,7 +1005,7 @@ def _offer_email_html(candidate_name, job_title, salary, start_date, notes, app_
         {notes_block}
         <p style="color:#555;font-size:13px;">We believe your skills and experience will be a fantastic addition to our team. This offer is subject to satisfactory references and standard onboarding procedures.</p>
         <div style="text-align:center;margin:32px 0;">
-          <a href="https://hrm.eximps-cloves.com/?offer={app_id}" style="display:inline-block;background:#4ADE80;color:#1A1A1A;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:bold;font-size:14px;">Review & Respond to Offer</a>
+          <a href="https://app.eximps-cloves.com/hr/?offer={app_id}" style="display:inline-block;background:#4ADE80;color:#1A1A1A;text-decoration:none;padding:14px 28px;border-radius:8px;font-weight:bold;font-size:14px;">Review & Respond to Offer</a>
         </div>
         <p style="color:#555;font-size:13px;">Please let us know your decision by clicking the button above. We would love to have you on board!</p>
         <p style="color:#555;margin-top:30px;">Best regards,<br>The Eximp &amp; Cloves HR Team</p>
@@ -1061,7 +1061,7 @@ def _staff_onboarding_html(name, email, password, job_title, department):
         <p style="color:#333;font-weight:bold;margin-top:24px;">Your Portal Access Credentials:</p>
         <div style="background:#f9f9f9;border-radius:8px;padding:20px;margin:12px 0;border:1px solid #eee;">
           <table style="width:100%;font-size:14px;border-collapse:collapse;">
-            <tr><td style="padding:8px 0;color:#888;">Portal URL</td><td style="padding:8px 0;text-align:right;"><a href="https://hrm.eximps-cloves.com" style="color:#F5A623;font-weight:bold;text-decoration:none;">hrm.eximps-cloves.com</a></td></tr>
+            <tr><td style="padding:8px 0;color:#888;">Portal URL</td><td style="padding:8px 0;text-align:right;"><a href="https://app.eximps-cloves.com/hr" style="color:#F5A623;font-weight:bold;text-decoration:none;">app.eximps-cloves.com/hr</a></td></tr>
             <tr><td style="padding:8px 0;color:#888;">Email Address</td><td style="padding:8px 0;text-align:right;font-weight:bold;">{email}</td></tr>
             <tr><td style="padding:8px 0;color:#888;">Default Password</td><td style="padding:8px 0;text-align:right;font-family:monospace;background:#eee;padding:4px 8px;border-radius:4px;">{password}</td></tr>
           </table>

@@ -96,7 +96,7 @@ const calcScore = p => {
 
 // ─── GLOBAL STYLES ──────────────────────────────────────────────────────────────
 const GS = dark => {
-    const scaleUp = `@keyframes scaleUp { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }`;
+  const scaleUp = `@keyframes scaleUp { from { transform: scale(0.8); opacity: 0; } to { transform: scale(1); opacity: 1; } }`;
   const C = dark ? DARK : LIGHT;
   const G = T.gold;
   return `
@@ -7147,7 +7147,7 @@ function PolicyLibrary({ isHR }) {
               </select>
             </div>
             <div><Lbl>Summary</Lbl><textarea className="inp" rows={3} placeholder="Brief description of the policy…" value={form.summary} onChange={e => setForm(f => ({ ...f, summary: e.target.value }))} /></div>
-            
+
             <div style={{ padding: 16, background: C.border, borderRadius: 8 }}>
               <Lbl>Policy Document File</Lbl>
               {form.document_url && (
@@ -7216,7 +7216,8 @@ function InternalJobBoard({ isHR, user }) {
         body: JSON.stringify({
           job_id: showApply.id,
           candidate_name: user?.full_name || "Internal Applicant",
-          cover_letter: `[INTERNAL APPLICATION]\n\nCurrent Role: ${applyForm.current_role}\nExperience: ${applyForm.years_experience} years\nReason: ${applyForm.reason}\n\n${applyForm.cover_letter}`
+            candidate_email: user?.email || "internal@eximps-cloves.com",
+            cover_letter: `[INTERNAL APPLICATION]\n\nCurrent Role: ${applyForm.current_role}\nExperience: ${applyForm.years_experience} years\nReason: ${applyForm.reason}\n\n${applyForm.cover_letter}`
         })
       });
       alert("Your application has been submitted!"); setShowApply(null); setApplyForm({ cover_letter: "", years_experience: "", current_role: "", reason: "" }); load();
@@ -8563,8 +8564,9 @@ function SystemUsers() {
 
 
 // ─── HUB: HR CALENDAR ─────────────────────────────────────────────────────────
-function HRCalendarView() {
+function HRCalendarView({ user }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const isHR = user && user.role && (user.role.includes("admin") || user.role.includes("hr_admin"));
   const [events, setEvents] = useState([]);
   const [month, setMonth] = useState(new Date());
   const [showNew, setShowNew] = useState(false);
@@ -8583,12 +8585,12 @@ function HRCalendarView() {
 
   const addEvent = async () => {
     if (!form.title || !form.date) return alert("Title and date required");
-    try { await apiFetch(`${API_BASE}/hr/calendar-events`, { method: "POST", body: JSON.stringify({ name: form.name, holiday_date: form.date, is_recurring: form.is_mandatory }) }); } catch (e) { }
+    try { await apiFetch(`${API_BASE}/hr/calendar-events`, { method: "POST", body: JSON.stringify({ title: form.title, date: form.date, event_type: form.event_type, department: isHR ? form.department : (user?.department || "Personal") }) }); } catch (e) { }
     setEvents(prev => [{ ...form, id: Date.now().toString() }, ...prev]);
     setShowNew(false); setForm({ title: "", event_type: "Holiday", date: "", end_date: "", description: "", department: "All" });
   };
 
-  const typeCol = { Holiday: "#4ADE80", Deadline: "#F87171", Interview: T.gold, Payroll: "#60A5FA", Meeting: "#A78BFA", Training: "#F59E0B", Review: "#EC4899" };
+  const typeCol = { Holiday: "#4ADE80", Deadline: "#F87171", Interview: T.gold, Payroll: "#60A5FA", Meeting: "#A78BFA", Training: "#F59E0B", Review: "#EC4899", "Focus Time": "#8B5CF6", Leave: "#F43F5E", "Team Sync": "#0EA5E9" };
 
   // Build calendar grid for current month
   const y = month.getFullYear(); const m = month.getMonth();
@@ -8653,8 +8655,8 @@ function HRCalendarView() {
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
           <div><Lbl>Event Title *</Lbl><input className="inp" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Q3 Performance Reviews Due" /></div>
           <div className="g2" style={{ gap: 12 }}>
-            <div><Lbl>Event Type</Lbl><select className="inp" value={form.event_type} onChange={e => setForm(f => ({ ...f, event_type: e.target.value }))}><option>Holiday</option><option>Deadline</option><option>Interview</option><option>Payroll</option><option>Meeting</option><option>Training</option><option>Review</option></select></div>
-            <div><Lbl>Department</Lbl><select className="inp" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}><option>All</option><option>HR</option><option>Finance</option><option>Sales & Acquisitions</option><option>Operations</option><option>Executive</option></select></div>
+            <div><Lbl>Event Type</Lbl><select className="inp" value={form.event_type} onChange={e => setForm(f => ({ ...f, event_type: e.target.value }))}>{isHR ? (<><option>Holiday</option><option>Deadline</option><option>Interview</option><option>Payroll</option><option>Meeting</option><option>Training</option><option>Review</option></>) : (<><option>Meeting</option><option>Focus Time</option><option>Leave</option><option>Team Sync</option></>)}</select></div>
+            <div><Lbl>Scope / Department</Lbl>{isHR ? <select className="inp" value={form.department} onChange={e => setForm(f => ({ ...f, department: e.target.value }))}><option>All</option><option>HR</option><option>Finance</option><option>Sales & Acquisitions</option><option>Operations</option><option>Executive</option></select> : <div style={{ padding: "10px 14px", background: C.base, border: `1px solid ${C.border}`, borderRadius: 8, fontSize: 13, color: C.text }}>{user?.department || "Personal"} (Auto-assigned)</div>}</div>
           </div>
           <div className="g2" style={{ gap: 12 }}>
             <div><Lbl>Start Date *</Lbl><input type="date" className="inp" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
@@ -9042,7 +9044,7 @@ function HRAdminPortal({ user, onLogout }) {
       if (p === "timesheets") return <StaffTimesheet />;
       if (p === "timesheet_approvals") return <TimesheetApprovalCenter />;
       if (p === "shifts") return <ShiftScheduler isHR={true} />;
-      if (p === "hr_calendar") return <HRCalendarView />;
+      if (p === "hr_calendar") return <HRCalendarView user={user} />;
       if (p === "holidays") return <HolidaysManager />;
       // Hub 4: Leave
       if (p === "leave") return <LeaveManagement user={user} />;
@@ -9155,7 +9157,7 @@ function ManagerPortal({ user, onLogout }) {
       if (p === "leave_accrual") return <LeaveAccrualConfig />;
       if (p === "leave_policies") return <LeavePolicies isHR={false} />;
       if (p === "presence" || p === "holidays") return <Presence currentUser={user} />;
-      if (p === "hr_calendar") return <HRCalendarView />;
+      if (p === "hr_calendar") return <HRCalendarView user={user} />;
       if (p === "timesheets") return <StaffTimesheet />;
       if (p === "timesheet_approvals") return <TimesheetApprovalCenter />;
       if (p === "shifts") return <ShiftScheduler isHR={false} />;
@@ -9337,7 +9339,7 @@ function StaffPortal({ user, onLogout }) {
       if (pg === "skills_matrix") return <SkillsMatrix />;
       if (pg === "tasks") return <Tasks currentUser={user} />;
       if (pg === "presence") return <Presence currentUserId={user.id} currentUser={user} />;
-      if (pg === "hr_calendar") return <HRCalendarView />;
+      if (pg === "hr_calendar") return <HRCalendarView user={user} />;
       if (pg === "timesheets") return <StaffTimesheet />;
       if (pg === "payroll") return <StaffPayroll user={user} />;
       if (pg === "bonuses") return <BonusManager isHR={false} />;
@@ -9592,36 +9594,36 @@ function ExitInterviews() {
 // ─── NOTIFICATION BELL SYSTEM ─────────────────────────────────────────────────
 // ─── NOTIFICATION CONTEXT ─────────────────────────────────────────────────────
 // Single source of truth for notifications — shared by bell AND nav badges.
-const NotifCtx = createContext({ notifs: [], unread: 0, unreadByType: {}, refresh: () => {}, markRead: () => {}, markAllRead: () => {} });
+const NotifCtx = createContext({ notifs: [], unread: 0, unreadByType: {}, refresh: () => { }, markRead: () => { }, markAllRead: () => { } });
 const useNotifs = () => useContext(NotifCtx);
 
 // Maps notification_type → nav page id (for badge counts on sidebar items)
 const NOTIF_TYPE_TO_PAGE = {
-  task_assigned:       "tasks",
-  task_assigned_hr:    "tasks_hr",
-  request_update:      "hr_requests",
-  hr_request:          "hr_requests",
-  leave_request:       "leave",
-  leave_update:        "leave",
-  grievance_update:    "grievances",
-  grievance_filed:     "grievances",
-  letter_issued:       "hr_letters",
-  announcement:        "announcements",
-  recognition:         "recognition",
-  remote_work_update:  "remote_work",
-  goal_update:         "goals",
-  performance_review:  "perf",
-  disciplinary:        "disciplinary",
-  asset_assigned:      "assets",
-  shift_assigned:      "shifts",
-  payroll_run:         "payroll",
-  bonus_awarded:       "bonuses",
-  timesheet_update:    "timesheets",
-  offer_response:      "offers",
-  new_application:     "applications",
+  task_assigned: "tasks",
+  task_assigned_hr: "tasks_hr",
+  request_update: "hr_requests",
+  hr_request: "hr_requests",
+  leave_request: "leave",
+  leave_update: "leave",
+  grievance_update: "grievances",
+  grievance_filed: "grievances",
+  letter_issued: "hr_letters",
+  announcement: "announcements",
+  recognition: "recognition",
+  remote_work_update: "remote_work",
+  goal_update: "goals",
+  performance_review: "perf",
+  disciplinary: "disciplinary",
+  asset_assigned: "assets",
+  shift_assigned: "shifts",
+  payroll_run: "payroll",
+  bonus_awarded: "bonuses",
+  timesheet_update: "timesheets",
+  offer_response: "offers",
+  new_application: "applications",
   interview_scheduled: "interviews",
-  expense_update:      "expenses",
-  survey_new:          "surveys",
+  expense_update: "expenses",
+  survey_new: "surveys",
 };
 
 function NotifProvider({ userId, children }) {
@@ -9677,33 +9679,33 @@ function NotifProvider({ userId, children }) {
 
 // Notification type metadata
 const NOTIF_META = {
-  letter_issued:       { icon: "📄", color: "#60A5FA", label: "HR Letter" },
-  task_assigned:       { icon: "✅", color: "#4ADE80", label: "Task" },
-  task_assigned_hr:    { icon: "✅", color: "#4ADE80", label: "Task" },
-  grievance_update:    { icon: "⚖️", color: "#F87171", label: "Grievance" },
-  grievance_filed:     { icon: "⚖️", color: "#F87171", label: "Grievance" },
-  request_update:      { icon: "📋", color: T.gold,    label: "Request" },
-  hr_request:          { icon: "📋", color: T.gold,    label: "HR Request" },
-  leave_request:       { icon: "🌴", color: "#34D399", label: "Leave" },
-  leave_update:        { icon: "🌴", color: "#34D399", label: "Leave" },
-  goal_update:         { icon: "🎯", color: "#A78BFA", label: "Goal" },
-  announcement:        { icon: "📢", color: "#F59E0B", label: "Announcement" },
-  recognition:         { icon: "🏆", color: T.gold,    label: "Recognition" },
-  remote_work_update:  { icon: "🏠", color: "#60A5FA", label: "Remote Work" },
-  performance_review:  { icon: "📊", color: "#A78BFA", label: "Performance" },
-  disciplinary:        { icon: "🚨", color: "#F87171", label: "Disciplinary" },
-  asset_assigned:      { icon: "💼", color: "#60A5FA", label: "Asset" },
-  shift_assigned:      { icon: "🗓️", color: "#34D399", label: "Shift" },
-  payroll_run:         { icon: "💰", color: "#4ADE80", label: "Payroll" },
-  bonus_awarded:       { icon: "🎁", color: T.gold,    label: "Bonus" },
-  timesheet_update:    { icon: "⏱️", color: "#60A5FA", label: "Timesheet" },
-  offer_response:      { icon: "🤝", color: "#4ADE80", label: "Offer" },
-  new_application:     { icon: "📥", color: T.gold,    label: "Application" },
+  letter_issued: { icon: "📄", color: "#60A5FA", label: "HR Letter" },
+  task_assigned: { icon: "✅", color: "#4ADE80", label: "Task" },
+  task_assigned_hr: { icon: "✅", color: "#4ADE80", label: "Task" },
+  grievance_update: { icon: "⚖️", color: "#F87171", label: "Grievance" },
+  grievance_filed: { icon: "⚖️", color: "#F87171", label: "Grievance" },
+  request_update: { icon: "📋", color: T.gold, label: "Request" },
+  hr_request: { icon: "📋", color: T.gold, label: "HR Request" },
+  leave_request: { icon: "🌴", color: "#34D399", label: "Leave" },
+  leave_update: { icon: "🌴", color: "#34D399", label: "Leave" },
+  goal_update: { icon: "🎯", color: "#A78BFA", label: "Goal" },
+  announcement: { icon: "📢", color: "#F59E0B", label: "Announcement" },
+  recognition: { icon: "🏆", color: T.gold, label: "Recognition" },
+  remote_work_update: { icon: "🏠", color: "#60A5FA", label: "Remote Work" },
+  performance_review: { icon: "📊", color: "#A78BFA", label: "Performance" },
+  disciplinary: { icon: "🚨", color: "#F87171", label: "Disciplinary" },
+  asset_assigned: { icon: "💼", color: "#60A5FA", label: "Asset" },
+  shift_assigned: { icon: "🗓️", color: "#34D399", label: "Shift" },
+  payroll_run: { icon: "💰", color: "#4ADE80", label: "Payroll" },
+  bonus_awarded: { icon: "🎁", color: T.gold, label: "Bonus" },
+  timesheet_update: { icon: "⏱️", color: "#60A5FA", label: "Timesheet" },
+  offer_response: { icon: "🤝", color: "#4ADE80", label: "Offer" },
+  new_application: { icon: "📥", color: T.gold, label: "Application" },
   interview_scheduled: { icon: "🗓️", color: "#A78BFA", label: "Interview" },
-  expense_update:      { icon: "🧾", color: T.gold,    label: "Expense" },
-  survey_new:          { icon: "📝", color: "#60A5FA", label: "Survey" },
-  hr_alert:            { icon: "🔔", color: "#F59E0B", label: "Alert" },
-  general:             { icon: "🔔", color: "#9CA3AF", label: "Notification" },
+  expense_update: { icon: "🧾", color: T.gold, label: "Expense" },
+  survey_new: { icon: "📝", color: "#60A5FA", label: "Survey" },
+  hr_alert: { icon: "🔔", color: "#F59E0B", label: "Alert" },
+  general: { icon: "🔔", color: "#9CA3AF", label: "Notification" },
 };
 
 function NotificationBell() {
@@ -9744,9 +9746,9 @@ function NotificationBell() {
         title="Notifications"
       >
         <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke={unread > 0 ? T.gold : C.sub} strokeWidth="2" strokeLinecap="round" strokeLinejoin="round">
-          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9"/>
-          <path d="M13.73 21a2 2 0 0 1-3.46 0"/>
-          {unread > 0 && <circle cx="19" cy="5" r="4" fill="#F87171" stroke="none"/>}
+          <path d="M18 8A6 6 0 0 0 6 8c0 7-3 9-3 9h18s-3-2-3-9" />
+          <path d="M13.73 21a2 2 0 0 1-3.46 0" />
+          {unread > 0 && <circle cx="19" cy="5" r="4" fill="#F87171" stroke="none" />}
         </svg>
         {unread > 0 && (
           <span style={{
@@ -10535,7 +10537,7 @@ function ATSPipeline() {
       {loading ? <div style={{ textAlign: "center", padding: 60, color: C.muted }}>Loading pipeline…</div> : (
         <div style={{ display: "flex", gap: 12, overflowX: "auto", paddingBottom: 20, alignItems: "flex-start" }}>
           {stages.map(stage => {
-            const stageApps = filteredApps.filter(a => a.status === stage.key);
+            const stageApps = filteredApps.filter(a => a.status === stage.key || (stage.key === "Rejected" && a.status === "Offer Declined") || (stage.key === "Offered" && a.status === "Offer Accepted"));
             return (<div key={stage.key} style={{ minWidth: 220, width: 220, flexShrink: 0, background: C.surface, border: `1px solid ${C.border}`, borderRadius: 14, overflow: "hidden" }}>
               <div style={{ padding: "12px 16px", borderBottom: `2px solid ${stage.col}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                 <div style={{ display: "flex", alignItems: "center", gap: 8 }}><span style={{ fontSize: 16 }}>{stage.emoji}</span><span style={{ fontSize: 12, fontWeight: 800, color: stage.col, textTransform: "uppercase", letterSpacing: "1px" }}>{stage.label}</span></div>
@@ -10690,12 +10692,12 @@ function InterviewScheduler() {
         </div>
         {viewIV.notes && <div><Lbl>Notes</Lbl><div style={{ fontSize: 13, color: C.sub, lineHeight: 1.7, padding: "12px 16px", background: `${T.gold}08`, borderRadius: 10, marginTop: 8 }}>{viewIV.notes}</div></div>}
         {viewIV.outcome && <div style={{ marginTop: 14 }}><Lbl>Outcome / Feedback</Lbl><div style={{ fontSize: 13, color: "#4ADE80", fontWeight: 700, padding: "12px 16px", background: "#4ADE8010", borderRadius: 10, marginTop: 8 }}>{viewIV.outcome}</div></div>}
-        
+
         {viewIV.status !== 'completed' && viewIV.status !== 'cancelled' && (
           <div style={{ marginTop: 24, display: 'flex', gap: 10 }}>
-            <button className="bp" onClick={() => { setForm({ ...viewIV, scheduled_at: viewIV.scheduled_at?.substring(0,16) }); setShowNew(true); setViewIV(null); }} style={{ flex: 1 }}>Reschedule 📅</button>
-            <button className="bp" style={{ flex: 1, background: '#4ADE80', borderColor: '#4ADE80' }} onClick={() => { const out = window.prompt("Log Outcome / Rating (e.g. 4/5 - Strong Technical Skills):"); if(out) updateIV(viewIV.id, { status: 'completed', outcome: out }); }}>Complete & Rate ✅</button>
-            <button style={{ flex: 1, border: '1px solid #F87171', background: '#F8717118', color: '#F87171', borderRadius: 10, cursor: 'pointer', fontSize: 12, fontWeight: 700 }} onClick={() => { if(window.confirm("Cancel this interview?")) updateIV(viewIV.id, { status: 'cancelled' }); }}>Cancel ✕</button>
+            <button className="bp" onClick={() => { setForm({ ...viewIV, scheduled_at: viewIV.scheduled_at?.substring(0, 16) }); setShowNew(true); setViewIV(null); }} style={{ flex: 1 }}>Reschedule 📅</button>
+            <button className="bp" style={{ flex: 1, background: '#4ADE80', borderColor: '#4ADE80' }} onClick={() => { const out = window.prompt("Log Outcome / Rating (e.g. 4/5 - Strong Technical Skills):"); if (out) updateIV(viewIV.id, { status: 'completed', outcome: out }); }}>Complete & Rate ✅</button>
+            <button style={{ flex: 1, border: '1px solid #F87171', background: '#F8717118', color: '#F87171', borderRadius: 10, cursor: 'pointer', fontSize: 12, fontWeight: 700 }} onClick={() => { if (window.confirm("Cancel this interview?")) updateIV(viewIV.id, { status: 'cancelled' }); }}>Cancel ✕</button>
           </div>
         )}
       </Modal>)}
@@ -10776,13 +10778,18 @@ function OffersManager() {
                     {a.offered_salary && <span>💰 Offered: <strong style={{ color: T.gold }}>₦{parseFloat(a.offered_salary).toLocaleString()}</strong></span>}
                     {a.start_date && <span>📅 Start: {a.start_date}</span>}
                   </div>
-                </div>
+                {a.notes && (
+                      <div style={{ marginTop: 12, fontSize: 12, color: C.sub, padding: "8px 12px", background: `${T.gold}11`, borderLeft: "3px solid ${T.gold}", borderRadius: 4, whiteSpace: "pre-wrap" }}>
+                        {a.notes}
+                      </div>
+                    )}
+                  </div>
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "flex-end", gap: 8 }}>
                   {a.status === "Hired" && <span className="tg" style={{ background: "#4ADE8022", color: "#4ADE80" }}>✓ Hired</span>}
                   {a.status === "Offer Accepted" && <span className="tg" style={{ background: `${T.gold}22`, color: T.gold }}>🎉 Offer Accepted</span>}
                   {(a.status === "Offer Declined" || a.status === "Rejected") && <span className="tg" style={{ background: "#F8717122", color: "#F87171" }}>❌ Declined</span>}
                   {a.status === "Offered" && <span className="tg" style={{ background: "#A78BFA22", color: "#A78BFA" }}>⏳ Offer Pending</span>}
-                  
+
                   <div style={{ display: "flex", gap: 8, marginTop: 4 }}>
                     {a.status === "Offer Accepted" && (
                       <button className="bp" style={{ fontSize: 11, padding: "5px 14px", background: "#4ADE80", color: "#1A1A1A" }} onClick={() => hireApplicant(a.id)}>Hire & Onboard ✓</button>
@@ -10792,6 +10799,9 @@ function OffersManager() {
                         <button className="bg" style={{ fontSize: 11, padding: "5px 14px" }} onClick={() => acceptOffer(a.id)}>Force Accept</button>
                         <button style={{ fontSize: 11, padding: "5px 14px", border: "1px solid #F87171", background: "#F8717118", color: "#F87171", borderRadius: 8, cursor: "pointer" }} onClick={() => declineOffer(a.id)}>Force Decline</button>
                       </>
+                    )}
+                    {(a.status === "Offer Declined" || a.status === "Rejected") && (
+                      <button className="bp" style={{ fontSize: 11, padding: "5px 14px" }} onClick={() => { setForm({ application_id: a.id, offered_salary: a.offered_salary, start_date: a.start_date || "", notes: a.notes || "" }); setShowNew(true); }}>Revise & Resend Offer 📝</button>
                     )}
                   </div>
                 </div>
@@ -10803,7 +10813,7 @@ function OffersManager() {
       )}
       {showNew && (<Modal onClose={() => setShowNew(false)} title="Issue Employment Offer" width={560}>
         <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div><Lbl>Candidate *</Lbl><select className="inp" value={form.application_id} onChange={e => setForm(f => ({ ...f, application_id: e.target.value }))}><option value="">— Select Candidate —</option>{apps.filter(a => ["Interview", "Screening"].includes(a.status)).map(a => (<option key={a.id} value={a.id}>{a.candidate_name} — {jobs.find(j => j.id === a.job_id)?.title || "—"}</option>))}</select></div>
+          <div><Lbl>Candidate *</Lbl><select className="inp" value={form.application_id} onChange={e => setForm(f => ({ ...f, application_id: e.target.value }))}><option value="">— Select Candidate —</option>{apps.filter(a => ["Interview", "Screening", "Offered", "Offer Accepted", "Offer Declined", "Rejected"].includes(a.status) || a.id === form.application_id).map(a => (<option key={a.id} value={a.id}>{a.candidate_name} ({a.candidate_email || "N/A"}) — {jobs.find(j => j.id === a.job_id)?.title || "—"}</option>))}</select></div>
           <div className="g2" style={{ gap: 12 }}>
             <div><Lbl>Offered Salary (NGN) *</Lbl><input type="number" className="inp" value={form.offered_salary} onChange={e => setForm(f => ({ ...f, offered_salary: e.target.value }))} placeholder="e.g. 250000" /></div>
             <div><Lbl>Proposed Start Date</Lbl><input type="date" className="inp" value={form.start_date} onChange={e => setForm(f => ({ ...f, start_date: e.target.value }))} /></div>
@@ -10918,7 +10928,7 @@ HR Team` });
             <button className="bp" onClick={sendEmail} disabled={sending} style={{ flex: 1, padding: 13 }}>{sending ? "Sending…" : "Send Email ✉️"}</button>
             <button className="bg" onClick={() => { setEmailing(null); setEmailForm({ subject: "", message: "" }); }} style={{ flex: 1, padding: 13 }}>Cancel</button>
           </div>
-          <div style={{ fontSize: 11, color: C.muted, textAlign: "center" }}>Sent via Eximp Resend email service. Delivery is logged automatically.</div>
+          <div style={{ fontSize: 11, color: C.muted, textAlign: "center" }}>Sent via Eximp email service. Delivery is logged automatically.</div>
         </div>
       </Modal>)}
       {showAdd && (<Modal onClose={() => setShowAdd(false)} title="Add to Talent Pool" width={560}>
@@ -11074,8 +11084,8 @@ function PeerReviews360() {
   const [tab, setTab] = useState("active"); // active | create | results
   const [showCreate, setShowCreate] = useState(false);
   const [viewReview, setViewReview] = useState(null);
-    const [launching, setLaunching] = useState(false);
-    const [launched, setLaunched] = useState(false);
+  const [launching, setLaunching] = useState(false);
+  const [launched, setLaunched] = useState(false);
   const [form, setForm] = useState({ reviewee_id: "", reviewer_ids: [], title: "", questions: ["How would you rate this person's communication skills?", "How effectively does this person collaborate with the team?", "What is this person's greatest strength?", "What area should this person focus on improving?", "Would you recommend this person for a leadership role? Why?"], deadline: "", is_anonymous: true });
 
   useEffect(() => {
@@ -11372,72 +11382,72 @@ function PeerReviews360() {
       {showCreate && (
         <Modal onClose={() => setShowCreate(false)} title="Launch 360° Peer Review" width={680}>
           {launched ? (
-              <div style={{ textAlign: "center", padding: "40px 0", animation: "scaleUp 0.5s ease" }}>
-                <div style={{ fontSize: 60, marginBottom: 16 }}>🚀</div>
-                <div style={{ fontSize: 20, fontWeight: 900, color: "#4ADE80" }}>Review Launched!</div>
-                <div style={{ fontSize: 13, color: C.sub, marginTop: 8 }}>Notifications have been sent to reviewers.</div>
-              </div>
-            ) : (
-              <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-            {/* Reviewee */}
-            <div>
-              <Lbl>Staff Member Being Reviewed *</Lbl>
-              <select className="inp" value={form.reviewee_id} onChange={e => setForm(f => ({ ...f, reviewee_id: e.target.value }))}>
-                <option value="">— Select Employee —</option>
-                {staff.map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.department || s.job_title || "—"})</option>)}
-              </select>
+            <div style={{ textAlign: "center", padding: "40px 0", animation: "scaleUp 0.5s ease" }}>
+              <div style={{ fontSize: 60, marginBottom: 16 }}>🚀</div>
+              <div style={{ fontSize: 20, fontWeight: 900, color: "#4ADE80" }}>Review Launched!</div>
+              <div style={{ fontSize: 13, color: C.sub, marginTop: 8 }}>Notifications have been sent to reviewers.</div>
             </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+              {/* Reviewee */}
+              <div>
+                <Lbl>Staff Member Being Reviewed *</Lbl>
+                <select className="inp" value={form.reviewee_id} onChange={e => setForm(f => ({ ...f, reviewee_id: e.target.value }))}>
+                  <option value="">— Select Employee —</option>
+                  {staff.map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.department || s.job_title || "—"})</option>)}
+                </select>
+              </div>
 
-            {/* Review Title */}
-            <div>
-              <Lbl>Review Title *</Lbl>
-              <input className="inp" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Q2 2025 Peer Feedback – Sales Team" />
+              {/* Review Title */}
+              <div>
+                <Lbl>Review Title *</Lbl>
+                <input className="inp" value={form.title} onChange={e => setForm(f => ({ ...f, title: e.target.value }))} placeholder="e.g. Q2 2025 Peer Feedback – Sales Team" />
+              </div>
+
+              {/* Reviewers */}
+              <div>
+                <Lbl>Assign Reviewers * ({form.reviewer_ids.length} selected)</Lbl>
+                <div style={{ maxHeight: 200, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 12px", marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>
+                  {staff.filter(s => s.id !== form.reviewee_id).map(s => {
+                    const sel = form.reviewer_ids.includes(s.id);
+                    return (<button key={s.id} onClick={() => toggleReviewer(s.id)} style={{ padding: "5px 12px", borderRadius: 20, border: `1px solid ${sel ? T.gold : C.border}`, background: sel ? `${T.gold}22` : "transparent", color: sel ? T.gold : C.sub, cursor: "pointer", fontSize: 11, fontWeight: sel ? 800 : 400, transition: "all .12s" }}>{sel ? "✓ " : ""}{s.full_name}</button>);
+                  })}
+                </div>
+                <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+                  <button className="bg" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => setForm(f => ({ ...f, reviewer_ids: staff.filter(s => s.id !== f.reviewee_id).map(s => s.id) }))}>Select All</button>
+                  <button className="bg" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => setForm(f => ({ ...f, reviewer_ids: [] }))}>Clear</button>
+                </div>
+              </div>
+
+              {/* Questions */}
+              <div>
+                <Lbl>Review Questions *</Lbl>
+                <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
+                  {Object.entries(qTemplates).map(([cat, qs]) => (<button key={cat} className="bg" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => setForm(f => ({ ...f, questions: [...new Set([...f.questions, ...qs])] }))}>+ {cat}</button>))}
+                </div>
+                <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
+                  {form.questions.map((q, idx) => (<div key={idx} style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    <input className="inp" style={{ flex: 1 }} value={q} onChange={e => { const nq = [...form.questions]; nq[idx] = e.target.value; setForm(f => ({ ...f, questions: nq })); }} placeholder={`Question ${idx + 1}`} />
+                    <button onClick={() => setForm(f => ({ ...f, questions: f.questions.filter((_, i) => i !== idx) }))} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #F87171", background: "#F8717118", color: "#F87171", cursor: "pointer", fontSize: 14, flexShrink: 0 }}>×</button>
+                  </div>))}
+                  <button className="bg" style={{ alignSelf: "flex-start", fontSize: 11, padding: "6px 14px" }} onClick={() => setForm(f => ({ ...f, questions: [...f.questions, ""] }))}>+ Add Question</button>
+                </div>
+              </div>
+
+              {/* Settings */}
+              <div className="g2" style={{ gap: 12 }}>
+                <div><Lbl>Deadline</Lbl><input type="date" className="inp" value={form.deadline} onChange={e => setForm(f => ({ ...f, deadline: e.target.value }))} /></div>
+                <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 22 }}>
+                  <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: C.text, fontWeight: 700 }}>
+                    <input type="checkbox" checked={form.is_anonymous} onChange={e => setForm(f => ({ ...f, is_anonymous: e.target.checked }))} style={{ width: 16, height: 16, accentColor: T.gold }} />
+                    Anonymous responses
+                  </label>
+                </div>
+              </div>
+
+              <button className="bp" onClick={launchReview} style={{ padding: 14 }}>🚀 Launch Review</button>
             </div>
-
-            {/* Reviewers */}
-            <div>
-              <Lbl>Assign Reviewers * ({form.reviewer_ids.length} selected)</Lbl>
-              <div style={{ maxHeight: 200, overflowY: "auto", border: `1px solid ${C.border}`, borderRadius: 10, padding: "10px 12px", marginTop: 8, display: "flex", flexWrap: "wrap", gap: 6 }}>
-                {staff.filter(s => s.id !== form.reviewee_id).map(s => {
-                  const sel = form.reviewer_ids.includes(s.id);
-                  return (<button key={s.id} onClick={() => toggleReviewer(s.id)} style={{ padding: "5px 12px", borderRadius: 20, border: `1px solid ${sel ? T.gold : C.border}`, background: sel ? `${T.gold}22` : "transparent", color: sel ? T.gold : C.sub, cursor: "pointer", fontSize: 11, fontWeight: sel ? 800 : 400, transition: "all .12s" }}>{sel ? "✓ " : ""}{s.full_name}</button>);
-                })}
-              </div>
-              <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
-                <button className="bg" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => setForm(f => ({ ...f, reviewer_ids: staff.filter(s => s.id !== f.reviewee_id).map(s => s.id) }))}>Select All</button>
-                <button className="bg" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => setForm(f => ({ ...f, reviewer_ids: [] }))}>Clear</button>
-              </div>
-            </div>
-
-            {/* Questions */}
-            <div>
-              <Lbl>Review Questions *</Lbl>
-              <div style={{ display: "flex", gap: 6, flexWrap: "wrap", marginBottom: 8 }}>
-                {Object.entries(qTemplates).map(([cat, qs]) => (<button key={cat} className="bg" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => setForm(f => ({ ...f, questions: [...new Set([...f.questions, ...qs])] }))}>+ {cat}</button>))}
-              </div>
-              <div style={{ display: "flex", flexDirection: "column", gap: 6 }}>
-                {form.questions.map((q, idx) => (<div key={idx} style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                  <input className="inp" style={{ flex: 1 }} value={q} onChange={e => { const nq = [...form.questions]; nq[idx] = e.target.value; setForm(f => ({ ...f, questions: nq })); }} placeholder={`Question ${idx + 1}`} />
-                  <button onClick={() => setForm(f => ({ ...f, questions: f.questions.filter((_, i) => i !== idx) }))} style={{ width: 28, height: 28, borderRadius: "50%", border: "1px solid #F87171", background: "#F8717118", color: "#F87171", cursor: "pointer", fontSize: 14, flexShrink: 0 }}>×</button>
-                </div>))}
-                <button className="bg" style={{ alignSelf: "flex-start", fontSize: 11, padding: "6px 14px" }} onClick={() => setForm(f => ({ ...f, questions: [...f.questions, ""] }))}>+ Add Question</button>
-              </div>
-            </div>
-
-            {/* Settings */}
-            <div className="g2" style={{ gap: 12 }}>
-              <div><Lbl>Deadline</Lbl><input type="date" className="inp" value={form.deadline} onChange={e => setForm(f => ({ ...f, deadline: e.target.value }))} /></div>
-              <div style={{ display: "flex", alignItems: "center", gap: 12, paddingTop: 22 }}>
-                <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer", fontSize: 13, color: C.text, fontWeight: 700 }}>
-                  <input type="checkbox" checked={form.is_anonymous} onChange={e => setForm(f => ({ ...f, is_anonymous: e.target.checked }))} style={{ width: 16, height: 16, accentColor: T.gold }} />
-                  Anonymous responses
-                </label>
-              </div>
-            </div>
-
-            <button className="bp" onClick={launchReview} style={{ padding: 14 }}>🚀 Launch Review</button>
-          </div>
-            )}
+          )}
         </Modal>
       )}
     </div>
@@ -11446,33 +11456,33 @@ function PeerReviews360() {
 
 // ─── EMPLOYEE: MY PEER REVIEWS (submit assigned reviews) ─────────────────────
 function MyPeerReviews({ user }) {
-    const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
-    const [assignedReviews, setAssignedReviews] = useState([]);
-    const [loading, setLoading] = useState(true);
-    const [activeReview, setActiveReview] = useState(null); 
-    const [answers, setAnswers] = useState({});
-    const [submitting, setSubmitting] = useState(false);
-    const [submitted, setSubmitted] = useState({});
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [assignedReviews, setAssignedReviews] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [activeReview, setActiveReview] = useState(null);
+  const [answers, setAnswers] = useState({});
+  const [submitting, setSubmitting] = useState(false);
+  const [submitted, setSubmitted] = useState({});
 
-    useEffect(() => {
-      Promise.all([
-        apiFetch(`${API_BASE}/hr/peer-reviews`).catch(() => []),
-        apiFetch(`${API_BASE}/hr/peer-reviews/my-assignments?staff_id=${user.id}`).catch(() => null),
-      ]).then(([all, myAssigned]) => {
-        const reviews = (myAssigned && Array.isArray(myAssigned)) ? myAssigned : (Array.isArray(all) ? all.filter(r => (r.reviewer_ids || []).map(String).includes(String(user.id))) : []);
-        setAssignedReviews(reviews);
-        
-        const done = {};
-        reviews.forEach(r => {
-          if (r.submitted_by_me || (r.responses || []).some(resp => String(resp.reviewer_id) === String(user.id))) {
-            done[r.id] = true;
-          }
-        });
-        setSubmitted(done);
-      }).finally(() => setLoading(false));
-    }, [user.id]);
+  useEffect(() => {
+    Promise.all([
+      apiFetch(`${API_BASE}/hr/peer-reviews`).catch(() => []),
+      apiFetch(`${API_BASE}/hr/peer-reviews/my-assignments?staff_id=${user.id}`).catch(() => null),
+    ]).then(([all, myAssigned]) => {
+      const reviews = (myAssigned && Array.isArray(myAssigned)) ? myAssigned : (Array.isArray(all) ? all.filter(r => (r.reviewer_ids || []).map(String).includes(String(user.id))) : []);
+      setAssignedReviews(reviews);
 
-    const openReview = (r) => {
+      const done = {};
+      reviews.forEach(r => {
+        if (r.submitted_by_me || (r.responses || []).some(resp => String(resp.reviewer_id) === String(user.id))) {
+          done[r.id] = true;
+        }
+      });
+      setSubmitted(done);
+    }).finally(() => setLoading(false));
+  }, [user.id]);
+
+  const openReview = (r) => {
     setActiveReview(r);
     setAnswers({});
   };
@@ -11873,7 +11883,7 @@ function PublicOfferPage({ offerId }) {
                   <div style={{ display: "flex", justifyContent: "space-between" }}><span style={{ color: C.sub }}>Start Date</span><strong style={{ textAlign: "right" }}>{offer.start_date || "To be agreed"}</strong></div>
                 </div>
               </div>
-              
+
               {offer.notes && (
                 <div style={{ marginBottom: 24 }}>
                   <div style={{ fontSize: 12, fontWeight: 700, color: C.sub, marginBottom: 8, textTransform: "uppercase", letterSpacing: "1px" }}>Offer Conditions</div>
@@ -11892,7 +11902,7 @@ function PublicOfferPage({ offerId }) {
                   {declineMode ? (
                     <div className="fade" style={{ display: "flex", flexDirection: "column", gap: 12 }}>
                       <div><label style={{ fontSize: 12, fontWeight: 700, color: C.sub, display: "block", marginBottom: 8 }}>Reason for Decline or Counter-Offer</label>
-                      <textarea className="inp" rows={4} value={reason} onChange={e => setReason(e.target.value)} placeholder="Please let us know why you are declining, or state your counter-offer..." /></div>
+                        <textarea className="inp" rows={4} value={reason} onChange={e => setReason(e.target.value)} placeholder="Please let us know why you are declining, or state your counter-offer..." /></div>
                       <div style={{ display: "flex", gap: 10, marginTop: 8 }}>
                         <button className="bg" style={{ flex: 1 }} onClick={() => setDeclineMode(false)} disabled={submitting}>Back</button>
                         <button className="bp" style={{ flex: 1, background: "#EF4444" }} onClick={() => respond("decline")} disabled={submitting}>{submitting ? "Submitting..." : "Submit Decline"}</button>
@@ -11982,3 +11992,5 @@ export default function App() {
     </ThemeCtx.Provider>
   );
 }
+
+

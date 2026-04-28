@@ -3404,7 +3404,17 @@ async def get_calendar_events(current_admin: dict = Depends(verify_token)):
     try:
         db = get_db()
         res = await db_execute(lambda: db.table("calendar_events").select("*").execute())
-        return res.data if res.data else []
+        data = res.data if res.data else []
+        
+        user_roles = current_admin.get("role", "").split(",")
+        is_hr = "admin" in user_roles or "hr_admin" in user_roles
+        user_dept = current_admin.get("department", "")
+
+        if not is_hr:
+            # Filter events: Staff only see "All" company events or events for their own department
+            data = [e for e in data if e.get("department") in ["All", "Company", user_dept]]
+            
+        return data
     except Exception as e:
         print(f"Error fetching calendar events: {e}")
         return []
@@ -3412,11 +3422,19 @@ async def get_calendar_events(current_admin: dict = Depends(verify_token)):
 @router.post("/calendar-events", status_code=status.HTTP_201_CREATED)
 async def create_calendar_event(request: Request, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
-        raise HTTPException(status_code=403, detail="HR only")
+    is_hr = "admin" in user_roles or "hr_admin" in user_roles
+    
     try:
         db = get_db()
         data = await request.json()
+        
+        if not is_hr:
+            # Enforce department scoping for staff
+            data["department"] = current_admin.get("department", "Unknown")
+            # Restrict event types for staff
+            if data.get("event_type") not in ["Meeting", "Focus Time", "Leave", "Team Sync"]:
+                data["event_type"] = "Meeting"
+                
         res = await db_execute(lambda: db.table("calendar_events").insert(data).execute())
         return res.data[0] if res.data else None
     except Exception as e:

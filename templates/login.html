@@ -212,7 +212,7 @@
       <div class="divider"></div>
     </div>
 
-    <p class="form-title">Finance Admin Portal — Sign In</p>
+    <p class="form-title">Enterprise Management Portal — Sign In</p>
 
     <div class="form-group">
       <label class="form-label">Email Address</label>
@@ -279,8 +279,8 @@
         const userRoles = (data.admin.role || '').toLowerCase().split(',').map(r => r.trim()).filter(Boolean);
         const staffType = (data.admin && data.admin.staff_type) ? data.admin.staff_type.toLowerCase() : 'full';
 
-        // Contractors and Labourers go to HR portal
-        if (primary === 'hr' || primary === 'hr_admin' || userRoles.includes('hr_admin') || staffType === 'contractor' || staffType === 'onsite') {
+        // Contractors, Labourers, and basic Staff go to HR portal
+        if (primary === 'staff' || primary === 'hr' || primary === 'hr_admin' || userRoles.includes('hr_admin') || staffType === 'contractor' || staffType === 'onsite') {
           window.location.href = '/hr';
         } else if (primary === 'marketing' || (userRoles.length === 1 && userRoles[0] === 'marketing')) {
           window.location.href = '/marketing';

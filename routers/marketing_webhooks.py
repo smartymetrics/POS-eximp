@@ -29,10 +29,10 @@ async def resend_webhook(request: Request):
     db = get_db()
 
     if event_type == "email.delivered":
-        db.table("campaign_recipients").update({
+        await db_execute(lambda: db.table("campaign_recipients").update({
             "status": "delivered",
             "delivered_at": datetime.utcnow().isoformat()
-        await db_execute(lambda: }).eq("resend_message_id", message_id).execute())
+        }).eq("resend_message_id", message_id).execute())
 
     elif event_type == "email.opened":
         # Increment open count and update engagement score
@@ -40,11 +40,11 @@ async def resend_webhook(request: Request):
         if res.data:
             rec = res.data[0]
             new_count = (rec.get("open_count") or 0) + 1
-            db.table("campaign_recipients").update({
+            await db_execute(lambda: db.table("campaign_recipients").update({
                 "open_count": new_count,
                 "opened_at": rec.get("opened_at") or datetime.utcnow().isoformat(),
                 "last_opened_at": datetime.utcnow().isoformat()
-            await db_execute(lambda: }).eq("id", rec["id"]).execute())
+            }).eq("id", rec["id"]).execute())
 
             # Update contact engagement (PRD 3.4)
             await db_execute(lambda: db.rpc("increment_engagement_score", {"cid": rec["contact_id"], "amount": 5}).execute())
@@ -55,21 +55,21 @@ async def resend_webhook(request: Request):
             await db_execute(lambda: db.rpc("increment_contact_stats", {"cont_id": rec["contact_id"], "event_type": "open"}).execute())
 
             # Closing the Loop: Attribution on Open (HubSpot Standard)
-            db.table("marketing_contacts").update({
+            await db_execute(lambda: db.table("marketing_contacts").update({
                 "last_campaign_id": campaign_id,
                 "last_interaction_at": datetime.utcnow().isoformat()
-            await db_execute(lambda: }).eq("id", rec["contact_id"]).execute())
+            }).eq("id", rec["contact_id"]).execute())
 
     elif event_type == "email.clicked":
         # Similar logic for clicks
         res = await db_execute(lambda: db.table("campaign_recipients").select("id, contact_id, click_count").eq("resend_message_id", message_id).execute())
         if res.data:
             rec = res.data[0]
-            db.table("campaign_recipients").update({
+            await db_execute(lambda: db.table("campaign_recipients").update({
                 "click_count": (rec.get("click_count") or 0) + 1,
                 "clicked_at": rec.get("clicked_at") or datetime.utcnow().isoformat(),
                 "last_clicked_at": datetime.utcnow().isoformat()
-            await db_execute(lambda: }).eq("id", rec["id"]).execute())
+            }).eq("id", rec["id"]).execute())
             await db_execute(lambda: db.rpc("increment_engagement_score", {"cid": rec["contact_id"], "amount": 10}).execute())
 
             # Increment total clicks for campaign and contact
@@ -82,26 +82,26 @@ async def resend_webhook(request: Request):
         # Suppress contact
         res = await db_execute(lambda: db.table("campaign_recipients").select("contact_id").eq("resend_message_id", message_id).execute())
         if res.data:
-            db.table("marketing_contacts").update({
+            await db_execute(lambda: db.table("marketing_contacts").update({
                 "is_subscribed": False,
                 "is_bounced": True,
                 "bounced_at": datetime.utcnow().isoformat()
-            await db_execute(lambda: }).eq("id", res.data[0]["contact_id"]).execute())
+            }).eq("id", res.data[0]["contact_id"]).execute())
 
     elif event_type == "email.unsubscribed":
         res = await db_execute(lambda: db.table("campaign_recipients").select("contact_id").eq("resend_message_id", message_id).execute())
         if res.data:
             contact_id = res.data[0]["contact_id"]
-            db.table("marketing_contacts").update({
+            await db_execute(lambda: db.table("marketing_contacts").update({
                 "is_subscribed": False,
                 "unsubscribed_at": datetime.utcnow().isoformat()
-            await db_execute(lambda: }).eq("id", contact_id).execute())
+            }).eq("id", contact_id).execute())
 
-            db.table("marketing_unsubscribes").insert({
+            await db_execute(lambda: db.table("marketing_unsubscribes").insert({
                 "contact_id": contact_id,
                 "email": data.get("to", ""),
                 "reason": "Unsubscribed via Resend"
-            await db_execute(lambda: }).execute())
+            }).execute())
 
     return {"status": "ok"}
 
@@ -111,10 +111,10 @@ async def tracking_pixel(campaign_id: str, contact_id: str):
     db = get_db()
     # Log open event directly from pixel (as a fallback or primary measurement)
     # We update the first and last opened timestamps
-    db.table("campaign_recipients").update({
+    await db_execute(lambda: db.table("campaign_recipients").update({
         "last_opened_at": datetime.utcnow().isoformat(),
         # opened_at is handled by COALESCE logic in a real app or just by checking if null
-    await db_execute(lambda: }).eq("campaign_id", campaign_id).eq("contact_id", contact_id).execute())
+    }).eq("campaign_id", campaign_id).eq("contact_id", contact_id).execute())
 
     # Increment contact score
     await db_execute(lambda: db.rpc("increment_engagement_score", {"cid": contact_id, "amount": 5}).execute())
@@ -124,10 +124,10 @@ async def tracking_pixel(campaign_id: str, contact_id: str):
     await db_execute(lambda: db.rpc("increment_contact_stats", {"cont_id": contact_id, "event_type": "open"}).execute())
 
     # Closing the Loop: Attribution on Pixel Open
-    db.table("marketing_contacts").update({
+    await db_execute(lambda: db.table("marketing_contacts").update({
         "last_campaign_id": campaign_id,
         "last_interaction_at": datetime.utcnow().isoformat()
-    await db_execute(lambda: }).eq("id", contact_id).execute())
+    }).eq("id", contact_id).execute())
 
     # Return a 1x1 transparent PNG
     pixel_data = b'\x89PNG\r\n\x1a\n\x00\x00\x00\rIHDR\x00\x00\x00\x01\x00\x00\x00\x01\x08\x06\x00\x00\x00\x1f\x15\xc4\x89\x00\x00\x00\x0bIDATx\x9cc\x00\x01\x00\x00\x05\x00\x01\r\n-\xb4\x00\x00\x00\x00IEND\xaeB`\x82'
@@ -139,19 +139,19 @@ async def click_tracking(campaign_id: str, contact_id: str, url: str, request: R
     db = get_db()
 
     # 1. Log the click event
-    db.table("email_click_events").insert({
+    await db_execute(lambda: db.table("email_click_events").insert({
         "campaign_id": campaign_id,
         "contact_id": contact_id,
         "original_url": url,
         "ip_address": request.client.host,
         "user_agent": request.headers.get("user-agent")
-    await db_execute(lambda: }).execute())
+    }).execute())
 
     # 2. Update recipient status & scoring
-    db.table("campaign_recipients").update({
+    await db_execute(lambda: db.table("campaign_recipients").update({
         "last_clicked_at": datetime.utcnow().isoformat(),
         # click_count handled via RPC or simple update
-    await db_execute(lambda: }).eq("campaign_id", campaign_id).eq("contact_id", contact_id).execute())
+    }).eq("campaign_id", campaign_id).eq("contact_id", contact_id).execute())
 
     # Update score (+10 for click)
     await db_execute(lambda: db.rpc("increment_engagement_score", {"cid": contact_id, "amount": 10}).execute())
@@ -177,10 +177,10 @@ async def click_tracking(campaign_id: str, contact_id: str, url: str, request: R
 
     # 4. REVENUE ATTRIBUTION TRACKING
     try:
-        db.table("marketing_contacts").update({
+        await db_execute(lambda: db.table("marketing_contacts").update({
             "last_campaign_id": campaign_id,
             "last_interaction_at": datetime.utcnow().isoformat()
-        await db_execute(lambda: }).eq("id", contact_id).execute())
+        }).eq("id", contact_id).execute())
     except: pass
 
     return RedirectResponse(url=url)
@@ -199,12 +199,12 @@ async def site_tracking(request: Request):
         db = get_db()
 
         # 1. Log behavior in activity log
-        db.table("activity_log").insert({
+        await db_execute(lambda: db.table("activity_log").insert({
             "event_type": "site_view",
             "description": f"Viewed listing: {title or url}",
             "client_id": None, # Non-client lead activity
             "metadata": {"url": url, "title": title}
-        await db_execute(lambda: }).execute())
+        }).execute())
 
         # 2. Increment score (+2 for browsing)
         await db_execute(lambda: db.rpc("increment_engagement_score", {"cid": contact_id, "amount": 2}).execute())
@@ -291,21 +291,21 @@ async def process_unsubscribe(request: Request):
 
     # 1. Update contact global status
     timestamp = datetime.utcnow().isoformat()
-    db.table("marketing_contacts").update({
+    await db_execute(lambda: db.table("marketing_contacts").update({
         "is_subscribed": False,
         "unsubscribed_at": timestamp,
         "unsubscribe_reason": f"{reason}: {feedback}" if feedback else reason
-    await db_execute(lambda: }).eq("id", token).execute())
+    }).eq("id", token).execute())
 
     # 2. Log to unsubscribe table (PRD 3.5)
     contact_res = await db_execute(lambda: db.table("marketing_contacts").select("email").eq("id", token).execute())
     if contact_res.data:
-        db.table("marketing_unsubscribes").insert({
+        await db_execute(lambda: db.table("marketing_unsubscribes").insert({
             "contact_id": token,
             "email": contact_res.data[0]["email"],
             "reason": reason,
             "unsubscribed_at": timestamp
-        await db_execute(lambda: }).execute())
+        }).execute())
 
     # Return success page
     html = f"""
