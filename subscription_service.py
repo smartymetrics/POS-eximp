@@ -143,7 +143,7 @@ class SubscriptionService:
             "signature_url": data.get("signature_url"),
             "payment_proof_url": data.get("payment_receipt_url"),
             "source": "custom_portal",
-            "pipeline_stage": "inspection"
+            "pipeline_stage": "interest"
         }
         
         inv_res = await db_execute(lambda: db.table("invoices").insert(jsonable_encoder(invoice_insert)).execute())
