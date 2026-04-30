@@ -5,7 +5,7 @@ import time
 from pdf_service import generate_invoice_pdf, generate_receipt_pdf, generate_statement_pdf, COMPANY
 from database import get_db, db_execute
 from utils import sanitize_client_address
-from datetime import datetime
+from datetime import datetime, timedelta, timezone
 import logging
 
 async def async_resend(payload):
@@ -1371,7 +1371,7 @@ async def send_executed_contract_email(invoice, client, pdf_content, certificate
         <p><strong>Property Details:</strong><br>
         Estate: {invoice.get('property_name')}<br>
         Plot Size: {invoice.get('plot_size_sqm')} SQM<br>
-        Execution Date: {datetime.now().strftime("%B %d, %Y")}</p>
+        Execution Date: {datetime.now(timezone(timedelta(hours=1))).strftime("%B %d, %Y")}</p>
 
         <p>Our documentation team will contact you shortly regarding the next steps (Survey and Allocation).</p>
         <p>Thank you for choosing Eximp & Cloves Infrastructure Limited.</p>
@@ -1547,7 +1547,7 @@ async def broadcast_campaign_email(campaign: dict, recipients: list, admin_id: s
             if delivered % 5 == 0:
                 db.table("marketing_campaigns").update({
                     "delivered_count": delivered,
-                    "updated_at": datetime.now().isoformat()
+                    "updated_at": datetime.now(timezone(timedelta(hours=1))).isoformat()
                 }).eq("id", campaign_id).execute()
                 
             # Optional: Add a small delay to respect rate limits if needed
@@ -1560,7 +1560,7 @@ async def broadcast_campaign_email(campaign: dict, recipients: list, admin_id: s
     db.table("marketing_campaigns").update({
         "status": "sent",
         "delivered_count": delivered,
-        "sent_at": datetime.now().isoformat()
+        "sent_at": datetime.now(timezone(timedelta(hours=1))).isoformat()
     }).eq("id", campaign_id).execute()
 
     logger.info(f"Campaign {campaign_id} broadcast finished. Delivered: {delivered}/{total}")
@@ -1800,7 +1800,7 @@ async def send_ready_for_execution_email(invoice, client):
             <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #888;">Client</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold;">{client['full_name']}</td></tr>
             <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #888;">Property</td><td style="padding: 8px; border-bottom: 1px solid #eee;">{invoice.get('property_name', 'N/A')}</td></tr>
             <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #888;">Invoice No</td><td style="padding: 8px; border-bottom: 1px solid #eee; font-weight: bold; color: #C47D0A;">{invoice.get('invoice_number', 'N/A')}</td></tr>
-            <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #888;">Signed On</td><td style="padding: 8px; border-bottom: 1px solid #eee;">{datetime.now().strftime("%B %d, %Y at %I:%M %p")}</td></tr>
+            <tr><td style="padding: 8px; border-bottom: 1px solid #eee; color: #888;">Signed On</td><td style="padding: 8px; border-bottom: 1px solid #eee;">{datetime.now(timezone(timedelta(hours=1))).strftime("%B %d, %Y at %I:%M %p")}</td></tr>
         </table>
 
         <div style="text-align: center; margin-top: 24px;">
@@ -2131,7 +2131,7 @@ async def send_personnel_executed_email(
     if not signer_email:
         return
 
-    executed_date = datetime.now().strftime("%d %B %Y at %H:%M")
+    executed_date = datetime.now(timezone(timedelta(hours=1))).strftime("%d %B %Y at %H:%M")
     download_url = f"https://app.eximps-cloves.com/api/hr-legal/matters/{matter_id}/export?token={download_token}"
 
     # Build audit rows

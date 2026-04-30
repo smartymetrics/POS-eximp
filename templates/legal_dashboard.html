@@ -536,11 +536,11 @@
                 </svg>
                 Signature Vault
             </div>
-            <div class="nav-link" onclick="closeMobileNav(); switchTab('personnel-matters')">
+            <div class="nav-link" onclick="closeMobileNav(); switchTab('internal-matters')">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                     <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
-                Personnel Matters
+                Internal Matters
             </div>
             <div class="nav-link" onclick="closeMobileNav(); switchTab('external-matters')">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -605,19 +605,19 @@
                     </svg>
                     Legal Dashboard
                 </div>
-                <!-- Personnel Matters Integration -->
-                <div class="nav-link" onclick="switchTab('personnel-matters')">
+                <!-- Internal Matters Integration -->
+                <div class="nav-link" onclick="switchTab('internal-matters')">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
-                    Personnel Matters
+                    Internal Matters
                 </div>
-                <!-- External Legal Integration -->
-                <div class="nav-link" onclick="switchTab('external-legal')">
+                <!-- External Matters Integration -->
+                <div class="nav-link" onclick="switchTab('external-matters')">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                     </svg>
-                    External Legal
+                    External Matters
                 </div>
                 <div class="nav-link" onclick="switchTab('execution-portal')">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
@@ -957,14 +957,14 @@
             </div>
         </section>
 
-        <!-- Tab: Personnel Matters -->
-        <section id="tab-personnel-matters" class="tab-content hidden">
+        <!-- Tab: Internal Matters -->
+        <section id="tab-internal-matters" class="tab-content hidden">
             <header class="flex items-center justify-between mb-12">
                 <div>
-                    <h2 class="font-serif text-4xl mb-2">Personnel Matters</h2>
+                    <h2 class="font-serif text-4xl mb-2">Internal Matters</h2>
                     <p class="text-gray-500">Legal agreements and offer letters for Eximp & Cloves staff.</p>
                 </div>
-                <button onclick="openInitiateModal('Staff')" class="bg-brand-gold text-white px-8 py-3 rounded-xl font-bold hover:brightness-110 transition shadow-lg shadow-brand-gold/20">+ Initiate Personnel Matter</button>
+                <button onclick="openInitiateModal('Staff')" class="bg-brand-gold text-white px-8 py-3 rounded-xl font-bold hover:brightness-110 transition shadow-lg shadow-brand-gold/20">+ Initiate Internal Matter</button>
             </header>
             <div class="card overflow-hidden !p-0">
                 <table class="w-full text-left">
@@ -984,11 +984,11 @@
             </div>
         </section>
 
-        <!-- Tab: External Legal -->
-        <section id="tab-external-legal" class="tab-content hidden">
+        <!-- Tab: External Matters -->
+        <section id="tab-external-matters" class="tab-content hidden">
             <header class="flex items-center justify-between mb-12">
                 <div>
-                    <h2 class="font-serif text-4xl mb-2">External Legal</h2>
+                    <h2 class="font-serif text-4xl mb-2">External Matters</h2>
                     <p class="text-gray-500">Commercial agreements, Land Deeds, and Vendor contracts.</p>
                 </div>
                 <button onclick="openInitiateModal('External')" class="bg-brand-gold text-white px-8 py-3 rounded-xl font-bold hover:brightness-110 transition shadow-lg shadow-brand-gold/20">+ New External Case</button>
@@ -1170,9 +1170,9 @@
             <div class="space-y-6">
                 <div>
                     <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Matter Category</label>
-                    <select id="initiate-category" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white focus:border-brand-gold outline-none text-sm transition appearance-none cursor-pointer">
-                        <option value="Personnel">Personnel (Staff & HR)</option>
-                        <option value="External">External (Property/Client)</option>
+                    <select id="initiate-category" class="w-full bg-[#1A1C20] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-brand-gold outline-none text-sm transition cursor-pointer">
+                        <option value="Personnel" class="bg-[#1A1C20] text-white">Internal (Staff & HR)</option>
+                        <option value="External" class="bg-[#1A1C20] text-white">External (Property/Client)</option>
                     </select>
                 </div>
                 <div>
@@ -1180,8 +1180,8 @@
                     <input type="text" id="initiate-title" placeholder="e.g. Employment Contract - John Doe" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-brand-gold text-sm">
                 </div>
                 <div id="party-fields">
-                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Search Staff or Enter External Name</label>
-                    <input type="text" id="initiate-party-name" list="staff-search-results" oninput="handleStaffSearch(this.value)" placeholder="Start typing name, email or department..." class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-brand-gold text-sm">
+                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Search Staff or Enter Name</label>
+                    <input type="text" id="initiate-party-name" list="staff-search-results" oninput="handleStaffSearch(this.value)" placeholder="Search for staff or type external name..." class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-brand-gold text-sm">
                     <datalist id="staff-search-results"></datalist>
                     <input type="hidden" id="initiate-staff-id" value="">
                 </div>
@@ -1328,8 +1328,8 @@
                 fetchExecutionTrends();
             }
             if (tabId === 'execution-portal') fetchContracts();
-            if (tabId === 'personnel-matters') fetchPersonnelMatters();
-            if (tabId === 'external-legal') fetchExternalLegal();
+            if (tabId === 'internal-matters') fetchPersonnelMatters();
+            if (tabId === 'external-matters') fetchExternalLegal();
             if (tabId === 'signature-vault') loadAuthorities();
             if (tabId === 'archive') fetchArchive();
         }

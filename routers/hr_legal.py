@@ -4,7 +4,7 @@ import os
 from database import get_db, db_execute, SUPABASE_URL
 import os
 from routers.auth import verify_token, verify_token_optional, resolve_admin_token
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 import json
 import uuid
 import pdf_service
@@ -812,7 +812,8 @@ async def submit_signature(signing_token: str, data: dict):
         signer_name  = data.get("signer_name", "Signatory")
         signer_email = data.get("signer_email", "")
         sig_image    = data.get("signature_image", "")
-        signed_at    = datetime.now().strftime("%d %B %Y, %H:%M")
+        lagos_tz = timezone(timedelta(hours=1))
+        signed_at = datetime.now(lagos_tz).strftime("%d %B %Y, %H:%M")
 
         # ── Resolve placeholders in existing content_html ──
         branding = await get_branding_urls()
@@ -865,8 +866,8 @@ async def submit_signature(signing_token: str, data: dict):
 
         update_data = {
             "status": "Executed",
-            "signed_at": datetime.now().isoformat(),
-            "executed_at": datetime.now().isoformat(),
+            "signed_at": datetime.now(timezone(timedelta(hours=1))).isoformat(),
+            "executed_at": datetime.now(timezone(timedelta(hours=1))).isoformat(),
             "signed_by": signer_email,
             "staff_visible": True,
             "content_html": patched_html,
@@ -874,7 +875,7 @@ async def submit_signature(signing_token: str, data: dict):
                 "signing_token": signing_token[:8],
                 "signer_name": signer_name,
                 "signer_email": signer_email,
-                "timestamp": datetime.now().isoformat()
+                "timestamp": datetime.now(timezone(timedelta(hours=1))).isoformat()
             }
         }
         
@@ -890,7 +891,7 @@ async def submit_signature(signing_token: str, data: dict):
                         "staff_id": matter["staff_id"],
                         "document_type": "Legal Contract - Executed",
                         "document_link": f"/api/hr-legal/matters/{matter_id}/export",
-                        "uploaded_at": datetime.now().isoformat()
+                        "uploaded_at": datetime.now(timezone(timedelta(hours=1))).isoformat()
                     }).execute()
                 )
             except:
@@ -959,87 +960,69 @@ async def _send_matter_executed_email(matter_id: str, signing_token: str, signer
         pdf_full_html = f"""<!DOCTYPE html><html><head><meta charset="UTF-8">
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Tinos:ital,wght@0,400;0,700;1,400;1,700&display=swap');
-  @page {{size:A4;margin:0;}}
-  body{{font-family:'Tinos', 'Times New Roman',serif;font-size:11pt;color:#000;background:white;margin:0;}}
-  .page{{width:210mm;min-height:297mm;display:flex;flex-direction:column;}}
-  /* BUG1 FIX: min-height so absolute bars are contained; body cannot overlap letterhead */
-  .letterhead{{position:relative;min-height:50px;}}
-  .header-bar-black{{position:absolute;top:0;left:0;width:60%;height:40px;background:#000;border-bottom-right-radius:40px;z-index:2;}}
-  /* BUG2 FIX: gold bar 70% to match browser and signing page */
-  .header-bar-gold{{position:absolute;top:0;right:0;width:70%;height:30px;background:#C47D0A;z-index:1;}}
-  /* BUG1 FIX: padding-top 50px clears the 40px black bar */
-  .letterhead-inner{{display:flex;justify-content:space-between;align-items:center;padding:50px 60px 20px;position:relative;z-index:3;}}
-  .lh-contact{{border-left:2px solid #000;padding:4px 15px;font-size:9pt;line-height:1.5;color:#111;font-weight:700;font-variant-caps:all-small-caps;letter-spacing:0.05em;font-family:'Inter', sans-serif;}}
-  .lh-contact a{{color:#C47D0A;text-decoration:none;}}
-  .text-brand-gold{{color:#C47D0A;}}
-  .lh-divider{{height:2px;background:#eee;margin:0 60px;}}
-  /* BUG8 FIX: consistent body padding 28px 72px (matches export PDF) */
-  .body{{padding:28px 72px;flex:1;line-height:1.6;}}
-  /* BUG3 FIX: constrain all images incl. signature PNGs */
-  .body img{{max-width:100%;height:auto;display:block;}}
-  .footer{{margin-top:auto;}}
-  .footer-bars{{display:flex;height:12px;}}
-  .fb{{flex:1;background:#000;}}.fg{{flex:1;background:#C47D0A;}}
-  .body p {{ margin-bottom: 12pt; text-align: justify; min-height: 1.2em; }}
-  .body h1 {{ font-size: 18pt; font-family: 'Inter', sans-serif; font-weight: 800; margin: 20pt 0 10pt; }}
-  .body h2 {{ font-size: 14pt; font-family: 'Inter', sans-serif; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin: 16pt 0 8pt; }}
-  .body h3 {{ font-size: 12pt; font-family: 'Inter', sans-serif; font-weight: 600; margin: 14pt 0 6pt; }}
-  .body ol, .body ul {{ margin: 0 0 12pt 24pt; padding: 0; }}
-  .body li {{ margin-bottom: 4pt; }}
-  .body ol[type="a"], .body ol.lower-alpha {{ list-style-type: lower-alpha; }}
-  .body ol[type="A"], .body ol.upper-alpha {{ list-style-type: upper-alpha; }}
-  .body ol[type="i"], .body ol.lower-roman {{ list-style-type: lower-roman; }}
-  .body ol[type="I"], .body ol.upper-roman {{ list-style-type: upper-roman; }}
-  .body table {{ width: 100%; border-collapse: collapse; margin: 12pt 0; }}
-  .body td, .body th {{ border: 1px solid #ccc; padding: 6pt 8pt; font-size: 10pt; vertical-align: top; }}
-  .body th {{ background: #f5f5f5; font-weight: 700; }}
-  .body hr {{ border: none; border-top: 1px solid #ccc; margin: 20pt 0; }}
-  .body p:empty::before {{ content: "\\00a0"; }}
-  .body [data-indent="1"] {{ margin-left: 40px !important; }}
-  .body [data-indent="2"] {{ margin-left: 80px !important; }}
-  .body [data-indent="3"] {{ margin-left: 120px !important; }}
-  .body [data-indent="4"] {{ margin-left: 160px !important; }}
-  .body [data-indent="5"] {{ margin-left: 200px !important; }}
-  .body [data-indent="6"] {{ margin-left: 240px !important; }}
-  .body [data-indent="7"] {{ margin-left: 280px !important; }}
-  .legal-badge {{ display: inline-flex !important; vertical-align: middle; margin: 10px; }}
-  /* BUG4 FIX: hide Tiptap page-break widget, emit real CSS page break */
-  .body [data-page-break="true"],
-  .body .editor-page-break {{
-    display: block !important;
-    height: 0 !important;
-    overflow: hidden !important;
-    visibility: hidden !important;
-    page-break-after: always !important;
-    break-after: page !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    border: none !important;
-  }}
-  /* BUG5 FIX: strip editor-only styling from unresolved merge-field tokens */
-  .body .merge-field {{
-    background: none !important;
-    border: none !important;
-    padding: 0 !important;
-    font-family: inherit !important;
-    font-size: inherit !important;
-    color: #000 !important;
-  }}
-</style></head>
-<body><div class="page">
-  <div class="letterhead">
-    <div class="header-bar-black"></div><div class="header-bar-gold"></div>
-    <div class="letterhead-inner">
-      <img src="{logo_uri}" style="height:70px;width:auto;">
-      <div class="lh-contact">
+  @page {{ size: A4; margin: 0; }}
+  body {{ font-family: 'Tinos', 'Times New Roman', serif; font-size: 11pt; color: #000; background: white; margin: 0; padding: 0; }}
+  
+  /* ── ABSOLUTE BARS (Pinned to Page Top) ── */
+  .bar-black {{ position: absolute; top: 0; left: 0; width: 60%; height: 40px; background: #000; border-bottom-right-radius: 40px; z-index: 100; }}
+  .bar-gold {{ position: absolute; top: 0; right: 0; width: 70%; height: 30px; background: #C47D0A; z-index: 90; }}
+  
+  /* ── MAIN CONTENT (Pushed down by padding) ── */
+  .main-wrapper {{ position: relative; z-index: 200; width: 100%; }}
+  
+  .header-content {{ padding: 50px 60px 10px; width: 100%; box-sizing: border-box; }}
+  .logo-box {{ float: left; width: 50%; }}
+  .contact-box {{ float: right; width: 45%; border-left: 2px solid #000; padding: 4px 15px; font-size: 9pt; line-height: 1.4; color: #111; font-weight: 700; font-variant-caps: all-small-caps; letter-spacing: 0.05em; font-family: 'Inter', sans-serif; }}
+  .contact-box a {{ color: #C47D0A; text-decoration: none; }}
+  
+  .clear {{ clear: both; height: 1px; }}
+  .divider {{ height: 2px; background: #eee; margin: 10px 60px 0; }}
+  
+  .body {{ padding: 30px 72px; line-height: 1.6; text-align: justify; }}
+  .body p {{ margin-bottom: 12pt; min-height: 1.2em; }}
+  .body ol, .body ul {{ padding: 0 0 0 40px; margin: 12pt 0; list-style-position: outside; }}
+  .body li {{ margin-bottom: 8pt; padding-left: 5px; }}
+  /* Automatic Parent-Child Nesting */
+  .body ol {{ list-style-type: decimal; }}
+  .body ol ol {{ list-style-type: lower-alpha; margin: 6pt 0; }}
+  .body ol ol ol {{ list-style-type: lower-roman; margin: 4pt 0; }}
+  .body ul {{ list-style-type: disc; }}
+  .body ul ul {{ list-style-type: circle; }}
+  /* Force specific types if overridden by user */
+  .body ol[type="a"] {{ list-style-type: lower-alpha !important; }}
+  .body ol[type="A"] {{ list-style-type: upper-alpha !important; }}
+  .body ol[type="i"] {{ list-style-type: lower-roman !important; }}
+  .body ol[type="I"] {{ list-style-type: upper-roman !important; }}
+  .body img {{ max-width: 100%; height: auto; display: block; }}
+  
+  .footer {{ position: absolute; bottom: 0; left: 0; width: 100%; }}
+  .footer-bars {{ display: flex; height: 12px; }}
+  .fb {{ flex: 1; background: #000; }}
+  .fg {{ flex: 1; background: #C47D0A; }}
+</style>
+</head>
+<body>
+  <div class="bar-black"></div>
+  <div class="bar-gold"></div>
+  
+  <div class="main-wrapper">
+    <div class="header-content">
+      <div class="logo-box">
+        <img src="{logo_uri}" style="height:70px; width:auto;">
+      </div>
+      <div class="contact-box">
         {contact_html}
       </div>
+      <div class="clear"></div>
     </div>
-    <div class="lh-divider"></div>
+    <div class="divider"></div>
+    <div class="body">{body_html}</div>
   </div>
-  <div class="body">{body_html}</div>
-  <div class="footer"><div class="footer-bars"><div class="fb"></div><div class="fg"></div></div></div>
-</div></body></html>"""
+  
+  <div class="footer">
+    <div class="footer-bars"><div class="fb"></div><div class="fg"></div></div>
+  </div>
+</body></html>"""
 
         pdf_bytes = WeasyprintHTML(string=pdf_full_html, base_url=APP_BASE_URL).write_pdf()
 
@@ -1103,7 +1086,7 @@ async def acknowledge_document(signing_token: str, data: dict):
     await db_execute(
         lambda: db.table("legal_signing_requests").update({
             "status": "Acknowledged",
-            "acknowledged_at": datetime.now().isoformat(),
+            "acknowledged_at": datetime.now(timezone(timedelta(hours=1))).isoformat(),
             "signer_name": signer_name,
             "signer_email": signer_email,
             "signature_metadata": {
@@ -1118,7 +1101,8 @@ async def acknowledge_document(signing_token: str, data: dict):
     branding = await get_branding_urls()
     logo_url = branding.get("firm_logo")
     stamp_url = branding.get("stamp_url")
-    signed_date_str = datetime.now().strftime("%d %B %Y, %H:%M")
+    lagos_tz = timezone(timedelta(hours=1))
+    signed_date_str = datetime.now(lagos_tz).strftime("%d %B %Y, %H:%M")
     
     seal_html = f"""<div class="legal-badge seal-badge" style="display:inline-flex;flex-direction:column;align-items:center;border:3px solid #C47D0A;border-radius:50%;width:110px;height:110px;justify-content:center;padding:8px;text-align:center;box-shadow:0 0 0 2px #C47D0A inset;line-height:1.1;background:rgba(196,125,10,0.05);color:#C47D0A;vertical-align:middle;margin:10px;"><img src="{logo_url}" style="height:40px;width:auto;margin-bottom:2px;opacity:0.9;"><span style="font-size:6.5pt;font-weight:900;letter-spacing:0.05em;text-transform:uppercase;">OFFICIAL<br>CORPORATE SEAL</span></div>"""
     
@@ -1631,131 +1615,66 @@ async def export_matter_pdf(matter_id: str, token: str = None, request: Request 
   }}
 
   /* ── LETTERHEAD ── */
-  /* BUG1 FIX: min-height ensures absolutely-positioned bars are contained
-     and the body can never start behind the letterhead */
-  .letterhead {{ position: relative; padding: 0; min-height: 50px; }}
-  .header-bar-black {{
-    position: absolute; top: 0; left: 0;
-    width: 60%; height: 40px;
-    background: #000;
-    border-bottom-right-radius: 40px;
-    z-index: 2;
-  }}
-  /* BUG2 FIX: gold bar must be 70% (matches browser/signing page) not 40% */
-  .header-bar-gold {{
-    position: absolute; top: 0; right: 0;
-    width: 70%; height: 30px;
-    background: #C47D0A;
-    z-index: 1;
-  }}
-  .letterhead-inner {{
-    display: flex;
-    justify-content: space-between;
-    align-items: center;
-    /* BUG1 FIX: top padding must clear the tallest absolute bar (40px black) */
-    padding: 50px 60px 20px;
-    position: relative;
-    z-index: 3;
-  }}
-  .logo-img {{ height: 70px; width: auto; }}
-  .lh-contact {{
-    border-left: 2px solid #000;
-    padding: 4px 15px;
-    font-size: 9pt;
-    line-height: 1.5;
-    color: #111;
-    font-weight: 700;
-    font-variant-caps: all-small-caps;
-    letter-spacing: 0.05em;
-    font-family: 'Inter', sans-serif;
-  }}
-  .lh-contact a {{ color: var(--brand-gold); text-decoration: none; }}
-  .text-brand-gold {{ color: var(--brand-gold); }}
-  .letterhead-divider {{ height: 2px; background: #eee; margin: 0 60px; }}
-
-  /* ── BODY ── */
-  .document-body {{
-    padding: 28px 72px;
-    flex: 1;
-    line-height: 1.6;
-  }}
-  .document-body h1 {{ font-size: 18pt; font-family: 'Inter', sans-serif; font-weight: 800; margin: 20pt 0 10pt; }}
-  .document-body h2 {{ font-size: 14pt; font-family: 'Inter', sans-serif; font-weight: 700; text-transform: uppercase; letter-spacing: 0.04em; margin: 16pt 0 8pt; }}
-  .document-body h3 {{ font-size: 12pt; font-family: 'Inter', sans-serif; font-weight: 600; margin: 14pt 0 6pt; }}
-  .document-body p {{ margin-bottom: 8pt; text-align: justify; }}
-  .document-body ul {{ margin: 8pt 0 8pt 24pt; list-style: disc; }}
-  .document-body ol {{ margin: 8pt 0 8pt 24pt; }}
-  .document-body ol[type="a"], .document-body ol.lower-alpha {{ list-style-type: lower-alpha; }}
-  .document-body ol[type="A"], .document-body ol.upper-alpha {{ list-style-type: upper-alpha; }}
-  .document-body ol[type="i"], .document-body ol.lower-roman {{ list-style-type: lower-roman; }}
-  .document-body ol[type="I"], .document-body ol.upper-roman {{ list-style-type: upper-roman; }}
-  .document-body li {{ margin-bottom: 4pt; }}
-  .document-body table {{ width: 100%; border-collapse: collapse; margin: 12pt 0; }}
-  .document-body td, .document-body th {{ border: 1px solid #ccc; padding: 6pt 8pt; font-size: 10pt; vertical-align: top; }}
-  .document-body th {{ background: #f5f5f5; font-weight: 700; }}
-  .document-body hr {{ border: none; border-top: 1px solid #ccc; margin: 20pt 0; }}
-  /* BUG3 FIX: constrain all images including signatures */
-  .document-body img {{ max-width: 100%; height: auto; display: block; }}
-
-  /* BUG4 FIX: hide the Tiptap editor page-break widget in PDF output,
-     trigger a real CSS page break instead */
-  .document-body [data-page-break="true"],
-  .document-body .editor-page-break {{
-    display: block !important;
-    height: 0 !important;
-    overflow: hidden !important;
-    visibility: hidden !important;
-    page-break-after: always !important;
-    break-after: page !important;
-    margin: 0 !important;
-    padding: 0 !important;
-    border: none !important;
-  }}
-
-  /* BUG5 FIX: strip editor-only styling from unresolved merge-field tokens */
-  .document-body .merge-field {{
-    background: none !important;
-    border: none !important;
-    padding: 0 !important;
-    font-family: inherit !important;
-    font-size: inherit !important;
-    color: #000 !important;
-  }}
-
-  /* ── FOOTER ── */
-  .page-footer {{ margin-top: auto; }}
-  .footer-bar-container {{ display: flex; height: 12px; }}
-  .footer-black {{ flex: 1; background: #000; }}
-  .footer-gold {{ flex: 1; background: var(--brand-gold); }}
+  @page {{ size: A4; margin: 0; }}
+  body {{ font-family: 'Tinos', 'Times New Roman', serif; font-size: 11pt; color: #000; background: white; margin: 0; padding: 0; }}
+  
+  .bar-black {{ position: absolute; top: 0; left: 0; width: 60%; height: 40px; background: #000; border-bottom-right-radius: 40px; z-index: 100; }}
+  .bar-gold {{ position: absolute; top: 0; right: 0; width: 70%; height: 30px; background: #C47D0A; z-index: 90; }}
+  
+  .main-wrapper {{ position: relative; z-index: 200; width: 100%; }}
+  .header-content {{ padding: 50px 60px 10px; width: 100%; box-sizing: border-box; }}
+  .logo-box {{ float: left; width: 50%; }}
+  .contact-box {{ float: right; width: 45%; border-left: 2px solid #000; padding: 4px 15px; font-size: 9pt; line-height: 1.4; color: #111; font-weight: 700; font-variant-caps: all-small-caps; letter-spacing: 0.05em; font-family: 'Inter', sans-serif; }}
+  .contact-box a {{ color: #C47D0A; text-decoration: none; }}
+  
+  .clear {{ clear: both; height: 1px; }}
+  .divider {{ height: 2px; background: #eee; margin: 10px 60px 0; }}
+  
+  .body-content {{ padding: 30px 72px; line-height: 1.6; text-align: justify; }}
+  .body-content p {{ margin-bottom: 12pt; min-height: 1.2em; }}
+  .body-content ol, .body-content ul {{ padding: 0 0 0 40px; margin: 12pt 0; list-style-position: outside; }}
+  .body-content li {{ margin-bottom: 8pt; padding-left: 5px; }}
+  /* Automatic Parent-Child Nesting */
+  .body-content ol {{ list-style-type: decimal; }}
+  .body-content ol ol {{ list-style-type: lower-alpha; margin: 6pt 0; }}
+  .body-content ol ol ol {{ list-style-type: lower-roman; margin: 4pt 0; }}
+  .body-content ul {{ list-style-type: disc; }}
+  .body-content ul ul {{ list-style-type: circle; }}
+  /* Force specific types if overridden by user */
+  .body-content ol[type="a"] {{ list-style-type: lower-alpha !important; }}
+  .body-content ol[type="A"] {{ list-style-type: upper-alpha !important; }}
+  .body-content ol[type="i"] {{ list-style-type: lower-roman !important; }}
+  .body-content ol[type="I"] {{ list-style-type: upper-roman !important; }}
+  .body-content img {{ max-width: 100%; height: auto; display: block; }}
+  
+  .footer {{ position: absolute; bottom: 0; left: 0; width: 100%; }}
+  .footer-bars {{ display: flex; height: 12px; }}
+  .fb {{ flex: 1; background: #000; }}
+  .fg {{ flex: 1; background: #C47D0A; }}
 </style>
 </head>
 <body>
-<div class="page">
-  <div class="letterhead">
-    <div class="header-bar-black"></div>
-    <div class="header-bar-gold"></div>
-    <div class="letterhead-inner">
-      <img class="logo-img" src="{logo_uri}" alt="Eximp &amp; Cloves">
-      <div class="lh-contact">
+  <div class="bar-black"></div>
+  <div class="bar-gold"></div>
+  
+  <div class="main-wrapper">
+    <div class="header-content">
+      <div class="logo-box">
+        <img src="{logo_uri}" style="height:70px; width:auto;">
+      </div>
+      <div class="contact-box">
         {contact_html}
       </div>
+      <div class="clear"></div>
     </div>
-    <div class="letterhead-divider"></div>
+    <div class="divider"></div>
+    <div class="body-content">{body_html}</div>
   </div>
-
-  <div class="document-body">
-    {body_html}
+  
+  <div class="footer">
+    <div class="footer-bars"><div class="fb"></div><div class="fg"></div></div>
   </div>
-
-  <div class="page-footer">
-    <div class="footer-bar-container">
-      <div class="footer-black"></div>
-      <div class="footer-gold"></div>
-    </div>
-  </div>
-</div>
-</body>
-</html>"""
+</body></html>"""
 
     try:
         from weasyprint import HTML as WeasyprintHTML

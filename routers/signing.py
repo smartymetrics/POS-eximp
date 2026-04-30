@@ -4,7 +4,7 @@ from fastapi.templating import Jinja2Templates
 from database import get_db, db_execute, SUPABASE_URL
 from models import WitnessSignatureSubmit, ClientContractSignatureSubmit
 from routers.analytics import log_activity
-from datetime import datetime
+from datetime import datetime, timezone, timedelta
 import base64
 import io
 from PIL import Image
@@ -100,7 +100,7 @@ async def get_client_signing_context(token: str):
         raise HTTPException(status_code=404, detail="Invalid signing link")
     session = session_res.data[0]
     expires_at = datetime.fromisoformat(session["expires_at"].replace('Z', '+00:00'))
-    if expires_at < datetime.now().astimezone():
+    if expires_at < datetime.now(timezone(timedelta(hours=1))):
         raise HTTPException(status_code=400, detail="This signing link has expired")
     invoice = session["invoices"]
     client = invoice["clients"]
@@ -129,7 +129,7 @@ async def submit_client_signature(token: str, data: ClientContractSignatureSubmi
     invoice = session["invoices"]
 
     expires_at = datetime.fromisoformat(session["expires_at"].replace('Z', '+00:00'))
-    if expires_at < datetime.now().astimezone():
+    if expires_at < datetime.now(timezone(timedelta(hours=1))):
         raise HTTPException(status_code=400, detail="Link expired")
 
     try:
@@ -141,7 +141,7 @@ async def submit_client_signature(token: str, data: ClientContractSignatureSubmi
         db.table("invoices").update({
             "contract_signature_url": stored_signature,
             "contract_signature_method": data.signature_method,
-            "contract_signed_at": datetime.now().isoformat(),
+            "contract_signed_at": datetime.now(timezone(timedelta(hours=1))).isoformat(),
             "contract_audit_ip": audit_ip,
             "contract_audit_agent": audit_agent,
             "pipeline_stage": "paid"
@@ -181,7 +181,7 @@ async def get_signing_context(token: str):
     
     # 2. Check expiry
     expires_at = datetime.fromisoformat(session["expires_at"].replace('Z', '+00:00'))
-    if expires_at < datetime.now().astimezone():
+    if expires_at < datetime.now(timezone(timedelta(hours=1))):
         raise HTTPException(status_code=400, detail="This signing link has expired")
     
     if session["status"] == "completed":
@@ -214,7 +214,7 @@ async def get_contract_pdf_for_witness(token: str):
     
     # 2. Check expiry
     expires_at = datetime.fromisoformat(session["expires_at"].replace('Z', '+00:00'))
-    if expires_at < datetime.now().astimezone():
+    if expires_at < datetime.now(timezone(timedelta(hours=1))):
         raise HTTPException(status_code=400, detail="This signing link has expired")
     
     invoice = session["invoices"]
@@ -291,7 +291,7 @@ async def submit_witness_signature(token: str, data: WitnessSignatureSubmit, req
     
     # 2. Check expiry & status
     expires_at = datetime.fromisoformat(session["expires_at"].replace('Z', '+00:00'))
-    if expires_at < datetime.now().astimezone():
+    if expires_at < datetime.now(timezone(timedelta(hours=1))):
         raise HTTPException(status_code=400, detail="Link expired")
     
     if session["status"] == "completed":

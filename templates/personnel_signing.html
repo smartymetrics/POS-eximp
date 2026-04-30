@@ -83,8 +83,12 @@
 
         .letterhead {
             position: relative;
+            display: block;
+            width: 100%;
+            height: 180px;
+            margin: 0;
             padding: 0;
-            margin-bottom: 10mm; 
+            margin-bottom: 10mm;
         }
         .header-bar-black { position: absolute; top: 0; left: 0; width: 60%; height: 40px; background: #000; border-bottom-right-radius: 40px; z-index: 2; }
         .header-bar-gold { position: absolute; top: 0; right: 0; width: 70%; height: 30px; background: var(--brand-gold); z-index: 1; }
@@ -168,22 +172,23 @@
         .document-body [data-indent="6"] { margin-left: 240px !important; }
         .document-body [data-indent="7"] { margin-left: 280px !important; }
 
-        .document-body ul {
-            list-style-type: disc;
-            padding-left: 2rem;
-            margin: 6pt 0 10pt;
-        }
-
+        .document-body ul,
         .document-body ol {
-            padding-left: 2rem;
-            margin: 6pt 0 10pt;
+            padding-left: 40px !important;
+            margin: 12pt 0 12pt 0 !important;
+            list-style-position: outside !important;
         }
 
-        .document-body ol[type="a"] { list-style-type: lower-alpha; }
-        .document-body ol[type="A"] { list-style-type: upper-alpha; }
-        .document-body ol[type="i"] { list-style-type: lower-roman; }
-        .document-body ol[type="I"] { list-style-type: upper-roman; }
-        .document-body ol:not([type]) { list-style-type: decimal; }
+        .document-body ol { list-style-type: decimal; }
+        .document-body ol ol { list-style-type: lower-alpha; margin-top: 4pt; }
+        .document-body ol ol ol { list-style-type: lower-roman; margin-top: 2pt; }
+        .document-body ul { list-style-type: disc; }
+        .document-body ul ul { list-style-type: circle; }
+
+        .document-body ol[type="a"] { list-style-type: lower-alpha !important; }
+        .document-body ol[type="A"] { list-style-type: upper-alpha !important; }
+        .document-body ol[type="i"] { list-style-type: lower-roman !important; }
+        .document-body ol[type="I"] { list-style-type: upper-roman !important; }
 
         .document-body li {
             margin-bottom: 4pt;
@@ -779,10 +784,19 @@
                 const res = await fetch(endpoint);
 
                 if (!res.ok) {
-                    showStatus(
-                        res.status === 410 || res.status === 403 ? 'This link has expired.' : 'Document not found.',
-                        'error'
-                    );
+                    const msg = res.status === 410 || res.status === 403 ? 'This link has expired.' : 'Document not found.';
+                    if (IS_PREVIEW_MODE) {
+                        document.getElementById('document-content').innerHTML = `
+                            <div style="text-align: center; padding: 100px 20px; color: #ef4444; font-family: 'Inter', sans-serif;">
+                                <div style="font-size: 48px; margin-bottom: 20px;">⚠️</div>
+                                <h2 style="font-size: 20px; font-weight: 900; text-transform: uppercase; letter-spacing: 0.05em; margin-bottom: 12px; color: #ef4444;">Access Denied</h2>
+                                <p style="color: #111; font-weight: 700; margin-bottom: 8px;">${msg}</p>
+                                <p style="color: #666; font-size: 13px; line-height: 1.5;">Legal preview links are valid for 48 hours for security purposes.<br>Please request a new link from the drafting officer.</p>
+                            </div>
+                        `;
+                    } else {
+                        showStatus(msg, 'error');
+                    }
                     return;
                 }
 
@@ -1092,12 +1106,17 @@
 
         function showStatus(message, type) {
             const statusEl = document.getElementById('status-message');
+            if (!statusEl) {
+                console.warn("Status element missing, logging to console:", message);
+                if (type === 'error') alert(message); // Fallback for critical errors if UI is missing
+                return;
+            }
             statusEl.textContent = message;
             statusEl.className = `status-message status-${type}`;
             statusEl.style.display = 'block';
             // Auto-hide info messages
             if (type === 'info') return;
-            setTimeout(() => { statusEl.style.display = 'none'; }, 6000);
+            setTimeout(() => { if(statusEl) statusEl.style.display = 'none'; }, 6000);
         }
 
         init();
