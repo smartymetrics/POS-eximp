@@ -9269,13 +9269,16 @@ function ExpensesManager() {
     amount: parseFloat(r.amount || r.amount_gross || 0),
     amount_gross: parseFloat(r.amount_gross || 0),
     net: parseFloat(r.net || r.net_payout_amount || r.amount_gross || 0),
+    // amount_paid tracks how much of net has already been reimbursed (partial payments)
+    amount_paid: parseFloat(r.amount_paid || 0),
     currency: "NGN",
     date: r.date || r.created_at,
     created_at: r.created_at,
     // Normalise all status variants to a consistent capitalised form for display
     status: {
       pending_verification: "Pending", pending: "Pending", approved: "Approved",
-      rejected: "Rejected", paid: "Paid", voided: "Voided"
+      rejected: "Rejected", paid: "Paid", voided: "Voided",
+      partially_paid: "Partially Paid",
     }[r.status] || r.status || "Pending",
     payout_method: r.payout_method,
     receipt_url: r.receipt_url || r.proforma_url || null,
@@ -9456,12 +9459,12 @@ function ExpensesManager() {
 
   // ── Derived / display ──
   const statuses = ["All", "Pending", "Approved", "Partially Paid", "Rejected", "Paid"];
-  const stCol = { Pending: T.gold, Approved: "#4ADE80", Rejected: "#F87171", Paid: "#60A5FA", "Partially Paid": "#F59E0B", approved: "#4ADE80", rejected: "#F87171", paid: "#60A5FA", pending: T.gold, partially_paid: "#F59E0B" };
+  const stCol = { Pending: T.gold, Approved: "#4ADE80", Rejected: "#F87171", Paid: "#60A5FA", "Partially Paid": "#F59E0B", approved: "#4ADE80", rejected: "#F87171", paid: "#60A5FA", pending: T.gold, partially_paid: "#F59E0B", "partially paid": "#F59E0B" };
   const catEmoji = { Travel: "✈️", Accommodation: "🏨", Meals: "🍽️", Equipment: "💻", Training: "📚", Commission: "💰", Other: "📋" };
 
   const normalize = s => (s || "").toLowerCase();
   const filteredExpenses = expenses.filter(e => {
-    const matchStatus = statusFilter === "All" || normalize(e.status) === normalize(statusFilter) || (statusFilter === "Partially Paid" && normalize(e.status) === "partially_paid");
+    const matchStatus = statusFilter === "All" || normalize(e.status) === normalize(statusFilter);
     const matchStaff = !staffFilter || (e.staff?.full_name || "").toLowerCase().includes(staffFilter.toLowerCase());
     return matchStatus && matchStaff;
   });
@@ -9474,8 +9477,8 @@ function ExpensesManager() {
   const totalPending = expenses.filter(e => normalize(e.status) === "pending").reduce((s, e) => s + parseFloat(e.net || e.amount || 0), 0);
   // Option A: separate paid vs owed so the stat cards are accurate
   const totalReimbPaid = expenses.filter(e => normalize(e.status) === "paid").reduce((s, e) => s + parseFloat(e.net || e.amount || 0), 0)
-    + expenses.filter(e => normalize(e.status) === "partially_paid").reduce((s, e) => s + parseFloat(e.amount_paid || 0), 0);
-  const totalReimbOwed = expenses.filter(e => ["approved", "partially_paid"].includes(normalize(e.status))).reduce((s, e) => {
+    + expenses.filter(e => normalize(e.status) === "partially paid").reduce((s, e) => s + parseFloat(e.amount_paid || 0), 0);
+  const totalReimbOwed = expenses.filter(e => ["approved", "partially paid"].includes(normalize(e.status))).reduce((s, e) => {
     const net = parseFloat(e.net || e.amount || 0);
     const paid = parseFloat(e.amount_paid || 0);
     return s + Math.max(0, net - paid);
@@ -9607,12 +9610,12 @@ function ExpensesManager() {
                               {!e.hr_verified && normalize(e.status) !== "rejected" && e.source === "PORTAL" && (
                                 <button style={{ fontSize: 10, padding: "4px 10px", border: `1px solid ${T.gold}`, background: `${T.gold}18`, color: T.gold, borderRadius: 6, cursor: "pointer", fontWeight: 700 }} onClick={() => openVerify(e, "expense")}>HR Verify</button>
                               )}
-                              {(normalize(e.status) === "approved" || normalize(e.status) === "partially_paid") && (
+                              {(normalize(e.status) === "approved" || normalize(e.status) === "partially paid") && (
                                 <button className="bp" style={{ fontSize: 10, padding: "4px 10px", background: "#10B981" }} onClick={() => openPayModal(e)}>
-                                  {normalize(e.status) === "partially_paid" ? "💳 Pay Balance" : "💳 Mark Paid"}
+                                  {normalize(e.status) === "partially paid" ? "💳 Pay Balance" : "💳 Mark Paid"}
                                 </button>
                               )}
-                              {normalize(e.status) === "partially_paid" && (() => {
+                              {normalize(e.status) === "partially paid" && (() => {
                                 const paid = parseFloat(e.amount_paid || 0);
                                 const net = parseFloat(e.net || e.amount || 0);
                                 return <span style={{ fontSize: 9, color: "#F59E0B", fontWeight: 700 }}>₦{paid.toLocaleString()} / ₦{net.toLocaleString()}</span>;
