@@ -482,6 +482,398 @@
             }
         }
     </style>
+
+    <!-- ═══════════════════════════════ LEGAL DMS — VAULT STYLES ═══════════════════════════════ -->
+    <style>
+        /* ── Vault Slide-Over Panel ──────────────────────────────────── */
+        #vaultPanel {
+            position: fixed;
+            top: 0;
+            right: 0;
+            height: 100vh;
+            width: 480px;
+            max-width: 95vw;
+            background: #16181D;
+            border-left: 1px solid rgba(255, 255, 255, 0.08);
+            z-index: 10000;
+            transform: translateX(110%);
+            transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+            display: flex;
+            flex-direction: column;
+            overflow: hidden;
+            box-shadow: -24px 0 80px rgba(0, 0, 0, 0.6);
+        }
+
+        #vaultPanel.open {
+            transform: translateX(0);
+        }
+
+        #vaultBackdrop {
+            position: fixed;
+            inset: 0;
+            background: rgba(0, 0, 0, 0.55);
+            z-index: 9999;
+            opacity: 0;
+            pointer-events: none;
+            transition: opacity 0.3s ease;
+        }
+
+        #vaultBackdrop.open {
+            opacity: 1;
+            pointer-events: auto;
+        }
+
+        .vault-header {
+            padding: 24px 24px 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.07);
+            background: linear-gradient(135deg, rgba(196, 125, 10, 0.08) 0%, transparent 60%);
+        }
+
+        .vault-header h2 {
+            font-family: 'Cormorant Garamond', Georgia, serif;
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: #fff;
+            margin: 0 0 4px;
+            letter-spacing: -0.01em;
+        }
+
+        .vault-matter-label {
+            font-size: 11px;
+            font-weight: 600;
+            text-transform: uppercase;
+            letter-spacing: 0.12em;
+            color: #C47D0A;
+            opacity: 0.9;
+        }
+
+        .vault-upload-zone {
+            border: 2px dashed rgba(196, 125, 10, 0.35);
+            border-radius: 14px;
+            padding: 24px 20px;
+            text-align: center;
+            cursor: pointer;
+            transition: all 0.2s ease;
+            background: rgba(196, 125, 10, 0.03);
+            position: relative;
+        }
+
+        .vault-upload-zone:hover,
+        .vault-upload-zone.drag-over {
+            border-color: #C47D0A;
+            background: rgba(196, 125, 10, 0.08);
+        }
+
+        .vault-upload-zone input[type="file"] {
+            position: absolute;
+            inset: 0;
+            opacity: 0;
+            cursor: pointer;
+            width: 100%;
+            height: 100%;
+        }
+
+        .vault-upload-icon {
+            font-size: 2rem;
+            display: block;
+            margin-bottom: 6px;
+        }
+
+        .vault-upload-title {
+            font-weight: 700;
+            color: #fff;
+            font-size: 0.875rem;
+        }
+
+        .vault-upload-sub {
+            font-size: 0.75rem;
+            color: #6B7280;
+            margin-top: 4px;
+        }
+
+        .vault-upload-types {
+            display: inline-flex;
+            gap: 6px;
+            margin-top: 10px;
+        }
+
+        .vault-type-badge {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 2px 8px;
+            border-radius: 4px;
+            letter-spacing: 0.08em;
+            text-transform: uppercase;
+        }
+
+        .vault-type-badge.pdf {
+            background: rgba(239, 68, 68, 0.15);
+            color: #F87171;
+        }
+
+        .vault-type-badge.doc,
+        .vault-type-badge.docx {
+            background: rgba(59, 130, 246, 0.15);
+            color: #60A5FA;
+        }
+
+        .vault-progress-bar {
+            height: 3px;
+            background: rgba(255, 255, 255, 0.06);
+            border-radius: 99px;
+            overflow: hidden;
+            margin-top: 10px;
+            display: none;
+        }
+
+        .vault-progress-fill {
+            height: 100%;
+            background: linear-gradient(90deg, #C47D0A, #E09C2A);
+            border-radius: 99px;
+            transition: width 0.3s ease;
+            width: 0%;
+        }
+
+        .vault-file-list {
+            flex: 1;
+            overflow-y: auto;
+            padding: 0 24px 24px;
+        }
+
+        .vault-file-list::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .vault-file-list::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .vault-file-list::-webkit-scrollbar-thumb {
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 2px;
+        }
+
+        .vault-file-item {
+            display: flex;
+            align-items: flex-start;
+            gap: 14px;
+            padding: 14px 0;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+            animation: vaultFadeIn 0.25s ease both;
+        }
+
+        @keyframes vaultFadeIn {
+            from {
+                opacity: 0;
+                transform: translateY(8px);
+            }
+
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .vault-file-icon {
+            width: 40px;
+            height: 40px;
+            border-radius: 10px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 18px;
+            flex-shrink: 0;
+        }
+
+        .vault-file-icon.pdf {
+            background: rgba(239, 68, 68, 0.12);
+        }
+
+        .vault-file-icon.doc,
+        .vault-file-icon.docx {
+            background: rgba(59, 130, 246, 0.12);
+        }
+
+        .vault-file-meta {
+            flex: 1;
+            min-width: 0;
+        }
+
+        .vault-file-name {
+            font-size: 13px;
+            font-weight: 600;
+            color: #F3F4F6;
+            white-space: nowrap;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            max-width: 240px;
+        }
+
+        .vault-file-details {
+            font-size: 11px;
+            color: #6B7280;
+            margin-top: 3px;
+            display: flex;
+            gap: 8px;
+            align-items: center;
+            flex-wrap: wrap;
+        }
+
+        .vault-version-badge {
+            font-size: 10px;
+            font-weight: 700;
+            padding: 1px 7px;
+            border-radius: 99px;
+            background: rgba(196, 125, 10, 0.15);
+            color: #C47D0A;
+            letter-spacing: 0.06em;
+        }
+
+        .vault-version-badge.superseded {
+            background: rgba(255, 255, 255, 0.05);
+            color: #4B5563;
+        }
+
+        .vault-file-uploader {
+            font-size: 11px;
+            color: #9CA3AF;
+            margin-top: 2px;
+        }
+
+        .vault-file-actions {
+            display: flex;
+            gap: 6px;
+            flex-shrink: 0;
+        }
+
+        .vault-btn {
+            width: 30px;
+            height: 30px;
+            border-radius: 7px;
+            border: none;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 14px;
+            transition: all 0.15s ease;
+            background: rgba(255, 255, 255, 0.05);
+            color: #9CA3AF;
+        }
+
+        .vault-btn:hover {
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+        }
+
+        .vault-btn.danger:hover {
+            background: rgba(239, 68, 68, 0.15);
+            color: #F87171;
+        }
+
+        .vault-version-toggle {
+            font-size: 11px;
+            font-weight: 600;
+            color: #C47D0A;
+            cursor: pointer;
+            background: none;
+            border: none;
+            padding: 0;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            opacity: 0.8;
+        }
+
+        .vault-version-toggle:hover {
+            opacity: 1;
+        }
+
+        .vault-empty {
+            text-align: center;
+            padding: 40px 20px;
+            color: #4B5563;
+        }
+
+        .vault-empty-icon {
+            font-size: 3rem;
+            display: block;
+            margin-bottom: 12px;
+            opacity: 0.4;
+        }
+
+        .vault-empty-text {
+            font-size: 13px;
+        }
+
+        .vault-spinner {
+            width: 30px;
+            height: 30px;
+            border: 3px solid rgba(196, 125, 10, 0.1);
+            border-top-color: #C47D0A;
+            border-radius: 50%;
+            animation: vault-spin 0.8s linear infinite;
+            margin: 0 auto 12px;
+        }
+
+        @keyframes vault-spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .vault-toast {
+            position: fixed;
+            bottom: 24px;
+            right: 24px;
+            background: #1F2128;
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 12px 18px;
+            font-size: 13px;
+            font-weight: 500;
+            color: #fff;
+            z-index: 99999;
+            transform: translateY(80px);
+            opacity: 0;
+            transition: all 0.3s ease;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            min-width: 220px;
+            box-shadow: 0 12px 32px rgba(0, 0, 0, 0.5);
+        }
+
+        .vault-toast.show {
+            transform: translateY(0);
+            opacity: 1;
+        }
+
+        .vault-toast.success {
+            border-color: rgba(34, 197, 94, 0.3);
+        }
+
+        .vault-toast.error {
+            border-color: rgba(239, 68, 68, 0.3);
+        }
+
+        /* PDF Preview overlay */
+        .vault-preview-overlay {
+            position: fixed;
+            inset: 0;
+            z-index: 99999;
+            background: #0D0F14;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .vault-preview-bar {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            padding: 12px 20px;
+            background: #16181D;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.08);
+        }
+    </style>
 </head>
 
 <body>
@@ -538,13 +930,15 @@
             </div>
             <div class="nav-link" onclick="closeMobileNav(); switchTab('internal-matters')">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                 </svg>
                 Internal Matters
             </div>
             <div class="nav-link" onclick="closeMobileNav(); switchTab('external-matters')">
                 <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                 </svg>
                 External Matters
             </div>
@@ -608,14 +1002,16 @@
                 <!-- Internal Matters Integration -->
                 <div class="nav-link" onclick="switchTab('internal-matters')">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M17 20h5v-2a3 3 0 00-5.356-1.857M17 20H7m10 0v-2c0-.656-.126-1.283-.356-1.857M7 20H2v-2a3 3 0 015.356-1.857M7 20v-2c0-.656.126-1.283.356-1.857m0 0a5.002 5.002 0 019.288 0M15 7a3 3 0 11-6 0 3 3 0 016 0zm6 3a2 2 0 11-4 0 2 2 0 014 0zM7 10a2 2 0 11-4 0 2 2 0 014 0z" />
                     </svg>
                     Internal Matters
                 </div>
                 <!-- External Matters Integration -->
                 <div class="nav-link" onclick="switchTab('external-matters')">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M19 21V5a2 2 0 00-2-2H7a2 2 0 00-2 2v16m14 0h2m-2 0h-5m-9 0H3m2 0h5M9 7h1m-1 4h1m4-4h1m-1 4h1m-5 10v-5a1 1 0 011-1h2a1 1 0 011 1v5m-4 0h4" />
                     </svg>
                     External Matters
                 </div>
@@ -823,7 +1219,7 @@
                         <span class="status-badge bg-gray-800 text-gray-600" id="status-director">Empty</span>
                     </div>
                     <div class="h-24 signature-card rounded-xl flex items-center justify-center mb-6 overflow-hidden">
-                        <img id="img-director" class="h-16 object-contain hidden filter brightness-150 shadow-lg">
+                        <img id="img-director" class="h-16 object-contain hidden filter brightness-150 shadow-lg" crossorigin="anonymous">
                         <span class="text-gray-700 text-xs italic" id="empty-director">No signature on file</span>
                     </div>
                     <div class="mt-auto">
@@ -847,7 +1243,7 @@
                         <span class="status-badge bg-gray-800 text-gray-600" id="status-secretary">Empty</span>
                     </div>
                     <div class="h-24 signature-card rounded-xl flex items-center justify-center mb-6 overflow-hidden">
-                        <img id="img-secretary" class="h-16 object-contain hidden filter brightness-150 shadow-lg">
+                        <img id="img-secretary" class="h-16 object-contain hidden filter brightness-150 shadow-lg" crossorigin="anonymous">
                         <span class="text-gray-700 text-xs italic" id="empty-secretary">No signature on file</span>
                     </div>
                     <div class="mt-auto">
@@ -871,7 +1267,7 @@
                         <span class="status-badge bg-gray-800 text-gray-600" id="status-lawyer">Empty</span>
                     </div>
                     <div class="h-24 signature-card rounded-xl flex items-center justify-center mb-6 overflow-hidden">
-                        <img id="img-lawyer" class="h-16 object-contain hidden filter brightness-150 shadow-lg">
+                        <img id="img-lawyer" class="h-16 object-contain hidden filter brightness-150 shadow-lg" crossorigin="anonymous">
                         <span class="text-gray-700 text-xs italic" id="empty-lawyer">No signature on file</span>
                     </div>
                     <div class="mt-auto">
@@ -894,7 +1290,7 @@
                         <span class="status-badge bg-gray-800 text-gray-600" id="status-seal">Empty</span>
                     </div>
                     <div class="h-24 signature-card rounded-xl flex items-center justify-center mb-6 overflow-hidden">
-                        <img id="img-seal" class="h-20 object-contain hidden filter brightness-150">
+                        <img id="img-seal" class="h-20 object-contain hidden filter brightness-150" crossorigin="anonymous">
                         <span class="text-gray-700 text-xs italic" id="empty-seal">No seal on file</span>
                     </div>
                     <div class="mt-auto">
@@ -918,7 +1314,7 @@
                         <span class="status-badge bg-gray-800 text-gray-600" id="status-witness">Empty</span>
                     </div>
                     <div class="h-24 signature-card rounded-xl flex items-center justify-center mb-6 overflow-hidden">
-                        <img id="img-witness" class="h-16 object-contain hidden filter brightness-150 shadow-lg">
+                        <img id="img-witness" class="h-16 object-contain hidden filter brightness-150 shadow-lg" crossorigin="anonymous">
                         <span class="text-gray-700 text-xs italic" id="empty-witness">No signature on file</span>
                     </div>
                     <div class="mt-auto">
@@ -964,7 +1360,9 @@
                     <h2 class="font-serif text-4xl mb-2">Internal Matters</h2>
                     <p class="text-gray-500">Legal agreements and offer letters for Eximp & Cloves staff.</p>
                 </div>
-                <button onclick="openInitiateModal('Staff')" class="bg-brand-gold text-white px-8 py-3 rounded-xl font-bold hover:brightness-110 transition shadow-lg shadow-brand-gold/20">+ Initiate Internal Matter</button>
+                <button onclick="openInitiateModal('Staff')"
+                    class="bg-brand-gold text-white px-8 py-3 rounded-xl font-bold hover:brightness-110 transition shadow-lg shadow-brand-gold/20">+
+                    Initiate Internal Matter</button>
             </header>
             <div class="card overflow-hidden !p-0">
                 <table class="w-full text-left">
@@ -978,7 +1376,10 @@
                         </tr>
                     </thead>
                     <tbody id="personnelTableBody">
-                        <tr><td colspan="5" class="p-12 text-center text-gray-500 italic">Connecting to Personnel Vault...</td></tr>
+                        <tr>
+                            <td colspan="5" class="p-12 text-center text-gray-500 italic">Connecting to Personnel
+                                Vault...</td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -991,7 +1392,9 @@
                     <h2 class="font-serif text-4xl mb-2">External Matters</h2>
                     <p class="text-gray-500">Commercial agreements, Land Deeds, and Vendor contracts.</p>
                 </div>
-                <button onclick="openInitiateModal('External')" class="bg-brand-gold text-white px-8 py-3 rounded-xl font-bold hover:brightness-110 transition shadow-lg shadow-brand-gold/20">+ New External Case</button>
+                <button onclick="openInitiateModal('External')"
+                    class="bg-brand-gold text-white px-8 py-3 rounded-xl font-bold hover:brightness-110 transition shadow-lg shadow-brand-gold/20">+
+                    New External Case</button>
             </header>
             <div class="card overflow-hidden !p-0">
                 <table class="w-full text-left">
@@ -1005,7 +1408,10 @@
                         </tr>
                     </thead>
                     <tbody id="externalTableBody">
-                        <tr><td colspan="5" class="p-12 text-center text-gray-500 italic">Loading external matters...</td></tr>
+                        <tr>
+                            <td colspan="5" class="p-12 text-center text-gray-500 italic">Loading external matters...
+                            </td>
+                        </tr>
                     </tbody>
                 </table>
             </div>
@@ -1158,7 +1564,8 @@
     </div>
 
     <!-- Initiation Modal -->
-    <div id="initiateModal" class="fixed inset-0 z-[150] flex items-center justify-center bg-black/90 backdrop-blur-sm hidden">
+    <div id="initiateModal"
+        class="fixed inset-0 z-[150] flex items-center justify-center bg-black/90 backdrop-blur-sm hidden">
         <div class="card w-full max-w-lg border-brand-gold shadow-[0_0_50px_rgba(196,125,10,0.3)]">
             <div class="flex justify-between items-center mb-8">
                 <div>
@@ -1169,198 +1576,219 @@
             </div>
             <div class="space-y-6">
                 <div>
-                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Matter Category</label>
-                    <select id="initiate-category" class="w-full bg-[#1A1C20] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-brand-gold outline-none text-sm transition cursor-pointer">
+                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Matter
+                        Category</label>
+                    <select id="initiate-category"
+                        class="w-full bg-[#1A1C20] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-brand-gold outline-none text-sm transition cursor-pointer">
                         <option value="Personnel" class="bg-[#1A1C20] text-white">Internal (Staff & HR)</option>
                         <option value="External" class="bg-[#1A1C20] text-white">External (Property/Client)</option>
                     </select>
                 </div>
                 <div>
-                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Subject / Title</label>
-                    <input type="text" id="initiate-title" placeholder="e.g. Employment Contract - John Doe" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-brand-gold text-sm">
+                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Subject /
+                        Title</label>
+                    <input type="text" id="initiate-title" placeholder="e.g. Employment Contract - John Doe"
+                        class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-brand-gold text-sm">
                 </div>
                 <div id="party-fields">
-                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Search Staff or Enter Name</label>
-                    <input type="text" id="initiate-party-name" list="staff-search-results" oninput="handleStaffSearch(this.value)" placeholder="Search for staff or type external name..." class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-brand-gold text-sm">
+                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Search Staff
+                        or Enter Name</label>
+                    <input type="text" id="initiate-party-name" list="staff-search-results"
+                        oninput="handleStaffSearch(this.value)" placeholder="Search for staff or type external name..."
+                        class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-brand-gold text-sm">
                     <datalist id="staff-search-results"></datalist>
                     <input type="hidden" id="initiate-staff-id" value="">
                 </div>
                 <div>
-                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Party Email</label>
-                    <input type="email" id="initiate-party-email" placeholder="email@example.com" class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-brand-gold text-sm">
+                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Party
+                        Email</label>
+                    <input type="email" id="initiate-party-email" placeholder="email@example.com"
+                        class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-brand-gold text-sm">
                 </div>
             </div>
             <div class="flex gap-4 mt-10">
-                <button onclick="closeInitiateModal()" class="flex-1 py-3 bg-white/5 rounded-xl font-bold hover:bg-white/10 transition text-sm">Discard</button>
-                <button onclick="submitInitiate()" class="flex-1 py-3 bg-brand-gold text-white rounded-xl font-bold hover:brightness-110 transition shadow-lg text-sm">Start Drafting Session</button>
+                <button onclick="closeInitiateModal()"
+                    class="flex-1 py-3 bg-white/5 rounded-xl font-bold hover:bg-white/10 transition text-sm">Discard</button>
+                <button onclick="submitInitiate()"
+                    class="flex-1 py-3 bg-brand-gold text-white rounded-xl font-bold hover:brightness-110 transition shadow-lg text-sm">Start
+                    Drafting Session</button>
             </div>
         </div>
-    <!-- Execution Modal -->
-    <div id="executionModal" class="fixed inset-0 z-[120] flex items-center justify-center bg-black/90 backdrop-blur-sm hidden">
-        <div
-            class="card w-full max-w-2xl bg-[#1E2128] shadow-[0_0_50px_rgba(196,125,10,0.2)] rounded-2xl border border-brand-gold max-h-[90vh] overflow-y-auto !p-0">
-            <div class="sticky top-0 bg-[#1E2128] p-6 border-b border-[#2D2F36] z-10 flex justify-between items-center">
-                <div>
-                    <h3 class="font-serif text-2xl text-white">Seal & Execute</h3>
-                    <p class="text-gray-400 text-sm">Choose your preferred execution method.</p>
+        <!-- Execution Modal -->
+        <div id="executionModal"
+            class="fixed inset-0 z-[120] flex items-center justify-center bg-black/90 backdrop-blur-sm hidden">
+            <div
+                class="card w-full max-w-2xl bg-[#1E2128] shadow-[0_0_50px_rgba(196,125,10,0.2)] rounded-2xl border border-brand-gold max-h-[90vh] overflow-y-auto !p-0">
+                <div
+                    class="sticky top-0 bg-[#1E2128] p-6 border-b border-[#2D2F36] z-10 flex justify-between items-center">
+                    <div>
+                        <h3 class="font-serif text-2xl text-white">Seal & Execute</h3>
+                        <p class="text-gray-400 text-sm">Choose your preferred execution method.</p>
+                    </div>
+                    <button onclick="closeExecutionModal()"
+                        class="text-gray-500 hover:text-white transition w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/5">✕</button>
                 </div>
-                <button onclick="closeExecutionModal()"
-                    class="text-gray-500 hover:text-white transition w-8 h-8 flex items-center justify-center rounded-full hover:bg-white/5">✕</button>
-            </div>
 
-            <div class="p-6 space-y-8">
-                <!-- Option 1: Digital Sealing -->
-                <div class="p-6 bg-white/5 border border-white/10 rounded-2xl">
-                    <h4 class="text-brand-gold font-bold mb-2">Option 1: Digital Execution</h4>
-                    <p class="text-xs text-gray-400 mb-4 tracking-wide leading-relaxed">Automatically append the firm's
-                        digital seal and signatures from the vault. This is the fastest method.</p>
+                <div class="p-6 space-y-8">
+                    <!-- Option 1: Digital Sealing -->
+                    <div class="p-6 bg-white/5 border border-white/10 rounded-2xl">
+                        <h4 class="text-brand-gold font-bold mb-2">Option 1: Digital Execution</h4>
+                        <p class="text-xs text-gray-400 mb-4 tracking-wide leading-relaxed">Automatically append the
+                            firm's
+                            digital seal and signatures from the vault. This is the fastest method.</p>
 
-                    <div class="space-y-4 mb-6">
-                        <label
-                            class="flex items-center justify-between p-4 bg-black/20 rounded-xl cursor-pointer hover:bg-black/30 transition">
-                            <p class="text-sm font-bold">Include Audit Certificate</p>
-                            <input type="checkbox" id="sendCertToggle" checked class="w-5 h-5 accent-brand-gold">
-                        </label>
-                        <div class="p-4 bg-black/20 rounded-xl">
-                            <p class="text-sm font-bold text-gray-300 mb-2">Override Global Seal (Optional)</p>
-                            <p class="text-[10px] text-gray-500 mb-3 tracking-wide">Upload a specific seal to override
-                                the global firm vault seal for this contract only.</p>
-                            <input type="file" id="customSealFile" accept="image/*"
-                                class="w-full bg-black/40 border border-white/5 rounded-lg px-3 py-2 text-xs text-gray-300 focus:outline-none">
+                        <div class="space-y-4 mb-6">
+                            <label
+                                class="flex items-center justify-between p-4 bg-black/20 rounded-xl cursor-pointer hover:bg-black/30 transition">
+                                <p class="text-sm font-bold">Include Audit Certificate</p>
+                                <input type="checkbox" id="sendCertToggle" checked class="w-5 h-5 accent-brand-gold">
+                            </label>
+                            <div class="p-4 bg-black/20 rounded-xl">
+                                <p class="text-sm font-bold text-gray-300 mb-2">Override Global Seal (Optional)</p>
+                                <p class="text-[10px] text-gray-500 mb-3 tracking-wide">Upload a specific seal to
+                                    override
+                                    the global firm vault seal for this contract only.</p>
+                                <input type="file" id="customSealFile" accept="image/*"
+                                    class="w-full bg-black/40 border border-white/5 rounded-lg px-3 py-2 text-xs text-gray-300 focus:outline-none">
+                            </div>
                         </div>
+
+                        <button id="confirmExecuteBtn" onclick="executeContract()"
+                            class="w-full py-3 bg-brand-gold text-white rounded-xl font-bold shadow-[0_4px_15px_rgba(196,125,10,0.3)] hover:brightness-110 transition text-sm">
+                            DIGITALLY EXECUTE & SEND
+                        </button>
                     </div>
 
-                    <button id="confirmExecuteBtn" onclick="executeContract()"
-                        class="w-full py-3 bg-brand-gold text-white rounded-xl font-bold shadow-[0_4px_15px_rgba(196,125,10,0.3)] hover:brightness-110 transition text-sm">
-                        DIGITALLY EXECUTE & SEND
-                    </button>
-                </div>
+                    <!-- Option 2: External Sealing (Wet Signature/External Software) -->
+                    <div class="p-6 bg-white/5 border border-brand-gold/30 rounded-2xl relative overflow-hidden">
+                        <div
+                            class="absolute top-0 right-0 bg-brand-gold text-black text-[9px] font-bold px-3 py-1 rounded-bl-lg uppercase tracking-widest">
+                            New Workflow</div>
+                        <h4 class="text-white font-bold mb-2">Option 2: External Sealing Workflow</h4>
+                        <p class="text-xs text-gray-400 mb-6 tracking-wide leading-relaxed">Download a clean copy, seal
+                            it
+                            externally (e.g., wet seal or specialized software), and upload the finalized version.</p>
 
-                <!-- Option 2: External Sealing (Wet Signature/External Software) -->
-                <div class="p-6 bg-white/5 border border-brand-gold/30 rounded-2xl relative overflow-hidden">
-                    <div
-                        class="absolute top-0 right-0 bg-brand-gold text-black text-[9px] font-bold px-3 py-1 rounded-bl-lg uppercase tracking-widest">
-                        New Workflow</div>
-                    <h4 class="text-white font-bold mb-2">Option 2: External Sealing Workflow</h4>
-                    <p class="text-xs text-gray-400 mb-6 tracking-wide leading-relaxed">Download a clean copy, seal it
-                        externally (e.g., wet seal or specialized software), and upload the finalized version.</p>
-
-                    <div class="space-y-4 relative z-10">
-                        <!-- Step 1: Download -->
-                        <div class="flex items-center justify-between p-4 bg-black/40 rounded-xl border border-white/5">
-                            <div>
-                                <p class="text-sm font-bold text-gray-200">1. Clean PDF</p>
-                                <p class="text-[10px] text-gray-500">Download without 'Draft' watermark.</p>
-                            </div>
-                            <button onclick="downloadSealingPDF()"
-                                class="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold transition">Download</button>
-                        </div>
-
-                        <!-- Step 2: Upload -->
-                        <div class="p-4 bg-black/40 rounded-xl border border-white/5">
-                            <div class="flex items-center justify-between mb-3">
+                        <div class="space-y-4 relative z-10">
+                            <!-- Step 1: Download -->
+                            <div
+                                class="flex items-center justify-between p-4 bg-black/40 rounded-xl border border-white/5">
                                 <div>
-                                    <p class="text-sm font-bold text-brand-gold">2. Upload Sealed Copy</p>
-                                    <p class="text-[10px] text-gray-500">Upload the externally sealed PDF.</p>
+                                    <p class="text-sm font-bold text-gray-200">1. Clean PDF</p>
+                                    <p class="text-[10px] text-gray-500">Download without 'Draft' watermark.</p>
                                 </div>
-                                <span id="sealedUploadStatus"
-                                    class="hidden text-[10px] font-bold bg-green-900/50 text-green-400 px-2 py-1 rounded">ATTACHED
-                                    ✓</span>
+                                <button onclick="downloadSealingPDF()"
+                                    class="px-4 py-2 bg-white/10 hover:bg-white/20 text-white rounded-lg text-xs font-bold transition">Download</button>
                             </div>
-                            <div class="flex gap-2">
-                                <input type="file" id="sealedPdfFile" accept="application/pdf"
-                                    class="flex-1 bg-white/5 border border-white/5 rounded-lg px-3 py-2 text-xs text-gray-300 focus:outline-none">
-                                <button id="uploadSealedBtn" onclick="uploadSealedPDF()"
-                                    class="px-4 py-2 bg-brand-gold/20 hover:bg-brand-gold/40 text-brand-gold rounded-lg text-xs font-bold transition whitespace-nowrap">Upload</button>
-                            </div>
-                        </div>
 
-                        <!-- Step 3: Send -->
-                        <div class="flex items-center justify-between p-4 bg-black/40 rounded-xl border border-white/5">
-                            <div>
-                                <p class="text-sm font-bold text-gray-200">3. Finalize</p>
-                                <p class="text-[10px] text-gray-500">Email sealed PDF + certificate.</p>
+                            <!-- Step 2: Upload -->
+                            <div class="p-4 bg-black/40 rounded-xl border border-white/5">
+                                <div class="flex items-center justify-between mb-3">
+                                    <div>
+                                        <p class="text-sm font-bold text-brand-gold">2. Upload Sealed Copy</p>
+                                        <p class="text-[10px] text-gray-500">Upload the externally sealed PDF.</p>
+                                    </div>
+                                    <span id="sealedUploadStatus"
+                                        class="hidden text-[10px] font-bold bg-green-900/50 text-green-400 px-2 py-1 rounded">ATTACHED
+                                        ✓</span>
+                                </div>
+                                <div class="flex gap-2">
+                                    <input type="file" id="sealedPdfFile" accept="application/pdf"
+                                        class="flex-1 bg-white/5 border border-white/5 rounded-lg px-3 py-2 text-xs text-gray-300 focus:outline-none">
+                                    <button id="uploadSealedBtn" onclick="uploadSealedPDF()"
+                                        class="px-4 py-2 bg-brand-gold/20 hover:bg-brand-gold/40 text-brand-gold rounded-lg text-xs font-bold transition whitespace-nowrap">Upload</button>
+                                </div>
                             </div>
-                            <button id="sendSealedBtn" onclick="sendSealedPDF()" disabled
-                                class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition disabled:opacity-30 disabled:cursor-not-allowed">Finalize
-                                & Send</button>
+
+                            <!-- Step 3: Send -->
+                            <div
+                                class="flex items-center justify-between p-4 bg-black/40 rounded-xl border border-white/5">
+                                <div>
+                                    <p class="text-sm font-bold text-gray-200">3. Finalize</p>
+                                    <p class="text-[10px] text-gray-500">Email sealed PDF + certificate.</p>
+                                </div>
+                                <button id="sendSealedBtn" onclick="sendSealedPDF()" disabled
+                                    class="px-4 py-2 bg-emerald-600 hover:bg-emerald-500 text-white rounded-lg text-xs font-bold transition disabled:opacity-30 disabled:cursor-not-allowed">Finalize
+                                    & Send</button>
+                            </div>
                         </div>
                     </div>
                 </div>
             </div>
         </div>
-    </div>
 
-    <!-- UI Scripts -->
-    <script>
-        let currentTab = 'dashboard';
-        let velocityChart = null;
-        let allContracts = [];
-        const API_BASE = '/api/contracts';
-        const HR_LEGAL_API = '/api/hr-legal';
+        <!-- UI Scripts -->
+        <script>
+            let currentTab = 'dashboard';
+            let velocityChart = null;
+            let allContracts = [];
+            const API_BASE = '/api/contracts';
+            const HR_LEGAL_API = '/api/hr-legal';
 
-        // --- MOBILE NAV ---
-        function openMobileNav() {
-            document.getElementById('mobileNavDrawer').classList.add('open');
-            document.getElementById('mobileNavOverlay').classList.add('open');
-            document.body.style.overflow = 'hidden';
-        }
-        function closeMobileNav() {
-            document.getElementById('mobileNavDrawer').classList.remove('open');
-            document.getElementById('mobileNavOverlay').classList.remove('open');
-            document.body.style.overflow = '';
-        }
-
-        function switchTab(tabId, element) {
-            document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
-            document.getElementById(`tab-${tabId}`).classList.remove('hidden');
-
-            document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
-            if (element) {
-                element.classList.add('active');
-            } else if (event && event.currentTarget) {
-                event.currentTarget.classList.add('active');
+            // --- MOBILE NAV ---
+            function openMobileNav() {
+                document.getElementById('mobileNavDrawer').classList.add('open');
+                document.getElementById('mobileNavOverlay').classList.add('open');
+                document.body.style.overflow = 'hidden';
+            }
+            function closeMobileNav() {
+                document.getElementById('mobileNavDrawer').classList.remove('open');
+                document.getElementById('mobileNavOverlay').classList.remove('open');
+                document.body.style.overflow = '';
             }
 
-            currentTab = tabId;
-            if (tabId === 'dashboard') {
-                fetchSummary();
-                fetchExecutionTrends();
+            function switchTab(tabId, element) {
+                document.querySelectorAll('.tab-content').forEach(t => t.classList.add('hidden'));
+                document.getElementById(`tab-${tabId}`).classList.remove('hidden');
+
+                document.querySelectorAll('.nav-link').forEach(l => l.classList.remove('active'));
+                if (element) {
+                    element.classList.add('active');
+                } else if (event && event.currentTarget) {
+                    event.currentTarget.classList.add('active');
+                }
+
+                currentTab = tabId;
+                if (tabId === 'dashboard') {
+                    fetchSummary();
+                    fetchExecutionTrends();
+                }
+                if (tabId === 'execution-portal') fetchContracts();
+                if (tabId === 'internal-matters') fetchPersonnelMatters();
+                if (tabId === 'external-matters') fetchExternalLegal();
+                if (tabId === 'signature-vault') loadAuthorities();
+                if (tabId === 'archive') fetchArchive();
             }
-            if (tabId === 'execution-portal') fetchContracts();
-            if (tabId === 'internal-matters') fetchPersonnelMatters();
-            if (tabId === 'external-matters') fetchExternalLegal();
-            if (tabId === 'signature-vault') loadAuthorities();
-            if (tabId === 'archive') fetchArchive();
-        }
 
-        async function fetchPersonnelMatters() {
-            try {
-                const res = await fetch(`${HR_LEGAL_API}/matters?category=Personnel`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
-                });
-                const data = await res.json();
-                renderMatterTable(data, 'personnelTableBody');
-            } catch (err) { console.error('Personnel fetch error:', err); }
-        }
-
-        async function fetchExternalLegal() {
-            try {
-                const res = await fetch(`${HR_LEGAL_API}/matters?category=External`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
-                });
-                const data = await res.json();
-                renderMatterTable(data, 'externalTableBody');
-            } catch (err) { console.error('External fetch error:', err); }
-        }
-
-        function renderMatterTable(data, tableId) {
-            const body = document.getElementById(tableId);
-            if (!data || data.length === 0) {
-                body.innerHTML = '<tr><td colspan="5" class="p-12 text-center text-gray-500 italic">No matters found. Click "Initiate" to start.</td></tr>';
-                return;
+            async function fetchPersonnelMatters() {
+                try {
+                    const res = await fetch(`${HR_LEGAL_API}/matters?category=Personnel`, {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                    });
+                    const data = await res.json();
+                    renderMatterTable(data, 'personnelTableBody');
+                } catch (err) { console.error('Personnel fetch error:', err); }
             }
-            body.innerHTML = data.map(m => `
+
+            async function fetchExternalLegal() {
+                try {
+                    const res = await fetch(`${HR_LEGAL_API}/matters?category=External`, {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                    });
+                    const data = await res.json();
+                    renderMatterTable(data, 'externalTableBody');
+                } catch (err) { console.error('External fetch error:', err); }
+            }
+
+            function renderMatterTable(data, tableId) {
+                const body = document.getElementById(tableId);
+                if (!data || data.length === 0) {
+                    body.innerHTML = '<tr><td colspan="6" class="p-12 text-center text-gray-500 italic">No matters found. Click &quot;Initiate&quot; to start.</td></tr>';
+                    return;
+                }
+                body.innerHTML = data.map(m => {
+                    const safeTitle = (m.external_party_name || m.title || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+                    return `
                 <tr class="border-b border-[#2D2F36] hover:bg-white/5 transition group">
                     <td class="px-6 py-4 text-xs font-mono text-brand-gold">${m.id.split('-')[0]}...</td>
                     <td class="px-6 py-4">
@@ -1372,212 +1800,215 @@
                     </td>
                     <td class="px-6 py-4 text-xs text-gray-400">Admin</td>
                     <td class="px-6 py-4">
-                        <div class="flex gap-2">
-                            <button onclick="window.location.href='/legal/view?id=${m.id}'" class="p-2 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20 transition-all flex items-center justify-center w-8 h-8" title="View Document">👁️</button>
+                        <div class="flex gap-2 flex-wrap">
+                            <button onclick="window.location.href=\'/legal/view?id=${m.id}\'" class="p-2 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20 transition-all flex items-center justify-center w-8 h-8" title="View Document">&#128065;&#65039;</button>
                             ${m.status !== 'Executed' ? `
-                                <button onclick="window.location.href='/legal/advanced-editor?id=${m.id}'" class="p-2 bg-brand-gold/10 text-brand-gold rounded hover:bg-brand-gold/20 transition-all flex items-center justify-center w-8 h-8" title="Open Editor">✏️</button>
+                                <button onclick="window.location.href=\'/legal/advanced-editor?id=${m.id}\'" class="p-2 bg-brand-gold/10 text-brand-gold rounded hover:bg-brand-gold/20 transition-all flex items-center justify-center w-8 h-8" title="Open Editor">&#9999;&#65039;</button>
                             ` : `
-                                <button onclick="copyPersonnelPreviewLink('${m.id}')" class="p-2 bg-purple-500/10 text-purple-400 rounded hover:bg-purple-500/20 transition-all flex items-center justify-center w-8 h-8" title="Share Preview Link">🔗</button>
+                                <button onclick="copyPersonnelPreviewLink(\'${m.id}\')" class="p-2 bg-purple-500/10 text-purple-400 rounded hover:bg-purple-500/20 transition-all flex items-center justify-center w-8 h-8" title="Share Preview Link">&#128279;</button>
                             `}
-                            <button onclick="duplicateMatter('${m.id}')" class="p-2 bg-white/5 text-gray-400 rounded hover:bg-white/10 transition-all flex items-center justify-center w-8 h-8" title="Duplicate Matter">👯</button>
-                            <button onclick="openAuditTrail('${m.id}')" class="p-2 bg-white/5 text-gray-400 rounded hover:bg-white/10 transition-all flex items-center justify-center w-8 h-8" title="View Audit">📜</button>
+                            <button onclick="duplicateMatter(\'${m.id}\')" class="p-2 bg-white/5 text-gray-400 rounded hover:bg-white/10 transition-all flex items-center justify-center w-8 h-8" title="Duplicate Matter">&#128111;</button>
+                            <button onclick="openAuditTrail(\'${m.id}\')" class="p-2 bg-white/5 text-gray-400 rounded hover:bg-white/10 transition-all flex items-center justify-center w-8 h-8" title="View Audit">&#128220;</button>
+                            <button onclick="openVaultPanel(\'${m.id}\', \'${safeTitle}\')"
+                                    class="p-2 bg-amber-500/10 text-amber-400 rounded hover:bg-amber-500/20 transition-all flex items-center justify-center w-8 h-8"
+                                    title="Document Vault">&#128206;</button>
                         </div>
                     </td>
-                </tr>
-            `).join('');
-        }
+                </tr>`;
+                }).join('');
+            }
 
-        async function copyPersonnelPreviewLink(matterId) {
-            try {
-                const res = await fetch(`${HR_LEGAL_API}/matters/${matterId}/preview-link`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
-                });
-                const data = await res.json();
-                const url = data.preview_url || data.link;
-                if (url) {
-                    const fullUrl = url.startsWith('http') ? url : `${window.location.origin}${url}`;
-                    await navigator.clipboard.writeText(fullUrl);
-                    alert('✅ Secure preview link copied to clipboard!\n\nThis link expires in 48 hours.');
-                } else {
-                    alert('Failed to generate link: ' + (data.detail || 'Unknown error'));
+            async function copyPersonnelPreviewLink(matterId) {
+                try {
+                    const res = await fetch(`${HR_LEGAL_API}/matters/${matterId}/preview-link`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                    });
+                    const data = await res.json();
+                    const url = data.preview_url || data.link;
+                    if (url) {
+                        const fullUrl = url.startsWith('http') ? url : `${window.location.origin}${url}`;
+                        await navigator.clipboard.writeText(fullUrl);
+                        alert('✅ Secure preview link copied to clipboard!\n\nThis link expires in 48 hours.');
+                    } else {
+                        alert('Failed to generate link: ' + (data.detail || 'Unknown error'));
+                    }
+                } catch (err) {
+                    console.error('Sharing error:', err);
+                    alert('Connection error while generating link.');
                 }
-            } catch (err) {
-                console.error('Sharing error:', err);
-                alert('Connection error while generating link.');
             }
-        }
 
-        async function duplicateMatter(matterId) {
-            if (!confirm('Duplicate this matter? This will create a new Draft with identical content.')) return;
-            try {
-                const res = await fetch(`${HR_LEGAL_API}/matters/${matterId}/duplicate`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
-                });
-                const data = await res.json();
-                if (data.status === 'success') {
-                    alert('Matter duplicated successfully!');
-                    fetchPersonnelMatters(); // Refresh
-                } else {
-                    alert('Duplication failed: ' + (data.detail || 'Unknown error'));
+            async function duplicateMatter(matterId) {
+                if (!confirm('Duplicate this matter? This will create a new Draft with identical content.')) return;
+                try {
+                    const res = await fetch(`${HR_LEGAL_API}/matters/${matterId}/duplicate`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                    });
+                    const data = await res.json();
+                    if (data.status === 'success') {
+                        alert('Matter duplicated successfully!');
+                        fetchPersonnelMatters(); // Refresh
+                    } else {
+                        alert('Duplication failed: ' + (data.detail || 'Unknown error'));
+                    }
+                } catch (err) {
+                    console.error('Duplication error:', err);
+                    alert('Connection error.');
                 }
-            } catch (err) {
-                console.error('Duplication error:', err);
-                alert('Connection error.');
             }
-        }
 
-        async function fetchSummary() {
-            try {
-                const res = await fetch(`${API_BASE}/summary`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
-                });
-                const data = await res.json();
+            async function fetchSummary() {
+                try {
+                    const res = await fetch(`${HR_LEGAL_API}/summary`, {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                    });
+                    const data = await res.json();
 
-                document.getElementById('statTotal').innerText = data.total_contracts || 0;
-                document.getElementById('statActive').innerText = data.active_sessions || 0;
-                document.getElementById('statExecuted').innerText = data.executed_contracts || 0;
-                document.getElementById('statPending').innerText = data.pending_execution || 0;
-            } catch (err) { console.error('Summary fetch error:', err); }
-        }
+                    document.getElementById('statTotal').innerText = data.total_matters || 0;
+                    document.getElementById('statActive').innerText = data.active_matters || 0;
+                    document.getElementById('statExecuted').innerText = data.executed_matters || 0;
+                    document.getElementById('statPending').innerText = data.pending_review || 0;
+                } catch (err) { console.error('Summary fetch error:', err); }
+            }
 
-        async function fetchActivity() {
-            try {
-                const res = await fetch(`${API_BASE}/activity`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
-                });
-                const data = await res.json();
-                renderActivity(data);
-            } catch (err) { console.error('Activity fetch error:', err); }
-        }
+            async function fetchActivity() {
+                try {
+                    const res = await fetch(`${HR_LEGAL_API}/activity`, {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                    });
+                    const data = await res.json();
+                    renderActivity(data);
+                } catch (err) { console.error('Activity fetch error:', err); }
+            }
 
-        async function fetchExecutionTrends() {
-            try {
-                const res = await fetch(`${API_BASE}/execution-trends`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
-                });
-                const data = await res.json();
-                if (res.ok) {
-                    renderExecutionTrends(data);
-                } else {
-                    console.error('Execution trends error:', data);
+            async function fetchExecutionTrends() {
+                try {
+                    const res = await fetch(`${HR_LEGAL_API}/execution-trends`, {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                    });
+                    const data = await res.json();
+                    if (res.ok) {
+                        renderExecutionTrends(data);
+                    } else {
+                        console.error('Execution trends error:', data);
+                    }
+                } catch (err) {
+                    console.error('Execution trends fetch error:', err);
                 }
-            } catch (err) {
-                console.error('Execution trends fetch error:', err);
-            }
-        }
-
-        function renderExecutionTrends(data) {
-            const ctx = document.getElementById('velocityChart');
-            if (!ctx) return;
-
-            const labels = data.labels || [];
-            const initiated = data.initiated_counts || [];
-            const executed = data.executed_counts || [];
-            const avgHours = data.avg_hours_to_execution || [];
-
-            if (velocityChart) {
-                velocityChart.destroy();
             }
 
-            velocityChart = new Chart(ctx, {
-                data: {
-                    labels,
-                    datasets: [
-                        {
-                            label: 'Contracts Initiated',
-                            data: initiated,
-                            type: 'line',
-                            borderColor: '#60A5FA',
-                            backgroundColor: 'rgba(96,165,250,0.18)',
-                            borderWidth: 2,
-                            tension: 0.35,
-                            fill: false,
-                            pointRadius: 4,
-                            yAxisID: 'y',
-                        },
-                        {
-                            label: 'Executed Contracts',
-                            data: executed,
-                            type: 'bar',
-                            backgroundColor: '#F59E0B',
-                            borderColor: '#F59E0B',
-                            borderWidth: 1,
-                            yAxisID: 'y',
-                        },
-                        {
-                            label: 'Avg Time to Execution (hrs)',
-                            data: avgHours,
-                            type: 'line',
-                            borderColor: '#34D399',
-                            backgroundColor: 'rgba(52,211,153,0.2)',
-                            borderWidth: 2,
-                            tension: 0.35,
-                            fill: false,
-                            pointStyle: 'rectRounded',
-                            pointRadius: 4,
-                            yAxisID: 'y_right',
-                        }
-                    ]
-                },
-                options: {
-                    responsive: true,
-                    maintainAspectRatio: false,
-                    interaction: {
-                        mode: 'index',
-                        intersect: false,
+            function renderExecutionTrends(data) {
+                const ctx = document.getElementById('velocityChart');
+                if (!ctx) return;
+
+                const labels = data.labels || [];
+                const initiated = data.initiated || [];
+                const executed = data.executed || [];
+                const pending = data.pending || [];
+
+                if (velocityChart) {
+                    velocityChart.destroy();
+                }
+
+                velocityChart = new Chart(ctx, {
+                    data: {
+                        labels,
+                        datasets: [
+                            {
+                                label: 'Contracts Initiated',
+                                data: initiated,
+                                type: 'line',
+                                borderColor: '#60A5FA',
+                                backgroundColor: 'rgba(96,165,250,0.18)',
+                                borderWidth: 2,
+                                tension: 0.35,
+                                fill: false,
+                                pointRadius: 4,
+                                yAxisID: 'y',
+                            },
+                            {
+                                label: 'Executed Contracts',
+                                data: executed,
+                                type: 'bar',
+                                backgroundColor: '#F59E0B',
+                                borderColor: '#F59E0B',
+                                borderWidth: 1,
+                                yAxisID: 'y',
+                            },
+                            {
+                                label: 'Pending Review',
+                                data: pending,
+                                type: 'line',
+                                borderColor: '#34D399',
+                                backgroundColor: 'rgba(52,211,153,0.2)',
+                                borderWidth: 2,
+                                tension: 0.35,
+                                fill: false,
+                                pointStyle: 'rectRounded',
+                                pointRadius: 4,
+                                yAxisID: 'y',
+                            }
+                        ]
                     },
-                    plugins: {
-                        legend: {
-                            labels: {
-                                color: '#E5E7EB',
-                                font: { size: 12 }
+                    options: {
+                        responsive: true,
+                        maintainAspectRatio: false,
+                        interaction: {
+                            mode: 'index',
+                            intersect: false,
+                        },
+                        plugins: {
+                            legend: {
+                                labels: {
+                                    color: '#E5E7EB',
+                                    font: { size: 12 }
+                                }
+                            },
+                            tooltip: {
+                                callbacks: {
+                                    label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}`
+                                }
                             }
                         },
-                        tooltip: {
-                            callbacks: {
-                                label: ctx => `${ctx.dataset.label}: ${ctx.parsed.y}`
+                        scales: {
+                            x: {
+                                ticks: { color: '#9CA3AF' },
+                                grid: { color: 'rgba(255,255,255,0.06)' },
+                            },
+                            y: {
+                                type: 'linear',
+                                position: 'left',
+                                title: {
+                                    display: true,
+                                    text: 'Volume',
+                                    color: '#9CA3AF'
+                                },
+                                ticks: { color: '#9CA3AF' },
+                                grid: { color: 'rgba(255,255,255,0.06)' },
+                            },
+                            y_right: {
+                                type: 'linear',
+                                position: 'right',
+                                title: {
+                                    display: true,
+                                    text: 'Hours',
+                                    color: '#9CA3AF'
+                                },
+                                ticks: { color: '#9CA3AF' },
+                                grid: { drawOnChartArea: false },
                             }
-                        }
-                    },
-                    scales: {
-                        x: {
-                            ticks: { color: '#9CA3AF' },
-                            grid: { color: 'rgba(255,255,255,0.06)' },
-                        },
-                        y: {
-                            type: 'linear',
-                            position: 'left',
-                            title: {
-                                display: true,
-                                text: 'Volume',
-                                color: '#9CA3AF'
-                            },
-                            ticks: { color: '#9CA3AF' },
-                            grid: { color: 'rgba(255,255,255,0.06)' },
-                        },
-                        y_right: {
-                            type: 'linear',
-                            position: 'right',
-                            title: {
-                                display: true,
-                                text: 'Hours',
-                                color: '#9CA3AF'
-                            },
-                            ticks: { color: '#9CA3AF' },
-                            grid: { drawOnChartArea: false },
                         }
                     }
-                }
-            });
-        }
+                });
+            }
 
-        function renderActivity(logs) {
-            const container = document.getElementById('activityFeed');
-            container.innerHTML = (logs || []).map(log => {
-                const date = new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                return `
+            function renderActivity(logs) {
+                const container = document.getElementById('activityFeed');
+                container.innerHTML = (logs || []).map(log => {
+                    const date = new Date(log.created_at).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                    return `
                     <div class="activity-item flex gap-4">
                         <div class="flex-shrink-0 w-10 h-10 bg-brand-gold/10 rounded-xl flex items-center justify-center text-brand-gold">
                              <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path d="M9 12l2 2 4-4m5.618-4.016A11.955 11.955 0 0112 2.944a11.955 11.955 0 01-8.618 3.04A12.02 12.02 0 003 9c0 5.591 3.824 10.29 9 11.622 5.176-1.332 9-6.03 9-11.622 0-1.042-.133-2.052-.382-3.016z"></path></svg>
@@ -1587,81 +2018,81 @@
                                 <p class="text-sm font-bold text-white">${log.description}</p>
                                 <span class="text-[10px] text-gray-600 font-bold uppercase">${date}</span>
                             </div>
-                            <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold">BY ${log.admins?.full_name || 'SYSTEM'}</p>
+                            <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold">BY ${log.performed_by_name || 'SYSTEM'}</p>
                         </div>
                     </div>
                 `;
-            }).join('');
-            if (!logs || logs.length === 0) container.innerHTML = '<p class="text-xs text-gray-500 italic">No recent activity.</p>';
-        }
-
-        async function fetchContracts() {
-            try {
-                const showVoidedEl = document.getElementById('showVoidedToggle');
-                const showVoided = showVoidedEl ? showVoidedEl.checked : false;
-
-                // Update toggle UI
-                const track = document.getElementById('toggleTrack');
-                const thumb = document.getElementById('toggleThumb');
-                if (track && thumb) {
-                    if (showVoided) {
-                        track.classList.remove('bg-gray-700');
-                        track.classList.add('bg-brand-gold');
-                        thumb.classList.add('translate-x-5');
-                    } else {
-                        track.classList.add('bg-gray-700');
-                        track.classList.remove('bg-brand-gold');
-                        thumb.classList.remove('translate-x-5');
-                    }
-                }
-
-                const res = await fetch(`${API_BASE}/all-contracts?include_voided=${showVoided}`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
-                });
-                const contracts = await res.json();
-                if (res.ok) {
-                    allContracts = contracts || [];
-                    renderContracts(allContracts);
-                } else {
-                    console.error('Contracts error:', contracts);
-                }
-            } catch (err) { console.error('Contracts fetch error:', err); }
-        }
-
-        function filterContracts() {
-            const query = (document.getElementById('searchInput')?.value || '').trim().toLowerCase();
-            if (!query) {
-                return renderContracts(allContracts);
+                }).join('');
+                if (!logs || logs.length === 0) container.innerHTML = '<p class="text-xs text-gray-500 italic">No recent activity.</p>';
             }
 
-            const filtered = allContracts.filter(c => {
-                const invoiceId = (c.id || '').toLowerCase();
-                const invoiceNumber = (c.invoice_number || '').toLowerCase();
-                const clientName = (c.clients?.full_name || '').toLowerCase();
-                const clientEmail = (c.clients?.email || '').toLowerCase();
-                return invoiceId.includes(query)
-                    || invoiceNumber.includes(query)
-                    || clientName.includes(query)
-                    || clientEmail.includes(query);
-            });
-            renderContracts(filtered);
-        }
+            async function fetchContracts() {
+                try {
+                    const showVoidedEl = document.getElementById('showVoidedToggle');
+                    const showVoided = showVoidedEl ? showVoidedEl.checked : false;
 
-        function renderContracts(contracts) {
-            const tbody = document.getElementById('contractTableBody');
-            const rows = (contracts || []).map(c => {
-                const isVoided = c.status === 'voided';
-                if (isVoided) {
-                    // Filter out voided if toggle changed while rendering (safety)
-                    if (!document.getElementById('showVoidedToggle').checked) return '';
+                    // Update toggle UI
+                    const track = document.getElementById('toggleTrack');
+                    const thumb = document.getElementById('toggleThumb');
+                    if (track && thumb) {
+                        if (showVoided) {
+                            track.classList.remove('bg-gray-700');
+                            track.classList.add('bg-brand-gold');
+                            thumb.classList.add('translate-x-5');
+                        } else {
+                            track.classList.add('bg-gray-700');
+                            track.classList.remove('bg-brand-gold');
+                            thumb.classList.remove('translate-x-5');
+                        }
+                    }
+
+                    const res = await fetch(`${API_BASE}/all-contracts?include_voided=${showVoided}`, {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                    });
+                    const contracts = await res.json();
+                    if (res.ok) {
+                        allContracts = contracts || [];
+                        renderContracts(allContracts);
+                    } else {
+                        console.error('Contracts error:', contracts);
+                    }
+                } catch (err) { console.error('Contracts fetch error:', err); }
+            }
+
+            function filterContracts() {
+                const query = (document.getElementById('searchInput')?.value || '').trim().toLowerCase();
+                if (!query) {
+                    return renderContracts(allContracts);
                 }
-                const statusClass = `status-${c.signing_status}`;
-                const progressWidth = (c.signatures_collected / 3) * 100;
-                const execBtn = (c.signing_status === 'completed')
-                    ? '<span class="text-xs text-gray-600 uppercase font-bold">Executed</span>'
-                    : `<button onclick="openStatusModal('${c.id}')" class="bg-brand-gold/10 text-brand-gold px-3 py-1 rounded-lg text-[10px] font-bold hover:bg-brand-gold hover:text-white transition uppercase pulse-gold">Manage Execution</button>`;
 
-                return `
+                const filtered = allContracts.filter(c => {
+                    const invoiceId = (c.id || '').toLowerCase();
+                    const invoiceNumber = (c.invoice_number || '').toLowerCase();
+                    const clientName = (c.clients?.full_name || '').toLowerCase();
+                    const clientEmail = (c.clients?.email || '').toLowerCase();
+                    return invoiceId.includes(query)
+                        || invoiceNumber.includes(query)
+                        || clientName.includes(query)
+                        || clientEmail.includes(query);
+                });
+                renderContracts(filtered);
+            }
+
+            function renderContracts(contracts) {
+                const tbody = document.getElementById('contractTableBody');
+                const rows = (contracts || []).map(c => {
+                    const isVoided = c.status === 'voided';
+                    if (isVoided) {
+                        // Filter out voided if toggle changed while rendering (safety)
+                        if (!document.getElementById('showVoidedToggle').checked) return '';
+                    }
+                    const statusClass = `status-${c.signing_status}`;
+                    const progressWidth = (c.signatures_collected / 3) * 100;
+                    const execBtn = (c.signing_status === 'completed')
+                        ? '<span class="text-xs text-gray-600 uppercase font-bold">Executed</span>'
+                        : `<button onclick="openStatusModal('${c.id}')" class="bg-brand-gold/10 text-brand-gold px-3 py-1 rounded-lg text-[10px] font-bold hover:bg-brand-gold hover:text-white transition uppercase pulse-gold">Manage Execution</button>`;
+
+                    return `
                     <tr class="border-b border-[#2D2F36] hover:bg-white/5 transition ${isVoided ? 'opacity-40 grayscale' : ''}" 
                         onclick="if(event.target.tagName !== 'BUTTON' && '${c.status}' !== 'voided') openStatusModal('${c.id}')">
                         <td class="px-6 py-4">
@@ -1693,227 +2124,227 @@
                         </td>
                     </tr>
                 `;
-            }).join('');
-            tbody.innerHTML = rows || '<tr><td colspan="7" class="p-12 text-center text-gray-500">No contracts found matching your search.</td></tr>';
-        }
-
-        // --- SIGNATURE VAULT CONTROLS ---
-        function openSignatureModal(dbRole, title) {
-            document.getElementById('modalTitle').innerText = `Manage ${title}`;
-            document.getElementById('sigRole').value = dbRole;
-            document.getElementById('sigRoleLabel').innerText = `Selected role: ${title}`;
-            document.getElementById('sigNameLabel').innerText = dbRole === 'lawyer_seal' ? 'Seal Name' : 'Full Name';
-            document.getElementById('sigName').placeholder = dbRole === 'lawyer_seal' ? 'e.g. Eximp & Cloves Seal' : 'e.g. Kolawole Olawale';
-
-            document.getElementById('sigName').value = '';
-            document.getElementById('sigAddress').value = '';
-            document.getElementById('sigOccupation').value = '';
-
-            const meta = document.getElementById('metaFields');
-            if (dbRole === 'company_witness' || dbRole === 'lawyer') {
-                meta.classList.remove('hidden');
-            } else {
-                meta.classList.add('hidden');
+                }).join('');
+                tbody.innerHTML = rows || '<tr><td colspan="7" class="p-12 text-center text-gray-500">No contracts found matching your search.</td></tr>';
             }
 
-            document.getElementById('signatureModal').classList.remove('hidden');
-        }
-        function closeSignatureModal() { document.getElementById('signatureModal').classList.add('hidden'); }
+            // --- SIGNATURE VAULT CONTROLS ---
+            function openSignatureModal(dbRole, title) {
+                document.getElementById('modalTitle').innerText = `Manage ${title}`;
+                document.getElementById('sigRole').value = dbRole;
+                document.getElementById('sigRoleLabel').innerText = `Selected role: ${title}`;
+                document.getElementById('sigNameLabel').innerText = dbRole === 'lawyer_seal' ? 'Seal Name' : 'Full Name';
+                document.getElementById('sigName').placeholder = dbRole === 'lawyer_seal' ? 'e.g. Eximp & Cloves Seal' : 'e.g. Kolawole Olawale';
 
-        async function uploadSignature() {
-            const name = document.getElementById('sigName').value;
-            const role = document.getElementById('sigRole').value;
-            const address = document.getElementById('sigAddress').value;
-            const occupation = document.getElementById('sigOccupation').value;
-            const file = document.getElementById('sigFile').files[0];
-            const btn = document.getElementById('uploadBtn');
+                document.getElementById('sigName').value = '';
+                document.getElementById('sigAddress').value = '';
+                document.getElementById('sigOccupation').value = '';
 
-            if (!name || !file) return alert('Please provide name and signature file');
+                const meta = document.getElementById('metaFields');
+                if (dbRole === 'company_witness' || dbRole === 'lawyer') {
+                    meta.classList.remove('hidden');
+                } else {
+                    meta.classList.add('hidden');
+                }
 
-            btn.innerText = 'Uploading...';
-            btn.disabled = true;
+                document.getElementById('signatureModal').classList.remove('hidden');
+            }
+            function closeSignatureModal() { document.getElementById('signatureModal').classList.add('hidden'); }
 
-            const reader = new FileReader();
-            reader.onloadend = async () => {
-                const base64 = reader.result;
+            async function uploadSignature() {
+                const name = document.getElementById('sigName').value;
+                const role = document.getElementById('sigRole').value;
+                const address = document.getElementById('sigAddress').value;
+                const occupation = document.getElementById('sigOccupation').value;
+                const file = document.getElementById('sigFile').files[0];
+                const btn = document.getElementById('uploadBtn');
+
+                if (!name || !file) return alert('Please provide name and signature file');
+
+                btn.innerText = 'Uploading...';
+                btn.disabled = true;
+
+                const reader = new FileReader();
+                reader.onloadend = async () => {
+                    const base64 = reader.result;
+                    try {
+                        const res = await fetch(`${API_BASE}/signatures`, {
+                            method: 'POST',
+                            headers: {
+                                'Content-Type': 'application/json',
+                                'Authorization': `Bearer ${localStorage.getItem('ec_token')}`
+                            },
+                            body: JSON.stringify({
+                                full_name: name,
+                                role: role,
+                                address: address || null,
+                                occupation: occupation || null,
+                                signature_base64: base64,
+                                is_active: true
+                            })
+                        });
+                        if (res.ok) {
+                            closeSignatureModal();
+                            loadAuthorities();
+                        } else {
+                            const err = await res.json();
+                            alert(err.detail || 'Upload failed');
+                        }
+                    } catch (err) { alert('Upload failed'); }
+                    finally {
+                        btn.innerText = 'Upload & Save';
+                        btn.disabled = false;
+                    }
+                };
+                reader.readAsDataURL(file);
+            }
+
+            async function deactivateSignature(id) {
+                if (!confirm('Are you sure you want to deactivate this signature? It will no longer be available for new contracts.')) return;
                 try {
-                    const res = await fetch(`${API_BASE}/signatures`, {
-                        method: 'POST',
-                        headers: {
-                            'Content-Type': 'application/json',
-                            'Authorization': `Bearer ${localStorage.getItem('ec_token')}`
-                        },
-                        body: JSON.stringify({
-                            full_name: name,
-                            role: role,
-                            address: address || null,
-                            occupation: occupation || null,
-                            signature_base64: base64,
-                            is_active: true
-                        })
+                    const res = await fetch(`${API_BASE}/signatures/${id}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                    });
+                    if (res.ok) loadAuthorities();
+                } catch (err) { alert('Deactivation failed'); }
+            }
+
+            function renderAuthorities(data) {
+                const roleMap = {
+                    'director': 'director',
+                    'secretary': 'secretary',
+                    'lawyer': 'lawyer',
+                    'lawyer_seal': 'seal',
+                    'company_witness': 'witness',
+                    // Fallbacks just in case
+                    'Managing Director': 'director',
+                    'Company Secretary': 'secretary',
+                    'Authorizing Lawyer': 'lawyer',
+                    'Lawyer Seal': 'seal',
+                    'Company Witness': 'witness'
+                };
+
+                Object.values(roleMap).forEach(id => {
+                    const img = document.getElementById(`img-${id}`);
+                    const empty = document.getElementById(`empty-${id}`);
+                    const status = document.getElementById(`status-${id}`);
+                    const nameText = document.getElementById(`name-${id}`);
+
+                    const delBtn = document.getElementById(`del-${id}`);
+
+                    if (img) img.classList.add('hidden');
+                    if (empty) empty.classList.remove('hidden');
+                    if (status) {
+                        status.innerText = 'Empty';
+                        status.className = 'status-badge bg-gray-800 text-gray-600';
+                    }
+                    if (nameText) nameText.innerText = '--';
+                    if (id === 'witness') {
+                        const meta = document.getElementById('meta-witness');
+                        if (meta) meta.innerText = '';
+                    }
+                    if (delBtn) {
+                        delBtn.disabled = true;
+                        delete delBtn.dataset.sigId;
+                    }
+                });
+
+                data.filter(s => s.is_active).forEach(sig => {
+                    const id = roleMap[sig.role];
+                    if (!id) return;
+
+                    const img = document.getElementById(`img-${id}`);
+                    const empty = document.getElementById(`empty-${id}`);
+                    const status = document.getElementById(`status-${id}`);
+                    const nameText = document.getElementById(`name-${id}`);
+
+                    const delBtn = document.getElementById(`del-${id}`);
+
+                    if (img) {
+                        let src = sig.signature_base64 || sig.signature_url || '';
+                        if (src && !src.startsWith('http') && !src.startsWith('data:')) {
+                            src = `data:image/png;base64,${src}`;
+                        }
+                        img.src = src;
+                        img.classList.remove('hidden');
+                    }
+                    if (empty) empty.classList.add('hidden');
+                    if (status) {
+                        status.innerText = 'Active';
+                        status.className = 'status-badge status-completed';
+                    }
+                    if (nameText) nameText.innerText = sig.full_name || sig.role;
+
+                    if (id === 'witness') {
+                        const meta = document.getElementById('meta-witness');
+                        if (meta) meta.innerText = `${sig.occupation || ''}${sig.occupation && sig.address ? ' • ' : ''}${sig.address || ''}`;
+                    }
+
+                    if (delBtn) {
+                        delBtn.dataset.role = id;
+                        delBtn.disabled = false;
+                    }
+                });
+            }
+
+            async function deleteAuthority(role) {
+                if (!role) return;
+                if (!confirm('Are you sure you want to delete this signature from the system?')) return;
+
+                try {
+                    const res = await fetch(`${API_BASE}/signatures/${role}`, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
                     });
                     if (res.ok) {
-                        closeSignatureModal();
+                        alert('Signature successfully deleted');
                         loadAuthorities();
                     } else {
                         const err = await res.json();
-                        alert(err.detail || 'Upload failed');
+                        alert(err.detail || 'Failed to delete signature.');
                     }
-                } catch (err) { alert('Upload failed'); }
-                finally {
-                    btn.innerText = 'Upload & Save';
-                    btn.disabled = false;
+                } catch (err) {
+                    console.error(err);
+                    alert('Connection error while trying to delete.');
                 }
-            };
-            reader.readAsDataURL(file);
-        }
-
-        async function deactivateSignature(id) {
-            if (!confirm('Are you sure you want to deactivate this signature? It will no longer be available for new contracts.')) return;
-            try {
-                const res = await fetch(`${API_BASE}/signatures/${id}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
-                });
-                if (res.ok) loadAuthorities();
-            } catch (err) { alert('Deactivation failed'); }
-        }
-
-        function renderAuthorities(data) {
-            const roleMap = {
-                'director': 'director',
-                'secretary': 'secretary',
-                'lawyer': 'lawyer',
-                'lawyer_seal': 'seal',
-                'company_witness': 'witness',
-                // Fallbacks just in case
-                'Managing Director': 'director',
-                'Company Secretary': 'secretary',
-                'Authorizing Lawyer': 'lawyer',
-                'Lawyer Seal': 'seal',
-                'Company Witness': 'witness'
-            };
-
-            Object.values(roleMap).forEach(id => {
-                const img = document.getElementById(`img-${id}`);
-                const empty = document.getElementById(`empty-${id}`);
-                const status = document.getElementById(`status-${id}`);
-                const nameText = document.getElementById(`name-${id}`);
-
-                const delBtn = document.getElementById(`del-${id}`);
-
-                if (img) img.classList.add('hidden');
-                if (empty) empty.classList.remove('hidden');
-                if (status) {
-                    status.innerText = 'Empty';
-                    status.className = 'status-badge bg-gray-800 text-gray-600';
-                }
-                if (nameText) nameText.innerText = '--';
-                if (id === 'witness') {
-                    const meta = document.getElementById('meta-witness');
-                    if (meta) meta.innerText = '';
-                }
-                if (delBtn) {
-                    delBtn.disabled = true;
-                    delete delBtn.dataset.sigId;
-                }
-            });
-
-            data.filter(s => s.is_active).forEach(sig => {
-                const id = roleMap[sig.role];
-                if (!id) return;
-
-                const img = document.getElementById(`img-${id}`);
-                const empty = document.getElementById(`empty-${id}`);
-                const status = document.getElementById(`status-${id}`);
-                const nameText = document.getElementById(`name-${id}`);
-
-                const delBtn = document.getElementById(`del-${id}`);
-
-                if (img) {
-                    let src = sig.signature_base64 || sig.signature_url || '';
-                    if (src && !src.startsWith('http') && !src.startsWith('data:')) {
-                        src = `data:image/png;base64,${src}`;
-                    }
-                    img.src = src;
-                    img.classList.remove('hidden');
-                }
-                if (empty) empty.classList.add('hidden');
-                if (status) {
-                    status.innerText = 'Active';
-                    status.className = 'status-badge status-completed';
-                }
-                if (nameText) nameText.innerText = sig.full_name || sig.role;
-
-                if (id === 'witness') {
-                    const meta = document.getElementById('meta-witness');
-                    if (meta) meta.innerText = `${sig.occupation || ''}${sig.occupation && sig.address ? ' • ' : ''}${sig.address || ''}`;
-                }
-
-                if (delBtn) {
-                    delBtn.dataset.role = id;
-                    delBtn.disabled = false;
-                }
-            });
-        }
-
-        async function deleteAuthority(role) {
-            if (!role) return;
-            if (!confirm('Are you sure you want to delete this signature from the system?')) return;
-
-            try {
-                const res = await fetch(`${API_BASE}/signatures/${role}`, {
-                    method: 'DELETE',
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
-                });
-                if (res.ok) {
-                    alert('Signature successfully deleted');
-                    loadAuthorities();
-                } else {
-                    const err = await res.json();
-                    alert(err.detail || 'Failed to delete signature.');
-                }
-            } catch (err) {
-                console.error(err);
-                alert('Connection error while trying to delete.');
             }
-        }
 
-        // --- CONTRACT STATUS MODAL (ORCHESTRATION) ---
-        let activeInvoiceId = null;
-        let walkInRole = null;
+            // --- CONTRACT STATUS MODAL (ORCHESTRATION) ---
+            let activeInvoiceId = null;
+            let walkInRole = null;
 
-        async function openStatusModal(id) {
-            activeInvoiceId = id;
-            document.getElementById('statusModal').classList.remove('hidden');
-            document.getElementById('statusModalBody').innerHTML = '<div class="py-12 text-center text-gray-500">Loading orchestration data...</div>';
+            async function openStatusModal(id) {
+                activeInvoiceId = id;
+                document.getElementById('statusModal').classList.remove('hidden');
+                document.getElementById('statusModalBody').innerHTML = '<div class="py-12 text-center text-gray-500">Loading orchestration data...</div>';
 
-            try {
-                const res = await fetch(`${API_BASE}/${id}/status`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
-                });
-                if (!res.ok) throw new Error('Status fetch failed');
-                const data = await res.json();
-                if (data.status === 'not_started') {
+                try {
+                    const res = await fetch(`${API_BASE}/${id}/status`, {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                    });
+                    if (!res.ok) throw new Error('Status fetch failed');
+                    const data = await res.json();
+                    if (data.status === 'not_started') {
+                        renderEmptyStatus();
+                    } else {
+                        renderStatusModal(data);
+                    }
+                } catch (err) {
+                    console.error(err);
+                    document.getElementById('statusModalBody').innerHTML = '<div class="py-12 text-center text-red-500 font-bold">Session not found or expired.</div>';
                     renderEmptyStatus();
-                } else {
-                    renderStatusModal(data);
                 }
-            } catch (err) {
-                console.error(err);
-                document.getElementById('statusModalBody').innerHTML = '<div class="py-12 text-center text-red-500 font-bold">Session not found or expired.</div>';
-                renderEmptyStatus();
             }
-        }
 
-        function closeStatusModal() {
-            document.getElementById('statusModal').classList.add('hidden');
-            activeInvoiceId = null;
-        }
+            function closeStatusModal() {
+                document.getElementById('statusModal').classList.add('hidden');
+                activeInvoiceId = null;
+            }
 
-        function renderEmptyStatus() {
-            document.getElementById('statusModalInvoice').innerText = "UNAVAILABLE";
-            document.getElementById('statusModalBody').innerHTML = `
+            function renderEmptyStatus() {
+                document.getElementById('statusModalInvoice').innerText = "UNAVAILABLE";
+                document.getElementById('statusModalBody').innerHTML = `
                 <div class="text-center py-12">
                      <div class="w-16 h-16 bg-brand-gold/10 rounded-full flex items-center justify-center mx-auto mb-6">
                         <svg class="w-8 h-8 text-brand-gold" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z"></path></svg>
@@ -1937,17 +2368,17 @@
                      </div>
                 </div>
              `;
-            document.getElementById('statusModalActions').innerHTML = '';
-        }
+                document.getElementById('statusModalActions').innerHTML = '';
+            }
 
-        function renderStatusModal(data) {
-            const hasWitness = data.witness_signatures && data.witness_signatures.length > 0;
-            const hasClient = data.client_signed;
-            const expires = new Date(data.expires_at).toLocaleDateString();
+            function renderStatusModal(data) {
+                const hasWitness = data.witness_signatures && data.witness_signatures.length > 0;
+                const hasClient = data.client_signed;
+                const expires = new Date(data.expires_at).toLocaleDateString();
 
-            document.getElementById('statusModalInvoice').innerText = "ACTIVE ORCHESTRATION";
+                document.getElementById('statusModalInvoice').innerText = "ACTIVE ORCHESTRATION";
 
-            let html = `
+                let html = `
                 <div class="bg-brand-gold/5 border border-brand-gold/20 rounded-2xl p-4 mb-8 flex justify-between items-center group relative overflow-hidden">
                     <div class="relative z-10">
                         <p class="text-[10px] font-bold text-brand-gold uppercase tracking-tighter mb-1">ORCHESTRATION ACTIVE</p>
@@ -1993,315 +2424,322 @@
                     </div>
                 </div>
             `;
-            document.getElementById('statusModalBody').innerHTML = html;
+                document.getElementById('statusModalBody').innerHTML = html;
 
-            // Actions
-            let actionsHtml = `
+                // Actions
+                let actionsHtml = `
                 <button onclick="window.location.href='/legal/editor?id='+activeInvoiceId" class="px-6 py-2 bg-white/5 border border-brand-gold/30 text-brand-gold rounded-xl text-xs font-bold hover:bg-white/10 transition">Edit Wordings</button>
                 <button onclick="viewDraft('${activeInvoiceId}')" class="px-6 py-2 bg-white/5 border border-white/10 rounded-xl text-xs font-bold hover:bg-white/10 transition">View Draft (HTML)</button>
             `;
-            if (hasWitness && hasClient) {
-                actionsHtml += `<button onclick="openExecutionModal('${activeInvoiceId}')" class="px-6 py-2 bg-brand-gold text-white rounded-xl text-xs font-bold shadow-lg hover:brightness-110 transition pulse-gold">Final Execution</button>`;
-            } else {
-                if (!hasWitness) actionsHtml += `<button onclick="initiateWalkIn('witness')" class="px-4 py-2 bg-white/5 rounded-xl text-[10px] font-bold hover:bg-white/10 transition uppercase tracking-widest whitespace-nowrap">Walk-in Witness</button>`;
-                if (!hasClient) actionsHtml += `<button onclick="initiateWalkIn('client')" class="px-4 py-2 bg-white/5 rounded-xl text-[10px] font-bold hover:bg-white/10 transition uppercase tracking-widest whitespace-nowrap">Walk-in Client</button>`;
-            }
-            document.getElementById('statusModalActions').innerHTML = actionsHtml;
-        }
-
-        // --- ORCHESTRATION ACTIONS ---
-        async function startSigningSession() {
-            try {
-                const res = await fetch(`${API_BASE}/session/${activeInvoiceId}`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
-                });
-                const data = await res.json();
-                if (res.ok) openStatusModal(activeInvoiceId);
-                else alert(data.detail || 'Failed to start session. Ensure company signatures are set.');
-            } catch (err) { alert('Action failed'); }
-        }
-
-        async function extendSession() {
-            try {
-                const res = await fetch(`${API_BASE}/${activeInvoiceId}/extend`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
-                });
-                if (res.ok) {
-                    alert('Session extended by 48 hours');
-                    openStatusModal(activeInvoiceId);
-                }
-            } catch (err) { alert('Extension failed'); }
-        }
-
-        async function resendLink() {
-            try {
-                const res = await fetch(`${API_BASE}/resend/${activeInvoiceId}`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
-                });
-                if (res.ok) alert('Signing link resent to client email.');
-            } catch (err) { alert('Action failed'); }
-        }
-
-        function copySigningLink(token) {
-            const url = `${window.location.origin}/sign-contract?token=${token}`;
-            if (navigator.clipboard) {
-                navigator.clipboard.writeText(url).then(() => alert('Signing link copied to clipboard')).catch(() => alert('Link: ' + url));
-            } else { alert('Link: ' + url); }
-        }
-
-        function viewDraft(id) {
-            window.open(`/api/contracts/${id}/html-draft?token=${localStorage.getItem('ec_token')}`, '_blank');
-        }
-
-        // --- WALK-IN LOGIC ---
-        function initiateWalkIn(role) {
-            walkInRole = role;
-            document.getElementById('walkInModal').classList.remove('hidden');
-            document.getElementById('walkInTitle').innerText = role === 'witness' ? 'Record Walk-in Witness' : 'Record Walk-in Client';
-            document.getElementById('witnessInfoFields').classList.toggle('hidden', role !== 'witness');
-            clearCanvas();
-        }
-
-        function closeWalkInModal() {
-            document.getElementById('walkInModal').classList.add('hidden');
-            walkInRole = null;
-        }
-
-        // --- SIGNATURE PAD LOGIC ---
-        const canvas = document.getElementById('sig-canvas');
-        const ctx = canvas.getContext('2d');
-        let painting = false;
-
-        function startPosition(e) {
-            painting = true;
-            draw(e);
-        }
-        function finishedPosition() {
-            painting = false;
-            ctx.beginPath();
-        }
-        function draw(e) {
-            if (!painting) return;
-            ctx.lineWidth = 3;
-            ctx.lineCap = 'round';
-            ctx.strokeStyle = '#1e293b';
-
-            const rect = canvas.getBoundingClientRect();
-            const x = ((e.clientX || (e.touches && e.touches[0].clientX)) - rect.left);
-            const y = ((e.clientY || (e.touches && e.touches[0].clientY)) - rect.top);
-
-            ctx.lineTo(x, y);
-            ctx.stroke();
-            ctx.beginPath();
-            ctx.moveTo(x, y);
-        }
-        canvas.addEventListener('mousedown', startPosition);
-        canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startPosition(e); });
-        canvas.addEventListener('mouseup', finishedPosition);
-        canvas.addEventListener('touchend', finishedPosition);
-        canvas.addEventListener('mousemove', draw);
-        canvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e); });
-
-        function clearCanvas() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
-
-        async function saveWalkInSignature() {
-            const btn = document.getElementById('saveWalkInBtn');
-            const dataUrl = canvas.toDataURL('image/png');
-
-            const payload = {
-                signature_base64: dataUrl,
-                signature_method: 'digital'
-            };
-
-            if (walkInRole === 'witness') {
-                payload.full_name = document.getElementById('walkInName').value;
-                payload.email = document.getElementById('walkInEmail').value;
-                if (!payload.full_name) return alert('Legal name is required for witness');
-            }
-
-            btn.innerText = 'Capturing...';
-            btn.disabled = true;
-
-            try {
-                const endpoint = walkInRole === 'witness' ? 'manual-witness' : 'manual-client';
-                const res = await fetch(`${API_BASE}/${activeInvoiceId}/${endpoint}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('ec_token')}`
-                    },
-                    body: JSON.stringify(payload)
-                });
-
-                if (res.ok) {
-                    closeWalkInModal();
-                    openStatusModal(activeInvoiceId);
+                if (hasWitness && hasClient) {
+                    actionsHtml += `<button onclick="openExecutionModal('${activeInvoiceId}')" class="px-6 py-2 bg-brand-gold text-white rounded-xl text-xs font-bold shadow-lg hover:brightness-110 transition pulse-gold">Final Execution</button>`;
                 } else {
-                    const err = await res.json();
-                    alert(err.detail || 'Capture failed');
+                    if (!hasWitness) actionsHtml += `<button onclick="initiateWalkIn('witness')" class="px-4 py-2 bg-white/5 rounded-xl text-[10px] font-bold hover:bg-white/10 transition uppercase tracking-widest whitespace-nowrap">Walk-in Witness</button>`;
+                    if (!hasClient) actionsHtml += `<button onclick="initiateWalkIn('client')" class="px-4 py-2 bg-white/5 rounded-xl text-[10px] font-bold hover:bg-white/10 transition uppercase tracking-widest whitespace-nowrap">Walk-in Client</button>`;
                 }
-            } catch (err) { alert('Connection error'); }
-            finally {
-                btn.innerText = 'Capture & Save';
-                btn.disabled = false;
+                document.getElementById('statusModalActions').innerHTML = actionsHtml;
             }
-        }
 
-        function openExecutionModal(id) {
-            document.getElementById('customSealFile').value = '';
-            document.getElementById('sealedPdfFile').value = '';
-            document.getElementById('sealedUploadStatus').classList.add('hidden');
+            async function startSigningSession() {
+                const btn = event.currentTarget;
+                const originalText = btn.innerHTML;
+                try {
+                    btn.disabled = true;
+                    btn.innerHTML = `<svg class="animate-spin h-4 w-4 text-white inline-block mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Starting...`;
+                    const res = await fetch(`${API_BASE}/session/${activeInvoiceId}`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                    });
+                    const data = await res.json();
+                    if (res.ok) openStatusModal(activeInvoiceId);
+                    else alert(data.detail || 'Failed to start session. Ensure company signatures are set.');
+                } catch (err) { alert('Action failed'); }
+                finally {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                }
+            }
 
-            const sendBtn = document.getElementById('sendSealedBtn');
-            sendBtn.disabled = true;
-            sendBtn.classList.add('opacity-30', 'cursor-not-allowed');
+            async function extendSession() {
+                try {
+                    const res = await fetch(`${API_BASE}/${activeInvoiceId}/extend`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                    });
+                    if (res.ok) {
+                        alert('Session extended by 48 hours');
+                        openStatusModal(activeInvoiceId);
+                    }
+                } catch (err) { alert('Extension failed'); }
+            }
 
-            document.getElementById('executionModal').classList.remove('hidden');
-        }
-        function closeExecutionModal() { document.getElementById('executionModal').classList.add('hidden'); }
+            async function resendLink() {
+                try {
+                    const res = await fetch(`${API_BASE}/resend/${activeInvoiceId}`, {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                    });
+                    if (res.ok) alert('Signing link resent to client email.');
+                } catch (err) { alert('Action failed'); }
+            }
 
-        async function executeContract() {
-            const btn = document.getElementById('confirmExecuteBtn');
-            btn.innerText = 'Executing...';
-            btn.disabled = true;
+            function copySigningLink(token) {
+                const url = `${window.location.origin}/sign-contract?token=${token}`;
+                if (navigator.clipboard) {
+                    navigator.clipboard.writeText(url).then(() => alert('Signing link copied to clipboard')).catch(() => alert('Link: ' + url));
+                } else { alert('Link: ' + url); }
+            }
 
-            try {
-                // If custom seal is uploaded, push it first
-                const sealFile = document.getElementById('customSealFile').files[0];
-                if (sealFile) {
-                    btn.innerText = 'Uploading Seal...';
-                    const sealData = new FormData();
-                    sealData.append('file', sealFile);
-                    await fetch(`${API_BASE}/${activeInvoiceId}/seal`, {
+            function viewDraft(id) {
+                window.open(`/api/contracts/${id}/html-draft?token=${localStorage.getItem('ec_token')}`, '_blank');
+            }
+
+            // --- WALK-IN LOGIC ---
+            function initiateWalkIn(role) {
+                walkInRole = role;
+                document.getElementById('walkInModal').classList.remove('hidden');
+                document.getElementById('walkInTitle').innerText = role === 'witness' ? 'Record Walk-in Witness' : 'Record Walk-in Client';
+                document.getElementById('witnessInfoFields').classList.toggle('hidden', role !== 'witness');
+                clearCanvas();
+            }
+
+            function closeWalkInModal() {
+                document.getElementById('walkInModal').classList.add('hidden');
+                walkInRole = null;
+            }
+
+            // --- SIGNATURE PAD LOGIC ---
+            const canvas = document.getElementById('sig-canvas');
+            const ctx = canvas.getContext('2d');
+            let painting = false;
+
+            function startPosition(e) {
+                painting = true;
+                draw(e);
+            }
+            function finishedPosition() {
+                painting = false;
+                ctx.beginPath();
+            }
+            function draw(e) {
+                if (!painting) return;
+                ctx.lineWidth = 3;
+                ctx.lineCap = 'round';
+                ctx.strokeStyle = '#1e293b';
+
+                const rect = canvas.getBoundingClientRect();
+                const x = ((e.clientX || (e.touches && e.touches[0].clientX)) - rect.left);
+                const y = ((e.clientY || (e.touches && e.touches[0].clientY)) - rect.top);
+
+                ctx.lineTo(x, y);
+                ctx.stroke();
+                ctx.beginPath();
+                ctx.moveTo(x, y);
+            }
+            canvas.addEventListener('mousedown', startPosition);
+            canvas.addEventListener('touchstart', (e) => { e.preventDefault(); startPosition(e); });
+            canvas.addEventListener('mouseup', finishedPosition);
+            canvas.addEventListener('touchend', finishedPosition);
+            canvas.addEventListener('mousemove', draw);
+            canvas.addEventListener('touchmove', (e) => { e.preventDefault(); draw(e); });
+
+            function clearCanvas() { ctx.clearRect(0, 0, canvas.width, canvas.height); }
+
+            async function saveWalkInSignature() {
+                const btn = document.getElementById('saveWalkInBtn');
+                const dataUrl = canvas.toDataURL('image/png');
+
+                const payload = {
+                    signature_base64: dataUrl,
+                    signature_method: 'digital'
+                };
+
+                if (walkInRole === 'witness') {
+                    payload.full_name = document.getElementById('walkInName').value;
+                    payload.email = document.getElementById('walkInEmail').value;
+                    if (!payload.full_name) return alert('Legal name is required for witness');
+                }
+
+                btn.innerText = 'Capturing...';
+                btn.disabled = true;
+
+                try {
+                    const endpoint = walkInRole === 'witness' ? 'manual-witness' : 'manual-client';
+                    const res = await fetch(`${API_BASE}/${activeInvoiceId}/${endpoint}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('ec_token')}`
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (res.ok) {
+                        closeWalkInModal();
+                        openStatusModal(activeInvoiceId);
+                    } else {
+                        const err = await res.json();
+                        alert(err.detail || 'Capture failed');
+                    }
+                } catch (err) { alert('Connection error'); }
+                finally {
+                    btn.innerText = 'Capture & Save';
+                    btn.disabled = false;
+                }
+            }
+
+            function openExecutionModal(id) {
+                document.getElementById('customSealFile').value = '';
+                document.getElementById('sealedPdfFile').value = '';
+                document.getElementById('sealedUploadStatus').classList.add('hidden');
+
+                const sendBtn = document.getElementById('sendSealedBtn');
+                sendBtn.disabled = true;
+                sendBtn.classList.add('opacity-30', 'cursor-not-allowed');
+
+                document.getElementById('executionModal').classList.remove('hidden');
+            }
+            function closeExecutionModal() { document.getElementById('executionModal').classList.add('hidden'); }
+
+            async function executeContract() {
+                const btn = document.getElementById('confirmExecuteBtn');
+                btn.innerText = 'Executing...';
+                btn.disabled = true;
+
+                try {
+                    // If custom seal is uploaded, push it first
+                    const sealFile = document.getElementById('customSealFile').files[0];
+                    if (sealFile) {
+                        btn.innerText = 'Uploading Seal...';
+                        const sealData = new FormData();
+                        sealData.append('file', sealFile);
+                        await fetch(`${API_BASE}/${activeInvoiceId}/seal`, {
+                            method: 'POST',
+                            headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` },
+                            body: sealData
+                        });
+                    }
+
+                    btn.innerText = 'Finalizing...';
+                    const sendCert = document.getElementById('sendCertToggle').checked;
+                    const res = await fetch(`${API_BASE}/execute/${activeInvoiceId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('ec_token')}`
+                        },
+                        body: JSON.stringify({ send_certificate: sendCert })
+                    });
+
+                    if (res.ok) {
+                        alert('Contract fully executed and archived.');
+                        closeExecutionModal();
+                        closeStatusModal();
+                        fetchContracts();
+                    } else {
+                        const err = await res.json();
+                        alert(err.detail || 'Execution failed');
+                    }
+                } catch (err) { alert('Execution failed'); }
+                finally {
+                    btn.innerText = 'VERIFY & EXECUTE';
+                    btn.disabled = false;
+                }
+            }
+
+            function downloadSealingPDF() {
+                window.location.href = `${API_BASE}/download-sealing/${activeInvoiceId}?token=${localStorage.getItem('ec_token')}`;
+            }
+
+            async function uploadSealedPDF() {
+                const file = document.getElementById('sealedPdfFile').files[0];
+                if (!file) return alert('Please select a PDF file to upload.');
+
+                const btn = document.getElementById('uploadSealedBtn');
+                btn.innerText = 'Uploading...';
+                btn.disabled = true;
+
+                const formData = new FormData();
+                formData.append('file', file);
+
+                try {
+                    const res = await fetch(`${API_BASE}/upload-sealed/${activeInvoiceId}`, {
                         method: 'POST',
                         headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` },
-                        body: sealData
+                        body: formData
                     });
-                }
 
-                btn.innerText = 'Finalizing...';
+                    if (res.ok) {
+                        document.getElementById('sealedUploadStatus').classList.remove('hidden');
+                        const sendBtn = document.getElementById('sendSealedBtn');
+                        sendBtn.disabled = false;
+                        sendBtn.classList.remove('opacity-30', 'cursor-not-allowed');
+                    } else {
+                        const err = await res.json();
+                        alert(err.detail || 'Upload failed');
+                    }
+                } catch (err) {
+                    alert('Upload failed due to connection error.');
+                } finally {
+                    btn.innerText = 'Upload';
+                    btn.disabled = false;
+                }
+            }
+
+            async function sendSealedPDF() {
+                const btn = document.getElementById('sendSealedBtn');
+                btn.innerText = 'Sending...';
+                btn.disabled = true;
+
                 const sendCert = document.getElementById('sendCertToggle').checked;
-                const res = await fetch(`${API_BASE}/execute/${activeInvoiceId}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('ec_token')}`
-                    },
-                    body: JSON.stringify({ send_certificate: sendCert })
-                });
 
-                if (res.ok) {
-                    alert('Contract fully executed and archived.');
-                    closeExecutionModal();
-                    closeStatusModal();
-                    fetchContracts();
-                } else {
-                    const err = await res.json();
-                    alert(err.detail || 'Execution failed');
+                try {
+                    const res = await fetch(`${API_BASE}/send-sealed/${activeInvoiceId}`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('ec_token')}`
+                        },
+                        body: JSON.stringify({ send_certificate: sendCert })
+                    });
+
+                    if (res.ok) {
+                        alert('Sealed contract finalized, archived, and emailed to the client.');
+                        closeExecutionModal();
+                        closeStatusModal();
+                        fetchContracts();
+                    } else {
+                        const err = await res.json();
+                        alert(err.detail || 'Failed to send sealed contract');
+                    }
+                } catch (err) {
+                    alert('Action failed due to connection error.');
+                } finally {
+                    btn.innerText = 'Finalize & Send';
+                    btn.disabled = false;
                 }
-            } catch (err) { alert('Execution failed'); }
-            finally {
-                btn.innerText = 'VERIFY & EXECUTE';
-                btn.disabled = false;
             }
-        }
 
-        function downloadSealingPDF() {
-            window.location.href = `${API_BASE}/download-sealing/${activeInvoiceId}?token=${localStorage.getItem('ec_token')}`;
-        }
+            // --- LEGAL ARCHIVE ---
+            async function fetchArchive() {
+                try {
+                    const res = await fetch(`${API_BASE}/archive`, {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                    });
+                    const data = await res.json();
+                    if (res.ok) renderArchive(data);
+                    else console.error('Archive error:', data);
+                } catch (err) { console.error('Archive load failed'); }
+            }
 
-        async function uploadSealedPDF() {
-            const file = document.getElementById('sealedPdfFile').files[0];
-            if (!file) return alert('Please select a PDF file to upload.');
-
-            const btn = document.getElementById('uploadSealedBtn');
-            btn.innerText = 'Uploading...';
-            btn.disabled = true;
-
-            const formData = new FormData();
-            formData.append('file', file);
-
-            try {
-                const res = await fetch(`${API_BASE}/upload-sealed/${activeInvoiceId}`, {
-                    method: 'POST',
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` },
-                    body: formData
-                });
-
-                if (res.ok) {
-                    document.getElementById('sealedUploadStatus').classList.remove('hidden');
-                    const sendBtn = document.getElementById('sendSealedBtn');
-                    sendBtn.disabled = false;
-                    sendBtn.classList.remove('opacity-30', 'cursor-not-allowed');
-                } else {
-                    const err = await res.json();
-                    alert(err.detail || 'Upload failed');
+            function renderArchive(data) {
+                const tbody = document.getElementById('archiveTableBody');
+                if (!tbody) return;
+                if (!Array.isArray(data)) {
+                    tbody.innerHTML = '<tr><td colspan="4" class="p-12 text-center text-red-500">Error loading archive. Please ensure database columns are synced.</td></tr>';
+                    return;
                 }
-            } catch (err) {
-                alert('Upload failed due to connection error.');
-            } finally {
-                btn.innerText = 'Upload';
-                btn.disabled = false;
-            }
-        }
-
-        async function sendSealedPDF() {
-            const btn = document.getElementById('sendSealedBtn');
-            btn.innerText = 'Sending...';
-            btn.disabled = true;
-
-            const sendCert = document.getElementById('sendCertToggle').checked;
-
-            try {
-                const res = await fetch(`${API_BASE}/send-sealed/${activeInvoiceId}`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('ec_token')}`
-                    },
-                    body: JSON.stringify({ send_certificate: sendCert })
-                });
-
-                if (res.ok) {
-                    alert('Sealed contract finalized, archived, and emailed to the client.');
-                    closeExecutionModal();
-                    closeStatusModal();
-                    fetchContracts();
-                } else {
-                    const err = await res.json();
-                    alert(err.detail || 'Failed to send sealed contract');
-                }
-            } catch (err) {
-                alert('Action failed due to connection error.');
-            } finally {
-                btn.innerText = 'Finalize & Send';
-                btn.disabled = false;
-            }
-        }
-
-        // --- LEGAL ARCHIVE ---
-        async function fetchArchive() {
-            try {
-                const res = await fetch(`${API_BASE}/archive`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
-                });
-                const data = await res.json();
-                if (res.ok) renderArchive(data);
-                else console.error('Archive error:', data);
-            } catch (err) { console.error('Archive load failed'); }
-        }
-
-        function renderArchive(data) {
-            const tbody = document.getElementById('archiveTableBody');
-            if (!tbody) return;
-            if (!Array.isArray(data)) {
-                tbody.innerHTML = '<tr><td colspan="4" class="p-12 text-center text-red-500">Error loading archive. Please ensure database columns are synced.</td></tr>';
-                return;
-            }
-            tbody.innerHTML = data.map(session => `
+                tbody.innerHTML = data.map(session => `
                 <tr class="border-b border-[#2D2F36] hover:bg-white/5 transition">
                     <td class="px-6 py-4">
                         <p class="font-bold text-brand-gold">${session.invoices?.invoice_number || 'N/A'}</p>
@@ -2323,323 +2761,352 @@
                     </td>
                 </tr>
             `).join('');
-            if (data.length === 0) tbody.innerHTML = '<tr><td colspan="4" class="p-12 text-center text-gray-500">No executed contracts found in archive.</td></tr>';
-        }
-
-        async function downloadDoc(invoiceId, type) {
-            const url = type === 'contract' ? `/api/contracts/${invoiceId}/contract` : `/api/contracts/${invoiceId}/certificate`;
-            const token = localStorage.getItem('ec_token');
-            window.open(`${url}?token=${token}`, '_blank');
-        }
-
-        async function loadAuthorities() {
-            try {
-                const res = await fetch(`${API_BASE}/signatures`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
-                });
-                const data = await res.json();
-                renderAuthorities(data);
-            } catch (err) { console.error('Authority load error:', err); }
-        }
-
-        function checkAuth() {
-            const token = localStorage.getItem('ec_token');
-            const admin = JSON.parse(localStorage.getItem('admin') || '{}');
-            const displayName = admin.full_name || admin.name || 'User';
-            const allowedRoles = ['admin', 'super_admin', 'lawyer', 'legal'];
-            const roles = (admin.role || '').toLowerCase().split(',').map(r => r.trim()).filter(Boolean);
-
-            if (!token || !admin.role) {
-                window.location.href = '/login';
-                return;
+                if (data.length === 0) tbody.innerHTML = '<tr><td colspan="4" class="p-12 text-center text-gray-500">No executed contracts found in archive.</td></tr>';
             }
 
-            if (!roles.some(role => allowedRoles.includes(role))) {
-                alert('Access denied. You do not have permission to view this page.');
-                window.location.href = '/dashboard';
-                return;
+            async function downloadDoc(invoiceId, type) {
+                const url = type === 'contract' ? `/api/contracts/${invoiceId}/contract` : `/api/contracts/${invoiceId}/certificate`;
+                const token = localStorage.getItem('ec_token');
+                window.open(`${url}?token=${token}`, '_blank');
             }
 
-            document.getElementById('adminName').innerText = displayName;
-            document.getElementById('adminRole').innerText = admin.role;
-            document.getElementById('adminInitial').innerText = displayName ? displayName[0].toUpperCase() : 'A';
-
-            // Show Finance links ONLY for admins
-            if (roles.includes('admin') || roles.includes('super_admin')) {
-                const navFin = document.getElementById('nav-finance-container');
-                const navFinSide = document.getElementById('nav-finance-container-sidebar');
-                if (navFin) navFin.style.display = 'block';
-                if (navFinSide) navFinSide.style.display = 'block';
+            async function loadAuthorities() {
+                try {
+                    const res = await fetch(`${API_BASE}/signatures`, {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                    });
+                    const data = await res.json();
+                    renderAuthorities(data);
+                } catch (err) { console.error('Authority load error:', err); }
             }
-        }
 
-        function logout() {
-            localStorage.clear();
-            window.location.href = '/login';
-        }
+            function checkAuth() {
+                const token = localStorage.getItem('ec_token');
+                const admin = JSON.parse(localStorage.getItem('admin') || '{}');
+                const displayName = admin.full_name || admin.name || 'User';
+                const allowedRoles = ['admin', 'super_admin', 'lawyer', 'legal'];
+                const roles = (admin.role || '').toLowerCase().split(',').map(r => r.trim()).filter(Boolean);
 
-        let hrStaff = [];
-        async function fetchHRStaff() {
-            try {
-                const res = await fetch('/api/hr/staff', {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
-                });
-                if (res.ok) {
-                    hrStaff = await res.json();
-                    const dl = document.getElementById('staff-search-results');
-                    if (dl) {
-                        dl.innerHTML = hrStaff.map(s => 
-                            `<option value="${s.full_name}">${s.email} | ${s.department || 'No Dept'} | ${s.primary_role || ''}</option>`
-                        ).join('');
-                    }
-                }
-            } catch (err) { console.error('Failed to fetch HR directory'); }
-        }
-
-        function handleStaffSearch(val) {
-            const found = hrStaff.find(s => s.full_name === val);
-            if (found) {
-                document.getElementById('initiate-party-email').value = found.email;
-                document.getElementById('initiate-staff-id').value = found.id;
-            } else {
-                // If they changed it or it's external, clear the ID
-                document.getElementById('initiate-staff-id').value = '';
-            }
-        }
-
-        window.onload = () => {
-            checkAuth();
-            fetchSummary();
-            fetchContracts();
-            loadAuthorities();
-            fetchArchive();
-            fetchActivity();
-            fetchExecutionTrends();
-            fetchHRStaff();
-            setInterval(fetchActivity, 60000);
-        };
-
-        // --- INITIATION LOGIC ---
-        function openInitiateModal(category) {
-            if (category) {
-                document.getElementById('initiate-category').value = category;
-            }
-            document.getElementById('initiateModal').classList.remove('hidden');
-        }
-
-        function closeInitiateModal() {
-            document.getElementById('initiateModal').classList.add('hidden');
-        }
-
-        async function submitInitiate() {
-            const category = document.getElementById('initiate-category').value;
-            const title = document.getElementById('initiate-title').value;
-            const partyName = document.getElementById('initiate-party-name').value;
-            const partyEmail = document.getElementById('initiate-party-email').value;
-            const staffId = document.getElementById('initiate-staff-id').value;
-
-            if (!title || !partyName) return alert('Subject and Party Name are required');
-
-            try {
-                const res = await fetch(`${HR_LEGAL_API}/matters`, {
-                    method: 'POST',
-                    headers: {
-                        'Content-Type': 'application/json',
-                        'Authorization': `Bearer ${localStorage.getItem('ec_token')}`
-                    },
-                    body: JSON.stringify({
-                        category,
-                        title,
-                        staff_id: staffId || null,
-                        external_party_name: staffId ? null : partyName,
-                        external_party_email: partyEmail,
-                        priority: 'Normal'
-                    })
-                });
-
-                if (res.ok) {
-                    const matter = await res.json();
-                    window.location.href = `/legal/advanced-editor?id=${matter.id}`;
-                } else {
-                    const err = await res.json();
-                    alert(err.detail || 'Failed to initiate matter');
-                }
-            } catch (err) { alert('Connection error'); }
-        }
-    </script>
-
-    <!-- Mobile Bottom Tab Bar (only visible on small screens) -->
-    <nav id="mobileBottomNav"
-        class="fixed bottom-0 left-0 right-0 z-[200] lg:hidden bg-[#121317]/95 backdrop-blur-lg border-t border-[#2D2F36] flex items-stretch"
-        style="padding-bottom: env(safe-area-inset-bottom);">
-        <button onclick="switchTab('dashboard'); updateBottomNav('dashboard')" id="bnav-dashboard"
-            class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-brand-gold transition"
-            aria-label="Dashboard">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
-            </svg>
-            <span class="text-[9px] font-bold uppercase tracking-wider">Overview</span>
-        </button>
-        <button onclick="switchTab('execution-portal'); updateBottomNav('execution-portal')" id="bnav-execution-portal"
-            class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-gray-500 hover:text-gray-300 transition"
-            aria-label="Execution Portal">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
-            </svg>
-            <span class="text-[9px] font-bold uppercase tracking-wider">Portal</span>
-        </button>
-        <button onclick="switchTab('signature-vault'); updateBottomNav('signature-vault')" id="bnav-signature-vault"
-            class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-gray-500 hover:text-gray-300 transition"
-            aria-label="Signature Vault">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
-            </svg>
-            <span class="text-[9px] font-bold uppercase tracking-wider">Vault</span>
-        </button>
-        <button onclick="switchTab('archive'); updateBottomNav('archive')" id="bnav-archive"
-            class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-gray-500 hover:text-gray-300 transition"
-            aria-label="Archive">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
-            </svg>
-            <span class="text-[9px] font-bold uppercase tracking-wider">Archive</span>
-        </button>
-        <div class="w-px bg-[#2D2F36] self-stretch my-2"></div>
-        <a href="/dashboard"
-            class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-gray-500 hover:text-amber-400 transition"
-            aria-label="Finance Dashboard">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
-            </svg>
-            <span class="text-[9px] font-bold uppercase tracking-wider">Finance</span>
-        </a>
-        <div class="w-px bg-[#2D2F36] self-stretch my-2"></div>
-        <button onclick="logout()"
-            class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-gray-500 hover:text-red-400 transition"
-            aria-label="Sign Out">
-            <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
-                    d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
-            </svg>
-            <span class="text-[9px] font-bold uppercase tracking-wider">Sign Out</span>
-        </button>
-    </nav>
-
-    <script>
-        // Bottom nav active state sync
-        function updateBottomNav(tabId) {
-            ['dashboard', 'execution-portal', 'signature-vault', 'archive'].forEach(id => {
-                const btn = document.getElementById(`bnav-${id}`);
-                if (!btn) return;
-                if (id === tabId) {
-                    btn.classList.add('text-brand-gold');
-                    btn.classList.remove('text-gray-500');
-                } else {
-                    btn.classList.remove('text-brand-gold');
-                    btn.classList.add('text-gray-500');
-                }
-            });
-        }
-
-        // Give content breathing room above bottom bar on mobile
-        (function () {
-            const style = document.createElement('style');
-            style.textContent = '@media (max-width:768px) { .main-content { padding-bottom: 80px !important; } }';
-            document.head.appendChild(style);
-        })();
-    </script>
-
-    <!-- ── AUDIT TRAIL MODAL ── -->
-    <div id="auditModal" class="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-sm hidden">
-        <div class="relative w-full max-w-2xl mx-4 bg-[#16181D] border border-[#2D2F36] rounded-2xl overflow-hidden shadow-2xl">
-            <!-- Header -->
-            <div class="flex items-center justify-between px-8 py-5 border-b border-[#2D2F36]">
-                <div>
-                    <h3 class="font-bold text-white text-lg">📜 Audit Trail</h3>
-                    <p id="audit-matter-title" class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">Loading…</p>
-                </div>
-                <button onclick="closeAuditModal()" class="text-gray-500 hover:text-white text-xl transition">✕</button>
-            </div>
-            <!-- Body -->
-            <div id="audit-body" class="overflow-y-auto" style="max-height: 420px; padding: 24px 32px;">
-                <div id="audit-loading" class="flex items-center justify-center py-12">
-                    <div style="width:32px;height:32px;border:3px solid #2D2F36;border-top-color:#C47D0A;border-radius:50%;animation:spin 0.8s linear infinite"></div>
-                </div>
-                <div id="audit-entries" class="hidden space-y-3"></div>
-                <div id="audit-empty" class="hidden text-center py-10 text-gray-500 text-sm">No audit events recorded for this matter.</div>
-                <div id="audit-error" class="hidden text-center py-10 text-red-400 text-sm">Failed to load audit trail.</div>
-            </div>
-            <!-- Footer -->
-            <div class="px-8 py-4 border-t border-[#2D2F36] flex justify-end">
-                <button onclick="closeAuditModal()" class="px-6 py-2 bg-white/5 border border-white/10 rounded-xl text-xs font-bold hover:bg-white/10 transition">Close</button>
-            </div>
-        </div>
-    </div>
-
-    <script>
-        // ── AUDIT TRAIL ──
-        async function openAuditTrail(matterId) {
-            const modal        = document.getElementById('auditModal');
-            const titleEl      = document.getElementById('audit-matter-title');
-            const loadingEl    = document.getElementById('audit-loading');
-            const entriesEl    = document.getElementById('audit-entries');
-            const emptyEl      = document.getElementById('audit-empty');
-            const errorEl      = document.getElementById('audit-error');
-
-            // Reset state
-            modal.classList.remove('hidden');
-            document.body.classList.add('overflow-hidden');
-            loadingEl.classList.remove('hidden');
-            entriesEl.classList.add('hidden');
-            emptyEl.classList.add('hidden');
-            errorEl.classList.add('hidden');
-            titleEl.textContent = 'Loading…';
-            entriesEl.innerHTML = '';
-
-            try {
-                const res = await fetch(`/api/hr-legal/matters/${matterId}`, {
-                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
-                });
-                if (!res.ok) throw new Error('Fetch failed');
-                const data = await res.json();
-
-                titleEl.textContent = data.matter?.title || matterId.split('-')[0] + '…';
-                const history = data.history || [];
-
-                loadingEl.classList.add('hidden');
-
-                if (history.length === 0) {
-                    emptyEl.classList.remove('hidden');
+                if (!token || !admin.role) {
+                    window.location.href = '/login';
                     return;
                 }
 
-                const actionColors = {
-                    'Created':         'text-green-400',
-                    'Saved':           'text-blue-400',
-                    'Status Changed':  'text-yellow-400',
-                    'Collaborator Added': 'text-purple-400',
-                    'Staff Viewed':    'text-cyan-400',
-                    'Visibility Changed': 'text-orange-400',
-                };
-                const actionIcons = {
-                    'Created':         '🟢',
-                    'Saved':           '💾',
-                    'Status Changed':  '🔄',
-                    'Collaborator Added': '👥',
-                    'Staff Viewed':    '👁️',
-                    'Visibility Changed': '🔒',
-                };
+                if (!roles.some(role => allowedRoles.includes(role))) {
+                    alert('Access denied. You do not have permission to view this page.');
+                    window.location.href = '/dashboard';
+                    return;
+                }
 
-                entriesEl.innerHTML = history.map(h => {
-                    const color = actionColors[h.action] || 'text-gray-300';
-                    const icon  = actionIcons[h.action]  || '📋';
-                    const date  = new Date(h.created_at).toLocaleString();
-                    return `
+                document.getElementById('adminName').innerText = displayName;
+                document.getElementById('adminRole').innerText = admin.role;
+                document.getElementById('adminInitial').innerText = displayName ? displayName[0].toUpperCase() : 'A';
+
+                // Show Finance links ONLY for admins
+                if (roles.includes('admin') || roles.includes('super_admin')) {
+                    const navFin = document.getElementById('nav-finance-container');
+                    const navFinSide = document.getElementById('nav-finance-container-sidebar');
+                    if (navFin) navFin.style.display = 'block';
+                    if (navFinSide) navFinSide.style.display = 'block';
+                }
+            }
+
+            function logout() {
+                localStorage.clear();
+                window.location.href = '/login';
+            }
+
+            let hrStaff = [];
+            async function fetchHRStaff() {
+                try {
+                    const res = await fetch('/api/hr/staff', {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                    });
+                    if (res.ok) {
+                        hrStaff = await res.json();
+                        const dl = document.getElementById('staff-search-results');
+                        if (dl) {
+                            dl.innerHTML = hrStaff.map(s =>
+                                `<option value="${s.full_name}">${s.email} | ${s.department || 'No Dept'} | ${s.primary_role || ''}</option>`
+                            ).join('');
+                        }
+                    }
+                } catch (err) { console.error('Failed to fetch HR directory'); }
+            }
+
+            function handleStaffSearch(val) {
+                const found = hrStaff.find(s => s.full_name === val);
+                if (found) {
+                    document.getElementById('initiate-party-email').value = found.email;
+                    document.getElementById('initiate-staff-id').value = found.id;
+                } else {
+                    // If they changed it or it's external, clear the ID
+                    document.getElementById('initiate-staff-id').value = '';
+                }
+            }
+
+            window.onload = () => {
+                checkAuth();
+                fetchSummary();
+                fetchContracts();
+                loadAuthorities();
+                fetchArchive();
+                fetchActivity();
+                fetchExecutionTrends();
+                fetchHRStaff();
+                setInterval(fetchActivity, 60000);
+            };
+
+            // --- INITIATION LOGIC ---
+            function openInitiateModal(category) {
+                if (category) {
+                    document.getElementById('initiate-category').value = category;
+                }
+                document.getElementById('initiateModal').classList.remove('hidden');
+            }
+
+            function closeInitiateModal() {
+                document.getElementById('initiateModal').classList.add('hidden');
+            }
+
+            async function submitInitiate() {
+                const btn = event.currentTarget;
+                const originalText = btn.innerHTML;
+                
+                try {
+                    const category = document.getElementById('initiate-category').value;
+                    const title = document.getElementById('initiate-title').value;
+                    const partyName = document.getElementById('initiate-party-name').value;
+                    const partyEmail = document.getElementById('initiate-party-email').value;
+                    const staffId = document.getElementById('initiate-staff-id').value;
+
+                    if (!title) { alert('Please enter a matter title'); return; }
+
+                    btn.disabled = true;
+                    btn.innerHTML = `<svg class="animate-spin h-4 w-4 text-white inline-block mr-2" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24"><circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle><path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path></svg> Initializing...`;
+
+                    const payload = {
+                        category: category,
+                        title: title,
+                        staff_id: staffId || null,
+                        external_party_name: staffId ? null : partyName,
+                        external_party_email: staffId ? null : partyEmail,
+                        status: 'Draft'
+                    };
+
+                    console.log('Initiating matter with payload:', payload);
+
+                    const res = await fetch(`${HR_LEGAL_API}/matters`, {
+                        method: 'POST',
+                        headers: {
+                            'Content-Type': 'application/json',
+                            'Authorization': `Bearer ${localStorage.getItem('ec_token')}`
+                        },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (!res.ok) {
+                        const err = await res.json();
+                        throw new Error(err.detail || 'Failed to create matter');
+                    }
+
+                    const matter = await res.json();
+                    console.log('Matter created:', matter);
+                    
+                    // Success! Redirect to editor
+                    window.location.href = `/legal/advanced-editor?id=${matter.id}`;
+                } catch (err) {
+                    console.error('Initiation error:', err);
+                    alert(err.message || 'Connection error. Please check your network.');
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = originalText;
+                }
+            }
+        </script>
+
+        <!-- Mobile Bottom Tab Bar (only visible on small screens) -->
+        <nav id="mobileBottomNav"
+            class="fixed bottom-0 left-0 right-0 z-[200] lg:hidden bg-[#121317]/95 backdrop-blur-lg border-t border-[#2D2F36] flex items-stretch"
+            style="padding-bottom: env(safe-area-inset-bottom);">
+            <button onclick="switchTab('dashboard'); updateBottomNav('dashboard')" id="bnav-dashboard"
+                class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-brand-gold transition"
+                aria-label="Dashboard">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M3 12l2-2m0 0l7-7 7 7M5 10v10a1 1 0 001 1h3m10-11l2 2m-2-2v10a1 1 0 01-1 1h-3m-6 0a1 1 0 001-1v-4a1 1 0 011-1h2a1 1 0 011 1v4a1 1 0 001 1m-6 0h6" />
+                </svg>
+                <span class="text-[9px] font-bold uppercase tracking-wider">Overview</span>
+            </button>
+            <button onclick="switchTab('execution-portal'); updateBottomNav('execution-portal')"
+                id="bnav-execution-portal"
+                class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-gray-500 hover:text-gray-300 transition"
+                aria-label="Execution Portal">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M9 12h6m-6 4h6m2 5H7a2 2 0 01-2-2V5a2 2 0 012-2h5.586a1 1 0 01.707.293l5.414 5.414a1 1 0 01.293.707V19a2 2 0 01-2 2z" />
+                </svg>
+                <span class="text-[9px] font-bold uppercase tracking-wider">Portal</span>
+            </button>
+            <button onclick="switchTab('signature-vault'); updateBottomNav('signature-vault')" id="bnav-signature-vault"
+                class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-gray-500 hover:text-gray-300 transition"
+                aria-label="Signature Vault">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 15v2m-6 4h12a2 2 0 002-2v-6a2 2 0 00-2-2H6a2 2 0 00-2 2v6a2 2 0 002 2zm10-10V7a4 4 0 00-8 0v4h8z" />
+                </svg>
+                <span class="text-[9px] font-bold uppercase tracking-wider">Vault</span>
+            </button>
+            <button onclick="switchTab('archive'); updateBottomNav('archive')" id="bnav-archive"
+                class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-gray-500 hover:text-gray-300 transition"
+                aria-label="Archive">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M5 8h14M5 8a2 2 0 110-4h14a2 2 0 110 4M5 8v10a2 2 0 002 2h10a2 2 0 002-2V8m-9 4h4" />
+                </svg>
+                <span class="text-[9px] font-bold uppercase tracking-wider">Archive</span>
+            </button>
+            <div class="w-px bg-[#2D2F36] self-stretch my-2"></div>
+            <a href="/dashboard"
+                class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-gray-500 hover:text-amber-400 transition"
+                aria-label="Finance Dashboard">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M12 8c-1.657 0-3 .895-3 2s1.343 2 3 2 3 .895 3 2-1.343 2-3 2m0-8c1.11 0 2.08.402 2.599 1M12 8V7m0 1v8m0 0v1m0-1c-1.11 0-2.08-.402-2.599-1M21 12a9 9 0 11-18 0 9 9 0 0118 0z" />
+                </svg>
+                <span class="text-[9px] font-bold uppercase tracking-wider">Finance</span>
+            </a>
+            <div class="w-px bg-[#2D2F36] self-stretch my-2"></div>
+            <button onclick="logout()"
+                class="flex-1 flex flex-col items-center justify-center gap-1 py-3 text-gray-500 hover:text-red-400 transition"
+                aria-label="Sign Out">
+                <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M17 16l4-4m0 0l-4-4m4 4H7m6 4v1a3 3 0 01-3 3H6a3 3 0 01-3-3V7a3 3 0 013-3h4a3 3 0 013 3v1" />
+                </svg>
+                <span class="text-[9px] font-bold uppercase tracking-wider">Sign Out</span>
+            </button>
+        </nav>
+
+        <script>
+            // Bottom nav active state sync
+            function updateBottomNav(tabId) {
+                ['dashboard', 'execution-portal', 'signature-vault', 'archive'].forEach(id => {
+                    const btn = document.getElementById(`bnav-${id}`);
+                    if (!btn) return;
+                    if (id === tabId) {
+                        btn.classList.add('text-brand-gold');
+                        btn.classList.remove('text-gray-500');
+                    } else {
+                        btn.classList.remove('text-brand-gold');
+                        btn.classList.add('text-gray-500');
+                    }
+                });
+            }
+
+            // Give content breathing room above bottom bar on mobile
+            (function () {
+                const style = document.createElement('style');
+                style.textContent = '@media (max-width:768px) { .main-content { padding-bottom: 80px !important; } }';
+                document.head.appendChild(style);
+            })();
+        </script>
+
+        <!-- ── AUDIT TRAIL MODAL ── -->
+        <div id="auditModal"
+            class="fixed inset-0 z-[200] flex items-center justify-center bg-black/90 backdrop-blur-sm hidden">
+            <div
+                class="relative w-full max-w-2xl mx-4 bg-[#16181D] border border-[#2D2F36] rounded-2xl overflow-hidden shadow-2xl">
+                <!-- Header -->
+                <div class="flex items-center justify-between px-8 py-5 border-b border-[#2D2F36]">
+                    <div>
+                        <h3 class="font-bold text-white text-lg">📜 Audit Trail</h3>
+                        <p id="audit-matter-title"
+                            class="text-[10px] text-gray-500 font-bold uppercase tracking-widest mt-0.5">Loading…</p>
+                    </div>
+                    <button onclick="closeAuditModal()"
+                        class="text-gray-500 hover:text-white text-xl transition">✕</button>
+                </div>
+                <!-- Body -->
+                <div id="audit-body" class="overflow-y-auto" style="max-height: 420px; padding: 24px 32px;">
+                    <div id="audit-loading" class="flex items-center justify-center py-12">
+                        <div
+                            style="width:32px;height:32px;border:3px solid #2D2F36;border-top-color:#C47D0A;border-radius:50%;animation:spin 0.8s linear infinite">
+                        </div>
+                    </div>
+                    <div id="audit-entries" class="hidden space-y-3"></div>
+                    <div id="audit-empty" class="hidden text-center py-10 text-gray-500 text-sm">No audit events
+                        recorded for this matter.</div>
+                    <div id="audit-error" class="hidden text-center py-10 text-red-400 text-sm">Failed to load audit
+                        trail.</div>
+                </div>
+                <!-- Footer -->
+                <div class="px-8 py-4 border-t border-[#2D2F36] flex justify-end">
+                    <button onclick="closeAuditModal()"
+                        class="px-6 py-2 bg-white/5 border border-white/10 rounded-xl text-xs font-bold hover:bg-white/10 transition">Close</button>
+                </div>
+            </div>
+        </div>
+
+        <script>
+            // ── AUDIT TRAIL ──
+            async function openAuditTrail(matterId) {
+                const modal = document.getElementById('auditModal');
+                const titleEl = document.getElementById('audit-matter-title');
+                const loadingEl = document.getElementById('audit-loading');
+                const entriesEl = document.getElementById('audit-entries');
+                const emptyEl = document.getElementById('audit-empty');
+                const errorEl = document.getElementById('audit-error');
+
+                // Reset state
+                modal.classList.remove('hidden');
+                document.body.classList.add('overflow-hidden');
+                loadingEl.classList.remove('hidden');
+                entriesEl.classList.add('hidden');
+                emptyEl.classList.add('hidden');
+                errorEl.classList.add('hidden');
+                titleEl.textContent = 'Loading…';
+                entriesEl.innerHTML = '';
+
+                try {
+                    const res = await fetch(`/api/hr-legal/matters/${matterId}`, {
+                        headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                    });
+                    if (!res.ok) throw new Error('Fetch failed');
+                    const data = await res.json();
+
+                    titleEl.textContent = data.matter?.title || matterId.split('-')[0] + '…';
+                    const history = data.history || [];
+
+                    loadingEl.classList.add('hidden');
+
+                    if (history.length === 0) {
+                        emptyEl.classList.remove('hidden');
+                        return;
+                    }
+
+                    const actionColors = {
+                        'Created': 'text-green-400',
+                        'Saved': 'text-blue-400',
+                        'Status Changed': 'text-yellow-400',
+                        'Collaborator Added': 'text-purple-400',
+                        'Staff Viewed': 'text-cyan-400',
+                        'Visibility Changed': 'text-orange-400',
+                    };
+                    const actionIcons = {
+                        'Created': '🟢',
+                        'Saved': '💾',
+                        'Status Changed': '🔄',
+                        'Collaborator Added': '👥',
+                        'Staff Viewed': '👁️',
+                        'Visibility Changed': '🔒',
+                    };
+
+                    entriesEl.innerHTML = history.map(h => {
+                        const color = actionColors[h.action] || 'text-gray-300';
+                        const icon = actionIcons[h.action] || '📋';
+                        const date = new Date(h.created_at).toLocaleString();
+                        return `
                         <div class="flex gap-4 items-start bg-white/3 border border-white/5 rounded-xl px-4 py-3 hover:bg-white/5 transition">
                             <span class="text-lg mt-0.5" style="flex-shrink:0">${icon}</span>
                             <div class="flex-1 min-w-0">
@@ -2650,27 +3117,328 @@
                                 ${h.description ? `<p class="text-[11px] text-gray-400 mt-1 leading-relaxed">${h.description}</p>` : ''}
                             </div>
                         </div>`;
-                }).join('');
+                    }).join('');
 
-                entriesEl.classList.remove('hidden');
+                    entriesEl.classList.remove('hidden');
 
-            } catch (err) {
-                loadingEl.classList.add('hidden');
-                errorEl.classList.remove('hidden');
-                console.error('Audit trail error:', err);
+                } catch (err) {
+                    loadingEl.classList.add('hidden');
+                    errorEl.classList.remove('hidden');
+                    console.error('Audit trail error:', err);
+                }
             }
-        }
 
-        function closeAuditModal() {
-            document.getElementById('auditModal').classList.add('hidden');
-            document.body.classList.remove('overflow-hidden');
-        }
+            function closeAuditModal() {
+                document.getElementById('auditModal').classList.add('hidden');
+                document.body.classList.remove('overflow-hidden');
+            }
 
-        // Close on backdrop click
-        document.getElementById('auditModal').addEventListener('click', function(e) {
-            if (e.target === this) closeAuditModal();
-        });
-    </script>
+            // Close on backdrop click
+            document.getElementById('auditModal').addEventListener('click', function (e) {
+                if (e.target === this) closeAuditModal();
+            });
+        </script>
+
+
+        <!-- ═══════════════════════════════════════════════════════════
+         LEGAL DMS — VAULT JAVASCRIPT
+         ═══════════════════════════════════════════════════════════ -->
+        <script>
+            /* ─── State ───────────────────────────────────────────────── */
+            let _vaultMatterId = null;
+            let _vaultMatterTitle = '';
+            let _vaultShowAll = false;
+
+            /* ─── Open / Close ────────────────────────────────────────── */
+            function openVaultPanel(matterId, matterTitle) {
+                console.log('Opening vault for:', matterId, matterTitle);
+                _vaultMatterId = matterId;
+                _vaultMatterTitle = matterTitle || matterId.split('-')[0] + '…';
+                _vaultShowAll = false;
+
+                document.getElementById('vaultMatterTitle').textContent = _vaultMatterTitle;
+                document.getElementById('vaultMatterLabel').textContent = 'Matter — ' + matterId.split('-')[0].toUpperCase();
+                document.getElementById('vaultVersionToggleIcon').textContent = '▼';
+                document.getElementById('vaultVersionToggleLabel').textContent = ' Show all versions';
+
+                const panel = document.getElementById('vaultPanel');
+                const backdrop = document.getElementById('vaultBackdrop');
+                
+                if (panel) panel.classList.add('open');
+                if (backdrop) backdrop.classList.add('open');
+                
+                document.body.style.overflow = 'hidden';
+                loadVaultFiles();
+            }
+
+            function closeVaultPanel() {
+                const panel = document.getElementById('vaultPanel');
+                const backdrop = document.getElementById('vaultBackdrop');
+                
+                if (panel) panel.classList.remove('open');
+                if (backdrop) backdrop.classList.remove('open');
+                
+                document.body.style.overflow = '';
+                _vaultMatterId = null;
+            }
+
+            /* ─── Load Files ──────────────────────────────────────────── */
+            async function loadVaultFiles() {
+                if (!_vaultMatterId) return;
+                const list = document.getElementById('vaultFileList');
+                list.innerHTML = `
+                    <div style="padding:60px 20px; text-align:center;">
+                        <div class="vault-spinner"></div>
+                        <div style="color:#9CA3AF; font-size:12px; font-weight:500; letter-spacing:0.05em; text-transform:uppercase;">Synchronizing Vault...</div>
+                    </div>
+                `;
+                try {
+                    const url = HR_LEGAL_API + '/matters/' + _vaultMatterId + '/attachments?include_all=' + _vaultShowAll;
+                    const res = await fetch(url, {
+                        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('ec_token') }
+                    });
+                    if (!res.ok) throw new Error(await res.text());
+                    const data = await res.json();
+                    renderVaultFiles(data.attachments || []);
+                } catch (err) {
+                    list.innerHTML = '<div class="vault-empty"><span class="vault-empty-icon">⚠️</span><div class="vault-empty-text">Failed to load files.<br><small>' + err.message + '</small></div></div>';
+                }
+            }
+
+            function renderVaultFiles(attachments) {
+                const list = document.getElementById('vaultFileList');
+                const count = document.getElementById('vaultFileCount');
+                const active = attachments.filter(a => a.status === 'Active');
+                count.textContent = active.length + ' file' + (active.length !== 1 ? 's' : '') + ' in vault';
+
+                if (!attachments.length) {
+                    list.innerHTML = '<div class="vault-empty"><span class="vault-empty-icon">🗄️</span><div class="vault-empty-text">No documents uploaded yet.<br>Use the zone above to add the first file.</div></div>';
+                    return;
+                }
+
+                list.innerHTML = attachments.map(att => {
+                    const isLatest = att.is_latest;
+                    const isSuperseded = att.status === 'Superseded';
+                    const ext = att.file_type;
+                    const icon = ext === 'pdf' ? '📄' : '📝';
+                    const sizeMB = (att.file_size_bytes / 1048576).toFixed(2);
+                    const uploadedAt = new Date(att.uploaded_at).toLocaleDateString('en-GB', {
+                        day: '2-digit', month: 'short', year: 'numeric', hour: '2-digit', minute: '2-digit'
+                    });
+
+                    const safeFilename = att.original_filename.replace(/'/g, "\\'");
+                    
+                    const dlBtn = `<button class="vault-btn" onclick="vaultDownload('${att.id}', '${safeFilename}')" title="Download">${att.signed_url ? '⬇' : '⬇'}</button>`;
+                    const previewBtn = (ext === 'pdf' && att.signed_url)
+                        ? `<button class="vault-btn" onclick="vaultPreviewPDF('${att.signed_url}', '${safeFilename}')" title="Preview PDF">👁</button>`
+                        : '';
+                    const delBtn = !isSuperseded
+                        ? `<button class="vault-btn danger" onclick="vaultDelete('${att.id}', '${safeFilename}')" title="Remove from vault">🗑</button>`
+                        : '';
+
+                    return `
+                        <div class="vault-file-item" style="${isSuperseded ? 'opacity:0.48' : ''}">
+                            <div class="vault-file-icon ${ext}">${icon}</div>
+                            <div class="vault-file-meta">
+                                <div class="vault-file-name" title="${att.original_filename}">${att.original_filename}</div>
+                                <div class="vault-file-details">
+                                    <span class="vault-version-badge ${isSuperseded ? 'superseded' : ''}">v${att.version_number} — ${att.version_label || 'Draft'}</span>
+                                    <span>${sizeMB} MB</span>
+                                    ${isLatest ? '<span style="color:#22c55e;font-weight:700;">● Latest</span>' : ''}
+                                </div>
+                                <div class="vault-file-uploader">⬆ ${att.uploader_name} &middot; ${uploadedAt}</div>
+                            </div>
+                            <div class="vault-file-actions">${dlBtn}${previewBtn}${delBtn}</div>
+                        </div>`;
+                }).join('');
+            }
+
+            /* ─── Version History Toggle ──────────────────────────────── */
+            function toggleVersionHistory() {
+                _vaultShowAll = !_vaultShowAll;
+                document.getElementById('vaultVersionToggleIcon').textContent = _vaultShowAll ? '▲' : '▼';
+                document.getElementById('vaultVersionToggleLabel').textContent = _vaultShowAll ? ' Hide old versions' : ' Show all versions';
+                loadVaultFiles();
+            }
+
+            /* ─── Drag-and-Drop wiring ────────────────────────────────── */
+            document.addEventListener('DOMContentLoaded', function () {
+                const zone = document.getElementById('vaultDropZone');
+                if (!zone) return;
+                zone.addEventListener('dragover', function (e) { e.preventDefault(); zone.classList.add('drag-over'); });
+                zone.addEventListener('dragleave', function () { zone.classList.remove('drag-over'); });
+                zone.addEventListener('drop', function (e) {
+                    e.preventDefault(); zone.classList.remove('drag-over');
+                    if (e.dataTransfer.files[0]) uploadVaultFile(e.dataTransfer.files[0]);
+                });
+            });
+
+            function handleVaultFileSelect(input) {
+                if (input.files && input.files[0]) {
+                    uploadVaultFile(input.files[0]);
+                    input.value = '';
+                }
+            }
+
+            /* ─── Upload ──────────────────────────────────────────────── */
+            async function uploadVaultFile(file) {
+                if (!_vaultMatterId) return;
+                const ALLOWED = ['application/pdf', 'application/msword',
+                    'application/vnd.openxmlformats-officedocument.wordprocessingml.document'];
+                if (!ALLOWED.includes(file.type)) {
+                    showVaultToast('Only PDF, DOC, and DOCX files are allowed.', 'error'); return;
+                }
+                if (file.size > 20 * 1024 * 1024) {
+                    showVaultToast('File too large (' + (file.size / 1048576).toFixed(1) + ' MB). Max: 20 MB.', 'error'); return;
+                }
+
+                const progressBar = document.getElementById('vaultProgressBar');
+                const progressFill = document.getElementById('vaultProgressFill');
+                progressBar.style.display = 'block';
+                progressFill.style.width = '0%';
+                let pct = 0;
+                const ticker = setInterval(function () {
+                    pct = Math.min(pct + Math.random() * 15, 85);
+                    progressFill.style.width = pct + '%';
+                }, 200);
+
+                try {
+                    const form = new FormData();
+                    form.append('file', file);
+                    const res = await fetch(HR_LEGAL_API + '/matters/' + _vaultMatterId + '/attachments', {
+                        method: 'POST',
+                        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('ec_token') },
+                        body: form
+                    });
+                    const data = await res.json();
+                    clearInterval(ticker);
+                    progressFill.style.width = '100%';
+                    setTimeout(function () { progressBar.style.display = 'none'; progressFill.style.width = '0%'; }, 600);
+                    if (!res.ok) throw new Error(data.detail || 'Upload failed');
+                    showVaultToast('"' + file.name + '" uploaded to vault.', 'success');
+                    loadVaultFiles();
+                } catch (err) {
+                    clearInterval(ticker);
+                    progressBar.style.display = 'none';
+                    showVaultToast('Upload failed: ' + err.message, 'error');
+                }
+            }
+
+            /* ─── Download ────────────────────────────────────────────── */
+            async function vaultDownload(attachmentId, filename) {
+                try {
+                    const res = await fetch(HR_LEGAL_API + '/matters/' + _vaultMatterId + '/attachments/' + attachmentId + '/download', {
+                        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('ec_token') }
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail);
+                    const a = document.createElement('a');
+                    a.href = data.signed_url; a.download = filename; a.target = '_blank'; a.click();
+                } catch (err) { showVaultToast('Download failed: ' + err.message, 'error'); }
+            }
+
+            /* ─── PDF Preview ─────────────────────────────────────────── */
+            function vaultPreviewPDF(signedUrl, filename) {
+                const overlay = document.createElement('div');
+                overlay.className = 'vault-preview-overlay';
+                overlay.innerHTML = '<div class="vault-preview-bar">'
+                    + '<span style="color:#fff;font-weight:600;font-size:14px;">📄 ' + filename + '</span>'
+                    + '<button onclick="this.closest(\'.vault-preview-overlay\').remove()" '
+                    + 'style="background:rgba(255,255,255,0.08);border:none;color:#fff;padding:6px 14px;border-radius:7px;cursor:pointer;font-size:13px;">✕ Close</button>'
+                    + '</div>'
+                    + '<iframe src="' + signedUrl + '" style="flex:1;border:none;width:100%;" title="Document Preview"></iframe>';
+                document.body.appendChild(overlay);
+            }
+
+            /* ─── Delete ──────────────────────────────────────────────── */
+            async function vaultDelete(attachmentId, filename) {
+                if (!confirm('Remove "' + filename + '" from the vault?\n\nThis is logged in the audit trail.')) return;
+                try {
+                    const res = await fetch(HR_LEGAL_API + '/matters/' + _vaultMatterId + '/attachments/' + attachmentId, {
+                        method: 'DELETE',
+                        headers: { 'Authorization': 'Bearer ' + localStorage.getItem('ec_token') }
+                    });
+                    const data = await res.json();
+                    if (!res.ok) throw new Error(data.detail);
+                    showVaultToast('File removed from vault.', 'success');
+                    loadVaultFiles();
+                } catch (err) { showVaultToast('Delete failed: ' + err.message, 'error'); }
+            }
+
+            /* ─── Toast ───────────────────────────────────────────────── */
+            let _vaultToastTimer = null;
+            function showVaultToast(msg, type) {
+                type = type || 'success';
+                const toast = document.getElementById('vaultToast');
+                document.getElementById('vaultToastMsg').textContent = msg;
+                document.getElementById('vaultToastIcon').textContent = type === 'success' ? '✅' : '❌';
+                toast.className = 'vault-toast show ' + type;
+                clearTimeout(_vaultToastTimer);
+                _vaultToastTimer = setTimeout(function () { toast.classList.remove('show'); }, 3500);
+            }
+        </script>
+
+<!-- ═══════════════════════════════════════════════════════════
+     LEGAL DMS — DOCUMENT VAULT PANEL (direct body child)
+     ═══════════════════════════════════════════════════════════ -->
+
+<!-- Vault Backdrop -->
+<div id="vaultBackdrop" onclick="closeVaultPanel()"></div>
+
+<!-- Slide-Over Panel -->
+<div id="vaultPanel">
+    <div class="vault-header">
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-bottom:14px;">
+            <div>
+                <div class="vault-matter-label" id="vaultMatterLabel">Document Vault</div>
+                <h2>&#128196; <span id="vaultMatterTitle">Attachments</span></h2>
+            </div>
+            <button onclick="closeVaultPanel()" style="background:rgba(255,255,255,0.06);border:none;color:#9CA3AF;
+                       width:34px;height:34px;border-radius:9px;cursor:pointer;font-size:18px;
+                       display:flex;align-items:center;justify-content:center;line-height:1;">&#x2715;</button>
+        </div>
+
+        <!-- Upload Zone -->
+        <div class="vault-upload-zone" id="vaultDropZone">
+            <input type="file" id="vaultFileInput"
+                accept=".pdf,.doc,.docx,application/pdf,application/msword,application/vnd.openxmlformats-officedocument.wordprocessingml.document"
+                onchange="handleVaultFileSelect(this)">
+            <span class="vault-upload-icon">&#128228;</span>
+            <div class="vault-upload-title">Drop file here or click to upload</div>
+            <div class="vault-upload-sub">Stored in encrypted private vault &bull; Signed URLs expire in 1 hr</div>
+            <div class="vault-upload-types">
+                <span class="vault-type-badge pdf">PDF</span>
+                <span class="vault-type-badge doc">DOC</span>
+                <span class="vault-type-badge docx">DOCX</span>
+            </div>
+            <div style="font-size:11px;color:#4B5563;margin-top:6px;">Max 20 MB per file</div>
+        </div>
+        <div class="vault-progress-bar" id="vaultProgressBar">
+            <div class="vault-progress-fill" id="vaultProgressFill"></div>
+        </div>
+
+        <div style="display:flex;align-items:center;justify-content:space-between;margin-top:14px;">
+            <span style="font-size:12px;color:#6B7280;" id="vaultFileCount">&mdash; files</span>
+            <button class="vault-version-toggle" id="vaultVersionToggle" onclick="toggleVersionHistory()">
+                <span id="vaultVersionToggleIcon">&#9660;</span>
+                <span id="vaultVersionToggleLabel">Show all versions</span>
+            </button>
+        </div>
+    </div>
+
+    <div class="vault-file-list" id="vaultFileList">
+        <div class="vault-empty">
+            <span class="vault-empty-icon">&#128452;&#65039;</span>
+            <div class="vault-empty-text">No documents uploaded yet.<br>Use the zone above to add the first file.</div>
+        </div>
+    </div>
+</div>
+
+<!-- Vault Toast -->
+<div class="vault-toast" id="vaultToast">
+    <span id="vaultToastIcon">&#9989;</span>
+    <span id="vaultToastMsg">Done</span>
+</div>
 
 </body>
 

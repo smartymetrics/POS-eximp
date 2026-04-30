@@ -9,6 +9,11 @@ import json
 import uuid
 import pdf_service
 
+import uuid as uuid_lib
+import os
+from fastapi import Form
+from database import supabase
+
 router = APIRouter()
 APP_BASE_URL = os.getenv("APP_BASE_URL", "https://app.eximps-cloves.com")
 
@@ -182,11 +187,12 @@ async def initiate_matter(data: dict, current_admin=Depends(verify_token)):
     
     matter = res.data[0]
     
-    # Log audit
+    # Log audit — standardized to actor_id/actor_name
     await db_execute(lambda: db.table("legal_matter_history").insert({
         "matter_id": matter["id"],
         "action": "Matter Initiated",
-        "performed_by": admin_id,
+        "actor_id": admin_id,
+        "actor_name": current_admin.get("full_name", "Unknown"),
         "description": f"New {matter['category']} matter created via { 'HR' if data.get('hr_memo') else 'Legal'} Portal"
     }).execute())
     
@@ -230,7 +236,8 @@ async def add_collaborator(matter_id: str, data: dict, current_admin=Depends(ver
     await db_execute(lambda: db.table("legal_matter_history").insert({
         "matter_id": matter_id,
         "action": "Permission Granted",
-        "performed_by": admin_id,
+        "actor_id": admin_id,
+        "actor_name": current_admin.get("full_name", "Unknown"),
         "description": f"Granted {collab_data['permission_level']} access to admin {data.get('admin_id')}"
     }).execute())
     
@@ -253,7 +260,8 @@ async def remove_collaborator(matter_id: str, target_admin_id: str, current_admi
     await db_execute(lambda: db.table("legal_matter_history").insert({
         "matter_id": matter_id,
         "action": "Permission Revoked",
-        "performed_by": admin_id,
+        "actor_id": admin_id,
+        "actor_name": current_admin.get("full_name", "Unknown"),
         "description": f"Revoked access for admin {target_admin_id}"
     }).execute())
     
@@ -279,7 +287,8 @@ async def save_matter_content(matter_id: str, data: dict, current_admin=Depends(
     await db_execute(lambda: db.table("legal_matter_history").insert({
         "matter_id": matter_id,
         "action": "Edit",
-        "performed_by": admin_id,
+        "actor_id": admin_id,
+        "actor_name": current_admin.get("full_name", "Unknown"),
         "description": "Updated document draft content"
     }).execute())
     
@@ -1688,3 +1697,426 @@ async def export_matter_pdf(matter_id: str, token: str = None, request: Request 
         )
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"PDF generation failed: {str(e)}")
+
+LEGAL_VAULT_BUCKET = "legal-vault"
+MAX_FILE_SIZE_MB   = 20
+ALLOWED_MIME_TYPES = {
+    "application/pdf": "pdf",
+    "application/msword": "doc",
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+}
+SIGNED_URL_EXPIRY_SECONDS = 3600  # 1 hour — short-lived for confidentiality
+
+
+# ════════════════════════════════════════════════════════════════════
+# HELPER: Upload a file to Supabase Storage
+# ════════════════════════════════════════════════════════════════════
+
+async def _upload_to_vault(matter_id: str, file: UploadFile, file_bytes: bytes) -> str:
+    """Uploads bytes to Supabase Storage. Returns the stored path."""
+    ext        = ALLOWED_MIME_TYPES[file.content_type]
+    unique_id  = str(uuid_lib.uuid4())[:8]
+    safe_name  = file.filename.replace(" ", "_")
+    stored_path = f"matters/{matter_id}/{unique_id}_{safe_name}"
+
+    # Supabase Python client storage upload
+    res = supabase.storage.from_(LEGAL_VAULT_BUCKET).upload(
+        path=stored_path,
+        file=file_bytes,
+        file_options={"content-type": file.content_type, "upsert": "false"},
+    )
+    # The supabase-py client raises on error, so if we get here it succeeded
+    return stored_path
+
+
+# ════════════════════════════════════════════════════════════════════
+# ENDPOINT 1 — Upload an Attachment
+# POST /api/hr-legal/matters/{matter_id}/attachments
+# ════════════════════════════════════════════════════════════════════
+
+@router.post("/matters/{matter_id}/attachments")
+async def upload_matter_attachment(
+    matter_id:     str,
+    file:          UploadFile = File(...),
+    version_label: str        = Form(None),  # e.g. "Initial Draft", "Revision 2"
+    current_admin: dict       = Depends(verify_token),
+):
+    db = get_db()
+
+    # ── 1. Access check ────────────────────────────────────────────
+    await check_matter_access(matter_id, current_admin, required_level="Edit")
+
+    # ── 2. Validate MIME type ──────────────────────────────────────
+    if file.content_type not in ALLOWED_MIME_TYPES:
+        raise HTTPException(
+            status_code=400,
+            detail=f"Unsupported file type '{file.content_type}'. "
+                   f"Allowed: PDF, DOC, DOCX only."
+        )
+
+    # ── 3. Read & validate file size ───────────────────────────────
+    file_bytes = await file.read()
+    size_mb    = len(file_bytes) / (1024 * 1024)
+    if size_mb > MAX_FILE_SIZE_MB:
+        raise HTTPException(
+            status_code=413,
+            detail=f"File too large ({size_mb:.1f} MB). Maximum allowed: {MAX_FILE_SIZE_MB} MB."
+        )
+
+    # ── 4. Determine version number ────────────────────────────────
+    existing_res = await db_execute(
+        lambda: db.table("legal_matter_attachments")
+                  .select("version_number")
+                  .eq("matter_id", matter_id)
+                  .eq("status", "Active")
+                  .order("version_number", desc=True)
+                  .limit(1)
+                  .execute()
+    )
+    existing = existing_res.data or []
+    next_version = (existing[0]["version_number"] + 1) if existing else 1
+
+    # ── 5. Mark all prior versions as Superseded ───────────────────
+    if existing:
+        await db_execute(
+            lambda: db.table("legal_matter_attachments")
+                      .update({"is_latest": False, "status": "Superseded"})
+                      .eq("matter_id", matter_id)
+                      .eq("is_latest", True)
+                      .execute()
+        )
+
+    # ── 6. Upload to Supabase Storage ──────────────────────────────
+    try:
+        stored_path = await _upload_to_vault(matter_id, file, file_bytes)
+    except Exception as e:
+        raise HTTPException(
+            status_code=502,
+            detail=f"Storage upload failed: {str(e)}"
+        )
+
+    # ── 7. Insert DB record ────────────────────────────────────────
+    auto_label = version_label or (
+        "Initial Upload" if next_version == 1 else f"Revision {next_version - 1}"
+    )
+    record = {
+        "matter_id":         matter_id,
+        "original_filename": file.filename,
+        "stored_path":       stored_path,
+        "file_type":         ALLOWED_MIME_TYPES[file.content_type],
+        "file_size_bytes":   len(file_bytes),
+        "mime_type":         file.content_type,
+        "version_number":    next_version,
+        "version_label":     auto_label,
+        "is_latest":         True,
+        "uploader_id":       current_admin["id"],
+        "uploader_name":     current_admin.get("full_name", "Unknown"),
+        "status":            "Active",
+    }
+    insert_res = await db_execute(
+        lambda: db.table("legal_matter_attachments").insert(record).execute()
+    )
+
+    # ── 8. Log to matter history ───────────────────────────────────
+    await db_execute(
+        lambda: db.table("legal_matter_history").insert({
+            "matter_id":   matter_id,
+            "actor_id":    current_admin["id"],
+            "actor_name":  current_admin.get("full_name", "Unknown"),
+            "action":      "file_uploaded",
+            "description": f"Uploaded '{file.filename}' (v{next_version} — {auto_label}, {size_mb:.2f} MB)",
+        }).execute()
+    )
+
+    attachment = insert_res.data[0] if insert_res.data else record
+    return {
+        "status":     "success",
+        "message":    f"File uploaded as version {next_version}.",
+        "attachment": attachment,
+    }
+
+
+# ════════════════════════════════════════════════════════════════════
+# ENDPOINT 2 — List Attachments for a Matter
+# GET /api/hr-legal/matters/{matter_id}/attachments
+# ════════════════════════════════════════════════════════════════════
+
+@router.get("/matters/{matter_id}/attachments")
+async def list_matter_attachments(
+    matter_id:    str,
+    include_all:  bool = False,   # ?include_all=true shows superseded versions too
+    current_admin: dict = Depends(verify_token),
+):
+    db = get_db()
+    await check_matter_access(matter_id, current_admin, required_level="View")
+
+    query = db.table("legal_matter_attachments").select("*").eq("matter_id", matter_id)
+    if not include_all:
+        query = query.eq("status", "Active")   # Only Active by default
+    else:
+        query = query.neq("status", "Deleted") # Exclude only hard-deleted
+
+    res = await db_execute(
+        lambda: query.order("version_number", desc=True).execute()
+    )
+    attachments = res.data or []
+
+    # Generate 1-hour signed URLs for each file
+    for att in attachments:
+        try:
+            url_res = supabase.storage.from_(LEGAL_VAULT_BUCKET).create_signed_url(
+                path=att["stored_path"],
+                expires_in=SIGNED_URL_EXPIRY_SECONDS,
+            )
+            att["signed_url"]  = url_res.get("signedURL") or url_res.get("signed_url")
+            att["url_expires"] = SIGNED_URL_EXPIRY_SECONDS
+        except Exception:
+            att["signed_url"]  = None
+            att["url_expires"] = None
+
+    return {"attachments": attachments, "total": len(attachments)}
+
+
+# ════════════════════════════════════════════════════════════════════
+# ENDPOINT 3 — Get a Signed Download URL on Demand
+# GET /api/hr-legal/matters/{matter_id}/attachments/{attachment_id}/download
+# ════════════════════════════════════════════════════════════════════
+
+@router.get("/matters/{matter_id}/attachments/{attachment_id}/download")
+async def get_attachment_download_url(
+    matter_id:     str,
+    attachment_id: str,
+    current_admin: dict = Depends(verify_token),
+):
+    db = get_db()
+    await check_matter_access(matter_id, current_admin, required_level="View")
+
+    res = await db_execute(
+        lambda: db.table("legal_matter_attachments")
+                  .select("*")
+                  .eq("id", attachment_id)
+                  .eq("matter_id", matter_id)
+                  .neq("status", "Deleted")
+                  .single()
+                  .execute()
+    )
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Attachment not found.")
+
+    att = res.data
+    try:
+        url_res = supabase.storage.from_(LEGAL_VAULT_BUCKET).create_signed_url(
+            path=att["stored_path"],
+            expires_in=SIGNED_URL_EXPIRY_SECONDS,
+        )
+        signed_url = url_res.get("signedURL") or url_res.get("signed_url")
+    except Exception as e:
+        raise HTTPException(status_code=502, detail=f"Could not generate download link: {str(e)}")
+
+    return {
+        "signed_url":  signed_url,
+        "filename":    att["original_filename"],
+        "file_type":   att["file_type"],
+        "expires_in":  SIGNED_URL_EXPIRY_SECONDS,
+    }
+
+
+# ════════════════════════════════════════════════════════════════════
+# ENDPOINT 4 — Soft-Delete an Attachment
+# DELETE /api/hr-legal/matters/{matter_id}/attachments/{attachment_id}
+# ════════════════════════════════════════════════════════════════════
+
+@router.delete("/matters/{matter_id}/attachments/{attachment_id}")
+async def delete_matter_attachment(
+    matter_id:     str,
+    attachment_id: str,
+    current_admin: dict = Depends(verify_token),
+):
+    db = get_db()
+    await check_matter_access(matter_id, current_admin, required_level="Edit")
+
+    # Fetch the record first
+    res = await db_execute(
+        lambda: db.table("legal_matter_attachments")
+                  .select("*")
+                  .eq("id", attachment_id)
+                  .eq("matter_id", matter_id)
+                  .neq("status", "Deleted")
+                  .single()
+                  .execute()
+    )
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Attachment not found.")
+
+    att = res.data
+
+    # Soft-delete in DB
+    await db_execute(
+        lambda: db.table("legal_matter_attachments")
+                  .update({"status": "Deleted", "is_latest": False})
+                  .eq("id", attachment_id)
+                  .execute()
+    )
+
+    # If this was the latest, promote the previous version
+    if att["is_latest"]:
+        prev_res = await db_execute(
+            lambda: db.table("legal_matter_attachments")
+                      .select("id")
+                      .eq("matter_id", matter_id)
+                      .eq("status", "Active")
+                      .order("version_number", desc=True)
+                      .limit(1)
+                      .execute()
+        )
+        if prev_res.data:
+            await db_execute(
+                lambda: db.table("legal_matter_attachments")
+                          .update({"is_latest": True})
+                          .eq("id", prev_res.data[0]["id"])
+                          .execute()
+            )
+
+    # Log to history
+    await db_execute(
+        lambda: db.table("legal_matter_history").insert({
+            "matter_id":   matter_id,
+            "actor_id":    current_admin["id"],
+            "actor_name":  current_admin.get("full_name", "Unknown"),
+            "action":      "file_deleted",
+            "description": f"Removed attachment: '{att['original_filename']}' (v{att['version_number']})",
+        }).execute()
+    )
+
+    return {"status": "success", "message": "Attachment removed from the vault."}
+    
+
+# ════════════════════════════════════════════════════════════════════
+# ANALYTICS ENDPOINTS (for Legal Dashboard)
+# ════════════════════════════════════════════════════════════════════
+
+@router.get("/summary")
+async def get_legal_summary(current_admin: dict = Depends(verify_token)):
+    """Fetch high-level KPIs for the legal dashboard."""
+    db = get_db()
+    
+    # 1. Total Matters
+    total_res = await db_execute(lambda: db.table("legal_matters").select("id", count="exact").execute())
+    total_count = total_res.count or 0
+    
+    # 2. Active Matters (In-Progress, Legal Review, Legal Signing)
+    active_res = await db_execute(lambda: db.table("legal_matters")
+        .select("id", count="exact")
+        .in_("status", ["In-Progress", "Legal Review", "Legal Signing"])
+        .execute())
+    active_count = active_res.count or 0
+    
+    # 3. Executed Matters
+    executed_res = await db_execute(lambda: db.table("legal_matters")
+        .select("id", count="exact")
+        .eq("status", "Executed")
+        .execute())
+    executed_count = executed_res.count or 0
+    
+    # 4. Pending Review
+    pending_res = await db_execute(lambda: db.table("legal_matters")
+        .select("id", count="exact")
+        .eq("status", "Legal Review")
+        .execute())
+    pending_count = pending_res.count or 0
+    
+    return {
+        "total_matters": total_count,
+        "active_matters": active_count,
+        "executed_matters": executed_count,
+        "pending_review": pending_count
+    }
+
+
+@router.get("/activity")
+async def get_legal_activity(limit: int = 15, current_admin: dict = Depends(verify_token)):
+    """Fetch recent activity from the legal_matter_history table."""
+    db = get_db()
+    
+    # Join with legal_matters to get the title
+    res = await db_execute(lambda: db.table("legal_matter_history")
+        .select("*, legal_matters(title, category, external_party_name)")
+        .order("created_at", desc=True)
+        .limit(limit)
+        .execute())
+    
+    history = res.data or []
+    
+    # Format for the frontend Activity widget
+    formatted = []
+    for item in history:
+        matter = item.get("legal_matters") or {}
+        title = matter.get("external_party_name") or matter.get("title") or "Unknown Matter"
+        
+        formatted.append({
+            "id": item["id"],
+            "event_type": item["action"],
+            "description": item["description"],
+            "performed_by_name": item.get("actor_name") or "Legal System",
+            "matter_title": title,
+            "created_at": item["created_at"]
+        })
+        
+    return formatted
+
+
+@router.get("/execution-trends")
+async def get_legal_execution_trends(current_admin: dict = Depends(verify_token)):
+    """Returns a 6-month trend of legal matters (Initiated, Executed, Pending)."""
+    db = get_db()
+    
+    # Fetch all matters from the last 6 months
+    res = await db_execute(lambda: db.table("legal_matters")
+        .select("id, status, created_at, updated_at")
+        .order("created_at", desc=True)
+        .execute())
+    
+    matters = res.data or []
+    
+    from collections import defaultdict
+    initiated_map = defaultdict(int)
+    executed_map = defaultdict(int)
+    pending_map = defaultdict(int)
+    
+    for m in matters:
+        try:
+            # Created = Initiated
+            created_dt = datetime.fromisoformat(m["created_at"].replace('Z', '+00:00'))
+            initiated_map[created_dt.strftime("%Y-%m")] += 1
+            
+            # Status based grouping
+            if m["status"] == "Executed":
+                updated_dt = datetime.fromisoformat(m["updated_at"].replace('Z', '+00:00'))
+                executed_map[updated_dt.strftime("%Y-%m")] += 1
+            elif m["status"] == "Legal Review":
+                pending_map[created_dt.strftime("%Y-%m")] += 1
+        except:
+            continue
+            
+    # Labels for last 6 months (Nigeria Time UTC+1)
+    labels = []
+    initiated = []
+    executed = []
+    pending = []
+    
+    now = datetime.now(timezone(timedelta(hours=1)))
+    for i in range(5, -1, -1):
+        # Using a safer way to get month starts
+        target = now - timedelta(days=i*30)
+        month_key = target.strftime("%Y-%m")
+        labels.append(target.strftime("%b"))
+        initiated.append(initiated_map.get(month_key, 0))
+        executed.append(executed_map.get(month_key, 0))
+        pending.append(pending_map.get(month_key, 0))
+        
+    return {
+        "labels": labels,
+        "initiated": initiated,
+        "executed": executed,
+        "pending": pending
+    }
