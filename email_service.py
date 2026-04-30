@@ -291,7 +291,7 @@ async def send_statement_email(invoices: list, client: dict, sent_by: str):
     try:
         client_sanitized = sanitize_client_address(client.copy())
         pdf = await db_execute(lambda: generate_statement_pdf(invoices, client_sanitized))
-        total_invoiced = sum(float(i["amount"]) for i in invoices)
+        total_invoiced = sum(float(i["amount"]) for i in invoices if i.get("status") != "voided")
         total_paid = sum(float(p["amount"]) for inv in invoices for p in (inv.get("payments") or []) if not p.get("is_voided"))
         balance = total_invoiced - total_paid
     
@@ -1256,6 +1256,11 @@ async def send_signing_link_email(invoice, client, token, expires_at):
             <li>Read the complete contract document.</li>
             <li>Sign and submit your contract signature.</li>
         </ul>
+        
+        <div style="background-color: #f9f9f9; border-left: 4px solid #F5A623; padding: 15px; margin-top: 30px; font-size: 13px; color: #666;">
+            <strong>Data Compliance & Security:</strong><br>
+            For legal and audit purposes, please be aware that we record your IP address, device type, browser user agent, and the precise timestamp of your signature. This information is stored securely as part of the digital audit trail for this transaction.
+        </div>
 
         <p><strong>Instructions for Witness:</strong></p>
         <ol>

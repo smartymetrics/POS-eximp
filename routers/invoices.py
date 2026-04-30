@@ -174,6 +174,7 @@ async def send_documents(
         raise HTTPException(status_code=404, detail="Invoice not found")
 
     invoice = inv.data[0]
+    invoice["status"] = resolve_invoice_status(invoice)
     client_raw = invoice.get("clients", {})
     # Handle both list and dict returns from Supabase-js style mapping
     client = client_raw[0] if isinstance(client_raw, list) and client_raw else client_raw
@@ -433,6 +434,40 @@ async def edit_invoice(
             db=db,
             performed_by=current_admin["sub"]
         )
+
+    # Automated Pipeline Synchronization
+    # If amount or amount_paid changed, we must sync the statuses and pipeline stages.
+    if "amount" in update_data or "amount_paid" in update_data:
+        try:
+            final_amount = float(update_data.get("amount", invoice["amount"]))
+            final_paid = float(update_data.get("amount_paid", invoice["amount_paid"]))
+            
+            if final_amount > 0 and final_paid >= final_amount:
+                new_inv_status = "paid"
+                new_inv_stage = "paid"
+                new_client_stage = "closed"
+            elif final_paid > 0:
+                new_inv_status = "partial"
+                new_inv_stage = "interest"
+                new_client_stage = "paid"
+            else:
+                new_inv_status = "unpaid"
+                new_inv_stage = "interest"
+                new_client_stage = "interest"
+
+            # 1. Update Invoice status and stage
+            await db_execute(lambda: db.table("invoices").update({
+                "status": new_inv_status,
+                "pipeline_stage": new_inv_stage
+            }).eq("id", invoice_id).execute())
+
+            # 2. Update Client stage
+            await db_execute(lambda: db.table("clients").update({
+                "pipeline_stage": new_client_stage
+            }).eq("id", invoice["client_id"]).execute())
+
+        except Exception as sync_err:
+            print(f"[WARN] Pipeline sync after invoice edit failed: {sync_err}")
     
     return {"message": "Invoice updated successfully"}
 
@@ -451,6 +486,7 @@ async def view_document_html(
         raise HTTPException(status_code=404, detail="Invoice not found")
     
     invoice = inv.data[0]
+    invoice["status"] = resolve_invoice_status(invoice)
     is_receipt = type == "receipt" or ("Receipt" in type.title())
     
     return templates.TemplateResponse("invoice_view.html", {
@@ -472,6 +508,7 @@ async def download_pdf(invoice_id: str, doc_type: str, current_admin=Depends(res
         raise HTTPException(status_code=404, detail="Invoice not found")
 
     invoice = inv.data[0]
+    invoice["status"] = resolve_invoice_status(invoice)
 
     # Fallback for missing location data
     if not invoice.get("property_location") and invoice.get("property_name"):

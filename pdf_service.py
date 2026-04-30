@@ -389,6 +389,8 @@ def render_statement_html(invoices: list, client: dict) -> str:
     running_balance = 0.0
 
     for inv in invoices:
+        if inv.get("status") == "voided":
+            continue
         running_balance += float(inv["amount"])
         transactions.append({
             "date": inv["invoice_date"],

@@ -121,6 +121,7 @@ async def confirm_verification(
     all_inv = await db_execute(lambda: db.table("invoices")\
         .select("*, payments(*)")\
         .eq("client_id", client["id"])\
+        .neq("status", "voided")\
         .order("invoice_date")\
         .execute())
 
@@ -159,16 +160,34 @@ async def confirm_verification(
             
             # Robust payment lookup: try reference first, then any payment on this invoice with 'deposit'
             ref = f"{verify_rec['payment_date']}_form_deposit"
+            
             pay_res = await db_execute(lambda: db.table("payments").select("id").eq("invoice_id", invoice["id"]).eq("reference", ref).execute())
             if not pay_res.data:
-                # Fallback: find any payment on this invoice with webhook-style reference
-                pay_res = await db_execute(lambda: db.table("payments")\
+                 # Fallback: find any payment on this invoice with webhook-style reference
+                 pay_res = await db_execute(lambda: db.table("payments")\
                     .select("id")\
                     .eq("invoice_id", invoice["id"])\
                     .ilike("reference", "%form_deposit")\
                     .execute())
-                    
-            payment_id = pay_res.data[0]["id"] if pay_res.data else None
+
+            payment_id = None
+            if pay_res.data:
+                payment_id = pay_res.data[0]["id"]
+            else:
+                # If no payment record exists (common for Portal submissions), create one now
+                # using the verified deposit details.
+                payment_payload = {
+                    "invoice_id": invoice["id"],
+                    "client_id": client["id"],
+                    "amount": deposit,
+                    "reference": ref,
+                    "payment_date": verify_rec.get("payment_date") or str(date.today()),
+                    "payment_method": "Bank Transfer", # Verified manually
+                    "notes": "Verified deposit from subscription portal"
+                }
+                new_pay = await db_execute(lambda: db.table("payments").insert(jsonable_encoder(payment_payload)).execute())
+                if new_pay.data:
+                    payment_id = new_pay.data[0]["id"]
             
             if payment_id:
                 # Insert professional earnings record
