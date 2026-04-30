@@ -82,6 +82,41 @@ async def confirm_verification(
     invoice = inv_res.data[0]
     client = invoice["clients"]
 
+    # 3a. Sync pipeline_stage on invoice + client now that payment is confirmed.
+    # Mirrors the same logic in routers/payments.py (lines 124-127).
+    # Wrapped in try/except so it never prevents the confirmation from completing.
+    try:
+        total_due  = float(invoice.get("amount") or 0)
+        total_paid = float(invoice.get("amount_paid") or 0)
+
+        if total_due > 0 and total_paid >= total_due:
+            # Fully paid — no balance remaining
+            new_inv_stage    = "paid"
+            new_client_stage = "closed"
+            new_inv_status   = "paid"
+        elif total_paid > 0:
+            # Has paid something but still owes a balance
+            new_inv_stage    = "interest"
+            new_client_stage = "paid"
+            new_inv_status   = "partial"
+        else:
+            # No payment recorded yet (edge case — shouldn't happen on confirm)
+            new_inv_stage    = "interest"
+            new_client_stage = "interest"
+            new_inv_status   = "unpaid"
+
+        await db_execute(lambda: db.table("invoices").update({
+            "pipeline_stage": new_inv_stage,
+            "status": new_inv_status,
+        }).eq("id", verify_rec["invoice_id"]).execute())
+
+        await db_execute(lambda: db.table("clients").update({
+            "pipeline_stage": new_client_stage,
+        }).eq("id", client["id"]).execute())
+
+    except Exception as stage_err:
+        print(f"[WARN] Pipeline stage sync after verification failed (non-critical): {stage_err}")
+
     # Fetch all invoices for statement
     all_inv = await db_execute(lambda: db.table("invoices")\
         .select("*, payments(*)")\

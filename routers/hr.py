@@ -3690,13 +3690,41 @@ async def update_expense(expense_id: str, request: Request, current_admin: dict 
 
     if res.data:
         exp = res.data[0]
-        requester_id = exp.get("requester_id")
+        requester_id = exp.get("requester_id") or exp.get("staff_id")
         if requester_id:
+            # Rich, human-readable bell notification
+            category   = exp.get("category") or "expense"
+            amount     = exp.get("amount_gross") or exp.get("net_payout_amount") or exp.get("amount") or 0
+            approver   = current_admin.get("name") or current_admin.get("sub") or "HR"
+            status_msg = {
+                "approved":       f"✅ Your {category} claim of ₦{float(amount):,.0f} has been approved by {approver}. Payment will be processed soon.",
+                "rejected":       f"❌ Your {category} claim of ₦{float(amount):,.0f} was declined by {approver}. See HR note for details.",
+                "paid":           f"💸 Your {category} reimbursement of ₦{float(exp.get('amount_paid') or amount):,.0f} has been paid out.",
+                "partially_paid": f"💳 A partial payment of ₦{float(exp.get('amount_paid') or 0):,.0f} has been made on your {category} claim.",
+            }.get(new_status, f"Your expense claim status was updated to {new_status}.")
+
             await send_notification(
-                requester_id, "Expense Update",
-                f"Your expense claim has been {new_status}.",
+                requester_id,
+                "Expense Claim Update",
+                status_msg,
                 "expense_update"
             )
+
+            # Optional email — only triggered when frontend sends send_email: true
+            if data.get("send_email") and new_status in ("approved", "paid", "partially_paid"):
+                try:
+                    from email_service import send_payout_receipt_email
+                    # Fetch the staff member's profile for the email
+                    vendor_res = await db_execute(lambda: db.table("admins")
+                        .select("id,full_name,email").eq("id", requester_id).maybe_single().execute()
+                    )
+                    vendor = vendor_res.data or {}
+                    vendor["name"] = vendor.get("full_name") or "Staff Member"
+                    await send_payout_receipt_email(exp, vendor, current_admin["sub"])
+                except Exception as email_err:
+                    # Non-blocking — email failure must never break the approval flow
+                    print(f"[EXPENSE EMAIL] non-blocking error: {email_err}")
+
     return res.data[0] if res.data else None
 
 @router.get("/peer-reviews")

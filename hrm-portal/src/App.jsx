@@ -9247,7 +9247,7 @@ function ExpensesManager() {
   const [staff, setStaff] = useState([]);
   // ── Verification modal (mirrors payout dashboard verify flow) ──
   const [verifying, setVerifying] = useState(null); // expense or commission record being verified
-  const [verifyForm, setVerifyForm] = useState({ decision: "approve", hr_note: "" });
+  const [verifyForm, setVerifyForm] = useState({ decision: "approve", hr_note: "", notify_email: true });
   const [verifyBusy, setVerifyBusy] = useState(false);
   // ── Detail drawer ──
   const [detail, setDetail] = useState(null);
@@ -9273,8 +9273,10 @@ function ExpensesManager() {
     date: r.date || r.created_at,
     created_at: r.created_at,
     // Normalise all status variants to a consistent capitalised form for display
-    status: { pending_verification: "Pending", pending: "Pending", approved: "Approved",
-              rejected: "Rejected", paid: "Paid", voided: "Voided" }[r.status] || r.status || "Pending",
+    status: {
+      pending_verification: "Pending", pending: "Pending", approved: "Approved",
+      rejected: "Rejected", paid: "Paid", voided: "Voided"
+    }[r.status] || r.status || "Pending",
     payout_method: r.payout_method,
     receipt_url: r.receipt_url || r.proforma_url || null,
     remarks: r.remarks || null,
@@ -9283,8 +9285,8 @@ function ExpensesManager() {
     dispute_reason: r.dispute_reason || null,
     risk_notes: r.risk_notes || null,
     source: r.source_platform === "payout_portal" ? "PORTAL"
-           : r.source_platform === "hrm_portal" ? "INTERNAL"
-           : r.source_platform ? r.source_platform.toUpperCase() : "INTERNAL",
+      : r.source_platform === "hrm_portal" ? "INTERNAL"
+        : r.source_platform ? r.source_platform.toUpperCase() : "INTERNAL",
     // hr_verified: no dedicated column — derive from reviewed_by being set
     hr_verified: !!(r.reviewed_by || r.hr_verified),
     // hr_note: stored in rejection_reason (for rejections) or risk_notes with [HR Note] prefix
@@ -9378,7 +9380,7 @@ function ExpensesManager() {
   const submitVerify = async () => {
     if (!verifying) return;
     setVerifyBusy(true);
-    const { decision, hr_note } = verifyForm;
+    const { decision, hr_note, notify_email } = verifyForm;
     const isApprove = decision === "approve";
     try {
       // PATCH via /hr/expenses/{id} — backend maps to real expenditure_requests columns:
@@ -9388,6 +9390,7 @@ function ExpensesManager() {
         body: JSON.stringify({
           status: isApprove ? "Approved" : "Rejected",
           hr_note: hr_note || null,   // backend stores in rejection_reason or risk_notes
+          send_email: isApprove ? !!notify_email : false,  // only send email on approval
         }),
       });
       if (verifying._kind === "expense") {
@@ -9414,12 +9417,12 @@ function ExpensesManager() {
     const alreadyPaid = parseFloat(exp.amount_paid || 0);
     const net = parseFloat(exp.net || exp.amount || 0);
     const balance = Math.max(0, net - alreadyPaid);
-    setPayModal({ exp, amountInput: String(balance), ref: "", busy: false });
+    setPayModal({ exp, amountInput: String(balance), ref: "", busy: false, notify_email: true });
   };
 
   const confirmPay = async () => {
     if (!payModal) return;
-    const { exp, amountInput, ref } = payModal;
+    const { exp, amountInput, ref, notify_email } = payModal;
     const amountSent = parseFloat(amountInput);
     if (!amountSent || amountSent <= 0) { alert("Please enter a valid amount."); return; }
     const net = parseFloat(exp.net || exp.amount || 0);
@@ -9436,6 +9439,7 @@ function ExpensesManager() {
           status: isFullyPaid ? "Paid" : "partially_paid",
           amount_paid: newAmountPaid,
           payout_reference: ref || undefined,
+          send_email: !!notify_email,  // notify staff by email if checked
         }),
       });
       setExpenses(prev => prev.map(x => x.id === exp.id ? {
@@ -9506,7 +9510,7 @@ function ExpensesManager() {
       {/* ── Summary cards ── */}
       <div style={{ display: "grid", gridTemplateColumns: "repeat(5,1fr)", gap: 14, marginBottom: 22 }}>
         <StatCard label="Expense Claims Pending" value={expenses.filter(e => normalize(e.status) === "pending").length} col={T.gold} sub={fmt(totalPending)} />
-        <StatCard label="Reimb. Owed" value={expenses.filter(e => ["approved","partially_paid"].includes(normalize(e.status))).length} col="#F87171" sub={fmt(totalReimbOwed)} />
+        <StatCard label="Reimb. Owed" value={expenses.filter(e => ["approved", "partially_paid"].includes(normalize(e.status))).length} col="#F87171" sub={fmt(totalReimbOwed)} />
         <StatCard label="Reimb. Paid Out" value={expenses.filter(e => normalize(e.status) === "paid").length} col="#4ADE80" sub={fmt(totalReimbPaid)} />
         <StatCard label="Commission Owed (Unpaid)" value={commissions.filter(c => normalize(c.payout_status) !== "paid" && normalize(c.payout_status) !== "rejected").length} col="#F59E0B" sub={fmt(totalCommOwed)} />
         <StatCard label="Commission Paid Out" value={commissions.filter(c => normalize(c.payout_status) === "paid").length} col="#60A5FA" sub={fmt(totalCommPaid)} />
@@ -9786,6 +9790,23 @@ function ExpensesManager() {
                   style={{ width: "100%" }}
                 />
               </div>
+              {/* ── Email notification checkbox ── */}
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", padding: "10px 14px", borderRadius: 8, background: "#FBB04010", border: "1px solid #FBB04030" }}>
+                <input
+                  type="checkbox"
+                  checked={payModal.notify_email}
+                  onChange={e => setPayModal(prev => ({ ...prev, notify_email: e.target.checked }))}
+                  style={{ width: 16, height: 16, marginTop: 2, accentColor: "#FBB040", cursor: "pointer", flexShrink: 0 }}
+                />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#FBB040" }}>📧 Notify staff by email</div>
+                  <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>
+                    {willBePartial
+                      ? "Staff will receive an email confirming this partial payment and the remaining balance"
+                      : "Staff will receive a Remittance Advice email confirming their full reimbursement"}
+                  </div>
+                </div>
+              </label>
               <div style={{ display: "flex", gap: 10, justifyContent: "flex-end" }}>
                 <button className="bg" style={{ padding: "8px 20px" }} onClick={() => setPayModal(null)} disabled={busy}>Cancel</button>
                 <button
@@ -9907,6 +9928,22 @@ function ExpensesManager() {
 
             {verifyForm.decision === "reject" && !verifyForm.hr_note.trim() && (
               <div style={{ fontSize: 12, color: "#EF4444", padding: "8px 12px", background: "#EF444410", borderRadius: 6 }}>⚠️ Please provide a reason when disputing a record.</div>
+            )}
+
+            {/* ── Email notification checkbox (approve only) ── */}
+            {verifyForm.decision === "approve" && (
+              <label style={{ display: "flex", alignItems: "flex-start", gap: 10, cursor: "pointer", padding: "10px 14px", borderRadius: 8, background: "#FBB04010", border: "1px solid #FBB04030" }}>
+                <input
+                  type="checkbox"
+                  checked={verifyForm.notify_email}
+                  onChange={e => setVerifyForm(f => ({ ...f, notify_email: e.target.checked }))}
+                  style={{ width: 16, height: 16, marginTop: 2, accentColor: "#FBB040", cursor: "pointer", flexShrink: 0 }}
+                />
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#FBB040" }}>📧 Send approval email to staff</div>
+                  <div style={{ fontSize: 11, color: C.sub, marginTop: 2 }}>Staff will receive a Remittance Advice email with their claim and payment details</div>
+                </div>
+              </label>
             )}
 
             <div style={{ display: "flex", gap: 10 }}>
