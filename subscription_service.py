@@ -52,12 +52,22 @@ class SubscriptionService:
             "nok_address": data.get("nok_address"),
             "source_of_income": data.get("source_of_income"),
             "referral_source": data.get("referral_source"),
+            "client_type": "client",
         }
 
-        # Check existing
-        client_res = await db_execute(lambda: db.table("clients").select("id").eq("email", email).execute())
-        if client_res.data:
-            client_id = client_res.data[0]["id"]
+        # 1b. Enhanced Matching (Email or Phone)
+        client_id = None
+        match_query = db.table("clients").select("id")
+        match_filters = []
+        if email: match_filters.append(f"email.eq.{email}")
+        if phone: match_filters.append(f"phone.eq.{phone}")
+        
+        if match_filters:
+            match_res = await db_execute(lambda: match_query.or_(",".join(match_filters)).execute())
+            if match_res.data:
+                client_id = match_res.data[0]["id"]
+
+        if client_id:
             await db_execute(lambda: db.table("clients").update(jsonable_encoder(client_data)).eq("id", client_id).execute())
         else:
             new_client = await db_execute(lambda: db.table("clients").insert(jsonable_encoder(client_data)).execute())

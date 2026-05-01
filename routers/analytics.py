@@ -42,8 +42,11 @@ async def get_kpis(
     # Net Revenue = Gross Invoiced - Total Refunded
     total_revenue = (gross_revenue - total_refunds) if is_admin else None
     
-    # 3. New Clients
-    clients_query = db.table("clients").select("id", count="exact").filter("created_at", "gte", start.isoformat()).filter("created_at", "lte", end.isoformat() + "T23:59:59")
+    # 3. New Clients (Paying customers only)
+    clients_query = db.table("clients").select("id", count="exact")\
+        .filter("created_at", "gte", start.isoformat())\
+        .filter("created_at", "lte", end.isoformat() + "T23:59:59")\
+        .eq("client_type", "client")
     new_clients = (await db_execute(lambda: clients_query.execute())).count
     
     # 4. Pending Verifications (Always live)
@@ -90,7 +93,12 @@ async def get_kpis(
         )
         
         # Prev Clients
-        prev_clients = (await db_execute(lambda: db.table("clients").select("id", count="exact").filter("created_at", "gte", prev_start.isoformat()).filter("created_at", "lte", prev_end.isoformat() + "T23:59:59").execute())).count
+        prev_clients = (await db_execute(lambda: db.table("clients")\
+            .select("id", count="exact")\
+            .filter("created_at", "gte", prev_start.isoformat())\
+            .filter("created_at", "lte", prev_end.isoformat() + "T23:59:59")\
+            .eq("client_type", "client")\
+            .execute())).count
         
         # Prev Refunds
         prev_refunds = sum(float(r["amount"]) for r in prev_refund_data)
@@ -200,7 +208,12 @@ async def get_referral_sources(
     admin: dict = Depends(verify_token)
 ):
     db = get_db()
-    data = (await db_execute(lambda: db.table("clients").select("referral_source").filter("created_at", "gte", start.isoformat()).filter("created_at", "lte", end.isoformat() + "T23:59:59").execute())).data
+    data = (await db_execute(lambda: db.table("clients")\
+        .select("referral_source")\
+        .filter("created_at", "gte", start.isoformat())\
+        .filter("created_at", "lte", end.isoformat() + "T23:59:59")\
+        .eq("client_type", "client")\
+        .execute())).data
     
     sources = {}
     for item in data:

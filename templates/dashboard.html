@@ -5053,7 +5053,8 @@
 
     // ── CLIENTS TABLE ─────────────────────────
     async function loadClients() {
-      const data = await apiFetch('/api/clients/').then(r => r.json());
+      // Show only actual clients on the Finance Dashboard
+      const data = await apiFetch('/api/clients/?client_type=client').then(r => r.json());
       allClients = data;
       document.getElementById('clientsTable').innerHTML = data.length ? `
     <div class="table-responsive">

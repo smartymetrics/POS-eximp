@@ -191,8 +191,8 @@ async def initiate_matter(data: dict, current_admin=Depends(verify_token)):
     await db_execute(lambda: db.table("legal_matter_history").insert({
         "matter_id": matter["id"],
         "action": "Matter Initiated",
-        "actor_id": admin_id,
-        "actor_name": current_admin.get("full_name", "Unknown"),
+        "performed_by": admin_id,
+        "performed_by_name": current_admin.get("full_name", "Unknown"),
         "description": f"New {matter['category']} matter created via { 'HR' if data.get('hr_memo') else 'Legal'} Portal"
     }).execute())
     
@@ -236,8 +236,8 @@ async def add_collaborator(matter_id: str, data: dict, current_admin=Depends(ver
     await db_execute(lambda: db.table("legal_matter_history").insert({
         "matter_id": matter_id,
         "action": "Permission Granted",
-        "actor_id": admin_id,
-        "actor_name": current_admin.get("full_name", "Unknown"),
+        "performed_by": admin_id,
+        "performed_by_name": current_admin.get("full_name", "Unknown"),
         "description": f"Granted {collab_data['permission_level']} access to admin {data.get('admin_id')}"
     }).execute())
     
@@ -260,8 +260,8 @@ async def remove_collaborator(matter_id: str, target_admin_id: str, current_admi
     await db_execute(lambda: db.table("legal_matter_history").insert({
         "matter_id": matter_id,
         "action": "Permission Revoked",
-        "actor_id": admin_id,
-        "actor_name": current_admin.get("full_name", "Unknown"),
+        "performed_by": admin_id,
+        "performed_by_name": current_admin.get("full_name", "Unknown"),
         "description": f"Revoked access for admin {target_admin_id}"
     }).execute())
     
@@ -287,8 +287,8 @@ async def save_matter_content(matter_id: str, data: dict, current_admin=Depends(
     await db_execute(lambda: db.table("legal_matter_history").insert({
         "matter_id": matter_id,
         "action": "Edit",
-        "actor_id": admin_id,
-        "actor_name": current_admin.get("full_name", "Unknown"),
+        "performed_by": admin_id,
+        "performed_by_name": current_admin.get("full_name", "Unknown"),
         "description": "Updated document draft content"
     }).execute())
     
@@ -1701,10 +1701,19 @@ async def export_matter_pdf(matter_id: str, token: str = None, request: Request 
 LEGAL_VAULT_BUCKET = "legal-vault"
 MAX_FILE_SIZE_MB   = 20
 ALLOWED_MIME_TYPES = {
-    "application/pdf": "pdf",
-    "application/msword": "doc",
-    "application/vnd.openxmlformats-officedocument.wordprocessingml.document": "docx",
+    # PDF
+    "application/pdf":                                                               "pdf",
+    # DOC — different browsers/OS report different MIME types for the same .doc file
+    "application/msword":                                                            "doc",
+    "application/vnd.ms-word":                                                       "doc",
+    "application/x-msword":                                                          "doc",
+    # DOCX
+    "application/vnd.openxmlformats-officedocument.wordprocessingml.document":       "docx",
+    # Generic fallback (some OS/browsers report .doc/.docx as octet-stream)
+    "application/octet-stream":                                                      None,
 }
+# Extension fallback when MIME is generic
+EXTENSION_TO_TYPE = {"pdf": "pdf", "doc": "doc", "docx": "docx"}
 SIGNED_URL_EXPIRY_SECONDS = 3600  # 1 hour — short-lived for confidentiality
 
 
@@ -1714,18 +1723,27 @@ SIGNED_URL_EXPIRY_SECONDS = 3600  # 1 hour — short-lived for confidentiality
 
 async def _upload_to_vault(matter_id: str, file: UploadFile, file_bytes: bytes) -> str:
     """Uploads bytes to Supabase Storage. Returns the stored path."""
-    ext        = ALLOWED_MIME_TYPES[file.content_type]
-    unique_id  = str(uuid_lib.uuid4())[:8]
-    safe_name  = file.filename.replace(" ", "_")
+    # Resolve extension — fall back to filename when MIME is generic
+    mime_ext = ALLOWED_MIME_TYPES.get(file.content_type)
+    if mime_ext is None:
+        filename_ext = (file.filename.rsplit(".", 1)[-1] if "." in file.filename else "").lower()
+        mime_ext = EXTENSION_TO_TYPE.get(filename_ext, "bin")
+
+    unique_id   = str(uuid_lib.uuid4())[:8]
+    safe_name   = "".join(c if c.isalnum() or c in "._-" else "_" for c in file.filename)
     stored_path = f"matters/{matter_id}/{unique_id}_{safe_name}"
 
-    # Supabase Python client storage upload
-    res = supabase.storage.from_(LEGAL_VAULT_BUCKET).upload(
+    # storage3 _upload_or_update: `if file_options.get("upsert"):` skips the False branch,
+    # leaving `"upsert": False` (a Python bool) in the headers dict.
+    # httpx raises TypeError on non-string header values → 502.
+    # DEFAULT_FILE_OPTIONS already sets "x-upsert": "false", so we simply omit upsert here.
+    supabase.storage.from_(LEGAL_VAULT_BUCKET).upload(
         path=stored_path,
         file=file_bytes,
-        file_options={"content-type": file.content_type, "upsert": "false"},
+        file_options={
+            "content-type": file.content_type,
+        },
     )
-    # The supabase-py client raises on error, so if we get here it succeeded
     return stored_path
 
 
@@ -1747,12 +1765,15 @@ async def upload_matter_attachment(
     await check_matter_access(matter_id, current_admin, required_level="Edit")
 
     # ── 2. Validate MIME type ──────────────────────────────────────
-    if file.content_type not in ALLOWED_MIME_TYPES:
+    filename_ext = (file.filename.rsplit(".", 1)[-1] if "." in file.filename else "").lower()
+    if file.content_type not in ALLOWED_MIME_TYPES and filename_ext not in EXTENSION_TO_TYPE:
         raise HTTPException(
             status_code=400,
             detail=f"Unsupported file type '{file.content_type}'. "
                    f"Allowed: PDF, DOC, DOCX only."
         )
+    # Resolve the canonical file_type string (pdf / doc / docx)
+    resolved_file_type = ALLOWED_MIME_TYPES.get(file.content_type) or EXTENSION_TO_TYPE.get(filename_ext, "bin")
 
     # ── 3. Read & validate file size ───────────────────────────────
     file_bytes = await file.read()
@@ -1803,13 +1824,13 @@ async def upload_matter_attachment(
         "matter_id":         matter_id,
         "original_filename": file.filename,
         "stored_path":       stored_path,
-        "file_type":         ALLOWED_MIME_TYPES[file.content_type],
+        "file_type":         resolved_file_type,
         "file_size_bytes":   len(file_bytes),
         "mime_type":         file.content_type,
         "version_number":    next_version,
         "version_label":     auto_label,
         "is_latest":         True,
-        "uploader_id":       current_admin["id"],
+        "uploader_id":       current_admin["sub"],
         "uploader_name":     current_admin.get("full_name", "Unknown"),
         "status":            "Active",
     }
@@ -1821,8 +1842,8 @@ async def upload_matter_attachment(
     await db_execute(
         lambda: db.table("legal_matter_history").insert({
             "matter_id":   matter_id,
-            "actor_id":    current_admin["id"],
-            "actor_name":  current_admin.get("full_name", "Unknown"),
+            "performed_by":    current_admin["sub"],
+            "performed_by_name":  current_admin.get("full_name", "Unknown"),
             "action":      "file_uploaded",
             "description": f"Uploaded '{file.filename}' (v{next_version} — {auto_label}, {size_mb:.2f} MB)",
         }).execute()
@@ -1981,8 +2002,8 @@ async def delete_matter_attachment(
     await db_execute(
         lambda: db.table("legal_matter_history").insert({
             "matter_id":   matter_id,
-            "actor_id":    current_admin["id"],
-            "actor_name":  current_admin.get("full_name", "Unknown"),
+            "performed_by":    current_admin["sub"],
+            "performed_by_name":  current_admin.get("full_name", "Unknown"),
             "action":      "file_deleted",
             "description": f"Removed attachment: '{att['original_filename']}' (v{att['version_number']})",
         }).execute()
@@ -2004,21 +2025,28 @@ async def get_legal_summary(current_admin: dict = Depends(verify_token)):
     total_res = await db_execute(lambda: db.table("legal_matters").select("id", count="exact").execute())
     total_count = total_res.count or 0
     
-    # 2. Active Matters (In-Progress, Legal Review, Legal Signing)
+    # 2. Draft Matters
+    draft_res = await db_execute(lambda: db.table("legal_matters")
+        .select("id", count="exact")
+        .eq("status", "Draft")
+        .execute())
+    draft_count = draft_res.count or 0
+
+    # 3. Active Matters (In-Progress, Legal Review, Legal Signing)
     active_res = await db_execute(lambda: db.table("legal_matters")
         .select("id", count="exact")
         .in_("status", ["In-Progress", "Legal Review", "Legal Signing"])
         .execute())
     active_count = active_res.count or 0
     
-    # 3. Executed Matters
+    # 4. Executed Matters
     executed_res = await db_execute(lambda: db.table("legal_matters")
         .select("id", count="exact")
         .eq("status", "Executed")
         .execute())
     executed_count = executed_res.count or 0
     
-    # 4. Pending Review
+    # 5. Pending Review (subset of active)
     pending_res = await db_execute(lambda: db.table("legal_matters")
         .select("id", count="exact")
         .eq("status", "Legal Review")
@@ -2027,6 +2055,7 @@ async def get_legal_summary(current_admin: dict = Depends(verify_token)):
     
     return {
         "total_matters": total_count,
+        "draft_matters": draft_count,
         "active_matters": active_count,
         "executed_matters": executed_count,
         "pending_review": pending_count
@@ -2057,7 +2086,7 @@ async def get_legal_activity(limit: int = 15, current_admin: dict = Depends(veri
             "id": item["id"],
             "event_type": item["action"],
             "description": item["description"],
-            "performed_by_name": item.get("actor_name") or "Legal System",
+            "performed_by_name": item.get("performed_by_name") or item.get("actor_name") or "Legal System",
             "matter_title": title,
             "created_at": item["created_at"]
         })

@@ -1,4 +1,5 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
+from typing import Optional
 from fastapi.encoders import jsonable_encoder
 from database import get_db, db_execute
 from routers.auth import verify_token
@@ -13,15 +14,21 @@ router = APIRouter()
 async def list_clients(
     limit: int = 100,
     offset: int = 0,
+    client_type: Optional[str] = None, # 'lead' or 'client'
     current_admin=Depends(verify_token)
 ):
     db = get_db()
-    # Privileged check
+    # Extract identity from token payload
+    admin_id = current_admin.get("sub") or current_admin.get("id")
+    role = current_admin.get("role", "")
     roles = [r.strip().lower() for r in (role or "").split(",")]
-    is_privileged = any(r in ["admin", "operations", "customer_support"] for r in roles)
-    
+    is_privileged = any(r in ["admin", "operations", "customer_support", "super_admin"] for r in roles)
+
     query = db.table("clients").select("*")
-    
+
+    if client_type:
+        query = query.eq("client_type", client_type)
+
     if not is_privileged:
         # Restricted users see only their assigned clients
         query = query.eq("assigned_rep_id", admin_id)
@@ -58,6 +65,13 @@ async def create_client(
 ):
     db = get_db()
     client_data = jsonable_encoder(data)
+    
+    # Ensure email exists (System Integrity)
+    if not client_data.get("email"):
+        import re
+        clean_id = re.sub(r'[^a-zA-Z0-9]', '', str(client_data.get("phone") or client_data.get("full_name") or "unknown"))
+        client_data["email"] = f"{clean_id.lower()}@temp-eximps.com"
+
     client_data["added_by"] = current_admin["sub"]
     
     result = await db_execute(lambda: db.table("clients").insert(client_data).execute())

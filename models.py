@@ -44,7 +44,7 @@ class UpdateProfileRequest(BaseModel):
 # ─── CLIENTS ─────────────────────────────────────────────────
 class ClientCreate(BaseModel):
     full_name: str
-    email: EmailStr
+    email: Optional[EmailStr] = None
     phone: Optional[str] = None
     address: Optional[str] = None
     city: Optional[str] = None
@@ -53,6 +53,7 @@ class ClientCreate(BaseModel):
     middle_name: Optional[str] = None
     gender: Optional[str] = None
     dob: Optional[str] = None
+    client_type: Optional[str] = "lead" # lead or client
 
 
 class ClientUpdate(BaseModel):
@@ -79,6 +80,7 @@ class ClientUpdate(BaseModel):
     id_number: Optional[str] = None
     passport_photo_url: Optional[str] = None
     id_document_url: Optional[str] = None
+    client_type: Optional[str] = None
 
 
 # ─── PROPERTIES ──────────────────────────────────────────────

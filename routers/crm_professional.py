@@ -85,8 +85,8 @@ async def score_all_leads(current_admin=Depends(verify_token)):
     """
     db = get_db()
     
-    # 1. Fetch all clients (single hit)
-    query = db.table("clients").select("id, full_name, email, assigned_rep_id")
+    # 1. Fetch only actual Leads (prospects) for scoring
+    query = db.table("clients").select("id, full_name, email, assigned_rep_id").eq("client_type", "lead")
     
     # ROLE-BASED FILTERING ✅
     roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]

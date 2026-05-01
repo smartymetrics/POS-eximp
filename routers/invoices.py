@@ -134,6 +134,13 @@ async def create_invoice(
     # Use jsonable_encoder to handle Decimal/date types for Supabase
     encoded_data = jsonable_encoder(invoice_data)
     result = await db_execute(lambda: db.table("invoices").insert(encoded_data).execute())
+    
+    # 4. PROMOTE TO CLIENT (Automatic Conversion)
+    # When an invoice is created, the lead officially becomes a client.
+    background_tasks.add_task(
+        db_execute,
+        lambda: db.table("clients").update({"client_type": "client"}).eq("id", data.client_id).execute()
+    )
 
     background_tasks.add_task(
         log_activity,

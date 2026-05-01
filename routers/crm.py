@@ -19,7 +19,7 @@ async def get_all_contacts(current_admin=Depends(verify_token)):
     db = get_db()
     
     contacts = (await db_execute(lambda: db.table("clients").select("""
-        id, full_name, email, phone, city, state, occupation, created_at, updated_at
+        id, full_name, email, phone, city, state, occupation, client_type, created_at, updated_at
     """).order("created_at", desc=True).execute())).data or []
     
     if not contacts:
@@ -158,6 +158,7 @@ async def get_sales_pipeline(current_admin=Depends(verify_token)):
         email,
         phone,
         pipeline_stage,
+        client_type,
         estimated_value,
         assigned_rep_id,
         created_at
@@ -243,6 +244,7 @@ async def import_leads_csv(file: UploadFile = File(...), current_admin=Depends(v
         lead_data = {
             "assigned_rep_id": admin_id,
             "pipeline_stage": "lead",
+            "client_type": "lead",
             "created_at": datetime.now().isoformat()
         }
 
@@ -252,6 +254,12 @@ async def import_leads_csv(file: UploadFile = File(...), current_admin=Depends(v
                     lead_data[db_field] = row_lower[possible_name]
                     break
         
+        # Ensure email exists (for system integrity & marketing engine stability)
+        if not lead_data.get("email"):
+            import re
+            clean_id = re.sub(r'[^a-zA-Z0-9]', '', str(lead_data.get("phone") or lead_data.get("full_name") or "unknown"))
+            lead_data["email"] = f"{clean_id.lower()}@temp-eximps.com"
+
         if lead_data.get("full_name"):
             await db_execute(lambda: db.table("clients").insert(lead_data).execute())
             imported_count += 1
@@ -275,9 +283,33 @@ async def create_lead(data: dict, current_admin=Depends(verify_token)):
     data["assigned_rep_id"] = admin_id
     if not data.get("pipeline_stage"):
         data["pipeline_stage"] = "lead"
+    if not data.get("client_type"):
+        data["client_type"] = "lead"
     data["created_at"] = datetime.now().isoformat()
     
-    res = await db_execute(lambda: db.table("clients").insert(data).execute())
+    # Ensure email exists
+    if not data.get("email"):
+        import re
+        clean_id = re.sub(r'[^a-zA-Z0-9]', '', str(data.get("phone") or data.get("full_name") or "unknown"))
+        data["email"] = f"{clean_id.lower()}@temp-eximps.com"
+
+    # Matching Logic (Email or Phone)
+    email = data.get("email")
+    phone = data.get("phone")
+    match_filters = []
+    if email: match_filters.append(f"email.eq.{email}")
+    if phone: match_filters.append(f"phone.eq.{phone}")
+    
+    existing_id = None
+    if match_filters:
+        match_res = await db_execute(lambda: db.table("clients").select("id").or_(",".join(match_filters)).execute())
+        if match_res.data:
+            existing_id = match_res.data[0]["id"]
+
+    if existing_id:
+        res = await db_execute(lambda: db.table("clients").update(data).eq("id", existing_id).execute())
+    else:
+        res = await db_execute(lambda: db.table("clients").insert(data).execute())
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to create lead")
     lead = res.data[0]
