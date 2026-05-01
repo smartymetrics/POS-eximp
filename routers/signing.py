@@ -137,16 +137,22 @@ async def submit_client_signature(token: str, data: ClientContractSignatureSubmi
         audit_ip = request.client.host if request.client else "unknown"
         audit_agent = request.headers.get("User-Agent", "unknown")
 
-        stored_signature = _upload_client_signature(db, invoice["id"], data.signature_base64)
-        db.table("invoices").update({
+        # Map frontend values to DB constraint values
+        method_map = {"draw": "drawn", "upload": "uploaded"}
+        db_method = method_map.get(data.signature_method, data.signature_method)
+
+        # Use db_execute for signature processing and upload (Fix for 502/timeouts)
+        stored_signature = await db_execute(lambda: _upload_client_signature(db, invoice["id"], data.signature_base64))
+        
+        # Use db_execute for DB update
+        await db_execute(lambda: db.table("invoices").update({
             "contract_signature_url": stored_signature,
-            "contract_signature_method": data.signature_method,
+            "contract_signature_method": db_method,
             "contract_signed_at": datetime.now(timezone(timedelta(hours=1))).isoformat(),
             "contract_audit_ip": audit_ip,
             "contract_audit_agent": audit_agent,
             "pipeline_stage": "paid"
-        }).eq("id", invoice["id"]).execute()
-
+        }).eq("id", invoice["id"]).execute())
 
         await log_activity(
             "client_signed_contract",
@@ -159,6 +165,7 @@ async def submit_client_signature(token: str, data: ClientContractSignatureSubmi
         return {"message": "Client contract signature recorded successfully"}
 
     except Exception as e:
+        print(f"CRITICAL ERROR in client signing: {e}")
         raise HTTPException(status_code=500, detail=f"Failed to record client signature: {str(e)}")
 
 @router.get("/sign/{token}", response_class=HTMLResponse)
