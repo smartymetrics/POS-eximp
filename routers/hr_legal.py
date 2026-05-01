@@ -1787,12 +1787,13 @@ async def upload_matter_attachment(
             detail=f"File too large ({size_mb:.1f} MB). Maximum allowed: {MAX_FILE_SIZE_MB} MB."
         )
 
-    # ── 4. Determine version number ────────────────────────────────
+    # ── 4. Determine version number for THIS SPECIFIC FILE ───────────
     existing_res = await db_execute(
         lambda: db.table("legal_matter_attachments")
                   .select("version_number")
                   .eq("matter_id", matter_id)
-                  .eq("status", "Active")
+                  .eq("original_filename", file.filename)
+                  .neq("status", "Deleted")
                   .order("version_number", desc=True)
                   .limit(1)
                   .execute()
@@ -1800,12 +1801,13 @@ async def upload_matter_attachment(
     existing = existing_res.data or []
     next_version = (existing[0]["version_number"] + 1) if existing else 1
 
-    # ── 5. Mark all prior versions as Superseded ───────────────────
+    # ── 5. Mark only prior version of THIS FILE as Superseded ───────
     if existing:
         await db_execute(
             lambda: db.table("legal_matter_attachments")
                       .update({"is_latest": False, "status": "Superseded"})
                       .eq("matter_id", matter_id)
+                      .eq("original_filename", file.filename)
                       .eq("is_latest", True)
                       .execute()
         )

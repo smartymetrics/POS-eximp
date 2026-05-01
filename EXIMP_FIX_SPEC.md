@@ -654,4 +654,39 @@ The previous session planned:
 7. Replace engagement decay loop in `marketing_scheduler.py` with SQL RPC
 8. Add WS keepalive to both the existing `ws_support.py` and the new chat WS handler
 9. Update `handleNotificationClick` in `professional_crm.html` before deploying notification changes
-10. Test the external join flow end-to-end before releasing — the session_token path is the most novel piece and must be validated carefully
+10. Test the external join flow end-to-end before releasing
+
+---
+
+## Part 3 — Legal Document Hub & High-Fidelity Word Studio
+
+As part of the May 2026 expansion, the legal drafting environment was upgraded from a static editor to a dynamic "Personnel Word Studio" integrated with a centralized Document Hub.
+
+### 1. Document Processing Architecture
+To maintain the **502 Prevention Strategy**, all document processing (conversion and scraping) is handled at the edge (browser) or via non-blocking backend calls:
+
+- **Word (.docx) to HTML**: Handled by `mammoth.js` in the frontend. This preserves document structure (headers, tables, lists) without hitting the Python event loop.
+- **PDF Scraping**: Handled by `pdf.js`. Text extraction is performed asynchronously in the browser, and the resulting text is "Appended" or "Scraped" into the Tiptap editor canvas.
+- **Backend Vaulting**: File uploads to the `legal-vault` bucket are processed via the `upload_matter_attachment` endpoint. Every DB call is wrapped in `db_execute` to ensure the storage operation doesn't block the FastAPI process.
+
+### 2. Multi-File Versioning Strategy
+To support complex legal matters (multiple IDs, contracts, evidence), the system implements a **Filename-Specific Versioning** logic:
+- **Identifier**: `matter_id` + `original_filename`.
+- **Promotion**: When a file with an existing name is uploaded, the previous version is marked as `Superseded` (status) and `is_latest = False`. The new file is promoted to `Active`.
+- **N+1 Avoidance**: Listing attachments for a matter is a single SELECT query filtered by `status = 'Active'`. Signed URLs are generated in a single loop with a 1-hour expiry to minimize storage latency.
+
+### 3. Forensic History (Audit Trail)
+Every action in the Hub (Upload, Scrape, Delete, Add Collaborator) is logged to `legal_matter_history`. 
+- **Column Fix**: The `performed_by_name` column must be present to avoid 500 errors during audit logging.
+- **Naming Context**: The `current_admin` context (from JWT) is used to capture the actor's name at the time of the event, ensuring the audit trail remains readable even if the admin's profile changes later.
+
+---
+
+### Updated Deployment Checklist (Legal Additions)
+
+1. **SQL Migration 033**: Create the `legal_matter_attachments` table for the Document Hub.
+2. **SQL Migration 035**: Add the `performed_by_name` column to `legal_matter_history` (CRITICAL for audit logging).
+3. **Storage Bucket**: Create a private bucket named `legal-vault` in Supabase.
+4. **CORS Policy**: Ensure the Supabase Storage bucket allows requests from the app domain for direct uploads.
+5. **PDF generation Cleanup**: Apply the trailing-whitespace removal logic in `hr_legal.py` to prevent blank final pages in exported PDFs.
+6. **Frontend Libs**: Ensure `mammoth.min.js` and `pdf.min.js` are correctly sourced in `personnel_editor.html`.
