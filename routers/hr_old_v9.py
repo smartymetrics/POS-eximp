@@ -3713,22 +3713,14 @@ async def update_expense(expense_id: str, request: Request, current_admin: dict 
             # Optional email — only triggered when frontend sends send_email: true
             if data.get("send_email") and new_status in ("approved", "paid", "partially_paid"):
                 try:
-                    # Re-fetch with vendors(*) join so bank/account fields are present for PDF
-                    full_res = await db_execute(lambda: db.table("expenditure_requests")
-                        .select("*, vendors(*)").eq("id", expense_id).maybe_single().execute()
+                    from email_service import send_payout_receipt_email
+                    # Fetch the staff member's profile for the email
+                    vendor_res = await db_execute(lambda: db.table("admins")
+                        .select("id,full_name,email").eq("id", requester_id).maybe_single().execute()
                     )
-                    if full_res.data:
-                        full_exp = full_res.data
-                        vendor = full_exp.get("vendors") or {}
-                        if vendor.get("email"):
-                            if new_status == "approved":
-                                from email_service import send_expense_approval_email
-                                await send_expense_approval_email(full_exp, vendor, current_admin["sub"])
-                            elif new_status in ("paid", "partially_paid"):
-                                from email_service import send_payout_receipt_email
-                                await send_payout_receipt_email(full_exp, vendor, current_admin["sub"])
-                        else:
-                            print(f"[EXPENSE EMAIL] No vendor email for expense {expense_id}")
+                    vendor = vendor_res.data or {}
+                    vendor["name"] = vendor.get("full_name") or "Staff Member"
+                    await send_payout_receipt_email(exp, vendor, current_admin["sub"])
                 except Exception as email_err:
                     # Non-blocking — email failure must never break the approval flow
                     print(f"[EXPENSE EMAIL] non-blocking error: {email_err}")

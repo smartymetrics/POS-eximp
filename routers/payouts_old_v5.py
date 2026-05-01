@@ -388,12 +388,13 @@ async def review_payout_request(request_id: str, data: PayoutReview, bg_tasks: B
             print(f"⚠️ Warning: Payout approved but Asset logging failed: {asset_err}")
             # We don't fail the whole payout if asset logging hits a snag, but we log it.
 
-    # ─── TRIGGER APPROVAL NOTIFICATION EMAIL ──────────────────────
-    # On approve: send an approval notification (not a payment receipt — no money has moved yet).
-    # The payment receipt is sent separately when /payments is called.
+    # ─── TRIGGER AUTOMATED RECEIPT EMAIL ──────────────────────
     if data.status == 'approved' and updated_req.get('vendor_id'):
-        # Re-fetch with vendor join AFTER the update so net_payout_amount / wht_amount
-        # reflect the post-approval values (WHT overrides applied above).
+        # Re-fetch with vendor join AFTER the update so the email/PDF carries:
+        #   1. Correct bank_name/account_number from the vendors table — req.get('vendors')
+        #      was populated from the original select(*) which has no join and returns None
+        #      for nested vendor fields, causing the email to show no bank details.
+        #   2. Post-approval net_payout_amount / wht_amount (from the DB, not stale req).
         receipt_res = await db_execute(
             lambda: db.table('expenditure_requests').select('*, vendors(*)').eq('id', request_id).execute()
         )
@@ -401,8 +402,7 @@ async def review_payout_request(request_id: str, data: PayoutReview, bg_tasks: B
             full_req = receipt_res.data[0]
             vendor = full_req.get('vendors')
             if vendor and vendor.get('email'):
-                from email_service import send_expense_approval_email
-                bg_tasks.add_task(send_expense_approval_email, full_req, vendor, current_admin['sub'])
+                bg_tasks.add_task(send_payout_receipt_email, full_req, vendor, current_admin['sub'])
 
     return updated_req
 

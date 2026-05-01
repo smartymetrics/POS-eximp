@@ -1567,82 +1567,58 @@ async def broadcast_campaign_email(campaign: dict, recipients: list, admin_id: s
 
 
 def _payout_receipt_html(payout: dict, vendor: dict, payment_amount: float = None) -> str:
-    total_due  = float(payout.get("net_payout_amount") or 0)
-
-    # amount_paid in the DB is already updated to include this payment by the time
-    # this function is called (the /payments endpoint updates the row first, then
-    # triggers the email). So payout.amount_paid IS the correct cumulative total.
-    total_paid_to_date = float(payout.get("amount_paid") or 0)
-
-    # The amount remitted in THIS transaction:
-    # If payment_amount was passed explicitly, use it.
-    # Otherwise this is a full-payment receipt and amount_now == total_due.
-    amount_now = float(payment_amount) if payment_amount is not None else total_paid_to_date
-
-    balance = max(0, total_due - total_paid_to_date)
-    is_fully_paid = balance <= 0.01
+    # Use payment_amount if passed, else fallback to net_payout_amount (old behavior)
+    amount_now = float(payment_amount or payout.get("net_payout_amount") or 0)
+    total_paid = float(payout.get("amount_paid") or 0)
+    total_due = float(payout.get("net_payout_amount") or 0)
+    balance = max(0, total_due - total_paid)
     ref = payout.get("payout_reference") or "N/A"
 
-    # Detect staff reimbursement vs external vendor payout
-    is_staff = (payout.get("payout_method") == "reimbursement" or
-                (payout.get("vendors") or {}).get("type") == "staff" or
-                vendor.get("type") == "staff")
-
     # BANK SNAPSHOT RESOLUTION:
-    # Prefer snapshot columns recorded at submission time over current vendor record,
-    # so a vendor/staff changing bank later never corrupts old receipts.
-    display_bank_name  = payout.get("bank_name_snapshot")     or vendor.get("bank_name")     or "N/A"
+    # Prefer the snapshot stored on the expenditure_request at submission time.
+    # This means if a vendor changes their bank details for a future transaction,
+    # receipts for THIS specific payout still show the bank that was used here.
+    # Fall back to the current vendor record only if no snapshot exists (legacy rows).
+    display_bank_name  = payout.get("bank_name_snapshot")    or vendor.get("bank_name")    or "N/A"
     display_acc_number = payout.get("account_number_snapshot") or vendor.get("account_number") or "N/A"
-
-    recipient_label = "Dear"
-    body_line = (
-        "We are writing to confirm that your expense reimbursement payment has been processed and remitted to you."
-        if is_staff else
-        "We are pleased to inform you that your payment has been authorized and processed via our expenditure cloud."
-    )
-    footer_note = (
-        "If you have any questions about this payment, please contact the HR/Finance team."
-        if is_staff else
-        "The official Payment Advice (PDF) with full tax breakdown is attached to this email."
-    )
-    closing = "Warm regards," if is_staff else "Thank you for your partnership."
-    status_label = "✓ Reimbursement Payment Processed" if is_staff else "✓ Payment Authorized & Processed"
-
+    
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <div style="background: #1A1A1A; padding: 24px; text-align: center;">
         <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">
       </div>
       <div style="background: #C47D0A; padding: 12px 24px;">
-        <h2 style="color: #fff; margin: 0; font-size: 16px;">{status_label}</h2>
+        <h2 style="color: #fff; margin: 0; font-size: 16px;">✓ Payment Authorized & Processed</h2>
       </div>
       <div style="padding: 32px 24px; background: #fff; border: 1px solid #eee;">
-        <p style="color: #333;">{recipient_label} <strong>{vendor.get('name', 'Staff Member')}</strong>,</p>
-        <p style="color: #555;">{body_line}</p>
+        <p style="color: #333;">Dear <strong>{vendor['name']}</strong>,</p>
+        <p style="color: #555;">We are pleased to inform you that your payment has been authorized and processed via our expenditure cloud.</p>
         <div style="background: #1A1A1A; border-radius: 8px; padding: 24px; margin: 24px 0;">
-          <p style="color: #aaa; margin: 0 0 8px; font-size: 13px; text-transform: uppercase;">Amount Remitted This Payment</p>
+          <p style="color: #aaa; margin: 0 0 8px; font-size: 13px; text-transform: uppercase;">Amount Remitted Now</p>
           <p style="color: #F5A623; font-size: 32px; font-weight: bold; margin: 0;">NGN {amount_now:,.2f}</p>
           <hr style="border-color: #333; margin: 16px 0;">
           <table style="width: 100%; color: #ccc; font-size: 13px;">
-            <tr><td>Total Claim Amount</td><td style="text-align:right;color:#fff;">NGN {total_due:,.2f}</td></tr>
-            <tr><td>Total Paid to Date</td><td style="text-align:right;color:#fff;">NGN {total_paid_to_date:,.2f}</td></tr>
-            <tr><td>Balance Outstanding</td><td style="text-align:right;color:{'#27ae60' if is_fully_paid else '#F5A623'};">NGN {balance:,.2f}</td></tr>
+            <tr><td>Total Paid to Date</td><td style="text-align:right;color:#fff;">NGN {total_paid:,.2f}</td></tr>
+            <tr><td>Balance Outstanding</td><td style="text-align:right;color:{'#27ae60' if balance == 0 else '#F5A623'};">NGN {balance:,.2f}</td></tr>
             <tr style="height: 10px;"><td></td><td></td></tr>
             <tr><td>Reference</td><td style="text-align:right;color:#fff;">{ref}</td></tr>
             <tr><td>Payee Bank</td><td style="text-align:right;color:#fff;">{display_bank_name}</td></tr>
             <tr><td>Account</td><td style="text-align:right;color:#fff;">{display_acc_number}</td></tr>
-            {"" if is_staff else f'<tr><td>Due Date</td><td style="text-align:right;color:#fff;">{payout.get("due_date", "—")}</td></tr>'}
-            {"" if is_staff else f'<tr><td>Phone</td><td style="text-align:right;color:#fff;">{vendor.get("phone", "—")}</td></tr>'}
+            <tr><td>Due Date</td><td style="text-align:right;color:#fff;">{payout.get('due_date','—')}</td></tr>
+            <tr><td>Phone</td><td style="text-align:right;color:#fff;">{vendor.get('phone','—')}</td></tr>
           </table>
         </div>
-        {"<p style='color:#27ae60; font-weight:700; text-align:center;'>✅ Your claim is now fully settled.</p>" if is_fully_paid else "<p style='color:#F5A623; font-size:13px; text-align:center;'>A further payment will follow for the remaining balance.</p>"}
-        <p style="color: #555; font-size: 13px;">{footer_note}</p>
-        <p style="color: #555; font-size: 13px;">{closing}</p>
+        <p style="color: #555; text-align: center; font-size: 11px;">Note: Tax would be deducted by the company and be paid to the Government.</p>
+        <p style="color: #555; font-size: 13px;">The official Payment Advice (PDF) with full tax breakdown is attached to this email.</p>
+        <p style="color: #555; font-size: 13px;">Thank you for your partnership.</p>
         <hr style="border-color: #eee;">
         <p style="color: #999; font-size: 12px; margin: 0;">
-          Eximp &amp; Cloves Infrastructure Limited | RC 8311800<br>
+          Eximp & Cloves Infrastructure Limited | RC 8311800<br>
           57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383<br>
           <a href="https://www.eximps-cloves.com" style="color: #999; text-decoration: none;">www.eximps-cloves.com</a>
+        </p>
+        <p style="color: #888; font-size: 11px; text-align: center; margin-top: 16px;">
+          Please review our official refund policy at <a href="https://www.eximps-cloves.com/refund" style="color: #C47D0A; text-decoration: none;">www.eximps-cloves.com/refund</a>
         </p>
       </div>
     </div>"""
@@ -1765,93 +1741,6 @@ async def send_payout_claim_rejected_email(payout: dict, vendor: dict, rejection
             f"FAILED to send rejection email to {claimant_name} ({email_addr}): {str(e)}",
             admin_id,
             metadata={"error": str(e), "email_type": "claim_rejected"}
-        )
-        return None
-
-
-async def send_expense_approval_email(payout: dict, vendor: dict, admin_id: str = "system"):
-    """
-    Sent to staff when their expense/reimbursement claim is approved.
-    This is NOT a payment receipt — no money has moved yet.
-    Tells the staff their claim is approved and payment is being processed.
-    """
-    from routers.analytics import log_activity
-
-    email_addr = vendor.get("email")
-    if not email_addr:
-        logger.warning(f"No email found for vendor {vendor.get('name')}. Approval email not sent.")
-        return None
-
-    staff_name   = vendor.get("name") or vendor.get("full_name") or "Staff Member"
-    category     = payout.get("category") or payout.get("payout_method") or "expense"
-    amount       = float(payout.get("net_payout_amount") or payout.get("amount_gross") or 0)
-    claim_ref    = payout.get("payout_reference") or payout.get("id", "")[:8].upper()
-    title        = payout.get("title") or "Expense Claim"
-    hr_note      = payout.get("hr_note") or ""
-
-    html = f"""
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border-radius: 10px; overflow: hidden; border: 1px solid #e5e7eb;">
-      <div style="background: #1A1A1A; padding: 24px; text-align: center;">
-        <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">
-      </div>
-      <div style="background: #C47D0A; padding: 12px 24px;">
-        <h2 style="color: #fff; margin: 0; font-size: 16px;">✅ Expense Claim Approved</h2>
-      </div>
-      <div style="padding: 32px 24px; background: #fff;">
-        <p style="color: #333;">Dear <strong>{staff_name}</strong>,</p>
-        <p style="color: #555; line-height: 1.6;">
-          Your expense claim has been reviewed and <strong>approved</strong> by HR.
-          Payment will be processed and remitted to you shortly.
-        </p>
-
-        <div style="background: #1A1A1A; border-radius: 8px; padding: 24px; margin: 24px 0;">
-          <p style="color: #aaa; margin: 0 0 4px; font-size: 12px; text-transform: uppercase; letter-spacing: 1px;">Approved Amount</p>
-          <p style="color: #C47D0A; font-size: 32px; font-weight: bold; margin: 0 0 16px;">NGN {amount:,.2f}</p>
-          <hr style="border-color: #333; margin: 16px 0;">
-          <table style="width: 100%; color: #ccc; font-size: 13px; border-collapse: collapse;">
-            <tr><td style="padding: 4px 0;">Claim Title</td><td style="text-align:right; color:#fff;">{title}</td></tr>
-            <tr><td style="padding: 4px 0;">Category</td><td style="text-align:right; color:#fff;">{category.replace("_", " ").title()}</td></tr>
-            <tr><td style="padding: 4px 0;">Reference</td><td style="text-align:right; color:#fff; font-family: monospace;">{claim_ref}</td></tr>
-            {f'<tr><td style="padding: 4px 0;">HR Note</td><td style="text-align:right; color:#aaa;">{hr_note}</td></tr>' if hr_note else ""}
-          </table>
-        </div>
-
-        <p style="color: #555; font-size: 13px; line-height: 1.6;">
-          You will receive another email with your full remittance advice once the payment has been processed.
-          If you have any questions, please contact HR directly.
-        </p>
-
-        <hr style="border-color: #eee; margin: 24px 0;">
-        <p style="color: #999; font-size: 12px; margin: 0;">
-          Eximp &amp; Cloves Infrastructure Limited | RC 8311800<br>
-          57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383<br>
-          <a href="https://www.eximps-cloves.com" style="color: #999; text-decoration: none;">www.eximps-cloves.com</a>
-        </p>
-      </div>
-    </div>"""
-
-    try:
-        res = await async_resend({
-            "from": f"Eximp & Cloves HR <{FROM_EMAIL}>",
-            "to": [email_addr],
-            "reply_to": "admin@eximps-cloves.com",
-            "subject": f"Expense Claim Approved — {title} [Ref: {claim_ref}]",
-            "html": html,
-        })
-        await log_activity(
-            "email_sent",
-            f"Expense approval email for {claim_ref} sent to {staff_name} ({email_addr})",
-            admin_id,
-            metadata={"payout_id": payout.get("id"), "vendor_id": vendor.get("id")}
-        )
-        return res
-    except Exception as e:
-        logger.error(f"Error sending expense approval email to {email_addr}: {e}")
-        await log_activity(
-            "email_failed",
-            f"FAILED to send approval email to {staff_name} ({email_addr}): {str(e)}",
-            admin_id,
-            metadata={"error": str(e), "email_type": "expense_approval"}
         )
         return None
 
