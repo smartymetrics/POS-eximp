@@ -963,6 +963,16 @@ async def _send_matter_executed_email(matter_id: str, signing_token: str, signer
         
         # Ensure weasyprint can resolve logos
         body_html = body_html.replace(f"{APP_BASE_URL}/static/img/logo_firm.png", logo_uri)
+        
+        # ── BLANK PAGE PREVENTION: CLEANUP ──
+        # 1. Remove trailing empty paragraphs and spaces
+        import re
+        body_html = body_html.strip()
+        body_html = re.sub(r'(<p[^>]*>(&nbsp;|\s)*</p>|<br\s*/?>)+$', '', body_html)
+        
+        # 2. Remove trailing page breaks which force a blank page at the end
+        body_html = re.sub(r'<div[^>]*page-break-after:\s*always[^>]*>\s*</div>$', '', body_html)
+        
         audit_entries = exec_audit.data or []
 
         # Build full PDF (Using the shared styles we established earlier)
@@ -970,7 +980,7 @@ async def _send_matter_executed_email(matter_id: str, signing_token: str, signer
 <style>
   @import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&family=Tinos:ital,wght@0,400;0,700;1,400;1,700&display=swap');
   @page {{ size: A4; margin: 0; }}
-  body {{ font-family: 'Tinos', 'Times New Roman', serif; font-size: 11pt; color: #000; background: white; margin: 0; padding: 0; }}
+  body {{ font-family: 'Tinos', 'Times New Roman', serif; font-size: 11pt; color: #000; background: white; margin: 0; padding: 0; -webkit-print-color-adjust: exact; }}
   
   /* ── ABSOLUTE BARS (Pinned to Page Top) ── */
   .bar-black {{ position: absolute; top: 0; left: 0; width: 60%; height: 40px; background: #000; border-bottom-right-radius: 40px; z-index: 100; }}
@@ -979,33 +989,26 @@ async def _send_matter_executed_email(matter_id: str, signing_token: str, signer
   /* ── MAIN CONTENT (Pushed down by padding) ── */
   .main-wrapper {{ position: relative; z-index: 200; width: 100%; }}
   
-  .header-content {{ padding: 50px 60px 10px; width: 100%; box-sizing: border-box; }}
+  .header-content {{ padding: 50px 60px 10px; width: 100%; box-sizing: border-box; page-break-inside: avoid; }}
   .logo-box {{ float: left; width: 50%; }}
   .contact-box {{ float: right; width: 45%; border-left: 2px solid #000; padding: 4px 15px; font-size: 9pt; line-height: 1.4; color: #111; font-weight: 700; font-variant-caps: all-small-caps; letter-spacing: 0.05em; font-family: 'Inter', sans-serif; }}
   .contact-box a {{ color: #C47D0A; text-decoration: none; }}
   
   .clear {{ clear: both; height: 1px; }}
-  .divider {{ height: 2px; background: #eee; margin: 10px 60px 0; }}
+  .divider {{ height: 2px; background: #eee; margin: 10px 60px 0; page-break-after: avoid; }}
   
   .body {{ padding: 30px 72px; line-height: 1.6; text-align: justify; }}
   .body p {{ margin-bottom: 12pt; min-height: 1.2em; }}
   .body ol, .body ul {{ padding: 0 0 0 40px; margin: 12pt 0; list-style-position: outside; }}
   .body li {{ margin-bottom: 8pt; padding-left: 5px; }}
-  /* Automatic Parent-Child Nesting */
-  .body ol {{ list-style-type: decimal; }}
-  .body ol ol {{ list-style-type: lower-alpha; margin: 6pt 0; }}
-  .body ol ol ol {{ list-style-type: lower-roman; margin: 4pt 0; }}
-  .body ul {{ list-style-type: disc; }}
-  .body ul ul {{ list-style-type: circle; }}
-  /* Force specific types if overridden by user */
-  .body ol[type="a"] {{ list-style-type: lower-alpha !important; }}
-  .body ol[type="A"] {{ list-style-type: upper-alpha !important; }}
-  .body ol[type="i"] {{ list-style-type: lower-roman !important; }}
-  .body ol[type="I"] {{ list-style-type: upper-roman !important; }}
-  .body img {{ max-width: 100%; height: auto; display: block; }}
   
-  .footer {{ position: absolute; bottom: 0; left: 0; width: 100%; }}
-  .footer-bars {{ display: flex; height: 12px; }}
+  /* Force page break avoidance for small elements */
+  h1, h2, h3, h4 {{ page-break-after: avoid; }}
+  .legal-badge {{ page-break-inside: avoid; }}
+  
+  /* ── FOOTER (Fixed to bottom, but careful with overflow) ── */
+  .footer {{ position: absolute; bottom: 0; left: 0; width: 100%; height: 12px; page-break-inside: avoid; }}
+  .footer-bars {{ display: flex; height: 12px; width: 100%; }}
   .fb {{ flex: 1; background: #000; }}
   .fg {{ flex: 1; background: #C47D0A; }}
 </style>

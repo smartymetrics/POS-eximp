@@ -62,6 +62,7 @@ CREATE TABLE IF NOT EXISTS legal_matter_history (
     matter_id UUID REFERENCES legal_matters(id) ON DELETE CASCADE,
     action TEXT NOT NULL, -- 'Draft Created', 'Edit', 'Sent for Signing', 'Signed', 'Permission Granted'
     performed_by UUID REFERENCES public.admins(id),
+    performed_by_name TEXT, -- Performer name for audit readability
     description TEXT,
     snapshot_html TEXT, -- Save snapshots of major versions
     created_at TIMESTAMP WITH TIME ZONE DEFAULT timezone('utc'::text, now())

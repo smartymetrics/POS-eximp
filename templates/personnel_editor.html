@@ -11,6 +11,14 @@
         href="https://fonts.googleapis.com/css2?family=Times+New+Roman&family=Inter:wght@400;500;600;700;900&family=Tinos:wght@400;700&display=swap">
     <link rel="stylesheet" href="/static/dist/output.css">
 
+    <!-- Document Processing Stack -->
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/mammoth/1.6.0/mammoth.browser.min.js"></script>
+    <script src="https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.min.js"></script>
+    <script>
+        // Initialize PDF.js Worker
+        pdfjsLib.GlobalWorkerOptions.workerSrc = 'https://cdnjs.cloudflare.com/ajax/libs/pdf.js/3.11.174/pdf.worker.min.js';
+    </script>
+
     <!-- TIPTAP EDITOR -->
     <script type="module">
         import { Editor, Node, Extension } from 'https://esm.sh/@tiptap/core@2.4.0';
@@ -1179,6 +1187,171 @@
             }
         };
 
+        window.loadAttachments = async function () {
+            if (!matterId) return;
+            const listEl = document.getElementById('attachments-list');
+            const loadingEl = document.getElementById('attachments-loading');
+            const emptyEl = document.getElementById('attachments-empty');
+
+            loadingEl.classList.remove('hidden');
+            listEl.classList.add('hidden');
+            emptyEl.classList.add('hidden');
+
+            try {
+                const res = await fetch(`${API_BASE}/matters/${matterId}/attachments`, {
+                    headers: { 'Authorization': 'Bearer ' + localStorage.ec_token }
+                });
+                const data = await res.json();
+                const attachments = data.attachments || [];
+
+                loadingEl.classList.add('hidden');
+
+                if (attachments.length === 0) {
+                    emptyEl.classList.remove('hidden');
+                    return;
+                }
+
+                listEl.classList.remove('hidden');
+                listEl.innerHTML = attachments.map((att, idx) => {
+                    const isEditable = ['docx', 'html', 'txt', 'pdf'].includes(att.file_type);
+                    return `
+                    <div class="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10 hover:border-brand-gold/30 transition-all duration-300 group animate-slide-up" style="animation-delay: ${idx * 0.05}s">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-lg bg-black/40 flex items-center justify-center text-xl group-hover:scale-110 transition-transform duration-300">
+                                ${att.file_type === 'pdf' ? '📕' : (att.file_type === 'docx' ? '📘' : '📄')}
+                            </div>
+                            <div>
+                                <div class="text-white font-bold text-sm tracking-tight truncate max-w-[240px]" title="${att.original_filename}">${att.original_filename}</div>
+                                <div class="flex items-center gap-2 mt-1">
+                                    <span class="text-[9px] bg-brand-gold/20 text-brand-gold px-1.5 rounded uppercase font-black">v${att.version_number}</span>
+                                    <span class="text-[10px] text-gray-500">${(att.file_size_bytes / 1024 / 1024).toFixed(2)} MB</span>
+                                    <span class="text-[10px] text-gray-600">•</span>
+                                    <span class="text-[10px] text-gray-600">${new Date(att.uploaded_at).toLocaleDateString()}</span>
+                                </div>
+                            </div>
+                        </div>
+                        <div class="flex items-center gap-2">
+                             ${isEditable ? `
+                                <button onclick="window.importDocToEditor('${att.signed_url}', '${att.file_type}')"
+                                    class="px-3 py-2 bg-blue-600/20 text-blue-400 border border-blue-500/30 rounded-lg hover:bg-blue-600 hover:text-white transition text-[10px] font-bold uppercase tracking-widest"
+                                    title="${att.file_type === 'pdf' ? 'Extract text from PDF' : 'Import content into editor'}">
+                                    ${att.file_type === 'pdf' ? 'Scrape' : 'Edit'}
+                                </button>
+                             ` : ''}
+                             <button onclick="window.insertDocRef('${att.original_filename}', '${att.signed_url}')"
+                                class="px-3 py-2 bg-white/5 text-gray-400 border border-white/10 rounded-lg hover:text-brand-gold hover:border-brand-gold transition text-[10px] font-bold uppercase tracking-widest"
+                                title="Insert link to this document into editor">
+                                Link
+                             </button>
+                             <a href="${att.signed_url}" target="_blank" 
+                                class="p-2.5 bg-brand-gold text-white rounded-lg hover:bg-yellow-600 transition shadow-lg shadow-brand-gold/10"
+                                title="Download / View">
+                                <b>View</b>
+                             </a>
+                        </div>
+                    </div>
+                `}).join('');
+
+            } catch (e) {
+                console.error("Failed to load attachments:", e);
+                loadingEl.classList.add('hidden');
+                listEl.innerHTML = '<div class="text-red-500 text-sm text-center p-4">Error loading documents.</div>';
+                listEl.classList.remove('hidden');
+            }
+        };
+
+        window.insertDocRef = function (name, url) {
+            editor.chain().focus().insertContent(`<a href="${url}" target="_blank" class="text-brand-gold underline font-bold">[Ref: ${name}]</a>`).run();
+            window.closeModal('doc-hub-modal');
+            document.getElementById('document-status').textContent = 'Reference inserted';
+        };
+
+        window.importDocToEditor = async function (url, type) {
+            let msg = "Are you sure? This will replace the current editor content with the content of the selected file.";
+            if (type === 'pdf') msg = "Note: PDF editing is complex. We will extract the text content from the PDF, but you will lose specific layouts, images, and fonts. Do you want to proceed with text extraction?";
+            
+            if (!confirm(msg)) return;
+            
+            const status = document.getElementById('document-status');
+            status.textContent = 'Importing...';
+            
+            try {
+                const response = await fetch(url);
+                const arrayBuffer = await response.arrayBuffer();
+
+                if (type === 'docx') {
+                    const result = await mammoth.convertToHtml({ arrayBuffer: arrayBuffer });
+                    editor.commands.setContent(result.value);
+                } else if (type === 'pdf') {
+                    const loadingTask = pdfjsLib.getDocument({ data: arrayBuffer });
+                    const pdf = await loadingTask.promise;
+                    let fullText = "";
+                    
+                    // Iterate through all pages
+                    for (let i = 1; i <= pdf.numPages; i++) {
+                        const page = await pdf.getPage(i);
+                        const textContent = await page.getTextContent();
+                        const pageText = textContent.items.map(item => item.str).join(' ');
+                        fullText += `<p>${pageText}</p><br>`;
+                    }
+                    
+                    editor.commands.setContent(fullText);
+                } else if (type === 'html' || type === 'txt') {
+                    const decoder = new TextDecoder('utf-8');
+                    const text = decoder.decode(arrayBuffer);
+                    editor.commands.setContent(text);
+                }
+                
+                window.closeModal('doc-hub-modal');
+                status.textContent = 'Import successful';
+                window.updateWordCount();
+            } catch (err) {
+                console.error("Import error:", err);
+                alert("Failed to import document. Please check the file format.");
+                status.textContent = 'Import failed';
+            }
+        };
+
+        window.handleHubUpload = async function (e) {
+            const file = e.target.files[0];
+            if (!file) return;
+
+            const overlay = document.getElementById('hub-upload-overlay');
+            const status = document.getElementById('document-status');
+            const originalText = status.textContent;
+            
+            overlay.classList.remove('hidden');
+            status.textContent = 'Uploading to vault...';
+
+            const formData = new FormData();
+            formData.append('file', file);
+            formData.append('version_label', 'Editor Quick Upload');
+
+            try {
+                const res = await fetch(`${API_BASE}/matters/${matterId}/attachments`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + localStorage.ec_token },
+                    body: formData
+                });
+
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || "Upload failed");
+                }
+
+                status.textContent = 'Upload successful';
+                window.loadAttachments(); // Refresh the list
+            } catch (err) {
+                console.error("Upload Error:", err);
+                alert("Upload Failed: " + err.message);
+                status.textContent = 'Upload failed';
+            } finally {
+                overlay.classList.add('hidden');
+                e.target.value = ''; // Reset input
+                setTimeout(() => status.textContent = originalText, 3000);
+            }
+        };
+
         window.sendMemo = async function () {
             if (!matterId) return alert('No matter loaded');
 
@@ -1243,6 +1416,7 @@
             if (id === 'clauses-modal') window.renderClauses();
             if (id === 'memo-modal') window.loadMemos();
             if (id === 'collaborate-modal') window.loadCollaborators();
+            if (id === 'doc-hub-modal') window.loadAttachments();
         };
 
         window.closeModal = function (id) {
@@ -2164,6 +2338,38 @@
         .hidden {
             display: none;
         }
+
+        /* ── PREMIUM ANIMATIONS ── */
+        @keyframes shimmer {
+            0% { background-position: -468px 0; }
+            100% { background-position: 468px 0; }
+        }
+
+        .skeleton {
+            background: #1a1a1a;
+            background-image: linear-gradient(to right, #1a1a1a 0%, #222 20%, #1a1a1a 40%, #1a1a1a 100%);
+            background-repeat: no-repeat;
+            background-size: 800px 104px;
+            display: inline-block;
+            position: relative;
+            animation-duration: 1s;
+            animation-fill-mode: forwards;
+            animation-iteration-count: infinite;
+            animation-name: shimmer;
+            animation-timing-function: linear;
+        }
+
+        @keyframes vaultPulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; color: #C47D0A; }
+        }
+        .vault-pulse { animation: vaultPulse 2s infinite ease-in-out; }
+
+        @keyframes slideUp {
+            from { opacity: 0; transform: translateY(10px); }
+            to { opacity: 1; transform: translateY(0); }
+        }
+        .animate-slide-up { animation: slideUp 0.3s ease-out forwards; }
     </style>
 </head>
 
@@ -2200,6 +2406,9 @@
                 <button onclick="window.toggleVisibility()" id="btn-visibility"
                     class="bg-white/5 text-gray-300 border border-white/10 px-3 py-2 rounded text-sm font-bold hover:text-white hover:bg-white/10 transition hover:border-brand-gold"
                     title="Toggle Staff Visibility">🔒 Private</button>
+                <button onclick="window.openModal('doc-hub-modal')"
+                    class="bg-white/5 text-gray-300 border border-white/10 px-3 py-2 rounded text-sm font-bold hover:text-white hover:bg-white/10 transition hover:border-brand-gold"
+                    title="Access uploaded drafts and evidence">📂 Document Hub</button>
                 <button onclick="window.openModal('visibility-info-modal')"
                     class="text-gray-400 hover:text-brand-gold transition text-lg" title="Visibility Info">ⓘ</button>
                 <button onclick="window.openModal('help-modal')"
@@ -2345,6 +2554,90 @@
     </div>
 
     <!-- MODALS -->
+
+    <!-- MODAL: DOCUMENT HUB -->
+    <div id="doc-hub-modal" class="modal-overlay hidden">
+        <div class="modal-box" style="width: 600px;">
+            <div class="p-6 border-b border-white/5 flex justify-between items-center text-white bg-black/20">
+                <div class="flex items-center gap-3">
+                    <div class="w-10 h-10 rounded bg-brand-gold/10 flex items-center justify-center text-brand-gold">
+                        📂
+                    </div>
+                    <div>
+                        <h2 class="font-black uppercase tracking-widest text-sm">Matter Document Hub</h2>
+                        <p class="text-[10px] text-gray-500 font-bold">Access uploaded drafts and evidence</p>
+                    </div>
+                </div>
+                <div class="flex items-center gap-2">
+                    <input type="file" id="hub-file-input" class="hidden" onchange="window.handleHubUpload(event)">
+                    <button onclick="document.getElementById('hub-file-input').click()" 
+                        class="bg-brand-gold text-white px-3 py-1.5 rounded text-[10px] font-black uppercase tracking-widest hover:bg-yellow-600 transition shadow-lg shadow-brand-gold/20">
+                        ↑ Upload
+                    </button>
+                    <button onclick="window.closeModal('doc-hub-modal')" class="text-gray-500 hover:text-white transition">✕</button>
+                </div>
+            </div>
+            
+            <div class="p-6">
+                <div id="attachments-loading" class="space-y-3">
+                    <div class="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-lg skeleton"></div>
+                            <div>
+                                <div class="w-32 h-4 skeleton rounded mb-2"></div>
+                                <div class="w-48 h-3 skeleton rounded"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-lg skeleton"></div>
+                            <div>
+                                <div class="w-40 h-4 skeleton rounded mb-2"></div>
+                                <div class="w-32 h-3 skeleton rounded"></div>
+                            </div>
+                        </div>
+                    </div>
+                    <div class="flex items-center justify-between p-4 bg-white/5 rounded-xl border border-white/10">
+                        <div class="flex items-center gap-4">
+                            <div class="w-12 h-12 rounded-lg skeleton"></div>
+                            <div>
+                                <div class="w-24 h-4 skeleton rounded mb-2"></div>
+                                <div class="w-56 h-3 skeleton rounded"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+                
+                <div id="attachments-list" class="space-y-3 hidden max-h-[400px] overflow-y-auto pr-2">
+                    <!-- Dynamic Content -->
+                </div>
+                
+                <div id="attachments-empty" class="hidden text-center py-12 border-2 border-dashed border-white/5 rounded-xl">
+                    <div class="text-4xl mb-4 opacity-20">📂</div>
+                    <p class="text-gray-400 text-sm">No documents found for this matter.</p>
+                    <p class="text-[10px] text-gray-600 uppercase mt-2">Upload files in the Matter Dashboard to see them here.</p>
+                </div>
+
+                <!-- Uploading State Overlay -->
+                <div id="hub-upload-overlay" class="hidden absolute inset-0 bg-black/60 backdrop-blur-sm z-50 flex flex-col items-center justify-center p-6 text-center">
+                    <div class="w-20 h-20 rounded-full bg-brand-gold/10 flex items-center justify-center text-3xl mb-4 vault-pulse">
+                        📂
+                    </div>
+                    <h3 class="text-white font-black uppercase tracking-widest text-sm mb-1">Vaulting Document...</h3>
+                    <p class="text-[10px] text-gray-400 font-bold mb-6">Encrypting and synchronizing with Legal Hub</p>
+                    <div class="w-full max-w-[240px] h-1.5 bg-white/5 rounded-full overflow-hidden">
+                        <div class="h-full bg-brand-gold skeleton" style="width: 100%;"></div>
+                    </div>
+                </div>
+            </div>
+            
+            <div class="p-4 bg-black/20 border-t border-white/5 flex justify-between items-center">
+                <p class="text-[10px] text-gray-500 italic">Only active versions are shown in this view.</p>
+                <button onclick="window.loadAttachments()" class="text-xs text-brand-gold hover:underline">Refresh Hub</button>
+            </div>
+        </div>
+    </div>
 
     <!-- WORKFLOW STATUS INDICATOR -->
     <div id="workflow-status"
