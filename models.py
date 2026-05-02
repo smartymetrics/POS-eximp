@@ -137,6 +137,8 @@ class InvoiceCreate(BaseModel):
     marketing_campaign_id: Optional[str] = None
     sales_rep_id: Optional[str] = None
     sales_rep_name: Optional[str] = None
+    purchase_purpose: Optional[str] = None
+    purchase_for: Optional[str] = None
 
 class InvoiceUpdate(BaseModel):
     due_date: Optional[date] = None
@@ -151,6 +153,8 @@ class InvoiceUpdate(BaseModel):
     reason: Optional[str] = None # For due date changes
     co_owner_name: Optional[str] = None
     co_owner_email: Optional[str] = None
+    purchase_purpose: Optional[str] = None
+    purchase_for: Optional[str] = None
 
 class SendDocumentRequest(BaseModel):
     invoice_id: str
@@ -226,6 +230,7 @@ class WebhookFormPayload(BaseModel):
     # Other
     source_of_income: Optional[str] = None
     referral_source: Optional[str] = None
+    purchase_for: Optional[str] = None
     purchase_purpose: Optional[str] = None
     sales_rep_name: Optional[str] = None
     sales_rep_phone: Optional[str] = None

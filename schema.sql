@@ -119,6 +119,7 @@ CREATE TABLE IF NOT EXISTS invoices (
     payment_proof_url TEXT,
     passport_photo_url TEXT,
     purchase_purpose VARCHAR(100),
+    purchase_for VARCHAR(50),
     source VARCHAR(50) DEFAULT 'manual', -- manual / google_form
     custom_contract_html TEXT, -- Lawyer-edited contract body HTML (overrides template if set)
     custom_cover_html TEXT, -- Editable cover page wording HTML (overrides default cover if set)
@@ -565,6 +566,7 @@ CREATE TABLE IF NOT EXISTS campaign_recipients (
   last_clicked_at TIMESTAMPTZ,
   click_count INTEGER DEFAULT 0,
   bounced_at TIMESTAMPTZ,
+  failed_at TIMESTAMPTZ,
   unsubscribed_at TIMESTAMPTZ,
   spam_reported_at TIMESTAMPTZ,
   UNIQUE(campaign_id, contact_id)

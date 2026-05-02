@@ -115,6 +115,8 @@ async def create_invoice(
         "notes": data.notes,
         "sales_rep_name": data.sales_rep_name,
         "sales_rep_id": data.sales_rep_id,
+        "purchase_purpose": data.purchase_purpose,
+        "purchase_for": data.purchase_for,
         "created_by": current_admin["sub"]
     }
     
@@ -395,7 +397,8 @@ async def edit_invoice(
     admin_only_fields = [
         "amount", "amount_paid", "quantity", "unit_price", "plot_size_sqm", "property_name", 
         "property_location", "property_id", "payment_terms", "sales_rep_name", 
-        "sales_rep_id", "invoice_date", "co_owner_name", "co_owner_email", "marketing_campaign_id"
+        "sales_rep_id", "invoice_date", "co_owner_name", "co_owner_email", 
+        "marketing_campaign_id", "purchase_purpose", "purchase_for"
     ]
     staff_allowed_fields = ["due_date", "notes"]
     

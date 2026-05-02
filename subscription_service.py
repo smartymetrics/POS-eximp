@@ -152,6 +152,8 @@ class SubscriptionService:
             "co_owner_email": data.get("co_owner_email"),
             "signature_url": data.get("signature_url"),
             "payment_proof_url": data.get("payment_receipt_url"),
+            "purchase_for": data.get("purchase_for"),
+            "purchase_purpose": data.get("purchase_purpose"),
             "source": "custom_portal",
             "pipeline_stage": "interest"
         }

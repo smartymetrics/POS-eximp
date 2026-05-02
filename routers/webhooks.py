@@ -341,6 +341,7 @@ async def form_submission(
             "signature_url": payload.signature_url, # Temporary (real one updated in background)
             "payment_proof_url": payload.payment_proof_url,
             "passport_photo_url": payload.passport_photo_url,
+            "purchase_for": payload.purchase_for,
             "purchase_purpose": payload.purchase_purpose,
             "marketing_campaign_id": marketing_campaign_id,
             "attribution_utm_source": payload.utm_source,

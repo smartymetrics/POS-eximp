@@ -505,8 +505,8 @@ async def get_daily_quota_stats():
     wat_now = datetime.utcnow() + timedelta(hours=1)
     today = wat_now.replace(hour=0, minute=0, second=0, microsecond=0) - timedelta(hours=1)
     today = today.isoformat()
-    # Count all emails sent today (WAT-adjusted)
-    count_res = db.table("campaign_recipients").select("id", count="exact").gte("sent_at", today).eq("status", "sent").execute()
+    # Count all emails sent today (WAT-adjusted), regardless of whether they later bounced or were delivered
+    count_res = db.table("campaign_recipients").select("id", count="exact").gte("sent_at", today).execute()
     current = count_res.count or 0
     
     return {
