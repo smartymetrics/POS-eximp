@@ -1282,7 +1282,8 @@ async def get_payout_stats(
         unpaid = float(r['net_payout_amount'] or 0) - float(r['amount_paid'] or 0)
         if unpaid <= 0: continue
         
-        created = datetime.fromisoformat(r['created_at'].replace('Z', '+00:00'))
+        # Use robust pandas parsing for Python 3.10 compatibility with variable subseconds
+        created = pd.to_datetime(r['created_at']).to_pydatetime()
         age_days = (now - created).days
         
         if age_days <= 30: aging["0-30"] += unpaid
@@ -1316,8 +1317,8 @@ async def get_payout_stats(
         .limit(50)
         .execute())
     for r in (eff_res.data or []):
-        c = datetime.fromisoformat(r['created_at'].replace('Z', '+00:00'))
-        p = datetime.fromisoformat(r['reviewed_at'].replace('Z', '+00:00'))
+        c = pd.to_datetime(r['created_at']).to_pydatetime()
+        p = pd.to_datetime(r['reviewed_at']).to_pydatetime()
         pay_times.append((p - c).total_seconds() / 3600)
     avg_speed = sum(pay_times) / len(pay_times) if pay_times else 0
 

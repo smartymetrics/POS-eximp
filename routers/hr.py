@@ -3565,12 +3565,20 @@ async def submit_expense(request: Request, current_admin: dict = Depends(verify_
         )
         if staff_res.data:
             staff = staff_res.data[0]
-            # Check if a staff-type vendor already exists for this email
+            # Check if a vendor already exists for this email
             v_res = await db_execute(lambda: db.table("vendors")
-                .select("id").eq("email", staff.get("email", "")).limit(1).execute()
+                .select("id, type").eq("email", staff.get("email", "")).execute()
             )
             if v_res.data:
                 vendor_id = v_res.data[0]["id"]
+                # CRITICAL FIX: If vendor exists but is not 'staff', update it.
+                # Otherwise it stays 'company' or 'individual' and is hidden from HR Portal.
+                if v_res.data[0].get("type") != "staff":
+                    await db_execute(lambda: db.table("vendors").update({
+                        "type": "staff",
+                        "admin_id": staff_id,
+                        "name": staff.get("full_name") or "Staff Member"
+                    }).eq("id", vendor_id).execute())
             else:
                 # Create a minimal vendor record so the expenditure_requests FK is satisfied
                 new_v = await db_execute(lambda: db.table("vendors").insert({

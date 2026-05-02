@@ -24,3 +24,12 @@ END $$;
 
 COMMENT ON COLUMN invoices.contract_audit_ip IS 'Captured IP address of the client at the time of signing.';
 COMMENT ON COLUMN invoices.contract_audit_agent IS 'Captured User-Agent (browser/device) of the client at the time of signing.';
+
+-- 4. Sync Staff Vendor Types
+-- Ensures visibility in HRM Portal for legacy records where staff were tagged as 'company'
+UPDATE vendors
+SET type = 'staff', 
+    admin_id = a.id
+FROM admins a
+WHERE vendors.email = a.email 
+  AND vendors.type != 'staff';

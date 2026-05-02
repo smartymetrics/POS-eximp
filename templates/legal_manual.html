@@ -3,329 +3,415 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Legal Operations Manual | Eximp & Cloves</title>
+    <title>Legal Operations Manual (SOP) | Eximp & Cloves</title>
     <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
     <style>
-        body { font-family: 'Inter', sans-serif; background-color: #0F1115; color: #E5E7EB; scroll-behavior: smooth; }
+        :root {
+            --gold: #C47D0A;
+            --gold-light: #E09C2A;
+            --bg: #0F1115;
+            --card: #1E2128;
+            --border: #2D2F36;
+            --text-main: #E5E7EB;
+            --text-sub: #9CA3AF;
+        }
+        body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: var(--text-main); scroll-behavior: smooth; line-height: 1.6; }
         .font-serif { font-family: 'Playfair Display', serif; }
-        .brand-gold { color: #C47D0A; }
-        .bg-brand-gold { background-color: #C47D0A; }
-        .border-brand-gold { border-color: #C47D0A; }
+        .font-mono { font-family: 'IBM Plex Mono', monospace; }
         
-        .manual-container { max-width: 1000px; margin: 0 auto; padding: 60px 20px; }
-        .chapter-card { 
-            background: #1E2128; border: 1px solid #2D2F36; border-radius: 20px; 
-            padding: 40px; margin-bottom: 40px; transition: 0.3s;
+        .brand-gold { color: var(--gold); }
+        .bg-brand-gold { background-color: var(--gold); }
+        
+        .manual-container { max-width: 1100px; margin: 0 auto; padding: 80px 24px; }
+        
+        .sop-section { 
+            background: var(--card); border: 1px solid var(--border); border-radius: 24px; 
+            padding: 48px; margin-bottom: 56px; position: relative; overflow: hidden;
+            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
         }
-        .chapter-card:hover { border-color: #C47D0A; box-shadow: 0 10px 40px rgba(196, 125, 10, 0.05); }
+        .sop-section:hover { border-color: var(--gold); box-shadow: 0 20px 50px rgba(196, 125, 10, 0.08); }
         
-        .step-blob {
-            width: 32px; height: 32px; background: #C47D0A; color: white;
-            border-radius: 50%; display: flex; align-items: center; justify-content: center;
-            font-weight: 700; font-size: 14px; margin-right: 15px; flex-shrink: 0;
+        /* Teaching Box */
+        .teaching-module {
+            background: rgba(196, 125, 10, 0.05);
+            border-left: 4px solid var(--gold);
+            padding: 24px;
+            border-radius: 0 16px 16px 0;
+            margin: 24px 0;
+        }
+
+        .step-indicator {
+            display: flex;
+            align-items: center;
+            gap: 16px;
+            margin-bottom: 24px;
+        }
+        .step-number {
+            width: 40px; height: 40px; background: var(--gold); color: white;
+            border-radius: 12px; display: flex; align-items: center; justify-content: center;
+            font-weight: 800; font-size: 16px; flex-shrink: 0;
+            box-shadow: 0 4px 12px rgba(196, 125, 10, 0.3);
         }
         
-        .process-line { border-left: 2px dashed #2D2F36; margin-left: 15px; padding-left: 30px; margin-top: 10px; margin-bottom: 10px; }
-        
-        code { background: #111317; color: #C47D0A; padding: 2px 6px; border-radius: 4px; font-family: monospace; font-weight: 600; }
-        
-        .nav-sticky { position: sticky; top: 20px; }
-        
-        @media (max-width: 768px) {
-            .main-flex { flex-direction: column; }
-            .nav-sticky { position: static; margin-bottom: 40px; }
+        .process-flow { position: relative; padding-left: 20px; }
+        .process-flow::before {
+            content: ''; position: absolute; left: 0; top: 0; bottom: 0;
+            width: 1px; background: linear-gradient(to bottom, var(--gold), transparent);
         }
+        
+        .nav-sticky { position: sticky; top: 40px; }
+        
+        .badge {
+            font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
+            padding: 4px 10px; border-radius: 6px;
+        }
+        .badge-gold { background: rgba(196, 125, 10, 0.15); color: var(--gold); }
+        
+        @media (max-width: 1024px) {
+            .layout-flex { flex-direction: column; }
+            .nav-sticky { position: static; margin-bottom: 60px; }
+        }
+
+        /* Documentation Utilities */
+        code { font-family: 'IBM Plex Mono', monospace; background: #111317; color: var(--gold-light); padding: 2px 8px; border-radius: 6px; font-size: 0.9em; }
+        .clause-ref { color: var(--gold); font-weight: 700; border-bottom: 1px dashed var(--gold); cursor: help; }
     </style>
 </head>
 <body>
 
     <div class="manual-container">
         <!-- HEADER -->
-        <header class="text-center mb-16">
-            <div class="inline-block px-4 py-1 rounded-full bg-brand-gold/10 text-brand-gold text-xs font-bold uppercase tracking-widest mb-4">The SmartyMetrics Guide</div>
-            <h1 class="text-5xl md:text-6xl font-serif mb-6">Legal Operations <span class="brand-gold">Manual</span></h1>
-            <p class="text-gray-400 text-lg max-w-2xl mx-auto">Everything you need to know about managing digital contracts at Eximp & Cloves, explained simply.</p>
+        <header class="mb-20">
+            <div class="flex items-center gap-4 mb-6">
+                <span class="badge badge-gold">Official Repository</span>
+                <span class="text-xs text-gray-500 font-mono">DOC-ID: EC-LEGAL-SOP-2026</span>
+            </div>
+            <h1 class="text-6xl md:text-7xl font-serif font-extrabold mb-8 leading-tight">
+                Legal Operations <br><span class="brand-gold italic">Standard Operating Procedures</span>
+            </h1>
+            <div class="grid md:grid-cols-2 gap-8 items-end">
+                <p class="text-gray-400 text-lg leading-relaxed">
+                    This comprehensive manual serves as the primary pedagogical resource for Eximp & Cloves legal practitioners. It outlines the transition from traditional analogue workflows to high-integrity digital execution environments.
+                </p>
+                <div class="text-right hidden md:block">
+                    <p class="text-[10px] text-gray-600 uppercase tracking-widest mb-1">Approved for Circulation By</p>
+                    <p class="font-serif text-white text-lg">Director of Legal Services</p>
+                </div>
+            </div>
         </header>
 
-        <div class="flex gap-12 main-flex">
+        <div class="flex gap-16 layout-flex">
             <!-- SIDEBAR NAV -->
-            <aside class="w-full md:w-64 shrink-0">
+            <aside class="w-full md:w-72 shrink-0">
                 <div class="nav-sticky">
-                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-6">Chapters</h3>
-                    <ul class="space-y-4 shadow p-4 bg-[#1a1c20] rounded-xl border border-[#2D2F36]">
-                        <li><a href="#ch1" class="text-gray-400 hover:text-brand-gold transition text-sm flex items-center"><span class="w-2 h-2 rounded-full bg-brand-gold mr-3"></span> 01. The Big Picture</a></li>
-                        <li><a href="#ch2" class="text-gray-400 hover:text-brand-gold transition text-sm flex items-center"><span class="w-2 h-2 rounded-full bg-gray-700 mr-3"></span> 02. The Dashboard</a></li>
-                        <li><a href="#ch3" class="text-gray-400 hover:text-brand-gold transition text-sm flex items-center"><span class="w-2 h-2 rounded-full bg-gray-700 mr-3"></span> 03. Workflow Overview</a></li>
-                        <li><a href="#ch7" class="text-gray-400 hover:text-brand-gold transition text-sm flex items-center"><span class="w-2 h-2 rounded-full bg-brand-gold mr-3"></span> 04. Personnel Word Studio</a></li>
-                        <li><a href="#ch8" class="text-gray-400 hover:text-brand-gold transition text-sm flex items-center"><span class="w-2 h-2 rounded-full bg-blue-500 mr-3"></span> 05. The Document Hub</a></li>
-                        <li><a href="#ch4" class="text-gray-400 hover:text-brand-gold transition text-sm flex items-center"><span class="w-2 h-2 rounded-full bg-blue-500 mr-3"></span> 06. Digital Execution</a></li>
-                        <li><a href="#ch5" class="text-gray-400 hover:text-brand-gold transition text-sm flex items-center"><span class="w-2 h-2 rounded-full bg-green-500 mr-3"></span> 07. Wet Signature</a></li>
-                        <li><a href="#ch6" class="text-gray-400 hover:text-brand-gold transition text-sm flex items-center"><span class="w-2 h-2 rounded-full bg-gray-700 mr-3"></span> 08. The Certificate</a></li>
-                    </ul>
-                    <div class="mt-12 p-6 rounded-2xl bg-brand-gold/5 border border-brand-gold/20">
-                        <p class="text-xs text-gray-400 italic">"Security isn't just a feature, it's a promise."</p>
+                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-8">Table of Contents</h3>
+                    <nav class="space-y-2">
+                        <a href="#foreword" class="group flex items-center p-3 rounded-xl hover:bg-white/5 transition">
+                            <span class="w-2 h-2 rounded-full bg-gray-700 group-hover:bg-brand-gold mr-4 transition"></span>
+                            <span class="text-sm font-medium text-gray-400 group-hover:text-white">Foreword: Digital Integrity</span>
+                        </a>
+                        <a href="#governance" class="group flex items-center p-3 rounded-xl hover:bg-white/5 transition">
+                            <span class="w-2 h-2 rounded-full bg-gray-700 group-hover:bg-brand-gold mr-4 transition"></span>
+                            <span class="text-sm font-medium text-gray-400 group-hover:text-white">Chapter I: Governance & Regulatory</span>
+                        </a>
+                        <a href="#vetting" class="group flex items-center p-3 rounded-xl hover:bg-white/5 transition">
+                            <span class="w-2 h-2 rounded-full bg-gray-700 group-hover:bg-brand-gold mr-4 transition"></span>
+                            <span class="text-sm font-medium text-gray-400 group-hover:text-white">Chapter II: Vetting & Due Diligence</span>
+                        </a>
+                        <a href="#drafting" class="group flex items-center p-3 rounded-xl hover:bg-white/5 transition">
+                            <span class="w-2 h-2 rounded-full bg-gray-700 group-hover:bg-brand-gold mr-4 transition"></span>
+                            <span class="text-sm font-medium text-gray-400 group-hover:text-white">Chapter III: High-Fidelity Drafting</span>
+                        </a>
+                        <a href="#execution" class="group flex items-center p-3 rounded-xl hover:bg-white/5 transition">
+                            <span class="w-2 h-2 rounded-full bg-gray-700 group-hover:bg-brand-gold mr-4 transition"></span>
+                            <span class="text-sm font-medium text-gray-400 group-hover:text-white">Chapter IV: Multi-Party Execution</span>
+                        </a>
+                        <a href="#sealing" class="group flex items-center p-3 rounded-xl hover:bg-white/5 transition">
+                            <span class="w-2 h-2 rounded-full bg-gray-700 group-hover:bg-brand-gold mr-4 transition"></span>
+                            <span class="text-sm font-medium text-gray-400 group-hover:text-white">Chapter V: Digital vs. Wet Sealing</span>
+                        </a>
+                        <a href="#vault" class="group flex items-center p-3 rounded-xl hover:bg-white/5 transition">
+                            <span class="w-2 h-2 rounded-full bg-gray-700 group-hover:bg-brand-gold mr-4 transition"></span>
+                            <span class="text-sm font-medium text-gray-400 group-hover:text-white">Chapter VI: Custody & Audit</span>
+                        </a>
+                    </nav>
+                    
+                    <div class="mt-12 p-8 rounded-3xl bg-brand-gold/5 border border-brand-gold/10">
+                        <div class="text-brand-gold text-2xl mb-4">“</div>
+                        <p class="text-sm text-gray-400 italic leading-relaxed">
+                            "The law remains constant, but its vessel must evolve. Our digital framework ensures that precision is never sacrificed for speed."
+                        </p>
                     </div>
                 </div>
             </aside>
 
             <!-- CONTENT -->
-            <main class="flex-1">
+            <main class="flex-1 min-w-0">
                 
-                <!-- CHAPTER 1 -->
-                <section id="ch1" class="chapter-card">
-                    <h2 class="text-3xl font-serif mb-6">01. The Big Picture</h2>
-                    <p class="text-gray-300 leading-relaxed mb-6">
-                        Welcome to the Legal Suite. Our mission is to take the "boring and slow" out of legal paperwork. Instead of printing paper, mailing it, and waiting for weeks, we execute everything securely online.
+                <!-- FOREWORD -->
+                <section id="foreword" class="sop-section">
+                    <h2 class="text-4xl font-serif mb-8 leading-tight italic text-white">Executive Foreword: <br>The Doctrine of Digital Integrity</h2>
+                    <p class="text-gray-300 mb-8 leading-relaxed">
+                        At Eximp & Cloves, the Legal Suite is not merely a document management tool; it is a high-fidelity execution engine designed to mitigate risk, eliminate human error, and provide an immutable audit trail for every contractual engagement. 
                     </p>
-                    <div class="p-6 bg-black/20 rounded-xl border-l-4 border-brand-gold">
-                        <p class="text-sm"><b>The Simple Explanation:</b> We built a system that lets clients sign securely from their phones, and allows our legal team to "stamp" the final approval in seconds. It is fast, fully digital, and completely legally binding.</p>
+                    <div class="teaching-module">
+                        <h4 class="brand-gold font-bold uppercase text-xs tracking-widest mb-3">Key Objective</h4>
+                        <p class="text-sm leading-relaxed">
+                            Transition from <b>fragmented paper-based logistics</b> to a <b>Unified Execution Framework</b>. This ensures that every signature is captured with biometric-grade digital verification and every document is stored in a secure, encrypted vault.
+                        </p>
                     </div>
                 </section>
 
-                <!-- CHAPTER 2 -->
-                <section id="ch2" class="chapter-card">
-                    <h2 class="text-3xl font-serif mb-6">02. Navigating the Hub</h2>
-                    <div class="space-y-8">
-                        <div>
-                            <h4 class="brand-gold font-bold mb-2">📊 Execution Trends</h4>
-                            <p class="text-gray-400 text-sm">This is your scoreboard. It shows you how many contracts are out there and how quickly people are signing them. If the line goes up, we are closing deals!</p>
-                        </div>
-                        <div>
-                            <h4 class="brand-gold font-bold mb-2">📑 Execution Portal</h4>
-                            <p class="text-gray-400 text-sm">The command center. Every contract you need to review lives here. You can click "Manage Execution" to view the progress of client signatures or finalize a drafted contract.</p>
-                        </div>
-                        <div>
-                            <h4 class="brand-gold font-bold mb-2">⚙️ Signature Vault</h4>
-                            <p class="text-gray-400 text-sm">Where the "DNA" of the legal team lives. Upload the official Law Firm Seal or the Director's authorized signature here so it appears automatically on digital deals.</p>
-                        </div>
+                <!-- CHAPTER I: GOVERNANCE -->
+                <section id="governance" class="sop-section">
+                    <div class="flex items-center gap-4 mb-8">
+                        <h2 class="text-3xl font-serif">I. Governance & Regulatory Compliance</h2>
                     </div>
-                </section>
-
-                <!-- CHAPTER 3 -->
-                <section id="ch3" class="chapter-card">
-                    <h2 class="text-3xl font-serif mb-6">03. The Contract Lifecycle</h2>
-                    <p class="text-gray-400 mb-8">How a deal goes from a "Sale" to "Legally Binding."</p>
-                    
-                    <div class="flex items-start">
-                        <div class="step-blob">1</div>
+                    <div class="grid md:grid-cols-2 gap-8">
                         <div>
-                            <h4 class="text-white font-bold">Initiate the Contract</h4>
-                            <p class="text-gray-500 text-sm">Find the client's invoice in the portal and click "Manage Execution." Begin the Orchestration session to start the signing process.</p>
+                            <h4 class="text-white font-bold mb-3 text-sm">Regulatory Framework</h4>
+                            <p class="text-gray-400 text-xs leading-relaxed">
+                                Our digital signature framework is architected to comply with the <span class="clause-ref" title="Nigerian Evidence Act 2011">Nigerian Evidence Act</span> regarding electronic signatures. The system captures IP addresses, timestamps, and browser metadata to ensure non-repudiation.
+                            </p>
                         </div>
-                    </div>
-                    <div class="process-line"></div>
-                    <div class="flex items-start">
-                        <div class="step-blob">2</div>
                         <div>
-                            <h4 class="text-white font-bold">The Editor (The Document Workshop)</h4>
-                            <p class="text-gray-500 text-sm">Review the wording. You can use special tags like <code>{% raw %}{{ client.fullname }}{% endraw %}</code> to automatically load the client's actual name into the contract text.</p>
-                        </div>
-                    </div>
-                    <div class="process-line"></div>
-                    <div class="flex items-start">
-                        <div class="step-blob">3</div>
-                        <div>
-                            <h4 class="text-white font-bold">Import or Draft (The Workshop)</h4>
-                            <p class="text-gray-500 text-sm">Review wording in the <b>Personnel Word Studio</b>. You can now import existing Word Docs (.docx) or scrape text from PDFs directly into the editor canvas.</p>
-                        </div>
-                    </div>
-                    <div class="process-line"></div>
-                    <div class="flex items-start">
-                        <div class="step-blob">4</div>
-                        <div>
-                            <h4 class="text-white font-bold">Client Signs via Secure Link</h4>
-                            <p class="text-gray-500 text-sm">The system sends a unique link to the client and external witness. They draw their signature on their phone screen. Once they finish, you get alerted that it's ready for final sealing.</p>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- CHAPTER 7 -->
-                <section id="ch7" class="chapter-card border-brand-gold/50">
-                    <h2 class="text-3xl font-serif mb-6">04. The Personnel Word Studio</h2>
-                    <p class="text-gray-300 mb-6">The Studio is a high-fidelity environment designed specifically for the complex drafting requirements of Eximp & Cloves legal staff.</p>
-                    
-                    <div class="space-y-6">
-                        <div class="p-6 bg-white/5 rounded-2xl border border-white/10">
-                            <h4 class="brand-gold font-bold mb-2">📘 Word Doc Continuation (.docx)</h4>
-                            <p class="text-gray-400 text-sm mb-4">Powered by <code>mammoth.js</code>, this tool converts Microsoft Word documents into clean, semantic HTML. It is optimized for legal structures like numbered lists and nested clauses.</p>
-                            <div class="text-xs text-gray-500 bg-black/30 p-3 rounded-lg">
-                                <b>Pro Tip:</b> Ensure your Word document uses standard "Heading" styles for the best conversion results.
-                            </div>
-                        </div>
-                        
-                        <div class="p-6 bg-white/5 rounded-2xl border border-white/10">
-                            <h4 class="brand-gold font-bold mb-2">📕 The PDF Scraper (Text Extraction)</h4>
-                            <p class="text-gray-400 text-sm mb-4">When editing is impossible on a finalized PDF, use <b>Scrape</b>. This uses <code>pdf.js</code> to perform a deep-scan of the document's text layer.</p>
-                            <ul class="text-xs text-gray-500 space-y-2 list-disc ml-4">
-                                <li><b>Scrape Text Only</b>: Strips away formatting to give you the raw content for new drafts.</li>
-                                <li><b>Scrape & Append</b>: Adds the scraped text to your current cursor position in the editor.</li>
-                            </ul>
-                        </div>
-                        
-                        <div class="p-6 bg-white/5 rounded-2xl border border-white/10">
-                            <h4 class="brand-gold font-bold mb-2">🏷️ Variable Intelligence</h4>
-                            <p class="text-gray-400 text-sm mb-2">The Studio "knows" who you are drafting for. You can inject live data using these tags:</p>
-                            <div class="grid grid-cols-2 gap-2 mt-4">
-                                <div class="bg-black/40 p-2 rounded text-[10px] text-gray-300 border border-white/5"><code>{% raw %}{{ staff.full_name }}{% endraw %}</code></div>
-                                <div class="bg-black/40 p-2 rounded text-[10px] text-gray-300 border border-white/5"><code>{% raw %}{{ staff.job_title }}{% endraw %}</code></div>
-                                <div class="bg-black/40 p-2 rounded text-[10px] text-gray-300 border border-white/5"><code>{% raw %}{{ staff.salary_monthly }}{% endraw %}</code></div>
-                                <div class="bg-black/40 p-2 rounded text-[10px] text-gray-300 border border-white/5"><code>{% raw %}{{ matter.id_short }}{% endraw %}</code></div>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- CHAPTER 8 -->
-                <section id="ch8" class="chapter-card">
-                    <h2 class="text-3xl font-serif mb-6">05. The Document Hub & Vaulting</h2>
-                    <p class="text-gray-300 mb-6">Every matter acts as a **Secure Vault**. Documents uploaded here are encrypted in transit and stored in our private <code>legal-vault</code> bucket.</p>
-                    
-                    <div class="space-y-8">
-                        <div class="relative pl-8">
-                            <div class="absolute left-0 top-0 bottom-0 w-1 bg-gradient-to-b from-brand-gold to-transparent rounded"></div>
-                            <h4 class="text-white font-bold mb-2 uppercase text-xs tracking-widest">Multi-File Architecture</h4>
-                            <p class="text-gray-400 text-sm">Lawyers can maintain multiple independent documents per matter. The system manages them using <b>Unique Filename Tracking</b>.</p>
-                        </div>
-
-                        <div class="p-6 bg-brand-gold/5 rounded-2xl border border-brand-gold/10">
-                            <h4 class="text-brand-gold font-bold mb-4 text-sm">Understanding File Statuses</h4>
-                            <div class="grid md:grid-cols-3 gap-4">
-                                <div class="text-center">
-                                    <span class="px-2 py-1 bg-green-500/20 text-green-500 text-[10px] font-bold rounded uppercase">Active</span>
-                                    <p class="text-[10px] text-gray-500 mt-2">The latest available version. Ready for editing or linking.</p>
-                                </div>
-                                <div class="text-center">
-                                    <span class="px-2 py-1 bg-orange-500/20 text-orange-500 text-[10px] font-bold rounded uppercase">Superseded</span>
-                                    <p class="text-[10px] text-gray-500 mt-2">An older version. Kept for audit but hidden from daily view.</p>
-                                </div>
-                                <div class="text-center">
-                                    <span class="px-2 py-1 bg-gray-500/20 text-gray-500 text-[10px] font-bold rounded uppercase">Deleted</span>
-                                    <p class="text-[10px] text-gray-500 mt-2">Document is flagged for removal and will not be accessible.</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div>
-                            <h4 class="text-white font-bold mb-2 text-sm">Direct Vaulting (The Pulse)</h4>
-                            <p class="text-gray-400 text-sm">When you click <b>↑ Upload</b>, the "Vaulting Overlay" appears. This indicates that the file is being processed, versioned, and stored in the cloud. Do not close the Hub until the pulse animation completes.</p>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- CHAPTER 4 -->
-                <section id="ch4" class="chapter-card border-blue-500/50">
-                    <h2 class="text-3xl font-serif mb-6">06. Digital Execution</h2>
-                    <p class="text-gray-300 mb-6">When the client and witness have signed, you must execute the contract. <b>Digital Sealing is the fastest option.</b></p>
-                    
-                    <div class="p-6 bg-blue-900/10 rounded-2xl">
-                        <h4 class="text-blue-400 font-bold mb-4">How it works:</h4>
-                        <ol class="space-y-4 text-sm text-gray-300 list-decimal list-outside ml-4">
-                            <li>You click <b>"Verify & Execute"</b>.</li>
-                            <li>The system checks the <b>Signature Vault</b> for the official Eximp & Cloves seals and director signatures.</li>
-                            <li>It digitally "stamps" these images onto the final page of the PDF.</li>
-                            <li>The contract is instantly emailed to the client alongside an Audit Certificate, and immediately archived in our database.</li>
-                        </ol>
-                        <p class="mt-6 text-xs text-blue-300"><b>Why use this?</b> Because it takes 1 second and requires zero manual paper handling. It is fully authenticated by the digital audit trail.</p>
-                    </div>
-                </section>
-
-                <!-- CHAPTER 5 -->
-                <section id="ch5" class="chapter-card border-emerald-500/50">
-                    <h2 class="text-3xl font-serif mb-6">07. Wet Signature (External)</h2>
-                    <p class="text-gray-300 mb-4">Sometimes, a lawyer prefers to physically stamp a printed document (a "Wet Seal"), or they want to use external legal software to append their signature.</p>
-                    
-                    <div class="p-6 bg-emerald-900/10 rounded-2xl space-y-6">
-                        <div class="flex items-start">
-                            <div class="step-blob bg-emerald-600">1</div>
-                            <div>
-                                <h4 class="text-white font-bold text-sm">Download Clean PDF</h4>
-                                <p class="text-gray-400 text-xs mt-1">The system generates the full contract (with the client's signature already on it) but leaves the legal part blank and removes the "DRAFT" watermark.</p>
-                            </div>
-                        </div>
-                        <div class="flex items-start">
-                            <div class="step-blob bg-emerald-600">2</div>
-                            <div>
-                                <h4 class="text-white font-bold text-sm">Upload Sealed Copy</h4>
-                                <p class="text-gray-400 text-xs mt-1">After you have stamped it, you upload the finalized PDF back into the system.</p>
-                            </div>
-                        </div>
-                        <div class="flex items-start">
-                            <div class="step-blob bg-emerald-600">3</div>
-                            <div>
-                                <h4 class="text-white font-bold text-sm">Finalize & Send</h4>
-                                <p class="text-gray-400 text-xs mt-1">Click send. The system bundles your manually sealed PDF with our digital certificate and emails it to the client.</p>
-                            </div>
-                        </div>
-                    </div>
-                </section>
-
-                <!-- CHAPTER 6 -->
-                <section id="ch6" class="chapter-card">
-                    <div class="flex items-center gap-4 mb-6">
-                        <h2 class="text-3xl font-serif">08. The Audit Certificate</h2>
-                        <span class="bg-brand-gold text-white text-[10px] px-2 py-1 rounded font-black tracking-widest uppercase">Crucial</span>
-                    </div>
-                    <p class="text-gray-400 text-sm leading-relaxed mb-6">
-                        Regardless of which Option you pick, the system ALWAYS generates an <b>Authentication Certificate</b>. This extra PDF proves:
-                    </p>
-                    <ul class="space-y-3 mb-8">
-                        <li class="flex items-center text-sm text-gray-300"><span class="text-brand-gold mr-3">✔</span> <b>IP Tracking</b>: Device and location used to sign.</li>
-                        <li class="flex items-center text-sm text-gray-300"><span class="text-brand-gold mr-3">✔</span> <b>Timestamps</b>: Exact second of submission.</li>
-                        <li class="flex items-center text-sm text-gray-300"><span class="text-brand-gold mr-3">✔</span> <b>Hash Integrity</b>: Proves the document hasn't been tampered with.</li>
-                    </ul>
-                </section>
-
-                <!-- NEW: BEST PRACTICES -->
-                <section id="ch9" class="chapter-card">
-                    <h2 class="text-3xl font-serif mb-6">09. Best Practices & Troubleshooting</h2>
-                    
-                    <div class="space-y-8">
-                        <div>
-                            <h4 class="text-white font-bold mb-4 text-sm">Naming Conventions</h4>
-                            <p class="text-gray-400 text-sm mb-4">To leverage <b>Intelligent Versioning</b>, keep filenames consistent. Uploading a file with the same name updates its version.</p>
-                            <div class="flex gap-4">
-                                <div class="p-3 bg-red-900/10 border border-red-900/20 rounded flex-1">
-                                    <span class="text-red-500 font-bold text-[10px] uppercase">Wrong</span>
-                                    <p class="text-xs text-gray-500 italic">Contract_Revised_v2.docx</p>
-                                </div>
-                                <div class="p-3 bg-green-900/10 border border-green-900/20 rounded flex-1">
-                                    <span class="text-green-500 font-bold text-[10px] uppercase">Correct</span>
-                                    <p class="text-xs text-gray-500 italic">Contract_Main.docx</p>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div>
-                            <h4 class="text-white font-bold mb-4 text-sm">Troubleshooting Scraping</h4>
-                            <div class="space-y-3">
-                                <div class="flex items-center gap-3 p-3 bg-black/20 rounded">
-                                    <div class="text-xs">
-                                        <p class="font-bold">Text is missing after a PDF Scrape?</p>
-                                        <p class="text-gray-500">The PDF might be an image-only scan. Use an OCR tool first, or import the Word version instead.</p>
-                                    </div>
-                                </div>
-                                <div class="flex items-center gap-3 p-3 bg-black/20 rounded">
-                                    <div class="text-xs">
-                                        <p class="font-bold">Formatting looks messy in the Studio?</p>
-                                        <p class="text-gray-400">PDF Scrapes are for text recovery, not layout. Use <b>Edit</b> with Word Docs for perfect layout.</p>
-                                    </div>
-                                </div>
-                            </div>
-                        </div>
-
-                        <div class="p-6 bg-brand-gold/5 border border-brand-gold/20 rounded-2xl">
-                            <p class="text-gray-400 text-[10px] leading-relaxed">
-                                <b>Security Protocol:</b> All links expire after 1 hour. Click "Refresh Hub" to regenerate tokens if needed.
+                            <h4 class="text-white font-bold mb-3 text-sm">Identity Assurance</h4>
+                            <p class="text-gray-400 text-xs leading-relaxed">
+                                Each signatory is authenticated through a unique session token delivered via their registered communication channel, creating a secure link between the physical person and the digital signature.
                             </p>
                         </div>
                     </div>
                 </section>
 
+                <!-- CHAPTER II: VETTING -->
+                <section id="vetting" class="sop-section border-l-4 border-l-orange-500">
+                    <h2 class="text-3xl font-serif mb-8">II. Document Vetting & Due Diligence</h2>
+                    <p class="text-gray-400 text-sm mb-10">Before a contract is "Orchestrated," it must undergo the rigorous Vetting Phase.</p>
+                    
+                    <div class="process-flow space-y-10">
+                        <div class="flex items-start">
+                            <div class="step-number">1</div>
+                            <div>
+                                <h4 class="text-white font-bold mb-2">Matter Intake</h4>
+                                <p class="text-gray-500 text-xs">Verify that the property or personnel matter exists in the CRM. Ensure all prerequisite information (Survey Plans, Bio-data) is present in the record.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start">
+                            <div class="step-number">2</div>
+                            <div>
+                                <h4 class="text-white font-bold mb-2">The Vault Analysis</h4>
+                                <p class="text-gray-500 text-xs">Access the <b>Matter Vault</b> to review existing deeds or titles. Use the <b>Vault Slide-Over</b> to check for "Superseded" versions to avoid conflicting terms.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-start">
+                            <div class="step-number">3</div>
+                            <div>
+                                <h4 class="text-white font-bold mb-2">Internal Vetting</h4>
+                                <p class="text-gray-500 text-xs">Submit the draft for peer review if the matter value exceeds threshold limits. Once verified, the matter is moved to the "Orchestration" stage.</p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- CHAPTER III: DRAFTING -->
+                <section id="drafting" class="sop-section">
+                    <h2 class="text-3xl font-serif mb-8">III. High-Fidelity Drafting (Word Studio)</h2>
+                    <p class="text-gray-300 mb-8">The Studio is where legal expertise meets technical precision.</p>
+                    
+                    <div class="space-y-8">
+                        <div class="p-8 bg-black/30 rounded-2xl border border-white/5">
+                            <div class="flex items-center gap-4 mb-6">
+                                <span class="badge badge-gold">SOP: Conversion</span>
+                                <h4 class="brand-gold font-bold text-sm">Microsoft Word (.docx) Synchronization</h4>
+                            </div>
+                            <p class="text-gray-400 text-sm mb-6 leading-relaxed">
+                                Our conversion engine is optimized for legal structures. When importing a .docx file:
+                            </p>
+                            <ul class="grid grid-cols-2 gap-4 text-[11px] text-gray-500">
+                                <li class="flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                    Preserves nested list numbering (1.1, 1.1.1)
+                                </li>
+                                <li class="flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                    Maintains font-weight emphasizing
+                                </li>
+                                <li class="flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                    Retains complex legal tables
+                                </li>
+                                <li class="flex items-center gap-2">
+                                    <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
+                                    Optimizes margin compliance
+                                </li>
+                            </ul>
+                        </div>
+                        
+                        <div class="p-8 bg-black/30 rounded-2xl border border-white/5">
+                            <div class="flex items-center gap-4 mb-6">
+                                <span class="badge badge-gold">SOP: Intelligence</span>
+                                <h4 class="brand-gold font-bold text-sm">Dynamic Clause Insertion (Tokens)</h4>
+                            </div>
+                            <p class="text-gray-400 text-sm mb-6 leading-relaxed">
+                                Instead of manual entry, use <b>Liquid Variable Injection</b>. This eliminates typographical errors in sensitive data fields.
+                            </p>
+                            <div class="grid grid-cols-2 gap-3">
+                                <div class="bg-black/60 p-4 rounded-xl border border-white/10 group hover:border-gold transition cursor-help">
+                                    <div class="text-[10px] text-gray-500 uppercase mb-2">Property Data</div>
+                                    <code class="text-xs">{% raw %}{{ matter.plot_size }}{% endraw %}</code>
+                                </div>
+                                <div class="bg-black/60 p-4 rounded-xl border border-white/10 group hover:border-gold transition cursor-help">
+                                    <div class="text-[10px] text-gray-500 uppercase mb-2">Financial Data</div>
+                                    <code class="text-xs">{% raw %}{{ matter.total_consideration }}{% endraw %}</code>
+                                </div>
+                                <div class="bg-black/60 p-4 rounded-xl border border-white/10 group hover:border-gold transition cursor-help">
+                                    <div class="text-[10px] text-gray-500 uppercase mb-2">Identity Data</div>
+                                    <code class="text-xs">{% raw %}{{ client.nim_number }}{% endraw %}</code>
+                                </div>
+                                <div class="bg-black/60 p-4 rounded-xl border border-white/10 group hover:border-gold transition cursor-help">
+                                    <div class="text-[10px] text-gray-500 uppercase mb-2">Temporal Data</div>
+                                    <code class="text-xs">{% raw %}{{ contract.execution_date }}{% endraw %}</code>
+                                </div>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- CHAPTER IV: EXECUTION -->
+                <section id="execution" class="sop-section border-l-4 border-l-blue-500">
+                    <h2 class="text-4xl font-serif mb-8">IV. Multi-Party Execution Workflow</h2>
+                    <p class="text-gray-400 mb-10">Orchestration ensures that all required signatures are gathered in the correct sequence.</p>
+                    
+                    <div class="process-flow space-y-12">
+                        <div>
+                            <h4 class="text-white font-bold text-lg mb-4 flex items-center gap-3">
+                                <span class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center text-sm font-mono">P1</span>
+                                Primary Signatory (The Client)
+                            </h4>
+                            <div class="bg-blue-500/5 p-6 rounded-2xl border border-blue-500/10">
+                                <p class="text-gray-400 text-sm leading-relaxed mb-4">
+                                    The client receives a secured, tamper-evident link. They must draw or upload their signature. <b>IP & Device Audit</b> is captured at the exact moment of 'Final Submission'.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 class="text-white font-bold text-lg mb-4 flex items-center gap-3">
+                                <span class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center text-sm font-mono">P2</span>
+                                External Witness
+                            </h4>
+                            <div class="bg-blue-500/5 p-6 rounded-2xl border border-blue-500/10">
+                                <p class="text-gray-400 text-sm leading-relaxed">
+                                    Where required by law, a secondary signature is gathered from the client's witness. This signature is visually distinct and cross-referenced in the Audit Certificate.
+                                </p>
+                            </div>
+                        </div>
+
+                        <div>
+                            <h4 class="text-white font-bold text-lg mb-4 flex items-center gap-3">
+                                <span class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center text-sm font-mono">P3</span>
+                                Legal Sealing (Eximp & Cloves)
+                            </h4>
+                            <div class="bg-blue-500/5 p-6 rounded-2xl border border-blue-500/10">
+                                <p class="text-gray-400 text-sm leading-relaxed">
+                                    The legal officer reviews the gathered signatures. If compliant, they trigger the <b>"Verify & Seal"</b> command. This appends the Law Firm Seal and Director's signature from the encrypted <b>Signature Vault</b>.
+                                </p>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- CHAPTER V: SEALING -->
+                <section id="sealing" class="sop-section">
+                    <h2 class="text-3xl font-serif mb-8 leading-tight italic">V. Digital Sealing vs. Wet Signature <br><span class="text-gray-500">Choosing the Execution Method</span></h2>
+                    
+                    <div class="grid md:grid-cols-2 gap-8">
+                        <div class="p-8 bg-emerald-500/5 rounded-3xl border border-emerald-500/10 hover:border-emerald-500/30 transition">
+                            <h4 class="text-emerald-500 font-bold mb-4 uppercase tracking-widest text-xs">Option A: Digital Execution</h4>
+                            <p class="text-gray-400 text-xs leading-relaxed mb-6">
+                                Fully automated. The system appends high-resolution PNG signatures and seals from the vault. Best for speed and remote clients.
+                            </p>
+                            <div class="flex items-center gap-2 text-[10px] text-emerald-400 font-bold">
+                                <span>✔ SECURE</span>
+                                <span>✔ INSTANT</span>
+                                <span>✔ AUDITABLE</span>
+                            </div>
+                        </div>
+                        
+                        <div class="p-8 bg-orange-500/5 rounded-3xl border border-orange-500/10 hover:border-orange-500/30 transition">
+                            <h4 class="text-orange-500 font-bold mb-4 uppercase tracking-widest text-xs">Option B: Wet Sealing (Hybrid)</h4>
+                            <p class="text-gray-400 text-xs leading-relaxed mb-6">
+                                Download the "Pre-signed DRAFT" (includes Client's signature), physically stamp it, then scan and re-upload the <b>Fully Sealed Copy</b>.
+                            </p>
+                            <div class="flex items-center gap-2 text-[10px] text-orange-400 font-bold">
+                                <span>✔ PHYSICAL</span>
+                                <span>✔ TRADITIONAL</span>
+                                <span>✔ MANUALLY SCANNED</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- CHAPTER VI: VAULT -->
+                <section id="vault" class="sop-section">
+                    <div class="flex items-center justify-between mb-10">
+                        <h2 class="text-3xl font-serif">VI. Custody & Audit Integrity</h2>
+                        <span class="px-3 py-1 rounded bg-red-500/10 text-red-500 text-[10px] font-black uppercase tracking-tighter">Immutable Storage</span>
+                    </div>
+                    <p class="text-gray-400 text-sm leading-relaxed mb-10">
+                        Once execution is complete, the document enters <b>"Locked Custody."</b> It is archived in our private cloud with an accompanying <b>Certificate of Authentication</b>.
+                    </p>
+                    
+                    <div class="teaching-module border-red-500 bg-red-500/5">
+                        <h4 class="text-red-500 font-bold text-sm mb-4">The Certificate of Authentication</h4>
+                        <p class="text-gray-400 text-xs leading-relaxed mb-6">
+                            This document is the legal "Passport" for the contract. It contains:
+                        </p>
+                        <div class="space-y-3">
+                            <div class="flex items-center gap-4 text-xs">
+                                <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                                <span class="text-gray-300 font-bold">SHA-256 Hash Integrity</span>
+                                <span class="text-gray-600">Proves the document has not been altered post-sealing.</span>
+                            </div>
+                            <div class="flex items-center gap-4 text-xs">
+                                <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                                <span class="text-gray-300 font-bold">Geo-Temporal Captures</span>
+                                <span class="text-gray-600">Verification of physical location at time of signing.</span>
+                            </div>
+                            <div class="flex items-center gap-4 text-xs">
+                                <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
+                                <span class="text-gray-300 font-bold">Verification ID</span>
+                                <span class="text-gray-600">A unique serial number for registry cross-referencing.</span>
+                            </div>
+                        </div>
+                    </div>
+                </section>
+
+                <!-- BEST PRACTICES -->
+                <section id="best-practices" class="mb-20">
+                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-8 px-4">Compliance Checklist</h3>
+                    <div class="grid md:grid-cols-3 gap-6">
+                        <div class="p-6 bg-white/5 rounded-2xl border border-white/10">
+                            <h5 class="text-white font-bold text-xs mb-3">1. Naming Precision</h5>
+                            <p class="text-gray-500 text-[10px]">Use <code>Contract_Main</code> instead of <code>Contract_v2</code>. Consistent names trigger Intelligent Versioning.</p>
+                        </div>
+                        <div class="p-6 bg-white/5 rounded-2xl border border-white/10">
+                            <h5 class="text-white font-bold text-xs mb-3">2. Clause Auditing</h5>
+                            <p class="text-gray-500 text-[10px]">Always check if <code>{% raw %}{{ client.fullname }}{% endraw %}</code> tags are present in the first page preamble.</p>
+                        </div>
+                        <div class="p-6 bg-white/5 rounded-2xl border border-white/10">
+                            <h5 class="text-white font-bold text-xs mb-3">3. Vault Hygiene</h5>
+                            <p class="text-gray-500 text-[10px]">Regularly flag older title drafts as "Superseded" to maintain a clean matter record.</p>
+                        </div>
+                    </div>
+                </section>
+
                 <!-- FOOTER -->
-                <footer class="mt-20 text-center pb-20">
-                    <p class="text-gray-600 text-xs uppercase tracking-widest">Eximp & Cloves Infrastructure Limited</p>
-                    <p class="text-gray-700 text-[10px] mt-2">© 2026 SmartyMetrics Legal Suite. All Rights Reserved. Last Updated: May 2026</p>
+                <footer class="mt-20 border-t border-white/5 pt-12 pb-24 text-center">
+                    <img src="/static/img/logo.svg" alt="Eximp & Cloves" class="w-24 mx-auto mb-6 opacity-30">
+                    <p class="text-gray-600 text-[10px] uppercase tracking-[0.3em] font-bold">Eximp & Cloves Infrastructure Limited</p>
+                    <p class="text-gray-800 text-[10px] mt-4 font-mono">© 2026 SmartyMetrics Legal Suite. CONFIDENTIAL AND PROPRIETARY.</p>
                 </footer>
 
             </main>
@@ -337,9 +423,40 @@
         document.querySelectorAll('a[href^="#"]').forEach(anchor => {
             anchor.addEventListener('click', function (e) {
                 e.preventDefault();
-                document.querySelector(this.getAttribute('href')).scrollIntoView({
-                    behavior: 'smooth'
-                });
+                const target = document.querySelector(this.getAttribute('href'));
+                if (target) {
+                    window.scrollTo({
+                        top: target.offsetTop - 20,
+                        behavior: 'smooth'
+                    });
+                }
+            });
+        });
+
+        // Intersection Observer for highlighting nav (Optional but adds premium feel)
+        const sections = document.querySelectorAll('section');
+        const navLinks = document.querySelectorAll('aside nav a');
+
+        window.addEventListener('scroll', () => {
+            let current = '';
+            sections.forEach(section => {
+                const sectionTop = section.offsetTop;
+                if (pageYOffset >= sectionTop - 100) {
+                    current = section.getAttribute('id');
+                }
+            });
+
+            navLinks.forEach(link => {
+                link.classList.remove('bg-white/5');
+                const dot = link.querySelector('span');
+                dot.classList.remove('bg-brand-gold');
+                dot.classList.add('bg-gray-700');
+                
+                if (link.getAttribute('href').includes(current)) {
+                    link.classList.add('bg-white/5');
+                    dot.classList.remove('bg-gray-700');
+                    dot.classList.add('bg-brand-gold');
+                }
             });
         });
     </script>

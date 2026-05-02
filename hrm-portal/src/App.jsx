@@ -9475,14 +9475,17 @@ function ExpensesManager() {
   });
 
   const totalPending = expenses.filter(e => normalize(e.status) === "pending").reduce((s, e) => s + parseFloat(e.net || e.amount || 0), 0);
-  // Option A: separate paid vs owed so the stat cards are accurate
-  const totalReimbPaid = expenses.filter(e => normalize(e.status) === "paid").reduce((s, e) => s + parseFloat(e.net || e.amount || 0), 0)
-    + expenses.filter(e => normalize(e.status) === "partially paid").reduce((s, e) => s + parseFloat(e.amount_paid || 0), 0);
-  const totalReimbOwed = expenses.filter(e => ["approved", "partially paid"].includes(normalize(e.status))).reduce((s, e) => {
-    const net = parseFloat(e.net || e.amount || 0);
-    const paid = parseFloat(e.amount_paid || 0);
-    return s + Math.max(0, net - paid);
-  }, 0);
+  // Synchronized with Payout Dashboard: Total Paid is the sum of amount_paid across ALL records
+  const totalReimbPaid = expenses.reduce((s, e) => s + parseFloat(e.amount_paid || 0), 0);
+  // Total Owed is the sum of (Net - Paid) for all non-rejected claims
+  const totalReimbOwed = expenses
+    .filter(e => !["rejected", "voided"].includes(normalize(e.status)))
+    .reduce((s, e) => {
+      const net = parseFloat(e.net || e.amount || 0);
+      const paid = parseFloat(e.amount_paid || 0);
+      return s + Math.max(0, net - paid);
+    }, 0);
+
   // Keep for backward compat (used by nothing else now)
   const totalApproved = totalReimbPaid + totalReimbOwed;
   const totalCommOwed = commissions.filter(c => normalize(c.payout_status) !== "paid").reduce((s, c) => s + parseFloat(c.net || 0), 0);
