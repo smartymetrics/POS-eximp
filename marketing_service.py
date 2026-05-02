@@ -519,37 +519,45 @@ async def broadcast_campaign(campaign_id: str, segment_ids: List[str] = None, ma
     if campaign["status"] not in ["scheduled", "sending", "paused"]:
         return logger.info(f"Campaign {campaign_id} is in {campaign['status']} status, skipping broadcast.")
 
-    # 2. Fetch Recipients
-    recipients = await resolve_target_recipients(segment_ids, manual_emails)
-    
-    if not recipients:
-        db.table("email_campaigns").update({"status": "failed"}).eq("id", campaign_id).execute()
-        return logger.error(f"No recipients for campaign {campaign_id} with targets {segment_ids} / {manual_emails}")
+    # 2. Check if recipients queue already exists (i.e. Resuming from Pause or Safety Brake)
+    existing_recipients_res = db.table("campaign_recipients").select("contact_id, status").eq("campaign_id", campaign_id).execute()
+    has_existing_queue = bool(existing_recipients_res.data)
 
-    # TASK 2C: If resuming, only target those who are still 'pending'
-    if campaign["status"] == "paused":
-        pending_res = db.table("campaign_recipients").select("contact_id").eq("campaign_id", campaign_id).eq("status", "pending").execute()
-        pending_ids = {r["contact_id"] for r in pending_res.data} if pending_res.data else set()
-        recipients = [r for r in recipients if r["id"] in pending_ids]
-        if not recipients:
+    if has_existing_queue:
+        # We are resuming. Fetch ONLY the contacts that are still marked as 'pending'.
+        pending_ids = [r["contact_id"] for r in existing_recipients_res.data if r["status"] == "pending"]
+        
+        if not pending_ids:
             logger.info(f"Campaign {campaign_id} resumed but no pending recipients found. Finishing.")
             db.table("email_campaigns").update({"status": "sent", "sent_at": datetime.utcnow().isoformat()}).eq("id", campaign_id).execute()
             return
+            
+        # Fetch the actual contact details for those pending IDs
+        recipients_res = db.table("marketing_contacts").select("*").in_("id", pending_ids).execute()
+        recipients = recipients_res.data or []
+        
+    else:
+        # 3. Fresh Broadcast - Resolve targets
+        recipients = await resolve_target_recipients(segment_ids, manual_emails)
+        
+        if not recipients:
+            db.table("email_campaigns").update({"status": "failed"}).eq("id", campaign_id).execute()
+            return logger.error(f"No recipients for campaign {campaign_id} with targets {segment_ids} / {manual_emails}")
 
-    # 3. Update status to sending
-    db.table("email_campaigns").update({
-        "status": "sending",
-        "total_recipients": len(recipients)
-    }).eq("id", campaign_id).execute()
-
-    # TASK 2C: Mark all initial recipients as pending if they don't have a status yet
-    if campaign["status"] != "paused":
+        # Initialize the pending queue in the database
         for r in recipients:
             db.table("campaign_recipients").upsert({
                 "campaign_id": campaign_id,
                 "contact_id": r["id"],
                 "status": "pending"
             }).execute()
+
+    # 4. Update status to sending
+    update_data = {"status": "sending"}
+    if not has_existing_queue:
+        update_data["total_recipients"] = len(recipients)
+        
+    db.table("email_campaigns").update(update_data).eq("id", campaign_id).execute()
 
     # TASK 6: A/B Split Logic
     is_ab = campaign.get("is_ab_test", False)
