@@ -296,7 +296,13 @@
                 if (htmlContent) {
                     contentEl.innerHTML = htmlContent;
                 } else {
-                    contentEl.innerHTML = '<p style="color:#666; text-align:center; padding:100px 0;">No content available in this document.</p>';
+                    contentEl.innerHTML = `
+                        <div style="text-align: center; padding: 100px 20px; color: #666; font-family: 'Inter', sans-serif;">
+                            <div style="font-size: 48px; margin-bottom: 20px; opacity: 0.5;">📄</div>
+                            <h2 style="font-size: 18px; font-weight: 700; margin-bottom: 8px;">Document Not Ready</h2>
+                            <p style="font-size: 13px; line-height: 1.5;">This document is still being drafted by the Legal Department.<br>Please check back once it has been saved.</p>
+                        </div>
+                    `;
                 }
 
                 loadingEl.classList.add('hidden');
