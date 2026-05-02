@@ -1379,7 +1379,101 @@
         </div>
     </div>
 
-    <div id="pageLoader" class="page-loader">
+    <!-- Campaign Performance Report Modal (A/B Aware) -->
+    <div id="report-modal" class="fixed inset-0 bg-black bg-opacity-50 hidden z-[110] flex items-center justify-center p-4">
+        <div class="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 md:p-8 shadow-2xl">
+            <div class="flex justify-between items-center mb-8">
+                <div>
+                    <h2 class="text-2xl font-bold text-gray-800" id="report-camp-name">Campaign Report</h2>
+                    <p class="text-sm text-gray-500" id="report-camp-id-display">ID: ...</p>
+                </div>
+                <button onclick="closeReportModal()" class="text-gray-400 hover:text-gray-600"><svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg></button>
+            </div>
+
+            <div id="ab-report-content" class="hidden">
+                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                    <!-- Variant A Card -->
+                    <div class="border rounded-2xl p-6 bg-gray-50 bg-opacity-50 border-gray-100">
+                        <div class="flex justify-between items-center mb-4">
+                            <span class="px-3 py-1 bg-brand-gold text-white text-[10px] font-black rounded-full uppercase">Variant A</span>
+                            <span id="variant-a-status" class="text-xs font-bold text-green-600"></span>
+                        </div>
+                        <h3 class="font-bold text-gray-700 mb-2">Subject: <span id="variant-a-subject" class="font-normal italic">...</span></h3>
+                        
+                        <div class="grid grid-cols-3 gap-4 mt-6">
+                            <div class="text-center">
+                                <div class="text-2xl font-black text-gray-800" id="v-a-sent">0</div>
+                                <div class="text-[9px] uppercase font-bold text-gray-400">Sent</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-black text-brand-gold" id="v-a-opens">0</div>
+                                <div class="text-[9px] uppercase font-bold text-gray-400">Opens</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-black text-blue-500" id="v-a-clicks">0</div>
+                                <div class="text-[9px] uppercase font-bold text-gray-400">Clicks</div>
+                            </div>
+                        </div>
+
+                        <div class="mt-8">
+                            <div class="flex justify-between text-xs font-bold mb-2">
+                                <span>Open Rate</span>
+                                <span id="v-a-open-rate">0%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-1.5">
+                                <div id="v-a-open-bar" class="bg-brand-gold h-1.5 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+
+                    <!-- Variant B Card -->
+                    <div class="border rounded-2xl p-6 bg-blue-50 bg-opacity-30 border-blue-100">
+                        <div class="flex justify-between items-center mb-4">
+                            <span class="px-3 py-1 bg-blue-500 text-white text-[10px] font-black rounded-full uppercase">Variant B</span>
+                            <span id="variant-b-status" class="text-xs font-bold text-green-600"></span>
+                        </div>
+                        <h3 class="font-bold text-gray-700 mb-2">Subject: <span id="variant-b-subject" class="font-normal italic">...</span></h3>
+                        
+                        <div class="grid grid-cols-3 gap-4 mt-6">
+                            <div class="text-center">
+                                <div class="text-2xl font-black text-gray-800" id="v-b-sent">0</div>
+                                <div class="text-[9px] uppercase font-bold text-gray-400">Sent</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-black text-brand-gold" id="v-b-opens">0</div>
+                                <div class="text-[9px] uppercase font-bold text-gray-400">Opens</div>
+                            </div>
+                            <div class="text-center">
+                                <div class="text-2xl font-black text-blue-500" id="v-b-clicks">0</div>
+                                <div class="text-[9px] uppercase font-bold text-gray-400">Clicks</div>
+                            </div>
+                        </div>
+
+                        <div class="mt-8">
+                            <div class="flex justify-between text-xs font-bold mb-2">
+                                <span>Open Rate</span>
+                                <span id="v-b-open-rate">0%</span>
+                            </div>
+                            <div class="w-full bg-gray-200 rounded-full h-1.5">
+                                <div id="v-b-open-bar" class="bg-blue-500 h-1.5 rounded-full" style="width: 0%"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="mt-10 p-6 bg-brand-gold bg-opacity-5 rounded-2xl border border-brand-gold border-opacity-10">
+                    <h4 class="font-black uppercase text-[10px] tracking-widest text-brand-gold mb-2">Actionable Insight</h4>
+                    <p id="ab-insight-text" class="text-sm text-gray-700 leading-relaxed font-medium">Variant A is currently outperforming Variant B in open rates. We recommend using similar subject lines for future campaigns.</p>
+                </div>
+            </div>
+
+            <div id="standard-report-content" class="hidden text-center py-20">
+                <div class="text-4xl mb-4">📊</div>
+                <h3 class="text-xl font-bold text-gray-800">Standard Campaign</h3>
+                <p class="text-gray-500 max-w-sm mx-auto mt-2">Detailed per-recipient engagement stats are available in the main list. This was not an A/B test campaign.</p>
+            </div>
+        </div>
+    </div>
         <div class="loader-card">
             <div class="spinner"></div>
             <div id="pageLoaderMessage" class="loader-text">Loading marketing dashboard...</div>
@@ -1698,7 +1792,7 @@
                     </td>
                     <td>
                         <div class="flex flex-col gap-1">
-                            <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase w-fit ${c.status === 'sent' ? 'bg-green-100 text-green-700' : (c.status === 'scheduled' ? 'bg-blue-100 text-blue-700' : 'bg-gray-100 text-gray-500')}">${c.status}</span>
+                            <span class="px-3 py-1 rounded-full text-[10px] font-black uppercase w-fit ${c.status === 'sent' ? 'bg-green-100 text-green-700' : (c.status === 'scheduled' ? 'bg-blue-100 text-blue-700' : (c.status === 'sending' ? 'bg-yellow-100 text-yellow-700' : (c.status === 'paused' ? 'bg-orange-100 text-orange-700' : 'bg-gray-100 text-gray-500')))}">${c.status}</span>
                             ${c.status === 'scheduled' && c.scheduled_for ? `
                                 <div class="text-[9px] text-blue-500 font-bold ml-1">
                                     🗓️ ${new Date(c.scheduled_for).toLocaleString([], { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' })}
@@ -1760,6 +1854,16 @@
                             ${c.status === 'scheduled' ? `
                                 <button onclick="cancelSchedule('${c.id}')" class="p-2 text-red-400 hover:text-red-600 hover:bg-red-50 rounded-full transition" title="Cancel Schedule">
                                     <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 14l2-2m0 0l2-2m-2 2l-2-2m2 2l2 2m7-2a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                </button>
+                            ` : ''}
+                            ${c.status === 'sending' ? `
+                                <button onclick="pauseCampaign('${c.id}')" class="p-2 text-yellow-500 hover:text-yellow-700 hover:bg-yellow-50 rounded-full transition" title="Pause Broadcast">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M10 9v6m4-6v6m7-3a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
+                                </button>
+                            ` : ''}
+                            ${c.status === 'paused' ? `
+                                <button onclick="resumeCampaign('${c.id}')" class="p-2 text-green-500 hover:text-green-700 hover:bg-green-50 rounded-full transition" title="Resume Broadcast">
+                                    <svg class="w-5 h-5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M14.752 11.168l-3.197-2.132A1 1 0 0010 9.87v4.263a1 1 0 001.555.832l3.197-2.132a1 1 0 000-1.664z"></path><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
                                 </button>
                             ` : ''}
                             ${c.status === 'sent' ? `
@@ -1876,7 +1980,8 @@
         function getStatusBadge(s) {
             if (s === 'draft') return 'bg-gray-100 text-gray-500';
             if (s === 'sent') return 'bg-green-100 text-green-600';
-            if (s === 'sending') return 'bg-blue-100 text-blue-600';
+            if (s === 'sending') return 'bg-yellow-100 text-yellow-600';
+            if (s === 'paused') return 'bg-orange-100 text-orange-600';
             return 'bg-red-100 text-red-600';
         }
 
@@ -2040,6 +2145,51 @@
             }
         }
 
+        async function pauseCampaign(id) {
+            if (!confirm("Pause this campaign? No more emails will be sent for this broadcast until resumed.")) return;
+            showPageLoader('Pausing Broadcast...');
+            try {
+                const res = await fetch(`/api/marketing/campaigns/${id}/pause`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (res.ok) {
+                    alert("Campaign paused.");
+                    loadCampaigns();
+                } else {
+                    const err = await res.json();
+                    alert(err.detail || "Failed to pause campaign.");
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                hidePageLoader();
+            }
+        }
+
+        async function resumeCampaign(id) {
+            if (!confirm("Resume this campaign? Sending will continue for the remaining recipients.")) return;
+            showPageLoader('Resuming Broadcast...');
+            try {
+                const res = await fetch(`/api/marketing/campaigns/${id}/resume`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (res.ok) {
+                    const data = await res.json();
+                    alert(data.message || "Campaign resumed.");
+                    loadCampaigns();
+                } else {
+                    const err = await res.json();
+                    alert(err.detail || "Failed to resume campaign.");
+                }
+            } catch (e) {
+                console.error(e);
+            } finally {
+                hidePageLoader();
+            }
+        }
+
         async function loadSegments() {
             const list = document.getElementById('segment-list');
             try {
@@ -2053,11 +2203,11 @@
 
                 const smartSegments = [
                     { id: 'engaged', name: '✨ Engaged Audience', desc: 'Opened at least one email.', count: stats.engagement.total_opens || 0, color: 'green' },
-                    { id: 'hot', name: '🔥 Hot Leads', desc: 'Engagement score higher than 50.', count: stats.engagement.hot_leads || 0, color: 'red' },
+                    { id: 'hot', name: '🔥 Hot Leads', desc: 'Engagement score higher than 70.', count: stats.engagement.hot_leads || 0, color: 'red' },
                     { id: 'recent', name: '🆕 Recent Signups', desc: 'Joined in the last 30 days.', count: stats.contacts.recent || 0, color: 'blue' },
-                    { id: 'financial_overdue', name: '🔴 Overdue Clients', desc: 'Clients with missed invoice due dates.', count: 'Dynamic', color: 'red' },
-                    { id: 'financial_outstanding', name: '🟡 Outstanding Balance', desc: 'Clients with partial but not overdue payments.', count: 'Dynamic', color: 'yellow' },
-                    { id: 'financial_paid_fully', name: '🟢 Fully Paid', desc: 'Clients who have paid completely.', count: 'Dynamic', color: 'green' }
+                    { id: 'financial_overdue', name: '🔴 Overdue Clients', desc: 'Clients with missed invoice due dates.', count: stats.financial?.overdue || 0, color: 'red' },
+                    { id: 'financial_outstanding', name: '🟡 Outstanding Balance', desc: 'Clients with partial but not overdue payments.', count: stats.financial?.outstanding || 0, color: 'yellow' },
+                    { id: 'financial_paid_fully', name: '🟢 Fully Paid', desc: 'Clients who have paid completely.', count: stats.financial?.paid_fully || 0, color: 'green' }
                 ];
 
                 const allHtml = [...smartSegments].map(s => `
@@ -2231,7 +2381,75 @@
             }
         }
 
-        async function previewSegment() {
+        function viewReport(id) {
+            const c = allCampaigns.find(camp => camp.id === id);
+            if(!c) return;
+
+            document.getElementById('report-camp-name').innerText = c.name;
+            document.getElementById('report-camp-id-display').innerText = `ID: ${c.id}`;
+
+            const abContent = document.getElementById('ab-report-content');
+            const stdContent = document.getElementById('standard-report-content');
+
+            if (c.is_ab_test) {
+                abContent.classList.remove('hidden');
+                stdContent.classList.add('hidden');
+
+                // Populate Variant A
+                document.getElementById('variant-a-subject').innerText = c.subject_a || 'No subject';
+                document.getElementById('v-a-sent').innerText = c.variant_a_sent || 0;
+                document.getElementById('v-a-opens').innerText = c.variant_a_opens || 0;
+                document.getElementById('v-a-clicks').innerText = c.variant_a_clicks || 0;
+                
+                const aOpenRate = c.variant_a_sent > 0 ? (c.variant_a_opens / c.variant_a_sent * 100).toFixed(1) : 0;
+                document.getElementById('v-a-open-rate').innerText = aOpenRate + '%';
+                document.getElementById('v-a-open-bar').style.width = aOpenRate + '%';
+
+                // Populate Variant B
+                document.getElementById('variant-b-subject').innerText = c.subject_b || 'No subject';
+                document.getElementById('v-b-sent').innerText = c.variant_b_sent || 0;
+                document.getElementById('v-b-opens').innerText = c.variant_b_opens || 0;
+                document.getElementById('v-b-clicks').innerText = c.variant_b_clicks || 0;
+                
+                const bOpenRate = c.variant_b_sent > 0 ? (c.variant_b_opens / c.variant_b_sent * 100).toFixed(1) : 0;
+                document.getElementById('v-b-open-rate').innerText = bOpenRate + '%';
+                document.getElementById('v-b-open-bar').style.width = bOpenRate + '%';
+
+                // Winning Logic
+                const insight = document.getElementById('ab-insight-text');
+                const badgeA = document.getElementById('variant-a-status');
+                const badgeB = document.getElementById('variant-b-status');
+
+                badgeA.innerText = '';
+                badgeB.innerText = '';
+
+                if (parseFloat(aOpenRate) > parseFloat(bOpenRate) + 0.5) {
+                    badgeA.innerText = '🏆 WINNING';
+                    insight.innerText = `Variant A is winning with a ${aOpenRate}% open rate. The subject line "${c.subject_a}" resonated better with your audience.`;
+                } else if (parseFloat(bOpenRate) > parseFloat(aOpenRate) + 0.5) {
+                    badgeB.innerText = '🏆 WINNING';
+                    insight.innerText = `Variant B is winning with a ${bOpenRate}% open rate. The subject line "${c.subject_b}" performed better than the original.`;
+                } else {
+                    insight.innerText = `The results are neck-and-neck! Both variants are performing similarly. You can continue monitoring or pick your favorite design for future campaigns.`;
+                }
+
+            } else {
+                abContent.classList.add('hidden');
+                stdContent.classList.remove('hidden');
+            }
+
+            document.getElementById('report-modal').classList.remove('hidden');
+            document.getElementById('report-modal').classList.add('active');
+            document.getElementById('report-modal').style.display = 'flex';
+        }
+
+        function closeReportModal() {
+            const el = document.getElementById('report-modal');
+            el.classList.add('hidden');
+            el.classList.remove('active');
+            el.style.display = 'none';
+        }
+        async function updatePreview() {
             const rules = [];
             document.querySelectorAll('#rules-container > div').forEach(row => {
                 rules.push({

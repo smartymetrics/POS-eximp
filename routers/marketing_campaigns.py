@@ -17,8 +17,11 @@ class CampaignSendTarget(BaseModel):
 class CampaignCreate(BaseModel):
     name: str # Internal name
     subject_a: str
+    subject_b: Optional[str] = None
     preview_text: Optional[str]
     html_body_a: str
+    html_body_b: Optional[str] = None
+    is_ab_test: Optional[bool] = False
     from_name: Optional[str] = 'Eximp & Cloves'
     reply_to: Optional[str] = 'marketing@mail.eximps-cloves.com'
     budget: Optional[float] = 0
@@ -26,8 +29,11 @@ class CampaignCreate(BaseModel):
 class CampaignUpdate(BaseModel):
     name: Optional[str] = None
     subject_a: Optional[str] = None
+    subject_b: Optional[str] = None
     preview_text: Optional[str] = None
     html_body_a: Optional[str] = None
+    html_body_b: Optional[str] = None
+    is_ab_test: Optional[bool] = None
     status: Optional[str] = None
     budget: Optional[float] = None
     actual_spend: Optional[float] = None
@@ -38,7 +44,10 @@ class CampaignUpdate(BaseModel):
 class CampaignTest(BaseModel):
     email: str
     subject_a: Optional[str] = None
+    subject_b: Optional[str] = None
     html_body_a: Optional[str] = None
+    html_body_b: Optional[str] = None
+    variant: Optional[str] = 'A'
 
     class Config:
         extra = "ignore"
@@ -110,8 +119,15 @@ async def send_test_email(id: str, data: CampaignTest, current_admin=Depends(ver
     campaign["status"] = "test"
     
     # Override with real-time editor content if provided
-    if data.subject_a: campaign["subject_a"] = data.subject_a
-    if data.html_body_a: campaign["html_body_a"] = data.html_body_a
+    if data.variant == 'B':
+        if data.subject_b: campaign["subject_a"] = data.subject_b
+        elif campaign.get("subject_b"): campaign["subject_a"] = campaign["subject_b"]
+        
+        if data.html_body_b: campaign["html_body_a"] = data.html_body_b
+        elif campaign.get("html_body_b"): campaign["html_body_a"] = campaign["html_body_b"]
+    else:
+        if data.subject_a: campaign["subject_a"] = data.subject_a
+        if data.html_body_a: campaign["html_body_a"] = data.html_body_a
     
     # Dummy contact for testing
     contact = {
@@ -123,7 +139,7 @@ async def send_test_email(id: str, data: CampaignTest, current_admin=Depends(ver
     
     res = await send_marketing_email(campaign, contact)
     if res:
-        return {"message": f"Test email sent to {data.email}"}
+        return {"message": f"Test email (Variant {data.variant}) sent to {data.email}"}
     raise HTTPException(status_code=500, detail="Failed to send test email")
 
 @router.post("/{id}/send")
@@ -137,6 +153,42 @@ async def send_campaign_broadcast(id: str, target: Optional[CampaignSendTarget],
         raise HTTPException(status_code=404, detail="Campaign not found")
     if camp_res.data[0]["status"] != "draft":
         raise HTTPException(status_code=400, detail="Campaign must be in draft status to send.")
+
+    # TASK 8: Pre-send validation checklist
+    campaign_full = await db_execute(lambda: db.table("email_campaigns").select("*").eq("id", id).execute())
+    if not campaign_full.data:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    camp = campaign_full.data[0]
+
+    errors = []
+
+    # 1. Subject line must not be empty
+    if not camp.get("subject_a") or not camp["subject_a"].strip():
+        errors.append("Subject line cannot be empty.")
+
+    # 2. HTML body must not be empty
+    if not camp.get("html_body_a") or not camp["html_body_a"].strip():
+        errors.append("Email body cannot be empty.")
+
+    # 3. Must have at least one segment or manual emails provided
+    if not (target and (target.segment_ids or target.manual_emails)):
+        errors.append("You must select at least one segment or provide recipient emails.")
+
+    # 4. Unsubscribe link must be present
+    if camp.get("html_body_a") and "unsubscribe" not in camp["html_body_a"].lower():
+        errors.append("Email body must contain an unsubscribe link.")
+
+    # 5. Detect broken variables (unreplaced {{variable}} patterns)
+    import re
+    broken_vars = re.findall(r'\{\{(\w+)\}\}', camp.get("html_body_a", ""))
+    known_vars = {"first_name", "last_name", "full_name", "email", "phone", "unsubscribe_url",
+                  "outstanding", "amount_paid", "total_invoiced", "property_name", "due_date", "invoice_number"}
+    bad_vars = [v for v in broken_vars if v not in known_vars]
+    if bad_vars:
+        errors.append(f"Unknown template variables found: {', '.join(['{{'+ v +'}}' for v in bad_vars])}. Check for typos.")
+
+    if errors:
+        raise HTTPException(status_code=422, detail={"validation_errors": errors})
 
     # Handle Scheduling
     if target and target.scheduled_at:
@@ -174,7 +226,16 @@ async def send_campaign_broadcast(id: str, target: Optional[CampaignSendTarget],
         current_admin["sub"]
     )
     
-    return {"message": "Broadcast started in the background."}
+    # TASK 8: Estimate recipient count
+    estimated_count = 0
+    if target and target.segment_ids:
+        for sid in target.segment_ids:
+            count_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").eq("is_subscribed", True).execute())
+            estimated_count += count_res.count or 0
+    elif target and target.manual_emails:
+        estimated_count = len(target.manual_emails)
+
+    return {"message": "Broadcast started in the background.", "estimated_recipients": estimated_count}
 
 @router.post("/{id}/cancel-schedule")
 async def cancel_scheduled_broadcast(id: str, current_admin=Depends(verify_token)):
@@ -201,6 +262,53 @@ async def cancel_scheduled_broadcast(id: str, current_admin=Depends(verify_token
     )
     
     return {"message": "Schedule cancelled. Campaign is back in draft."}
+
+@router.post("/{id}/pause")
+async def pause_campaign(id: str, current_admin=Depends(verify_token)):
+    """TASK 2A: Pause an actively sending campaign."""
+    db = get_db()
+    res = await db_execute(lambda: db.table("email_campaigns").select("status").eq("id", id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    
+    if res.data[0]["status"] != "sending":
+        raise HTTPException(status_code=400, detail="Only actively sending campaigns can be paused.")
+    
+    await db_execute(lambda: db.table("email_campaigns").update({"status": "paused"}).eq("id", id).execute())
+    
+    await log_activity(
+        "marketing_campaign_paused",
+        f"Campaign '{id}' paused mid-send.",
+        current_admin["sub"]
+    )
+    return {"message": "Campaign paused. Sending will stop after the current batch."}
+
+@router.post("/{id}/resume")
+async def resume_campaign(id: str, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+    """TASK 2B: Resume a paused campaign."""
+    db = get_db()
+    res = await db_execute(lambda: db.table("email_campaigns").select("status").eq("id", id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    
+    if res.data[0]["status"] != "paused":
+        raise HTTPException(status_code=400, detail="Only paused campaigns can be resumed.")
+    
+    # Count pending recipients
+    pending_res = await db_execute(lambda: db.table("campaign_recipients").select("id", count="exact").eq("campaign_id", id).eq("status", "pending").execute())
+    pending_count = pending_res.count or 0
+    
+    await db_execute(lambda: db.table("email_campaigns").update({"status": "sending"}).eq("id", id).execute())
+    
+    # Use re-run broadcast_campaign
+    background_tasks.add_task(broadcast_campaign, id, None, None)
+    
+    await log_activity(
+        "marketing_campaign_resumed",
+        f"Campaign '{id}' resumed. {pending_count} recipients remaining.",
+        current_admin["sub"]
+    )
+    return {"message": f"Campaign resumed. {pending_count} recipients remaining.", "pending": pending_count}
 
 @router.post("/{id}/sync")
 async def sync_campaign_stats(id: str, current_admin=Depends(verify_token)):
@@ -250,8 +358,11 @@ async def duplicate_campaign(id: str, current_admin=Depends(verify_token)):
     copy_data = {
         "name": f"{source['name']} (Copy)",
         "subject_a": source["subject_a"],
+        "subject_b": source.get("subject_b"),
         "preview_text": source["preview_text"],
         "html_body_a": source["html_body_a"],
+        "html_body_b": source.get("html_body_b"),
+        "is_ab_test": source.get("is_ab_test", False),
         "from_name": source["from_name"],
         "reply_to": source["reply_to"],
         "status": "draft",

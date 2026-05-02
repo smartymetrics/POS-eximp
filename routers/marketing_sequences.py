@@ -104,8 +104,18 @@ async def enroll_contact(id: str, contact_id: str, current_admin=Depends(verify_
     
     return {"message": "Contact enrolled successfully.", "data": res.data[0] if res.data else None}
 
-@router.delete("/{id}")
-async def delete_sequence(id: str, current_admin=Depends(verify_token)):
-    db = get_db()
     await db_execute(lambda: db.table("marketing_sequences").delete().eq("id", id).execute())
     return {"message": "Sequence deleted."}
+
+@router.patch("/{id}/toggle")
+async def toggle_sequence(id: str, current_admin=Depends(verify_token)):
+    """TASK 4B: Enable or disable a sequence."""
+    db = get_db()
+    res = await db_execute(lambda: db.table("marketing_sequences").select("is_active").eq("id", id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Sequence not found")
+    
+    new_value = not res.data[0].get("is_active", True)
+    await db_execute(lambda: db.table("marketing_sequences").update({"is_active": new_value}).eq("id", id).execute())
+    
+    return {"message": f"Sequence {'enabled' if new_value else 'disabled'}.", "is_active": new_value}

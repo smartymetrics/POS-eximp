@@ -7,6 +7,26 @@ from routers.analytics import log_activity
 from datetime import datetime, timedelta
 from marketing_service import apply_segment_filters, get_financial_segment_contacts
 
+async def inject_ltv(contacts: List[Dict]):
+    if not contacts: return contacts
+    db = get_db()
+    # Fetch all paid invoices to calculate LTV
+    inv_res = await db_execute(lambda: db.table("invoices").select("client_id, amount").eq("status", "paid").execute())
+    invoices = inv_res.data or []
+    
+    # Map LTV to client_id
+    ltv_map = {}
+    for inv in invoices:
+        cid = inv.get("client_id")
+        if cid:
+            ltv_map[cid] = ltv_map.get(cid, 0) + float(inv.get("amount") or 0)
+    
+    # Inject LTV into contacts
+    for contact in contacts:
+        cid = contact.get("client_id")
+        contact["total_revenue_attributed"] = ltv_map.get(cid, 0) if cid else 0
+    return contacts
+
 router = APIRouter()
 
 class SegmentCreate(BaseModel):
@@ -62,16 +82,16 @@ async def get_segment_contacts(id: str, current_admin=Depends(verify_token)):
     # Handle Smart Segments
     if id == 'engaged':
         res = await db_execute(lambda: db.table("marketing_contacts").select("*").gt("total_emails_opened", 0).eq("is_subscribed", True).execute())
-        return res.data
+        return await inject_ltv(res.data)
     elif id == 'hot':
-        res = await db_execute(lambda: db.table("marketing_contacts").select("*").gt("engagement_score", 50).eq("is_subscribed", True).execute())
-        return res.data
+        res = await db_execute(lambda: db.table("marketing_contacts").select("*").gte("engagement_score", 70).eq("is_subscribed", True).execute())
+        return await inject_ltv(res.data)
     elif id == 'recent':
         thirty_days_ago = (datetime.utcnow() - timedelta(days=30)).isoformat()
         res = await db_execute(lambda: db.table("marketing_contacts").select("*").gt("created_at", thirty_days_ago).eq("is_subscribed", True).execute())
-        return res.data
+        return await inject_ltv(res.data)
     elif id.startswith("financial_"):
-        return get_financial_segment_contacts(id)
+        return get_financial_segment_contacts(id) # Already includes LTV from my last fix in marketing_service.py
 
     # Handle Custom Segments
     seg_res = await db_execute(lambda: db.table("marketing_segments").select("*").eq("id", id).execute())
@@ -84,13 +104,14 @@ async def get_segment_contacts(id: str, current_admin=Depends(verify_token)):
             .select("marketing_contacts(*)")\
             .eq("segment_id", id)\
             .execute()
-        return [r["marketing_contacts"] for r in res.data if r.get("marketing_contacts")]
+        contacts = [r["marketing_contacts"] for r in res.data if r.get("marketing_contacts")]
+        return await inject_ltv(contacts)
     
     rules = segment.get("filter_rules") or []
     query = db.table("marketing_contacts").select("*").eq("is_subscribed", True)
     query = apply_segment_filters(query, rules)
     result = await db_execute(lambda: query.limit(100).execute())
-    return result.data
+    return await inject_ltv(result.data)
 
 @router.post("/preview")
 async def preview_segment_rules(rules: List[Dict[str, Any]], current_admin=Depends(verify_token)):

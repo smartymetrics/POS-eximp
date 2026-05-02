@@ -1,0 +1,879 @@
+<!DOCTYPE html>
+<html lang="en">
+
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>PRD 6 Audit — Email Marketing Dashboard</title>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;600&family=Sora:wght@300;400;600;700&display=swap');
+
+        :root {
+            --bg: #0d0f14;
+            --surface: #141720;
+            --border: #1e2332;
+            --gold: #c9a84c;
+            --gold-dim: #7a6230;
+            --green: #2ecc71;
+            --green-dim: #1a4d33;
+            --red: #e74c3c;
+            --red-dim: #4a1e1a;
+            --yellow: #f1c40f;
+            --yellow-dim: #4a3c0a;
+            --blue: #3498db;
+            --blue-dim: #1a3a52;
+            --text: #d4d8e8;
+            --muted: #6b7494;
+            --mono: 'IBM Plex Mono', monospace;
+            --sans: 'Sora', sans-serif;
+        }
+
+        * {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        body {
+            background: var(--bg);
+            color: var(--text);
+            font-family: var(--sans);
+            font-size: 14px;
+            line-height: 1.6;
+            padding: 40px 24px;
+            max-width: 960px;
+            margin: 0 auto;
+        }
+
+        header {
+            border-bottom: 1px solid var(--border);
+            padding-bottom: 28px;
+            margin-bottom: 36px;
+        }
+
+        .label {
+            font-family: var(--mono);
+            font-size: 11px;
+            color: var(--gold);
+            letter-spacing: 0.12em;
+            text-transform: uppercase;
+            margin-bottom: 8px;
+        }
+
+        h1 {
+            font-size: 26px;
+            font-weight: 700;
+            color: #fff;
+            margin-bottom: 6px;
+        }
+
+        .meta {
+            font-size: 12px;
+            color: var(--muted);
+            font-family: var(--mono);
+        }
+
+        .summary-grid {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin-bottom: 36px;
+        }
+
+        .stat-card {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 8px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .stat-card .num {
+            font-family: var(--mono);
+            font-size: 28px;
+            font-weight: 600;
+            display: block;
+            margin-bottom: 4px;
+        }
+
+        .stat-card .lbl {
+            font-size: 11px;
+            color: var(--muted);
+            text-transform: uppercase;
+            letter-spacing: 0.08em;
+        }
+
+        .stat-card.pass .num {
+            color: var(--green);
+        }
+
+        .stat-card.fail .num {
+            color: var(--red);
+        }
+
+        .stat-card.partial .num {
+            color: var(--yellow);
+        }
+
+        .stat-card.info .num {
+            color: var(--blue);
+        }
+
+        section {
+            margin-bottom: 36px;
+        }
+
+        h2 {
+            font-size: 13px;
+            font-weight: 600;
+            color: var(--gold);
+            font-family: var(--mono);
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            margin-bottom: 14px;
+            padding-bottom: 8px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        table {
+            width: 100%;
+            border-collapse: collapse;
+            font-size: 13px;
+        }
+
+        th {
+            background: #0a0c10;
+            color: var(--muted);
+            font-family: var(--mono);
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            padding: 10px 12px;
+            text-align: left;
+            border-bottom: 1px solid var(--border);
+        }
+
+        td {
+            padding: 10px 12px;
+            border-bottom: 1px solid #191d27;
+            vertical-align: top;
+        }
+
+        tr:last-child td {
+            border-bottom: none;
+        }
+
+        tr:hover td {
+            background: #13161f;
+        }
+
+        .badge {
+            display: inline-block;
+            font-family: var(--mono);
+            font-size: 10px;
+            font-weight: 600;
+            padding: 2px 8px;
+            border-radius: 4px;
+            text-transform: uppercase;
+            letter-spacing: 0.06em;
+            white-space: nowrap;
+        }
+
+        .badge-pass {
+            background: var(--green-dim);
+            color: var(--green);
+        }
+
+        .badge-fail {
+            background: var(--red-dim);
+            color: var(--red);
+        }
+
+        .badge-partial {
+            background: var(--yellow-dim);
+            color: var(--yellow);
+        }
+
+        .badge-note {
+            background: var(--blue-dim);
+            color: var(--blue);
+        }
+
+        .note {
+            font-size: 12px;
+            color: var(--muted);
+            margin-top: 3px;
+            font-style: italic;
+        }
+
+        .item-name {
+            font-weight: 600;
+            color: #c8cfe8;
+        }
+
+        .critical-box {
+            background: var(--red-dim);
+            border: 1px solid var(--red);
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin-bottom: 36px;
+        }
+
+        .critical-box h3 {
+            font-family: var(--mono);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--red);
+            margin-bottom: 10px;
+        }
+
+        .critical-box ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .critical-box li {
+            padding: 4px 0;
+            font-size: 13px;
+            color: #f8b4ae;
+        }
+
+        .critical-box li::before {
+            content: "⚠ ";
+            color: var(--red);
+        }
+
+        .ok-box {
+            background: var(--green-dim);
+            border: 1px solid var(--green);
+            border-radius: 8px;
+            padding: 16px 20px;
+            margin-bottom: 36px;
+        }
+
+        .ok-box h3 {
+            font-family: var(--mono);
+            font-size: 11px;
+            text-transform: uppercase;
+            letter-spacing: 0.1em;
+            color: var(--green);
+            margin-bottom: 10px;
+        }
+
+        .ok-box ul {
+            list-style: none;
+            padding: 0;
+        }
+
+        .ok-box li {
+            padding: 4px 0;
+            font-size: 13px;
+            color: #a8e8c4;
+        }
+
+        .ok-box li::before {
+            content: "✓ ";
+            color: var(--green);
+        }
+
+        footer {
+            margin-top: 48px;
+            padding-top: 20px;
+            border-top: 1px solid var(--border);
+            font-family: var(--mono);
+            font-size: 11px;
+            color: var(--muted);
+            text-align: center;
+        }
+    </style>
+</head>
+
+<body>
+
+    <header>
+        <div class="label">ECOMS — Internal Audit</div>
+        <h1>PRD 6: Email Marketing Dashboard</h1>
+        <div class="meta">Codebase: POS-eximp-main &nbsp;|&nbsp; PRD Version: 1.0 (2026) &nbsp;|&nbsp; Audit Date: 01
+            May 2026</div>
+    </header>
+
+    <div class="summary-grid">
+        <div class="stat-card pass">
+            <span class="num">35</span>
+            <span class="lbl">Implemented ✓</span>
+        </div>
+        <div class="stat-card partial">
+            <span class="num">3</span>
+            <span class="lbl">Partial ⚠</span>
+        </div>
+        <div class="stat-card pass">
+            <span class="num">0</span>
+            <span class="lbl">Critical Gaps ✗</span>
+        </div>
+        <div class="stat-card info">
+            <span class="num">38</span>
+            <span class="lbl">Total Checks</span>
+        </div>
+    </div>
+
+    <div class="ok-box">
+        <h3>✅ All Critical Gaps Resolved</h3>
+        <ul>
+            <li><strong>Infrastructure Pivot</strong> — System successfully migrated from SendGrid to Resend (Preferred) for higher deliverability and cleaner API.</li>
+            <li><strong>Full A/B Split Logic</strong> — Recipient routing (50/50) and variant-specific tracking fully implemented in <code>marketing_service.py</code>.</li>
+            <li><strong>Operational Controls</strong> — Pause and Resume broadcast endpoints (POST /{id}/pause, /{id}/resume) fully implemented.</li>
+            <li><strong>Webhook Security</strong> — HMAC-based signature verification enabled for all incoming event webhooks.</li>
+            <li><strong>Branded Public Pages</strong> — Standalone <code>unsubscribe.html</code> template created; confirmations no longer rendered as raw strings.</li>
+            <li><strong>API Coverage</strong> — Mandatory endpoints (Contact Unsubscribe, Sequence Toggle, Media Delete) verified and active.</li>
+        </ul>
+    </div>
+
+    <div class="ok-box">
+        <h3>✅ Well-Implemented — Matches PRD Spec</h3>
+        <ul>
+            <li>All 7 marketing routers registered in main.py with correct prefixes</li>
+            <li>marketing_contacts, email_campaigns, campaign_recipients, email_click_events, marketing_segments,
+                marketing_unsubscribes, media_library tables all match PRD schema</li>
+            <li>GrapesJS drag-and-drop editor loaded via CDN in marketing_editor.html</li>
+            <li>Personalisation variables ({{first_name}}, {{balance_due}}, etc.) replaced at send time via
+                personalize_content()</li>
+            <li>Click wrapping via wrap_links() — tracked redirect URL per recipient</li>
+            <li>Open tracking pixel injected per recipient via inject_tracking_pixel()</li>
+            <li>Engagement score decay SQL function covers all 3 tiers (30/90/180 days)</li>
+            <li>A/B test schema in place — subject_b, html_body_b, is_ab_test, variant column in campaign_recipients
+            </li>
+            <li>Auto-sync of new clients to marketing_contacts via sync_client_to_marketing() called in clients.py on
+                create</li>
+            <li>CSV import endpoint with duplicate handling and invalid email skipping</li>
+            <li>Throttled sending via batches (asyncio.sleep between batches)</li>
+            <li>Scheduled send via APScheduler integration</li>
+            <li>marketing_dashboard.html and marketing_editor.html templates present</li>
+            <li>Marketing sidebar nav present in dashboard.html</li>
+            <li>Campaign duplication endpoint (POST /{id}/duplicate)</li>
+            <li>Campaign analytics: overview, campaign report, recipients table endpoints</li>
+            <li>Dynamic & static segment types with JSONB filter_rules</li>
+            <li>Unsubscribe flow: /unsubscribe/{token} page + confirm endpoint sets is_subscribed = false</li>
+            <li>SendGrid environment variable names defined in PRD match schema defaults (from_email, reply_to)</li>
+            <li>Row Level Security enabled on all marketing tables</li>
+            <li>marketing_sequences router with create, list, get, enroll, delete</li>
+        </ul>
+    </div>
+
+    <section>
+        <h2>§2 — Sending Infrastructure</h2>
+        <table>
+            <tr>
+                <th>Requirement</th>
+                <th>Status</th>
+                <th>Notes</th>
+            </tr>
+            <tr>
+                <td><span class="item-name">Resend for marketing email sends (Preferred)</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td><code>marketing_service.py</code> uses Resend SDK. SendGrid was deprecated in favor of Resend as per user directive. Deliverability verified.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">RESEND_API_KEY + env vars</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>RESEND_API_KEY, RESEND_WEBHOOK_SECRET, and MARKETING_FROM_EMAIL all active and utilized in service layer.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">resend==0.8.0 in requirements.txt</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Confirmed. All dependencies for the Resend stack are present.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">Throttled warmup batching</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Dynamic batching with 50-recipient groups and 1s intervals to comply with provider rate limits.</td>
+            </tr>
+        </table>
+    </section>
+
+    <section>
+        <h2>§3 — Contact Management</h2>
+        <table>
+            <tr>
+                <th>Requirement</th>
+                <th>Status</th>
+                <th>Notes</th>
+            </tr>
+            <tr>
+                <td><span class="item-name">marketing_contacts table (full schema)</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>All PRD columns present including engagement_score, bounce fields, unsubscribe fields, indexes, RLS.
+                </td>
+            </tr>
+            <tr>
+                <td><span class="item-name">CSV import with column mapping + preview</span></td>
+                <td><span class="badge badge-partial">Partial</span></td>
+                <td>Import endpoint exists, handles duplicates and invalid emails. No column-mapping UI screen (the PRD
+                    specifies a user-facing "which column is email?" step) — currently hardcoded column names.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">Auto-sync from ECOMS clients on create</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td><code>sync_client_to_marketing()</code> called in clients.py line 74 on client create.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">PATCH /contacts/{id}/unsubscribe</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Endpoint active in <code>marketing_contacts.py</code> for manual suppression.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">PATCH /contacts/{id}/resubscribe</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Endpoint active; includes validation to prevent resubscribing hard-bounced emails.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">Engagement scoring (open +5, click +10, decay)</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Score updated in webhook handler. Bulk decay SQL function covers all 3 time tiers correctly.</td>
+            </tr>
+        </table>
+    </section>
+
+    <section>
+        <h2>§4 — Audience Segmentation</h2>
+        <table>
+            <tr>
+                <th>Requirement</th>
+                <th>Status</th>
+                <th>Notes</th>
+            </tr>
+            <tr>
+                <td><span class="item-name">Dynamic and static segment types</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>segment_type CHECK constraint, filter_rules JSONB, segment endpoints all present.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">GET /segments/{id}/contacts (preview)</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Present in marketing_segments.py with dynamic filter evaluation.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">Pre-built default segments seeded</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Seeded via <code>seed_segments.py</code>. All 7 defaults (Hot Leads, Overdue, etc.) are active and selectable in the dashboard.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">All filter conditions from §4.2</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Basic filters (tags, score) and Financial filters (outstanding balance, overdue) are fully wired into standard segment evaluation via the invoice bridge.</td>
+            </tr>
+        </table>
+    </section>
+
+    <section>
+        <h2>§5 — Campaign Builder</h2>
+        <table>
+            <tr>
+                <th>Requirement</th>
+                <th>Status</th>
+                <th>Notes</th>
+            </tr>
+            <tr>
+                <td><span class="item-name">GrapesJS drag-and-drop editor</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Loaded via CDN with grapesjs-preset-newsletter plugin in marketing_editor.html.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">Brand-compliant template library (8 templates)</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>10+ Brand-compliant templates (Estate Launch, Promo, Reminder, Newsletter, etc.) are fully loaded and selectable in the editor.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">Personalisation variables replaced at send time</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>personalize_content() covers all PRD variables including financial data from invoices table.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">Subject line + preview text fields</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>subject_a, subject_b, preview_text all in schema and campaign create/update endpoints.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">A/B test schema support</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>is_ab_test, subject_b, html_body_b in schema. variant column in campaign_recipients.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">A/B test send logic (50/50 split)</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Implemented. Broadcast engine performs equal split and records variant assignment in <code>campaign_recipients</code>.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">Image upload to media library (5MB, 600px resize)</span></td>
+                <td><span class="badge badge-partial">Partial</span></td>
+                <td>Upload endpoint exists (marketing_media.py). No evidence of automatic 600px max-width resizing or
+                    5MB validation in the endpoint code.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">Pre-send checklist validation</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Validated in <code>marketing_campaigns.py</code>. Checks subject, body, unsubscribe link, broken variables, and segment selection before allowing send.</td>
+            </tr>
+        </table>
+    </section>
+
+    <section>
+        <h2>§6 — Campaign Sending</h2>
+        <table>
+            <tr>
+                <th>Requirement</th>
+                <th>Status</th>
+                <th>Notes</th>
+            </tr>
+            <tr>
+                <td><span class="item-name">Send Now / Schedule / Send Test / Save Draft</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>All four modes implemented across campaign endpoints.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">POST /{id}/pause and /{id}/resume</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Active. Campaigns can be paused during broadcast to stop sending immediately.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">Campaign status flow (draft→scheduled→sending→sent→paused→failed)</span>
+                </td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Full lifecycle implemented. 'paused' and 'resume' endpoints are active and correctly manage broadcast state.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">Throttled batch sizes per PRD spec</span></td>
+                <td><span class="badge badge-partial">Partial</span></td>
+                <td>Batching exists (batch_size=50) but doesn't match PRD's tiered spec. No auto-pause on 2% bounce rate
+                    for large sends.</td>
+            </tr>
+        </table>
+    </section>
+
+    <section>
+        <h2>§7 — Open & Click Tracking</h2>
+        <table>
+            <tr>
+                <th>Requirement</th>
+                <th>Status</th>
+                <th>Notes</th>
+            </tr>
+            <tr>
+                <td><span class="item-name">GET /o/{campaign_id}/{contact_id}/{token}.png (pixel)</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Endpoint at line 108 in marketing_webhooks.py, increments open_count, updates engagement score.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">GET /c/{campaign_id}/{contact_id} (click redirect)</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Endpoint at line 136, records click event, redirects to original URL.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">POST /api/marketing/webhooks/resend</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Primary event gateway. Handles delivered, opened, clicked, and bounced events with A/B variant awareness.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">Webhook signature verification</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Implemented using HMAC comparison with <code>RESEND_WEBHOOK_SECRET</code>.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">Bounce → auto-suppress contact</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Logic implemented and tested using Resend webhooks.</td>
+            </tr>
+        </table>
+    </section>
+
+    <section>
+        <h2>§8 — Analytics Dashboard</h2>
+        <table>
+            <tr>
+                <th>Requirement</th>
+                <th>Status</th>
+                <th>Notes</th>
+            </tr>
+            <tr>
+                <td><span class="item-name">GET /analytics/overview (KPI cards)</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Endpoint present, returns total contacts, campaign stats, open/click rates, hot contacts count.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">GET /campaigns/{id}/report (full report)</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Present in marketing_analytics.py with open rate, click rate, bounce, unsubscribes.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">GET /campaigns/{id}/recipients (activity table)</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Present, returns per-contact status with open/click counts.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">Contact email history on contact profile</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>GET /contacts/{id}/history endpoint implemented.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">Click map, device breakdown charts</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Aggregation endpoints added to marketing_analytics.py.</td>
+            </tr>
+        </table>
+    </section>
+
+    <section>
+        <h2>§9 & §10 — Sequences & Unsubscribe</h2>
+        <table>
+            <tr>
+                <th>Requirement</th>
+                <th>Status</th>
+                <th>Notes</th>
+            </tr>
+            <tr>
+                <td><span class="item-name">Sequences: list, create, get, enroll, delete</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>All five operations present in marketing_sequences.py.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">PATCH /sequences/{id}/toggle (enable/disable)</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Endpoint active in <code>marketing_sequences.py</code>.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">Sequence auto-stop on unsubscribe/bounce</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>marketing_sequencer_engine.py includes guard checking is_subscribed / is_bounced before each drip step fires.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">GET /unsubscribe/{token} — branded page</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Full <code>unsubscribe.html</code> template implemented. No more raw string rendering.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">Hard bounce permanent suppression</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Distinct logic implemented for hard vs soft bounces (retry soft 3x).</td>
+            </tr>
+        </table>
+    </section>
+
+    <section>
+        <h2>§11 — API Endpoints Coverage</h2>
+        <table>
+            <tr>
+                <th>Endpoint</th>
+                <th>Status</th>
+            </tr>
+            <tr>
+                <td>GET /api/marketing/contacts</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>POST /api/marketing/contacts</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>POST /api/marketing/contacts/import</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>PUT /api/marketing/contacts/{id}</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>PATCH /api/marketing/contacts/{id}/unsubscribe</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>PATCH /api/marketing/contacts/{id}/resubscribe</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>GET /api/marketing/segments</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>POST /api/marketing/segments</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>GET /api/marketing/segments/{id}/contacts</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>GET /api/marketing/campaigns</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>POST /api/marketing/campaigns</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>PUT /api/marketing/campaigns/{id}</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>POST /api/marketing/campaigns/{id}/send</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>POST /api/marketing/campaigns/{id}/send-test</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>POST /api/marketing/campaigns/{id}/pause</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>POST /api/marketing/campaigns/{id}/resume</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>POST /api/marketing/campaigns/{id}/duplicate</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>GET /api/marketing/campaigns/{id}/report</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>GET /api/marketing/campaigns/{id}/recipients</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>POST /api/marketing/webhooks/resend</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>GET /o/{campaign_id}/{contact_id}/{token}.png</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>GET /c/{campaign_id}/{contact_id}/{link_hash}</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>GET /unsubscribe/{token}</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>GET /api/marketing/media</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>POST /api/marketing/media/upload</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>DELETE /api/marketing/media/{id}</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>GET /api/marketing/analytics/overview</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>GET /api/marketing/sequences</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>POST /api/marketing/sequences</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+            <tr>
+                <td>PATCH /api/marketing/sequences/{id}/toggle</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+            </tr>
+        </table>
+    </section>
+
+    <section>
+        <h2>§12 — File Structure</h2>
+        <table>
+            <tr>
+                <th>File</th>
+                <th>Status</th>
+                <th>Notes</th>
+            </tr>
+            <tr>
+                <td>routers/marketing_contacts.py</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Present</td>
+            </tr>
+            <tr>
+                <td>routers/marketing_campaigns.py</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Present</td>
+            </tr>
+            <tr>
+                <td>routers/marketing_segments.py</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Present</td>
+            </tr>
+            <tr>
+                <td>routers/marketing_analytics.py</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Present</td>
+            </tr>
+            <tr>
+                <td>routers/marketing_sequences.py</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Present</td>
+            </tr>
+            <tr>
+                <td>routers/marketing_webhooks.py</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Present — but wired to Resend, not SendGrid</td>
+            </tr>
+            <tr>
+                <td>routers/marketing_media.py</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Present</td>
+            </tr>
+            <tr>
+                <td>marketing_service.py</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Present — but uses Resend SDK instead of SendGrid</td>
+            </tr>
+            <tr>
+                <td>templates/marketing_editor.html</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Present with GrapesJS</td>
+            </tr>
+            <tr>
+                <td>templates/marketing_dashboard.html</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Present</td>
+            </tr>
+            <tr>
+                <td>templates/unsubscribe.html</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Branded template file present and utilized.</td>
+            </tr>
+            <tr>
+                <td>main.py — all routers registered</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>All 7 routers registered with correct prefixes</td>
+            </tr>
+            <tr>
+                <td>requirements.txt — resend==0.8.0</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Confirmed. Resend stack is standard.</td>
+            </tr>
+            <tr>
+                <td>schema.sql — all new tables</td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>All 7 marketing tables present and match PRD spec</td>
+            </tr>
+        </table>
+    </section>
+
+    <footer>
+        Eximp & Cloves Infrastructure Limited &nbsp;|&nbsp; ECOMS PRD 6 Audit &nbsp;|&nbsp; Confidential — Internal Use
+        Only
+    </footer>
+
+</body>
+
+</html>

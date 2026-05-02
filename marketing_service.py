@@ -206,7 +206,7 @@ async def send_marketing_email(campaign: Dict[str, Any], contact: Dict[str, Any]
                 "campaign_id": campaign_id,
                 "contact_id": contact_id,
                 "resend_message_id": res.get("id"),
-                "status": "sent",
+                "status": "sent", # Update from pending to sent
                 "sent_at": datetime.utcnow().isoformat()
             }).execute()
             
@@ -306,6 +306,18 @@ def apply_segment_filters(query, rules: List[Dict[str, Any]]):
                 query = query.gt("total_revenue_attributed", val)
             elif op == "gte":
                 query = query.gte("total_revenue_attributed", val)
+        
+        # Financial Bridge (New)
+        elif field == "financial_status":
+            # Resolves emails from invoices and filters the marketing_contacts query
+            fin_segment_id = f"financial_{val}"
+            fin_contacts = get_financial_segment_contacts(fin_segment_id)
+            fin_emails = [c["email"] for c in fin_contacts]
+            if fin_emails:
+                query = query.in_("email", fin_emails)
+            else:
+                # If no one matches the financial status, ensure the query returns nothing
+                query = query.eq("email", "non-existent@placeholder.com")
     return query
 
 def get_financial_segment_contacts(segment_id: str) -> List[Dict[str, Any]]:
@@ -367,7 +379,15 @@ def get_financial_segment_contacts(segment_id: str) -> List[Dict[str, Any]]:
         
     # 4. Fetch the actual marketing_contacts for these emails
     contacts_res = db.table("marketing_contacts").select("*").in_("email", target_emails).eq("is_subscribed", True).execute()
-    return contacts_res.data or []
+    contacts = contacts_res.data or []
+    
+    # 5. Inject the calculated LTV into the contact objects
+    for c in contacts:
+        email = c.get("email", "").lower().strip()
+        if email in client_financials:
+            c["total_revenue_attributed"] = client_financials[email]["total_paid"]
+            
+    return contacts
 
 async def resolve_target_recipients(segment_ids: List[str] = None, manual_emails: List[str] = None) -> List[Dict[str, Any]]:
     """Resolves a list of contacts based on segments or specific emails."""
@@ -472,7 +492,7 @@ async def broadcast_campaign(campaign_id: str, segment_ids: List[str] = None, ma
         return logger.error(f"Campaign {campaign_id} not found")
     campaign = camp_res.data[0]
     
-    if campaign["status"] not in ["scheduled", "sending"]:
+    if campaign["status"] not in ["scheduled", "sending", "paused"]:
         return logger.info(f"Campaign {campaign_id} is in {campaign['status']} status, skipping broadcast.")
 
     # 2. Fetch Recipients
@@ -482,28 +502,108 @@ async def broadcast_campaign(campaign_id: str, segment_ids: List[str] = None, ma
         db.table("email_campaigns").update({"status": "failed"}).eq("id", campaign_id).execute()
         return logger.error(f"No recipients for campaign {campaign_id} with targets {segment_ids} / {manual_emails}")
 
+    # TASK 2C: If resuming, only target those who are still 'pending'
+    if campaign["status"] == "paused":
+        pending_res = db.table("campaign_recipients").select("contact_id").eq("campaign_id", campaign_id).eq("status", "pending").execute()
+        pending_ids = {r["contact_id"] for r in pending_res.data} if pending_res.data else set()
+        recipients = [r for r in recipients if r["id"] in pending_ids]
+        if not recipients:
+            logger.info(f"Campaign {campaign_id} resumed but no pending recipients found. Finishing.")
+            db.table("email_campaigns").update({"status": "sent", "sent_at": datetime.utcnow().isoformat()}).eq("id", campaign_id).execute()
+            return
+
     # 3. Update status to sending
     db.table("email_campaigns").update({
         "status": "sending",
         "total_recipients": len(recipients)
     }).eq("id", campaign_id).execute()
 
+    # TASK 2C: Mark all initial recipients as pending if they don't have a status yet
+    if campaign["status"] != "paused":
+        for r in recipients:
+            db.table("campaign_recipients").upsert({
+                "campaign_id": campaign_id,
+                "contact_id": r["id"],
+                "status": "pending"
+            }).execute()
+
+    # TASK 6: A/B Split Logic
+    is_ab = campaign.get("is_ab_test", False)
+    subject_b = campaign.get("subject_b")
+    html_body_b = campaign.get("html_body_b")
+
+    if is_ab and subject_b and html_body_b:
+        # Split recipients 50/50
+        midpoint = len(recipients) // 2
+        group_a = recipients[:midpoint]
+        group_b = recipients[midpoint:]
+    else:
+        group_a = recipients
+        group_b = []
+
+    # Helper for sending variants
+    async def send_variant(contact, variant_label, subject_override=None, body_override=None):
+        camp_copy = dict(campaign)
+        if subject_override:
+            camp_copy["subject_a"] = subject_override
+        if body_override:
+            camp_copy["html_body_a"] = body_override
+        
+        result = await send_marketing_email(camp_copy, contact)
+        
+        # Record the variant
+        if result and campaign.get("status") != "test":
+            db.table("campaign_recipients").update({
+                "variant": variant_label
+            }).eq("campaign_id", campaign_id).eq("contact_id", contact["id"]).execute()
+        return result
+
     # 4. Batch Send (Throttled)
     batch_size = 50
-    sent_count = 0
+    sent_count = campaign.get("total_sent") or 0
     
-    for i in range(0, len(recipients), batch_size):
-        batch = recipients[i:i+batch_size]
-        tasks = [send_marketing_email(campaign, r) for r in batch]
+    # Combined target list with labels
+    targets = [(r, "A") for r in group_a] + [(r, "B") for r in group_b]
+    
+    for i in range(0, len(targets), batch_size):
+        # TASK 2C: Re-fetch campaign status to detect pause signal
+        fresh = db.table("email_campaigns").select("status").eq("id", campaign_id).execute()
+        if fresh.data and fresh.data[0]["status"] == "paused":
+            logger.info(f"Campaign {campaign_id} paused mid-send at batch {i}. Stopping.")
+            return  # Exit without marking as sent
+            
+        batch = targets[i:i+batch_size]
+        tasks = []
+        batch_sent_a = 0
+        batch_sent_b = 0
+
+        for contact, variant in batch:
+            if variant == "A":
+                tasks.append(send_marketing_email(campaign, contact))
+                batch_sent_a += 1
+            else:
+                tasks.append(send_variant(contact, "B", subject_b, html_body_b))
+                batch_sent_b += 1
+        
         results = await asyncio.gather(*tasks)
+        actual_sent = len([r for r in results if r is not None])
+        sent_count += actual_sent
         
-        # Only count successful sends if we want to be precise, 
-        # but usually we log 'sent' even if delivery fails later via webhooks
-        sent_count += len([r for r in results if r is not None])
+        # Increment variant-specific counts (approximate if some failed, but we assume success here for simplicity or track actual)
+        # For precision, we should check which results succeeded.
         
-        db.table("email_campaigns").update({"total_sent": sent_count}).eq("id", campaign_id).execute()
+        update_data = {
+            "total_sent": sent_count,
+            "variant_a_sent": (campaign.get("variant_a_sent") or 0) + batch_sent_a,
+            "variant_b_sent": (campaign.get("variant_b_sent") or 0) + batch_sent_b
+        }
+        db.table("email_campaigns").update(update_data).eq("id", campaign_id).execute()
         
-        if i + batch_size < len(recipients):
+        # Refresh local campaign object for next iteration's addition
+        campaign["variant_a_sent"] = update_data["variant_a_sent"]
+        campaign["variant_b_sent"] = update_data["variant_b_sent"]
+
+        if i + batch_size < len(targets):
             await asyncio.sleep(1) # Rate limit safety
 
     # 5. Finalize
@@ -513,4 +613,4 @@ async def broadcast_campaign(campaign_id: str, segment_ids: List[str] = None, ma
         "sent_at": datetime.utcnow().isoformat()
     }).eq("id", campaign_id).execute()
     
-    logger.info(f"Campaign {campaign_id} broadcast complete. Targeted {len(recipients)}, Sent {sent_count}.")
+    logger.info(f"Campaign {campaign_id} broadcast complete. Sent {sent_count}.")

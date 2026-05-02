@@ -1,0 +1,1 @@
+ALTER TABLE campaign_recipients ADD COLUMN IF NOT EXISTS bounce_count INTEGER DEFAULT 0;

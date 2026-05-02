@@ -1,5 +1,6 @@
 from fastapi import APIRouter, Request, HTTPException, Depends, Response
 from fastapi.responses import RedirectResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
 from typing import Optional
 from database import get_db, db_execute
 from datetime import datetime
@@ -7,9 +8,12 @@ import os
 import logging
 import json
 import io
+import hmac
+import hashlib
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+templates = Jinja2Templates(directory="templates")
 
 # Webhook Secret from Resend
 RESEND_WEBHOOK_SECRET = os.getenv("RESEND_WEBHOOK_SECRET")
@@ -17,11 +21,56 @@ RESEND_WEBHOOK_SECRET = os.getenv("RESEND_WEBHOOK_SECRET")
 @router.post("/api/marketing/webhooks/resend")
 async def resend_webhook(request: Request):
     """Handle incoming webhooks from Resend."""
-    # TODO: Verify Signature using RESEND_WEBHOOK_SECRET
-    # signature = request.headers.get("resend-signature")
-    # For now, we'll log it.
+    # TASK 1: Verify Signature using RESEND_WEBHOOK_SECRET
+    raw_body = await request.body()
+    
+    if RESEND_WEBHOOK_SECRET:
+        signature_header = request.headers.get("svix-signature")
+        if not signature_header:
+            logger.warning("Missing svix-signature header")
+            raise HTTPException(status_code=401, detail="Missing signature")
+        
+        try:
+            # Resend/Svix signature format: v1,<base64_hmac>
+            # Actually, Resend uses svix-signature which has multiple parts.
+            # But the PRD says: v1,<base64_hmac> and signed content is raw body.
+            # Let's follow the PRD instructions exactly.
+            parts = signature_header.split(",")
+            if len(parts) < 2 or not parts[0] == "v1":
+                raise ValueError("Invalid signature format")
+            
+            received_sig = parts[1]
+            # PRD: Compute HMAC-SHA256 of the raw body using RESEND_WEBHOOK_SECRET
+            # Note: Svix usually signs (msg_id + "." + timestamp + "." + body). 
+            # But PRD says "signed content is the raw request body".
+            expected_sig = hmac.new(
+                RESEND_WEBHOOK_SECRET.encode(),
+                raw_body,
+                hashlib.sha256
+            ).hexdigest()
+            
+            # Note: PRD says base64_hmac in header, but hexdigest is more common for webhooks.
+            # However, if it's base64, I'd need to b64encode it.
+            # Let's check common practices or just follow "Compare against the signature in the header"
+            if not hmac.compare_digest(expected_sig, received_sig):
+                # Try base64 version if hex fails? No, let's stick to PRD logic.
+                import base64
+                expected_sig_b64 = base64.b64encode(hmac.new(
+                    RESEND_WEBHOOK_SECRET.encode(),
+                    raw_body,
+                    hashlib.sha256
+                ).digest()).decode()
+                
+                if not hmac.compare_digest(expected_sig_b64, received_sig):
+                    logger.warning("Invalid webhook signature")
+                    raise HTTPException(status_code=401, detail="Invalid signature")
+        except Exception as e:
+            logger.error(f"Signature verification error: {e}")
+            raise HTTPException(status_code=401, detail="Invalid signature")
+    else:
+        logger.warning("RESEND_WEBHOOK_SECRET not set. Skipping signature verification.")
 
-    payload = await request.json()
+    payload = json.loads(raw_body)
     event_type = payload.get("type")
     data = payload.get("data", {})
     message_id = data.get("email_id")
@@ -36,7 +85,7 @@ async def resend_webhook(request: Request):
 
     elif event_type == "email.opened":
         # Increment open count and update engagement score
-        res = await db_execute(lambda: db.table("campaign_recipients").select("id, contact_id, open_count").eq("resend_message_id", message_id).execute())
+        res = await db_execute(lambda: db.table("campaign_recipients").select("id, contact_id, open_count, variant").eq("resend_message_id", message_id).execute())
         if res.data:
             rec = res.data[0]
             new_count = (rec.get("open_count") or 0) + 1
@@ -51,6 +100,18 @@ async def resend_webhook(request: Request):
 
             # Increment total opens for campaign and contact
             campaign_id = (await db_execute(lambda: db.table("campaign_recipients").select("campaign_id").eq("id", rec["id"]).execute())).data[0]["campaign_id"]
+            
+            # TASK 6: Update variant-specific opens
+            variant = rec.get("variant", "A")
+            v_col = "variant_a_opens" if variant == "A" else "variant_b_opens"
+            
+            # We use a combined RPC or multiple updates. For now, let's just do a direct update for the variant
+            # (In high scale, an RPC is better to avoid race conditions, but this is fine for now)
+            await db_execute(lambda: db.rpc("increment_campaign_variant_stats", {
+                "camp_id": campaign_id, 
+                "col_name": v_col
+            }).execute())
+
             await db_execute(lambda: db.rpc("increment_campaign_stats", {"camp_id": campaign_id, "event_type": "open"}).execute())
             await db_execute(lambda: db.rpc("increment_contact_stats", {"cont_id": rec["contact_id"], "event_type": "open"}).execute())
 
@@ -62,7 +123,7 @@ async def resend_webhook(request: Request):
 
     elif event_type == "email.clicked":
         # Similar logic for clicks
-        res = await db_execute(lambda: db.table("campaign_recipients").select("id, contact_id, click_count").eq("resend_message_id", message_id).execute())
+        res = await db_execute(lambda: db.table("campaign_recipients").select("id, contact_id, click_count, variant").eq("resend_message_id", message_id).execute())
         if res.data:
             rec = res.data[0]
             await db_execute(lambda: db.table("campaign_recipients").update({
@@ -74,19 +135,50 @@ async def resend_webhook(request: Request):
 
             # Increment total clicks for campaign and contact
             campaign_id = (await db_execute(lambda: db.table("campaign_recipients").select("campaign_id").eq("id", rec["id"]).execute())).data[0]["campaign_id"]
+            
+            # TASK 6: Update variant-specific clicks
+            variant = rec.get("variant", "A")
+            v_col = "variant_a_clicks" if variant == "A" else "variant_b_clicks"
+            await db_execute(lambda: db.rpc("increment_campaign_variant_stats", {
+                "camp_id": campaign_id, 
+                "col_name": v_col
+            }).execute())
+
             await db_execute(lambda: db.rpc("increment_campaign_stats", {"camp_id": campaign_id, "event_type": "click"}).execute())
             await db_execute(lambda: db.rpc("increment_contact_stats", {"cont_id": rec["contact_id"], "event_type": "click"}).execute())
 
     elif event_type == "email.bounced":
-        await db_execute(lambda: db.table("campaign_recipients").update({"status": "bounced"}).eq("resend_message_id", message_id).execute())
-        # Suppress contact
-        res = await db_execute(lambda: db.table("campaign_recipients").select("contact_id").eq("resend_message_id", message_id).execute())
+        # TASK 10: Hard vs Soft Bounce Distinction
+        bounce_type = data.get("bounce", {}).get("type", "hard")  # Resend returns "hard" or "soft"
+        
+        await db_execute(lambda: db.table("campaign_recipients").update({
+            "status": "bounced"
+        }).eq("resend_message_id", message_id).execute())
+        
+        res = await db_execute(lambda: db.table("campaign_recipients").select("contact_id, bounce_count").eq("resend_message_id", message_id).execute())
         if res.data:
-            await db_execute(lambda: db.table("marketing_contacts").update({
-                "is_subscribed": False,
-                "is_bounced": True,
-                "bounced_at": datetime.utcnow().isoformat()
-            }).eq("id", res.data[0]["contact_id"]).execute())
+            contact_id = res.data[0]["contact_id"]
+            bounce_count = (res.data[0].get("bounce_count") or 0) + 1
+            
+            if bounce_type == "hard":
+                # Hard bounce: permanent suppression immediately
+                await db_execute(lambda: db.table("marketing_contacts").update({
+                    "is_subscribed": False,
+                    "is_bounced": True,
+                    "bounced_at": datetime.utcnow().isoformat()
+                }).eq("id", contact_id).execute())
+            else:
+                # Soft bounce: only suppress after 3 attempts
+                await db_execute(lambda: db.table("campaign_recipients").update({
+                    "bounce_count": bounce_count
+                }).eq("resend_message_id", message_id).execute())
+                
+                if bounce_count >= 3:
+                    await db_execute(lambda: db.table("marketing_contacts").update({
+                        "is_subscribed": False,
+                        "is_bounced": True,
+                        "bounced_at": datetime.utcnow().isoformat()
+                    }).eq("id", contact_id).execute())
 
     elif event_type == "email.unsubscribed":
         res = await db_execute(lambda: db.table("campaign_recipients").select("contact_id").eq("resend_message_id", message_id).execute())
@@ -213,8 +305,8 @@ async def site_tracking(request: Request):
     except Exception as e:
         return {"status": "error", "message": str(e)}
 
-@router.get("/unsubscribe/{token}", response_class=HTMLResponse)
-async def unsubscribe_page(token: str):
+@router.get("/unsubscribe/{token}")
+async def unsubscribe_page(token: str, request: Request):
     """Handle the public unsubscribe page with a survey."""
     db = get_db()
 
@@ -225,56 +317,13 @@ async def unsubscribe_page(token: str):
     name = contact.get("first_name", "there") if contact else "there"
     email = contact.get("email", "") if contact else ""
 
-    html = f"""
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Unsubscribe | Eximp & Cloves</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-        <style>
-            body {{ font-family: 'Inter', sans-serif; background: #f9fafb; color: #1f2937; margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }}
-            .card {{ background: white; max-width: 440px; width: 100%; padding: 40px; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); border: 1px solid #e5e7eb; }}
-            .logo {{ color: #C47D0A; font-weight: 700; font-size: 1.2rem; letter-spacing: 0.1em; display: block; margin-bottom: 30px; text-decoration: none; text-align: center; }}
-            h1 {{ font-size: 1.5rem; font-weight: 700; margin-bottom: 12px; color: #111; text-align: center; }}
-            p {{ font-size: 0.95rem; line-height: 1.6; color: #6b7280; margin-bottom: 24px; text-align: center; }}
-            form {{ display: flex; flex-direction: column; gap: 12px; }}
-            label {{ font-size: 0.85rem; font-weight: 600; color: #374151; }}
-            select, textarea {{ padding: 12px; border-radius: 8px; border: 1px solid #d1d5db; outline: none; font-family: inherit; font-size: 0.9rem; }}
-            select:focus, textarea:focus {{ border-color: #C47D0A; ring: 2px solid #C47D0A; }}
-            button {{ background: #C47D0A; color: white; border: none; padding: 14px; border-radius: 8px; font-weight: 700; cursor: pointer; transition: 0.2s; margin-top: 10px; }}
-            button:hover {{ background: #A66908; transform: translateY(-1px); }}
-            .footer {{ margin-top: 30px; text-align: center; font-size: 0.75rem; color: #9ca3af; }}
-        </style>
-    </head>
-    <body>
-        <div class="card">
-            <a href="https://eximps-cloves.com" class="logo">EXIMP & CLOVES</a>
-            <h1>We're sorry to see you go</h1>
-            <p>Hi {name}, if you'd like to unsubscribe from our marketing emails ({email}), please confirm below.</p>
-
-            <form action="/api/marketing/unsubscribe/confirm" method="POST">
-                <input type="hidden" name="token" value="{token}">
-                <label>Why are you leaving? (Optional)</label>
-                <select name="reason">
-                    <option value="too_many">Receiving too many emails</option>
-                    <option value="not_relevant">Content isn't relevant to me</option>
-                    <option value="bought_already">I've already purchased</option>
-                    <option value="other">Other</option>
-                </select>
-                <textarea name="feedback" rows="3" placeholder="Any other feedback?"></textarea>
-                <button type="submit">Unsubscribe Me</button>
-            </form>
-
-            <div class="footer">
-                &copy; 2026 Eximp & Cloves Infrastructure Limited
-            </div>
-        </div>
-    </body>
-    </html>
-    """
-    return HTMLResponse(content=html)
+    # TASK 7B: Return Jinja2 template
+    return templates.TemplateResponse("unsubscribe.html", {
+        "request": request,
+        "name": name,
+        "email": email,
+        "token": token
+    })
 
 @router.post("/api/marketing/unsubscribe/confirm")
 async def process_unsubscribe(request: Request):
@@ -307,32 +356,5 @@ async def process_unsubscribe(request: Request):
             "unsubscribed_at": timestamp
         }).execute())
 
-    # Return success page
-    html = f"""
-    <!DOCTYPE html>
-    <html lang="en">
-    <head>
-        <meta charset="UTF-8">
-        <meta name="viewport" content="width=device-width, initial-scale=1.0">
-        <title>Success | Eximp & Cloves</title>
-        <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700&display=swap" rel="stylesheet">
-        <style>
-            body {{ font-family: 'Inter', sans-serif; background: #f9fafb; color: #1f2937; margin: 0; display: flex; align-items: center; justify-content: center; min-height: 100vh; padding: 20px; }}
-            .card {{ background: white; max-width: 440px; width: 100%; padding: 40px; border-radius: 16px; box-shadow: 0 10px 25px -5px rgba(0,0,0,0.1); border: 1px solid #e5e7eb; text-align: center; }}
-            .icon {{ font-size: 3rem; margin-bottom: 20px; }}
-            h1 {{ font-size: 1.5rem; font-weight: 700; margin-bottom: 12px; color: #111; }}
-            p {{ font-size: 0.95rem; line-height: 1.6; color: #6b7280; margin-bottom: 30px; }}
-            .btn {{ display: inline-block; background: #111; color: white; text-decoration: none; padding: 12px 30px; border-radius: 8px; font-weight: 600; }}
-        </style>
-    </head>
-    <body>
-        <div class="card">
-            <div class="icon">✅</div>
-            <h1>Successfully Unsubscribed</h1>
-            <p>Your preferences have been updated. You will no longer receive marketing emails from us.</p>
-            <a href="https://eximps-cloves.com" class="btn">Return to Site</a>
-        </div>
-    </body>
-    </html>
-    """
-    return HTMLResponse(content=html)
+    # TASK 7B: Return success page via template
+    return templates.TemplateResponse("unsubscribe_success.html", {"request": request})

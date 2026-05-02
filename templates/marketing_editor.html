@@ -405,6 +405,22 @@
     </div>
     <div class="top-actions">
       <span class="save-status" id="save-status"></span>
+      
+      <!-- A/B Test Toggle -->
+      <div class="flex items-center gap-3 bg-[#111] px-4 py-1.5 rounded-full border border-[#333] mr-4">
+        <span class="text-[10px] font-black uppercase tracking-widest text-gray-500">A/B Mode</span>
+        <label class="relative inline-flex items-center cursor-pointer">
+          <input type="checkbox" id="ab-toggle" class="sr-only peer">
+          <div class="w-9 h-5 bg-gray-700 peer-focus:outline-none rounded-full peer peer-checked:after:translate-x-full peer-checked:after:border-white after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-gold"></div>
+        </label>
+      </div>
+
+      <!-- Variant Tabs -->
+      <div id="variant-tabs" class="hidden flex bg-[#111] rounded-lg p-1 border border-[#333] mr-4">
+        <button id="tab-a" onclick="switchVariant('A')" class="px-4 py-1 rounded text-xs font-bold transition-all bg-brand-gold text-white">Variant A</button>
+        <button id="tab-b" onclick="switchVariant('B')" class="px-4 py-1 rounded text-xs font-bold transition-all text-gray-500 hover:text-white">Variant B</button>
+      </div>
+
       <div class="flex items-center gap-2 w-full md:w-auto md:mr-4">
         <span class="text-xs text-gray-500 uppercase font-bold shrink-0">Subject:</span>
         <input type="text" id="subject-field"
@@ -569,6 +585,7 @@
 
   <script>
     const campaignId = new URLSearchParams(window.location.search).get('id');
+    let selectedTemplateId = null;
     // Using a public cloud URL to ensure it renders for every recipient
     const LOGO_URL = 'https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/marketing/logo_dark.svg';
 
@@ -1030,7 +1047,10 @@
     // ═══════════════════════════════════════
     // TEMPLATE PICKER LOGIC
     // ═══════════════════════════════════════
-    function openTemplates() { document.getElementById('template-modal').classList.remove('hidden'); }
+    function openTemplates() { 
+      renderTemplates();
+      document.getElementById('template-modal').classList.remove('hidden'); 
+    }
     function closeTemplates() { document.getElementById('template-modal').classList.add('hidden'); }
 
     function openTags() { document.getElementById('tags-modal').classList.remove('hidden'); }
@@ -1271,6 +1291,13 @@
       }
     });
 
+    let activeVariant = 'A';
+    let variantData = {
+      'A': { html: '', subject: '', json: null },
+      'B': { html: '', subject: '', json: null }
+    };
+    let isAB = false;
+
     async function loadCampaign() {
       const token = localStorage.getItem('ec_token');
 
@@ -1285,14 +1312,20 @@
         });
 
         const data = await res.json();
+        
+        isAB = data.is_ab_test || false;
+        document.getElementById('ab-toggle').checked = isAB;
+        if(isAB) document.getElementById('variant-tabs').classList.remove('hidden');
 
-        // Set subject
-        if (document.getElementById('subject-field')) {
-          document.getElementById('subject-field').value = data.subject_a || '';
-        }
+        variantData['A'].html = data.html_body_a || '';
+        variantData['A'].subject = data.subject_a || '';
+        variantData['B'].html = data.html_body_b || '';
+        variantData['B'].subject = data.subject_b || '';
 
-        // Check if it's a completely new, untouched campaign
-        const content = (data.html_body_a || '').trim();
+        // Set initial view
+        document.getElementById('subject-field').value = variantData[activeVariant].subject;
+
+        const content = (variantData[activeVariant].html || '').trim();
 
         // 🟢 FIX: Be much much less aggressive. We don't want to hide user work just because it's short.
         let isPlaceholder = false;
@@ -1338,9 +1371,25 @@
         fullHtml = `<html><head><style>${css}</style></head><body>${html}</body></html>`;
       }
 
+      // 0. Ensure current variant is in memory
+      variantData[activeVariant].subject = document.getElementById('subject-field').value;
+      variantData[activeVariant].json = editor.getProjectData();
+      
+      try {
+        variantData[activeVariant].html = editor.runCommand('gjs-get-inlined-html');
+        if (!variantData[activeVariant].html) throw new Error("Empty inliner output");
+      } catch (e) {
+        const html = editor.getHtml();
+        const css = editor.getCss();
+        variantData[activeVariant].html = `<html><head><style>${css}</style></head><body>${html}</body></html>`;
+      }
+
       const payload = {
-        html_body_a: fullHtml,
-        subject_a: document.getElementById('subject-field') ? document.getElementById('subject-field').value : ''
+        is_ab_test: isAB,
+        html_body_a: variantData['A'].html,
+        subject_a: variantData['A'].subject,
+        html_body_b: isAB ? variantData['B'].html : null,
+        subject_b: isAB ? variantData['B'].subject : null
       };
 
       try {
@@ -1369,25 +1418,97 @@
       }
     };
 
+    // ── A/B TESTING LOGIC ──
+    document.getElementById('ab-toggle').onchange = (e) => {
+      isAB = e.target.checked;
+      const tabs = document.getElementById('variant-tabs');
+      if (isAB) {
+        tabs.classList.remove('hidden');
+        // Initialize Variant B if empty
+        if (!variantData['B'].html && !variantData['B'].json) {
+          variantData['B'].html = variantData['A'].html;
+          variantData['B'].json = JSON.parse(JSON.stringify(editor.getProjectData())); // Deep clone
+          variantData['B'].subject = (variantData['A'].subject || "Campaign") + " (Variant B)";
+        }
+      } else {
+        tabs.classList.add('hidden');
+        switchVariant('A');
+      }
+    };
+
+    function switchVariant(v) {
+      if (v === activeVariant) return;
+
+      // 1. Save current editor state to memory
+      variantData[activeVariant].subject = document.getElementById('subject-field').value;
+      
+      // Save full project state (JSON) for perfect restoration
+      variantData[activeVariant].json = editor.getProjectData();
+      
+      // Save combined HTML + CSS for the backend/preview
+      const html = editor.getHtml();
+      const css = editor.getCss();
+      variantData[activeVariant].html = `<html><head><style>${css}</style></head><body>${html}</body></html>`;
+
+      // 2. Update tabs UI
+      activeVariant = v;
+      document.getElementById('tab-a').className = v === 'A' ? 'px-4 py-1 rounded text-xs font-bold transition-all bg-brand-gold text-white' : 'px-4 py-1 rounded text-xs font-bold transition-all text-gray-500 hover:text-white';
+      document.getElementById('tab-b').className = v === 'B' ? 'px-4 py-1 rounded text-xs font-bold transition-all bg-brand-gold text-white' : 'px-4 py-1 rounded text-xs font-bold transition-all text-gray-500 hover:text-white';
+
+      // 3. Load new variant state into editor
+      document.getElementById('subject-field').value = variantData[v].subject || '';
+      
+      if (variantData[v].json) {
+        editor.loadProjectData(variantData[v].json);
+      } else {
+        editor.setComponents(variantData[v].html || '<h1>Variant ' + v + '</h1>');
+      }
+    }
+
+    // Auto-save memory on input
+    document.getElementById('subject-field').oninput = (e) => {
+      variantData[activeVariant].subject = e.target.value;
+    };
+
+    editor.on('component:update', () => {
+       // This is expensive to run on every keystroke, better to do it on switch or save
+    });
+
     document.getElementById('send-test').onclick = async () => {
       const email = prompt('Enter an email address to send the test to:');
       if (!email) return;
 
-      const html = editor.getHtml();
-      const css = editor.getCss();
-      const fullHtml = `<html><head><style>${css}</style></head><body>${html}</body></html>`;
-      const subject = document.getElementById('subject-field').value;
+      // Ensure current variant is in memory
+      variantData[activeVariant].subject = document.getElementById('subject-field').value;
+      try {
+        variantData[activeVariant].html = editor.runCommand('gjs-get-inlined-html');
+      } catch (e) {
+        variantData[activeVariant].html = editor.getHtml();
+      }
 
-      await fetch(`/api/marketing/campaigns/${campaignId}/send-test`, {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('ec_token') },
-        body: JSON.stringify({
-          email: email,
-          html_body_a: fullHtml,
-          subject_a: subject
-        })
-      });
-      alert(`✅ Test email sent to ${email}`);
+      const payload = {
+        email: email,
+        variant: activeVariant,
+        subject_a: variantData['A'].subject,
+        html_body_a: variantData['A'].html,
+        subject_b: variantData['B'].subject,
+        html_body_b: variantData['B'].html
+      };
+
+      try {
+        const res = await fetch(`/api/marketing/campaigns/${campaignId}/send-test`, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('ec_token') },
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          alert(`✅ Test email (Variant ${activeVariant}) sent to ${email}`);
+        } else {
+          alert("❌ Failed to send test email");
+        }
+      } catch (e) {
+        console.error(e);
+      }
     };
 
     loadCampaign();

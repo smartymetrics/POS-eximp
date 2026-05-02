@@ -179,10 +179,14 @@
                                 class="text-gray-400 hover:text-brand-gold transition-all text-sm flex items-center group"><span
                                     class="w-2 h-2 rounded-full bg-blue-500 mr-3 group-hover:scale-125 transition"></span>
                                 03. The Design Studio</a></li>
+                        <li><a href="#ch-ab"
+                                class="text-gray-400 hover:text-brand-gold transition-all text-sm flex items-center group"><span
+                                    class="w-2 h-2 rounded-full bg-cyan-500 mr-3 group-hover:scale-125 transition"></span>
+                                04. A/B Testing</a></li>
                         <li><a href="#ch4"
                                 class="text-gray-400 hover:text-brand-gold transition-all text-sm flex items-center group"><span
                                     class="w-2 h-2 rounded-full bg-red-400 mr-3 group-hover:scale-125 transition"></span>
-                                04. Lead Attribution</a></li>
+                                05. Lead Attribution</a></li>
                         <li><a href="#ch5"
                                 class="text-gray-400 hover:text-brand-gold transition-all text-sm flex items-center group"><span
                                     class="w-2 h-2 rounded-full bg-gray-600 mr-3 group-hover:scale-125 transition"></span>
@@ -329,6 +333,20 @@
                                 </p>
                             </div>
                         </div>
+                        <div class="flex items-center p-5 bg-yellow-500/10 rounded-2xl border border-yellow-500/20 gap-6">
+                            <span class="text-2xl">⚡</span>
+                            <div>
+                                <h4 class="font-bold text-yellow-400 text-sm uppercase tracking-wide">Sending</h4>
+                                <p class="text-gray-400 text-xs mt-1">Broadcast is active. Emails are flying out in batches.</p>
+                            </div>
+                        </div>
+                        <div class="flex items-center p-5 bg-orange-500/10 rounded-2xl border border-orange-500/20 gap-6">
+                            <span class="text-2xl">⏸️</span>
+                            <div>
+                                <h4 class="font-bold text-orange-400 text-sm uppercase tracking-wide">Paused</h4>
+                                <p class="text-gray-400 text-xs mt-1">Broadcast stopped mid-way. You can resume at any time.</p>
+                            </div>
+                        </div>
                         <div class="flex items-center p-5 bg-green-500/10 rounded-2xl border border-green-500/20 gap-6">
                             <span class="text-2xl">✅</span>
                             <div>
@@ -336,6 +354,14 @@
                                 <p class="text-gray-400 text-xs mt-1">Delivery complete. Full analytics available.</p>
                             </div>
                         </div>
+                    </div>
+
+                    <div class="power-move border-yellow-500">
+                        <h5 class="text-yellow-500 font-bold mb-3 flex items-center gap-2">⏸️ Take Control: Pause & Resume</h5>
+                        <p class="text-sm text-gray-300">
+                            Mistake in your email? Or just want to wait for a better time? <br>
+                            Click the <b>Pause</b> button on any active broadcast to stop it instantly. When you're ready, click <b>Resume</b> to pick up exactly where you left off.
+                        </p>
                     </div>
 
                     <div class="quick-win">
@@ -392,6 +418,41 @@
                                 </tr>
                             </tbody>
                         </table>
+                    </div>
+                </section>
+
+                <!-- CHAPTER AB: A/B TESTING -->
+                <section id="ch-ab" class="chapter-card border-cyan-500/20">
+                    <span class="text-[10px] font-black text-cyan-400 uppercase tracking-[0.3em] mb-4 block">Elite Feature</span>
+                    <h2 class="text-4xl font-serif mb-10">A/B Testing: Science of Success</h2>
+                    <p class="text-gray-300 mb-8">Not sure which subject line works best? Send two versions! The system will split your audience 50/50 and show you which one gets more opens. No more guessing.</p>
+                    
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-6 mb-12">
+                        <div class="p-6 bg-black/20 rounded-2xl border border-gray-800">
+                            <h4 class="text-cyan-400 font-bold mb-2 flex items-center gap-2"><span>📧</span> Subject A vs B</h4>
+                            <p class="text-xs text-gray-400 leading-relaxed">Test different emotional hooks. Does "Exclusive VIP Access" perform better than "New Property in Lekki"? Let the data decide.</p>
+                        </div>
+                        <div class="p-6 bg-black/20 rounded-2xl border border-gray-800">
+                            <h4 class="text-cyan-400 font-bold mb-2 flex items-center gap-2"><span>🎨</span> Layout A vs B</h4>
+                            <p class="text-xs text-gray-400 leading-relaxed">Test different images or button colors. Does a blue button get more clicks than a gold one? The system tracks it all.</p>
+                        </div>
+                    </div>
+
+                    <div class="power-move border-cyan-500">
+                        <h5 class="text-cyan-500 font-bold mb-3 flex items-center gap-2">💡 How to activate A/B mode</h5>
+                        <p class="text-sm text-gray-300">
+                            In the Campaign Editor, look for the <b>"Variant B"</b> tab. If you add content there, the system automatically turns on A/B testing for that campaign. If you leave it empty, it remains a standard campaign.
+                        </p>
+                    </div>
+
+                    <div class="quick-win border-cyan-500">
+                        <h5 class="text-cyan-400 font-bold mb-3 flex items-center gap-2">📊 Reading the Results</h5>
+                        <p class="text-sm text-gray-300 leading-relaxed">
+                            Once your campaign is sent, click the <b>Performance Report</b> icon (the eye icon) on the dashboard. <br><br>
+                            • <b>Side-by-Side View</b>: You'll see Variant A and Variant B compared directly on stats like Opens and Clicks. <br>
+                            • <b>The Winner</b>: The system automatically crowns a winner with a 🏆 badge based on which variant got the most engagement. <br>
+                            • <b>Actionable Insight</b>: Use this knowledge to write better emails in the future!
+                        </p>
                     </div>
                 </section>
 
@@ -634,6 +695,20 @@
                             <p class="text-gray-500 text-sm">The moment a contact clicks "Unsubscribe", their status is
                                 set to <code>false</code>. Our engine checks this status the split-second before
                                 dispatching any future email. They are silently blocked forever.</p>
+                        </div>
+                        <div>
+                            <h4 class="text-white font-bold mb-2">3. Automatic Bounce Protection</h4>
+                            <p class="text-gray-500 text-sm">To keep our reputation high and ensure your emails don't end up in spam folders, we automatically handle "Bounces" (emails that couldn't be delivered).</p>
+                            <ul class="text-xs text-gray-400 mt-2 space-y-3">
+                                <li class="flex gap-2">
+                                    <span class="text-red-500 font-bold">●</span>
+                                    <span><b>Hard Bounce (Permanent)</b>: If an email address doesn't exist, we block it instantly so you never waste money sending to it again.</span>
+                                </li>
+                                <li class="flex gap-2">
+                                    <span class="text-yellow-500 font-bold">●</span>
+                                    <span><b>Soft Bounce (Temporary)</b>: If an inbox is full, we try 3 more times. If it still fails, we block it for 30 days to protect your account.</span>
+                                </li>
+                            </ul>
                         </div>
                     </div>
 

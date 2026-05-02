@@ -42,7 +42,27 @@ async def list_contacts(current_admin=Depends(verify_token), type: Optional[str]
         query = query.or_(f"first_name.ilike.%{q}%,last_name.ilike.%{q}%,email.ilike.%{q}%")
         
     result = await db_execute(lambda: query.order("created_at", desc=True).execute())
-    return result.data
+    contacts = result.data or []
+    
+    # Financial Bridge: Calculate LTV for each contact
+    if contacts:
+        # Fetch all paid invoices to calculate LTV
+        inv_res = await db_execute(lambda: db.table("invoices").select("client_id, amount").eq("status", "paid").execute())
+        invoices = inv_res.data or []
+        
+        # Map LTV to client_id
+        ltv_map = {}
+        for inv in invoices:
+            cid = inv.get("client_id")
+            if cid:
+                ltv_map[cid] = ltv_map.get(cid, 0) + float(inv.get("amount") or 0)
+        
+        # Inject LTV into contacts
+        for contact in contacts:
+            cid = contact.get("client_id")
+            contact["total_revenue_attributed"] = ltv_map.get(cid, 0) if cid else 0
+            
+    return contacts
 
 @router.post("/")
 async def create_contact(data: ContactCreate, current_admin=Depends(verify_token)):
@@ -74,13 +94,85 @@ async def update_contact(id: str, data: ContactUpdate, current_admin=Depends(ver
     result = await db_execute(lambda: db.table("marketing_contacts").update(update_dict).eq("id", id).execute())
     return result.data[0]
 
+@router.patch("/{id}/unsubscribe")
+async def unsubscribe_contact(id: str, current_admin=Depends(verify_token)):
+    """TASK 3A: Manually unsubscribe a contact."""
+    db = get_db()
+    res = await db_execute(lambda: db.table("marketing_contacts").select("email, is_subscribed").eq("id", id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    contact = res.data[0]
+    if not contact["is_subscribed"]:
+        raise HTTPException(status_code=400, detail="Contact is already unsubscribed.")
+    
+    timestamp = datetime.utcnow().isoformat()
+    await db_execute(lambda: db.table("marketing_contacts").update({
+        "is_subscribed": False,
+        "unsubscribed_at": timestamp,
+        "engagement_score": 0
+    }).eq("id", id).execute())
+    
+    await db_execute(lambda: db.table("marketing_unsubscribes").insert({
+        "contact_id": id,
+        "email": contact["email"],
+        "reason": "manual_admin",
+        "unsubscribed_at": timestamp
+    }).execute())
+    
+    await log_activity(
+        "marketing_contact_unsubscribed",
+        f"Contact {contact['email']} manually unsubscribed by admin.",
+        current_admin["sub"]
+    )
+    return {"message": "Contact unsubscribed.", "contact_id": id}
+
+@router.patch("/{id}/resubscribe")
+async def resubscribe_contact(id: str, current_admin=Depends(verify_token)):
+    """TASK 3B: Manually resubscribe a contact."""
+    db = get_db()
+    res = await db_execute(lambda: db.table("marketing_contacts").select("email, is_subscribed, is_bounced").eq("id", id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    
+    contact = res.data[0]
+    if contact["is_subscribed"]:
+        raise HTTPException(status_code=400, detail="Contact is already subscribed.")
+    
+    if contact.get("is_bounced"):
+        raise HTTPException(status_code=400, detail="Cannot resubscribe a hard-bounced contact. The email address is invalid.")
+    
+    await db_execute(lambda: db.table("marketing_contacts").update({
+        "is_subscribed": True,
+        "unsubscribed_at": None,
+        "unsubscribe_reason": None
+    }).eq("id", id).execute())
+    
+    await log_activity(
+        "marketing_contact_resubscribed",
+        f"Contact {contact['email']} manually resubscribed by admin {current_admin['sub']}.",
+        current_admin["sub"]
+    )
+    return {"message": "Contact resubscribed.", "contact_id": id}
+
 @router.get("/{id}")
 async def get_contact(id: str, current_admin=Depends(verify_token)):
     db = get_db()
     res = await db_execute(lambda: db.table("marketing_contacts").select("*").eq("id", id).execute())
     if not res.data:
         raise HTTPException(status_code=404, detail="Contact not found")
-    return res.data[0]
+    
+    contact = res.data[0]
+    cid = contact.get("client_id")
+    
+    # Fetch LTV for this specific client
+    ltv = 0
+    if cid:
+        inv_res = await db_execute(lambda: db.table("invoices").select("amount").eq("client_id", cid).eq("status", "paid").execute())
+        ltv = sum([float(inv.get("amount") or 0) for inv in inv_res.data or []])
+    
+    contact["total_revenue_attributed"] = ltv
+    return contact
 
 @router.post("/import")
 async def import_contacts(source: Optional[str] = "csv_import", file: UploadFile = File(...), current_admin=Depends(verify_token)):

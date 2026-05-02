@@ -77,3 +77,31 @@ async def list_media(current_admin=Depends(verify_token)):
         return {"data": result.data}
     except Exception as e:
         raise HTTPException(status_code=500, detail=str(e))
+
+@router.delete("/{id}")
+async def delete_media(id: str, current_admin=Depends(verify_token)):
+    """TASK 5: Delete media from storage and library."""
+    db = get_db()
+    # 1. Fetch the media record
+    res = await db_execute(lambda: db.table("media_library").select("*").eq("id", id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Media not found")
+    
+    media = res.data[0]
+    file_url = media["file_url"]
+    
+    # Extract storage path from URL: {SUPABASE_URL}/storage/v1/object/public/marketing/{date_folder}/{filename}
+    # Path is everything after /marketing/
+    storage_path = file_url.split("/marketing/")[-1]
+    
+    # 2. Delete from Storage
+    try:
+        db.storage.from_("marketing").remove([storage_path])
+    except Exception as e:
+        # Log and continue even if storage delete fails
+        print(f"Error deleting from storage: {e}")
+        
+    # 3. Delete from DB
+    await db_execute(lambda: db.table("media_library").delete().eq("id", id).execute())
+    
+    return {"message": "Media deleted.", "id": id}

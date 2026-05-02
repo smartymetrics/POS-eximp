@@ -39,6 +39,18 @@ async def process_active_sequences():
             sequence_id = enrollment["sequence_id"]
             current_step_num = enrollment["current_step"]
             
+            # TASK 4C: Update the sequencer engine guard
+            # 1. Fetch sequence is_active status
+            if not sequence.get("is_active", True):
+                logger.info(f"Skipping sequence {sequence_id} — sequence is disabled.")
+                continue
+
+            # 2. Fetch contact subscribed/bounced status
+            if not contact.get("is_subscribed") or contact.get("is_bounced"):
+                logger.info(f"Stopping sequence for contact {contact['id']} — unsubscribed or bounced.")
+                await db_execute(lambda: db.table("contact_sequence_status").update({"status": "exited"}).eq("id", enrollment["id"]).execute())
+                continue
+            
             # --- 2. UNIVERSAL EXIT RULE (Professional Logic) ---
             # If the contact is now a 'client', immediately exit any 'Lead' sequences
             # to avoid unprofessional automated emails post-purchase.

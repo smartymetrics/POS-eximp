@@ -1,464 +1,3083 @@
 <!DOCTYPE html>
 <html lang="en">
+
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Legal Operations Manual (SOP) | Eximp & Cloves</title>
-    <script src="https://cdn.tailwindcss.com"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&family=Playfair+Display:wght@700;800&family=IBM+Plex+Mono:wght@400;600&display=swap" rel="stylesheet">
+    <title>Legal System Manual | Eximp & Cloves</title>
+    <link
+        href="https://fonts.googleapis.com/css2?family=DM+Serif+Display:ital@0;1&family=DM+Sans:wght@300;400;500;600;700&family=JetBrains+Mono:wght@400;600&display=swap"
+        rel="stylesheet">
     <style>
         :root {
             --gold: #C47D0A;
             --gold-light: #E09C2A;
-            --bg: #0F1115;
-            --card: #1E2128;
-            --border: #2D2F36;
-            --text-main: #E5E7EB;
-            --text-sub: #9CA3AF;
-        }
-        body { font-family: 'Inter', sans-serif; background-color: var(--bg); color: var(--text-main); scroll-behavior: smooth; line-height: 1.6; }
-        .font-serif { font-family: 'Playfair Display', serif; }
-        .font-mono { font-family: 'IBM Plex Mono', monospace; }
-        
-        .brand-gold { color: var(--gold); }
-        .bg-brand-gold { background-color: var(--gold); }
-        
-        .manual-container { max-width: 1100px; margin: 0 auto; padding: 80px 24px; }
-        
-        .sop-section { 
-            background: var(--card); border: 1px solid var(--border); border-radius: 24px; 
-            padding: 48px; margin-bottom: 56px; position: relative; overflow: hidden;
-            transition: all 0.4s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-        .sop-section:hover { border-color: var(--gold); box-shadow: 0 20px 50px rgba(196, 125, 10, 0.08); }
-        
-        /* Teaching Box */
-        .teaching-module {
-            background: rgba(196, 125, 10, 0.05);
-            border-left: 4px solid var(--gold);
-            padding: 24px;
-            border-radius: 0 16px 16px 0;
-            margin: 24px 0;
+            --gold-dim: rgba(196, 125, 10, 0.12);
+            --bg: #0D0F13;
+            --surface: #161920;
+            --surface-2: #1E2028;
+            --border: #272A33;
+            --border-light: #2F3340;
+            --text: #E8EAF0;
+            --text-sub: #8B8FA8;
+            --text-muted: #555970;
+            --blue: #4A9EFF;
+            --purple: #A78BFA;
+            --green: #34D399;
+            --orange: #FB923C;
+            --red: #F87171;
+            --teal: #2DD4BF;
         }
 
-        .step-indicator {
+        *,
+        *::before,
+        *::after {
+            box-sizing: border-box;
+            margin: 0;
+            padding: 0;
+        }
+
+        html {
+            scroll-behavior: smooth;
+        }
+
+        body {
+            font-family: 'DM Sans', sans-serif;
+            background: var(--bg);
+            color: var(--text);
+            line-height: 1.65;
+            font-size: 15px;
+        }
+
+        /* ─── LAYOUT ─── */
+        .layout {
+            display: flex;
+            min-height: 100vh;
+        }
+
+        /* ─── SIDEBAR ─── */
+        .sidebar {
+            width: 280px;
+            flex-shrink: 0;
+            position: sticky;
+            top: 0;
+            height: 100vh;
+            overflow-y: auto;
+            background: var(--surface);
+            border-right: 1px solid var(--border);
+            display: flex;
+            flex-direction: column;
+        }
+
+        .sidebar::-webkit-scrollbar {
+            width: 4px;
+        }
+
+        .sidebar::-webkit-scrollbar-track {
+            background: transparent;
+        }
+
+        .sidebar::-webkit-scrollbar-thumb {
+            background: var(--border);
+            border-radius: 2px;
+        }
+
+        .sidebar-brand {
+            padding: 28px 24px 20px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        .sidebar-brand .badge {
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--gold);
+            background: var(--gold-dim);
+            padding: 3px 8px;
+            border-radius: 4px;
+            display: inline-block;
+            margin-bottom: 10px;
+        }
+
+        .sidebar-brand h1 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 18px;
+            color: var(--text);
+            line-height: 1.3;
+        }
+
+        .sidebar-brand h1 em {
+            color: var(--gold);
+            font-style: italic;
+        }
+
+        .sidebar-nav {
+            padding: 20px 12px;
+            flex: 1;
+        }
+
+        .nav-group {
+            margin-bottom: 28px;
+        }
+
+        .nav-group-label {
+            font-size: 9px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            color: var(--text-muted);
+            padding: 0 12px;
+            margin-bottom: 8px;
+        }
+
+        .nav-item {
             display: flex;
             align-items: center;
-            gap: 16px;
+            gap: 10px;
+            padding: 9px 12px;
+            border-radius: 9px;
+            cursor: pointer;
+            transition: all 0.2s;
+            text-decoration: none;
+            color: var(--text-sub);
+            font-size: 13px;
+            font-weight: 500;
+        }
+
+        .nav-item:hover {
+            background: rgba(255, 255, 255, 0.04);
+            color: var(--text);
+        }
+
+        .nav-item.active {
+            background: var(--gold-dim);
+            color: var(--gold);
+        }
+
+        .nav-item .nav-dot {
+            width: 6px;
+            height: 6px;
+            border-radius: 50%;
+            background: currentColor;
+            opacity: 0.5;
+            flex-shrink: 0;
+        }
+
+        .nav-item.active .nav-dot {
+            opacity: 1;
+        }
+
+        .nav-number {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 10px;
+            color: var(--text-muted);
+            margin-left: auto;
+            flex-shrink: 0;
+        }
+
+        /* ─── MAIN CONTENT ─── */
+        .main {
+            flex: 1;
+            min-width: 0;
+            max-width: 900px;
+            padding: 64px 56px 120px;
+        }
+
+        /* ─── HERO ─── */
+        .hero {
+            margin-bottom: 72px;
+        }
+
+        .hero-eyebrow {
+            display: flex;
+            align-items: center;
+            gap: 12px;
             margin-bottom: 24px;
         }
-        .step-number {
-            width: 40px; height: 40px; background: var(--gold); color: white;
-            border-radius: 12px; display: flex; align-items: center; justify-content: center;
-            font-weight: 800; font-size: 16px; flex-shrink: 0;
+
+        .doc-id {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        .hero h1 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 56px;
+            line-height: 1.1;
+            margin-bottom: 20px;
+            color: var(--text);
+        }
+
+        .hero h1 em {
+            color: var(--gold);
+            font-style: italic;
+        }
+
+        .hero p {
+            font-size: 16px;
+            color: var(--text-sub);
+            max-width: 580px;
+            line-height: 1.75;
+        }
+
+        .hero-meta {
+            display: flex;
+            gap: 32px;
+            margin-top: 32px;
+            padding-top: 32px;
+            border-top: 1px solid var(--border);
+        }
+
+        .hero-meta-item label {
+            display: block;
+            font-size: 9px;
+            font-weight: 700;
+            letter-spacing: 1.5px;
+            text-transform: uppercase;
+            color: var(--text-muted);
+            margin-bottom: 4px;
+        }
+
+        .hero-meta-item span {
+            font-size: 13px;
+            color: var(--text-sub);
+        }
+
+        /* ─── CHAPTERS ─── */
+        .chapter {
+            background: var(--surface);
+            border: 1px solid var(--border);
+            border-radius: 20px;
+            padding: 48px;
+            margin-bottom: 40px;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .chapter::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            height: 2px;
+            background: linear-gradient(90deg, var(--gold), transparent);
+            opacity: 0.5;
+        }
+
+        .chapter.accent-blue::before {
+            background: linear-gradient(90deg, var(--blue), transparent);
+        }
+
+        .chapter.accent-purple::before {
+            background: linear-gradient(90deg, var(--purple), transparent);
+        }
+
+        .chapter.accent-green::before {
+            background: linear-gradient(90deg, var(--green), transparent);
+        }
+
+        .chapter.accent-orange::before {
+            background: linear-gradient(90deg, var(--orange), transparent);
+        }
+
+        .chapter.accent-teal::before {
+            background: linear-gradient(90deg, var(--teal), transparent);
+        }
+
+        .chapter-header {
+            display: flex;
+            align-items: flex-start;
+            gap: 20px;
+            margin-bottom: 36px;
+        }
+
+        .chapter-num {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 11px;
+            font-weight: 600;
+            color: var(--gold);
+            background: var(--gold-dim);
+            padding: 4px 10px;
+            border-radius: 6px;
+            flex-shrink: 0;
+            margin-top: 6px;
+        }
+
+        .chapter-num.blue {
+            color: var(--blue);
+            background: rgba(74, 158, 255, 0.1);
+        }
+
+        .chapter-num.purple {
+            color: var(--purple);
+            background: rgba(167, 139, 250, 0.1);
+        }
+
+        .chapter-num.green {
+            color: var(--green);
+            background: rgba(52, 211, 153, 0.1);
+        }
+
+        .chapter-num.orange {
+            color: var(--orange);
+            background: rgba(251, 146, 60, 0.1);
+        }
+
+        .chapter-num.teal {
+            color: var(--teal);
+            background: rgba(45, 212, 191, 0.1);
+        }
+
+        .chapter h2 {
+            font-family: 'DM Serif Display', serif;
+            font-size: 28px;
+            color: var(--text);
+            line-height: 1.25;
+        }
+
+        .chapter-lead {
+            color: var(--text-sub);
+            font-size: 14px;
+            line-height: 1.75;
+            margin-bottom: 32px;
+            padding-bottom: 28px;
+            border-bottom: 1px solid var(--border);
+        }
+
+        /* ─── COMPONENTS ─── */
+        .section-title {
+            font-size: 13px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            margin-bottom: 16px;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+        }
+
+        .section-title::after {
+            content: '';
+            flex: 1;
+            height: 1px;
+            background: var(--border);
+        }
+
+        /* Info box */
+        .info-box {
+            background: rgba(74, 158, 255, 0.06);
+            border: 1px solid rgba(74, 158, 255, 0.2);
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 20px 0;
+        }
+
+        .info-box .info-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--blue);
+            margin-bottom: 8px;
+        }
+
+        .info-box p {
+            font-size: 13px;
+            color: var(--text-sub);
+        }
+
+        /* Warning box */
+        .warn-box {
+            background: rgba(251, 146, 60, 0.06);
+            border: 1px solid rgba(251, 146, 60, 0.2);
+            border-radius: 12px;
+            padding: 20px 24px;
+            margin: 20px 0;
+        }
+
+        .warn-box .warn-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--orange);
+            margin-bottom: 8px;
+        }
+
+        .warn-box p {
+            font-size: 13px;
+            color: var(--text-sub);
+        }
+
+        /* Gold callout */
+        .gold-callout {
+            background: var(--gold-dim);
+            border-left: 3px solid var(--gold);
+            border-radius: 0 12px 12px 0;
+            padding: 20px 24px;
+            margin: 20px 0;
+        }
+
+        .gold-callout .callout-label {
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--gold);
+            margin-bottom: 8px;
+        }
+
+        .gold-callout p {
+            font-size: 13px;
+            color: var(--text-sub);
+            line-height: 1.7;
+        }
+
+        /* Steps */
+        .steps {
+            display: flex;
+            flex-direction: column;
+            gap: 16px;
+            margin: 20px 0;
+        }
+
+        .step {
+            display: flex;
+            gap: 16px;
+            align-items: flex-start;
+        }
+
+        .step-badge {
+            width: 32px;
+            height: 32px;
+            border-radius: 10px;
+            background: var(--gold);
+            color: #000;
+            font-weight: 800;
+            font-size: 13px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            flex-shrink: 0;
             box-shadow: 0 4px 12px rgba(196, 125, 10, 0.3);
         }
-        
-        .process-flow { position: relative; padding-left: 20px; }
-        .process-flow::before {
-            content: ''; position: absolute; left: 0; top: 0; bottom: 0;
-            width: 1px; background: linear-gradient(to bottom, var(--gold), transparent);
-        }
-        
-        .nav-sticky { position: sticky; top: 40px; }
-        
-        .badge {
-            font-size: 10px; font-weight: 800; text-transform: uppercase; letter-spacing: 1px;
-            padding: 4px 10px; border-radius: 6px;
-        }
-        .badge-gold { background: rgba(196, 125, 10, 0.15); color: var(--gold); }
-        
-        @media (max-width: 1024px) {
-            .layout-flex { flex-direction: column; }
-            .nav-sticky { position: static; margin-bottom: 60px; }
+
+        .step-badge.blue {
+            background: var(--blue);
+            box-shadow: 0 4px 12px rgba(74, 158, 255, 0.3);
         }
 
-        /* Documentation Utilities */
-        code { font-family: 'IBM Plex Mono', monospace; background: #111317; color: var(--gold-light); padding: 2px 8px; border-radius: 6px; font-size: 0.9em; }
-        .clause-ref { color: var(--gold); font-weight: 700; border-bottom: 1px dashed var(--gold); cursor: help; }
+        .step-badge.purple {
+            background: var(--purple);
+            box-shadow: 0 4px 12px rgba(167, 139, 250, 0.3);
+        }
+
+        .step-badge.green {
+            background: var(--green);
+            box-shadow: 0 4px 12px rgba(52, 211, 153, 0.3);
+        }
+
+        .step-body h4 {
+            font-size: 14px;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 4px;
+        }
+
+        .step-body p {
+            font-size: 13px;
+            color: var(--text-sub);
+        }
+
+        /* Button pills */
+        .btn-grid {
+            display: flex;
+            flex-wrap: wrap;
+            gap: 10px;
+            margin: 16px 0;
+        }
+
+        .btn-pill {
+            display: inline-flex;
+            align-items: center;
+            gap: 7px;
+            padding: 8px 14px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            border: 1px solid;
+        }
+
+        .btn-pill.gold {
+            color: var(--gold);
+            background: var(--gold-dim);
+            border-color: rgba(196, 125, 10, 0.3);
+        }
+
+        .btn-pill.blue {
+            color: var(--blue);
+            background: rgba(74, 158, 255, 0.08);
+            border-color: rgba(74, 158, 255, 0.25);
+        }
+
+        .btn-pill.purple {
+            color: var(--purple);
+            background: rgba(167, 139, 250, 0.08);
+            border-color: rgba(167, 139, 250, 0.25);
+        }
+
+        .btn-pill.green {
+            color: var(--green);
+            background: rgba(52, 211, 153, 0.08);
+            border-color: rgba(52, 211, 153, 0.25);
+        }
+
+        .btn-pill.orange {
+            color: var(--orange);
+            background: rgba(251, 146, 60, 0.08);
+            border-color: rgba(251, 146, 60, 0.25);
+        }
+
+        .btn-pill.red {
+            color: var(--red);
+            background: rgba(248, 113, 113, 0.08);
+            border-color: rgba(248, 113, 113, 0.25);
+        }
+
+        .btn-pill.grey {
+            color: var(--text-sub);
+            background: rgba(255, 255, 255, 0.04);
+            border-color: var(--border);
+        }
+
+        .btn-pill.teal {
+            color: var(--teal);
+            background: rgba(45, 212, 191, 0.08);
+            border-color: rgba(45, 212, 191, 0.25);
+        }
+
+        /* Feature cards */
+        .feature-grid {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 16px;
+            margin: 20px 0;
+        }
+
+        .feature-grid.three {
+            grid-template-columns: 1fr 1fr 1fr;
+        }
+
+        .feature-card {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 14px;
+            padding: 20px;
+        }
+
+        .feature-card .fc-icon {
+            font-size: 22px;
+            margin-bottom: 10px;
+            display: block;
+        }
+
+        .feature-card h4 {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 6px;
+        }
+
+        .feature-card p {
+            font-size: 12px;
+            color: var(--text-sub);
+            line-height: 1.6;
+        }
+
+        /* Stat bar */
+        .stat-row {
+            display: grid;
+            grid-template-columns: repeat(4, 1fr);
+            gap: 12px;
+            margin: 20px 0;
+        }
+
+        .stat-card {
+            background: var(--surface-2);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 16px;
+            text-align: center;
+        }
+
+        .stat-card .stat-val {
+            font-family: 'DM Serif Display', serif;
+            font-size: 28px;
+            margin-bottom: 4px;
+        }
+
+        .stat-card .stat-label {
+            font-size: 11px;
+            color: var(--text-muted);
+        }
+
+        /* Role table */
+        .role-table {
+            width: 100%;
+            border-collapse: collapse;
+            margin: 16px 0;
+            font-size: 13px;
+        }
+
+        .role-table th {
+            text-align: left;
+            padding: 10px 16px;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 1px;
+            color: var(--text-muted);
+            border-bottom: 1px solid var(--border);
+        }
+
+        .role-table td {
+            padding: 12px 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.03);
+            color: var(--text-sub);
+            vertical-align: top;
+        }
+
+        .role-table tr:last-child td {
+            border-bottom: none;
+        }
+
+        .role-table td:first-child {
+            color: var(--text);
+            font-weight: 600;
+        }
+
+        /* Code inline */
+        code {
+            font-family: 'JetBrains Mono', monospace;
+            font-size: 12px;
+            background: rgba(196, 125, 10, 0.1);
+            color: var(--gold-light);
+            padding: 2px 7px;
+            border-radius: 5px;
+        }
+
+        /* Divider */
+        .divider {
+            height: 1px;
+            background: var(--border);
+            margin: 28px 0;
+        }
+
+        /* Tag */
+        .tag {
+            display: inline-flex;
+            align-items: center;
+            font-size: 10px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.8px;
+            padding: 3px 8px;
+            border-radius: 5px;
+            margin-right: 4px;
+        }
+
+        .tag.gold {
+            color: var(--gold);
+            background: var(--gold-dim);
+        }
+
+        .tag.blue {
+            color: var(--blue);
+            background: rgba(74, 158, 255, 0.1);
+        }
+
+        .tag.green {
+            color: var(--green);
+            background: rgba(52, 211, 153, 0.1);
+        }
+
+        .tag.orange {
+            color: var(--orange);
+            background: rgba(251, 146, 60, 0.1);
+        }
+
+        .tag.purple {
+            color: var(--purple);
+            background: rgba(167, 139, 250, 0.1);
+        }
+
+        .tag.red {
+            color: var(--red);
+            background: rgba(248, 113, 113, 0.1);
+        }
+
+        /* Workflow line */
+        .workflow {
+            display: flex;
+            flex-direction: column;
+            gap: 0;
+            margin: 20px 0;
+            padding-left: 16px;
+            border-left: 2px solid var(--border);
+            position: relative;
+        }
+
+        .workflow::before {
+            content: '';
+            position: absolute;
+            top: 0;
+            left: -2px;
+            bottom: 0;
+            width: 2px;
+            background: linear-gradient(to bottom, var(--gold), transparent);
+        }
+
+        .workflow-step {
+            padding: 12px 0 12px 24px;
+            position: relative;
+        }
+
+        .workflow-step::before {
+            content: '';
+            position: absolute;
+            left: -6px;
+            top: 18px;
+            width: 10px;
+            height: 10px;
+            border-radius: 50%;
+            background: var(--gold);
+            box-shadow: 0 0 0 3px var(--bg);
+        }
+
+        .workflow-step h5 {
+            font-size: 13px;
+            font-weight: 700;
+            color: var(--text);
+            margin-bottom: 4px;
+        }
+
+        .workflow-step p {
+            font-size: 12px;
+            color: var(--text-sub);
+        }
+
+        /* ─── PROGRESS INDICATOR ─── */
+        .toc-progress {
+            position: fixed;
+            top: 0;
+            right: 0;
+            width: 3px;
+            height: 100vh;
+            background: var(--border);
+            z-index: 100;
+        }
+
+        .toc-progress-fill {
+            width: 100%;
+            background: var(--gold);
+            transition: height 0.1s;
+        }
+
+        /* ─── MOBILE ─── */
+        @media (max-width: 900px) {
+            .sidebar {
+                display: none;
+            }
+
+            .main {
+                padding: 40px 24px 80px;
+            }
+
+            .feature-grid {
+                grid-template-columns: 1fr;
+            }
+
+            .feature-grid.three {
+                grid-template-columns: 1fr;
+            }
+
+            .stat-row {
+                grid-template-columns: 1fr 1fr;
+            }
+
+            .hero h1 {
+                font-size: 36px;
+            }
+
+            .chapter {
+                padding: 32px 24px;
+            }
+        }
     </style>
 </head>
+
 <body>
 
-    <div class="manual-container">
-        <!-- HEADER -->
-        <header class="mb-20">
-            <div class="flex items-center gap-4 mb-6">
-                <span class="badge badge-gold">Official Repository</span>
-                <span class="text-xs text-gray-500 font-mono">DOC-ID: EC-LEGAL-SOP-2026</span>
+    <div class="toc-progress">
+        <div class="toc-progress-fill" id="progressFill"></div>
+    </div>
+
+    <div class="layout">
+
+        <!-- ═══════════════ SIDEBAR ═══════════════ -->
+        <nav class="sidebar">
+            <div class="sidebar-brand">
+                <div class="badge">Official SOP</div>
+                <h1>Legal System<br><em>Complete Manual</em></h1>
             </div>
-            <h1 class="text-6xl md:text-7xl font-serif font-extrabold mb-8 leading-tight">
-                Legal Operations <br><span class="brand-gold italic">Standard Operating Procedures</span>
-            </h1>
-            <div class="grid md:grid-cols-2 gap-8 items-end">
-                <p class="text-gray-400 text-lg leading-relaxed">
-                    This comprehensive manual serves as the primary pedagogical resource for Eximp & Cloves legal practitioners. It outlines the transition from traditional analogue workflows to high-integrity digital execution environments.
+            <div class="sidebar-nav">
+
+                <div class="nav-group">
+                    <div class="nav-group-label">Getting Started</div>
+                    <a href="#intro" class="nav-item active"><span class="nav-dot"></span> Introduction & Roles</a>
+                    <a href="#navigation" class="nav-item"><span class="nav-dot"></span> System Navigation</a>
+                </div>
+
+                <div class="nav-group">
+                    <div class="nav-group-label">The Dashboard</div>
+                    <a href="#dashboard" class="nav-item"><span class="nav-dot"></span> Overview & Stats <span
+                            class="nav-number">II</span></a>
+                    <a href="#activity" class="nav-item"><span class="nav-dot"></span> Activity Feed & Charts</a>
+                </div>
+
+                <div class="nav-group">
+                    <div class="nav-group-label">Matters Management</div>
+                    <a href="#internal-matters" class="nav-item"><span class="nav-dot"></span> Internal Matters <span
+                            class="nav-number">III</span></a>
+                    <a href="#hr-legal-request" class="nav-item"><span class="nav-dot"></span> HR → Legal Request</a>
+                    <a href="#external-matters" class="nav-item"><span class="nav-dot"></span> External Matters <span
+                            class="nav-number">IV</span></a>
+                    <a href="#matter-actions" class="nav-item"><span class="nav-dot"></span> Per-Matter Actions</a>
+                </div>
+
+                <div class="nav-group">
+                    <div class="nav-group-label">Execution Portal</div>
+                    <a href="#execution-portal" class="nav-item"><span class="nav-dot"></span> Execution Portal <span
+                            class="nav-number">V</span></a>
+                    <a href="#invoice-session" class="nav-item"><span class="nav-dot"></span> Invoice Session States</a>
+                    <a href="#manage-execution" class="nav-item"><span class="nav-dot"></span> Manage Execution
+                        Modal</a>
+                </div>
+
+                <div class="nav-group">
+                    <div class="nav-group-label">The Legal Editor</div>
+                    <a href="#editor" class="nav-item"><span class="nav-dot"></span> Editor Overview <span
+                            class="nav-number">VI</span></a>
+                    <a href="#editor-tabs" class="nav-item"><span class="nav-dot"></span> Three-Tab System</a>
+                    <a href="#editor-toolbar" class="nav-item"><span class="nav-dot"></span> Formatting Toolbar</a>
+                    <a href="#editor-sidebar" class="nav-item"><span class="nav-dot"></span> Previews & Intelligence</a>
+                    <a href="#editor-signing" class="nav-item"><span class="nav-dot"></span> Signing Panel (Editor)</a>
+                </div>
+
+                <div class="nav-group">
+                    <div class="nav-group-label">Signature Vault</div>
+                    <a href="#sig-vault" class="nav-item"><span class="nav-dot"></span> Authority Slots <span
+                            class="nav-number">VII</span></a>
+                    <a href="#sig-actions" class="nav-item"><span class="nav-dot"></span> Upload & Manage</a>
+                </div>
+
+                <div class="nav-group">
+                    <div class="nav-group-label">Workflows</div>
+                    <a href="#signing-workflow" class="nav-item"><span class="nav-dot"></span> Digital Signing <span
+                            class="nav-number">VIII</span></a>
+                    <a href="#walkin" class="nav-item"><span class="nav-dot"></span> Walk-in Capture</a>
+                    <a href="#sealing" class="nav-item"><span class="nav-dot"></span> Sealing & Execution</a>
+                </div>
+
+                <div class="nav-group">
+                    <div class="nav-group-label">Document Management</div>
+                    <a href="#archive" class="nav-item"><span class="nav-dot"></span> Archive <span
+                            class="nav-number">IX</span></a>
+                    <a href="#doc-vault" class="nav-item"><span class="nav-dot"></span> Document Hub (Vault)</a>
+                    <a href="#attachments" class="nav-item"><span class="nav-dot"></span> Attachments</a>
+                </div>
+
+                <div class="nav-group">
+                    <div class="nav-group-label">Advanced Features</div>
+                    <a href="#templates" class="nav-item"><span class="nav-dot"></span> Template Library <span
+                            class="nav-number">X</span></a>
+                    <a href="#clauses" class="nav-item"><span class="nav-dot"></span> Clause Library <span
+                            class="nav-number">XI</span></a>
+                    <a href="#collaboration" class="nav-item"><span class="nav-dot"></span> Collaboration <span
+                            class="nav-number">XII</span></a>
+                    <a href="#audit" class="nav-item"><span class="nav-dot"></span> Audit Trail <span
+                            class="nav-number">XIII</span></a>
+                    <a href="#compliance" class="nav-item"><span class="nav-dot"></span> Compliance & Integrity <span
+                            class="nav-number">XIV</span></a>
+                </div>
+
+            </div>
+        </nav>
+
+        <!-- ═══════════════ MAIN ═══════════════ -->
+        <main class="main">
+
+            <!-- ─── HERO ─── -->
+            <div class="hero">
+                <div class="hero-eyebrow">
+                    <span class="tag gold">Official Repository</span>
+                    <span class="doc-id">EC-LEGAL-SOP-2026 · v3.1 Comprehensive</span>
+                </div>
+                <h1>Legal System<br><em>Complete Operations Manual</em></h1>
+                <p>The authoritative guide to every feature, workflow, button, and action available to Eximp & Cloves
+                    legal practitioners. This document covers the full lifecycle — from matter intake to final execution
+                    and archival — with no step omitted.</p>
+                <div class="hero-meta">
+                    <div class="hero-meta-item"><label>Scope</label><span>All 6 Dashboard Tabs · Full Editor · Signature
+                            Vault</span></div>
+                    <div class="hero-meta-item"><label>Audience</label><span>Lawyers, Legal Assistants, Directors</span>
+                    </div>
+                    <div class="hero-meta-item"><label>Status</label><span>Active · v3.1 · HR-Legal &amp; Sealing
+                            Expanded</span></div>
+                </div>
+            </div>
+
+
+            <!-- ═══ CHAPTER I: INTRODUCTION ═══ -->
+            <section id="intro" class="chapter">
+                <div class="chapter-header">
+                    <span class="chapter-num">CH. I</span>
+                    <h2>Introduction, Roles & System Architecture</h2>
+                </div>
+                <p class="chapter-lead">The Legal Suite is Eximp & Cloves' unified contract execution environment. It
+                    replaces fragmented paper-based processes with a structured, auditable digital workflow — from
+                    matter intake and document drafting through multi-party digital signing, physical sealing, and
+                    permanent archival.</p>
+
+                <div class="section-title">Who Uses the Legal Dashboard</div>
+                <table class="role-table">
+                    <thead>
+                        <tr>
+                            <th>Role</th>
+                            <th>Primary Responsibilities</th>
+                            <th>Key Access</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>🧑‍⚖️ Authorizing Lawyer</td>
+                            <td>Drafts, reviews, and seals all legal documents. Manages the full execution workflow.
+                            </td>
+                            <td>All tabs, full editor, seal authority</td>
+                        </tr>
+                        <tr>
+                            <td>👩‍💼 Managing Director</td>
+                            <td>Provides signature authority on contracts. Final approval signatory.</td>
+                            <td>Signature vault slot, signing sessions</td>
+                        </tr>
+                        <tr>
+                            <td>🗂️ Company Secretary</td>
+                            <td>Records and certifies resolutions and corporate documents.</td>
+                            <td>Signature vault slot, archive</td>
+                        </tr>
+                        <tr>
+                            <td>🧑‍💻 Legal Assistant / Viewer</td>
+                            <td>Read-only access to visible matters. Can view documents and status.</td>
+                            <td>Staff portal (read-only)</td>
+                        </tr>
+                        <tr>
+                            <td>📋 Witness</td>
+                            <td>Provides witness signature — either remote (signing link) or walk-in.</td>
+                            <td>Signing portal (external link or physical device)</td>
+                        </tr>
+                        <tr>
+                            <td>🏡 Client / Buyer</td>
+                            <td>Signs the contract as the primary party.</td>
+                            <td>Signing portal (external link or physical device)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="divider"></div>
+                <div class="section-title">System Architecture</div>
+                <div class="feature-grid three">
+                    <div class="feature-card">
+                        <span class="fc-icon">🏗️</span>
+                        <h4>Backend (FastAPI)</h4>
+                        <p>Python-based REST API under <code>/legal/</code>. Handles all matter data, signing logic, PDF
+                            generation, and Google Drive vault storage.</p>
+                    </div>
+                    <div class="feature-card">
+                        <span class="fc-icon">🖥️</span>
+                        <h4>Frontend (Jinja2 Templates)</h4>
+                        <p>Server-rendered HTML pages. Three core interfaces: the Dashboard, the Legal Editor, and the
+                            Signing Portal for external signatories.</p>
+                    </div>
+                    <div class="feature-card">
+                        <span class="fc-icon">☁️</span>
+                        <h4>Storage (Google Drive)</h4>
+                        <p>All signed PDFs, attachments, and authority signatures are stored encrypted in a private
+                            organizational Google Drive vault.</p>
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- ═══ CHAPTER I.b: NAVIGATION ═══ -->
+            <section id="navigation" class="chapter accent-blue">
+                <div class="chapter-header">
+                    <span class="chapter-num blue">NAV</span>
+                    <h2>System Navigation</h2>
+                </div>
+                <p class="chapter-lead">The Legal Dashboard is organized into six primary tabs accessible from the left
+                    navigation sidebar (desktop) or the hamburger menu (mobile). Each tab serves a distinct function in
+                    the legal workflow.</p>
+
+                <div class="section-title">Six Main Tabs</div>
+                <table class="role-table">
+                    <thead>
+                        <tr>
+                            <th>Tab</th>
+                            <th>Purpose</th>
+                            <th>Key Content</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>🏠 Dashboard</td>
+                            <td>Command center overview</td>
+                            <td>8 KPI stat cards, activity feed, execution velocity chart</td>
+                        </tr>
+                        <tr>
+                            <td>📂 Internal Matters</td>
+                            <td>Staff/personnel legal cases</td>
+                            <td>Matters table + Initiate new Staff matter button</td>
+                        </tr>
+                        <tr>
+                            <td>🌐 External Matters</td>
+                            <td>Client/property contracts</td>
+                            <td>Matters table + Initiate new External matter button</td>
+                        </tr>
+                        <tr>
+                            <td>⚡ Execution Portal</td>
+                            <td>All contracts ready for signing</td>
+                            <td>Full contracts table, voided toggle, Manage Execution modal</td>
+                        </tr>
+                        <tr>
+                            <td>🔐 Signature Vault</td>
+                            <td>Authority signature management</td>
+                            <td>5 authority slots: Director, Secretary, Lawyer, Seal, Witness</td>
+                        </tr>
+                        <tr>
+                            <td>🗄️ Archive</td>
+                            <td>Permanent executed records</td>
+                            <td>Read-only table of all executed & certified contracts</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="info-box">
+                    <div class="info-label">💡 Mobile Navigation</div>
+                    <p>On mobile devices, the sidebar collapses into a drawer triggered by the hamburger button
+                        (top-left). All six tabs remain accessible. The top bar always shows the current tab name and
+                        the Save / Execute buttons for the editor.</p>
+                </div>
+
+                <div class="divider"></div>
+                <div class="section-title">Global Actions (Always Available)</div>
+                <div class="btn-grid">
+                    <span class="btn-pill blue">🏢 Personnel Portal — navigate to HR</span>
+                    <span class="btn-pill grey">🚪 Sign Out — logout from system</span>
+                </div>
+            </section>
+
+
+            <!-- ═══ CHAPTER II: DASHBOARD ═══ -->
+            <section id="dashboard" class="chapter">
+                <div class="chapter-header">
+                    <span class="chapter-num">CH. II</span>
+                    <h2>The Dashboard — Command Center</h2>
+                </div>
+                <p class="chapter-lead">The Dashboard tab is the first screen upon login. It provides a real-time
+                    operational snapshot of all legal activity in the system, split into two categories:
+                    <strong>Matters</strong> (legal cases) and <strong>Contracts</strong> (execution documents).</p>
+
+                <div class="section-title">Matter Statistics (Top Row)</div>
+                <div class="stat-row">
+                    <div class="stat-card">
+                        <div class="stat-val" style="color:var(--text)">N</div>
+                        <div class="stat-label">Total Matters</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-val" style="color:var(--gold)">N</div>
+                        <div class="stat-label">Draft Matters</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-val" style="color:var(--purple)">N</div>
+                        <div class="stat-label">Active Matters</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-val" style="color:var(--green)">N</div>
+                        <div class="stat-label">Executed Matters</div>
+                    </div>
+                </div>
+                <p style="font-size:12px; color:var(--text-muted); margin-top: -8px;">These four cards track all legal
+                    matters (both internal/staff and external/client) by lifecycle stage.</p>
+
+                <div class="divider"></div>
+                <div class="section-title">Contract Statistics (Second Row)</div>
+                <div class="stat-row">
+                    <div class="stat-card">
+                        <div class="stat-val" style="color:var(--text)">N</div>
+                        <div class="stat-label">Total Contracts</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-val" style="color:var(--blue)">N</div>
+                        <div class="stat-label">Active Contracts</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-val" style="color:var(--green)">N</div>
+                        <div class="stat-label">Executed Contracts</div>
+                    </div>
+                    <div class="stat-card">
+                        <div class="stat-val" style="color:var(--gold)">N</div>
+                        <div class="stat-label">Pending Signing</div>
+                    </div>
+                </div>
+                <p style="font-size:12px; color:var(--text-muted); margin-top: -8px;">These cards track contract-level
+                    status. "Executed" excludes voided contracts. "Pending" = active signing sessions awaiting
+                    completion.</p>
+
+                <div class="divider"></div>
+                <div id="activity" class="section-title">Activity Feed</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:16px;">The Activity Feed shows the 15
+                    most recent actions across the system — document saves, signature captures, execution events, and
+                    status changes. Each entry displays the actor, action, matter title, and timestamp.</p>
+
+                <div class="gold-callout">
+                    <div class="callout-label">Quick Navigation</div>
+                    <p>The Dashboard contains a <strong>"View Portal"</strong> shortcut link that instantly switches to
+                        the Execution Portal tab — useful when you spot pending contracts in the stats cards and want to
+                        act on them immediately.</p>
+                </div>
+
+                <div class="divider"></div>
+                <div class="section-title">Execution Velocity Chart</div>
+                <p style="font-size:13px; color:var(--text-sub);">A line/bar chart (rendered via Chart.js) showing
+                    execution volume over recent periods. This visualizes how many contracts have been signed and sealed
+                    over time, helping legal leadership identify throughput trends and seasonal patterns.</p>
+            </section>
+
+
+            <!-- ═══ CHAPTER III: INTERNAL MATTERS ═══ -->
+            <section id="internal-matters" class="chapter accent-purple">
+                <div class="chapter-header">
+                    <span class="chapter-num purple">CH. III</span>
+                    <h2>Internal Matters — Staff & Personnel</h2>
+                </div>
+                <p class="chapter-lead">Internal Matters cover all legal cases related to Eximp & Cloves' own staff —
+                    employment contracts, disciplinary matters, HR-initiated legal proceedings, and any other
+                    personnel-facing legal document. These are linked to staff profiles in the HR system.</p>
+
+                <div class="section-title">Opening an Internal Matter</div>
+                <div class="btn-grid">
+                    <span class="btn-pill purple">＋ Initiate New Staff Matter</span>
+                </div>
+                <p style="font-size:13px; color:var(--text-sub); margin-top: 8px;">Clicking <strong>Initiate New Staff
+                        Matter</strong> opens the Initiate Modal pre-set to category <code>Staff</code>.</p>
+
+                <div class="divider"></div>
+                <div class="section-title">Initiate Matter Modal — Fields</div>
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-badge purple">1</div>
+                        <div class="step-body">
+                            <h4>Select Staff Member</h4>
+                            <p>Choose the employee this matter pertains to. Their name will be linked to the case record
+                                and used for document personalisation.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-badge purple">2</div>
+                        <div class="step-body">
+                            <h4>Matter Title</h4>
+                            <p>Provide a clear, descriptive title (e.g. "Employment Contract — J. Adeyemi 2026"). This
+                                becomes the document's primary identifier across all views.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-badge purple">3</div>
+                        <div class="step-body">
+                            <h4>Case Category</h4>
+                            <p>Select the appropriate legal category from the predefined list (e.g. Employment
+                                Agreement, Disciplinary, NDA, Settlement). Categories are managed by the system
+                                administrator.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-badge purple">4</div>
+                        <div class="step-body">
+                            <h4>Submit</h4>
+                            <p>Click <strong>Submit</strong> to create the matter. The system auto-generates a unique
+                                matter ID and redirects to the Legal Editor for this matter.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+                <div class="section-title">Internal Matters Table — Columns</div>
+                <table class="role-table">
+                    <thead>
+                        <tr>
+                            <th>Column</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Matter ID</td>
+                            <td>Auto-generated unique reference code (e.g. <code>EC-INT-2026-0042</code>)</td>
+                        </tr>
+                        <tr>
+                            <td>Staff Member</td>
+                            <td>The linked staff profile from HR</td>
+                        </tr>
+                        <tr>
+                            <td>Title</td>
+                            <td>Full matter title as entered during initiation</td>
+                        </tr>
+                        <tr>
+                            <td>Category</td>
+                            <td>Legal case category tag</td>
+                        </tr>
+                        <tr>
+                            <td>Status</td>
+                            <td>Draft → Active → Signing → Executed</td>
+                        </tr>
+                        <tr>
+                            <td>Created</td>
+                            <td>Date and time the matter was initiated</td>
+                        </tr>
+                        <tr>
+                            <td>Actions</td>
+                            <td>Row-level action buttons (see Per-Matter Actions chapter)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="divider"></div>
+                <div id="hr-legal-request" class="section-title">HR-Initiated Legal Cases — The HR → Legal Workflow
+                </div>
+
+                <div class="gold-callout">
+                    <div class="callout-label">Key Feature</div>
+                    <p>HR administrators do not need to access the Legal Dashboard to initiate a legal matter for a
+                        staff member. A dedicated <strong>Create Legal Case</strong> widget is embedded directly inside
+                        the HR Staff Profile page, allowing HR to request legal action without leaving the HR module.
+                        This is the primary handoff mechanism between HR and Legal — no emails or manual coordination
+                        required.</p>
+                </div>
+
+                <div class="info-box">
+                    <div class="info-label">Where to Find It</div>
+                    <p>In the <strong>HR Personnel Portal → Staff Profile → Legal tab</strong>, click the <strong>⚖️
+                            Create Legal Case</strong> button on any staff member's profile. The widget slides open as a
+                        right-side panel — no navigation away from HR is needed. The button is only visible to users
+                        with HR Admin or higher permissions.</p>
+                </div>
+
+                <div class="section-title" style="font-size:11px;">HR Legal Case Widget — Fields</div>
+                <table class="role-table">
+                    <thead>
+                        <tr>
+                            <th>Field</th>
+                            <th>Options / Input</th>
+                            <th>Purpose</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Case Type</td>
+                            <td>
+                                <span class="tag gold">📄 Contract Request</span>
+                                <span class="tag orange">⚠️ Disciplinary Review</span>
+                                <span class="tag green">✓ Legal Clearance</span>
+                                <span class="tag red">📋 Termination</span>
+                                <span class="tag grey">📝 Other</span>
+                            </td>
+                            <td>Sets the legal category for the matter. Pre-populates the matter type in the editor and
+                                determines which template library section is surfaced first when the lawyer opens the
+                                editor.</td>
+                        </tr>
+                        <tr>
+                            <td>Case Title</td>
+                            <td>Free text — e.g. <em>"Senior Developer Offer Letter"</em></td>
+                            <td>Becomes the matter's primary display name across the legal system. Should be specific
+                                enough to distinguish from other matters for the same staff member.</td>
+                        </tr>
+                        <tr>
+                            <td>HR Notes / Context</td>
+                            <td>Multi-line text area (max 2,000 characters)</td>
+                            <td>Internal notes for the legal team — background context, urgency, special instructions,
+                                relevant history. Stored as the matter's <strong>first internal memo</strong>, visible
+                                only to lawyers and HR admins — never to the staff member.</td>
+                        </tr>
+                        <tr>
+                            <td>Urgency Level</td>
+                            <td>
+                                <span class="tag green">Routine</span>
+                                <span class="tag orange">Urgent</span>
+                                <span class="tag red">Critical</span>
+                            </td>
+                            <td>Flags priority in the Legal Dashboard. Urgent and Critical matters appear with coloured
+                                indicators in the Internal Matters table. Critical urgency generates an additional email
+                                to the Director of Legal Services.</td>
+                        </tr>
+                        <tr>
+                            <td>Requires Digital Signature</td>
+                            <td>Checkbox (checked by default)</td>
+                            <td>Flags the matter for the digital signing workflow. If unchecked, the matter is treated
+                                as informational/advisory only — no signing session can be started. <strong>This cannot
+                                    be changed after submission.</strong></td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="section-title" style="font-size:11px;">Complete HR → Legal Handoff — End-to-End Workflow
+                </div>
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-badge purple">1</div>
+                        <div class="step-body">
+                            <h4>HR Locates the Staff Member</h4>
+                            <p>In the HR Personnel Portal, navigate to the staff member's profile and open the
+                                <strong>Legal tab</strong>. Any previously created legal cases for this staff member are
+                                listed here, showing their status (Draft, Active, Executed) so HR can review the full
+                                legal history before creating a new case.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-badge purple">2</div>
+                        <div class="step-body">
+                            <h4>HR Fills the Widget &amp; Submits</h4>
+                            <p>HR selects Case Type, writes the Case Title, provides context in HR Notes, sets urgency,
+                                and confirms the signature requirement. Clicking <strong>Submit Case Request</strong>
+                                calls <code>POST /api/hr-legal/staff/{staff_id}/create-legal-case</code>. The staff
+                                member's ID is automatically injected — HR does not need to enter it manually.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-badge purple">3</div>
+                        <div class="step-body">
+                            <h4>System Creates the Matter</h4>
+                            <p>The backend creates a new Internal Matter in <strong>Draft</strong> status with a unique
+                                matter ID (e.g. <code>EC-INT-2026-0042</code>). The matter is linked to the staff
+                                member's HR profile. The HR Notes are stored as the first internal memo, timestamped and
+                                attributed to the submitting HR admin. The matter immediately appears in the Legal
+                                Dashboard under <strong>Internal Matters</strong>.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-badge purple">4</div>
+                        <div class="step-body">
+                            <h4>Notification to Legal Team</h4>
+                            <p>The system sends an in-app notification to all users with Legal Admin access. The
+                                notification shows: matter title, case type, urgency level, the HR admin who submitted
+                                it, and a direct link to open the Legal Editor. Critical urgency cases generate an
+                                additional email to the Director of Legal Services.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-badge purple">5</div>
+                        <div class="step-body">
+                            <h4>Lawyer Opens the Editor &amp; Reviews HR Memo</h4>
+                            <p>The lawyer opens the matter from the Internal Matters table or via notification. In the
+                                editor sidebar, the <strong>Internal Memos</strong> section displays the HR Notes as
+                                context. The lawyer reads this, selects an appropriate template, customises the content,
+                                and saves drafts. The matter title and staff name are pre-populated on the Cover Page
+                                tab from the HR submission data.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-badge purple">6</div>
+                        <div class="step-body">
+                            <h4>Matter Visibility Toggle (Lawyer Controls This)</h4>
+                            <p>Prior to the visibility toggle, the matter is <strong>completely invisible</strong> to
+                                the staff member. Once the document is ready for the staff member to review or sign, the
+                                lawyer enables visibility via <code>PATCH /matters/{id}/visibility</code>. The staff
+                                member can then see the document in their self-service portal under <em>My Legal
+                                    Documents</em>.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-badge purple">7</div>
+                        <div class="step-body">
+                            <h4>Signing &amp; Execution (If Required)</h4>
+                            <p>If the matter requires a digital signature, the lawyer starts a signing session. For
+                                employment contracts and offer letters, the staff member signs via a remote link sent to
+                                their company email. For disciplinary or termination matters, the walk-in capture method
+                                is more appropriate — the staff member signs on-screen in the presence of an HR witness.
+                            </p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-badge purple">8</div>
+                        <div class="step-body">
+                            <h4>HR Views Completed Status</h4>
+                            <p>Once the matter reaches <strong>Executed</strong> status, the status badge on the staff
+                                member's Legal tab in the HR Portal updates automatically. HR cannot download the sealed
+                                PDF directly — they must request a copy from the legal team, who can share it via the
+                                Document Hub.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+                <div class="section-title" style="font-size:11px;">HR Legal Tab — What HR Can See vs. Access</div>
+                <table class="role-table">
+                    <thead>
+                        <tr>
+                            <th>Item</th>
+                            <th>HR Can See</th>
+                            <th>HR Can Do</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Matter list (this staff member)</td>
+                            <td>✅ Title, Type, Status, Date Created</td>
+                            <td>Read only</td>
+                        </tr>
+                        <tr>
+                            <td>Document content / contract wording</td>
+                            <td>❌ Hidden from HR</td>
+                            <td>No access</td>
+                        </tr>
+                        <tr>
+                            <td>Internal memos</td>
+                            <td>⚠️ Their own submitted HR Notes only</td>
+                            <td>Cannot add further memos after submission</td>
+                        </tr>
+                        <tr>
+                            <td>Signing status</td>
+                            <td>✅ Signed / Pending / Not Started</td>
+                            <td>Read only</td>
+                        </tr>
+                        <tr>
+                            <td>Create new legal case</td>
+                            <td>✅ Via the widget</td>
+                            <td>Submit only — cannot edit after submission</td>
+                        </tr>
+                        <tr>
+                            <td>Sealed PDF</td>
+                            <td>❌ Not accessible to HR directly</td>
+                            <td>Must request from legal team</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="warn-box">
+                    <div class="warn-label">⚠️ HR vs. Lawyer Permissions — Critical Boundaries</div>
+                    <p>HR administrators can <em>create</em> a legal case via this widget, but only users with Legal
+                        Admin credentials can: draft or edit document content, manage signing sessions, toggle matter
+                        visibility, add internal memos, access the sealed PDF, or execute the document. The <em>Create
+                            Legal Case</em> widget is a <strong>request mechanism only</strong>. If an HR admin also
+                        holds Legal Admin credentials (dual role), both sets of permissions apply and they will be
+                        redirected directly into the full Legal Editor on submission.</p>
+                </div>
+            </section>
+
+
+            <!-- ═══ CHAPTER IV: EXTERNAL MATTERS ═══ -->
+            <section id="external-matters" class="chapter accent-orange">
+                <div class="chapter-header">
+                    <span class="chapter-num orange">CH. IV</span>
+                    <h2>External Matters — Client Contracts</h2>
+                </div>
+                <p class="chapter-lead">External Matters are client-facing legal documents — property sale agreements,
+                    purchase contracts, co-ownership deeds, and all external commercial arrangements. These are the
+                    primary contract type that goes through digital signing with external parties.</p>
+
+                <div class="section-title">Opening an External Matter</div>
+                <div class="btn-grid">
+                    <span class="btn-pill orange">＋ Initiate New External Matter</span>
+                </div>
+                <p style="font-size:13px; color:var(--text-sub); margin-top: 8px;">Opens the same Initiate Modal with
+                    category pre-set to <code>External</code>. Fields are identical but the matter will appear in the
+                    External Matters table and be flagged for client-facing signing workflows.</p>
+
+                <div class="divider"></div>
+                <div class="section-title">External Matter Table — Columns</div>
+                <table class="role-table">
+                    <thead>
+                        <tr>
+                            <th>Column</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Matter ID</td>
+                            <td>Unique reference, e.g. <code>EC-EXT-2026-0108</code></td>
+                        </tr>
+                        <tr>
+                            <td>Client Name</td>
+                            <td>Primary client / buyer linked from CRM</td>
+                        </tr>
+                        <tr>
+                            <td>Title</td>
+                            <td>Contract description (e.g. "Full Payment Sale — Plot 12B, Lekki")</td>
+                        </tr>
+                        <tr>
+                            <td>Type</td>
+                            <td>Full Payment, Part Payment, Co-Ownership, etc.</td>
+                        </tr>
+                        <tr>
+                            <td>Status</td>
+                            <td>Draft → Active → Signing → Executed → Voided</td>
+                        </tr>
+                        <tr>
+                            <td>Last Modified</td>
+                            <td>Most recent save or action timestamp</td>
+                        </tr>
+                        <tr>
+                            <td>Actions</td>
+                            <td>Row-level actions (see next chapter)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="divider"></div>
+                <div id="matter-actions" class="section-title">Per-Matter Row Actions (Applies to Both Tables)</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom: 16px;">Every row in both matter tables
+                    contains an actions column with the following icon buttons:</p>
+
+                <table class="role-table">
+                    <thead>
+                        <tr>
+                            <th>Icon</th>
+                            <th>Button</th>
+                            <th>What It Does</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>👁️</td>
+                            <td>View Document</td>
+                            <td>Opens the matter in read-only preview mode (<code>/legal/view?id=…</code>). The document
+                                renders as a formatted page — no editing permitted.</td>
+                        </tr>
+                        <tr>
+                            <td>✏️</td>
+                            <td>Open Editor</td>
+                            <td>Opens the full Legal Editor for this matter (<code>/legal/advanced-editor?id=…</code>).
+                                Available only when the matter is in Draft or Active status, and only for authorized
+                                users.</td>
+                        </tr>
+                        <tr>
+                            <td>🔗</td>
+                            <td>Share Preview Link</td>
+                            <td>Generates a secure, time-limited preview link and copies it to clipboard. The recipient
+                                can view (but not sign) the document without logging in. Uses
+                                <code>POST /matters/{id}/preview-link</code>.</td>
+                        </tr>
+                        <tr>
+                            <td>👥</td>
+                            <td>Duplicate Matter</td>
+                            <td>Creates an exact copy of this matter as a new Draft. All content and metadata is
+                                preserved; the new matter receives a fresh ID. Uses
+                                <code>POST /matters/{id}/duplicate</code>.</td>
+                        </tr>
+                        <tr>
+                            <td>📋</td>
+                            <td>View Audit Trail</td>
+                            <td>Opens the Audit Trail panel showing every action taken on this matter — who saved,
+                                signed, modified, or changed status, with timestamps and IP metadata.</td>
+                        </tr>
+                        <tr>
+                            <td>📁</td>
+                            <td>Document Hub (Vault Panel)</td>
+                            <td>Opens the Document Hub slide-over panel for this matter. Allows uploading, downloading,
+                                previewing, and deleting attached files. See Chapter IX for full details.</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="warn-box">
+                    <div class="warn-label">⚠️ Permission Levels</div>
+                    <p>The Edit button (✏️) is hidden from users with View-only permissions. Visibility of matters can
+                        also be toggled by an authorized administrator using
+                        <code>PATCH /matters/{id}/visibility</code>.</p>
+                </div>
+            </section>
+
+
+            <!-- ═══ CHAPTER V: EXECUTION PORTAL ═══ -->
+            <section id="execution-portal" class="chapter accent-teal">
+                <div class="chapter-header">
+                    <span class="chapter-num teal">CH. V</span>
+                    <h2>The Execution Portal</h2>
+                </div>
+                <p class="chapter-lead">The Execution Portal is the master control panel for all contracts in the system
+                    — regardless of category. This is where lawyers manage the transition from drafted document to fully
+                    executed, legally binding contract.</p>
+
+                <div class="section-title">Portal Controls</div>
+                <div class="btn-grid">
+                    <span class="btn-pill teal">🔄 Refresh — reload contract list</span>
+                    <span class="btn-pill grey">🔍 Search — filter by invoice number or client name</span>
+                    <span class="btn-pill orange">👁 Show Voided — toggle to include voided contracts</span>
+                </div>
+
+                <div class="divider"></div>
+                <div class="section-title">Contract Table Columns</div>
+                <table class="role-table">
+                    <thead>
+                        <tr>
+                            <th>Column</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Invoice / Ref No.</td>
+                            <td>The sales invoice number or contract reference linked from the CRM</td>
+                        </tr>
+                        <tr>
+                            <td>Client</td>
+                            <td>Buyer name from the linked invoice</td>
+                        </tr>
+                        <tr>
+                            <td>Matter Title</td>
+                            <td>The legal matter title</td>
+                        </tr>
+                        <tr>
+                            <td>Status Badge</td>
+                            <td>Current signing status: Draft, Active, Signing, Executed, Voided</td>
+                        </tr>
+                        <tr>
+                            <td>Created</td>
+                            <td>Contract creation date</td>
+                        </tr>
+                        <tr>
+                            <td>Action</td>
+                            <td>Contextual button based on status (see below)</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="divider"></div>
+                <div class="section-title">Row Action — Contextual by Status</div>
+                <table class="role-table">
+                    <thead>
+                        <tr>
+                            <th>Status</th>
+                            <th>Button Shown</th>
+                            <th>What It Opens</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="tag gold">Draft / Active</span></td>
+                            <td>Manage Execution</td>
+                            <td>Opens the full Execution Status Modal for this contract</td>
+                        </tr>
+                        <tr>
+                            <td><span class="tag green">Executed</span></td>
+                            <td>View Certificate</td>
+                            <td>Opens the signed PDF certificate of authentication</td>
+                        </tr>
+                        <tr>
+                            <td><span class="tag red">Voided</span></td>
+                            <td>— (row is greyed out)</td>
+                            <td>No action available. Voided contracts are read-only.</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="divider"></div>
+                <div id="invoice-session" class="section-title">Invoice-Based Contract Session — How It Actually Works
+                </div>
+
+                <div class="gold-callout">
+                    <div class="callout-label">Critical Architecture Detail</div>
+                    <p>Every contract in the Execution Portal is identified by its <strong>Invoice ID</strong>, not the
+                        matter ID. When you click <strong>Manage Execution</strong> on a row, the system loads the
+                        orchestration state for that specific <code>invoiceId</code>. All session API calls use the
+                        invoice as the key: <code>POST /api/contracts/session/{invoiceId}</code>.</p>
+                </div>
+
+                <div class="section-title" style="font-size:11px;">State A — No Session Active (Empty State)</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:14px;">When you open Manage Execution for
+                    a contract that has no active signing session, you see this screen with <strong>exactly 4
+                        buttons</strong>:</p>
+
+                <table class="role-table">
+                    <thead>
+                        <tr>
+                            <th>Button</th>
+                            <th>What It Does</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><span class="tag gold">🚀 Start Signing Session</span></td>
+                            <td>The primary action. Calls <code>POST /api/contracts/session/{invoiceId}</code>.
+                                Generates a signing token, locks the current document content via hash, and dispatches
+                                the signing request email to the client. <strong>This is how all invoice-based contract
+                                    executions begin.</strong> The button shows a spinner while processing — if it
+                                fails, the error message will say "Ensure company signatures are set" — which means the
+                                Signature Vault is incomplete.</td>
+                        </tr>
+                        <tr>
+                            <td><span class="tag grey">🚶 Record Walk-in Witness</span></td>
+                            <td>Skip the remote session for the witness. Opens the canvas capture modal directly. Use
+                                this when the witness is physically present and does not need a signing link.</td>
+                        </tr>
+                        <tr>
+                            <td><span class="tag grey">🚶 Record Walk-in Client</span></td>
+                            <td>Same as above for the client/buyer. Use when the client is sitting with you in the
+                                office and can sign on the screen directly.</td>
+                        </tr>
+                        <tr>
+                            <td><span class="tag blue">✏️ Edit Contract Wordings</span></td>
+                            <td>Navigates to <code>/legal/editor?id={invoiceId}</code> for last-minute content edits
+                                before starting the session. <strong>Important:</strong> Once a signing session is
+                                started and the document is hashed, edits will break the hash integrity. Always finalize
+                                content before clicking Start Signing Session.</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="warn-box">
+                    <div class="warn-label">⚠️ Before You Click "Start Signing Session"</div>
+                    <p>Verify three things: (1) all 5 Signature Vault slots are Active — the session will fail silently
+                        if any are missing; (2) the contract content is final — editing after session start invalidates
+                        the document hash; (3) the client's email address in the CRM is correct — the signing link is
+                        sent there automatically.</p>
+                </div>
+
+                <div class="divider"></div>
+                <div class="section-title" style="font-size:11px;">State B — Active Session (Orchestration View)</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:14px;">Once a session is started, the
+                    modal switches to the live orchestration view. The invoice label changes from
+                    <code>UNAVAILABLE</code> to <code>ACTIVE ORCHESTRATION</code>. The available actions expand:</p>
+
+                <div class="btn-grid">
+                    <span class="btn-pill blue">📋 Copy Signing Link — share the client URL manually</span>
+                    <span class="btn-pill grey">📤 Resend Link — re-email the signing invite</span>
+                    <span class="btn-pill orange">⏱️ Extend Session — give more time before the token expires</span>
+                    <span class="btn-pill gold">✏️ Edit Wordings — modify content (use with caution)</span>
+                    <span class="btn-pill grey">👁 View Draft (HTML) — preview the document as-is</span>
+                    <span class="btn-pill purple">🚶 Walk-in Witness — capture on-site if not yet signed</span>
+                    <span class="btn-pill purple">🚶 Walk-in Client — capture on-site if not yet signed</span>
+                </div>
+
+                <div class="divider"></div>
+                <div class="section-title" style="font-size:11px;">State C — All Signatures Collected</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:14px;">When both the client and witness
+                    signatures are confirmed in the orchestration view, the terminal action becomes available:</p>
+
+                <div class="btn-grid">
+                    <span class="btn-pill gold">🔏 Final Execution — opens the Seal & Execute modal</span>
+                </div>
+
+                <p style="font-size:13px; color:var(--text-sub); margin-top:12px;">The <strong>Seal & Execute</strong>
+                    modal presents two execution paths. The choice depends on the document type and what the law or
+                    counterparty requires:</p>
+
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <span class="fc-icon">⚡</span>
+                        <h4>Option 1: Digital Execution (Dashboard Seal)</h4>
+                        <p>The system automatically overlays all Signature Vault authority signatures — MD, Company
+                            Secretary, Authorizing Lawyer — onto the execution page. The <strong>Law Firm Seal</strong>
+                            (Vault Slot 4) is applied as a circular stamp image at the designated seal position on the
+                            PDF. Optional: <strong>Include Audit Certificate</strong> (default on) appends the
+                            cryptographic Certificate of Authentication as a final page. Fastest method; no printing or
+                            physical handling required. Appropriate for the majority of Eximp &amp; Cloves contracts.
+                        </p>
+                    </div>
+                    <div class="feature-card">
+                        <span class="fc-icon">🖋️</span>
+                        <h4>Option 2: Wet Ink / Hybrid Physical Sealing</h4>
+                        <p>Download the base PDF (vault signatures already overlaid) → print → apply wet ink handwritten
+                            signatures in designated blocks → apply the firm's physical rubber stamp at the seal
+                            position → for Deeds: have it sworn before a Commissioner for Oaths → scan at 300 DPI →
+                            Upload Sealed PDF back into the system. Required by law for Deeds of Assignment, CAC
+                            filings, and any transaction where the counterparty's solicitors need a physical original
+                            with a stamped seal. See the Sealing &amp; Execution chapter for the full step-by-step
+                            process.</p>
+                    </div>
+                </div>
+
+                <div class="info-box">
+                    <div class="info-label">💡 Which Method Do I Use?</div>
+                    <p><strong>Digital Execution</strong> is appropriate for: property sale agreements, instalment
+                        agreements, co-ownership deeds, employment contracts, NDAs, and offer letters where all parties
+                        accept digital execution. <strong>Wet Ink / Physical</strong> is required for: Deeds of
+                        Assignment (compulsory under the Land Use Act), documents filed with the CAC or any government
+                        registry, and any matter where the counterparty's solicitors specifically demand a physical
+                        original with a stamped seal. When in doubt, consult the Director of Legal Services before
+                        proceeding — executing the wrong way can render a document void or unregistrable.</p>
+                </div>
+
+                <div class="info-box">
+                    <div class="info-label">Invoice Label in the Modal</div>
+                    <p>The Manage Execution modal shows a small label at the top reading <strong>"UNAVAILABLE"</strong>
+                        (no session) or <strong>"ACTIVE ORCHESTRATION"</strong> (session live). This is the fastest way
+                        to tell at a glance whether a contract has a live signing session without reading the full
+                        status.</p>
+                </div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:16px;">Clicking <strong>Manage
+                        Execution</strong> opens a rich modal displaying the full signing status and all available
+                    actions. This is the primary interface for driving a contract to completion.</p>
+
+                <table class="role-table">
+                    <thead>
+                        <tr>
+                            <th>Action</th>
+                            <th>When Available</th>
+                            <th>What It Does</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>🚀 Start Signing Session</td>
+                            <td>No session active</td>
+                            <td>Initiates the digital signing workflow. Generates a unique signing token and dispatches
+                                signature request emails/links to all required signatories.</td>
+                        </tr>
+                        <tr>
+                            <td>📋 Copy Signing Link</td>
+                            <td>Session active</td>
+                            <td>Copies the client/signatory signing URL to clipboard. Can be manually shared via
+                                WhatsApp, email, or any channel.</td>
+                        </tr>
+                        <tr>
+                            <td>📤 Resend Link</td>
+                            <td>Session active</td>
+                            <td>Re-dispatches the signing request email to the client. Use when the original email was
+                                not received.</td>
+                        </tr>
+                        <tr>
+                            <td>⏱️ Extend Session</td>
+                            <td>Session active</td>
+                            <td>Extends the signing session expiry time. Sessions expire after a configured period; use
+                                this to give more time to signatories without restarting the entire workflow.</td>
+                        </tr>
+                        <tr>
+                            <td>✏️ Edit Wordings</td>
+                            <td>Always (if Draft/Active)</td>
+                            <td>Navigates to <code>/legal/editor?id=…</code> — the full Legal Editor — to modify
+                                document content before or during the signing session.</td>
+                        </tr>
+                        <tr>
+                            <td>📄 View Draft (HTML)</td>
+                            <td>Always</td>
+                            <td>Opens a read-only HTML preview of the current document state in a new modal. Does not
+                                require the document to be signed.</td>
+                        </tr>
+                        <tr>
+                            <td>🔏 Final Execution</td>
+                            <td>All required signatures collected</td>
+                            <td>Opens the Final Execution Modal. This is the terminal action that seals the contract.
+                                See Sealing section.</td>
+                        </tr>
+                        <tr>
+                            <td>🚶 Walk-in Witness</td>
+                            <td>Witness not yet signed</td>
+                            <td>Opens the Walk-in Capture Modal for the witness role. Allows capturing a physical
+                                signature on a drawing canvas if the witness is present in person.</td>
+                        </tr>
+                        <tr>
+                            <td>🚶 Walk-in Client</td>
+                            <td>Client not yet signed</td>
+                            <td>Opens the Walk-in Capture Modal for the client role. Same as above but for the buyer.
+                            </td>
+                        </tr>
+                        <tr>
+                            <td>⬇️ Download Sealing PDF</td>
+                            <td>Final execution complete</td>
+                            <td>Downloads the fully assembled, signed PDF with all authority signatures overlaid. This
+                                is the legally binding version.</td>
+                        </tr>
+                        <tr>
+                            <td>⬆️ Upload Sealed PDF</td>
+                            <td>Physical/hybrid signing</td>
+                            <td>Allows uploading a physically signed and scanned PDF back into the system vault for
+                                hybrid workflows.</td>
+                        </tr>
+                        <tr>
+                            <td>📨 Send Sealed PDF</td>
+                            <td>After upload</td>
+                            <td>Emails the sealed PDF to the client. Button is disabled until a sealed PDF has been
+                                uploaded or generated.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+
+            <!-- ═══ CHAPTER VI: THE LEGAL EDITOR ═══ -->
+            <section id="editor" class="chapter">
+                <div class="chapter-header">
+                    <span class="chapter-num">CH. VI</span>
+                    <h2>The Legal Editor</h2>
+                </div>
+                <p class="chapter-lead">The Legal Editor is the core document workspace. It is a rich-text, three-pane
+                    interface opened via <code>/legal/advanced-editor?id={matter_id}</code>. Every contract is composed
+                    and refined here before being dispatched for signing. The editor has a read-only mode for view-only
+                    users.</p>
+
+                <div class="info-box">
+                    <div class="info-label">How to Access</div>
+                    <p>Click the ✏️ Edit button on any matter row, or use <strong>Edit Wordings</strong> from the
+                        Execution Modal. The URL <code>/legal/editor?id=…</code> is a lighter version;
+                        <code>/legal/advanced-editor?id=…</code> is the full interface.</p>
+                </div>
+
+                <div class="divider"></div>
+                <div class="section-title">Top Bar Controls</div>
+                <table class="role-table">
+                    <thead>
+                        <tr>
+                            <th>Element</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Matter Title + Ref</td>
+                            <td>Displays the invoice number and contract reference (e.g.
+                                <code>INV-2026-0420 · REF: EC/PROP/026</code>). Read-only in the top bar.</td>
+                        </tr>
+                        <tr>
+                            <td>Current Tab Pill</td>
+                            <td>Shows which of the three tabs (Cover / Body / Execution) is currently active.</td>
+                        </tr>
+                        <tr>
+                            <td>🧠 Deal Intelligence</td>
+                            <td>Opens the Deal Intelligence panel — shows client data, payment history, and property
+                                details pulled from the linked CRM invoice.</td>
+                        </tr>
+                        <tr>
+                            <td>💾 Save Draft</td>
+                            <td>Saves the current editor state to the database. Also accessible via keyboard autosave
+                                buffer. Triggers <code>PATCH /matters/{id}/save</code>.</td>
+                        </tr>
+                        <tr>
+                            <td>🔏 Seal & Execute</td>
+                            <td>Opens the Final Execution Modal to begin the official signing and sealing process.</td>
+                        </tr>
+                        <tr>
+                            <td>← Back to Legal</td>
+                            <td>Navigates back to the Legal Dashboard without saving (unsaved changes may be lost if
+                                autosave hasn't triggered).</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="divider"></div>
+                <div id="editor-tabs" class="section-title">The Three-Tab System</div>
+
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <span class="fc-icon">🗂️</span>
+                        <h4>Cover Page Tab</h4>
+                        <p>The first page of the document. Typically contains the contract title, parties' names,
+                            effective date, property details, and the firm letterhead or branding elements. This page is
+                            usually locked from free-form editing and populated from CRM data via tokens.</p>
+                    </div>
+                    <div class="feature-card">
+                        <span class="fc-icon">📝</span>
+                        <h4>Document Body Tab</h4>
+                        <p>The main content area. A fully editable rich-text canvas where all contract clauses,
+                            schedules, terms, and conditions are authored or modified. This is the primary editing zone
+                            with full toolbar access.</p>
+                    </div>
+                    <div class="feature-card">
+                        <span class="fc-icon">✒️</span>
+                        <h4>Execution Clauses Tab</h4>
+                        <p>The signature block and attestation section. Contains the IN WITNESS WHEREOF clauses,
+                            signature placeholders for all parties, and the execution date. Signature placeholders are
+                            rendered as dashed-border boxes where authority signatures will be injected during final
+                            execution.</p>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+                <div id="editor-toolbar" class="section-title">Formatting Toolbar — All Buttons</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:16px;">The toolbar appears above the
+                    Document Body canvas. It uses the browser's native <code>document.execCommand</code> API for
+                    formatting operations.</p>
+
+                <div class="btn-grid">
+                    <span class="btn-pill gold">𝐁 Bold — Ctrl+B</span>
+                    <span class="btn-pill gold">𝐼 Italic — Ctrl+I</span>
+                    <span class="btn-pill gold">U̲ Underline — Ctrl+U</span>
+                    <span class="btn-pill grey">— Divider</span>
+                    <span class="btn-pill blue">1. Numbered List</span>
+                    <span class="btn-pill blue">• Bullet List</span>
+                    <span class="btn-pill grey">— Divider</span>
+                    <span class="btn-pill purple">⟵ Decrease Indent (Outdent)</span>
+                    <span class="btn-pill purple">⟶ Increase Indent</span>
+                    <span class="btn-pill grey">— Divider</span>
+                    <span class="btn-pill red">⌫ Clear Formatting (Remove Format)</span>
+                </div>
+
+                <div class="gold-callout">
+                    <div class="callout-label">Autosave</div>
+                    <p>The editor triggers an autosave buffer on every keystroke
+                        (<code>oninput="autoSaveToBuffer()"</code>). This creates a temporary local save. Click
+                        <strong>Save Draft</strong> to commit changes permanently to the server. Do not rely on the
+                        autosave buffer alone — always explicitly save before closing.</p>
+                </div>
+
+                <div class="divider"></div>
+                <div id="editor-sidebar" class="section-title">Right Sidebar — Previews & Intelligence</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:16px;">The right sidebar (340px wide)
+                    contains document preview shortcuts and the Deal Intelligence section.</p>
+
+                <div class="section-title" style="font-size:11px;">Document Preview Buttons</div>
+                <table class="role-table">
+                    <thead>
+                        <tr>
+                            <th>Button</th>
+                            <th>Opens</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>📄 Invoice</td>
+                            <td>Tax invoice preview for the linked sale (pulled from CRM). Opens in a fullscreen preview
+                                modal.</td>
+                        </tr>
+                        <tr>
+                            <td>🧾 Receipt</td>
+                            <td>Payment receipt for any amounts received on the linked invoice.</td>
+                        </tr>
+                        <tr>
+                            <td>📋 Statement</td>
+                            <td>Account statement showing all transactions on the client's account.</td>
+                        </tr>
+                        <tr>
+                            <td>👁 View Draft</td>
+                            <td>A live HTML preview of the current contract as it would appear when sent to the client.
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="divider"></div>
+                <div class="section-title" style="font-size:11px;">Deal Intelligence Panel</div>
+                <p style="font-size:13px; color:var(--text-sub);">Accessible via the 🧠 button in the top bar, this
+                    panel surfaces live CRM data for the linked deal — client name, contact, payment percentage,
+                    property reference, sales representative, and any outstanding balance. Used by lawyers to verify
+                    contract details before sealing.</p>
+
+                <div class="divider"></div>
+                <div id="editor-signing" class="section-title">Signing Status Panel (Inside Editor)</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:16px;">The editor's right sidebar also
+                    includes a live orchestration/signing panel that mirrors the Manage Execution modal. All signing
+                    actions are available without leaving the editor:</p>
+
+                <div class="btn-grid">
+                    <span class="btn-pill gold">🚀 Start Signing Session</span>
+                    <span class="btn-pill blue">📋 Copy Signing Link</span>
+                    <span class="btn-pill grey">📤 Resend Link</span>
+                    <span class="btn-pill orange">⏱️ Extend Session</span>
+                    <span class="btn-pill purple">🚶 Walk-in Witness</span>
+                    <span class="btn-pill purple">🚶 Walk-in Client</span>
+                </div>
+
+                <div class="info-box">
+                    <div class="info-label">Read-Only Mode Banner</div>
+                    <p>When a user lacks edit permission, the editor renders a <strong>Read-Only Banner</strong> above
+                        the canvas. The toolbar and Save button are disabled. All preview and intelligence features
+                        remain accessible.</p>
+                </div>
+            </section>
+
+
+            <!-- ═══ CHAPTER VII: SIGNATURE VAULT ═══ -->
+            <section id="sig-vault" class="chapter accent-green">
+                <div class="chapter-header">
+                    <span class="chapter-num green">CH. VII</span>
+                    <h2>Signature Vault — Authority Management</h2>
+                </div>
+                <p class="chapter-lead">The Signature Vault stores the official signature and seal images that are
+                    automatically overlaid onto executed contracts. These represent the firm's legal authority and must
+                    be maintained by the designated administrator.</p>
+
+                <div class="section-title">Five Authority Slots</div>
+                <table class="role-table">
+                    <thead>
+                        <tr>
+                            <th>Slot</th>
+                            <th>Role</th>
+                            <th>Used For</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>1. Managing Director</td>
+                            <td>Company's senior executive</td>
+                            <td>Overlaid on all contracts as the company's primary signatory authority</td>
+                        </tr>
+                        <tr>
+                            <td>2. Company Secretary</td>
+                            <td>Corporate officer</td>
+                            <td>Overlaid as the certifying official for corporate documents</td>
+                        </tr>
+                        <tr>
+                            <td>3. Authorizing Lawyer</td>
+                            <td>Legal counsel</td>
+                            <td>Overlaid as the legal professional certifying the document's validity</td>
+                        </tr>
+                        <tr>
+                            <td>4. Law Firm Seal</td>
+                            <td>Firm's official seal / stamp image</td>
+                            <td>Rendered as a round stamp image on the execution page, signifying the firm's official
+                                endorsement</td>
+                        </tr>
+                        <tr>
+                            <td>5. Company Witness</td>
+                            <td>Internal company witness</td>
+                            <td>Pre-placed company-side witness signature; separate from walk-in witness capture</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="divider"></div>
+                <div id="sig-actions" class="section-title">Actions Per Slot</div>
+
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-badge green">1</div>
+                        <div class="step-body">
+                            <h4>Upload Signature / Seal</h4>
+                            <p>Click <strong>Upload Signature</strong> (or <strong>Upload Seal</strong> for slot 4). An
+                                image picker opens. Accepted formats: PNG, JPG, SVG. Best practice: use a
+                                transparent-background PNG of the signature on white paper, scanned at 300+ DPI. The
+                                system stores the image securely in Google Drive and links it to the role.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-badge green">2</div>
+                        <div class="step-body">
+                            <h4>View Status Badge</h4>
+                            <p>Each slot shows a status badge: <span class="tag grey"
+                                    style="background:rgba(255,255,255,0.05)">Empty</span> (no signature on file) or
+                                <span class="tag green">Active</span> (signature loaded and ready). The signature image
+                                is previewed in the card.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-badge green">3</div>
+                        <div class="step-body">
+                            <h4>Delete / Replace Signature</h4>
+                            <p>Click the 🗑️ Delete button to remove the current signature from the system.
+                                <strong>Important:</strong> This does not affect already-executed contracts — the
+                                overlay is applied at execution time and captured permanently in the PDF. The delete
+                                button is disabled when the slot is empty.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="warn-box">
+                    <div class="warn-label">⚠️ Critical Requirement</div>
+                    <p>All relevant authority slots must be filled before the Final Execution action can be completed.
+                        The system will not generate a sealed PDF if required signatures are missing from the vault.
+                        Verify all slots are <span class="tag green">Active</span> before initiating any signing
+                        session.</p>
+                </div>
+            </section>
+
+
+            <!-- ═══ CHAPTER VIII: SIGNING WORKFLOWS ═══ -->
+            <section id="signing-workflow" class="chapter accent-blue">
+                <div class="chapter-header">
+                    <span class="chapter-num blue">CH. VIII</span>
+                    <h2>Signing Workflows</h2>
+                </div>
+                <p class="chapter-lead">Eximp & Cloves supports three distinct signature capture methods. Each serves a
+                    different scenario: remote clients, physically present signatories, and hybrid situations. All
+                    methods feed into the same final execution pipeline.</p>
+
+                <div class="section-title">Method A — Digital Remote Signing (Primary)</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:16px;">The standard workflow for clients
+                    who are not physically present.</p>
+
+                <div class="workflow">
+                    <div class="workflow-step">
+                        <h5>1. Prepare Signing Session</h5>
+                        <p>Lawyer clicks <strong>Start Signing Session</strong> from the editor or the Execution Modal.
+                            The system calls <code>POST /matters/{id}/prepare-signing</code>, which computes a SHA-256
+                            hash of the current document HTML to create a tamper-evident snapshot.</p>
+                    </div>
+                    <div class="workflow-step">
+                        <h5>2. Dispatch Signature Request</h5>
+                        <p>The system sends a signing invitation email to the client containing a secure, unique signing
+                            link. The link contains a signing token. This calls
+                            <code>POST /matters/{id}/dispatch-signature</code>.</p>
+                    </div>
+                    <div class="workflow-step">
+                        <h5>3. Client Opens Signing Portal</h5>
+                        <p>The client opens the link in their browser — no login required. They see a read-only, fully
+                            formatted view of the contract (<code>GET /signing/{token}/details</code>). The portal shows
+                            the document, an acknowledgement checkbox, and a signature drawing canvas.</p>
+                    </div>
+                    <div class="workflow-step">
+                        <h5>4. Client Signs</h5>
+                        <p>The client draws their signature on the canvas (or types their name, depending on
+                            configuration). They submit the signature via <code>POST /signing/{token}/submit</code>.
+                            Their IP address, timestamp, browser metadata, and signature image are captured.</p>
+                    </div>
+                    <div class="workflow-step">
+                        <h5>5. Acknowledgement</h5>
+                        <p>After submitting the signature, the client confirms their acknowledgement of the document via
+                            <code>POST /signing/{token}/acknowledge</code>. An automated confirmation email is sent to
+                            all parties.</p>
+                    </div>
+                    <div class="workflow-step">
+                        <h5>6. Lawyer Reviews Signing Status</h5>
+                        <p>The lawyer checks the live signing status via <code>GET /matters/{id}/signing-status</code> —
+                            visible in both the Editor's signing panel and the Manage Execution Modal. Each party's
+                            signature appears with a timestamp when complete.</p>
+                    </div>
+                    <div class="workflow-step">
+                        <h5>7. Final Execution</h5>
+                        <p>Once all signatures are collected, the <strong>Final Execution</strong> button activates. The
+                            lawyer proceeds to seal the document.</p>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+                <div id="walkin" class="section-title">Method B — Walk-in Signature Capture</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:16px;">For signatories who are physically
+                    present in the office. Eliminates the need for a signing link.</p>
+
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-badge blue">1</div>
+                        <div class="step-body">
+                            <h4>Trigger Walk-in Modal</h4>
+                            <p>Click <strong>Walk-in Witness</strong> or <strong>Walk-in Client</strong> from the Editor
+                                signing panel or Manage Execution Modal.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-badge blue">2</div>
+                        <div class="step-body">
+                            <h4>Signatory Draws Signature</h4>
+                            <p>A modal appears with a large drawing canvas (<code>&lt;canvas&gt;</code> element). The
+                                physical signatory draws their signature using a finger (touchscreen) or mouse. The
+                                canvas is cleared with the <strong>Clear Canvas</strong> button if needed.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-badge blue">3</div>
+                        <div class="step-body">
+                            <h4>Save Walk-in Signature</h4>
+                            <p>Click <strong>Save Walk-in Signature</strong>. The canvas data is captured as a PNG image
+                                and submitted to the server, linking it to the matter as the witness or client signature
+                                with the current timestamp and the staff member's session as the recorder.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+                <div id="sealing" class="section-title">Method C — Sealing &amp; Execution (Physical &amp; Hybrid)</div>
+
+                <div class="gold-callout">
+                    <div class="callout-label">What "Execution" and "Sealing" Mean in Nigerian Legal Practice</div>
+                    <p>In Nigerian contract law, <strong>execution</strong> refers to the formal completion of a legal
+                        document — the act that gives it binding legal force. It involves the authorised parties
+                        signing, dating, and (where applicable) affixing an official seal to the document.
+                        <strong>Sealing</strong> is the specific act of applying the firm's or company's official seal —
+                        historically a wax or embossed stamp, today recognised in both physical and digital forms. A
+                        sealed document carries a higher degree of legal formality than a merely signed one,
+                        particularly for deeds of conveyance, property transfer agreements, and corporate resolutions.
+                    </p>
+                </div>
+
+                <div class="section-title" style="font-size:11px;">Understanding the Two Sealing Methods</div>
+
+                <table class="role-table">
+                    <thead>
+                        <tr>
+                            <th>Method</th>
+                            <th>When to Use</th>
+                            <th>Legal Standing</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td><strong>🖥️ Digital Execution (Dashboard Seal)</strong></td>
+                            <td>Standard property contracts, employment agreements, NDAs — any contract where parties
+                                have agreed to digital execution in advance or where the nature of the deal does not
+                                require a physical original</td>
+                            <td>Fully recognised under Nigeria's Evidence Act 2011 and the Cybercrimes Act 2015 when
+                                accompanied by the Certificate of Authentication. The SHA-256 hash and IP/timestamp
+                                capture satisfy non-repudiation requirements.</td>
+                        </tr>
+                        <tr>
+                            <td><strong>🖋️ Wet Ink Seal (Physical)</strong></td>
+                            <td>Deeds of Assignment for land (required by Land Use Act), corporate resolutions lodged
+                                with CAC, documents requiring notarisation, situations where the counterparty insists on
+                                a physical original, or transactions above a certain value threshold set by legal policy
+                            </td>
+                            <td>The traditional gold standard. The physical document with ink signatures, official firm
+                                stamp, and (for land deeds) Commissioner for Oaths or Notary Public attestation is the
+                                legally required form under specific Nigerian statutes.</td>
+                        </tr>
+                        <tr>
+                            <td><strong>🔄 Hybrid</strong></td>
+                            <td>When both a digital record and a physical original are required — e.g. one client copy
+                                is digital, the company retains a physical original; or when the counterparty's
+                                solicitors require a wet-ink copy but the deal team also needs a digital record</td>
+                            <td>Both records have legal validity. The digital version serves as the authoritative system
+                                record; the physical version serves as the counterparty's original.</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="divider"></div>
+                <div class="section-title" style="font-size:11px;">Method C1 — Digital Execution via the Dashboard
+                    (Recommended)</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:16px;">The fastest and most complete
+                    execution path. All authority signatures are applied programmatically — no printing, no scanning.
                 </p>
-                <div class="text-right hidden md:block">
-                    <p class="text-[10px] text-gray-600 uppercase tracking-widest mb-1">Approved for Circulation By</p>
-                    <p class="font-serif text-white text-lg">Director of Legal Services</p>
+
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-badge">1</div>
+                        <div class="step-body">
+                            <h4>Confirm All Signatures Are Collected</h4>
+                            <p>The <strong>Final Execution</strong> button only activates once both the client signature
+                                and witness signature are confirmed in the signing status panel. The lawyer verifies
+                                this in the Manage Execution Modal — each party shows a green ✅ badge with their signing
+                                timestamp.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-badge">2</div>
+                        <div class="step-body">
+                            <h4>Click Final Execution → Select Digital Option</h4>
+                            <p>In the Seal &amp; Execute modal, select <strong>Option 1: Digital Execution</strong>.
+                                Optionally check <strong>Include Audit Certificate</strong> (recommended — appends the
+                                Certificate of Authentication as a final page to the sealed PDF). Click <strong>Execute
+                                    Now</strong>.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-badge">3</div>
+                        <div class="step-body">
+                            <h4>System Assembles the Sealed PDF</h4>
+                            <p>The system performs the following operations in sequence: (a) retrieves all authority
+                                signature images from the Signature Vault — Managing Director, Company Secretary,
+                                Authorizing Lawyer, and Law Firm Seal; (b) overlays each signature onto its designated
+                                placeholder in the Execution Clauses tab; (c) applies the <strong>Law Firm Seal</strong>
+                                as a circular stamp image on the execution page — this is the digital equivalent of the
+                                firm's official round stamp; (d) appends the client and witness signatures captured
+                                during the signing session; (e) appends the Certificate of Authentication if selected;
+                                (f) computes the final SHA-256 hash of the assembled PDF; (g) stores the sealed PDF in
+                                the Google Drive vault and updates the contract status to <strong>Executed</strong>.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-badge">4</div>
+                        <div class="step-body">
+                            <h4>Send Sealed PDF to Client</h4>
+                            <p>Click <strong>Send Sealed PDF</strong> in the Manage Execution Modal. This dispatches the
+                                sealed PDF to the client's registered email address. The email includes the contract
+                                reference, a summary of the execution details (date, parties, reference number), and the
+                                sealed PDF as an attachment. The matter is now fully executed and moves to the Archive.
+                            </p>
+                        </div>
+                    </div>
                 </div>
-            </div>
-        </header>
 
-        <div class="flex gap-16 layout-flex">
-            <!-- SIDEBAR NAV -->
-            <aside class="w-full md:w-72 shrink-0">
-                <div class="nav-sticky">
-                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-8">Table of Contents</h3>
-                    <nav class="space-y-2">
-                        <a href="#foreword" class="group flex items-center p-3 rounded-xl hover:bg-white/5 transition">
-                            <span class="w-2 h-2 rounded-full bg-gray-700 group-hover:bg-brand-gold mr-4 transition"></span>
-                            <span class="text-sm font-medium text-gray-400 group-hover:text-white">Foreword: Digital Integrity</span>
-                        </a>
-                        <a href="#governance" class="group flex items-center p-3 rounded-xl hover:bg-white/5 transition">
-                            <span class="w-2 h-2 rounded-full bg-gray-700 group-hover:bg-brand-gold mr-4 transition"></span>
-                            <span class="text-sm font-medium text-gray-400 group-hover:text-white">Chapter I: Governance & Regulatory</span>
-                        </a>
-                        <a href="#vetting" class="group flex items-center p-3 rounded-xl hover:bg-white/5 transition">
-                            <span class="w-2 h-2 rounded-full bg-gray-700 group-hover:bg-brand-gold mr-4 transition"></span>
-                            <span class="text-sm font-medium text-gray-400 group-hover:text-white">Chapter II: Vetting & Due Diligence</span>
-                        </a>
-                        <a href="#drafting" class="group flex items-center p-3 rounded-xl hover:bg-white/5 transition">
-                            <span class="w-2 h-2 rounded-full bg-gray-700 group-hover:bg-brand-gold mr-4 transition"></span>
-                            <span class="text-sm font-medium text-gray-400 group-hover:text-white">Chapter III: High-Fidelity Drafting</span>
-                        </a>
-                        <a href="#execution" class="group flex items-center p-3 rounded-xl hover:bg-white/5 transition">
-                            <span class="w-2 h-2 rounded-full bg-gray-700 group-hover:bg-brand-gold mr-4 transition"></span>
-                            <span class="text-sm font-medium text-gray-400 group-hover:text-white">Chapter IV: Multi-Party Execution</span>
-                        </a>
-                        <a href="#sealing" class="group flex items-center p-3 rounded-xl hover:bg-white/5 transition">
-                            <span class="w-2 h-2 rounded-full bg-gray-700 group-hover:bg-brand-gold mr-4 transition"></span>
-                            <span class="text-sm font-medium text-gray-400 group-hover:text-white">Chapter V: Digital vs. Wet Sealing</span>
-                        </a>
-                        <a href="#vault" class="group flex items-center p-3 rounded-xl hover:bg-white/5 transition">
-                            <span class="w-2 h-2 rounded-full bg-gray-700 group-hover:bg-brand-gold mr-4 transition"></span>
-                            <span class="text-sm font-medium text-gray-400 group-hover:text-white">Chapter VI: Custody & Audit</span>
-                        </a>
-                    </nav>
-                    
-                    <div class="mt-12 p-8 rounded-3xl bg-brand-gold/5 border border-brand-gold/10">
-                        <div class="text-brand-gold text-2xl mb-4">“</div>
-                        <p class="text-sm text-gray-400 italic leading-relaxed">
-                            "The law remains constant, but its vessel must evolve. Our digital framework ensures that precision is never sacrificed for speed."
-                        </p>
+                <div class="divider"></div>
+                <div class="section-title" style="font-size:11px;">The Law Firm Seal — What It Is and What It Represents
+                </div>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <span class="fc-icon">🔵</span>
+                        <h4>Physical Wet Seal (Traditional)</h4>
+                        <p>A physical round rubber stamp bearing the law firm's name, registration number, and any other
+                            legally required identifiers. Applied with ink to a printed document. This is the original
+                            form of legal sealing recognised in all jurisdictions. Required by statute for Deeds of
+                            Assignment and certain corporate filings in Nigeria.</p>
+                    </div>
+                    <div class="feature-card">
+                        <span class="fc-icon">🖥️</span>
+                        <h4>Digital Seal (Dashboard)</h4>
+                        <p>A high-resolution PNG or SVG image of the firm's official seal, stored in the Signature Vault
+                            as <strong>Slot 4: Law Firm Seal</strong>. During digital execution, this image is
+                            programmatically overlaid onto the execution page of the PDF at the designated seal position
+                            — typically a 100×100px circular placement. The result is visually and legally equivalent to
+                            a physical stamp on digital documents.</p>
                     </div>
                 </div>
-            </aside>
 
-            <!-- CONTENT -->
-            <main class="flex-1 min-w-0">
-                
-                <!-- FOREWORD -->
-                <section id="foreword" class="sop-section">
-                    <h2 class="text-4xl font-serif mb-8 leading-tight italic text-white">Executive Foreword: <br>The Doctrine of Digital Integrity</h2>
-                    <p class="text-gray-300 mb-8 leading-relaxed">
-                        At Eximp & Cloves, the Legal Suite is not merely a document management tool; it is a high-fidelity execution engine designed to mitigate risk, eliminate human error, and provide an immutable audit trail for every contractual engagement. 
-                    </p>
-                    <div class="teaching-module">
-                        <h4 class="brand-gold font-bold uppercase text-xs tracking-widest mb-3">Key Objective</h4>
-                        <p class="text-sm leading-relaxed">
-                            Transition from <b>fragmented paper-based logistics</b> to a <b>Unified Execution Framework</b>. This ensures that every signature is captured with biometric-grade digital verification and every document is stored in a secure, encrypted vault.
-                        </p>
-                    </div>
-                </section>
+                <div class="info-box">
+                    <div class="info-label">Seal Image Best Practices</div>
+                    <p>Upload the seal as a transparent-background PNG at 300+ DPI for clean rendering. The seal image
+                        should match the firm's registered seal exactly — same font, same design, same registration
+                        details. The Director of Legal Services is responsible for approving and uploading the
+                        authoritative seal image to the Vault. Do not use a photograph of the physical stamp — use a
+                        professionally reproduced digital version.</p>
+                </div>
 
-                <!-- CHAPTER I: GOVERNANCE -->
-                <section id="governance" class="sop-section">
-                    <div class="flex items-center gap-4 mb-8">
-                        <h2 class="text-3xl font-serif">I. Governance & Regulatory Compliance</h2>
-                    </div>
-                    <div class="grid md:grid-cols-2 gap-8">
-                        <div>
-                            <h4 class="text-white font-bold mb-3 text-sm">Regulatory Framework</h4>
-                            <p class="text-gray-400 text-xs leading-relaxed">
-                                Our digital signature framework is architected to comply with the <span class="clause-ref" title="Nigerian Evidence Act 2011">Nigerian Evidence Act</span> regarding electronic signatures. The system captures IP addresses, timestamps, and browser metadata to ensure non-repudiation.
-                            </p>
-                        </div>
-                        <div>
-                            <h4 class="text-white font-bold mb-3 text-sm">Identity Assurance</h4>
-                            <p class="text-gray-400 text-xs leading-relaxed">
-                                Each signatory is authenticated through a unique session token delivered via their registered communication channel, creating a secure link between the physical person and the digital signature.
-                            </p>
+                <div class="divider"></div>
+                <div class="section-title" style="font-size:11px;">Method C2 — Hybrid / Wet Ink Physical Sealing</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:16px;">Used when a physical original with
+                    ink signatures and a stamped seal is required by statute or by the counterparty's solicitors.</p>
+
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-badge">1</div>
+                        <div class="step-body">
+                            <h4>Download the Sealing PDF</h4>
+                            <p>From the Manage Execution Modal, click <strong>Download Sealing PDF</strong>. The system
+                                generates a PDF with all authority signatures from the Signature Vault already overlaid
+                                digitally. This serves as the base document for physical signing — it already shows the
+                                MD, Secretary, and Lawyer signatures in their designated positions, with placeholder
+                                spaces remaining for ink signatures where required.</p>
                         </div>
                     </div>
-                </section>
-
-                <!-- CHAPTER II: VETTING -->
-                <section id="vetting" class="sop-section border-l-4 border-l-orange-500">
-                    <h2 class="text-3xl font-serif mb-8">II. Document Vetting & Due Diligence</h2>
-                    <p class="text-gray-400 text-sm mb-10">Before a contract is "Orchestrated," it must undergo the rigorous Vetting Phase.</p>
-                    
-                    <div class="process-flow space-y-10">
-                        <div class="flex items-start">
-                            <div class="step-number">1</div>
-                            <div>
-                                <h4 class="text-white font-bold mb-2">Matter Intake</h4>
-                                <p class="text-gray-500 text-xs">Verify that the property or personnel matter exists in the CRM. Ensure all prerequisite information (Survey Plans, Bio-data) is present in the record.</p>
-                            </div>
-                        </div>
-                        <div class="flex items-start">
-                            <div class="step-number">2</div>
-                            <div>
-                                <h4 class="text-white font-bold mb-2">The Vault Analysis</h4>
-                                <p class="text-gray-500 text-xs">Access the <b>Matter Vault</b> to review existing deeds or titles. Use the <b>Vault Slide-Over</b> to check for "Superseded" versions to avoid conflicting terms.</p>
-                            </div>
-                        </div>
-                        <div class="flex items-start">
-                            <div class="step-number">3</div>
-                            <div>
-                                <h4 class="text-white font-bold mb-2">Internal Vetting</h4>
-                                <p class="text-gray-500 text-xs">Submit the draft for peer review if the matter value exceeds threshold limits. Once verified, the matter is moved to the "Orchestration" stage.</p>
-                            </div>
+                    <div class="step">
+                        <div class="step-badge">2</div>
+                        <div class="step-body">
+                            <h4>Print &amp; Apply Wet Ink Signatures</h4>
+                            <p>Print the downloaded PDF. The physically present signatories — typically the Managing
+                                Director and the authorising lawyer — apply their <strong>wet ink signatures</strong>
+                                (handwritten, in blue or black ink) in the designated signature blocks. This is distinct
+                                from the digitally overlaid authority signatures: the wet ink signature is the physical
+                                act of execution.</p>
                         </div>
                     </div>
-                </section>
-
-                <!-- CHAPTER III: DRAFTING -->
-                <section id="drafting" class="sop-section">
-                    <h2 class="text-3xl font-serif mb-8">III. High-Fidelity Drafting (Word Studio)</h2>
-                    <p class="text-gray-300 mb-8">The Studio is where legal expertise meets technical precision.</p>
-                    
-                    <div class="space-y-8">
-                        <div class="p-8 bg-black/30 rounded-2xl border border-white/5">
-                            <div class="flex items-center gap-4 mb-6">
-                                <span class="badge badge-gold">SOP: Conversion</span>
-                                <h4 class="brand-gold font-bold text-sm">Microsoft Word (.docx) Synchronization</h4>
-                            </div>
-                            <p class="text-gray-400 text-sm mb-6 leading-relaxed">
-                                Our conversion engine is optimized for legal structures. When importing a .docx file:
-                            </p>
-                            <ul class="grid grid-cols-2 gap-4 text-[11px] text-gray-500">
-                                <li class="flex items-center gap-2">
-                                    <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                    Preserves nested list numbering (1.1, 1.1.1)
-                                </li>
-                                <li class="flex items-center gap-2">
-                                    <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                    Maintains font-weight emphasizing
-                                </li>
-                                <li class="flex items-center gap-2">
-                                    <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                    Retains complex legal tables
-                                </li>
-                                <li class="flex items-center gap-2">
-                                    <svg class="w-4 h-4 text-green-500" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M5 13l4 4L19 7"></path></svg>
-                                    Optimizes margin compliance
-                                </li>
-                            </ul>
-                        </div>
-                        
-                        <div class="p-8 bg-black/30 rounded-2xl border border-white/5">
-                            <div class="flex items-center gap-4 mb-6">
-                                <span class="badge badge-gold">SOP: Intelligence</span>
-                                <h4 class="brand-gold font-bold text-sm">Dynamic Clause Insertion (Tokens)</h4>
-                            </div>
-                            <p class="text-gray-400 text-sm mb-6 leading-relaxed">
-                                Instead of manual entry, use <b>Liquid Variable Injection</b>. This eliminates typographical errors in sensitive data fields.
-                            </p>
-                            <div class="grid grid-cols-2 gap-3">
-                                <div class="bg-black/60 p-4 rounded-xl border border-white/10 group hover:border-gold transition cursor-help">
-                                    <div class="text-[10px] text-gray-500 uppercase mb-2">Property Data</div>
-                                    <code class="text-xs">{% raw %}{{ matter.plot_size }}{% endraw %}</code>
-                                </div>
-                                <div class="bg-black/60 p-4 rounded-xl border border-white/10 group hover:border-gold transition cursor-help">
-                                    <div class="text-[10px] text-gray-500 uppercase mb-2">Financial Data</div>
-                                    <code class="text-xs">{% raw %}{{ matter.total_consideration }}{% endraw %}</code>
-                                </div>
-                                <div class="bg-black/60 p-4 rounded-xl border border-white/10 group hover:border-gold transition cursor-help">
-                                    <div class="text-[10px] text-gray-500 uppercase mb-2">Identity Data</div>
-                                    <code class="text-xs">{% raw %}{{ client.nim_number }}{% endraw %}</code>
-                                </div>
-                                <div class="bg-black/60 p-4 rounded-xl border border-white/10 group hover:border-gold transition cursor-help">
-                                    <div class="text-[10px] text-gray-500 uppercase mb-2">Temporal Data</div>
-                                    <code class="text-xs">{% raw %}{{ contract.execution_date }}{% endraw %}</code>
-                                </div>
-                            </div>
+                    <div class="step">
+                        <div class="step-badge">3</div>
+                        <div class="step-body">
+                            <h4>Apply the Physical Firm Seal (Rubber Stamp)</h4>
+                            <p>The authorising lawyer or designated seal custodian applies the law firm's physical round
+                                rubber stamp to the execution page — typically adjacent to or overlapping the lawyer's
+                                signature block. The stamp should be applied with even pressure for a clear, legible
+                                impression. The stamped area must be on the same page as the IN WITNESS WHEREOF clause
+                                and the signatory lines.</p>
                         </div>
                     </div>
-                </section>
-
-                <!-- CHAPTER IV: EXECUTION -->
-                <section id="execution" class="sop-section border-l-4 border-l-blue-500">
-                    <h2 class="text-4xl font-serif mb-8">IV. Multi-Party Execution Workflow</h2>
-                    <p class="text-gray-400 mb-10">Orchestration ensures that all required signatures are gathered in the correct sequence.</p>
-                    
-                    <div class="process-flow space-y-12">
-                        <div>
-                            <h4 class="text-white font-bold text-lg mb-4 flex items-center gap-3">
-                                <span class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center text-sm font-mono">P1</span>
-                                Primary Signatory (The Client)
-                            </h4>
-                            <div class="bg-blue-500/5 p-6 rounded-2xl border border-blue-500/10">
-                                <p class="text-gray-400 text-sm leading-relaxed mb-4">
-                                    The client receives a secured, tamper-evident link. They must draw or upload their signature. <b>IP & Device Audit</b> is captured at the exact moment of 'Final Submission'.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div>
-                            <h4 class="text-white font-bold text-lg mb-4 flex items-center gap-3">
-                                <span class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center text-sm font-mono">P2</span>
-                                External Witness
-                            </h4>
-                            <div class="bg-blue-500/5 p-6 rounded-2xl border border-blue-500/10">
-                                <p class="text-gray-400 text-sm leading-relaxed">
-                                    Where required by law, a secondary signature is gathered from the client's witness. This signature is visually distinct and cross-referenced in the Audit Certificate.
-                                </p>
-                            </div>
-                        </div>
-
-                        <div>
-                            <h4 class="text-white font-bold text-lg mb-4 flex items-center gap-3">
-                                <span class="w-8 h-8 rounded-lg bg-blue-500/10 text-blue-500 flex items-center justify-center text-sm font-mono">P3</span>
-                                Legal Sealing (Eximp & Cloves)
-                            </h4>
-                            <div class="bg-blue-500/5 p-6 rounded-2xl border border-blue-500/10">
-                                <p class="text-gray-400 text-sm leading-relaxed">
-                                    The legal officer reviews the gathered signatures. If compliant, they trigger the <b>"Verify & Seal"</b> command. This appends the Law Firm Seal and Director's signature from the encrypted <b>Signature Vault</b>.
-                                </p>
-                            </div>
+                    <div class="step">
+                        <div class="step-badge">4</div>
+                        <div class="step-body">
+                            <h4>Commissioner for Oaths / Notarisation (If Required)</h4>
+                            <p>For Deeds of Assignment (land transfer documents), the document must also be sworn before
+                                a <strong>Commissioner for Oaths</strong> or a <strong>Notary Public</strong>. This
+                                involves the swearing party appearing in person before the Commissioner, who witnesses
+                                the signature, applies their own stamp and signature, and attaches the jurat (the
+                                attestation clause confirming the oath was taken). This step is a statutory requirement
+                                under the Land Use Act and the Oaths Act.</p>
                         </div>
                     </div>
-                </section>
-
-                <!-- CHAPTER V: SEALING -->
-                <section id="sealing" class="sop-section">
-                    <h2 class="text-3xl font-serif mb-8 leading-tight italic">V. Digital Sealing vs. Wet Signature <br><span class="text-gray-500">Choosing the Execution Method</span></h2>
-                    
-                    <div class="grid md:grid-cols-2 gap-8">
-                        <div class="p-8 bg-emerald-500/5 rounded-3xl border border-emerald-500/10 hover:border-emerald-500/30 transition">
-                            <h4 class="text-emerald-500 font-bold mb-4 uppercase tracking-widest text-xs">Option A: Digital Execution</h4>
-                            <p class="text-gray-400 text-xs leading-relaxed mb-6">
-                                Fully automated. The system appends high-resolution PNG signatures and seals from the vault. Best for speed and remote clients.
-                            </p>
-                            <div class="flex items-center gap-2 text-[10px] text-emerald-400 font-bold">
-                                <span>✔ SECURE</span>
-                                <span>✔ INSTANT</span>
-                                <span>✔ AUDITABLE</span>
-                            </div>
-                        </div>
-                        
-                        <div class="p-8 bg-orange-500/5 rounded-3xl border border-orange-500/10 hover:border-orange-500/30 transition">
-                            <h4 class="text-orange-500 font-bold mb-4 uppercase tracking-widest text-xs">Option B: Wet Sealing (Hybrid)</h4>
-                            <p class="text-gray-400 text-xs leading-relaxed mb-6">
-                                Download the "Pre-signed DRAFT" (includes Client's signature), physically stamp it, then scan and re-upload the <b>Fully Sealed Copy</b>.
-                            </p>
-                            <div class="flex items-center gap-2 text-[10px] text-orange-400 font-bold">
-                                <span>✔ PHYSICAL</span>
-                                <span>✔ TRADITIONAL</span>
-                                <span>✔ MANUALLY SCANNED</span>
-                            </div>
+                    <div class="step">
+                        <div class="step-badge">5</div>
+                        <div class="step-body">
+                            <h4>Scan to High-Resolution PDF</h4>
+                            <p>Scan the fully executed and stamped physical document to a high-resolution PDF (minimum
+                                300 DPI, colour scan). Ensure all pages are included and the seal impression is clearly
+                                legible. Save as a single PDF file.</p>
                         </div>
                     </div>
-                </section>
-
-                <!-- CHAPTER VI: VAULT -->
-                <section id="vault" class="sop-section">
-                    <div class="flex items-center justify-between mb-10">
-                        <h2 class="text-3xl font-serif">VI. Custody & Audit Integrity</h2>
-                        <span class="px-3 py-1 rounded bg-red-500/10 text-red-500 text-[10px] font-black uppercase tracking-tighter">Immutable Storage</span>
-                    </div>
-                    <p class="text-gray-400 text-sm leading-relaxed mb-10">
-                        Once execution is complete, the document enters <b>"Locked Custody."</b> It is archived in our private cloud with an accompanying <b>Certificate of Authentication</b>.
-                    </p>
-                    
-                    <div class="teaching-module border-red-500 bg-red-500/5">
-                        <h4 class="text-red-500 font-bold text-sm mb-4">The Certificate of Authentication</h4>
-                        <p class="text-gray-400 text-xs leading-relaxed mb-6">
-                            This document is the legal "Passport" for the contract. It contains:
-                        </p>
-                        <div class="space-y-3">
-                            <div class="flex items-center gap-4 text-xs">
-                                <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                                <span class="text-gray-300 font-bold">SHA-256 Hash Integrity</span>
-                                <span class="text-gray-600">Proves the document has not been altered post-sealing.</span>
-                            </div>
-                            <div class="flex items-center gap-4 text-xs">
-                                <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                                <span class="text-gray-300 font-bold">Geo-Temporal Captures</span>
-                                <span class="text-gray-600">Verification of physical location at time of signing.</span>
-                            </div>
-                            <div class="flex items-center gap-4 text-xs">
-                                <span class="w-1.5 h-1.5 rounded-full bg-red-500"></span>
-                                <span class="text-gray-300 font-bold">Verification ID</span>
-                                <span class="text-gray-600">A unique serial number for registry cross-referencing.</span>
-                            </div>
+                    <div class="step">
+                        <div class="step-badge">6</div>
+                        <div class="step-body">
+                            <h4>Upload Sealed PDF to System</h4>
+                            <p>In the Manage Execution Modal, click <strong>Upload Sealed PDF</strong>. Select the
+                                scanned file. The system stores it in the matter's Document Hub vault in Google Drive
+                                and enables the <strong>Send Sealed PDF</strong> button. The contract status updates to
+                                <strong>Executed</strong> and the matter moves to the Archive.</p>
                         </div>
                     </div>
-                </section>
-
-                <!-- BEST PRACTICES -->
-                <section id="best-practices" class="mb-20">
-                    <h3 class="text-xs font-bold text-gray-500 uppercase tracking-widest mb-8 px-4">Compliance Checklist</h3>
-                    <div class="grid md:grid-cols-3 gap-6">
-                        <div class="p-6 bg-white/5 rounded-2xl border border-white/10">
-                            <h5 class="text-white font-bold text-xs mb-3">1. Naming Precision</h5>
-                            <p class="text-gray-500 text-[10px]">Use <code>Contract_Main</code> instead of <code>Contract_v2</code>. Consistent names trigger Intelligent Versioning.</p>
-                        </div>
-                        <div class="p-6 bg-white/5 rounded-2xl border border-white/10">
-                            <h5 class="text-white font-bold text-xs mb-3">2. Clause Auditing</h5>
-                            <p class="text-gray-500 text-[10px]">Always check if <code>{% raw %}{{ client.fullname }}{% endraw %}</code> tags are present in the first page preamble.</p>
-                        </div>
-                        <div class="p-6 bg-white/5 rounded-2xl border border-white/10">
-                            <h5 class="text-white font-bold text-xs mb-3">3. Vault Hygiene</h5>
-                            <p class="text-gray-500 text-[10px]">Regularly flag older title drafts as "Superseded" to maintain a clean matter record.</p>
+                    <div class="step">
+                        <div class="step-badge">7</div>
+                        <div class="step-body">
+                            <h4>Send to Client &amp; Retain Physical Copy</h4>
+                            <p>Click <strong>Send Sealed PDF</strong> to dispatch the digital version to the client by
+                                email. For the physical original — if both parties are entitled to an original — arrange
+                                for a second original to be executed (both sets are signed simultaneously at the same
+                                signing meeting), or make a certified true copy of the executed original, certified by
+                                the authorising lawyer. Retain the firm's original in a physical file.</p>
                         </div>
                     </div>
-                </section>
+                </div>
 
-                <!-- FOOTER -->
-                <footer class="mt-20 border-t border-white/5 pt-12 pb-24 text-center">
-                    <img src="/static/img/logo.svg" alt="Eximp & Cloves" class="w-24 mx-auto mb-6 opacity-30">
-                    <p class="text-gray-600 text-[10px] uppercase tracking-[0.3em] font-bold">Eximp & Cloves Infrastructure Limited</p>
-                    <p class="text-gray-800 text-[10px] mt-4 font-mono">© 2026 SmartyMetrics Legal Suite. CONFIDENTIAL AND PROPRIETARY.</p>
-                </footer>
+                <div class="warn-box">
+                    <div class="warn-label">⚠️ Important: Digital Seal vs. Physical Seal — Know When Each Applies</div>
+                    <p>The digital seal in the dashboard (Slot 4 in the Signature Vault) is the appropriate execution
+                        method for the majority of Eximp &amp; Cloves contracts — property sale agreements, instalment
+                        agreements, NDAs, and employment contracts. The physical wet seal and rubber stamp are
+                        specifically required for: (1) Deeds of Assignment (compulsory under the Land Use Act); (2)
+                        documents filed with the CAC or any government registry; (3) any transaction where the
+                        counterparty's solicitors specifically require a physical original with a wet seal. When in
+                        doubt, the Director of Legal Services makes the determination. Do not execute digitally a
+                        document that legally requires physical sealing — this can render the instrument void or
+                        unregistrable.</p>
+                </div>
 
-            </main>
-        </div>
+                <div class="divider"></div>
+                <div class="section-title">Session Management Tools</div>
+                <table class="role-table">
+                    <thead>
+                        <tr>
+                            <th>Tool</th>
+                            <th>When to Use</th>
+                            <th>Effect</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Copy Signing Link</td>
+                            <td>Client didn't receive email or prefers a different channel</td>
+                            <td>Copies the signing URL to clipboard. Valid for the session's duration.</td>
+                        </tr>
+                        <tr>
+                            <td>Resend Link</td>
+                            <td>Client says the email never arrived (check spam first)</td>
+                            <td>Sends a fresh signing invitation email to the client's registered address.</td>
+                        </tr>
+                        <tr>
+                            <td>Extend Session</td>
+                            <td>Session token is approaching or has passed its expiry</td>
+                            <td>Extends the token validity. The client's signing link remains functional.</td>
+                        </tr>
+                    </tbody>
+                </table>
+            </section>
+
+
+            <!-- ═══ CHAPTER IX: ARCHIVE & DOCUMENT VAULT ═══ -->
+            <section id="archive" class="chapter">
+                <div class="chapter-header">
+                    <span class="chapter-num">CH. IX</span>
+                    <h2>Archive & Document Hub</h2>
+                </div>
+                <p class="chapter-lead">The Archive is the permanent, immutable ledger of all executed contracts. The
+                    Document Hub (Vault Panel) is the per-matter file manager for uploading, previewing, and managing
+                    supporting documents.</p>
+
+                <div class="section-title">Archive Tab</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:16px;">The Archive tab automatically
+                    populates when a contract's status changes to <strong>Executed</strong>. It contains:</p>
+
+                <table class="role-table">
+                    <thead>
+                        <tr>
+                            <th>Column</th>
+                            <th>Description</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>Contract Reference</td>
+                            <td>The matter's unique ID and invoice reference</td>
+                        </tr>
+                        <tr>
+                            <td>Client</td>
+                            <td>Signatory's name</td>
+                        </tr>
+                        <tr>
+                            <td>Execution Date</td>
+                            <td>Timestamp of the Final Execution action</td>
+                        </tr>
+                        <tr>
+                            <td>Signatories</td>
+                            <td>Names and roles of all parties who signed</td>
+                        </tr>
+                        <tr>
+                            <td>Certificate</td>
+                            <td>Link to the Certificate of Authentication (PDF)</td>
+                        </tr>
+                        <tr>
+                            <td>Audit Hash</td>
+                            <td>SHA-256 document integrity hash — verifiable proof of no tampering</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="info-box">
+                    <div class="info-label">Immutability</div>
+                    <p>Archive entries are read-only. No editing, deletion, or status change is permitted on executed
+                        contracts. This ensures the integrity of the legal record as required by the Nigerian Evidence
+                        Act 2011.</p>
+                </div>
+
+                <div class="divider"></div>
+                <div id="doc-vault" class="section-title">Document Hub (Vault Panel)</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:16px;">Opened via the 📁 button on any
+                    matter row, the Vault Panel slides in from the right. It is the per-matter document repository.</p>
+
+                <div class="section-title" style="font-size:11px;">Upload Zone</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:12px;">A drag-and-drop or click-to-browse
+                    upload zone. Accepted formats: <span class="tag blue">PDF</span> <span class="tag blue">DOC</span>
+                    <span class="tag blue">DOCX</span>. Maximum file size: <strong>20 MB</strong>. Files are encrypted
+                    and stored in the organizational Google Drive vault.</p>
+
+                <div class="section-title" style="font-size:11px;">File List Actions</div>
+                <table class="role-table">
+                    <thead>
+                        <tr>
+                            <th>Button</th>
+                            <th>Action</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>⬇ Download</td>
+                            <td>Downloads the file to the user's device via a signed Google Drive URL.</td>
+                        </tr>
+                        <tr>
+                            <td>👁 Preview PDF</td>
+                            <td>Opens PDF files in a preview modal (only available for PDF files that have a signed
+                                URL).</td>
+                        </tr>
+                        <tr>
+                            <td>🗑 Delete</td>
+                            <td>Permanently removes the file from the vault. Requires elevated permission. Uses
+                                <code>DELETE /matters/{id}/attachments/{attachment_id}</code>.</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="section-title" style="font-size:11px;">Version History</div>
+                <p style="font-size:13px; color:var(--text-sub);">Click the <strong>Show All Versions ▼</strong> toggle
+                    to reveal all historical file versions uploaded to this matter. By default, only the latest version
+                    of each file is shown.</p>
+
+                <div class="divider"></div>
+                <div id="attachments" class="section-title">Attachments via API</div>
+                <p style="font-size:13px; color:var(--text-sub);">The attachment system supports programmatic access via
+                    three endpoints:</p>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <h4><code>POST /matters/{id}/attachments</code></h4>
+                        <p>Upload a new file to this matter's vault. Requires multipart form data with the file and
+                            optional description.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4><code>GET /matters/{id}/attachments</code></h4>
+                        <p>List all files currently in this matter's vault, including metadata, upload time, and signed
+                            download URLs.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4><code>GET /matters/{id}/attachments/{att_id}/download</code></h4>
+                        <p>Retrieve a time-limited direct download URL for a specific attachment.</p>
+                    </div>
+                    <div class="feature-card">
+                        <h4><code>DELETE /matters/{id}/attachments/{att_id}</code></h4>
+                        <p>Permanently delete a specific attachment from the vault.</p>
+                    </div>
+                </div>
+            </section>
+
+
+            <!-- ═══ CHAPTER X: TEMPLATES ═══ -->
+            <section id="templates" class="chapter accent-purple">
+                <div class="chapter-header">
+                    <span class="chapter-num purple">CH. X</span>
+                    <h2>Template Library</h2>
+                </div>
+                <p class="chapter-lead">Templates are pre-built contract structures that allow lawyers to initiate new
+                    matters quickly without drafting from scratch. Each template contains formatted content, clause
+                    placeholders, and dynamic tokens for automatic data population.</p>
+
+                <div class="section-title">Using a Template</div>
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-badge purple">1</div>
+                        <div class="step-body">
+                            <h4>Browse Template Library</h4>
+                            <p>Access via <code>GET /legal/templates</code>. Templates can be filtered by category (e.g.
+                                Property Sale, Employment, NDA, Co-Ownership). Each template shows its title, category,
+                                and a usage count.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-badge purple">2</div>
+                        <div class="step-body">
+                            <h4>View Template Details</h4>
+                            <p>Call <code>GET /legal/templates/{template_id}</code> to preview the full template content
+                                before using it.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-badge purple">3</div>
+                        <div class="step-body">
+                            <h4>Create Matter from Template</h4>
+                            <p>Call <code>POST /legal/matters/from-template/{template_id}</code> with the new matter's
+                                title and linked invoice/staff ID. A new matter is created pre-populated with the
+                                template's content, ready for customization in the editor.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+                <div class="section-title">Creating a New Template</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:12px;">Any drafted document can be saved
+                    as a template for future reuse. Use <code>POST /legal/templates</code> with the template title,
+                    category, and HTML body content. Templates are organization-wide and available to all lawyers.</p>
+
+                <div class="gold-callout">
+                    <div class="callout-label">Dynamic Tokens</div>
+                    <p>Templates support double-brace tokens such as <code>{{CLIENT_NAME}}</code>,
+                        <code>{{PROPERTY_ADDRESS}}</code>, <code>{{PURCHASE_PRICE}}</code>, and
+                        <code>{{EFFECTIVE_DATE}}</code>. When a matter is created from a template, these tokens are
+                        automatically replaced with the linked invoice's CRM data. Always verify token substitution in
+                        the editor before dispatching for signing.</p>
+                </div>
+
+                <div class="divider"></div>
+                <div class="section-title">Seeded System Templates</div>
+                <p style="font-size:13px; color:var(--text-sub);">The system ships with pre-seeded templates (loaded via
+                    migration <code>021_seed_legal_templates.sql</code>). These include:</p>
+                <div class="btn-grid">
+                    <span class="btn-pill gold">Full Payment Sale Agreement</span>
+                    <span class="btn-pill gold">Part Payment / Instalment Agreement</span>
+                    <span class="btn-pill gold">Co-Ownership / Joint Purchase Deed</span>
+                    <span class="btn-pill gold">Offer Letter</span>
+                    <span class="btn-pill gold">Non-Disclosure Agreement (NDA)</span>
+                    <span class="btn-pill gold">Employment Contract</span>
+                </div>
+            </section>
+
+
+            <!-- ═══ CHAPTER XI: CLAUSE LIBRARY ═══ -->
+            <section id="clauses" class="chapter accent-teal">
+                <div class="chapter-header">
+                    <span class="chapter-num teal">CH. XI</span>
+                    <h2>Clause Library</h2>
+                </div>
+                <p class="chapter-lead">The Clause Library is a reusable repository of individual contract clauses.
+                    Lawyers can save frequently used language — indemnity clauses, force majeure language, payment terms
+                    — and insert them into any document without retyping.</p>
+
+                <div class="section-title">Accessing the Clause Library</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:12px;"><code>GET /legal/clauses</code>
+                    returns all saved clauses. Each clause has a title, category, and HTML content body.</p>
+
+                <div class="section-title">Saving a New Clause</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:12px;"><code>POST /legal/clauses</code> —
+                    highlight a passage in the Legal Editor, give it a name and category, and save it to the library. It
+                    becomes immediately available for insertion into any future document.</p>
+
+                <div class="info-box">
+                    <div class="info-label">Best Practice</div>
+                    <p>Maintain a "Golden Clauses" category in the library containing legally approved boilerplate
+                        reviewed by the Director of Legal Services. All lawyers should use these golden clauses for
+                        recurring provisions rather than drafting fresh language each time, reducing the risk of
+                        unauthorized variations.</p>
+                </div>
+            </section>
+
+
+            <!-- ═══ CHAPTER XII: COLLABORATION ═══ -->
+            <section id="collaboration" class="chapter">
+                <div class="chapter-header">
+                    <span class="chapter-num">CH. XII</span>
+                    <h2>Collaboration & Access Control</h2>
+                </div>
+                <p class="chapter-lead">Legal matters can be shared with multiple internal users (collaborators) with
+                    precise access controls. Matter visibility can also be toggled to expose specific documents to staff
+                    in the Personnel Portal.</p>
+
+                <div class="section-title">Adding a Collaborator</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:12px;">
+                    <code>POST /matters/{id}/collaborators</code> — provide the target admin's ID and their permission
+                    level (View or Edit). Collaborators can then see the matter in their dashboard. The
+                    <code>GET /legal/collaborator-candidates</code> endpoint fetches the list of all admins who can be
+                    added.</p>
+
+                <div class="section-title">Removing a Collaborator</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:12px;">
+                    <code>DELETE /matters/{id}/collaborators/{target_admin_id}</code> — immediately revokes the
+                    collaborator's access to the matter.</p>
+
+                <div class="section-title">Matter Visibility (Staff Portal)</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:12px;">
+                    <code>PATCH /matters/{id}/visibility</code> — toggles whether a specific matter is visible to the
+                    linked staff member via their self-service portal. When visible, the staff member can view (but not
+                    edit) their own legal documents. This is used for employment contracts, offer letters, and
+                    HR-initiated legal cases.</p>
+
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <span class="fc-icon">👁️</span>
+                        <h4>Staff Self-Service View</h4>
+                        <p><code>GET /legal/staff/self/visible-matters</code> — staff members can retrieve all matters
+                            made visible to them. Used by the Staff Legal Portal.</p>
+                    </div>
+                    <div class="feature-card">
+                        <span class="fc-icon">📄</span>
+                        <h4>Single Visible Matter</h4>
+                        <p><code>GET /legal/staff/self/visible-matters/{id}</code> — retrieves a specific visible matter
+                            for a staff member, including signing status and document preview.</p>
+                    </div>
+                </div>
+
+                <div class="section-title">Matter Settings</div>
+                <p style="font-size:13px; color:var(--text-sub);">Beyond collaborators,
+                    <code>PATCH /matters/{id}/settings</code> allows editing matter-level metadata: title, category,
+                    linked staff/invoice ID, and other configuration fields. This is used after initiation if details
+                    need correction.</p>
+            </section>
+
+
+            <!-- ═══ CHAPTER XIII: AUDIT TRAIL ═══ -->
+            <section id="audit" class="chapter accent-orange">
+                <div class="chapter-header">
+                    <span class="chapter-num orange">CH. XIII</span>
+                    <h2>Audit Trail & Internal Memos</h2>
+                </div>
+                <p class="chapter-lead">Every action in the legal system is logged to an immutable audit trail.
+                    Additionally, lawyers can attach internal memos to matters for team communication and case notes.
+                </p>
+
+                <div class="section-title">Viewing the Audit Trail</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:12px;">Click the 📋 Audit Trail button on
+                    any matter row. The panel shows every logged event in chronological order:</p>
+
+                <div class="btn-grid">
+                    <span class="btn-pill grey">Matter Initiated</span>
+                    <span class="btn-pill grey">Content Saved</span>
+                    <span class="btn-pill blue">Signing Session Started</span>
+                    <span class="btn-pill blue">Signature Link Dispatched</span>
+                    <span class="btn-pill purple">Walk-in Signature Captured</span>
+                    <span class="btn-pill purple">Remote Signature Submitted</span>
+                    <span class="btn-pill green">Final Execution Completed</span>
+                    <span class="btn-pill gold">PDF Sealed & Generated</span>
+                    <span class="btn-pill orange">Session Extended</span>
+                    <span class="btn-pill grey">Collaborator Added / Removed</span>
+                    <span class="btn-pill grey">Visibility Changed</span>
+                    <span class="btn-pill red">Matter Voided</span>
+                </div>
+
+                <p style="font-size:13px; color:var(--text-sub); margin-top:16px;">Each log entry includes: the actor
+                    (admin name and ID), the action, the matter ID, the timestamp, and (for signing events) the IP
+                    address and browser user agent of the signatory.</p>
+
+                <div class="divider"></div>
+                <div class="section-title">System-Wide Activity</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:12px;"><code>GET /legal/activity</code>
+                    returns the 15 most recent events across all matters (used by the Dashboard activity feed).
+                    <code>GET /legal/execution-trends</code> returns time-series execution data for the velocity chart.
+                </p>
+
+                <div class="divider"></div>
+                <div class="section-title">Internal Memos</div>
+                <p style="font-size:13px; color:var(--text-sub); margin-bottom:12px;">Memos are private, internal-only
+                    notes attached to a matter — not visible to clients or external signatories.</p>
+
+                <table class="role-table">
+                    <thead>
+                        <tr>
+                            <th>Operation</th>
+                            <th>Endpoint</th>
+                            <th>Use Case</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>View Memos</td>
+                            <td><code>GET /matters/{id}/memos</code></td>
+                            <td>Read all internal notes for this matter in chronological order</td>
+                        </tr>
+                        <tr>
+                            <td>Add Memo</td>
+                            <td><code>POST /matters/{id}/memos</code></td>
+                            <td>Add a case note, meeting record, or legal observation</td>
+                        </tr>
+                        <tr>
+                            <td>Edit Memo</td>
+                            <td><code>PATCH /matters/{id}/memos/{memo_id}</code></td>
+                            <td>Correct or update an existing memo entry</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="gold-callout">
+                    <div class="callout-label">Usage</div>
+                    <p>Use memos to document client conversations, record decisions made during vetting, note
+                        outstanding due diligence items, or communicate instructions to other team members working on
+                        the matter. Memos are timestamped and author-attributed but can be edited, unlike audit logs
+                        which are write-once.</p>
+                </div>
+            </section>
+
+
+            <!-- ═══ CHAPTER XIV: COMPLIANCE ═══ -->
+            <section id="compliance" class="chapter accent-green">
+                <div class="chapter-header">
+                    <span class="chapter-num green">CH. XIV</span>
+                    <h2>Compliance, Integrity & Regulatory Framework</h2>
+                </div>
+                <p class="chapter-lead">The legal system is engineered to comply with Nigeria's digital signature and
+                    electronic evidence framework, ensuring that every executed document carries the legal weight of its
+                    physical equivalent.</p>
+
+                <div class="section-title">Regulatory Compliance</div>
+                <div class="feature-grid">
+                    <div class="feature-card">
+                        <span class="fc-icon">⚖️</span>
+                        <h4>Nigerian Evidence Act 2011</h4>
+                        <p>The system's digital signature process satisfies the requirements for electronic signatures
+                            under Nigerian law — capturing IP addresses, timestamps, device metadata, and explicit
+                            acknowledgement for non-repudiation.</p>
+                    </div>
+                    <div class="feature-card">
+                        <span class="fc-icon">🔒</span>
+                        <h4>Data Privacy</h4>
+                        <p>All personal data (client names, emails, signature images) is handled per applicable data
+                            protection principles. Signing sessions use unique tokens that expire, preventing
+                            unauthorized replay access.</p>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+                <div class="section-title">Document Integrity Mechanisms</div>
+
+                <div class="steps">
+                    <div class="step">
+                        <div class="step-badge green">1</div>
+                        <div class="step-body">
+                            <h4>SHA-256 Document Hash</h4>
+                            <p>When a signing session is prepared, the system computes a SHA-256 cryptographic hash of
+                                the document's HTML content. This hash is stored and displayed in the Archive. Any
+                                subsequent tampering with the document's content would produce a different hash —
+                                providing verifiable proof of integrity.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-badge green">2</div>
+                        <div class="step-body">
+                            <h4>Immutable Signing Token</h4>
+                            <p>Each signing session is tied to a unique, randomly generated token. This token links the
+                                signatory's action to the exact version of the document that was hashed. The token
+                                cannot be reused after the session concludes.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-badge green">3</div>
+                        <div class="step-body">
+                            <h4>Certificate of Authentication</h4>
+                            <p>Upon execution, the system generates a Certificate of Authentication PDF. This
+                                certificate contains: the document hash, all signatory names and roles, timestamps, IP
+                                addresses, and the signatures themselves. This certificate is the primary legal proof of
+                                execution.</p>
+                        </div>
+                    </div>
+                    <div class="step">
+                        <div class="step-badge green">4</div>
+                        <div class="step-body">
+                            <h4>Google Drive Encrypted Storage</h4>
+                            <p>All executed PDFs, authority signatures, and attachments are stored in a private Google
+                                Drive vault with organizational access controls. No document leaves the vault without
+                                authentication.</p>
+                        </div>
+                    </div>
+                </div>
+
+                <div class="divider"></div>
+                <div class="section-title">Pre-Execution Compliance Checklist</div>
+                <table class="role-table">
+                    <thead>
+                        <tr>
+                            <th>#</th>
+                            <th>Requirement</th>
+                            <th>Where to Verify</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr>
+                            <td>1</td>
+                            <td>All 5 Signature Vault slots are Active (not Empty)</td>
+                            <td>Signature Vault tab</td>
+                        </tr>
+                        <tr>
+                            <td>2</td>
+                            <td>Contract content reviewed and approved by the lawyer</td>
+                            <td>Legal Editor — Document Body tab</td>
+                        </tr>
+                        <tr>
+                            <td>3</td>
+                            <td>Client identity verified against CRM record</td>
+                            <td>Deal Intelligence panel in editor</td>
+                        </tr>
+                        <tr>
+                            <td>4</td>
+                            <td>Signing session token dispatched and received by client</td>
+                            <td>Manage Execution Modal — signing status</td>
+                        </tr>
+                        <tr>
+                            <td>5</td>
+                            <td>All required signatures collected (client + witness)</td>
+                            <td>Signing status indicators in editor/modal</td>
+                        </tr>
+                        <tr>
+                            <td>6</td>
+                            <td>Document hash matches pre-signing snapshot</td>
+                            <td>Archive — Audit Hash column (post-execution)</td>
+                        </tr>
+                        <tr>
+                            <td>7</td>
+                            <td>Sealed PDF generated and stored in vault</td>
+                            <td>Document Hub — Vault Panel</td>
+                        </tr>
+                        <tr>
+                            <td>8</td>
+                            <td>Sealed PDF sent to client</td>
+                            <td>Manage Execution Modal — Send Sealed PDF</td>
+                        </tr>
+                    </tbody>
+                </table>
+
+                <div class="info-box">
+                    <div class="info-label">Final Note — Support</div>
+                    <p>For system access issues, missing signature slots, or questions about specific contract clauses,
+                        contact the Director of Legal Services. For technical errors or API failures, contact the system
+                        administrator with the relevant matter ID and the specific error message visible in the browser
+                        console or toast notification.</p>
+                </div>
+            </section>
+
+        </main>
     </div>
 
     <script>
-        // Smooth scroll for nav links
-        document.querySelectorAll('a[href^="#"]').forEach(anchor => {
-            anchor.addEventListener('click', function (e) {
-                e.preventDefault();
-                const target = document.querySelector(this.getAttribute('href'));
-                if (target) {
-                    window.scrollTo({
-                        top: target.offsetTop - 20,
-                        behavior: 'smooth'
-                    });
-                }
-            });
+        // Progress bar
+        window.addEventListener('scroll', () => {
+            const el = document.documentElement;
+            const scrolled = el.scrollTop || document.body.scrollTop;
+            const total = el.scrollHeight - el.clientHeight;
+            const pct = total > 0 ? (scrolled / total) * 100 : 0;
+            document.getElementById('progressFill').style.height = pct + '%';
         });
 
-        // Intersection Observer for highlighting nav (Optional but adds premium feel)
-        const sections = document.querySelectorAll('section');
-        const navLinks = document.querySelectorAll('aside nav a');
+        // Active nav highlighting
+        const sections = document.querySelectorAll('[id]');
+        const navLinks = document.querySelectorAll('.nav-item');
 
         window.addEventListener('scroll', () => {
             let current = '';
-            sections.forEach(section => {
-                const sectionTop = section.offsetTop;
-                if (pageYOffset >= sectionTop - 100) {
-                    current = section.getAttribute('id');
-                }
+            sections.forEach(s => {
+                if (window.scrollY >= s.offsetTop - 120) current = s.id;
             });
-
             navLinks.forEach(link => {
-                link.classList.remove('bg-white/5');
-                const dot = link.querySelector('span');
-                dot.classList.remove('bg-brand-gold');
-                dot.classList.add('bg-gray-700');
-                
-                if (link.getAttribute('href').includes(current)) {
-                    link.classList.add('bg-white/5');
-                    dot.classList.remove('bg-gray-700');
-                    dot.classList.add('bg-brand-gold');
-                }
+                link.classList.remove('active');
+                if (link.getAttribute('href') === '#' + current) link.classList.add('active');
             });
         });
     </script>
 </body>
+
 </html>

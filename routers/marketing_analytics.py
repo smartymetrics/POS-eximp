@@ -3,6 +3,7 @@ from typing import List, Optional
 from database import get_db, db_execute
 from routers.auth import verify_token
 from datetime import datetime, timedelta
+from marketing_service import get_financial_segment_contacts
 
 router = APIRouter()
 
@@ -118,7 +119,7 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
 
     # 7. Engagement stats
     opens_count_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").gt("total_emails_opened", 0).execute())
-    hot_leads_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").gte("engagement_score", 50).execute())
+    hot_leads_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").gte("engagement_score", 70).execute())
     warm_leads_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").lt("engagement_score", 50).gte("engagement_score", 30).execute())
     cold_leads_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").lt("engagement_score", 30).execute())
 
@@ -143,6 +144,11 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
             "hot_leads": hot_leads_res.count or 0,
             "warm_leads": warm_leads_res.count or 0,
             "cold_leads": cold_leads_res.count or 0
+        },
+        "financial": {
+            "overdue": len(get_financial_segment_contacts("financial_overdue")),
+            "outstanding": len(get_financial_segment_contacts("financial_outstanding")),
+            "paid_fully": len(get_financial_segment_contacts("financial_paid_fully"))
         },
         "segment_stats": segment_stats,
         "growth": growth_data
