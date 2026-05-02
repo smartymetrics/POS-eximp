@@ -3737,9 +3737,10 @@ function LegalManager({ staffId: initialStaffId, staffName: initialStaffName, is
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [matters, setMatters] = useState([]);
   const [staffList, setStaffList] = useState([]);
+  const [drafterList, setDrafterList] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showInitiate, setShowInitiate] = useState(false);
-  const [initForm, setInitForm] = useState({ title: "", type: "Personnel", priority: "Normal", notes: "", staff_id: initialStaffId, external_name: "", external_email: "", isExternal: false });
+  const [initForm, setInitForm] = useState({ title: "", type: "Personnel", priority: "Normal", notes: "", staff_id: initialStaffId, external_name: "", external_email: "", isExternal: false, drafter_id: "" });
   const [submitting, setSubmitting] = useState(false);
   const [dispatchState, setDispatchState] = useState({});
   const [dispatchMsg, setDispatchMsg] = useState({});
@@ -3757,6 +3758,16 @@ function LegalManager({ staffId: initialStaffId, staffName: initialStaffName, is
       if (isHR) {
         const staff = await apiFetch(`${API_BASE}/hr/staff`);
         setStaffList(staff);
+        
+        try {
+          const cands = await apiFetch(`${API_BASE}/hr-legal/collaborator-candidates`);
+          // Prioritise lawyers
+          const lawyers = cands.filter(c => (c.role || '').toLowerCase().includes('legal') || (c.role || '').toLowerCase().includes('lawyer'));
+          const others = cands.filter(c => !lawyers.includes(c));
+          setDrafterList([...lawyers, ...others]);
+        } catch (e) {
+          console.warn("Could not fetch drafter list", e);
+        }
       }
     } catch (e) { console.error("Legal load error:", e); }
     finally { setLoading(false); }
@@ -3781,11 +3792,12 @@ function LegalManager({ staffId: initialStaffId, staffName: initialStaffName, is
           hr_memo: initForm.notes,
           external_party_name: initForm.isExternal ? initForm.external_name : null,
           external_party_email: initForm.isExternal ? initForm.external_email : null,
+          drafter_id: initForm.drafter_id || null,
           status: "Draft"
         })
       });
       setShowInitiate(false);
-      setInitForm({ title: "", type: "Personnel", priority: "Normal", notes: "", staff_id: initialStaffId, external_name: "", external_email: "", isExternal: false });
+      setInitForm({ title: "", type: "Personnel", priority: "Normal", notes: "", staff_id: initialStaffId, external_name: "", external_email: "", isExternal: false, drafter_id: "" });
       load();
     } catch (e) { alert(e.message); }
     finally { setSubmitting(false); }
@@ -3993,6 +4005,18 @@ function LegalManager({ staffId: initialStaffId, staffName: initialStaffName, is
                 </select>
               </div>
             </div>
+            {isHR && (
+              <div>
+                <Lbl>Assign Drafter <span style={{ fontWeight: "normal", color: C.muted }}>(optional)</span></Lbl>
+                <select className="inp" value={initForm.drafter_id} onChange={e => setInitForm({ ...initForm, drafter_id: e.target.value })}>
+                  <option value="">-- Myself (default) --</option>
+                  {drafterList.map(c => (
+                    <option key={c.id} value={c.id}>{c.full_name} ({c.role || "Admin"})</option>
+                  ))}
+                </select>
+                <div style={{ fontSize: 10, color: C.sub, marginTop: 4 }}>Assign this matter directly to a specific lawyer.</div>
+              </div>
+            )}
             <div><Lbl>HR Brief / Memo (Internal for Legal)</Lbl>
               <textarea className="inp" rows={4} placeholder="Brief instructions for the legal team..." value={initForm.notes} onChange={e => setInitForm({ ...initForm, notes: e.target.value })} />
             </div>

@@ -147,7 +147,35 @@ async def get_legal_matters(category: str = None, staff_id: str = None, current_
         query = query.eq("drafter_id", admin_id)
         
     res = await db_execute(lambda: query.order("created_at", desc=True).execute())
-    return res.data or []
+    matters = res.data or []
+
+    if not matters:
+        return []
+
+    # Batch-fetch all collaborator records for the current admin (avoids N+1)
+    matter_ids = [m["id"] for m in matters]
+    collab_res = await db_execute(lambda: db.table("legal_matter_collaborators")
+        .select("matter_id, permission_level")
+        .eq("admin_id", admin_id)
+        .in_("matter_id", matter_ids)
+        .execute()
+    )
+    # Build a map: matter_id → permission_level
+    collab_map = {c["matter_id"]: c["permission_level"] for c in (collab_res.data or [])}
+
+    is_super = any(r in ["admin", "super_admin"] for r in user_roles)
+
+    for m in matters:
+        is_drafter = str(m.get("drafter_id")) == str(admin_id)
+        collab_level = collab_map.get(m["id"])
+        # can_edit: drafter always can. Collaborator needs Edit or Full. Super-admin can always.
+        m["can_edit"] = is_drafter or is_super or (collab_level in ["Edit", "Full"])
+        # can_delete: only the drafter or a super-admin
+        m["can_delete"] = is_drafter or is_super
+        m["is_drafter"] = is_drafter
+
+    return matters
+
 
 @router.get("/staff/{staff_id}/matters")
 async def get_staff_matters(staff_id: str, current_admin=Depends(verify_token)):
@@ -165,14 +193,29 @@ async def get_staff_matters(staff_id: str, current_admin=Depends(verify_token)):
 
 @router.post("/matters")
 async def initiate_matter(data: dict, current_admin=Depends(verify_token)):
-    """Create a new legal matter."""
+    """Create a new legal matter. If drafter_id is provided by a privileged user, that admin becomes the drafter."""
     db = get_db()
     admin_id = current_admin["sub"]
-    
+    user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
+    is_privileged = any(r in ["admin", "super_admin", "hr_admin", "hr", "legal"] for r in user_roles)
+
+    # Allow privileged users (HR, Admin) to assign a different drafter
+    requested_drafter = data.get("drafter_id")
+    if requested_drafter and is_privileged and str(requested_drafter) != str(admin_id):
+        # Validate that the requested drafter actually exists
+        drafter_check = await db_execute(lambda: db.table("admins").select("id, full_name").eq("id", requested_drafter).eq("is_active", True).execute())
+        if not drafter_check.data:
+            raise HTTPException(status_code=400, detail="Assigned drafter does not exist or is inactive")
+        drafter_id = requested_drafter
+        drafter_name = drafter_check.data[0].get("full_name", "Unknown")
+    else:
+        drafter_id = admin_id
+        drafter_name = current_admin.get("full_name", "Unknown")
+
     matter_data = {
         "title": data.get("title", "Untitled Case"),
         "category": data.get("category", "General"),
-        "drafter_id": admin_id,
+        "drafter_id": drafter_id,
         "staff_id": data.get("staff_id"),
         "external_party_name": data.get("external_party_name"),
         "external_party_email": data.get("external_party_email"),
@@ -180,23 +223,31 @@ async def initiate_matter(data: dict, current_admin=Depends(verify_token)):
         "hr_memo": data.get("hr_memo"),
         "status": data.get("status", "Draft")
     }
-    
+
     res = await db_execute(lambda: db.table("legal_matters").insert(matter_data).execute())
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to initiate legal matter")
-    
+
     matter = res.data[0]
-    
-    # Log audit — standardized to actor_id/actor_name
+
+    # Build audit description — distinguish initiator from drafter when they differ
+    initiator_name = current_admin.get("full_name", "Unknown")
+    if str(drafter_id) != str(admin_id):
+        description = f"New {matter['category']} matter initiated by {initiator_name} and assigned to drafter: {drafter_name}"
+    else:
+        description = f"New {matter['category']} matter created via {'HR' if data.get('hr_memo') else 'Legal'} Portal"
+
     await db_execute(lambda: db.table("legal_matter_history").insert({
         "matter_id": matter["id"],
         "action": "Matter Initiated",
         "performed_by": admin_id,
-        "performed_by_name": current_admin.get("full_name", "Unknown"),
-        "description": f"New {matter['category']} matter created via { 'HR' if data.get('hr_memo') else 'Legal'} Portal"
+        "performed_by_name": initiator_name,
+        "description": description
     }).execute())
-    
+
     return matter
+
+
 
 @router.get("/matters/{matter_id}")
 async def get_matter_details(matter_id: str, current_admin=Depends(verify_token)):
@@ -214,6 +265,37 @@ async def get_matter_details(matter_id: str, current_admin=Depends(verify_token)
         "collaborators": collabs_res.data or [],
         "history": history_res.data or []
     }
+
+@router.delete("/matters/{matter_id}")
+async def delete_matter(matter_id: str, current_admin=Depends(verify_token)):
+    """Permanently delete a legal matter and all associated records. Drafter or admin only."""
+    db = get_db()
+    admin_id = current_admin["sub"]
+    user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
+    is_super = any(r in ["admin", "super_admin"] for r in user_roles)
+
+    # Verify the matter exists and check access
+    matter_res = await db_execute(lambda: db.table("legal_matters").select("id, title, drafter_id").eq("id", matter_id).execute())
+    if not matter_res.data:
+        raise HTTPException(status_code=404, detail="Legal matter not found")
+
+    matter = matter_res.data[0]
+
+    # Only the drafter or an admin/super_admin may delete
+    if not is_super and str(matter.get("drafter_id")) != str(admin_id):
+        raise HTTPException(status_code=403, detail="Only the drafter or an administrator can delete this matter")
+
+    # Cascade-delete all related records first
+    await db_execute(lambda: db.table("legal_matter_collaborators").delete().eq("matter_id", matter_id).execute())
+    await db_execute(lambda: db.table("legal_matter_history").delete().eq("matter_id", matter_id).execute())
+    await db_execute(lambda: db.table("legal_matter_memos").delete().eq("matter_id", matter_id).execute())
+    await db_execute(lambda: db.table("legal_signing_requests").delete().eq("matter_id", matter_id).execute())
+
+    # Delete the matter itself
+    await db_execute(lambda: db.table("legal_matters").delete().eq("id", matter_id).execute())
+
+    return {"status": "deleted", "id": matter_id, "title": matter.get("title")}
+
 
 @router.post("/matters/{matter_id}/collaborators")
 async def add_collaborator(matter_id: str, data: dict, current_admin=Depends(verify_token)):
