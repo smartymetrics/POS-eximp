@@ -5,7 +5,7 @@ from database import get_db, db_execute
 from routers.auth import verify_token
 from routers.analytics import log_activity
 from datetime import datetime, timedelta
-from marketing_service import broadcast_campaign, send_marketing_email
+from marketing_service import broadcast_campaign, send_marketing_email, get_daily_quota_stats
 
 router = APIRouter()
 
@@ -386,3 +386,30 @@ async def list_calendar_events(current_admin=Depends(verify_token)):
     from calendar_service import get_marketing_calendar
     events = get_marketing_calendar()
     return events
+@router.get("/settings/quota")
+async def get_quota_settings(current_admin=Depends(verify_token)):
+    """Returns the current daily quota configuration and usage."""
+    stats = await get_daily_quota_stats()
+    return stats
+
+@router.post("/settings/quota")
+async def update_quota_settings(enabled: bool, limit: Optional[int] = 80, current_admin=Depends(verify_token)):
+    """Updates the global daily quota safety brake settings."""
+    db = get_db()
+    new_value = {"enabled": enabled, "limit": limit, "reset_hour": 0}
+    
+    # Safe update using .eq() to bypass upsert unique constraint issues
+    res = await db_execute(lambda: db.table("marketing_settings").update({
+        "value": new_value,
+        "updated_at": datetime.utcnow().isoformat()
+    }).eq("key", "daily_quota").execute())
+    
+    if not res.data:
+        # Fallback if the migration hasn't initialized the row yet
+        await db_execute(lambda: db.table("marketing_settings").insert({
+            "key": "daily_quota",
+            "value": new_value,
+            "updated_at": datetime.utcnow().isoformat()
+        }).execute())
+    
+    return {"message": "Marketing quota settings updated.", "settings": new_value}

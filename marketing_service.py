@@ -482,6 +482,30 @@ async def resolve_target_recipients(segment_ids: List[str] = None, manual_emails
     res = db.table("marketing_contacts").select("*").eq("is_subscribed", True).execute()
     return res.data
 
+async def get_daily_quota_stats():
+    """Checks the current daily send volume vs the safety quota."""
+    db = get_db()
+    try:
+        settings_res = db.table("marketing_settings").select("value").eq("key", "daily_quota").execute()
+        settings = settings_res.data[0]["value"] if settings_res.data else {"enabled": True, "limit": 80}
+    except:
+        settings = {"enabled": True, "limit": 80}
+    
+    if not settings.get("enabled"):
+        return {"enabled": False, "current": 0, "limit": 999999, "remaining": 999999}
+        
+    today = datetime.utcnow().replace(hour=0, minute=0, second=0, microsecond=0).isoformat()
+    # Count all emails sent today (UTC)
+    count_res = db.table("campaign_recipients").select("id", count="exact").gte("sent_at", today).eq("status", "sent").execute()
+    current = count_res.count or 0
+    
+    return {
+        "enabled": True,
+        "current": current,
+        "limit": settings.get("limit", 80),
+        "remaining": max(0, settings.get("limit", 80) - current)
+    }
+
 async def broadcast_campaign(campaign_id: str, segment_ids: List[str] = None, manual_emails: List[str] = None):
     """Broadcasts a campaign to targeted recipients with throttling."""
     db = get_db()
@@ -571,8 +595,36 @@ async def broadcast_campaign(campaign_id: str, segment_ids: List[str] = None, ma
         if fresh.data and fresh.data[0]["status"] == "paused":
             logger.info(f"Campaign {campaign_id} paused mid-send at batch {i}. Stopping.")
             return  # Exit without marking as sent
+
+        # --- DAILY QUOTA SAFETY CHECK ---
+        quota = await get_daily_quota_stats()
+        if quota["enabled"] and quota["remaining"] <= 0:
+            logger.warning(f"Daily quota reached ({quota['current']}/{quota['limit']}). Rescheduling campaign {campaign_id}.")
             
-        batch = targets[i:i+batch_size]
+            # Auto-schedule for tomorrow at 08:00 AM
+            tomorrow = (datetime.utcnow() + timedelta(days=1)).replace(hour=8, minute=0, second=0, microsecond=0).isoformat()
+            
+            db.table("email_campaigns").update({
+                "status": "scheduled",
+                "scheduled_for": tomorrow,
+                "total_sent": sent_count
+            }).eq("id", campaign_id).execute()
+            
+            from routers.analytics import log_activity
+            await log_activity(
+                "marketing_campaign_quota_brake",
+                f"Daily quota reached ({quota['limit']}). Campaign paused and auto-scheduled for tomorrow at 08:00.",
+                "system",
+                metadata={"campaign_id": campaign_id, "sent_so_far": sent_count}
+            )
+            return # Exit broadcast
+
+        # Calculate batch size based on remaining quota
+        current_batch_size = min(batch_size, quota["remaining"]) if quota["enabled"] else batch_size
+        if current_batch_size <= 0 and quota["enabled"]:
+            continue # Should be caught by the break above but safety first
+
+        batch = targets[i:i+current_batch_size]
         tasks = []
         batch_sent_a = 0
         batch_sent_b = 0

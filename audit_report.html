@@ -536,10 +536,14 @@
                 <td>Active. Campaigns can be paused during broadcast to stop sending immediately.</td>
             </tr>
             <tr>
-                <td><span class="item-name">Campaign status flow (draft→scheduled→sending→sent→paused→failed)</span>
-                </td>
+                <td><span class="item-name">Campaign status flow (draft→scheduled→sending→sent→paused→failed)</span></td>
                 <td><span class="badge badge-pass">Pass</span></td>
                 <td>Full lifecycle implemented. 'paused' and 'resume' endpoints are active and correctly manage broadcast state.</td>
+            </tr>
+            <tr>
+                <td><span class="item-name">Daily Email Quota (80/day Safety Brake)</span></td>
+                <td><span class="badge badge-pass">Pass</span></td>
+                <td>Intelligent quota implemented. System auto-stops at 80 emails and reschedules remaining recipients for tomorrow 08:00 AM. Includes dashboard toggle.</td>
             </tr>
             <tr>
                 <td><span class="item-name">Throttled batch sizes per PRD spec</span></td>
