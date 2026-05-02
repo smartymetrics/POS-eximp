@@ -223,7 +223,32 @@
             transition: all 0.3s;
         }
 
+        select {
+            appearance: none;
+            cursor: pointer;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%23C47D0A' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 16px center;
+            background-size: 18px;
+        }
+
+        select option {
+            background: #1A1C24;
+            color: #fff;
+            padding: 12px;
+        }
+
+        select optgroup {
+            background: #111317;
+            color: var(--brand);
+            font-weight: 800;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+        }
+
         input:focus,
+        select:focus,
         textarea:focus {
             border-color: var(--brand);
             background: rgba(255, 255, 255, 0.05);
@@ -663,6 +688,46 @@
                         <div id="fileList" style="margin-top:10px; text-align:left; display:none;"></div>
                     </div>
                     <textarea id="remarks" placeholder="Remarks..." style="height:86px; padding:12px;"></textarea>
+                    
+                    <!-- Structured Dropdown for Office Disbursements -->
+                    <div class="input-wrapper">
+                        <i class="fas fa-tags"></i>
+                        <select id="office_expense_type" class="hidden" style="width:100%; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:10px; color:var(--text); outline:none; font-family:inherit;">
+                            <option value="" disabled selected>— Select Expense Type —</option>
+                            <optgroup label="🏡 Real Estate Operations">
+                                <option value="Site Inspection - Transport/Logistics">Site Inspection - Transport/Logistics</option>
+                                <option value="Site Inspection - Feeding/Refreshments">Site Inspection - Feeding/Refreshments</option>
+                                <option value="Allocation - Surveying & Pegging">Allocation - Surveying & Pegging</option>
+                                <option value="Allocation - Logistics/Documentation">Allocation - Logistics/Documentation</option>
+                                <option value="Site Clearing & Maintenance">Site Clearing & Maintenance</option>
+                            </optgroup>
+                            <optgroup label="🔌 Office Utilities & Maintenance">
+                                <option value="Fuel - Generator">Fuel - Generator</option>
+                                <option value="Fuel - Office Vehicle">Fuel - Office Vehicle</option>
+                                <option value="Electricity (AEDC) & Water">Electricity (AEDC) & Water</option>
+                                <option value="Repairs (AC/Plumbing/Electrical)">Repairs (AC/Plumbing/Electrical)</option>
+                            </optgroup>
+                            <optgroup label="🧹 Cleaning & Janitorial">
+                                <option value="Toiletries & Cleaning Supplies">Toiletries & Cleaning Supplies</option>
+                                <option value="Janitorial / Cleaning Services">Janitorial / Cleaning Services</option>
+                            </optgroup>
+                            <optgroup label="💻 Tech & Infrastructure">
+                                <option value="Database & API Costs">Database & API Costs</option>
+                                <option value="Domain & Hosting Renewals">Domain & Hosting Renewals</option>
+                                <option value="Internet & Data Subscriptions">Internet & Data Subscriptions</option>
+                                <option value="Software Licenses">Software Licenses</option>
+                            </optgroup>
+                            <optgroup label="📋 Administration & Branding">
+                                <option value="Office Supplies & Stationery">Office Supplies & Stationery</option>
+                                <option value="Printing & Branding Materials">Printing & Branding Materials</option>
+                                <option value="Courier & General Logistics">Courier & General Logistics</option>
+                            </optgroup>
+                            <optgroup label="☕ Welfare & Meetings">
+                                <option value="Client Welfare">Client Welfare</option>
+                                <option value="Staff Welfare (Lunch/Tea/Water)">Staff Welfare (Lunch/Tea/Water)</option>
+                            </optgroup>
+                        </select>
+                    </div>
                 </div>
             </div>
 
@@ -706,6 +771,16 @@
             document.querySelectorAll('.sub-btn')[idx].classList.add('active');
             const invSection = document.getElementById('invoice-section');
             invSection.classList.toggle('hidden', tab !== 'staff_commission');
+
+            // Handle Remarks vs Dropdown toggle
+            const remarksEl = document.getElementById('remarks');
+            const officeSelectEl = document.getElementById('office_expense_type');
+            if (remarksEl && officeSelectEl) {
+                const isOffice = (currentTab === 'disbursement' && tab === 'office');
+                remarksEl.classList.toggle('hidden', isOffice);
+                officeSelectEl.classList.toggle('hidden', !isOffice);
+                if (isOffice) remarksEl.value = ""; // Clear textarea if switching to office
+            }
         }
 
         function validateLookupState() {
@@ -878,7 +953,14 @@
             formData.append('payment_type', document.getElementById('hid_payment_type').value);
             formData.append('is_dispute', isDispute);
             formData.append('dispute_reason', isDispute ? document.getElementById('dispute_reason').value : "");
-            formData.append('remarks', document.getElementById('remarks').value || "");
+            
+            // Logic for Remarks vs Dropdown
+            const isOffice = (currentTab === 'disbursement' && subTab === 'office');
+            const finalRemarks = isOffice 
+                ? document.getElementById('office_expense_type').value 
+                : document.getElementById('remarks').value;
+            
+            formData.append('remarks', finalRemarks || "");
 
             const files = Array.from(document.getElementById('fileInput').files);
             files.forEach(f => formData.append('files', f));

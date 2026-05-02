@@ -800,9 +800,30 @@
             background: rgba(255, 255, 255, 0.06);
         }
 
+        select.form-input {
+            appearance: none;
+            cursor: pointer;
+            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%23C47D0A' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat: no-repeat;
+            background-position: right 16px center;
+            background-size: 18px;
+            padding-right: 48px;
+        }
+
         select.form-input option {
-            background: var(--dark2);
+            background: #1A1C24;
             color: #fff;
+            padding: 12px;
+        }
+
+        select.form-input optgroup {
+            background: #111317;
+            color: var(--gold);
+            font-weight: 800;
+            font-size: 10px;
+            text-transform: uppercase;
+            letter-spacing: 1.5px;
+            padding: 10px 0;
         }
 
         /* Toast notifications */
@@ -1931,7 +1952,8 @@
             </div>
 
             <!-- REJECTION REASON (hidden until REJECT CLAIM is clicked) -->
-            <div id="reject-reason-container" class="hidden" style="margin-top:24px; padding:18px; border:1.5px solid var(--error); border-radius:12px; background:rgba(239,68,68,0.05);">
+            <div id="reject-reason-container" class="hidden"
+                style="margin-top:24px; padding:18px; border:1.5px solid var(--error); border-radius:12px; background:rgba(239,68,68,0.05);">
                 <label class="form-label" style="color:var(--error); margin-bottom:8px; display:block;">
                     <i class="fas fa-exclamation-triangle" style="margin-right:6px;"></i>
                     Rejection Reason <span style="font-size:11px;">(Required — sent to claimant)</span>
@@ -1940,14 +1962,17 @@
                     style="height:80px; border-color:var(--error); resize:vertical;"
                     placeholder="e.g. Invoice could not be verified / Duplicate submission / Missing supporting documents…"></textarea>
                 <div style="display:flex; gap:10px; margin-top:12px;">
-                    <button class="btn" style="flex:1; justify-content:center; border-color:var(--gray); color:var(--gray); font-size:12px;"
+                    <button class="btn"
+                        style="flex:1; justify-content:center; border-color:var(--gray); color:var(--gray); font-size:12px;"
                         onclick="cancelReject()">CANCEL</button>
-                    <button class="btn" style="flex:2; justify-content:center; background:var(--error); border-color:var(--error); color:#fff; font-size:13px; font-weight:700;"
+                    <button class="btn"
+                        style="flex:2; justify-content:center; background:var(--error); border-color:var(--error); color:#fff; font-size:13px; font-weight:700;"
                         onclick="confirmReject()">CONFIRM REJECTION</button>
                 </div>
             </div>
 
-            <div id="audit-action-buttons" style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top:40px;">
+            <div id="audit-action-buttons"
+                style="display:grid; grid-template-columns: 1fr 1fr; gap:16px; margin-top:40px;">
                 <button class="btn btn-gold" style="justify-content:center; padding:18px;"
                     onclick="submitReview('approved')">AUTHORIZE PAYMENT</button>
                 <button class="btn" style="justify-content:center; border-color:var(--error); color:var(--error);"
@@ -3468,7 +3493,7 @@
                     fetchRequests();
                 } else {
                     let errMsg = "Audit action failed";
-                    try { const err = await res.json(); errMsg = err.detail || errMsg; } catch (_) {}
+                    try { const err = await res.json(); errMsg = err.detail || errMsg; } catch (_) { }
                     toast(errMsg, "error");
                 }
             } catch (e) {

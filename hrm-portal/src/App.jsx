@@ -140,10 +140,13 @@ const GS = dark => {
     .bd:hover{background:#EF444422;transform:translateY(-1px);}
     
     /* Inputs */
-    .inp{background:#121417;border:1px solid #FFFFFF14;color:${C.text};padding:12px 18px;border-radius:12px;font-size:14px;outline:none;font-family:inherit;width:100%;transition:all .2s ease;}
-    .inp:focus{border-color:${G};background:#15181C;box-shadow:0 0 0 4px ${G}14;}
-    select.inp option{background:#1A1C20;color:#FFF;}
+    .inp{background:${C.input};border:1px solid ${C.border};color:${C.text};padding:12px 18px;border-radius:12px;font-size:14px;outline:none;font-family:inherit;width:100%;transition:all .25s ease;}
+    .inp:focus{border-color:${G};background:${dark ? "#15181C" : "#FFFFFF"};box-shadow:0 0 0 4px ${G}14;}
+    select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%23${G.replace("#","")}' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center;background-size:18px;padding-right:48px;}
+    select.inp option{background:${dark ? "#1A1C24" : "#FFFFFF"};color:${C.text};padding:12px;}
+    select.inp optgroup{background:${dark ? "#111317" : "#F4F6FA"};color:${G};font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;padding:10px 0;}
     textarea.inp{resize:vertical;min-height:90px;}
+    @media(max-width:640px){ .inp{font-size:16px;padding:14px 20px;} }
     
     /* Tags */
     .tg{display:inline-flex;align-items:center;padding:5px 14px;border-radius:9999px;font-size:10px;font-weight:800;letter-spacing:.08em;text-transform:uppercase;}
@@ -9992,10 +9995,74 @@ function ExpensesManager() {
           <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
             <div><Lbl>Staff Member</Lbl><select className="inp" value={form.staff_id} onChange={e => setForm(f => ({ ...f, staff_id: e.target.value }))}><option value="">— Select Staff —</option>{staff.map(s => <option key={s.id} value={s.id}>{s.full_name}</option>)}</select></div>
             <div className="g2" style={{ gap: 12 }}>
-              <div><Lbl>Category</Lbl><select className="inp" value={form.category} onChange={e => setForm(f => ({ ...f, category: e.target.value }))}><option>Travel</option><option>Accommodation</option><option>Meals</option><option>Equipment</option><option>Training</option><option>Other</option></select></div>
+              <div>
+                <Lbl>Category</Lbl>
+                <select className="inp" value={form.category} onChange={e => {
+                  setForm(f => ({ ...f, category: e.target.value }));
+                  // Reset description when switching to/from Office Expenditure
+                  if (e.target.value === "Office Expenditure") {
+                    setForm(f => ({ ...f, description: "" }));
+                  }
+                }}>
+                  <option value="Office Expenditure">Office Expenditure</option>
+                  <option value="Travel">Travel</option>
+                  <option value="Accommodation">Accommodation</option>
+                  <option value="Meals">Meals</option>
+                  <option value="Equipment">Equipment</option>
+                  <option value="Training">Training</option>
+                  <option value="Other">Other</option>
+                </select>
+              </div>
               <div><Lbl>Amount (NGN) *</Lbl><input type="number" className="inp" value={form.amount} onChange={e => setForm(f => ({ ...f, amount: e.target.value }))} placeholder="e.g. 45000" /></div>
             </div>
-            <div><Lbl>Description *</Lbl><input className="inp" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Brief description of the expense" /></div>
+            <div>
+              <Lbl>Expense Detail *</Lbl>
+              {form.category === "Office Expenditure" ? (
+                <select className="inp" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))}>
+                  <option value="" disabled>— Select Detail —</option>
+                  <optgroup label="🏡 Real Estate Operations">
+                    <option value="Site Inspection - Transport/Logistics">Site Inspection - Transport/Logistics</option>
+                    <option value="Site Inspection - Feeding/Refreshments">Site Inspection - Feeding/Refreshments</option>
+                    <option value="Allocation - Surveying & Pegging">Allocation - Surveying & Pegging</option>
+                    <option value="Allocation - Logistics/Documentation">Allocation - Logistics/Documentation</option>
+                    <option value="Site Clearing & Maintenance">Site Clearing & Maintenance</option>
+                  </optgroup>
+                  <optgroup label="🔌 Office Utilities & Maintenance">
+                    <option value="Fuel - Generator">Fuel - Generator</option>
+                    <option value="Fuel - Office Vehicle">Fuel - Office Vehicle</option>
+                    <option value="Electricity (AEDC) & Water">Electricity (AEDC) & Water</option>
+                    <option value="Repairs (AC/Plumbing/Electrical)">Repairs (AC/Plumbing/Electrical)</option>
+                  </optgroup>
+                  <optgroup label="🧹 Cleaning & Janitorial">
+                    <option value="Toiletries & Cleaning Supplies">Toiletries & Cleaning Supplies</option>
+                    <option value="Janitorial / Cleaning Services">Janitorial / Cleaning Services</option>
+                  </optgroup>
+                  <optgroup label="💻 Tech & Infrastructure">
+                    <option value="Database & API Costs">Database & API Costs</option>
+                    <option value="Domain & Hosting Renewals">Domain & Hosting Renewals</option>
+                    <option value="Internet & Data Subscriptions">Internet & Data Subscriptions</option>
+                    <option value="Software Licenses">Software Licenses</option>
+                  </optgroup>
+                  <optgroup label="📋 Administration & Branding">
+                    <option value="Office Supplies & Stationery">Office Supplies & Stationery</option>
+                    <option value="Printing & Branding Materials">Printing & Branding Materials</option>
+                    <option value="Courier & General Logistics">Courier & General Logistics</option>
+                  </optgroup>
+                  <optgroup label="☕ Welfare & Meetings">
+                    <option value="Client Welfare">Client Welfare</option>
+                    <option value="Staff Welfare (Lunch/Tea/Water)">Staff Welfare (Lunch/Tea/Water)</option>
+                  </optgroup>
+                </select>
+              ) : (
+                <input
+                  type="text"
+                  className="inp"
+                  value={form.description}
+                  onChange={e => setForm(f => ({ ...f, description: e.target.value }))}
+                  placeholder="e.g. Flight to Abuja for site visit"
+                />
+              )}
+            </div>
             <div className="g2" style={{ gap: 12 }}>
               <div><Lbl>Date Incurred</Lbl><input type="date" className="inp" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
               <div><Lbl>Receipt URL</Lbl><input className="inp" value={form.receipt_url} onChange={e => setForm(f => ({ ...f, receipt_url: e.target.value }))} placeholder="https://…" /></div>
