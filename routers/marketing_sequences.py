@@ -3,6 +3,7 @@ from typing import List, Optional, Dict, Any
 from pydantic import BaseModel
 from database import get_db, db_execute
 from routers.auth import verify_token
+from routers.analytics import log_activity
 from datetime import datetime, timedelta
 
 router = APIRouter()
@@ -72,6 +73,12 @@ async def create_sequence(data: SequenceCreate, current_admin=Depends(verify_tok
     if step_entries:
         await db_execute(lambda: db.table("sequence_steps").insert(step_entries).execute())
         
+    await log_activity(
+        "marketing_sequence_created",
+        f"Sequence '{data.name}' created with {len(data.steps)} step(s).",
+        current_admin["sub"]
+    )
+        
     return {"id": seq_id, "message": "Sequence and steps created successfully."}
 
 @router.get("/{id}")
@@ -117,5 +124,11 @@ async def toggle_sequence(id: str, current_admin=Depends(verify_token)):
     
     new_value = not res.data[0].get("is_active", True)
     await db_execute(lambda: db.table("marketing_sequences").update({"is_active": new_value}).eq("id", id).execute())
+    
+    await log_activity(
+        "marketing_sequence_toggled",
+        f"Sequence '{id}' {'enabled' if new_value else 'disabled'}.",
+        current_admin["sub"]
+    )
     
     return {"message": f"Sequence {'enabled' if new_value else 'disabled'}.", "is_active": new_value}

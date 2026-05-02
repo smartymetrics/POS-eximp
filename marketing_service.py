@@ -544,13 +544,15 @@ async def broadcast_campaign(campaign_id: str, segment_ids: List[str] = None, ma
             db.table("email_campaigns").update({"status": "failed"}).eq("id", campaign_id).execute()
             return logger.error(f"No recipients for campaign {campaign_id} with targets {segment_ids} / {manual_emails}")
 
-        # Initialize the pending queue in the database
-        for r in recipients:
-            db.table("campaign_recipients").upsert({
-                "campaign_id": campaign_id,
-                "contact_id": r["id"],
-                "status": "pending"
-            }).execute()
+        # Initialize the pending queue in the database using a bulk upsert for speed and reliability
+        queue_data = [{
+            "campaign_id": campaign_id,
+            "contact_id": r["id"],
+            "status": "pending"
+        } for r in recipients]
+        
+        if queue_data:
+            db.table("campaign_recipients").upsert(queue_data).execute()
 
     # 4. Update status to sending
     update_data = {"status": "sending"}
@@ -594,8 +596,13 @@ async def broadcast_campaign(campaign_id: str, segment_ids: List[str] = None, ma
     batch_size = 50
     sent_count = campaign.get("total_sent") or 0
     
-    # Combined target list with labels
-    targets = [(r, "A") for r in group_a] + [(r, "B") for r in group_b]
+    # Combined target list with labels (Interleaved for true A/B distribution in every batch)
+    targets = []
+    for i in range(max(len(group_a), len(group_b))):
+        if i < len(group_a):
+            targets.append((group_a[i], "A"))
+        if i < len(group_b):
+            targets.append((group_b[i], "B"))
     
     for i in range(0, len(targets), batch_size):
         # TASK 2C: Re-fetch campaign status to detect pause signal

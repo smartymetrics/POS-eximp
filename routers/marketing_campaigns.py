@@ -75,6 +75,24 @@ async def create_campaign(data: CampaignCreate, current_admin=Depends(verify_tok
     )
     return result.data[0]
 
+@router.get("/audit-logs")
+async def get_marketing_audit_logs(limit: int = 50, admin: dict = Depends(verify_token)):
+    """Fetches the audit log of all marketing actions for the dashboard."""
+    db = get_db()
+    query = db.table("activity_log").select("*, admins(full_name)").ilike("event_type", "marketing_%").order("created_at", desc=True).limit(limit)
+    res = await db_execute(lambda: query.execute())
+    
+    logs = []
+    for item in res.data:
+        logs.append({
+            "id": item["id"],
+            "event_type": item["event_type"],
+            "description": item["description"],
+            "performed_by_name": item["admins"].get("full_name") if item.get("admins") else "System",
+            "created_at": item["created_at"]
+        })
+    return logs
+
 @router.get("/{id}")
 async def get_campaign(id: str, current_admin=Depends(verify_token)):
     db = get_db()
@@ -105,6 +123,17 @@ async def update_campaign(id: str, data: CampaignUpdate, current_admin=Depends(v
     update_dict["updated_at"] = datetime.utcnow().isoformat()
     
     result = await db_execute(lambda: db.table("email_campaigns").update(update_dict).eq("id", id).execute())
+    
+    # Log the save action
+    if result.data:
+        campaign_name = result.data[0].get("name", "Unknown Campaign")
+        action = "financials updated" if is_locked else "saved/edited"
+        await log_activity(
+            "marketing_campaign_saved",
+            f"Campaign '{campaign_name}' {action}.",
+            current_admin["sub"]
+        )
+        
     return result.data[0]
 
 @router.post("/{id}/send-test")
@@ -354,17 +383,17 @@ async def duplicate_campaign(id: str, current_admin=Depends(verify_token)):
     
     source = res.data[0]
     
-    # 2. Create copy data
+    # 2. Create copy data using safe fallbacks for NULLs and missing keys
     copy_data = {
-        "name": f"{source['name']} (Copy)",
-        "subject_a": source["subject_a"],
+        "name": f"{source.get('name') or 'Untitled Campaign'} (Copy)",
+        "subject_a": source.get("subject_a") or "",
         "subject_b": source.get("subject_b"),
-        "preview_text": source["preview_text"],
-        "html_body_a": source["html_body_a"],
+        "preview_text": source.get("preview_text") or "",
+        "html_body_a": source.get("html_body_a") or "",
         "html_body_b": source.get("html_body_b"),
-        "is_ab_test": source.get("is_ab_test", False),
-        "from_name": source["from_name"],
-        "reply_to": source["reply_to"],
+        "is_ab_test": source.get("is_ab_test") or False,
+        "from_name": source.get("from_name") or "Eximp & Cloves",
+        "reply_to": source.get("reply_to") or "marketing@mail.eximps-cloves.com",
         "status": "draft",
         "created_by": current_admin["sub"]
     }
@@ -374,7 +403,7 @@ async def duplicate_campaign(id: str, current_admin=Depends(verify_token)):
     
     await log_activity(
         "marketing_campaign_duplicated",
-        f"Campaign '{source['name']}' duplicated as '{copy_data['name']}'",
+        f"Campaign '{source.get('name', 'Untitled')}' duplicated as '{copy_data['name']}'",
         current_admin["sub"]
     )
     

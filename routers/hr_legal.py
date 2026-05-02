@@ -136,7 +136,7 @@ async def get_legal_matters(category: str = None, staff_id: str = None, current_
     # Otherwise, they only see matters where they are the drafter or collaborator.
     is_privileged = any(r in ["admin", "super_admin", "legal", "hr_admin", "operations"] for r in user_roles)
     
-    query = db.table("legal_matters").select("*")
+    query = db.table("legal_matters").select("*, drafter:admins!legal_matters_drafter_id_fkey(full_name), staff:admins!legal_matters_staff_id_fkey(full_name)")
     if category:
         query = query.eq("category", category)
     if staff_id:
@@ -158,7 +158,7 @@ async def get_staff_matters(staff_id: str, current_admin=Depends(verify_token)):
     
     db = get_db()
     res = await db_execute(lambda: db.table("legal_matters")\
-        .select("*")\
+        .select("*, drafter:admins!legal_matters_drafter_id_fkey(full_name), staff:admins!legal_matters_staff_id_fkey(full_name)")\
         .eq("staff_id", staff_id)\
         .order("created_at", desc=True).execute())
     return res.data or []

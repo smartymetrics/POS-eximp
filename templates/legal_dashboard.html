@@ -1837,18 +1837,20 @@
                 return;
             }
             body.innerHTML = data.map(m => {
-                const safeTitle = (m.external_party_name || m.title || '').replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
+                const displayName = (m.staff && m.staff.full_name) || m.external_party_name || m.title || 'Unknown';
+                const drafterName = (m.drafter && m.drafter.full_name) || 'Admin';
+                const safeTitle = displayName.replace(/\\/g, '\\\\').replace(/'/g, "\\'").replace(/"/g, '\\"');
                 return `
                 <tr class="border-b border-[#2D2F36] hover:bg-white/5 transition group">
                     <td class="px-6 py-4 text-xs font-mono text-brand-gold">${m.id.split('-')[0]}...</td>
                     <td class="px-6 py-4">
-                        <p class="text-sm font-bold text-white">${m.external_party_name || m.title}</p>
+                        <p class="text-sm font-bold text-white">${displayName}</p>
                         <p class="text-[10px] text-gray-500">${m.category}</p>
                     </td>
                     <td class="px-6 py-4">
                         <span class="status-badge ${m.status === 'Executed' ? 'status-completed' : 'status-pending'}">${m.status}</span>
                     </td>
-                    <td class="px-6 py-4 text-xs text-gray-400">Admin</td>
+                    <td class="px-6 py-4 text-xs text-gray-400">${drafterName}</td>
                     <td class="px-6 py-4">
                         <div class="flex gap-2 flex-wrap">
                             <button onclick="window.location.href=\'/legal/view?id=${m.id}\'" class="p-2 bg-blue-500/10 text-blue-400 rounded hover:bg-blue-500/20 transition-all flex items-center justify-center w-8 h-8" title="View Document">&#128065;&#65039;</button>
