@@ -406,12 +406,13 @@ class ReportService:
             estate_name = p.get("estate_name") or p_name.split(" - ")[0]
             
             # Extract base name and size (e.g. "Park View - 500SQM")
-            # We strip common plan suffixes to get the unique variation name
             base_part = p_name
             for suffix in [" (Outright)", " (Installment)", " (Outright Payment)", " (Installment Payment)"]:
                 if suffix in p_name:
                     base_part = p_name.split(suffix)[0]
                     break
+            
+            p_size = float(p.get("plot_size_sqm") or 0)
             
             if estate_name not in estates_map:
                 estates_map[estate_name] = {
@@ -426,14 +427,14 @@ class ReportService:
             # Add to IDs for expense matching
             estates_map[estate_name]["ids"].add(str(p["id"]))
             
-            # Check if this size variation already exists in our map
-            existing_var = next((v for v in estates_map[estate_name]["variations"] if v["base_name"] == base_part), None)
+            # Check if this variation (Name + Size) already exists
+            existing_var = next((v for v in estates_map[estate_name]["variations"] if v["base_name"] == base_part and v["size"] == p_size), None)
             
             if not existing_var:
                 # Create new variation entry
                 var_data = {
                     "base_name": base_part,
-                    "size": float(p.get("plot_size_sqm") or 0),
+                    "size": p_size,
                     "outright_id": None,
                     "installment_id": None,
                     "outright_ids": [],
@@ -511,12 +512,19 @@ class ReportService:
             acquisition = data["acquisition_cost"]
             p_exp = [e for e in expenditures if (str(e.get("property_id")) in ids) or (draft_id and str(e.get("estate_draft_id")) == draft_id)]
             
-            clearing = sum(float(e["amount"]) for e in p_exp if e.get("category") == "Clearing")
-            fencing = sum(float(e["amount"]) for e in p_exp if e.get("category") == "Fencing")
-            other_dev = sum(float(e["amount"]) for e in p_exp if e.get("category") not in ["Clearing", "Fencing"])
+            # Categorized Development Costs
+            expense_breakdown = {}
+            total_dev_paid = 0
+            for e in p_exp:
+                cat = e.get("category") or "General"
+                amt = float(e.get("amount") or 0)
+                paid = float(e.get("amount_paid") or 0)
+                expense_breakdown[cat] = expense_breakdown.get(cat, 0) + amt
+                total_dev_paid += paid
             
-            total_development = clearing + fencing + other_dev
+            total_development = sum(expense_breakdown.values())
             total_investment = acquisition + total_development
+            total_paid_outflow = acquisition + total_dev_paid # Assuming acquisition is fully paid for context
             
             # Revenue
             p_inv = [i for i in invoices if str(i.get("property_id")) in ids]
@@ -557,11 +565,12 @@ class ReportService:
                 "variations": data["variations"],
                 "financials": {
                     "acquisition_cost": acquisition,
-                    "clearing_cost": clearing,
-                    "fencing_cost": fencing,
-                    "other_development_cost": other_dev,
+                    "expense_breakdown": expense_breakdown,
+                    "expense_history": sorted(p_exp, key=lambda x: x.get("expense_date", ""), reverse=True),
                     "total_development": total_development,
+                    "total_development_paid": total_dev_paid,
                     "total_investment": total_investment,
+                    "total_paid_outflow": total_paid_outflow,
                     "revenue_invoiced": revenue_invoiced,
                     "revenue_collected": revenue_collected,
                     "inventory_value": inventory_value,

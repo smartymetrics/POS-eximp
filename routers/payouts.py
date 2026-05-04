@@ -1477,6 +1477,169 @@ async def list_procurement_expenses(property_id: Optional[str] = None, current_a
     res = await db_execute(lambda: query.order("expense_date", desc=True).execute())
     return res.data
 
+@router.patch("/procurement-expenses/{expense_id}")
+async def update_procurement_expense(expense_id: str, payload: dict, current_admin=Depends(require_roles(["super_admin"]))):
+    db = get_db()
+    update_data = {}
+    if "title" in payload: update_data["title"] = payload["title"]
+    if "amount" in payload: update_data["amount"] = float(payload["amount"])
+    if "category" in payload: update_data["category"] = payload["category"]
+    if "amount_paid" in payload: update_data["amount_paid"] = float(payload["amount_paid"])
+    if "status" in payload: update_data["status"] = payload["status"]
+    if "notes" in payload: update_data["notes"] = payload["notes"]
+    
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No data provided")
+        
+    res = await db_execute(lambda: db.table("procurement_expenses").update(update_data).eq("id", expense_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Expense not found")
+    return res.data[0]
+
+@router.post("/procurement-expenses/import")
+async def import_procurement_expenses(
+    file: UploadFile = File(...),
+    property_id: Optional[str] = Form(None),
+    estate_draft_id: Optional[str] = Form(None),
+    current_admin=Depends(require_roles(["super_admin"]))
+):
+    db = get_db()
+    content = await file.read()
+    
+    try:
+        # Load all sheets if Excel
+        if file.filename.endswith('.csv'):
+            sheets = {'Sheet1': pd.read_csv(io.BytesIO(content), header=None)}
+        else:
+            excel_file = pd.ExcelFile(io.BytesIO(content))
+            sheets = {name: excel_file.parse(name, header=None) for name in excel_file.sheet_names}
+        
+        all_records = []
+        keywords = {
+            'title': ['item', 'description', 'particulars', 'title', 'name'],
+            'amount': ['total', 'amount', 'price', 'cost'],
+            'unit_price': ['unit price', 'rate', 'unit cost'],
+            'paid': ['paid', 'payment', 'actual'],
+            'quantity': ['qty', 'quantity', 'units', 'number', 'count'],
+            'duration': ['duration', 'days', 'weeks', 'months', 'period']
+        }
+
+        for sheet_name, df in sheets.items():
+            current_category = f"Imported ({sheet_name})"
+            mapping = {}
+            mapping_header_row = None
+            
+            for i, row in df.iterrows():
+                # --- HEURISTIC 1: Check if this row is a HEADER ---
+                temp_mapping = {}
+                for target, aliases in keywords.items():
+                    for idx, val in enumerate(row):
+                        clean_val = str(val).lower().strip()
+                        if any(a in clean_val for a in aliases):
+                            temp_mapping[target] = idx
+                            break
+                
+                # If we found at least Title and Amount, this is a (new) header
+                if 'title' in temp_mapping and 'amount' in temp_mapping:
+                    mapping = temp_mapping
+                    mapping_header_row = row
+                    continue # Skip the header row itself
+                
+                # --- HEURISTIC 2: If we have a mapping, try to extract DATA ---
+                if mapping:
+                    title_idx = mapping.get('title')
+                    amount_idx = mapping.get('amount')
+                    paid_idx = mapping.get('paid')
+                    qty_idx = mapping.get('quantity')
+                    dur_idx = mapping.get('duration')
+                    unit_idx = mapping.get('unit_price')
+                    
+                    title_val = row[title_idx] if title_idx is not None else None
+                    amount_val = row[amount_idx] if amount_idx is not None else None
+                    paid_val = row[paid_idx] if paid_idx is not None else 0
+                    
+                    if pd.isnull(title_val) or str(title_val).strip() == '':
+                        continue
+                        
+                    title = str(title_val).strip()
+                    
+                    # Clean amount
+                    amount = 0
+                    try:
+                        if pd.notnull(amount_val):
+                            clean_amt = str(amount_val).replace('₦', '').replace(',', '').strip()
+                            amount = float(clean_amt) if clean_amt and clean_amt != 'nan' else 0
+                    except: pass
+                    
+                    # Category Header Detection (Title but no amount)
+                    if title and amount == 0:
+                        current_category = title
+                        continue
+                        
+                    if title and amount > 0:
+                        # Capture Metadata using actual header names from the mapping row
+                        extra_metadata = {}
+                        
+                        if qty_idx is not None and pd.notnull(row[qty_idx]): extra_metadata["Quantity"] = row[qty_idx]
+                        if dur_idx is not None and pd.notnull(row[dur_idx]): extra_metadata["Duration"] = row[dur_idx]
+                        if unit_idx is not None and pd.notnull(row[unit_idx]): extra_metadata["Unit Price"] = row[unit_idx]
+
+                        # Capture everything else using original headers
+                        for idx, val in enumerate(row):
+                            if idx in mapping.values(): continue
+                            if pd.isnull(val) or str(val).strip() == '': continue
+                            
+                            try:
+                                header_name = str(mapping_header_row[idx]).strip()
+                                if not header_name or header_name == 'nan': header_name = f"Info_{idx}"
+                                extra_metadata[header_name] = val
+                            except:
+                                extra_metadata[f"Field_{idx}"] = val
+                        
+                        record = {
+                            "created_by": current_admin['sub'],
+                            "property_id": property_id,
+                            "estate_draft_id": estate_draft_id,
+                            "title": title,
+                            "amount": amount,
+                            "category": current_category,
+                            "metadata": extra_metadata
+                        }
+                        
+                        # Clean paid
+                        paid = 0
+                        try:
+                            if pd.notnull(paid_val):
+                                clean_paid = str(paid_val).replace('₦', '').replace(',', '').strip()
+                                paid = float(clean_paid) if clean_paid and clean_paid != 'nan' else 0
+                        except: pass
+                        
+                        record["amount_paid"] = paid
+                        if paid >= amount - 1: record['status'] = 'paid'
+                        elif paid > 0: record['status'] = 'partial'
+                        else: record['status'] = 'pending'
+                        
+                        all_records.append(record)
+
+        if not all_records:
+            raise HTTPException(status_code=400, detail="No valid records found in any sheets")
+
+        try:
+            res = await db_execute(lambda: db.table("procurement_expenses").insert(all_records).execute())
+        except Exception as insert_err:
+            # Fallback: Try without created_by if it's missing from schema
+            if "created_by" in str(insert_err):
+                for r in all_records: r.pop("created_by", None)
+                res = await db_execute(lambda: db.table("procurement_expenses").insert(all_records).execute())
+            else:
+                raise insert_err
+
+        return {"status": "success", "imported": len(res.data) if res.data else 0}
+        
+    except Exception as e:
+        logger.error(f"Import failed: {e}")
+        raise HTTPException(status_code=400, detail=f"Failed to process file: {str(e)}")
+
 # --- ESTATE DRAFTS & PIPELINE ---
 from models import EstateDraftCreate
 

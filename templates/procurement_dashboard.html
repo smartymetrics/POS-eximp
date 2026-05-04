@@ -17,9 +17,33 @@
         .stat-value { font-size: 1.5rem; font-weight: 700; color: #fff; }
         .progress-bar { height: 8px; border-radius: 4px; background: rgba(255,255,255,0.1); overflow: hidden; }
         .progress-fill { height: 100%; background: linear-gradient(90deg, #d4af37, #f9e29d); transition: width 1s ease-in-out; }
+        
+        /* Spinner Animation */
+        @keyframes spin { to { transform: rotate(360deg); } }
+        .spinner {
+            width: 20px; height: 20px;
+            border: 2px solid rgba(212, 175, 55, 0.1);
+            border-top-color: #d4af37;
+            border-radius: 50%;
+            animation: spin 0.8s linear infinite;
+        }
+        #importLoading {
+            position: fixed; inset: 0;
+            background: rgba(0,0,0,0.7);
+            backdrop-filter: blur(4px);
+            z-index: 100;
+            display: none;
+            align-items: center; justify-content: center;
+            flex-direction: column; gap: 1rem;
+        }
     </style>
 </head>
 <body class="min-h-screen p-4 md:p-8">
+    <!-- Global Loading Overlay for Import -->
+    <div id="importLoading">
+        <div class="spinner" style="width: 40px; height: 40px; border-width: 3px;"></div>
+        <p class="text-xs font-bold text-amber-400 uppercase tracking-widest animate-pulse">Processing Quotation...</p>
+    </div>
 
     <div class="max-w-7xl mx-auto">
         <!-- Header -->
@@ -29,6 +53,10 @@
                 <p class="text-gray-400 mt-1">Manage pre-launch drafts and live ERP inventory</p>
             </div>
             <div class="flex gap-3">
+                <div class="glass-card p-1 flex gap-1 mr-4">
+                    <button onclick="switchView('inventory')" id="view-inventory" class="px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all bg-amber-500 text-black">Inventory</button>
+                    <button onclick="switchView('analytics')" id="view-analytics" class="px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all text-gray-400 hover:text-white">Analytics</button>
+                </div>
                 <button onclick="openCreateModal()" class="px-6 py-2 btn-gold rounded-xl text-sm shadow-lg">Create New Estate</button>
                 <button onclick="location.reload()" class="px-4 py-2 glass-card text-sm hover:bg-white/5 transition-all">Refresh</button>
             </div>
@@ -70,8 +98,39 @@
             </div>
         </div>
 
+        <!-- Analytics View (Hidden by default) -->
+        <div id="analytics-view" class="hidden space-y-8 animate-in fade-in duration-500">
+            <div class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                <!-- Global Allocation -->
+                <div class="glass-card p-6 lg:col-span-2">
+                    <h3 class="text-sm font-bold text-amber-400 uppercase tracking-widest mb-6">Capital Allocation across Portfolio</h3>
+                    <div class="h-[300px]">
+                        <canvas id="globalAllocationChart"></canvas>
+                    </div>
+                </div>
+                <!-- ROI Leaderboard -->
+                <div class="glass-card p-6">
+                    <h3 class="text-sm font-bold text-amber-400 uppercase tracking-widest mb-6">Top Performing Estates</h3>
+                    <div class="space-y-4">
+                        {% for item in analytics | sort(attribute='financials.roi_projected', reverse=True) %}
+                        <div class="flex justify-between items-center p-3 bg-white/2 rounded-xl border border-white/5">
+                            <div>
+                                <p class="text-xs font-bold text-white">{{ item.name }}</p>
+                                <p class="text-[10px] text-gray-500 uppercase">{{ item.location }}</p>
+                            </div>
+                            <div class="text-right">
+                                <p class="text-sm font-bold text-amber-400">{{ item.financials.roi_projected }}%</p>
+                                <p class="text-[10px] text-gray-500 uppercase">ROI</p>
+                            </div>
+                        </div>
+                        {% endfor %}
+                    </div>
+                </div>
+            </div>
+        </div>
+
         <!-- Estate Listing -->
-        <div class="grid grid-cols-1 lg:grid-cols-2 gap-8">
+        <div id="inventory-view" class="grid grid-cols-1 lg:grid-cols-2 gap-8">
             {% for item in analytics %}
             <div class="glass-card overflow-hidden {% if item.is_draft %}border-l-4 border-l-blue-500{% endif %}">
                 <div class="p-6 border-b border-white/5 bg-white/2">
@@ -101,15 +160,25 @@
                         <div>
                             <div class="flex justify-between items-center mb-4">
                                 <p class="stat-label">Financials</p>
-                                <button onclick='openManageModal({{ item | tojson | safe }})' class="text-[10px] text-amber-400 hover:text-amber-300 font-bold uppercase tracking-wider underline">Manage</button>
+                                <button onclick='viewEstateManagement({{ item | tojson | safe }})' class="text-[10px] text-amber-400 hover:text-amber-300 font-bold uppercase tracking-wider underline">Manage</button>
                             </div>
                             <div class="space-y-3">
                                 <div class="flex justify-between text-xs">
-                                    <span class="text-gray-400">Invested</span>
-                                    <span class="font-medium text-white">₦{{ "{:,.0f}".format(item.financials.total_investment) }}</span>
+                                    <span class="text-gray-400">Acquisition</span>
+                                    <span class="font-medium text-white">₦{{ "{:,.0f}".format(item.financials.acquisition_cost) }}</span>
                                 </div>
-                                <div class="flex justify-between text-xs">
-                                    <span class="text-gray-400">Sold (Verified)</span>
+                                {% for cat, amt in item.financials.expense_breakdown.items() %}
+                                <div class="flex justify-between text-[10px]">
+                                    <span class="text-gray-500 italic">{{ cat }}</span>
+                                    <span class="text-gray-400">₦{{ "{:,.0f}".format(amt) }}</span>
+                                </div>
+                                {% endfor %}
+                                <div class="flex justify-between text-[10px] pt-1 border-t border-white/5">
+                                    <span class="text-gray-500 uppercase">Dev. Progress</span>
+                                    <span class="text-white font-bold">₦{{ "{:,.0f}".format(item.financials.total_development_paid) }} / ₦{{ "{:,.0f}".format(item.financials.total_development) }}</span>
+                                </div>
+                                <div class="flex justify-between text-xs pt-1">
+                                    <span class="text-gray-400">Revenue In</span>
                                     <span class="font-medium text-emerald-400">₦{{ "{:,.0f}".format(item.financials.revenue_collected) }}</span>
                                 </div>
                                 <div class="flex justify-between text-sm pt-2 border-t border-white/5">
@@ -243,6 +312,32 @@
                         <input type="text" id="expCategoryOther" placeholder="Specify Category..." class="hidden bg-white/5 border border-white/10 rounded-lg p-2 text-sm outline-none">
                         <button onclick="logExpense()" class="bg-amber-500/10 text-amber-400 border border-amber-500/20 py-2 rounded-lg text-xs font-bold uppercase hover:bg-amber-500/20 transition-all">Log Expense</button>
                     </div>
+                    <div class="mt-4 pt-4 border-t border-white/5 flex items-center justify-between">
+                        <p class="text-[10px] text-gray-500 italic">Or import from quotation file (Excel/CSV)</p>
+                        <input type="file" id="importFile" class="hidden" accept=".xlsx, .xls, .csv" onchange="handleBulkImport()">
+                        <button onclick="document.getElementById('importFile').click()" class="text-[10px] bg-white/5 px-4 py-2 rounded-lg hover:bg-white/10 font-bold uppercase tracking-wider text-amber-400 border border-amber-500/20">Import XLSX / CSV</button>
+                    </div>
+                </section>
+
+                <section id="expenseHistorySection" class="hidden">
+                    <h3 class="text-sm font-bold text-amber-400 uppercase tracking-widest mb-4">Transaction Ledger</h3>
+                    <div class="glass-card bg-white/2 border border-white/5 overflow-hidden">
+                        <table class="w-full text-[10px] text-left">
+                            <thead class="bg-white/5 text-gray-500 uppercase">
+                                <tr>
+                                    <th class="p-3">Date</th>
+                                    <th class="p-3">Title</th>
+                                    <th class="p-3">Category</th>
+                                    <th class="p-3">Status</th>
+                                    <th class="p-3 text-right">Amount / Paid</th>
+                                    <th class="p-3 text-right">Action</th>
+                                </tr>
+                            </thead>
+                            <tbody id="expenseHistoryTable">
+                                <!-- Dynamic Rows -->
+                            </tbody>
+                        </table>
+                    </div>
                 </section>
                 <div id="variationList" class="space-y-4"></div>
             </div>
@@ -331,20 +426,98 @@
             } catch (e) { alert(e.message); }
         }
 
-        function openManageModal(item) {
-            currentItem = item;
-            document.getElementById('modalEstateName').textContent = item.name;
-            document.getElementById('modalEstateSub').textContent = item.is_draft ? 'Draft Planning' : 'Live Inventory';
+        function viewEstateManagement(data) {
+            currentItem = data;
+            const expenseHistory = data.financials.expense_history || [];
+            window.activeExpenseHistory = expenseHistory; // Store globally for editing lookup
+            
+            const modal = document.getElementById('manageModal');
+            document.getElementById('modalEstateName').textContent = data.name;
+            document.getElementById('modalEstateSub').textContent = data.is_draft ? 'Draft Planning' : 'Live Inventory';
             
             const list = document.getElementById('variationList');
-            list.innerHTML = `<h3 class="text-sm font-bold text-amber-400 uppercase tracking-widest mb-4">Structure</h3>`;
+            list.innerHTML = `
+                <div class="flex justify-between items-center mb-4">
+                    <h3 class="text-sm font-bold text-amber-400 uppercase tracking-widest">Structure</h3>
+                    <button onclick="wipeEstateLedger()" class="text-[9px] font-bold text-red-500/50 hover:text-red-500 transition-colors uppercase tracking-tighter">Wipe Transaction Ledger</button>
+                </div>
+            `;
 
-            item.variations.forEach(v => {
+            // Render Expense History
+            const historySection = document.getElementById('expenseHistorySection');
+            const historyTable = document.getElementById('expenseHistoryTable');
+            
+            if (expenseHistory.length > 0) {
+                historySection.classList.remove('hidden');
+                historyTable.innerHTML = expenseHistory.map(e => {
+                    const status = e.status || 'paid';
+                    const paid = parseFloat(e.amount_paid || 0);
+                    const total = parseFloat(e.amount || 0);
+                    const pct = Math.min(100, (paid / total) * 100);
+                    
+                    let statusColor = 'text-gray-400 bg-white/5';
+                    if (status === 'paid') statusColor = 'text-emerald-400 bg-emerald-500/10 border border-emerald-500/20';
+                    if (status === 'partial') statusColor = 'text-amber-400 bg-amber-500/10 border border-amber-500/20';
+
+                    return `
+                    <tr class="border-t border-white/5 hover:bg-white/2 transition-colors">
+                        <td class="p-3 text-gray-400">${e.expense_date || '—'}</td>
+                        <td class="p-3">
+                            <p class="text-white font-medium">${e.title}</p>
+                            <div class="flex flex-wrap gap-1 mt-1">
+                                ${e.metadata ? Object.entries(e.metadata).map(([k, v]) => {
+                                    if (!v || v === 'nan') return '';
+                                    
+                                    // Highlight specific important keys
+                                    let badgeClass = 'bg-white/5 border-white/10 text-gray-500';
+                                    let labelClass = 'text-amber-500/50';
+                                    
+                                    const key = k.toLowerCase();
+                                    if (key.includes('quantity') || key.includes('qty')) {
+                                        badgeClass = 'bg-emerald-500/10 border-emerald-500/20 text-emerald-400';
+                                        labelClass = 'text-emerald-500/70';
+                                    } else if (key.includes('unit price') || key.includes('rate')) {
+                                        badgeClass = 'bg-amber-500/10 border-amber-500/20 text-amber-400';
+                                        labelClass = 'text-amber-500/70';
+                                    } else if (key.includes('duration')) {
+                                        badgeClass = 'bg-blue-500/10 border-blue-500/20 text-blue-400';
+                                        labelClass = 'text-blue-500/70';
+                                    }
+
+                                    return `
+                                    <span class="px-1.5 py-0.5 rounded-md border text-[7px] uppercase flex items-center gap-1 ${badgeClass}">
+                                        <b class="${labelClass}">${k}:</b> ${v}
+                                    </span>
+                                    `;
+                                }).join('') : ''}
+                            </div>
+                            <div class="w-24 h-1 bg-white/5 rounded-full mt-1 overflow-hidden">
+                                <div class="h-full bg-amber-500" style="width: ${pct}%"></div>
+                            </div>
+                        </td>
+                        <td class="p-3 text-gray-500 uppercase">${e.category}</td>
+                        <td class="p-3">
+                            <span class="px-2 py-0.5 rounded-md text-[8px] font-bold uppercase ${statusColor}">${status}</span>
+                        </td>
+                        <td class="p-3 text-right">
+                            <p class="text-white font-bold">₦${total.toLocaleString()}</p>
+                            <p class="text-[9px] text-gray-500">Paid: ₦${paid.toLocaleString()}</p>
+                        </td>
+                        <td class="p-3 text-right">
+                            <button onclick="editExpenseRecord('${e.id}')" class="text-amber-400 hover:underline font-bold uppercase tracking-tighter">Edit</button>
+                        </td>
+                    </tr>
+                `}).join('');
+            } else {
+                historySection.classList.add('hidden');
+            }
+
+            data.variations.forEach(v => {
                 const div = document.createElement('div');
                 div.className = 'p-4 bg-white/2 rounded-xl border border-white/5 space-y-3';
                 
                 let installmentAction = '';
-                if (!item.is_draft && !v.installment_id) {
+                if (!data.is_draft && !v.installment_id) {
                     installmentAction = `
                         <button onclick="createInstallmentPlan('${v.outright_id}', '${v.base_name}')" class="mt-2 text-[10px] text-blue-400 hover:underline">+ ADD INSTALLMENT LISTING</button>
                     `;
@@ -467,6 +640,78 @@
             }
         }
 
+        async function editExpenseRecord(id) {
+            const e = window.activeExpenseHistory.find(item => item.id === id);
+            if (!e) return;
+
+            const newTitle = prompt("Update Title:", e.title);
+            if (newTitle === null) return;
+            
+            const newCat = prompt("Update Category:", e.category || "General");
+            if (newCat === null) return;
+
+            const newTotal = prompt("Update Total Amount (₦):", e.amount);
+            if (newTotal === null) return;
+
+            const newPaid = prompt("Update Amount Paid (₦):", e.amount_paid || 0);
+            if (newPaid === null) return;
+
+            const total = parseFloat(newTotal);
+            const paid = parseFloat(newPaid);
+            if (isNaN(total) || isNaN(paid)) return alert('Invalid amounts');
+
+            let status = 'partial';
+            if (paid >= total - 1) status = 'paid';
+            else if (paid === 0) status = 'pending';
+
+            try {
+                const res = await fetch(`/api/payouts/procurement-expenses/${e.id}?token=${TOKEN}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ 
+                        title: newTitle, 
+                        category: newCat, 
+                        amount: total, 
+                        amount_paid: paid, 
+                        status: status 
+                    })
+                });
+                if (res.ok) { location.reload(); }
+            } catch (err) { alert(err.message); }
+        }
+
+        async function handleBulkImport() {
+            const fileInput = document.getElementById('importFile');
+            if (!fileInput.files.length) return;
+
+            const loader = document.getElementById('importLoading');
+            loader.style.display = 'flex';
+
+            const file = fileInput.files[0];
+            const formData = new FormData();
+            formData.append('file', file);
+            if (currentItem.is_draft) formData.append('estate_draft_id', currentItem.draft_id);
+            else formData.append('property_id', currentItem.variations[0].outright_id);
+
+            try {
+                const res = await fetch(`/api/payouts/procurement-expenses/import?token=${TOKEN}`, {
+                    method: 'POST',
+                    body: formData
+                });
+                const result = await res.json();
+                if (res.ok) {
+                    alert(`Successfully imported ${result.imported} records.`);
+                    location.reload();
+                } else {
+                    alert(`Error: ${result.detail}`);
+                }
+            } catch (e) { 
+                alert(e.message); 
+            } finally {
+                loader.style.display = 'none';
+            }
+        }
+
         async function logExpense() {
             const title = document.getElementById('expTitle').value;
             const amount = document.getElementById('expAmount').value;
@@ -492,6 +737,72 @@
                 });
                 if (res.ok) { location.reload(); }
             } catch (e) { alert(e.message); }
+        }
+
+        function switchView(view) {
+            const inv = document.getElementById('inventory-view');
+            const ana = document.getElementById('analytics-view');
+            const btnInv = document.getElementById('view-inventory');
+            const btnAna = document.getElementById('view-analytics');
+
+            if (view === 'inventory') {
+                inv.classList.remove('hidden');
+                ana.classList.add('hidden');
+                btnInv.className = "px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all bg-amber-500 text-black";
+                btnAna.className = "px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all text-gray-400 hover:text-white";
+            } else {
+                inv.classList.add('hidden');
+                ana.classList.remove('hidden');
+                btnAna.className = "px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all bg-amber-500 text-black";
+                btnInv.className = "px-4 py-1.5 rounded-lg text-[10px] font-bold uppercase transition-all text-gray-400 hover:text-white";
+                initAnalytics();
+            }
+        }
+
+        let chartsInitialized = false;
+        function initAnalytics() {
+            if (chartsInitialized) return;
+            chartsInitialized = true;
+
+            const analyticsData = {{ analytics | tojson | safe }};
+            
+            // 1. Global Allocation Chart
+            const categories = {};
+            analyticsData.forEach(item => {
+                // Acquisition
+                categories['Acquisition'] = (categories['Acquisition'] || 0) + item.financials.acquisition_cost;
+                // Other categories
+                Object.entries(item.financials.expense_breakdown).forEach(([cat, val]) => {
+                    categories[cat] = (categories[cat] || 0) + val;
+                });
+            });
+
+            const ctx = document.getElementById('globalAllocationChart').getContext('2d');
+            new Chart(ctx, {
+                type: 'doughnut',
+                data: {
+                    labels: Object.keys(categories),
+                    datasets: [{
+                        data: Object.values(categories),
+                        backgroundColor: [
+                            '#d4af37', '#8b5cf6', '#3b82f6', '#10b981', '#f59e0b', '#ef4444'
+                        ],
+                        borderWidth: 0,
+                        hoverOffset: 20
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: {
+                            position: 'right',
+                            labels: { color: '#a3a3a3', font: { family: 'Outfit', size: 10 } }
+                        }
+                    },
+                    cutout: '70%'
+                }
+            });
         }
     </script>
 </body>

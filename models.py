@@ -687,6 +687,8 @@ class ProcurementExpenseCreate(BaseModel):
     title: str
     category: str
     amount: Decimal
+    amount_paid: Optional[Decimal] = 0
+    status: Optional[str] = "paid"
     vendor_name: Optional[str] = None
     vendor_id: Optional[str] = None
     expense_date: Optional[date] = None
