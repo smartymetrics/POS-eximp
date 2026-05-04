@@ -331,7 +331,7 @@ async def get_staff_profile(staff_id: str, current_admin: dict = Depends(verify_
     """Fetch full personnel data for a staff member. Accessible by HR, Manager, or Self."""
     user_email = current_admin["email"]
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     db = get_db()
     
@@ -384,7 +384,7 @@ async def update_staff_profile(staff_id: str, update: StaffProfileUpdate, curren
     """Update detailed staff profile. HR admins may edit all fields; line managers and staff may self-edit a restricted set."""
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     is_self = current_admin.get("sub") == staff_id
 
     # Check if the caller is the direct line manager of this staff member
@@ -510,7 +510,7 @@ async def set_staff_goal(goal: GoalCreate, current_admin: dict = Depends(verify_
     """HR or manager sets a KPI goal for a staff member or a department."""
     user_email = current_admin["email"]
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     if not goal.staff_id and not goal.department:
         raise HTTPException(status_code=400, detail="Either staff_id or department is required")
@@ -561,7 +561,7 @@ async def update_goal(goal_id: str, update: GoalUpdate, current_admin: dict = De
     """Update an existing KPI goal when it is still editable."""
     user_email = current_admin["email"]
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
 
     db = get_db()
     existing = await db_execute(lambda: db.table("staff_goals").select("*").eq("id", goal_id).execute())
@@ -734,7 +734,7 @@ async def get_pending_leave(staff_id: Optional[str] = None, current_admin: dict 
     """Fetch leave requests. HR sees all. Managers see their team. Staff see their own."""
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     # We must explicitly define the foreign key relationship for admins to avoid PGRST201
     query = db.table("leave_requests").select("*, admins!leave_requests_staff_id_fkey(full_name, department)")
@@ -768,7 +768,7 @@ async def get_attendance(
     """Fetch attendance records. HR sees all. Staff see own. Supports single date or date range."""
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     query = db.table("attendance_records").select("*, admins(full_name, department)")
     
@@ -809,7 +809,7 @@ async def get_absence_report(
     """
     from datetime import timedelta as td
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     # Staff can only see their own record
     target_id = staff_id if (is_hr and staff_id) else current_admin["sub"]
@@ -915,7 +915,7 @@ async def get_global_absences(
     Only active staff are included. Weekends are excluded.
     """
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     if not is_hr:
          raise HTTPException(status_code=403, detail="Not authorized")
 
@@ -1092,7 +1092,7 @@ class LeaveStatusUpdate(BaseModel):
 async def update_leave_status(leave_id: str, update: LeaveStatusUpdate, current_admin: dict = Depends(verify_token)):
     """Approve or reject a leave request (HR or Line Manager only)."""
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     db = get_db()
     
@@ -1121,7 +1121,7 @@ async def submit_performance_review(review: PerformanceReviewCreate, current_adm
     """Line Manager or HR submits a formal performance review."""
     user_email = current_admin["email"]
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     db = get_db()
     
@@ -1153,7 +1153,7 @@ async def get_all_goals(staff_id: Optional[str] = None, current_admin: dict = De
     db = get_db()
     user_email = current_admin["email"]
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
 
     query = db.table("staff_goals").select("*, admins(full_name, department)")
     
@@ -1185,7 +1185,7 @@ async def get_hr_tasks(staff_id: Optional[str] = None, current_admin: dict = Dep
     """Fetch tasks for HR (all) or Staff (own)."""
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     query = db.table("staff_tasks").select("*, admins!staff_tasks_assigned_to_fkey(full_name)")
     if staff_id:
@@ -1226,7 +1226,7 @@ class GoalCreate(BaseModel):
 async def update_staff_goal(goal_id: str, goal: GoalUpdate, current_admin: dict = Depends(verify_token)):
     """Update a staff goal/KPI. HR or Manager only."""
     user_roles = current_admin.get("role", "").split(",")
-    is_privileged = any(r in ["admin", "hr_admin", "line_manager"] for r in user_roles)
+    is_privileged = any(r in ["admin", "super_admin", "hr_admin", "line_manager"] for r in user_roles)
     if not is_privileged:
         raise HTTPException(status_code=403, detail="Not authorized")
     
@@ -1271,7 +1271,7 @@ async def list_kpi_templates(department: Optional[str] = None, active: Optional[
 async def create_kpi_template(template: KPITemplateCreate, current_admin: dict = Depends(verify_token)):
     """Create a new KPI template. HR only."""
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     if not is_hr:
         raise HTTPException(status_code=403, detail="Admin only")
     db = get_db()
@@ -1293,7 +1293,7 @@ async def create_kpi_template(template: KPITemplateCreate, current_admin: dict =
 async def update_kpi_template(template_id: str, template: KPITemplateUpdate, current_admin: dict = Depends(verify_token)):
     """Update an existing KPI template. HR only."""
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     if not is_hr:
         raise HTTPException(status_code=403, detail="Admin only")
     update_data = template.dict(exclude_unset=True)
@@ -1309,7 +1309,7 @@ async def update_kpi_template(template_id: str, template: KPITemplateUpdate, cur
 async def delete_kpi_template(template_id: str, current_admin: dict = Depends(verify_token)):
     """Delete a KPI template. HR only."""
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="Admin only")
     db = get_db()
     
@@ -1327,7 +1327,7 @@ async def delete_kpi_template(template_id: str, current_admin: dict = Depends(ve
 async def create_performance_review(review: PerformanceReviewCreate, current_admin: dict = Depends(verify_token)):
     """Log a formal performance review. HR/Admin only (reviewers)."""
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin", "operations"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
         raise HTTPException(status_code=403, detail="Reviewer access only.")
     
     db = get_db()
@@ -1345,7 +1345,7 @@ async def get_performance_reviews(staff_id: Optional[str] = None, current_admin:
     """Fetch performance reviews. HR sees all. Staff sees own."""
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     query = db.table("performance_reviews").select("*, reviewer:admins!performance_reviews_reviewer_id_fkey(full_name), staff:admins!performance_reviews_staff_id_fkey(full_name)")
     
@@ -1371,7 +1371,7 @@ async def get_hr_incidents(staff_id: Optional[str] = None, current_admin: dict =
     """Fetch logged incidents. HR sees all. Staff see own."""
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     query = db.table("disciplinary_records").select("*, admins!disciplinary_records_staff_id_fkey(full_name, department)")
     if staff_id:
@@ -1411,7 +1411,7 @@ async def get_payslips(staff_id: Optional[str] = None, current_admin: dict = Dep
     """Fetch payslips. HR sees all. Staff see own."""
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     query = db.table("payroll_records").select("*, admins!payroll_records_staff_id_fkey(full_name, department)")
     if staff_id:
@@ -1426,7 +1426,7 @@ async def get_payslips(staff_id: Optional[str] = None, current_admin: dict = Dep
 async def get_dashboard_stats(current_admin: dict = Depends(verify_token)):
     """Fetch all necessary data for the HR dashboard in a single optimized call."""
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     if not is_hr:
          raise HTTPException(status_code=403, detail="Not authorized for HR Dashboard")
     
@@ -1780,7 +1780,7 @@ async def get_suspicious_attendance(current_admin: dict = Depends(verify_token))
     Reads from the suspicious_attendance view created in the migration.
     """
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR Admin only.")
 
     db  = get_db()
@@ -1793,7 +1793,7 @@ async def get_suspicious_attendance(current_admin: dict = Depends(verify_token))
 async def seed_kpi_library(current_admin: dict = Depends(verify_token)):
     """Temporary endpoint to seed professional KPI templates."""
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="Admin access required.")
         
     db = get_db()
@@ -1839,7 +1839,7 @@ async def get_leave_requests(staff_id: Optional[str] = None, current_admin: dict
     """Fetch leave requests. HR sees all. Staff see own."""
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     query = db.table("leave_requests").select("*, staff:admins!leave_requests_staff_id_fkey(full_name, department)")
     
@@ -1857,7 +1857,7 @@ async def get_leave_requests(staff_id: Optional[str] = None, current_admin: dict
 async def update_leave_status(req_id: str, up: LeaveRequestUpdate, current_admin: dict = Depends(verify_token)):
     """Approve or reject a leave request. HR only."""
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin", "operations"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
         raise HTTPException(status_code=403, detail="Admin only.")
     
     db = get_db()
@@ -1891,7 +1891,7 @@ async def update_leave_status(req_id: str, up: LeaveRequestUpdate, current_admin
 async def get_all_documents(current_admin: dict = Depends(verify_token)):
     """HR-only: Fetch all staff documents."""
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR Admin only.")
     
     db = get_db()
@@ -1903,7 +1903,7 @@ async def upload_staff_document(doc: StaffDocumentCreate, current_admin: dict = 
     """Link an uploaded document to a staff profile. HR can upload anything; Staff can only self-upload uniquely per type."""
     user_id = current_admin["sub"]
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles)
     is_self = doc.staff_id == user_id
     
     if not (is_hr or is_self):
@@ -1935,7 +1935,7 @@ async def upload_staff_document(doc: StaffDocumentCreate, current_admin: dict = 
 async def delete_staff_document(doc_id: str, current_admin: dict = Depends(verify_token)):
     """HR-only: Delete a staff document."""
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR Admin only.")
     
     db = get_db()
@@ -2030,7 +2030,7 @@ def compute_composite_score(goals: List[dict], reviews: List[dict]) -> dict:
 async def create_performance_review(staff_id: str, rev: PerformanceReviewCreate, current_admin: dict = Depends(verify_token)):
     """Managers or HR submit a qualitative performance review."""
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin", "line_manager"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin", "line_manager"] for r in user_roles):
         raise HTTPException(status_code=403, detail="Managerial access only.")
         
     db = get_db()
@@ -2116,7 +2116,7 @@ async def get_performance_history(staff_id: str, current_admin: dict = Depends(v
 async def log_incident(inc: IncidentCreate, current_admin: dict = Depends(verify_token)):
     """Log a management/disciplinary incident."""
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin", "line_manager"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin", "line_manager"] for r in user_roles):
         raise HTTPException(status_code=403, detail="Managerial access only.")
         
     db = get_db()
@@ -2135,7 +2135,7 @@ async def get_all_incidents(staff_id: Optional[str] = None, current_admin: dict 
     """Fetch incidents. HR sees all. Staff see own."""
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     query = db.table("disciplinary_records").select("*, staff:admins!disciplinary_records_staff_id_fkey(full_name, department)")
     
@@ -2627,7 +2627,7 @@ async def get_surveys(current_admin: dict = Depends(verify_token)):
     
     # 2. Fetch responses if HR to calculate completion rates
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
     if is_hr:
         responses = await db_execute(lambda: db.table("survey_responses").select("survey_id, answers").execute())
@@ -2696,7 +2696,7 @@ async def update_task_status(task_id: str, update: TaskStatusUpdate, current_adm
         raise HTTPException(status_code=404, detail="Task not found")
     task = task_res.data[0]
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     is_assignee = task.get("assigned_to") == current_admin.get("sub")
     is_creator = task.get("created_by") == current_admin.get("sub")
     if not (is_hr or is_assignee or is_creator):
@@ -2740,7 +2740,7 @@ class IncidentStatusUpdate(BaseModel):
 async def update_incident(incident_id: str, update: IncidentStatusUpdate, current_admin: dict = Depends(verify_token)):
     """HR only: update incident status to open|under_review|resolved|dismissed."""
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin", "operations"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR Admin only")
     valid = ["open", "under_review", "resolved", "dismissed"]
     if update.status not in valid:
@@ -2774,7 +2774,7 @@ class TimesheetApproval(BaseModel):
 async def get_timesheets(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     query = db.table("timesheets").select("*, admins!timesheets_staff_id_fkey(full_name, department)")
     if staff_id:
         query = query.eq("staff_id", staff_id)
@@ -2869,7 +2869,7 @@ async def get_holidays(current_admin: dict = Depends(verify_token)):
 @router.post("/holidays", status_code=201)
 async def add_holiday(h: HolidayCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR Admin only")
     db = get_db()
     res = await db_execute(lambda: db.table("public_holidays").insert({
@@ -2891,7 +2891,7 @@ async def get_leave_policies(current_admin: dict = Depends(verify_token)):
 @router.post("/leave-policies", status_code=201)
 async def create_leave_policy(p: LeavePolicyCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR Admin only")
     db = get_db()
     res = await db_execute(lambda: db.table("leave_policies").insert(serialize_dates(p.dict())).execute())
@@ -2901,7 +2901,7 @@ async def create_leave_policy(p: LeavePolicyCreate, current_admin: dict = Depend
 async def get_leave_balances(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     target = staff_id if (is_hr and staff_id) else current_admin["sub"]
     profile = await db_execute(lambda: db.table("staff_profiles").select("leave_quota").eq("admin_id", target).execute())
     leaves = await db_execute(lambda: db.table("leave_requests").select("days_count, leave_type").eq("staff_id", target).eq("status", "approved").execute())
@@ -2930,7 +2930,7 @@ async def get_pips(staff_id: Optional[str] = None, current_admin: dict = Depends
 @router.post("/pip", status_code=201)
 async def create_pip(pip: PIPCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin", "line_manager"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin", "line_manager"] for r in user_roles):
         raise HTTPException(status_code=403, detail="Manager or HR only")
     db = get_db()
     res = await db_execute(lambda: db.table("performance_improvement_plans").insert({
@@ -2963,7 +2963,7 @@ async def get_trainings(current_admin: dict = Depends(verify_token)):
 @router.post("/trainings", status_code=201)
 async def create_training(t: TrainingCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     data = serialize_dates(t.dict())
@@ -3053,7 +3053,7 @@ async def get_comp_bands(current_admin: dict = Depends(verify_token)):
 @router.post("/comp-bands", status_code=201)
 async def create_comp_band(cb: CompBandCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     res = await db_execute(lambda: db.table("compensation_bands").insert(serialize_dates(cb.dict())).execute())
@@ -3063,7 +3063,7 @@ async def create_comp_band(cb: CompBandCreate, current_admin: dict = Depends(ver
 async def get_bonuses(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles)
     query = db.table("bonuses").select("*, admins!bonuses_staff_id_fkey(full_name)")
     if staff_id:
         query = query.eq("staff_id", staff_id)
@@ -3075,7 +3075,7 @@ async def get_bonuses(staff_id: Optional[str] = None, current_admin: dict = Depe
 @router.post("/bonuses", status_code=201)
 async def create_bonus(b: BonusCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     res = await db_execute(lambda: db.table("bonuses").insert({**serialize_dates(b.dict()), "created_by": current_admin["sub"]}).execute())
@@ -3100,7 +3100,7 @@ async def get_announcements(current_admin: dict = Depends(verify_token)):
 @router.post("/announcements", status_code=201)
 async def create_announcement(a: AnnouncementCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin", "operations"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     res = await db_execute(lambda: db.table("announcements").insert({
@@ -3153,7 +3153,7 @@ async def list_surveys(current_admin: dict = Depends(verify_token)):
 @router.post("/culture/surveys", status_code=201)
 async def create_survey(s: SurveyCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     res = await db_execute(lambda: db.table("surveys").insert({
@@ -3203,7 +3203,7 @@ async def get_work_permits(staff_id: Optional[str] = None, current_admin: dict =
 @router.post("/work-permits", status_code=201)
 async def create_work_permit(wp: WorkPermitCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     data = serialize_dates(wp.dict())
@@ -3222,7 +3222,7 @@ class HRLetterCreate(BaseModel):
 async def get_hr_letters(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles)
     query = db.table("hr_letters").select("*, admins!hr_letters_staff_id_fkey(full_name)")
     if staff_id:
         query = query.eq("staff_id", staff_id)
@@ -3234,7 +3234,7 @@ async def get_hr_letters(staff_id: Optional[str] = None, current_admin: dict = D
 @router.post("/hr-letters", status_code=201)
 async def create_hr_letter(l: HRLetterCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     res = await db_execute(lambda: db.table("hr_letters").insert({
@@ -3254,7 +3254,7 @@ class GrievanceCreate(BaseModel):
 @router.get("/grievances")
 async def get_grievances(current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     res = await db_execute(lambda: db.table("grievances").select("*").order("created_at", desc=True).execute())
@@ -3276,7 +3276,7 @@ async def submit_grievance(g: GrievanceCreate, current_admin: dict = Depends(ver
 @router.patch("/grievances/{grievance_id}")
 async def update_grievance_status(grievance_id: str, request: Request, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR only")
     db = get_db()
     data = await request.json()
@@ -3841,7 +3841,7 @@ async def get_notifications(staff_id: Optional[str] = None, limit: int = 30, cur
     # Only HR or self can see notifications
     if target != current_admin["sub"]:
         user_roles = current_admin.get("role", "").split(",")
-        if not any(r in ["admin", "hr_admin"] for r in user_roles):
+        if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
              raise HTTPException(status_code=403, detail="Permission denied")
              
     res = await db_execute(lambda: db.table("notifications")
@@ -3877,7 +3877,7 @@ async def get_succession_plans(current_admin: dict = Depends(verify_token)):
 @router.post("/succession-plans", status_code=201)
 async def create_succession_plan(plan: SuccessionPlanCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
          raise HTTPException(status_code=403, detail="HR Admin only")
     db = get_db()
     res = await db_execute(lambda: db.table("succession_plans").insert(serialize_dates(plan.dict())).execute())
@@ -3899,7 +3899,7 @@ async def get_tax_config(current_admin: dict = Depends(verify_token)):
 @router.patch("/tax-config")
 async def update_tax_config(update: TaxConfigUpdate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
          raise HTTPException(status_code=403, detail="HR Admin only")
     db = get_db()
     # Always update the first record
@@ -3911,7 +3911,7 @@ async def update_tax_config(update: TaxConfigUpdate, current_admin: dict = Depen
 async def get_remote_work(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles)
     query = db.table("remote_work_requests").select("*, admins!remote_work_requests_staff_id_fkey(full_name, department)")
     if staff_id:
         query = query.eq("staff_id", staff_id)
@@ -3935,7 +3935,7 @@ async def request_remote_work(req: RemoteWorkCreate, current_admin: dict = Depen
 @router.patch("/remote-work/{req_id}/status")
 async def approve_remote_work(req_id: str, status_update: dict, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin", "line_manager"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin", "line_manager"] for r in user_roles):
          raise HTTPException(status_code=403, detail="Manager or HR only")
     db = get_db()
     res = await db_execute(lambda: db.table("remote_work_requests").update({
@@ -3958,7 +3958,7 @@ async def get_policies(current_admin: dict = Depends(verify_token)):
 @router.post("/policies", status_code=201)
 async def create_policy(p: PolicyCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
          raise HTTPException(status_code=403, detail="HR Admin only")
     db = get_db()
     data = serialize_dates(p.dict())
@@ -3971,7 +3971,7 @@ async def create_policy(p: PolicyCreate, current_admin: dict = Depends(verify_to
 @router.get("/exit-interviews")
 async def get_exit_interviews(current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
          raise HTTPException(status_code=403, detail="HR Admin only")
     db = get_db()
     res = await db_execute(lambda: db.table("exit_interviews").select("*, admins!exit_interviews_staff_id_fkey(full_name, department)").execute())
@@ -3980,7 +3980,7 @@ async def get_exit_interviews(current_admin: dict = Depends(verify_token)):
 @router.post("/exit-interviews", status_code=201)
 async def create_exit_interview(interview: ExitInterviewCreate, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
          raise HTTPException(status_code=403, detail="HR Admin only")
     db = get_db()
     data = serialize_dates(interview.dict())
@@ -3993,7 +3993,7 @@ async def create_exit_interview(interview: ExitInterviewCreate, current_admin: d
 async def get_hr_requests(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
     db = get_db()
     user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "hr_admin"] for r in user_roles)
+    is_hr = any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles)
     query = db.table("hr_requests").select("*, admins!hr_requests_staff_id_fkey(full_name, department)")
     if staff_id:
         query = query.eq("staff_id", staff_id)
@@ -4018,7 +4018,7 @@ async def create_hr_request(req: HRRequestCreate, current_admin: dict = Depends(
 async def update_request(req_id: str, request: Request, current_admin: dict = Depends(verify_token)):
     """Update an HR request — accepts { status } from the frontend."""
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR Admin only")
     db = get_db()
     data = await request.json()
@@ -4033,7 +4033,7 @@ async def update_request(req_id: str, request: Request, current_admin: dict = De
 @router.patch("/requests/{req_id}/status")
 async def update_request_status(req_id: str, status_update: dict, current_admin: dict = Depends(verify_token)):
     user_roles = current_admin.get("role", "").split(",")
-    if not any(r in ["admin", "hr_admin"] for r in user_roles):
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
          raise HTTPException(status_code=403, detail="HR Admin only")
     db = get_db()
     res = await db_execute(lambda: db.table("hr_requests").update({

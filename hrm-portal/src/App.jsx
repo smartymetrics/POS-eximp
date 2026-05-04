@@ -12143,6 +12143,7 @@ const isHrAdminUser = (user) => {
       ? rawRole.split(",").map(r => r.trim())
       : [];
   return roles.includes("admin")
+    || roles.includes("super_admin")
     || roles.includes("hr")
     || roles.includes("hr_admin")
     || primaryRole === "hr";

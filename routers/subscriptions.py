@@ -47,9 +47,26 @@ async def get_subscription_form(request: Request, rep: str = None):
         if rep_res and getattr(rep_res, 'data', None):
             rep_data = rep_res.data[0]
             
-    # List of active properties for the dropdown (Ensuring unique names)
-    prop_res = await db_execute(lambda: db.table("properties").select("name").eq("is_active", True).execute())
-    properties_list = sorted(list(set([p["name"] for p in prop_res.data if p.get("name")])))
+    # List of active properties for the dropdown (Ensuring clean, unique names)
+    prop_res = await db_execute(lambda: db.table("properties").select("name, estate_name").eq("is_active", True).execute())
+    
+    unique_names = set()
+    for p in prop_res.data:
+        # Use estate_name if it exists, otherwise clean up the name
+        e_name = p.get("estate_name")
+        if not e_name:
+            p_name = p.get("name", "")
+            # Strip suffixes to get the clean base name
+            e_name = p_name
+            for suffix in [" - ", " (Outright)", " (Installment)", " (Outright Payment)", " (Installment Payment)"]:
+                if suffix in e_name:
+                    e_name = e_name.split(suffix)[0]
+                    break
+        
+        if e_name:
+            unique_names.add(e_name.strip())
+            
+    properties_list = sorted(list(unique_names))
     
     return templates.TemplateResponse("property_subscription.html", {
         "request": request,

@@ -1,9 +1,10 @@
-from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks, File, UploadFile, Form, Body
-from fastapi.responses import StreamingResponse
+from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks, File, UploadFile, Form, Body, Request
+from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
 from database import get_db, db_execute
 from models import ExpenditureRequestCreate, PayoutReview, AssetCreate, VendorCreate, VoidExpenditureRequest, PayoutPaymentData
-from routers.auth import verify_token, has_any_role, require_roles
+from routers.auth import verify_token, has_any_role, require_roles, resolve_admin_token
 from email_service import send_payout_receipt_email, send_portal_invite_email, send_report_email, send_receipt_email
 from commission_service import sync_invoice_commissions
 from report_service import ReportService
@@ -18,6 +19,20 @@ import logging
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
+templates = Jinja2Templates(directory="templates")
+
+@router.get("/procurement-dashboard", response_class=HTMLResponse)
+async def procurement_dashboard(request: Request, current_admin=Depends(require_roles(["super_admin"]))):
+    """
+    Estate Development & Procurement Dashboard.
+    Only accessible by Super Admins.
+    """
+    analytics = await ReportService.get_procurement_analytics()
+    return templates.TemplateResponse("procurement_dashboard.html", {
+        "request": request,
+        "admin": current_admin,
+        "analytics": analytics
+    })
 
 # ─── WHT 2025 HELPER ──────────────────────────────────────────
 def calculate_wht_2025(amount: Decimal, category: str, has_tin: bool = True, is_resident: bool = True) -> dict:
@@ -143,6 +158,8 @@ async def submit_payout_request(data: ExpenditureRequestCreate, current_admin=De
         "proforma_url": data.proforma_url,
         "receipt_url": data.receipt_url,
         "category": data.category or "General",
+        "property_id": data.property_id,
+        "development_category": data.development_category,
         "status": "pending_verification"
     }
     
@@ -1435,3 +1452,111 @@ async def save_report_schedule(data: ScheduleRequest, current_admin=Depends(requ
     except Exception as e:
         logger.warning(f"Failed to upsert schedule (table might be missing): {e}")
         return {"status": "success", "message": "Automation preference logged."}
+
+
+# ─── PROCUREMENT EXPENSES ─────────────────────────────────────
+from models import ProcurementExpenseCreate
+
+@router.post("/procurement-expenses")
+async def create_procurement_expense(data: ProcurementExpenseCreate, current_admin=Depends(require_roles(["super_admin"]))):
+    db = get_db()
+    payload = data.dict(exclude_none=True)
+    payload["created_by"] = current_admin['sub']
+    
+    res = await db_execute(lambda: db.table("procurement_expenses").insert(payload).execute())
+    if not res.data:
+        raise HTTPException(status_code=400, detail="Failed to record procurement expense")
+    return res.data[0]
+
+@router.get("/procurement-expenses")
+async def list_procurement_expenses(property_id: Optional[str] = None, current_admin=Depends(require_roles(["super_admin"]))):
+    db = get_db()
+    query = db.table("procurement_expenses").select("*")
+    if property_id:
+        query = query.eq("property_id", property_id)
+    res = await db_execute(lambda: query.order("expense_date", desc=True).execute())
+    return res.data
+
+# --- ESTATE DRAFTS & PIPELINE ---
+from models import EstateDraftCreate
+
+@router.post("/estates")
+async def create_estate_draft(data: EstateDraftCreate, current_admin=Depends(require_roles(["super_admin"]))):
+    db = get_db()
+    payload = data.dict()
+    payload["created_by"] = current_admin['sub']
+    
+    res = await db_execute(lambda: db.table("estate_drafts").insert(payload).execute())
+    if not res.data:
+        raise HTTPException(status_code=400, detail="Failed to create estate draft")
+    return res.data[0]
+
+@router.get("/estates")
+async def list_estate_drafts(current_admin=Depends(require_roles(["super_admin"]))):
+    db = get_db()
+    res = await db_execute(lambda: db.table("estate_drafts").select("*").order("created_at", desc=True).execute())
+    return res.data
+
+@router.post("/estates/{draft_id}/publish")
+async def publish_estate(draft_id: str, current_admin=Depends(require_roles(["super_admin"]))):
+    db = get_db()
+    
+    # 1. Fetch Draft
+    res = await db_execute(lambda: db.table("estate_drafts").select("*").eq("id", draft_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    
+    draft = res.data[0]
+    if draft.get("is_public"):
+        raise HTTPException(status_code=400, detail="Estate is already public")
+        
+    # 2. Create Properties for each variation
+    variations = draft.get("variations", [])
+    created_prop_ids = []
+    
+    for var in variations:
+        outright = float(var.get('outright_price', 0))
+        installment = float(var.get('installment_price', 0))
+        size = var['size_sqm']
+        
+        # 1. Create Outright Listing
+        outright_payload = {
+            "name": draft['name'],
+            "estate_name": draft['name'],
+            "location": draft['location'],
+            "description": "Outright Payment Plan",
+            "plot_size_sqm": size,
+            "total_price": outright,
+            "total_plots": var['total_plots'],
+            "acquisition_cost": var.get('acquisition_cost', 0),
+            "is_active": True
+        }
+        o_res = await db_execute(lambda: db.table("properties").insert(outright_payload).execute())
+        if o_res.data:
+            created_prop_ids.append(o_res.data[0]['id'])
+            
+        # 2. Create Installment Listing (Optional)
+        if installment > 0:
+            inst_payload = {
+                "name": draft['name'],
+                "estate_name": draft['name'],
+                "location": draft['location'],
+                "description": "Installment Payment Plan",
+                "plot_size_sqm": size,
+                "total_price": installment,
+                "total_plots": var['total_plots'],
+                "acquisition_cost": 0,
+                "is_active": True
+            }
+            i_res = await db_execute(lambda: db.table("properties").insert(inst_payload).execute())
+            if i_res.data:
+                created_prop_ids.append(i_res.data[0]['id'])
+            
+    # 3. Update Draft Status
+    await db_execute(lambda: db.table("estate_drafts").update({"is_public": True}).eq("id", draft_id).execute())
+    
+    # 4. Link existing expenses to the first property ID created
+    if created_prop_ids:
+        await db_execute(lambda: db.table("procurement_expenses").update({"property_id": created_prop_ids[0]}).eq("estate_draft_id", draft_id).execute())
+
+    return {"status": "success", "properties_created": len(created_prop_ids)}

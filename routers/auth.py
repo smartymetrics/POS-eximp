@@ -62,6 +62,9 @@ def has_any_role(admin_payload: dict, *roles) -> bool:
         else:
             flat_roles.append(r)
     user_roles = {r.strip() for r in (admin_payload.get("role") or "").split(",") if r.strip()}
+    # Always allow super_admin
+    if "super_admin" in user_roles:
+        return True
     return bool(user_roles & {r.strip() for r in flat_roles if r})
 
 
@@ -184,9 +187,14 @@ async def list_admins(current_admin=Depends(verify_token)):
 def require_roles(allowed_roles: list[str]):
     """
     Returns a dependency that checks if the current user has any of the required roles.
+    Uses resolve_admin_token to support both Header and Query Param tokens.
     """
-    async def role_checker(current_admin=Depends(verify_token)):
+    async def role_checker(current_admin=Depends(resolve_admin_token)):
         user_roles = [r.strip() for r in current_admin.get("role", "").split(",")]
+        # Global override for super_admin
+        if "super_admin" in user_roles:
+            return current_admin
+            
         if not any(role in user_roles for role in allowed_roles):
             raise HTTPException(
                 status_code=403, 

@@ -1,5 +1,5 @@
 from pydantic import BaseModel, EmailStr
-from typing import Optional
+from typing import Optional, List
 from datetime import date, datetime
 from decimal import Decimal
 from uuid import UUID
@@ -94,6 +94,8 @@ class PropertyCreate(BaseModel):
     description: Optional[str] = None
     available_plot_sizes: Optional[str] = None
     is_active: bool = True
+    acquisition_cost: Optional[Decimal] = 0
+    total_plots: Optional[int] = 0
 
 
 class PropertyUpdate(BaseModel):
@@ -107,6 +109,8 @@ class PropertyUpdate(BaseModel):
     available_plot_sizes: Optional[str] = None
     is_active: Optional[bool] = None
     is_archived: Optional[bool] = None
+    acquisition_cost: Optional[Decimal] = None
+    total_plots: Optional[int] = None
 
 
 # ─── INVOICES ────────────────────────────────────────────────
@@ -552,6 +556,8 @@ class ExpenditureRequestCreate(BaseModel):
     wht_exemption_reason: Optional[str] = None
     proforma_url: Optional[str] = None
     receipt_url: Optional[str] = None
+    property_id: Optional[str] = None
+    development_category: Optional[str] = None # Clearing, Fencing, Acquisition, etc.
 
 class PayoutPaymentData(BaseModel):
     amount: Decimal
@@ -673,3 +679,29 @@ class IncidentCreate(BaseModel):
     severity: str # Minor, Moderate, Serious, Critical
     notes: Optional[str] = None
     incident_date: Optional[date] = None
+
+
+class ProcurementExpenseCreate(BaseModel):
+    property_id: Optional[str] = None
+    estate_draft_id: Optional[str] = None
+    title: str
+    category: str
+    amount: Decimal
+    vendor_name: Optional[str] = None
+    vendor_id: Optional[str] = None
+    expense_date: Optional[date] = None
+    notes: Optional[str] = None
+
+
+class EstateVariation(BaseModel):
+    size_sqm: Decimal
+    outright_price: Decimal
+    installment_price: Optional[Decimal] = None
+    total_plots: int
+    acquisition_cost: Optional[Decimal] = 0
+
+class EstateDraftCreate(BaseModel):
+    name: str
+    location: str
+    description: Optional[str] = None
+    variations: List[EstateVariation]

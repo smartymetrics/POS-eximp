@@ -291,6 +291,13 @@
         } else {
           window.location.href = '/dashboard';
         }
+
+        // Final override: if we have a "next" param, use it
+        const urlParams = new URLSearchParams(window.location.search);
+        const next = urlParams.get('next');
+        if (next) {
+            window.location.href = next;
+        }
       } catch (e) {
         if (e.name === 'TypeError' || e.message.includes('fetch')) {
           err.textContent = 'Connection lost. Please check your internet and try again.';

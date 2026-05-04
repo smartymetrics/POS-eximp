@@ -112,25 +112,40 @@ class SubscriptionService:
             plot_size_str = data.get("plot_size", "")
             size_match = re.search(r'(\d+)', plot_size_str)
             target_size = float(size_match.group(1)) if size_match else None
+            
+            # Is this an installment purchase?
+            # Note: The form values are "Outright", "3 Months", "6 Months", "12 Months"
+            payment_duration = data.get("payment_duration") or "Outright"
+            is_installment_request = payment_duration != "Outright"
 
             prop_query = db.table("properties").select("*").ilike("name", f"%{data['property_name']}%").eq("is_active", True)
             prop_res = await db_execute(lambda: prop_query.execute())
             
             if prop_res.data:
-                # Find best match based on plot size if available
-                prop = prop_res.data[0] # Default to first
+                # 1. Filter by size if available
+                matches = prop_res.data
                 if target_size:
-                    for p in prop_res.data:
-                        p_size = float(p.get("plot_size_sqm") or 0)
-                        if abs(p_size - target_size) < 1: # Close enough match
-                            prop = p
-                            break
+                    matches = [p for p in matches if abs(float(p.get("plot_size_sqm") or 0) - target_size) < 1]
+                
+                if not matches: matches = prop_res.data # Fallback to all if size filter fails
+                
+                # 2. Filter by Plan (Installment vs Outright)
+                plan_matches = []
+                for p in matches:
+                    desc = (p.get("description") or "").lower()
+                    name = (p.get("name") or "").lower()
+                    is_inst_row = "installment" in desc or "installment" in name
+                    
+                    if is_installment_request == is_inst_row:
+                        plan_matches.append(p)
+                
+                # Use the best plan match, otherwise fallback to first available
+                prop = plan_matches[0] if plan_matches else matches[0]
                 
                 property_id = prop["id"]
                 property_location = prop.get("location")
                 
                 if total_amount <= 0:
-                    # Priority order for price columns based on user database feedback
                     unit_price = float(prop.get("total_price") or prop.get("starting_price") or prop.get("price_per_sqm") or 0)
                     total_amount = unit_price * quantity
 

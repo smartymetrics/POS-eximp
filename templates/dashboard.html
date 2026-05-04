@@ -53,6 +53,28 @@
         // Set global user data for role-based UI
         window.ec_token = token;
         window.currentUser = payload;
+        window.userRoles = roles;
+
+        // Auto-inject token into protected dashboard links
+        document.addEventListener('DOMContentLoaded', () => {
+          // Apply role classes to body for CSS visibility
+          const b = document.body;
+          if (window.userRoles.includes('super_admin')) b.classList.add('role-super-admin');
+          if (window.userRoles.includes('admin')) b.classList.add('role-admin');
+          if (window.userRoles.includes('staff')) b.classList.add('role-staff');
+          if (window.userRoles.includes('legal')) b.classList.add('role-lawyer');
+
+          setTimeout(() => {
+            const links = document.querySelectorAll('a[href^="/finance/"], a[href^="/api/"]');
+            links.forEach(link => {
+              try {
+                const url = new URL(link.href, window.location.origin);
+                url.searchParams.set('token', token);
+                link.href = url.pathname + url.search;
+              } catch(e) {}
+            });
+          }, 1000); 
+        });
 
       } catch (e) {
         localStorage.removeItem('ec_token');
@@ -654,6 +676,14 @@
 
     body.role-admin .staff-only {
       display: none !important;
+    }
+
+    .super-admin-only {
+      display: none !important;
+    }
+    
+    body.role-super-admin .super-admin-only {
+      display: flex !important;
     }
 
     /* Lawyers cannot see financial edit buttons */
@@ -1308,6 +1338,15 @@
           <path d="M12 2v20M17 5H9.5a3.5 3.5 0 0 0 0 7h5a3.5 3.5 0 0 1 0 7H6" />
         </svg>
         Finance & Assets
+      </a>
+      <a class="nav-item super-admin-only" href="/finance/procurement" id="nav-procurement">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
+          style="margin-right: 12px; opacity: 0.7;">
+          <path d="M21 16V8a2 2 0 0 0-1-1.73l-7-4a2 2 0 0 0-2 0l-7 4A2 2 0 0 0 3 8v8a2 2 0 0 0 1 1.73l7 4a2 2 0 0 0 2 0l7-4A2 2 0 0 0 21 16z" />
+          <polyline points="3.27 6.96 12 12.01 20.73 6.96" />
+          <line x1="12" y1="22.08" x2="12" y2="12" />
+        </svg>
+        Procurement & ROI
       </a>
 
 
@@ -3819,8 +3858,8 @@
         const admin = await res.json();
         currentUserRole = (admin.role || '').toLowerCase();
         document.getElementById('adminName').textContent = admin.full_name;
-        const roleLabels = { admin: '⭐ Admin', lawyer: '⚖️ Lawyer', staff: '👤 Staff' };
-        document.getElementById('adminRole').textContent = roleLabels[admin.role] || 'Staff';
+        const roleLabels = { super_admin: '💎 Super Admin', admin: '⭐ Admin', lawyer: '⚖️ Lawyer', staff: '👤 Staff' };
+        document.getElementById('adminRole').textContent = roleLabels[admin.role] || admin.role || 'Staff';
         document.getElementById('adminInitials').textContent = admin.full_name.split(' ').map(n => n[0]).join('').slice(0, 2).toUpperCase();
 
         // Apply role styling and hide all role-specific UI until allowed

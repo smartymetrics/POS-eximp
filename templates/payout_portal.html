@@ -688,24 +688,31 @@
                         <div id="fileList" style="margin-top:10px; text-align:left; display:none;"></div>
                     </div>
                     <textarea id="remarks" placeholder="Remarks..." style="height:86px; padding:12px;"></textarea>
-                    
+
                     <!-- Structured Dropdown for Office Disbursements -->
                     <div class="input-wrapper">
                         <i class="fas fa-tags"></i>
-                        <select id="office_expense_type" class="hidden" style="width:100%; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:10px; color:var(--text); outline:none; font-family:inherit;">
+                        <select id="office_expense_type" class="hidden"
+                            style="width:100%; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:10px; color:var(--text); outline:none; font-family:inherit;">
                             <option value="" disabled selected>— Select Expense Type —</option>
                             <optgroup label="🏡 Real Estate Operations">
-                                <option value="Site Inspection - Transport/Logistics">Site Inspection - Transport/Logistics</option>
-                                <option value="Site Inspection - Feeding/Refreshments">Site Inspection - Feeding/Refreshments</option>
-                                <option value="Allocation - Surveying & Pegging">Allocation - Surveying & Pegging</option>
-                                <option value="Allocation - Logistics/Documentation">Allocation - Logistics/Documentation</option>
+                                <option value="Site Inspection - Transport/Logistics">Site Inspection -
+                                    Transport/Logistics</option>
+                                <option value="Site Inspection - Feeding/Refreshments">Site Inspection -
+                                    Feeding/Refreshments</option>
+                                <option value="Allocation - Surveying & Pegging">Allocation - Surveying & Pegging
+                                </option>
+                                <option value="Allocation - Logistics/Documentation">Allocation -
+                                    Logistics/Documentation</option>
                                 <option value="Site Clearing & Maintenance">Site Clearing & Maintenance</option>
                             </optgroup>
                             <optgroup label="🔌 Office Utilities & Maintenance">
                                 <option value="Fuel - Generator">Fuel - Generator</option>
                                 <option value="Fuel - Office Vehicle">Fuel - Office Vehicle</option>
-                                <option value="Electricity (AEDC) & Water">Electricity (AEDC) & Water</option>
-                                <option value="Repairs (AC/Plumbing/Electrical)">Repairs (AC/Plumbing/Electrical)</option>
+                                <option value="Electricity Bill">Electricity Bill</option>
+                                <option value="Water Bill">Water Bill</option>
+                                <option value="Repairs (AC/Plumbing/Electrical)">Repairs (AC/Plumbing/Electrical)
+                                </option>
                             </optgroup>
                             <optgroup label="🧹 Cleaning & Janitorial">
                                 <option value="Toiletries & Cleaning Supplies">Toiletries & Cleaning Supplies</option>
@@ -953,13 +960,13 @@
             formData.append('payment_type', document.getElementById('hid_payment_type').value);
             formData.append('is_dispute', isDispute);
             formData.append('dispute_reason', isDispute ? document.getElementById('dispute_reason').value : "");
-            
+
             // Logic for Remarks vs Dropdown
             const isOffice = (currentTab === 'disbursement' && subTab === 'office');
-            const finalRemarks = isOffice 
-                ? document.getElementById('office_expense_type').value 
+            const finalRemarks = isOffice
+                ? document.getElementById('office_expense_type').value
                 : document.getElementById('remarks').value;
-            
+
             formData.append('remarks', finalRemarks || "");
 
             const files = Array.from(document.getElementById('fileInput').files);

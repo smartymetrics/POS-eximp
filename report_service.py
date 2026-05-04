@@ -371,3 +371,194 @@ class ReportService:
                 worksheet.column_dimensions[col[0].column_letter].width = min(max_len + 2, 50)
         output.seek(0)
         return output
+
+    @staticmethod
+    @staticmethod
+    async def get_procurement_analytics() -> List[Dict[str, Any]]:
+        """
+        Analyzes estate-level financial health: Acquisition + Development vs Revenue.
+        Includes both live Properties and pre-launch Estate Drafts.
+        """
+        # 1. Fetch live properties
+        prop_res = supabase.table("properties").select("*").eq("is_archived", False).execute()
+        properties = prop_res.data or []
+        
+        # 2. Fetch estate drafts
+        draft_res = supabase.table("estate_drafts").select("*").eq("is_public", False).execute()
+        drafts = draft_res.data or []
+        
+        # 3. Fetch all procurement specific expenses
+        exp_res = supabase.table("procurement_expenses").select("*").execute()
+        expenditures = exp_res.data or []
+        
+        # 4. Fetch all revenue (invoices)
+        inv_res = supabase.table("invoices").select("property_id, amount, amount_paid").neq("status", "voided").execute()
+        invoices = inv_res.data or []
+        
+        estates_map = {}
+        
+        # Process Live Properties
+        for p in properties:
+            p_name = p["name"]
+            p_desc = (p.get("description") or "").lower()
+            
+            # Use the dedicated estate_name column if available, otherwise fallback to name splitting
+            estate_name = p.get("estate_name") or p_name.split(" - ")[0]
+            
+            # Extract base name and size (e.g. "Park View - 500SQM")
+            # We strip common plan suffixes to get the unique variation name
+            base_part = p_name
+            for suffix in [" (Outright)", " (Installment)", " (Outright Payment)", " (Installment Payment)"]:
+                if suffix in p_name:
+                    base_part = p_name.split(suffix)[0]
+                    break
+            
+            if estate_name not in estates_map:
+                estates_map[estate_name] = {
+                    "ids": [],
+                    "location": p["location"],
+                    "acquisition_cost": 0,
+                    "total_plots": 0,
+                    "variations": [],
+                    "is_draft": False
+                }
+            
+            # Add to IDs for expense matching
+            estates_map[estate_name]["ids"].append(str(p["id"]))
+            
+            # Check if this size variation already exists in our map
+            existing_var = next((v for v in estates_map[estate_name]["variations"] if v["base_name"] == base_part), None)
+            
+            if not existing_var:
+                # Create new variation entry
+                var_data = {
+                    "base_name": base_part,
+                    "size": float(p.get("plot_size_sqm") or 0),
+                    "outright_id": None,
+                    "installment_id": None,
+                    "outright_price": 0,
+                    "installment_price": 0,
+                    "plots_total": int(p.get("total_plots") or 0),
+                    "acquisition_cost": float(p.get("acquisition_cost") or 0)
+                }
+                estates_map[estate_name]["variations"].append(var_data)
+                existing_var = var_data
+                
+                # Update estate totals once per variation
+                estates_map[estate_name]["acquisition_cost"] += var_data["acquisition_cost"]
+                estates_map[estate_name]["total_plots"] += var_data["plots_total"]
+
+            # Map the specific plan to the variation
+            # We check both the name suffix AND the description content
+            is_installment = "(Installment)" in p_name or "installment" in p_desc
+            
+            if is_installment:
+                existing_var["installment_id"] = str(p["id"])
+                existing_var["installment_price"] = float(p.get("total_price") or 0)
+            else:
+                # Default to outright if not marked as installment
+                existing_var["outright_id"] = str(p["id"])
+                existing_var["outright_price"] = float(p.get("total_price") or 0)
+                # Primary ID for internal mapping
+                existing_var["id"] = str(p["id"]) 
+
+        # Process Drafts
+        for d in drafts:
+            name = d["name"]
+            if name not in estates_map:
+                estates_map[name] = {
+                    "ids": [],
+                    "draft_id": str(d["id"]),
+                    "location": d["location"],
+                    "acquisition_cost": 0,
+                    "total_plots": 0,
+                    "variations": [],
+                    "is_draft": True
+                }
+            
+            vars_list = d.get("variations", [])
+            for v in vars_list:
+                acq = float(v.get('acquisition_cost') or 0)
+                estates_map[name]["acquisition_cost"] += acq
+                estates_map[name]["total_plots"] += int(v.get('total_plots') or 0)
+                estates_map[name]["variations"].append({
+                    "id": None,
+                    "base_name": f"{name} - {v.get('size_sqm')}SQM",
+                    "size": float(v.get('size_sqm') or 0),
+                    "outright_price": float(v.get('outright_price') or 0),
+                    "installment_price": float(v.get('installment_price') or 0),
+                    "plots_total": int(v.get('total_plots') or 0),
+                    "acquisition_cost": acq
+                })
+
+        analytics = []
+        for name, data in estates_map.items():
+            ids = data["ids"]
+            draft_id = data.get("draft_id")
+            
+            # Costs
+            acquisition = data["acquisition_cost"]
+            p_exp = [e for e in expenditures if (str(e.get("property_id")) in ids) or (draft_id and str(e.get("estate_draft_id")) == draft_id)]
+            
+            clearing = sum(float(e["amount"]) for e in p_exp if e.get("category") == "Clearing")
+            fencing = sum(float(e["amount"]) for e in p_exp if e.get("category") == "Fencing")
+            other_dev = sum(float(e["amount"]) for e in p_exp if e.get("category") not in ["Clearing", "Fencing"])
+            
+            total_development = clearing + fencing + other_dev
+            total_investment = acquisition + total_development
+            
+            # Revenue
+            p_inv = [i for i in invoices if str(i.get("property_id")) in ids]
+            revenue_invoiced = sum(float(i["amount"]) for i in p_inv)
+            revenue_collected = sum(float(i["amount_paid"]) for i in p_inv)
+            
+            inventory_value = 0
+            total_plots_sold = 0
+            for v in data["variations"]:
+                # Count sales for BOTH IDs in this variation
+                relevant_ids = [v.get("outright_id"), v.get("installment_id")]
+                sold_this_var = len([i for i in p_inv if str(i.get("property_id")) in relevant_ids and i.get("property_id")])
+                total_plots_sold += sold_this_var
+                
+                avail_this_var = max(0, v["plots_total"] - sold_this_var)
+                # Use Outright price for unsold inventory valuation (standard practice)
+                inventory_value += (avail_this_var * (v.get("outright_price") or v.get("price") or 0))
+            
+            total_plots = data["total_plots"]
+            plots_available = max(0, total_plots - total_plots_sold)
+            
+            projected_total_revenue = revenue_invoiced + inventory_value
+            net_profit_actual = revenue_collected - total_investment
+            net_profit_projected = projected_total_revenue - total_investment
+            
+            roi_actual = (net_profit_actual / total_investment * 100) if total_investment > 0 else 0
+            roi_projected = (net_profit_projected / total_investment * 100) if total_investment > 0 else 0
+            
+            analytics.append({
+                "name": name,
+                "draft_id": draft_id,
+                "location": data["location"],
+                "total_plots": total_plots,
+                "plots_sold": total_plots_sold,
+                "plots_available": plots_available,
+                "is_draft": data["is_draft"],
+                "variations": data["variations"],
+                "financials": {
+                    "acquisition_cost": acquisition,
+                    "clearing_cost": clearing,
+                    "fencing_cost": fencing,
+                    "other_development_cost": other_dev,
+                    "total_development": total_development,
+                    "total_investment": total_investment,
+                    "revenue_invoiced": revenue_invoiced,
+                    "revenue_collected": revenue_collected,
+                    "inventory_value": inventory_value,
+                    "projected_total_revenue": projected_total_revenue,
+                    "net_profit_actual": net_profit_actual,
+                    "net_profit_projected": net_profit_projected,
+                    "roi_percent": round(roi_actual, 1),
+                    "roi_projected": round(roi_projected, 1)
+                }
+            })
+            
+        return sorted(analytics, key=lambda x: x["is_draft"], reverse=True)

@@ -2954,7 +2954,9 @@
             }
 
             document.getElementById('adminName').innerText = displayName;
-            document.getElementById('adminRole').innerText = admin.role;
+            const _legalRoleLabels = { super_admin: '💎 Super Admin', admin: '⭐ Admin', lawyer: '⚖️ Lawyer', legal: '⚖️ Legal' };
+            const _legalPrimaryRole = (admin.role || '').split(',')[0].trim();
+            document.getElementById('adminRole').innerText = _legalRoleLabels[_legalPrimaryRole] || _legalPrimaryRole.replace(/_/g, ' ') || 'User';
             document.getElementById('adminInitial').innerText = displayName ? displayName[0].toUpperCase() : 'A';
 
             // Show Finance links ONLY for admins

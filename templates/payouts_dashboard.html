@@ -2617,6 +2617,9 @@
 
                     document.getElementById('adminName').innerText = user.full_name;
                     document.getElementById('adminInitials').innerText = user.full_name.split(' ').map(n => n[0]).join('').toUpperCase().slice(0, 2);
+                    const _roleLabels = { super_admin: '💎 Super Admin', admin: '⭐ Admin', operations: '⚙️ Operations', lawyer: '⚖️ Lawyer' };
+                    const _primaryRole = (user.role || '').split(',')[0].trim();
+                    document.getElementById('adminRole').innerText = _roleLabels[_primaryRole] || _primaryRole || 'Administrator';
                 } else {
                     window.location.href = '/login';
                 }

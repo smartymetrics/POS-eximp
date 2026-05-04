@@ -65,6 +65,38 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Log exactly what failed in the 422 error.
+    This helps us see if it's a bad email format or missing field.
+    """
+    print(f"❌ VALIDATION ERROR at {request.url.path}: {exc.errors()}")
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": exc.errors(), "body": exc.body},
+    )
+
+@app.exception_handler(HTTPException)
+async def auth_exception_handler(request: Request, exc: HTTPException):
+    """
+    Professionally handle Auth errors.
+    If a user is not logged in or doesn't have access, 
+    redirect them to login instead of showing raw JSON.
+    """
+    if exc.status_code in [401, 403]:
+        # Only redirect if it's a browser page request
+        accept = request.headers.get("accept", "")
+        if "text/html" in accept:
+            return RedirectResponse(url="/login?next=" + str(request.url.path))
+    
+    # Otherwise return the standard JSON error (for API calls)
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
 app.mount("/static", StaticFiles(directory="static"), name="static")
 app.mount("/hr", StaticFiles(directory="hrm-portal/dist", html=True), name="hr")
 templates = Jinja2Templates(directory="templates")
@@ -230,6 +262,17 @@ async def legal_manual_page(request: Request):
 @app.get("/finance/payouts", response_class=HTMLResponse)
 async def payouts_dashboard_page(request: Request):
     return templates.TemplateResponse("payouts_dashboard.html", {"request": request})
+
+@app.get("/finance/procurement", response_class=HTMLResponse)
+async def procurement_dashboard_page(request: Request, current_admin=Depends(require_roles(["super_admin"]))):
+    """Clean URL for the Procurement Dashboard (Super Admin Only)."""
+    from report_service import ReportService
+    analytics = await ReportService.get_procurement_analytics()
+    return templates.TemplateResponse("procurement_dashboard.html", {
+        "request": request,
+        "admin": current_admin,
+        "analytics": analytics
+    })
 
 
 @app.get("/finance/manual", response_class=HTMLResponse)
