@@ -114,24 +114,35 @@ class ReportService:
             return {"items": summary.to_dict("records"), "stats": {}, "type": "Sales Rep Performance"}
 
         elif report_type == "client_register":
-            res = supabase.table("clients").select("full_name, email, phone, address, title, middle_name, gender, dob, marital_status, occupation, nin, id_number, nationality, nok_name, nok_phone, nok_relationship, source_of_income, referral_source, created_at, invoices(property_name, purchase_purpose)").order("created_at", desc=True).execute()
+            res = supabase.table("clients").select("full_name, email, phone, address, title, middle_name, gender, dob, marital_status, occupation, nin, id_number, nationality, nok_name, nok_phone, nok_relationship, source_of_income, referral_source, created_at, invoices(invoice_number, property_name, purchase_purpose, purchase_for, status)").order("created_at", desc=True).execute()
             data = res.data or []
             rows = []
             for c in data:
-                invoices = c.get("invoices") or []
-                # Create a list of "Property Name (Purpose)" strings
+                all_invoices = c.get("invoices") or []
+                # Filter out voided invoices
+                active_invoices = [inv for inv in all_invoices if inv.get("status") != "voided"]
+                
+                if not active_invoices: continue # Filter: Only include clients with at least one valid (non-voided) transaction
+                
+                # Create a list of "Invoice: Property Name (Purpose/Reason)" strings
                 prop_list = []
-                for i in invoices:
+                for i in active_invoices:
+                    inv_no = i.get("invoice_number", "N/A")
                     p_name = i.get("property_name")
                     p_purpose = i.get("purchase_purpose")
+                    p_for = i.get("purchase_for")
                     if p_name:
-                        entry = p_name
-                        if p_purpose:
-                            entry += f" ({p_purpose})"
+                        entry = f"{inv_no}: {p_name}"
+                        details = []
+                        if p_purpose: details.append(f"Purpose: {p_purpose}")
+                        if p_for: details.append(f"Reason: {p_for}")
+                        
+                        if details:
+                            entry += f" ({', '.join(details)})"
                         prop_list.append(entry)
                 
-                # Deduplicate and join
-                props_display = "; ".join(sorted(set(prop_list))) if prop_list else "None"
+                # Join with newlines for cleaner PDF display
+                props_display = "\n".join(sorted(set(prop_list))) if prop_list else "None"
                 
                 name_parts = [p for p in [c.get("title"), c.get("full_name"), c.get("middle_name")] if p]
                 full_name_str = " ".join(name_parts) or "Unknown Client"
@@ -151,7 +162,7 @@ class ReportService:
                 if c.get("nok_relationship"): nok_details += f" ({c.get('nok_relationship')})"
                 if c.get("nok_occupation"): nok_details += f"\nOcc: {c.get('nok_occupation')}"
                 
-                sales_info = f"Props: {props_display}\nReferral: {c.get('referral_source', 'N/A')}\nIncome: {c.get('source_of_income', 'N/A')}\nReg: {c.get('created_at', '')[:10]}"
+                sales_info = f"PROPERTIES: {props_display}\nREFERRAL: {c.get('referral_source', 'N/A')}\nINCOME: {c.get('source_of_income', 'N/A')}\nREG DATE: {c.get('created_at', '')[:10]}"
 
                 rows.append({
                     "Client Details": client_details,

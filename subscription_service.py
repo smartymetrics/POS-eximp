@@ -168,7 +168,7 @@ class SubscriptionService:
             'gender', 'date_of_birth', 'residential_address', 'email', 'whatsapp_phone', 
             'marital_status', 'occupation', 'nationality', 'passport_photo_url', 
             'nin_id_number', 'nin_document_url', 'international_passport_url', 
-            'property_name', 'plot_size', 'ownership_type', 'purchase_purpose', 
+            'property_name', 'plot_size', 'ownership_type', 'purchase_purpose', 'purchase_for', 
             'nok_full_name', 'nok_phone', 'nok_email', 'nok_occupation', 'nok_relationship', 
             'nok_address', 'co_owner_name', 'co_owner_address', 'co_owner_occupation', 
             'co_owner_phone', 'co_owner_email', 'payment_duration', 'deposit_amount', 
