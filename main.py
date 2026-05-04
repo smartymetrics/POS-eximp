@@ -264,10 +264,17 @@ async def payouts_dashboard_page(request: Request):
     return templates.TemplateResponse("payouts_dashboard.html", {"request": request})
 
 @app.get("/finance/procurement", response_class=HTMLResponse)
-async def procurement_dashboard_page(request: Request, current_admin=Depends(require_roles(["super_admin"]))):
+async def procurement_dashboard_page(request: Request, start_date: str = None, end_date: str = None, current_admin=Depends(require_roles(["super_admin"]))):
     """Clean URL for the Procurement Dashboard (Super Admin Only)."""
     from report_service import ReportService
-    analytics = await ReportService.get_procurement_analytics()
+    from datetime import datetime, timedelta
+    
+    if not start_date and not end_date:
+        now = datetime.now()
+        start_date = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+        end_date = now.strftime("%Y-%m-%d")
+        
+    analytics = await ReportService.get_procurement_analytics(start_date=start_date, end_date=end_date)
     return templates.TemplateResponse("procurement_dashboard.html", {
         "request": request,
         "admin": current_admin,

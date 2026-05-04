@@ -3,7 +3,7 @@ import io
 import logging
 from datetime import datetime
 from decimal import Decimal
-from typing import List, Dict, Any
+from typing import List, Dict, Any, Optional
 import pandas as pd
 from xhtml2pdf import pisa
 from database import supabase
@@ -373,11 +373,11 @@ class ReportService:
         return output
 
     @staticmethod
-    @staticmethod
-    async def get_procurement_analytics() -> List[Dict[str, Any]]:
+    async def get_procurement_analytics(start_date: Optional[str] = None, end_date: Optional[str] = None) -> List[Dict[str, Any]]:
         """
         Analyzes estate-level financial health: Acquisition + Development vs Revenue.
         Includes both live Properties and pre-launch Estate Drafts.
+        Supports time-frame filtering for tax/performance reporting.
         """
         # 1. Fetch live properties
         prop_res = supabase.table("properties").select("*").eq("is_archived", False).execute()
@@ -387,13 +387,33 @@ class ReportService:
         draft_res = supabase.table("estate_drafts").select("*").eq("is_public", False).execute()
         drafts = draft_res.data or []
         
-        # 3. Fetch all procurement specific expenses
-        exp_res = supabase.table("procurement_expenses").select("*").execute()
-        expenditures = exp_res.data or []
+        # 3. Fetch procurement expenses
+        # Period-specific (for tax/performance reporting)
+        exp_query = supabase.table("procurement_expenses").select("*")
+        if start_date:
+            exp_query = exp_query.gte("expense_date", start_date)
+        if end_date:
+            exp_query = exp_query.lte("expense_date", end_date)
+        exp_res = exp_query.execute()
+        period_expenditures = exp_res.data or []
         
-        # 4. Fetch all revenue (invoices)
-        inv_res = supabase.table("invoices").select("property_id, amount, amount_paid, quantity").neq("status", "voided").execute()
-        invoices = inv_res.data or []
+        # All-time (for total investment and current status)
+        all_exp_res = supabase.table("procurement_expenses").select("*").execute()
+        all_expenditures = all_exp_res.data or []
+        
+        # 4. Fetch revenue (invoices)
+        # Period-specific (for tax/performance reporting)
+        inv_query = supabase.table("invoices").select("property_id, amount, amount_paid, quantity, created_at").neq("status", "voided")
+        if start_date:
+            inv_query = inv_query.gte("created_at", start_date)
+        if end_date:
+            inv_query = inv_query.lte("created_at", end_date)
+        inv_res = inv_query.execute()
+        period_invoices = inv_res.data or []
+        
+        # All-time (for inventory tracking and lifetime revenue)
+        all_inv_res = supabase.table("invoices").select("property_id, amount, amount_paid, quantity").neq("status", "voided").execute()
+        all_invoices = all_inv_res.data or []
         
         estates_map = {}
         
@@ -419,6 +439,7 @@ class ReportService:
                     "ids": set(),
                     "location": p["location"],
                     "acquisition_cost": 0,
+                    "budget": float(p.get("budget") or 0),
                     "total_plots": 0,
                     "variations": [],
                     "is_draft": False
@@ -479,10 +500,10 @@ class ReportService:
             name = d["name"]
             if name not in estates_map:
                 estates_map[name] = {
-                    "ids": set(),
                     "draft_id": str(d["id"]),
                     "location": d["location"],
                     "acquisition_cost": 0,
+                    "budget": float(d.get("total_budget") or 0),
                     "total_plots": 0,
                     "variations": [],
                     "is_draft": True
@@ -507,79 +528,188 @@ class ReportService:
         for name, data in estates_map.items():
             ids = data["ids"]
             draft_id = data.get("draft_id")
-            
-            # Costs
             acquisition = data["acquisition_cost"]
-            p_exp = [e for e in expenditures if (str(e.get("property_id")) in ids) or (draft_id and str(e.get("estate_draft_id")) == draft_id)]
             
-            # Categorized Development Costs
+            # 1. Period-specific costs (for the tax report)
+            p_exp_period = [e for e in period_expenditures if (str(e.get("property_id")) in ids) or (draft_id and str(e.get("estate_draft_id")) == draft_id)]
+            period_development = sum(float(e.get("amount") or 0) for e in p_exp_period)
+            period_paid = sum(float(e.get("amount_paid") or 0) for e in p_exp_period)
+
+            # 2. All-time costs (for total investment and budget tracking)
+            p_exp_all = [e for e in all_expenditures if (str(e.get("property_id")) in ids) or (draft_id and str(e.get("estate_draft_id")) == draft_id)]
+            total_development_all = sum(float(e.get("amount") or 0) for e in p_exp_all)
+            total_dev_paid_all = sum(float(e.get("amount_paid") or 0) for e in p_exp_all)
+
+            # Categorized Development Costs (Period-based for chart, All-time for totals?)
+            # Let's keep breakdown period-based if a filter is active
             expense_breakdown = {}
-            total_dev_paid = 0
-            for e in p_exp:
+            for e in p_exp_period:
                 cat = e.get("category") or "General"
-                amt = float(e.get("amount") or 0)
-                paid = float(e.get("amount_paid") or 0)
-                expense_breakdown[cat] = expense_breakdown.get(cat, 0) + amt
-                total_dev_paid += paid
+                expense_breakdown[cat] = expense_breakdown.get(cat, 0) + float(e.get("amount") or 0)
             
-            total_development = sum(expense_breakdown.values())
-            total_investment = acquisition + total_development
-            total_paid_outflow = acquisition + total_dev_paid # Assuming acquisition is fully paid for context
+            # 2. Expenses & Budgeting
+            estate_budget = float(data.get("budget") or 0)
+            total_budget = estate_budget # Strict enforcement, no automatic fallback to spend amount
             
-            # Revenue
-            p_inv = [i for i in invoices if str(i.get("property_id")) in ids]
-            revenue_invoiced = sum(float(i["amount"]) for i in p_inv)
-            revenue_collected = sum(float(i["amount_paid"]) for i in p_inv)
+            budget_variance = total_development_all - total_budget
+            budget_utilization = (total_development_all / total_budget * 100) if total_budget > 0 else 0
+
+            # 3. Revenue
+            # Period-specific (How much did we make in this timeframe?)
+            p_inv_period = [i for i in period_invoices if str(i.get("property_id")) in ids]
+            revenue_invoiced_period = sum(float(i["amount"]) for i in p_inv_period)
+            revenue_collected_period = sum(float(i["amount_paid"]) for i in p_inv_period)
+
+            # All-time (How many plots are ACTUALLY left?)
+            p_inv_all = [i for i in all_invoices if str(i.get("property_id")) in ids]
             
             inventory_value = 0
-            total_plots_sold = 0
+            total_plots_sold_all = 0
             for v in data["variations"]:
-                # Count sales for ALL related property IDs in this variation
                 relevant_ids = set(v.get("outright_ids", []) + v.get("installment_ids", []))
-                # Sum quantities instead of just counting invoices
-                sold_this_var = sum(int(i.get("quantity") or 1) for i in p_inv if str(i.get("property_id")) in relevant_ids and i.get("property_id"))
-                total_plots_sold += sold_this_var
+                sold_this_var = sum(int(i.get("quantity") or 1) for i in p_inv_all if str(i.get("property_id")) in relevant_ids and i.get("property_id"))
+                total_plots_sold_all += sold_this_var
                 
                 avail_this_var = max(0, v["plots_total"] - sold_this_var)
-                # Use Outright price for unsold inventory valuation (standard practice)
                 inventory_value += (avail_this_var * (v.get("outright_price") or v.get("price") or 0))
             
             total_plots = data["total_plots"]
-            plots_available = max(0, total_plots - total_plots_sold)
+            plots_available = max(0, total_plots - total_plots_sold_all)
             
-            projected_total_revenue = revenue_invoiced + inventory_value
-            net_profit_actual = revenue_collected - total_investment
-            net_profit_projected = projected_total_revenue - total_investment
+            # Final Metrics for the UI
+            # We prioritize period-based metrics for the KPIs if filtering, 
+            # but keep lifetime metrics for project status.
             
-            roi_actual = (net_profit_actual / total_investment * 100) if total_investment > 0 else 0
-            roi_projected = (net_profit_projected / total_investment * 100) if total_investment > 0 else 0
+            # 4. ROI and Profit (Period vs Lifetime)
+            roi_actual = ((revenue_collected_period - period_development) / (acquisition + total_development_all) * 100) if (acquisition + total_development_all) > 0 else 0
+            roi_projected = (((sum(float(i["amount"]) for i in p_inv_all)) + inventory_value - (acquisition + total_development_all)) / (acquisition + total_development_all) * 100) if (acquisition + total_development_all) > 0 else 0
+
+            financials = {
+                "acquisition_cost": acquisition,
+                "total_development": total_development_all,
+                "period_development": period_development,
+                "total_investment": acquisition + total_development_all,
+                "total_paid_outflow": acquisition + total_dev_paid_all,
+                "period_paid_outflow": period_paid,
+                "revenue_invoiced": revenue_invoiced_period,
+                "revenue_collected": revenue_collected_period,
+                "inventory_value": inventory_value,
+                "projected_total_revenue": (sum(float(i["amount"]) for i in p_inv_all)) + inventory_value,
+                "budget": total_budget,
+                "budget_variance": budget_variance,
+                "budget_utilization": budget_utilization,
+                "net_profit_actual": revenue_collected_period - period_development,
+                "net_profit_projected": ((sum(float(i["amount"]) for i in p_inv_all)) + inventory_value) - (acquisition + total_development_all),
+                "roi_actual": roi_actual,
+                "roi_projected": roi_projected,
+                "expense_history": p_exp_period,
+                "all_time_history": p_exp_all,
+                "expense_breakdown": expense_breakdown,
+                "total_development": total_development_all, # UI Compatibility
+                "total_development_paid": total_dev_paid_all, # UI Compatibility
+                "total_dev_paid": total_dev_paid_all, # UI Compatibility
+                "roi_percent": roi_actual, # UI Compatibility
+                "total_budget": total_budget # UI Compatibility
+            }
             
+            # --- ADVANCED ANALYTICS (Pareto, Risk, Optimization) ---
+            
+            # 1. Pareto Analysis (Top 20% items driving 80% cost - based on ALL TIME)
+            sorted_items = sorted(p_exp_all, key=lambda x: float(x.get("amount") or 0), reverse=True)
+            cumulative_cost = 0
+            pareto_items = []
+            for item in sorted_items:
+                amt = float(item.get("amount") or 0)
+                cumulative_cost += amt
+                if cumulative_cost <= total_development_all * 0.8:
+                    pareto_items.append(item.get("title"))
+            
+            # 2. Advanced Risk Assessment
+            risks = []
+            
+            # --- OPERATIONAL RISKS (Timeframe Sensitive) ---
+            target_period_dev = period_development if period_development > 0 else total_development_all
+            labor_total_period = sum(float(e.get("amount") or 0) for e in p_exp_period if (e.get("category") or "").lower() in ["labour", "workers"])
+            material_total_period = sum(float(e.get("amount") or 0) for e in p_exp_period if (e.get("category") or "").lower() in ["materials", "equipment", "cement", "blocks"])
+            
+            # Workforce Yield Inefficiency (High labor, low materials)
+            if period_development > 0 and (labor_total_period / period_development) > 0.40:
+                msg = f"Workforce overhead constitutes {round(labor_total_period/period_development*100)}% of periodic outflow."
+                if material_total_period < (labor_total_period * 0.5):
+                    msg += " The severe disproportion to material acquisition suggests high probability of idle time or site bottlenecks."
+                risks.append({
+                    "level": "high", "title": "Workforce Yield Inefficiency",
+                    "msg": msg
+                })
+
+            # Procurement Concentration Risk
+            sorted_period = sorted(p_exp_period, key=lambda x: float(x.get("amount") or 0), reverse=True)
+            if sorted_period and float(sorted_period[0].get("amount") or 0) > period_development * 0.5:
+                risks.append({
+                    "level": "medium", "title": "CAPEX Concentration Exposure",
+                    "msg": f"A singular asset class '{sorted_period[0].get('title')}' is absorbing >50% of current liquidity deployment. Diversification recommended if timeline permits."
+                })
+
+            # --- FINANCIAL RISKS (Global/Outstanding) ---
+            total_paid = sum(float(e.get("amount_paid") or 0) for e in p_exp_all)
+            total_outstanding = total_development_all - total_paid
+            
+            # Liquidity Strain / Supply Chain Freeze
+            if total_development_all > 0 and (total_outstanding / total_development_all) > 0.60:
+                risks.append({
+                    "level": "high", "title": "Severe Liquidity Strain",
+                    "msg": f"₦{total_outstanding:,.0f} ({(total_outstanding/total_development_all*100):.0f}%) of aggregate development capital is accrued as unsecured accounts payable. High risk of supply chain freezing if creditor confidence erodes."
+                })
+
+            # CAPEX Saturation & Deficit Trajectory
+            if total_budget > 0 and total_development_all > total_budget:
+                risks.append({
+                    "level": "high", "title": "Budget Deficit Trajectory",
+                    "msg": f"Capital deployment has breached the baseline CAPEX threshold by a deficit of ₦{(total_development_all - total_budget):,.0f}. Immediate capital injection required to prevent project stalling."
+                })
+            elif total_budget > 0 and (total_development_all / total_budget) > 0.85:
+                risks.append({
+                    "level": "medium", "title": "CAPEX Saturation Risk",
+                    "msg": f"Portfolio has absorbed {round(total_development_all/total_budget*100)}% of authorized procurement budget. Evaluate remaining milestone-to-completion ratio urgently."
+                })
+
+            # 3. Strategic Recommendations (Economic Focus)
+            recommendations = []
+            
+            # Debt Restructuring
+            if total_development_all > 0 and (total_outstanding / total_development_all) > 0.50:
+                recommendations.append("Restructure short-term accounts payable into amortized vendor agreements to ease immediate liquidity strain and preserve working capital.")
+            
+            # Value Engineering
+            if total_budget > 0 and (total_development_all / total_budget) > 0.85:
+                recommendations.append("Initiate immediate value-engineering review on remaining unprocured line items to compress CAPEX variance and defend profit margins.")
+                
+            # Labor Milestone Indexing
+            if labor_total_period > 1000000:
+                recommendations.append("Deploy performance-gated capital releases for labor contracts, indexing cash outflow strictly against verified physical site milestones.")
+            
+            # Material Forward-Purchasing / Hedging
+            materials = ["Cement", "Blocks", "Iron Rods", "Sand", "Gravel"]
+            for m in materials:
+                m_cost = sum(float(e.get("amount") or 0) for e in p_exp_all if m.lower() in (e.get("title") or "").lower())
+                if m_cost > 500000:
+                    recommendations.append(f"Execute bulk forward-purchasing contracts for {m} to hedge against impending inflationary unit-cost spikes and optimize economies of scale.")
+
             analytics.append({
                 "name": name,
                 "draft_id": draft_id,
                 "location": data["location"],
                 "total_plots": total_plots,
-                "plots_sold": total_plots_sold,
+                "plots_sold": total_plots_sold_all,
                 "plots_available": plots_available,
+                "financials": financials,
+                "breakdown": expense_breakdown,
                 "is_draft": data["is_draft"],
-                "variations": data["variations"],
-                "financials": {
-                    "acquisition_cost": acquisition,
-                    "expense_breakdown": expense_breakdown,
-                    "expense_history": sorted(p_exp, key=lambda x: x.get("expense_date", ""), reverse=True),
-                    "total_development": total_development,
-                    "total_development_paid": total_dev_paid,
-                    "total_investment": total_investment,
-                    "total_paid_outflow": total_paid_outflow,
-                    "revenue_invoiced": revenue_invoiced,
-                    "revenue_collected": revenue_collected,
-                    "inventory_value": inventory_value,
-                    "projected_total_revenue": projected_total_revenue,
-                    "net_profit_actual": net_profit_actual,
-                    "net_profit_projected": net_profit_projected,
-                    "roi_percent": round(roi_actual, 1),
-                    "roi_projected": round(roi_projected, 1)
-                }
+                "pareto_drivers": pareto_items[:5],
+                "pareto_count": len(pareto_items),
+                "risks": risks,
+                "recommendations": recommendations[:3],
+                "variations": data["variations"]
             })
             
         return sorted(analytics, key=lambda x: x["is_draft"], reverse=True)

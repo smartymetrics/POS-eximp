@@ -22,17 +22,24 @@ logger = logging.getLogger(__name__)
 templates = Jinja2Templates(directory="templates")
 
 @router.get("/procurement-dashboard", response_class=HTMLResponse)
-async def procurement_dashboard(request: Request, current_admin=Depends(require_roles(["super_admin"]))):
+async def procurement_dashboard(
+    request: Request, 
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_admin=Depends(require_roles(["super_admin"]))
+):
     """
     Estate Development & Procurement Dashboard.
     Only accessible by Super Admins.
     """
-    analytics = await ReportService.get_procurement_analytics()
+    analytics = await ReportService.get_procurement_analytics(start_date, end_date)
     return templates.TemplateResponse("procurement_dashboard.html", {
         "request": request,
         "admin": current_admin,
         "analytics": analytics
     })
+
+
 
 # ─── WHT 2025 HELPER ──────────────────────────────────────────
 def calculate_wht_2025(amount: Decimal, category: str, has_tin: bool = True, is_resident: bool = True) -> dict:
@@ -1503,126 +1510,210 @@ async def import_procurement_expenses(
     estate_draft_id: Optional[str] = Form(None),
     current_admin=Depends(require_roles(["super_admin"]))
 ):
+    """
+    Intelligent procurement import engine.
+    Detects section headers, metadata, and maps non-standard vendor columns.
+    """
     db = get_db()
     content = await file.read()
     
     try:
-        # Load all sheets if Excel
+        # Load data
         if file.filename.endswith('.csv'):
-            sheets = {'Sheet1': pd.read_csv(io.BytesIO(content), header=None)}
+            df = pd.read_csv(io.BytesIO(content), header=None).fillna('')
         else:
-            excel_file = pd.ExcelFile(io.BytesIO(content))
-            sheets = {name: excel_file.parse(name, header=None) for name in excel_file.sheet_names}
+            df = pd.read_excel(io.BytesIO(content), header=None).fillna('')
         
         all_records = []
-        keywords = {
+        current_category = "General"
+        project_metadata = {}
+        mapping = {}
+        mapping_header_row_idx = -1
+        
+        # KEYWORD DEFINITIONS
+        section_keywords = ['QUOTATION FOR', 'WORKS', 'SECTION', 'CATEGORY', 'PROPOSAL']
+        header_keywords = {
             'title': ['item', 'description', 'particulars', 'title', 'name'],
-            'amount': ['total', 'amount', 'price', 'cost'],
-            'unit_price': ['unit price', 'rate', 'unit cost'],
+            'amount': ['total cost', 'total amount', 'amount', 'grand total', 'final cost'],
+            'unit_price': ['unit price', 'rate', 'unit cost', 'price per'],
             'paid': ['paid', 'payment', 'actual'],
             'quantity': ['qty', 'quantity', 'units', 'number', 'count'],
-            'duration': ['duration', 'days', 'weeks', 'months', 'period']
+            'duration': ['duration', 'days', 'weeks', 'months', 'period'],
+            'budget': ['budget', 'estimate', 'allocation'],
+            'vendor': ['vendor', 'supplier', 'contractor', 'company']
+        }
+        meta_keywords = {
+            'location': ['location', 'site', 'project'],
+            'date': ['date', 'quotation date'],
+            'company': ['company', 'vendor', 'contractor']
         }
 
-        for sheet_name, df in sheets.items():
-            current_category = f"Imported ({sheet_name})"
-            mapping = {}
-            mapping_header_row = None
+        # PASS 1: SCAN FOR METADATA & DATA
+        for i, row in df.iterrows():
+            row_list = [str(v).strip() for v in row]
+            row_text = ' '.join([v for v in row_list if v]).upper()
             
-            for i, row in df.iterrows():
-                # --- HEURISTIC 1: Check if this row is a HEADER ---
-                temp_mapping = {}
-                for target, aliases in keywords.items():
-                    for idx, val in enumerate(row):
-                        clean_val = str(val).lower().strip()
-                        if any(a in clean_val for a in aliases):
-                            temp_mapping[target] = idx
-                            break
-                
-                # If we found at least Title and Amount, this is a (new) header
-                if 'title' in temp_mapping and 'amount' in temp_mapping:
-                    mapping = temp_mapping
-                    mapping_header_row = row
-                    continue # Skip the header row itself
-                
-                # --- HEURISTIC 2: If we have a mapping, try to extract DATA ---
-                if mapping:
-                    title_idx = mapping.get('title')
-                    amount_idx = mapping.get('amount')
-                    paid_idx = mapping.get('paid')
-                    qty_idx = mapping.get('quantity')
-                    dur_idx = mapping.get('duration')
-                    unit_idx = mapping.get('unit_price')
-                    
-                    title_val = row[title_idx] if title_idx is not None else None
-                    amount_val = row[amount_idx] if amount_idx is not None else None
-                    paid_val = row[paid_idx] if paid_idx is not None else 0
-                    
-                    if pd.isnull(title_val) or str(title_val).strip() == '':
-                        continue
-                        
-                    title = str(title_val).strip()
-                    
-                    # Clean amount
-                    amount = 0
-                    try:
-                        if pd.notnull(amount_val):
-                            clean_amt = str(amount_val).replace('₦', '').replace(',', '').strip()
-                            amount = float(clean_amt) if clean_amt and clean_amt != 'nan' else 0
-                    except: pass
-                    
-                    # Category Header Detection (Title but no amount)
-                    if title and amount == 0:
-                        current_category = title
-                        continue
-                        
-                    if title and amount > 0:
-                        # Capture Metadata using actual header names from the mapping row
-                        extra_metadata = {}
-                        
-                        if qty_idx is not None and pd.notnull(row[qty_idx]): extra_metadata["Quantity"] = row[qty_idx]
-                        if dur_idx is not None and pd.notnull(row[dur_idx]): extra_metadata["Duration"] = row[dur_idx]
-                        if unit_idx is not None and pd.notnull(row[unit_idx]): extra_metadata["Unit Price"] = row[unit_idx]
+            # 1. Extract Project Metadata (from top rows)
+            if i < 15: # Usually in header
+                for key, aliases in meta_keywords.items():
+                    if key not in project_metadata:
+                        for alias in aliases:
+                            if alias.upper() in row_text:
+                                # Try to get value from next cell or after colon
+                                for cell in row_list:
+                                    if alias.upper() in cell.upper() and ':' in cell:
+                                        val = cell.split(':', 1)[1].strip()
+                                        if key == 'date':
+                                            try:
+                                                std_date = pd.to_datetime(val, dayfirst=True, errors='coerce')
+                                                if not pd.isna(std_date):
+                                                    val = std_date.strftime('%Y-%m-%d')
+                                            except: pass
+                                        project_metadata[key] = val
+                                        break
+                                if key not in project_metadata:
+                                    for cell in row_list:
+                                        if found_alias and cell:
+                                            val = cell
+                                            if key == 'date':
+                                                # Standardize Date: DD/MM/YYYY -> YYYY-MM-DD
+                                                try:
+                                                    # Try common formats, dayfirst=True is critical for DD/MM/YYYY
+                                                    std_date = pd.to_datetime(val, dayfirst=True, errors='coerce')
+                                                    if not pd.isna(std_date):
+                                                        val = std_date.strftime('%Y-%m-%d')
+                                                except: pass
+                                            project_metadata[key] = val
+                                            break
+                                        if alias.upper() in cell.upper():
+                                            found_alias = True
+            
+            # 2. Detect Section Headers (e.g. "FENCING QUOTATION")
+            # If row has text but very few columns filled, it might be a section
+            non_empty_cells = [v for v in row_list if v and v != 'nan']
+            if 1 <= len(non_empty_cells) <= 2:
+                if any(k in row_text for k in section_keywords):
+                    current_category = ' '.join(non_empty_cells).title()
+                    # Reset mapping for new section if headers repeat
+                    mapping = {} 
+                    continue
 
-                        # Capture everything else using original headers
-                        for idx, val in enumerate(row):
-                            if idx in mapping.values(): continue
-                            if pd.isnull(val) or str(val).strip() == '': continue
-                            
-                            try:
-                                header_name = str(mapping_header_row[idx]).strip()
-                                if not header_name or header_name == 'nan': header_name = f"Info_{idx}"
-                                extra_metadata[header_name] = val
-                            except:
-                                extra_metadata[f"Field_{idx}"] = val
-                        
-                        record = {
-                            "created_by": current_admin['sub'],
-                            "property_id": property_id,
-                            "estate_draft_id": estate_draft_id,
-                            "title": title,
-                            "amount": amount,
-                            "category": current_category,
-                            "metadata": extra_metadata
-                        }
-                        
-                        # Clean paid
-                        paid = 0
-                        try:
-                            if pd.notnull(paid_val):
-                                clean_paid = str(paid_val).replace('₦', '').replace(',', '').strip()
-                                paid = float(clean_paid) if clean_paid and clean_paid != 'nan' else 0
-                        except: pass
-                        
-                        record["amount_paid"] = paid
-                        if paid >= amount - 1: record['status'] = 'paid'
-                        elif paid > 0: record['status'] = 'partial'
-                        else: record['status'] = 'pending'
-                        
-                        all_records.append(record)
+            # 3. Detect Table Headers (S/N, Description, etc.)
+            temp_mapping = {}
+            for target, aliases in header_keywords.items():
+                for idx, val in enumerate(row_list):
+                    clean_val = val.lower()
+                    if any(a in clean_val for a in aliases):
+                        temp_mapping[target] = idx
+                        break
+            
+            if 'title' in temp_mapping and 'amount' in temp_mapping:
+                mapping = temp_mapping
+                mapping_header_row_idx = i
+                continue
+
+            # 4. Extract Data Rows
+            if mapping and i > mapping_header_row_idx:
+                title_idx = mapping.get('title')
+                amount_idx = mapping.get('amount')
+                
+                if title_idx is None or amount_idx is None: continue
+                
+                title_val = row_list[title_idx]
+                amount_val = row_list[amount_idx]
+                
+                if not title_val or title_val.lower() in ['total', 'grand total', 'subtotal', 'nan']:
+                    continue
+                
+                # S/N Check (often the first cell is numeric for data rows)
+                first_cell = row_list[0]
+                if not first_cell.isdigit() and len(non_empty_cells) < 3:
+                    # Might be a spacer or sub-header
+                    continue
+
+                # Parse numeric amount
+                try:
+                    amount = float(str(amount_val).replace('₦', '').replace(',', '').strip())
+                except:
+                    continue # Skip if no valid amount
+                
+                if amount <= 0: continue
+
+                # Parse budget if exists
+                budget = 0
+                if mapping.get('budget') is not None:
+                    try:
+                        budget_val = row_list[mapping['budget']]
+                        budget = float(str(budget_val).replace('₦', '').replace(',', '').strip())
+                    except: pass
+                
+                # Vendor detection
+                vendor_name = project_metadata.get('company')
+                if mapping.get('vendor') is not None:
+                    vendor_name = row_list[mapping['vendor']]
+
+                # Build Metadata
+                extra_metadata = {
+                    "Import Source": file.filename,
+                    "Project Location": project_metadata.get('location', 'Unknown'),
+                    "Quotation Date": project_metadata.get('date', 'Unknown')
+                }
+                
+                # Standardize key fields in metadata for frontend badges
+                if mapping.get('quantity') is not None:
+                    extra_metadata["Quantity"] = row_list[mapping['quantity']]
+                if mapping.get('duration') is not None:
+                    extra_metadata["Duration"] = row_list[mapping['duration']]
+                if mapping.get('unit_price') is not None:
+                    extra_metadata["Unit Price"] = row_list[mapping['unit_price']]
+                
+                # Capture all other columns as generic metadata
+                for idx, val in enumerate(row_list):
+                    if idx in mapping.values() or not val or val == 'nan': continue
+                    try:
+                        header_name = str(df.iloc[mapping_header_row_idx, idx]).strip()
+                        if not header_name or header_name == 'nan': header_name = f"Field_{idx}"
+                        extra_metadata[header_name] = val
+                    except:
+                        extra_metadata[f"Col_{idx}"] = val
+
+                # Clean paid
+                paid = 0
+                if mapping.get('paid') is not None:
+                    try:
+                        paid_val = row_list[mapping['paid']]
+                        paid = float(str(paid_val).replace('₦', '').replace(',', '').strip())
+                    except: pass
+
+                # Final Date Validation
+                final_date = project_metadata.get('date')
+                try:
+                    # Ensure it's in YYYY-MM-DD
+                    valid_date = pd.to_datetime(final_date, dayfirst=True, errors='coerce')
+                    if pd.isna(valid_date):
+                        final_date = datetime.now().strftime('%Y-%m-%d')
+                    else:
+                        final_date = valid_date.strftime('%Y-%m-%d')
+                except:
+                    final_date = datetime.now().strftime('%Y-%m-%d')
+
+                all_records.append({
+                    "created_by": current_admin['sub'],
+                    "property_id": property_id,
+                    "estate_draft_id": estate_draft_id,
+                    "title": title_val,
+                    "amount": amount,
+                    "budget": budget or amount, # Default budget to amount if missing
+                    "category": current_category,
+                    "metadata": extra_metadata,
+                    "amount_paid": paid,
+                    "vendor_name": vendor_name,
+                    "status": "paid" if paid >= amount - 1 and amount > 0 else ("partial" if paid > 0 else "pending"),
+                    "expense_date": final_date
+                })
 
         if not all_records:
-            raise HTTPException(status_code=400, detail="No valid records found in any sheets")
+            raise HTTPException(status_code=400, detail="No valid records found. Ensure your file has 'Description' and 'Amount' columns.")
 
         try:
             res = await db_execute(lambda: db.table("procurement_expenses").insert(all_records).execute())
@@ -1633,12 +1724,35 @@ async def import_procurement_expenses(
                 res = await db_execute(lambda: db.table("procurement_expenses").insert(all_records).execute())
             else:
                 raise insert_err
-
-        return {"status": "success", "imported": len(res.data) if res.data else 0}
+        
+        return {
+            "status": "success", 
+            "imported": len(res.data) if res.data else 0,
+            "metadata": project_metadata
+        }
         
     except Exception as e:
-        logger.error(f"Import failed: {e}")
-        raise HTTPException(status_code=400, detail=f"Failed to process file: {str(e)}")
+        logger.error(f"Procurement Import Error: {e}")
+        raise HTTPException(status_code=400, detail=f"Import failed: {str(e)}")
+
+@router.delete("/procurement-expenses/wipe")
+async def wipe_procurement_ledger(
+    property_id: Optional[str] = Query(None),
+    estate_draft_id: Optional[str] = Query(None),
+    current_admin=Depends(require_roles(["super_admin"]))
+):
+    db = get_db()
+    if not property_id and not estate_draft_id:
+        raise HTTPException(status_code=400, detail="Must provide property_id or estate_draft_id")
+    
+    query = db.table("procurement_expenses").delete()
+    if property_id:
+        query = query.eq("property_id", property_id)
+    else:
+        query = query.eq("estate_draft_id", estate_draft_id)
+        
+    res = await db_execute(lambda: query.execute())
+    return {"status": "success", "wiped": len(res.data) if res.data else 0}
 
 # --- ESTATE DRAFTS & PIPELINE ---
 from models import EstateDraftCreate
@@ -1659,6 +1773,14 @@ async def list_estate_drafts(current_admin=Depends(require_roles(["super_admin"]
     db = get_db()
     res = await db_execute(lambda: db.table("estate_drafts").select("*").order("created_at", desc=True).execute())
     return res.data
+
+@router.patch("/estates/{draft_id}")
+async def update_estate_draft(draft_id: str, data: dict, current_admin=Depends(require_roles(["super_admin"]))):
+    db = get_db()
+    res = await db_execute(lambda: db.table("estate_drafts").update(data).eq("id", draft_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Draft not found")
+    return res.data[0]
 
 @router.post("/estates/{draft_id}/publish")
 async def publish_estate(draft_id: str, current_admin=Depends(require_roles(["super_admin"]))):
@@ -1689,9 +1811,11 @@ async def publish_estate(draft_id: str, current_admin=Depends(require_roles(["su
             "location": draft['location'],
             "description": "Outright Payment Plan",
             "plot_size_sqm": size,
+            "plot_size_sqm": size,
             "total_price": outright,
             "total_plots": var['total_plots'],
             "acquisition_cost": var.get('acquisition_cost', 0),
+            "budget": float(draft.get('total_budget', 0)) if not created_prop_ids else 0, # Put budget on the first variation only to avoid double counting
             "is_active": True
         }
         o_res = await db_execute(lambda: db.table("properties").insert(outright_payload).execute())

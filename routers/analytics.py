@@ -9,7 +9,19 @@ from models import (
 )
 from utils import resolve_invoice_status
 
+from routers.auth import verify_token, require_roles
+from report_service import ReportService
+
 router = APIRouter()
+
+@router.get("/procurement")
+async def get_procurement_analytics_api(
+    start_date: Optional[str] = None,
+    end_date: Optional[str] = None,
+    current_admin=Depends(require_roles(["super_admin"]))
+):
+    """JSON API for Procurement Analytics."""
+    return await ReportService.get_procurement_analytics(start_date, end_date)
 
 def get_previous_period(start: date, end: date):
     delta = end - start

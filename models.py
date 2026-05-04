@@ -692,6 +692,8 @@ class ProcurementExpenseCreate(BaseModel):
     vendor_name: Optional[str] = None
     vendor_id: Optional[str] = None
     expense_date: Optional[date] = None
+    budget: Optional[Decimal] = 0
+    metadata: Optional[dict] = None
     notes: Optional[str] = None
 
 
@@ -706,4 +708,5 @@ class EstateDraftCreate(BaseModel):
     name: str
     location: str
     description: Optional[str] = None
-    variations: List[EstateVariation]
+    total_budget: Optional[Decimal] = 0
+    variations: List[EstateVariation] = []
