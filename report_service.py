@@ -392,7 +392,7 @@ class ReportService:
         expenditures = exp_res.data or []
         
         # 4. Fetch all revenue (invoices)
-        inv_res = supabase.table("invoices").select("property_id, amount, amount_paid").neq("status", "voided").execute()
+        inv_res = supabase.table("invoices").select("property_id, amount, amount_paid, quantity").neq("status", "voided").execute()
         invoices = inv_res.data or []
         
         estates_map = {}
@@ -415,7 +415,7 @@ class ReportService:
             
             if estate_name not in estates_map:
                 estates_map[estate_name] = {
-                    "ids": [],
+                    "ids": set(),
                     "location": p["location"],
                     "acquisition_cost": 0,
                     "total_plots": 0,
@@ -424,7 +424,7 @@ class ReportService:
                 }
             
             # Add to IDs for expense matching
-            estates_map[estate_name]["ids"].append(str(p["id"]))
+            estates_map[estate_name]["ids"].add(str(p["id"]))
             
             # Check if this size variation already exists in our map
             existing_var = next((v for v in estates_map[estate_name]["variations"] if v["base_name"] == base_part), None)
@@ -436,38 +436,49 @@ class ReportService:
                     "size": float(p.get("plot_size_sqm") or 0),
                     "outright_id": None,
                     "installment_id": None,
+                    "outright_ids": [],
+                    "installment_ids": [],
                     "outright_price": 0,
                     "installment_price": 0,
-                    "plots_total": int(p.get("total_plots") or 0),
-                    "acquisition_cost": float(p.get("acquisition_cost") or 0)
+                    "plots_total": 0,
+                    "acquisition_cost": 0
                 }
                 estates_map[estate_name]["variations"].append(var_data)
                 existing_var = var_data
-                
-                # Update estate totals once per variation
-                estates_map[estate_name]["acquisition_cost"] += var_data["acquisition_cost"]
-                estates_map[estate_name]["total_plots"] += var_data["plots_total"]
+            
+            # Sum totals for every property in this variation
+            plots = int(p.get("total_plots") or 0)
+            acq = float(p.get("acquisition_cost") or 0)
+            existing_var["plots_total"] += plots
+            existing_var["acquisition_cost"] += acq
+            estates_map[estate_name]["total_plots"] += plots
+            estates_map[estate_name]["acquisition_cost"] += acq
 
             # Map the specific plan to the variation
             # We check both the name suffix AND the description content
             is_installment = "(Installment)" in p_name or "installment" in p_desc
             
             if is_installment:
-                existing_var["installment_id"] = str(p["id"])
-                existing_var["installment_price"] = float(p.get("total_price") or 0)
+                id_str = str(p["id"])
+                existing_var["installment_ids"].append(id_str)
+                if not existing_var["installment_id"]: existing_var["installment_id"] = id_str
+                # Keep the highest price as the reference for installment
+                existing_var["installment_price"] = max(existing_var["installment_price"], float(p.get("total_price") or 0))
             else:
-                # Default to outright if not marked as installment
-                existing_var["outright_id"] = str(p["id"])
-                existing_var["outright_price"] = float(p.get("total_price") or 0)
-                # Primary ID for internal mapping
-                existing_var["id"] = str(p["id"]) 
+                id_str = str(p["id"])
+                existing_var["outright_ids"].append(id_str)
+                if not existing_var["outright_id"]: existing_var["outright_id"] = id_str
+                # Keep the highest price as the reference for outright (standard price)
+                existing_var["outright_price"] = max(existing_var["outright_price"], float(p.get("total_price") or 0))
+                # Primary ID for internal mapping (use the first one found)
+                if "id" not in existing_var: existing_var["id"] = id_str
 
         # Process Drafts
         for d in drafts:
             name = d["name"]
             if name not in estates_map:
                 estates_map[name] = {
-                    "ids": [],
+                    "ids": set(),
                     "draft_id": str(d["id"]),
                     "location": d["location"],
                     "acquisition_cost": 0,
@@ -515,9 +526,10 @@ class ReportService:
             inventory_value = 0
             total_plots_sold = 0
             for v in data["variations"]:
-                # Count sales for BOTH IDs in this variation
-                relevant_ids = [v.get("outright_id"), v.get("installment_id")]
-                sold_this_var = len([i for i in p_inv if str(i.get("property_id")) in relevant_ids and i.get("property_id")])
+                # Count sales for ALL related property IDs in this variation
+                relevant_ids = set(v.get("outright_ids", []) + v.get("installment_ids", []))
+                # Sum quantities instead of just counting invoices
+                sold_this_var = sum(int(i.get("quantity") or 1) for i in p_inv if str(i.get("property_id")) in relevant_ids and i.get("property_id"))
                 total_plots_sold += sold_this_var
                 
                 avail_this_var = max(0, v["plots_total"] - sold_this_var)

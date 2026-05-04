@@ -60,7 +60,7 @@
           // Apply role classes to body for CSS visibility
           const b = document.body;
           if (window.userRoles.includes('super_admin')) b.classList.add('role-super-admin');
-          if (window.userRoles.includes('admin')) b.classList.add('role-admin');
+          if (window.userRoles.includes('admin') || window.userRoles.includes('super_admin')) b.classList.add('role-admin');
           if (window.userRoles.includes('staff')) b.classList.add('role-staff');
           if (window.userRoles.includes('legal')) b.classList.add('role-lawyer');
 
@@ -4753,8 +4753,8 @@
                 <button class="action-btn" onclick="downloadInvoicePDF(this, '${inv.id}', 'invoice', '${inv.invoice_number}')">Invoice</button>
                 ${inv.amount_paid > 0 ? `<button class="action-btn" onclick="downloadInvoicePDF(this, '${inv.id}', 'receipt', '${inv.invoice_number}')">Receipt</button>` : ''}
                 <button class="action-btn" onclick="downloadInvoicePDF(this, '${inv.id}', 'statement', '${inv.invoice_number}')">Statement</button>
-                ${['admin', 'lawyer'].includes(currentUserRole) ? `<button class="action-btn" style="border-color:#9b59b6; color:#8e44ad;" onclick="openContractStatus('${inv.id}')">Contract</button>` : ''}
-                ${currentUserRole === 'admin' ? `<button class="action-btn" style="color:var(--red);border-color:#feb2b2;" onclick="openVoidModal('${inv.id}')">Void</button>` : ''}
+                ${['admin', 'super_admin', 'lawyer'].includes(currentUserRole) ? `<button class="action-btn" style="border-color:#9b59b6; color:#8e44ad;" onclick="openContractStatus('${inv.id}')">Contract</button>` : ''}
+                ${['admin', 'super_admin'].includes(currentUserRole) ? `<button class="action-btn" style="color:var(--red);border-color:#feb2b2;" onclick="openVoidModal('${inv.id}')">Void</button>` : ''}
               </td>
             </tr>`).join('')}
         </tbody>
@@ -4768,7 +4768,7 @@
         if (!res.ok) throw new Error('Invoice not found');
         const inv = await res.json();
 
-        if (inv.status === 'paid' && currentUserRole !== 'admin') {
+        if (inv.status === 'paid' && !['admin', 'super_admin'].includes(currentUserRole)) {
           return toast('Fully paid invoices cannot be edited by staff.', 'error');
         }
 
@@ -4974,7 +4974,7 @@
         body.due_date = newDue;
       }
 
-      if (currentUserRole === 'admin') {
+      if (['admin', 'super_admin'].includes(currentUserRole)) {
         const termsDropdown = document.getElementById('edit-inv-terms').value;
         body.payment_terms = termsDropdown === 'Custom' ? document.getElementById('edit-inv-terms-custom').value : termsDropdown;
 
@@ -5079,7 +5079,7 @@
                   ${p.payment_type === 'refund' ? `
                     <button class="action-btn" onclick="downloadRefundReceipt('${p.id}', '${inv.invoice_number}', '${p.reference}')">Receipt</button>
                   ` : ''}
-                  ${currentUserRole === 'admin' ? `<button class="action-btn" onclick='openEditPaymentModal(${JSON.stringify(p).replace(/'/g, "&#39;")})'>Edit</button>` : '<span style="color:var(--gray);font-size:11px;">Admin Only</span>'}
+                  ${['admin', 'super_admin'].includes(currentUserRole) ? `<button class="action-btn" onclick='openEditPaymentModal(${JSON.stringify(p).replace(/'/g, "&#39;")})'>Edit</button>` : '<span style="color:var(--gray);font-size:11px;">Admin Only</span>'}
                 </td>
               </tr>
             `).join('')}
@@ -5731,9 +5731,10 @@
       document.getElementById('profile-email-display').textContent = admin.email;
       document.getElementById('profile-since').textContent = `Member since ${new Date(admin.created_at).toLocaleDateString('en-NG', { year: 'numeric', month: 'long' })}`;
       document.getElementById('profile-name-input').value = admin.full_name;
-      document.getElementById('profile-role-badge').textContent = admin.role === 'admin' ? '⭐ Admin' : 'Staff';
-      document.getElementById('profile-role-badge').style.background = admin.role === 'admin' ? 'var(--gold-light)' : '#ebf5fb';
-      document.getElementById('profile-role-badge').style.color = admin.role === 'admin' ? 'var(--gold-dark)' : '#2471a3';
+      const isAdm = ['admin', 'super_admin'].includes(admin.role);
+      document.getElementById('profile-role-badge').textContent = isAdm ? (admin.role === 'super_admin' ? '💎 Super Admin' : '⭐ Admin') : 'Staff';
+      document.getElementById('profile-role-badge').style.background = isAdm ? (admin.role === 'super_admin' ? '#fee2e2' : 'var(--gold-light)') : '#ebf5fb';
+      document.getElementById('profile-role-badge').style.color = isAdm ? (admin.role === 'super_admin' ? '#991b1b' : 'var(--gold-dark)') : '#2471a3';
     }
 
     async function saveProfileName() {
@@ -6345,7 +6346,7 @@
       const id = document.getElementById('edit-ver-id').value;
       const body = { payment_proof_url: document.getElementById('edit-ver-proof').value };
 
-      if (currentUserRole === 'admin') {
+      if (['admin', 'super_admin'].includes(currentUserRole)) {
         body.deposit_amount = parseFloat(document.getElementById('edit-ver-deposit').value);
         body.payment_date = document.getElementById('edit-ver-date').value;
       }
@@ -6624,7 +6625,7 @@
             </div>
             <div style="display:flex; align-items:center; gap:10px;">
               <span class="status ${w1 ? 'paid' : 'unpaid'}">${w1 ? 'SIGNED' : 'PENDING'}</span>
-              ${w1 && ['admin', 'lawyer'].includes(currentUserRole) ? `<button class="btn btn-danger btn-sm" onclick="confirmRemoveWitness('${w1.id}', 1)">Remove</button>` : ''}
+              ${w1 && ['admin', 'super_admin', 'lawyer'].includes(currentUserRole) ? `<button class="btn btn-danger btn-sm" onclick="confirmRemoveWitness('${w1.id}', 1)">Remove</button>` : ''}
             </div>
           `;
           wList.appendChild(row1);
