@@ -583,7 +583,7 @@
                 <label>4. Payout Information</label>
                 <div class="form-group"
                     style="padding: 20px; background: rgba(196,125,10,0.03); border: 1px solid var(--border); border-radius: 16px;">
-                    <label style="color:var(--brand);">Claim Amount (NGN)</label>
+                    <label style="color:var(--brand);" id="amount-label">Claim Amount (NGN)</label>
                     <div class="input-wrapper">
                         <i class="fas fa-coins"></i>
                         <input type="number" id="claim_amount" required step="0.01" placeholder="0.00">
@@ -767,6 +767,7 @@
                 setSubTab(subTab);
             } else if (tab === 'partner') {
                 invSection.classList.remove('hidden');
+                setSubTab('partner'); // Refresh label
             }
             validateLookupState();
         }
@@ -787,6 +788,13 @@
                 remarksEl.classList.toggle('hidden', isOffice);
                 officeSelectEl.classList.toggle('hidden', !isOffice);
                 if (isOffice) remarksEl.value = ""; // Clear textarea if switching to office
+            }
+
+            // Toggle Label Text based on context
+            const labelEl = document.getElementById('amount-label');
+            if (labelEl) {
+                const isCommission = (currentTab === 'partner' || (currentTab === 'disbursement' && subTab === 'staff_commission'));
+                labelEl.innerText = isCommission ? "Enter Amount Paid by Client (NGN)" : "Claim Amount (NGN)";
             }
         }
 

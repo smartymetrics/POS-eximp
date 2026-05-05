@@ -840,6 +840,9 @@ async def submit_payout_claim_from_portal(
     Now supports initial deposit vs instalment differentiation and rep dispute escalation.
     """
     db = get_db()
+    
+    # Default status logic
+    final_status = "paid" if is_already_paid else "pending_verification"
 
     # ── Validate dispute submission ──
     if is_dispute and not dispute_reason:
@@ -909,6 +912,13 @@ async def submit_payout_claim_from_portal(
         v_link = await db_execute(lambda: db.table("vendors").select("admin_id").eq("email", payee_email).not_.is_("admin_id", "null").execute())
         if v_link.data:
             requester_id = v_link.data[0]['admin_id']
+    
+    # Final safety check: if we still don't have requester_id, try a direct email lookup on admins table one last time
+    if not requester_id:
+        final_staff_check = await db_execute(lambda: db.table("admins").select("id").eq("email", payee_email).execute())
+        if final_staff_check.data:
+            requester_id = final_staff_check.data[0]['id']
+
     if not requester_id:
         inv_res = await db_execute(lambda: db.table("portal_invites").select("invited_by").eq("email", payee_email).execute())
         if inv_res.data:
@@ -939,6 +949,40 @@ async def submit_payout_claim_from_portal(
         if inv_res.data:
             inv = inv_res.data[0]
             linked_invoice_id = inv["id"]
+
+            # --- SMART ANALYSIS: Flagging instead of Blocking to avoid 'Glitches' ---
+            
+            # 1. Check Dashboard for existing verified payments
+            check_earn = await db_execute(lambda: db.table("commission_earnings")
+                .select("id, created_at, is_paid")
+                .eq("invoice_id", linked_invoice_id)
+                .eq("payment_amount", claim_amount)
+                .execute())
+            
+            if check_earn.data:
+                match = check_earn.data[0]
+                is_high_risk = True # Mark for attention
+                verified_date = match["created_at"][:10]
+                status_label = "PAID" if match["is_paid"] else "VERIFIED/UNPAID"
+                risk_notes.append(
+                    f"🔍 SYSTEM MATCH: A dashboard record for this amount (₦{claim_amount:,.0f}) was already {status_label} on {verified_date}. "
+                    "HR should verify if this is a duplicate or a new instalment."
+                )
+
+            # 2. Check Portal for existing claims (Pending/Approved)
+            check_portal = await db_execute(lambda: db.table("expenditure_requests")
+                .select("id, status, created_at")
+                .eq("invoice_id", linked_invoice_id)
+                .eq("category", "Sales Commission")
+                .neq("status", "rejected")
+                .execute())
+            
+            if check_portal.data:
+                is_high_risk = True
+                risk_notes.append(
+                    f"🚩 POTENTIAL DUPLICATE: {len(check_portal.data)} other claim(s) exist in the portal for this invoice. "
+                    "Please cross-check before approving."
+                )
 
             # ── Rep dispute escalation ──
             if is_dispute:
@@ -1033,8 +1077,8 @@ async def submit_payout_claim_from_portal(
         "wht_amount": float(wht),
         "net_payout_amount": float(net),
         "receipt_url": file_url,
-        "status": "paid" if is_already_paid else "pending_verification",
-        "payout_reference": payout_reference if is_already_paid else None,
+        "status": final_status,
+        "payout_reference": payout_reference if final_status == "paid" else None,
         "paid_at": datetime.now(timezone.utc).isoformat() if is_already_paid else None,
         "is_high_risk": is_high_risk,
         "risk_notes": "\n".join(risk_notes) if risk_notes else None,
@@ -1107,6 +1151,37 @@ async def update_payout_request_status(request_id: str, body: dict, current_admi
         "status": new_status,
         "updated_at": datetime.now(timezone.utc).isoformat(),
     }).eq("id", request_id).execute())
+
+    # --- Notification Bridge ---
+    # Since HR mostly uses the Expenses tab, we ensure this endpoint also triggers notifications
+    # if the claimant is a staff member (requester_id is present).
+    try:
+        from routers.hr import send_notification
+        req_full = await db_execute(lambda: db.table("expenditure_requests")
+            .select("*, vendors(name)").eq("id", request_id).maybe_single().execute())
+        
+        if req_full.data and req_full.data.get("requester_id"):
+            exp = req_full.data
+            requester_id = exp["requester_id"]
+            raw_category = exp.get("category") or ""
+            is_commission = "commission" in raw_category.lower() or "commission" in (exp.get("title") or "").lower()
+            category_label = "Commission Claim" if is_commission else "Reimbursement Claim"
+            amount = exp.get("amount_gross") or 0
+            
+            status_verb = "approved" if new_status == "approved" else "paid" if new_status == "paid" else "rejected"
+            amount_str = f"₦{float(amount):,.0f}"
+            
+            if new_status == "rejected":
+                status_msg = f"❌ Your {category_label} for {amount_str} was declined by HR."
+            elif new_status == "paid":
+                status_msg = f"✅ Your {category_label} for {amount_str} has been paid successfully."
+            else:
+                status_msg = f"📩 Your {category_label} for {amount_str} has been {status_verb}."
+
+            await send_notification(requester_id, "Claim Status Update", status_msg, "expense_update")
+    except Exception as e:
+        print(f"[WARN] Payout notification bridge failed: {e}")
+
     return {"status": "ok", "new_status": new_status}
 
 @router.patch("/requests/{request_id}/void")

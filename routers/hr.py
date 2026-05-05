@@ -3701,19 +3701,32 @@ async def update_expense(expense_id: str, request: Request, current_admin: dict 
         requester_id = exp.get("requester_id") or exp.get("staff_id")
         if requester_id:
             # Rich, human-readable bell notification
-            category   = exp.get("category") or "expense"
+            raw_category = exp.get("category") or ""
+            is_commission = "commission" in raw_category.lower() or "commission" in (exp.get("title") or "").lower()
+            category_label = "Commission Claim" if is_commission else "Reimbursement Claim"
+            
             amount     = exp.get("amount_gross") or exp.get("net_payout_amount") or exp.get("amount") or 0
             approver   = current_admin.get("name") or current_admin.get("sub") or "HR"
-            status_msg = {
-                "approved":       f"✅ Your {category} claim of ₦{float(amount):,.0f} has been approved by {approver}. Payment will be processed soon.",
-                "rejected":       f"❌ Your {category} claim of ₦{float(amount):,.0f} was declined by {approver}. See HR note for details.",
-                "paid":           f"💸 Your {category} reimbursement of ₦{float(exp.get('amount_paid') or amount):,.0f} has been paid out.",
-                "partially_paid": f"💳 A partial payment of ₦{float(exp.get('amount_paid') or 0):,.0f} has been made on your {category} claim.",
-            }.get(new_status, f"Your expense claim status was updated to {new_status}.")
+            
+            # Base messages
+            status_msgs = {
+                "approved":       f"✅ Your {category_label} of ₦{float(amount):,.0f} has been approved by {approver}. Payment will be processed soon.",
+                "rejected":       f"❌ Your {category_label} of ₦{float(amount):,.0f} was declined by {approver}.",
+                "paid":           f"💸 Your {category_label} of ₦{float(exp.get('amount_paid') or amount):,.0f} has been paid out.",
+                "partially_paid": f"💳 A partial payment of ₦{float(exp.get('amount_paid') or 0):,.0f} has been made on your {category_label}.",
+            }
+            
+            status_msg = status_msgs.get(new_status, f"Your {category_label.lower()} status was updated to {new_status}.")
+            
+            # Append HR Note/Reason if provided, especially for rejections
+            if hr_note:
+                status_msg += f" Note: {hr_note}"
+            elif new_status == "rejected":
+                status_msg += " Please check with HR for details."
 
             await send_notification(
                 requester_id,
-                "Expense Claim Update",
+                "Claim Status Update",
                 status_msg,
                 "expense_update"
             )

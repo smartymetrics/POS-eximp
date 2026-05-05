@@ -9911,7 +9911,7 @@ function ExpensesManager() {
                 <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{detail.dispute_reason || "Dispute raised via portal."}</div>
               </div>
             )}
-            {detail.risk_notes && !detail.is_disputed && (
+            {detail.risk_notes && (
               <div style={{ background: "#FFFBEB", border: "1.5px solid #FCD34D", borderRadius: 8, padding: "12px 14px" }}>
                 <div style={{ fontSize: 10, color: "#D97706", textTransform: "uppercase", letterSpacing: 1, marginBottom: 6, fontWeight: 800 }}>⚠ Risk / Fraud Flags</div>
                 <div style={{ fontSize: 12, color: "#374151", lineHeight: 1.6, whiteSpace: "pre-wrap" }}>{detail.risk_notes}</div>
@@ -11818,6 +11818,7 @@ function PublicGuarantorForm() {
   const [submitting, setSubmitting] = useState(false);
   const [companyInfo, setCompanyInfo] = useState({ name: "Company Name", address: "Company Address", rc: "", phone: "", email_addr: "" });
   const [currentGuarantor, setCurrentGuarantor] = useState(1); // which guarantor slot we're filling (1 or 2)
+  const [submission, setSubmission] = useState(null); // Added to track full submission object
 
   // Section A: Employee fields (editable by employee)
   const [empForm, setEmpForm] = useState({
@@ -11933,6 +11934,7 @@ function PublicGuarantorForm() {
       if (data.submission) {
         // RESUME LOGIC
         const s = data.submission;
+        setSubmission(s);
         setEmpForm({
           full_name: s.employee_name || "",
           position: s.position || "",
@@ -11953,6 +11955,7 @@ function PublicGuarantorForm() {
         else if (!s.g2 || !s.g2.signature_url) setPhase("section_b_2");
         else setPhase("success");
       } else {
+        setSubmission(null);
         if (data.staff_info) {
           setEmpForm(f => ({
             ...f,
@@ -12047,17 +12050,21 @@ function PublicGuarantorForm() {
   // ── Shared styling ─────────────────────────────────────────────────────────
   const G = "#C47D0A";
   const inp = {
-    background: "#F8F9FB", border: "1px solid #DDE3EE", color: "#1A2130",
-    padding: "12px 16px", borderRadius: 10, fontSize: 14, outline: "none",
-    fontFamily: "inherit", width: "100%", boxSizing: "border-box",
+    background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "#fff",
+    padding: "14px 18px", borderRadius: 14, fontSize: 14, outline: "none",
+    fontFamily: "inherit", width: "100%", boxSizing: "border-box", transition: "0.3s",
   };
-  const lbl = { fontSize: 11, fontWeight: 700, color: "#6B7280", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 5, display: "block" };
-  const card = { background: "#fff", borderRadius: 16, padding: "28px 32px", boxShadow: "0 4px 24px #00000012", marginBottom: 20 };
-  const sectionTitle = { fontFamily: "'Playfair Display',serif", fontSize: 16, color: G, fontWeight: 700, marginBottom: 6 };
-  const sectionSub = { fontSize: 12, color: "#6B7280", marginBottom: 20 };
+  const lbl = { fontSize: 10, fontWeight: 800, color: "#94A3B8", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 6, display: "block" };
+  const card = {
+    background: "rgba(30, 32, 40, 0.6)", backdropFilter: "blur(20px)",
+    borderRadius: 24, padding: "32px 40px", border: "1px solid rgba(255,255,255,0.05)",
+    boxShadow: "0 40px 100px -20px rgba(0,0,0,0.5)", marginBottom: 24
+  };
+  const sectionTitle = { fontFamily: "'Playfair Display',serif", fontSize: 18, color: "#fff", fontWeight: 700, marginBottom: 4 };
+  const sectionSub = { fontSize: 12, color: "#94A3B8", marginBottom: 24 };
   const sigBox = {
-    border: "1.5px solid #DDE3EE", borderRadius: 10, height: 90, width: "100%",
-    background: "#F8F9FB", cursor: "crosshair", touchAction: "none", display: "block",
+    border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, height: 100, width: "100%",
+    background: "rgba(0,0,0,0.2)", cursor: "crosshair", touchAction: "none", display: "block",
   };
 
   const FormField = ({ label, children, required, gridSpan }) => (
@@ -12068,21 +12075,21 @@ function PublicGuarantorForm() {
   );
 
   const SigBlock = ({ label, sigRef, handlers, hasData }) => (
-    <div>
+    <div style={{ background: "rgba(0,0,0,0.15)", padding: 20, borderRadius: 16, border: "1px solid rgba(255,255,255,0.05)" }}>
       <label style={lbl}>{label} <span style={{ color: "#EF4444" }}>*</span></label>
-      <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+      <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
         <canvas
-          ref={sigRef} style={sigBox}
+          ref={sigRef} style={{ ...sigBox, background: "#fff", filter: "invert(1) contrast(1.1)" }}
           onMouseDown={handlers.start} onMouseMove={handlers.move} onMouseUp={handlers.end} onMouseLeave={handlers.end}
           onTouchStart={handlers.start} onTouchMove={handlers.move} onTouchEnd={handlers.end}
         />
         {hasData && (
-          <button onClick={handlers.clear} style={{ padding: "6px 14px", background: "none", border: "1px solid #DDE3EE", borderRadius: 8, fontSize: 12, color: "#6B7280", cursor: "pointer", whiteSpace: "nowrap" }}>
+          <button onClick={handlers.clear} style={{ padding: "8px 16px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, fontSize: 11, fontWeight: 700, color: "#fff", cursor: "pointer", whiteSpace: "nowrap" }}>
             Clear
           </button>
         )}
       </div>
-      {!hasData && <div style={{ fontSize: 11, color: "#99AABB", marginTop: 4 }}>Draw your signature above</div>}
+      {!hasData && <div style={{ fontSize: 11, color: "#556677", marginTop: 8 }}>Draw your signature in the white area</div>}
     </div>
   );
 
@@ -12101,23 +12108,29 @@ function PublicGuarantorForm() {
 
   // ─── LETTER HEAD ───────────────────────────────────────────────────────────
   const Letterhead = () => (
-    <div style={{ ...card, textAlign: "center", borderTop: `4px solid ${G}`, paddingBottom: 20 }}>
-      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, fontWeight: 900, color: "#1A2130", letterSpacing: 0.5 }}>
-        {companyInfo.name || "[Company Name]"}
-      </div>
-      <div style={{ fontSize: 12, color: "#6B7280", marginTop: 4 }}>
-        {companyInfo.address || "[Company Address]"}
+    <div style={{ ...card, textAlign: "center", background: "#fff", borderTop: `6px solid ${G}`, paddingBottom: 32, boxShadow: "0 20px 60px rgba(0,0,0,0.1)" }}>
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 20 }}>
+        <img src="/static/img/logo.svg" alt="Logo" style={{ height: 65, marginBottom: 16 }} 
+             onError={e => { e.target.src = "https://www.eximps-cloves.com/logo.svg"; }} />
+        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 26, fontWeight: 900, color: "#1A2130", letterSpacing: -0.2, marginBottom: 4 }}>
+          {companyInfo.name || "Eximp & Cloves Infrastructure"}
+        </div>
+        <div style={{ fontSize: 13, color: "#6B7280", maxWidth: 450, margin: "0 auto", lineHeight: 1.6, fontWeight: 500 }}>
+          {companyInfo.address}
+        </div>
       </div>
       {(companyInfo.rc || companyInfo.phone || companyInfo.email_addr) && (
-        <div style={{ fontSize: 11, color: "#99AABB", marginTop: 4 }}>
-          {[companyInfo.rc, companyInfo.phone, companyInfo.email_addr].filter(Boolean).join("  |  ")}
+        <div style={{ display: "flex", justifyContent: "center", gap: 16, fontSize: 11, color: "#99AABB", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>
+          {companyInfo.rc && <span>RC {companyInfo.rc}</span>}
+          {companyInfo.phone && <span>·</span>}
+          {companyInfo.phone && <span>{companyInfo.phone}</span>}
         </div>
       )}
       <div style={{
-        marginTop: 18, padding: "10px 28px", display: "inline-block",
-        background: `${G}12`, border: `1px solid ${G}33`, borderRadius: 8,
+        marginTop: 28, padding: "12px 40px", display: "inline-block",
+        background: `${G}12`, border: `1px solid ${G}20`, borderRadius: 12, color: G
       }}>
-        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 15, fontWeight: 700, color: G, letterSpacing: 1 }}>
+        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 900, letterSpacing: 2 }}>
           EMPLOYEE GUARANTOR'S FORM
         </div>
       </div>
@@ -12156,17 +12169,17 @@ function PublicGuarantorForm() {
     return (
       <div style={wrap}>
         <div style={{ ...container, display: "flex", alignItems: "center", justifyContent: "center", minHeight: "70vh" }}>
-          <div style={{ background: "#fff", borderRadius: 20, padding: 60, textAlign: "center", boxShadow: "0 24px 80px #00000044", width: "100%" }}>
-            <div style={{ width: 80, height: 80, background: "#D1FAE5", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px", fontSize: 36 }}>✓</div>
-            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 28, fontWeight: 900, color: "#0B0C0F", marginBottom: 12 }}>
-              Form Submitted!
+          <div style={{ ...card, textAlign: "center", padding: 60, width: "100%" }}>
+            <div style={{ width: 80, height: 80, background: "rgba(16, 185, 129, 0.1)", border: "1px solid rgba(16, 185, 129, 0.3)", color: "#10B981", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px", fontSize: 36 }}>✓</div>
+            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 32, fontWeight: 900, color: "#fff", marginBottom: 12 }}>
+              Submission Successful
             </div>
-            <div style={{ fontSize: 14, color: "#6B7280", lineHeight: 1.8, marginBottom: 28, maxWidth: 400, margin: "0 auto 28px" }}>
-              Your guarantor form has been submitted successfully and is now under review by the HR team.
-              You will be notified of the outcome via email.
+            <div style={{ fontSize: 14, color: "#94A3B8", lineHeight: 1.8, marginBottom: 32, maxWidth: 420, margin: "0 auto 32px" }}>
+              Your guarantor form has been recorded and is currently being processed by our HR department.
+              You will receive an update via email once the verification is complete.
             </div>
-            <div style={{ fontSize: 12, color: "#99AABB" }}>
-              Submitted: {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}
+            <div style={{ fontSize: 12, color: G, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>
+              Official HR Record · {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}
             </div>
           </div>
         </div>
@@ -12180,14 +12193,14 @@ function PublicGuarantorForm() {
       <div style={wrap}>
         <div style={container}>
           <Letterhead />
-          <div style={{ ...card, textAlign: "center" }}>
-            <div style={{ fontSize: 15, fontWeight: 700, color: "#1A2130", marginBottom: 8 }}>Enter your email address to begin</div>
-            <div style={{ fontSize: 13, color: "#6B7280", marginBottom: 24, lineHeight: 1.6 }}>
-              Enter the email address associated with your employee record to access the guarantor form.
+          <div style={{ ...card, textAlign: "center", paddingTop: 48 }}>
+            <div style={{ fontSize: 18, fontWeight: 700, color: "#fff", marginBottom: 12 }}>Employee Verification</div>
+            <div style={{ fontSize: 14, color: "#94A3B8", marginBottom: 32, lineHeight: 1.6, maxWidth: 400, margin: "0 auto 32px" }}>
+              Please enter your business email to access your personalized guarantor form.
             </div>
             <input
-              style={{ ...inp, marginBottom: 14 }}
-              type="email" placeholder="your.email@company.com"
+              style={{ ...inp, textAlign: "center", fontSize: 16, marginBottom: 16, background: "rgba(255,255,255,0.05)" }}
+              type="email" placeholder="name@eximps-cloves.com"
               value={email} onChange={e => setEmail(e.target.value)}
               onKeyDown={e => e.key === "Enter" && checkEmail()}
             />
@@ -12213,30 +12226,30 @@ function PublicGuarantorForm() {
         <div style={container}>
           <Letterhead />
           <div style={{ ...card, textAlign: "center" }}>
-            <div style={{ width: 60, height: 60, background: "#D1FAE5", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 24 }}>✓</div>
-            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 20, fontWeight: 900, color: "#1A2130", marginBottom: 8 }}>Section A Complete!</div>
-            <div style={{ fontSize: 13, color: "#6B7280", marginBottom: 24, lineHeight: 1.8 }}>
-              Great job. Your details have been saved. Now, please share this **one-click link** with your two guarantors to complete the process.
+            <div style={{ width: 60, height: 60, background: "rgba(16, 185, 129, 0.1)", color: "#10B981", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px", fontSize: 24 }}>✓</div>
+            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, fontWeight: 900, color: "#fff", marginBottom: 12 }}>Employee Details Saved</div>
+            <div style={{ fontSize: 14, color: "#94A3B8", marginBottom: 32, lineHeight: 1.8 }}>
+              Now, please share this **Unique Link** with your two guarantors. They can click it to complete their sections directly.
             </div>
             
-            <div style={{ background: "#F8F9FB", border: "1.5px dashed #DDE3EE", borderRadius: 12, padding: 20, marginBottom: 24 }}>
+            <div style={{ background: "rgba(0,0,0,0.3)", border: "1px dashed rgba(255,255,255,0.15)", borderRadius: 16, padding: 24, marginBottom: 32 }}>
               <div style={lbl}>Your Unique Guarantor Link</div>
-              <div style={{ fontSize: 13, color: G, fontWeight: 700, wordBreak: "break-all", marginTop: 8, marginBottom: 16 }}>{relayLink}</div>
+              <div style={{ fontSize: 14, color: G, fontWeight: 700, wordBreak: "break-all", marginTop: 12, marginBottom: 20 }}>{relayLink}</div>
               <button 
                 onClick={() => { navigator.clipboard.writeText(relayLink); alert("Link copied!"); }}
-                style={{ background: G, color: "#fff", border: "none", padding: "10px 20px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                style={{ background: G, color: "#000", border: "none", padding: "12px 24px", borderRadius: 12, fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
                 Copy Link to Share
               </button>
             </div>
 
-            <div style={{ fontSize: 12, color: "#99AABB" }}>
-              The guarantors will use this link to fill their sections directly without needing your email.
+            <div style={{ fontSize: 12, color: "#556677" }}>
+              The guarantors will use this link to access the form securely.
             </div>
             
             <button 
               onClick={() => setPhase("section_b_1")}
-              style={{ marginTop: 32, background: "none", border: "none", color: G, fontWeight: 700, fontSize: 14, cursor: "pointer", textDecoration: "underline" }}>
-              Continue as Guarantor 1 (if sitting with them) →
+              style={{ marginTop: 40, background: "none", border: "none", color: G, fontWeight: 700, fontSize: 13, cursor: "pointer", textDecoration: "underline", textTransform: "uppercase", letterSpacing: 1 }}>
+              Proceed as Guarantor 1 (if present) →
             </button>
           </div>
         </div>

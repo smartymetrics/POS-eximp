@@ -353,6 +353,43 @@ async def mark_payout(payload: CommissionPayout, background_tasks: BackgroundTas
     rep_obj = rep_obj_res.data
     if rep_obj:
         background_tasks.add_task(send_commission_paid_email, rep_obj, batch.data[0])
+        
+        # --- NEW: Sync with Portal Claim Requests & Send Bell Notification ---
+        from routers.hr import send_notification
+        
+        # 1. Fetch staff admin_id if this rep is a staff member
+        if rep_obj.get("email"):
+            admin_res = await db_execute(lambda: db.table("admins").select("id").eq("email", rep_obj["email"]).execute())
+            if admin_res.data:
+                staff_id = admin_res.data[0]["id"]
+                
+                # 2. Send Bell Notification
+                await send_notification(
+                    staff_id,
+                    "Commission Paid",
+                    f"💸 Good news! A commission payout of ₦{payment_amount:,.2f} has been processed. Reference: {payload.reference}",
+                    "commission_paid"
+                )
+                
+                # 3. Mark any matching Portal Claims (Expenditure Requests) as PAID
+                # Find all invoice IDs in this batch
+                earning_ids = [e["id"] for e in earnings]
+                earning_details = await db_execute(lambda: db.table("commission_earnings").select("invoice_id").in_("id", earning_ids).execute())
+                invoice_ids = list(set([d["invoice_id"] for d in earning_details.data if d.get("invoice_id")]))
+                
+                if invoice_ids:
+                    await db_execute(lambda: db.table("expenditure_requests")
+                        .update({
+                            "status": "paid",
+                            "paid_at": datetime.now().isoformat(),
+                            "paid_by": current_admin["sub"],
+                            "payout_reference": payload.reference,
+                            "hr_note": f"Paid via Commission Payout Batch {batch_id}"
+                        })
+                        .in_("invoice_id", invoice_ids)
+                        .eq("status", "approved") # Only update those already approved
+                        .execute()
+                    )
     
     return {"message": "Payout successful", "batch": batch.data[0], "amount_paid": payment_amount}
 
@@ -426,6 +463,37 @@ async def pay_single_commission(id: str, payload: dict, background_tasks: Backgr
     
     # 6. Send Email
     background_tasks.add_task(send_commission_paid_email, earning["sales_reps"], batch.data[0])
+
+    # --- NEW: Sync with Portal Claim & Send Bell Notification ---
+    from routers.hr import send_notification
+    rep_email = earning["sales_reps"].get("email")
+    if rep_email:
+        admin_res = await db_execute(lambda: db.table("admins").select("id").eq("email", rep_email).execute())
+        if admin_res.data:
+            staff_id = admin_res.data[0]["id"]
+            
+            # 1. Send Bell Notification
+            await send_notification(
+                staff_id,
+                "Commission Paid",
+                f"💸 Your commission of ₦{net_amount:,.2f} for Invoice #{earning['invoices']['invoice_number']} has been paid.",
+                "commission_paid"
+            )
+            
+            # 2. Mark Portal Claim (Expenditure Request) as PAID
+            if earning.get("invoice_id"):
+                await db_execute(lambda: db.table("expenditure_requests")
+                    .update({
+                        "status": "paid",
+                        "paid_at": datetime.now().isoformat(),
+                        "paid_by": current_admin["sub"],
+                        "payout_reference": payload.get("reference"),
+                        "hr_note": "Processed via Commissions dashboard"
+                    })
+                    .eq("invoice_id", earning["invoice_id"])
+                    .in_("status", ["pending", "approved", "pending_verification"])
+                    .execute()
+                )
 
     return {"message": "Payout recorded successfully", "batch_id": batch_id}
 

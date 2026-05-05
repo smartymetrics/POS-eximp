@@ -98,13 +98,27 @@ async def record_payment(
             # Notify rep
             rep_res = await db_execute(lambda: db.table("sales_reps").select("*").eq("id", rep_id).execute())
             if rep_res.data:
+                rep_data = rep_res.data[0]
                 background_tasks.add_task(
                     send_commission_earned_email,
-                    rep=rep_res.data[0],
+                    rep=rep_data,
                     client=client_data,
                     invoice=invoice,
                     earning=earning
                 )
+                
+                # --- NEW: Bell Notification for Portal ---
+                from routers.hr import send_notification
+                if rep_data.get("email"):
+                    admin_check = await db_execute(lambda: db.table("admins").select("id").eq("email", rep_data["email"]).execute())
+                    if admin_check.data:
+                        staff_id = admin_check.data[0]["id"]
+                        await send_notification(
+                            staff_id,
+                            "Commission Earned",
+                            f"✨ You've earned a commission of ₦{net_comm:,.2f} for {client_data.get('full_name')} (Invoice #{invoice.get('invoice_number')}). It is now awaiting payout processing.",
+                            "commission_earned"
+                        )
     # -----------------------------------------------------
 
     background_tasks.add_task(
