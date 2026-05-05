@@ -1,4 +1,4 @@
-import { useState, createContext, useContext, useCallback, useEffect, useRef, Fragment } from "react";
+import React, { useState, createContext, useContext, useCallback, useEffect, useRef, Fragment } from "react";
 import { apiFetch, API_BASE } from "./api";
 
 const ThemeCtx = createContext({ dark: true, toggle: () => { } });
@@ -11875,8 +11875,15 @@ function PublicGuarantorForm() {
   };
   const getPos = (e, canvas) => {
     const rect = canvas.getBoundingClientRect();
-    if (e.touches) return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
-    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
+    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
+    
+    // Scale coordinates back to internal canvas resolution if needed, 
+    // but since we use ctx.scale(dpr, dpr), we must return CSS pixels.
+    return { 
+      x: clientX - rect.left, 
+      y: clientY - rect.top 
+    };
   };
   const makeSigHandlers = (ref, ctx, setCtx, drawing, setDrawing, setHasData) => ({
     start: (e) => {
@@ -11907,7 +11914,10 @@ function PublicGuarantorForm() {
       const pos = getPos(e, canvas);
       ctx.lineTo(pos.x, pos.y); ctx.stroke();
     },
-    end: () => setDrawing(false),
+    end: () => {
+      setDrawing(false);
+      if (ctx) ctx.beginPath(); // Reset path for next stroke
+    },
     clear: () => {
       const canvas = ref.current;
       if (!canvas || !ctx) return;
@@ -12121,14 +12131,19 @@ function PublicGuarantorForm() {
 
   // ─── LETTER HEAD ───────────────────────────────────────────────────────────
   const Letterhead = () => (
-    <div style={{ ...card, textAlign: "center", background: "#fff", borderTop: `6px solid ${G}`, paddingBottom: 32, boxShadow: "0 20px 60px rgba(0,0,0,0.1)" }}>
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 20 }}>
-        <img src="/static/img/logo.svg" alt="Logo" style={{ height: 65, marginBottom: 16 }} 
-             onError={e => { e.target.src = "https://www.eximps-cloves.com/logo.svg"; }} />
-        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 26, fontWeight: 900, color: "#1A2130", letterSpacing: -0.2, marginBottom: 4 }}>
+    <div style={{ ...card, textAlign: "center", background: "#ffffff", borderTop: `8px solid ${G}`, padding: "48px 40px", boxShadow: "0 25px 70px rgba(0,0,0,0.15)", overflow: "hidden", position: "relative" }}>
+      {/* Decorative background element */}
+      <div style={{ position: "absolute", top: -50, right: -50, width: 200, height: 200, background: `${G}08`, borderRadius: "50%" }} />
+      
+      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 24, position: "relative", zIndex: 1 }}>
+        <div style={{ background: "#f8fafc", padding: 12, borderRadius: 16, marginBottom: 20, boxShadow: "0 4px 12px rgba(0,0,0,0.05)" }}>
+          <img src="/static/img/logo.svg" alt="Eximp & Cloves Logo" style={{ height: 60, display: "block" }} 
+               onError={e => { e.target.src = "https://www.eximps-cloves.com/logo.svg"; e.target.style.filter="contrast(1.1)"; }} />
+        </div>
+        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 28, fontWeight: 900, color: "#0F172A", letterSpacing: "-0.5px", marginBottom: 6 }}>
           {companyInfo.name || "Eximp & Cloves Infrastructure"}
         </div>
-        <div style={{ fontSize: 13, color: "#6B7280", maxWidth: 450, margin: "0 auto", lineHeight: 1.6, fontWeight: 500 }}>
+        <div style={{ fontSize: 13, color: "#64748B", maxWidth: 480, margin: "0 auto", lineHeight: 1.6, fontWeight: 500, fontStyle: "italic" }}>
           {companyInfo.address}
         </div>
       </div>

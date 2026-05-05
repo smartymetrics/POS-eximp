@@ -693,7 +693,7 @@ async def request_leave(req: LeaveRequestCreate, current_admin: dict = Depends(v
     staff_id = current_admin["sub"]
     
     # 1. Fetch User's Leave Quota
-    profile_res = await db_execute(lambda: db.table("staff_profiles").select("leave_quota").eq("staff_id", staff_id).execute())
+    profile_res = await db_execute(lambda: db.table("staff_profiles").select("leave_quota").eq("admin_id", staff_id).execute())
     leave_quota = 20
     if profile_res.data and profile_res.data[0].get("leave_quota") is not None:
         leave_quota = profile_res.data[0]["leave_quota"]

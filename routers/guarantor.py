@@ -209,9 +209,10 @@ async def check_public_token(token: str, email: str):
         staff_res = await db_execute(lambda: db.table("admins").select("id, full_name, role, department").eq("email", email).execute())
         staff_info = staff_res.data[0] if staff_res.data else None
         if staff_info:
-            profile_res = await db_execute(lambda: db.table("staff_profiles").select("staff_id").eq("admin_id", staff_info["id"]).execute())
-            staff_info["staff_id"] = profile_res.data[0]["staff_id"] if profile_res.data else ""
-            staff_info["job_title"] = staff_info.get("role", "")
+            profile_res = await db_execute(lambda: db.table("staff_profiles").select("*").eq("admin_id", staff_info["id"]).execute())
+            profile = profile_res.data[0] if profile_res.data else {}
+            staff_info["staff_id"] = profile.get("staff_id") or "" # Fallback if column still missing in some envs
+            staff_info["job_title"] = profile.get("job_title") or staff_info.get("role", "")
 
     return {
         "status": "ok", 
