@@ -1,4 +1,4 @@
-import { useState, createContext, useContext, useCallback, useEffect, useRef } from "react";
+import { useState, createContext, useContext, useCallback, useEffect, useRef, Fragment } from "react";
 import { apiFetch, API_BASE } from "./api";
 
 const ThemeCtx = createContext({ dark: true, toggle: () => { } });
@@ -12141,7 +12141,7 @@ function PublicGuarantorForm() {
   const Progress = () => (
     <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 28 }}>
       {steps.map((s, i) => (
-        <React.Fragment key={s}>
+        <Fragment key={s}>
           <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: i < steps.length - 1 ? "none" : 1 }}>
             <div style={{
               width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
@@ -12159,7 +12159,7 @@ function PublicGuarantorForm() {
           {i < steps.length - 1 && (
             <div style={{ flex: 1, height: 2, background: i < phaseNum ? G : "#2D2F36", margin: "0 4px", marginBottom: 18 }} />
           )}
-        </React.Fragment>
+        </Fragment>
       ))}
     </div>
   );
