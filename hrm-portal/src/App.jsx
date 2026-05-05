@@ -142,7 +142,7 @@ const GS = dark => {
     /* Inputs */
     .inp{background:${C.input};border:1px solid ${C.border};color:${C.text};padding:12px 18px;border-radius:12px;font-size:14px;outline:none;font-family:inherit;width:100%;transition:all .25s ease;}
     .inp:focus{border-color:${G};background:${dark ? "#15181C" : "#FFFFFF"};box-shadow:0 0 0 4px ${G}14;}
-    select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%23${G.replace("#","")}' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center;background-size:18px;padding-right:48px;}
+    select.inp{appearance:none;cursor:pointer;background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%23${G.replace("#", "")}' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");background-repeat:no-repeat;background-position:right 16px center;background-size:18px;padding-right:48px;}
     select.inp option{background:${dark ? "#1A1C24" : "#FFFFFF"};color:${C.text};padding:12px;}
     select.inp optgroup{background:${dark ? "#111317" : "#F4F6FA"};color:${G};font-weight:800;font-size:10px;text-transform:uppercase;letter-spacing:1.5px;padding:10px 0;}
     textarea.inp{resize:vertical;min-height:90px;}
@@ -3761,7 +3761,7 @@ function LegalManager({ staffId: initialStaffId, staffName: initialStaffName, is
       if (isHR) {
         const staff = await apiFetch(`${API_BASE}/hr/staff`);
         setStaffList(staff);
-        
+
         try {
           const cands = await apiFetch(`${API_BASE}/hr-legal/collaborator-candidates`);
           // Prioritise lawyers
@@ -7304,7 +7304,7 @@ function RemoteWork() {
       const _roles = (_p.role || "").toLowerCase().split(",").map(r => r.trim());
       _rwIsHR = _roles.some(r => ["admin", "super_admin", "hr_admin", "operations"].includes(r));
     }
-  } catch (_) {}
+  } catch (_) { }
   const user = _rwUser;
   const isHR = _rwIsHR;
   const currentUserId = user?.id || null;
@@ -11183,6 +11183,1307 @@ function PublicBiodataForm() {
 
 // ─────────────────────────────────────────────────────────────────────────────
 
+// ─────────────────────────────────────────────────────────────────────────────
+// GUARANTOR FORM — HR DASHBOARD MANAGER
+// Place this AFTER BiodataReviewModal and BEFORE MyBiodata in App.jsx
+// ─────────────────────────────────────────────────────────────────────────────
+
+// ─── HR GUARANTOR MANAGER ────────────────────────────────────────────────────
+function GuarantorManager() {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [tab, setTab] = useState("submissions");
+  const [submissions, setSubmissions] = useState([]);
+  const [invites, setInvites] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [inviteEmail, setInviteEmail] = useState("");
+  const [inviting, setInviting] = useState(false);
+  const [generalLink, setGeneralLink] = useState("");
+  const [copied, setCopied] = useState(false);
+  const [selected, setSelected] = useState(null);
+  const [filterStatus, setFilterStatus] = useState("all");
+  const [isCollecting, setIsCollecting] = useState(true);
+  const [togglingForm, setTogglingForm] = useState(false);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [subs, inv, gl] = await Promise.all([
+        apiFetch(`${API_BASE}/guarantor/submissions`),
+        apiFetch(`${API_BASE}/guarantor/invites`),
+        apiFetch(`${API_BASE}/guarantor/general-link`),
+      ]);
+      setSubmissions(Array.isArray(subs) ? subs : []);
+      setInvites(Array.isArray(inv) ? inv : []);
+      setGeneralLink(gl.link || "");
+      setIsCollecting(gl.is_collecting !== false);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const toggleCollecting = async () => {
+    setTogglingForm(true);
+    try {
+      const res = await apiFetch(`${API_BASE}/guarantor/settings`, {
+        method: "PATCH",
+        body: JSON.stringify({ is_collecting: !isCollecting }),
+      });
+      setIsCollecting(res.is_collecting);
+    } catch (e) { alert(e.message); }
+    finally { setTogglingForm(false); }
+  };
+
+  const sendInvite = async () => {
+    if (!inviteEmail.trim()) return;
+    setInviting(true);
+    try {
+      const res = await apiFetch(`${API_BASE}/guarantor/invites`, {
+        method: "POST",
+        body: JSON.stringify({ email: inviteEmail.trim() }),
+      });
+      alert(`Guarantor form link sent to ${res.email}.`);
+      setInviteEmail("");
+      load();
+    } catch (e) { alert(e.message); }
+    finally { setInviting(false); }
+  };
+
+  const copyLink = () => {
+    navigator.clipboard.writeText(generalLink);
+    setCopied(true);
+    setTimeout(() => setCopied(false), 2000);
+  };
+
+  const filtered = filterStatus === "all" ? submissions : submissions.filter(s => s.status === filterStatus);
+  const stats = {
+    total: submissions.length,
+    pending: submissions.filter(s => s.status === "pending").length,
+    approved: submissions.filter(s => s.status === "approved").length,
+    rejected: submissions.filter(s => s.status === "rejected").length,
+  };
+
+  const statusColor = (st) => ({ pending: T.gold, approved: "#10B981", rejected: "#EF4444" }[st] || C.muted);
+  const statusBg = (st) => ({ pending: `${T.gold}18`, approved: "#10B98118", rejected: "#EF444418" }[st] || C.surface);
+
+  if (loading) return <div style={{ padding: 60, textAlign: "center", color: C.muted }}>Loading Guarantor Form System…</div>;
+
+  return (
+    <div className="fade">
+      {/* Header */}
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", marginBottom: 28 }}>
+        <div>
+          <div className="ho" style={{ fontSize: 26, fontWeight: 900, letterSpacing: -0.5 }}>Guarantor Form Collection</div>
+          <div style={{ fontSize: 13, color: C.sub, marginTop: 4 }}>
+            Manage employee guarantor forms, send invitations, and review submissions. Each employee requires two guarantors.
+          </div>
+        </div>
+        {/* Form ON/OFF Toggle */}
+        <div style={{ display: "flex", alignItems: "center", gap: 12, background: C.card, border: `1px solid ${C.border}`, borderRadius: 12, padding: "10px 18px" }}>
+          <div style={{ fontSize: 12, color: C.sub, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>
+            Form {isCollecting ? "Active" : "Closed"}
+          </div>
+          <div
+            onClick={!togglingForm ? toggleCollecting : undefined}
+            style={{
+              width: 52, height: 28, borderRadius: 14, cursor: "pointer",
+              background: isCollecting ? T.gold : C.border,
+              position: "relative", transition: "all 0.25s ease",
+              opacity: togglingForm ? 0.6 : 1,
+            }}
+          >
+            <div style={{
+              position: "absolute", top: 3, left: isCollecting ? 27 : 3,
+              width: 22, height: 22, borderRadius: "50%", background: "#fff",
+              transition: "left 0.25s ease", boxShadow: "0 1px 4px #0004",
+            }} />
+          </div>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(4,1fr)", gap: 16, marginBottom: 28 }}>
+        {[
+          { label: "Total Submissions", value: stats.total, col: C.text },
+          { label: "Pending Review", value: stats.pending, col: T.gold },
+          { label: "Approved", value: stats.approved, col: "#10B981" },
+          { label: "Rejected", value: stats.rejected, col: "#EF4444" },
+        ].map(({ label, value, col }) => (
+          <div key={label} className="gc" style={{ padding: "20px 24px" }}>
+            <div style={{ fontSize: 32, fontWeight: 900, color: col, lineHeight: 1 }}>{value}</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 6, fontWeight: 600, letterSpacing: 0.3 }}>{label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Tabs */}
+      <Tabs
+        items={[["submissions", "Submissions"], ["invites", "Invitations"], ["settings", "Settings & Links"]]}
+        active={tab} setActive={setTab}
+      />
+
+      {/* ── SUBMISSIONS TAB ── */}
+      {tab === "submissions" && (
+        <div className="fade">
+          <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
+            {["all", "pending", "approved", "rejected"].map(st => (
+              <button key={st} onClick={() => setFilterStatus(st)}
+                style={{
+                  padding: "6px 18px", borderRadius: 99, fontSize: 12, fontWeight: 700,
+                  cursor: "pointer", border: `1px solid ${filterStatus === st ? T.gold : C.border}`,
+                  background: filterStatus === st ? `${T.gold}18` : "transparent",
+                  color: filterStatus === st ? T.gold : C.muted,
+                  textTransform: "capitalize", letterSpacing: 0.3,
+                }}>
+                {st} {st !== "all" && `(${stats[st] || 0})`}
+              </button>
+            ))}
+          </div>
+
+          {filtered.length === 0 ? (
+            <div style={{ padding: "60px 40px", textAlign: "center", color: C.muted, border: `2px dashed ${C.border}`, borderRadius: 14 }}>
+              <div style={{ fontSize: 40, marginBottom: 14 }}>🤝</div>
+              <div style={{ fontSize: 15, fontWeight: 700 }}>No {filterStatus !== "all" ? filterStatus : ""} submissions yet</div>
+              <div style={{ fontSize: 13, color: C.muted, marginTop: 8 }}>Send invitations or share the general link to get started.</div>
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+              {filtered.map(sub => (
+                <div key={sub.id} className="gc" style={{ padding: "18px 22px", cursor: "pointer", transition: "all 0.2s" }}
+                  onClick={() => setSelected(sub)}>
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                      <div style={{
+                        width: 44, height: 44, borderRadius: "50%", background: `${T.gold}20`,
+                        border: `2px solid ${T.gold}40`, display: "flex", alignItems: "center",
+                        justifyContent: "center", fontSize: 16, fontWeight: 800, color: T.gold, flexShrink: 0,
+                      }}>
+                        {(sub.employee_name?.[0] || sub.employee_email?.[0] || "?").toUpperCase()}
+                      </div>
+                      <div>
+                        <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{sub.employee_name}</div>
+                        <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>
+                          {sub.employee_email} · {sub.position} · Staff ID: {sub.staff_id || "—"}
+                        </div>
+                        <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>
+                          Guarantors: {sub.guarantors_count || 0}/2 submitted
+                        </div>
+                      </div>
+                    </div>
+                    <div style={{ display: "flex", alignItems: "center", gap: 14 }}>
+                      <div style={{ fontSize: 11, color: C.muted }}>
+                        {sub.submitted_at ? new Date(sub.submitted_at).toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" }) : "—"}
+                      </div>
+                      <span style={{
+                        background: statusBg(sub.status), color: statusColor(sub.status),
+                        border: `1px solid ${statusColor(sub.status)}33`,
+                        padding: "4px 14px", borderRadius: 99, fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5,
+                      }}>
+                        {sub.status}
+                      </span>
+                      <svg width="18" height="18" fill="none" viewBox="0 0 24 24" stroke={C.muted} strokeWidth="2">
+                        <path strokeLinecap="round" strokeLinejoin="round" d="M9 5l7 7-7 7" />
+                      </svg>
+                    </div>
+                  </div>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── INVITES TAB ── */}
+      {tab === "invites" && (
+        <div className="fade">
+          <div className="gc" style={{ padding: 24, marginBottom: 20 }}>
+            <div className="ho" style={{ fontSize: 14, marginBottom: 16 }}>Send Invitation by Email</div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <input className="inp" placeholder="employee@company.com" value={inviteEmail}
+                onChange={e => setInviteEmail(e.target.value)}
+                onKeyDown={e => e.key === "Enter" && sendInvite()}
+                style={{ flex: 1 }} />
+              <button className="bp" onClick={sendInvite} disabled={inviting || !inviteEmail.trim()}
+                style={{ whiteSpace: "nowrap" }}>
+                {inviting ? "Sending…" : "Send Invite"}
+              </button>
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 10 }}>
+              The employee will receive a link to fill Section A (Employee Details). The system will then prompt them to have their two guarantors complete Sections B & C.
+            </div>
+          </div>
+
+          {invites.length === 0 ? (
+            <div style={{ padding: 40, textAlign: "center", color: C.muted, border: `2px dashed ${C.border}`, borderRadius: 14 }}>
+              No invitations sent yet.
+            </div>
+          ) : (
+            <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+              {invites.map(inv => (
+                <div key={inv.id} style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
+                  padding: "14px 20px", background: C.card, border: `1px solid ${C.border}`, borderRadius: 12,
+                }}>
+                  <div>
+                    <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>{inv.email}</div>
+                    <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
+                      Sent {new Date(inv.created_at).toLocaleDateString()} · Expires {new Date(inv.expires_at).toLocaleDateString()}
+                    </div>
+                  </div>
+                  <span style={{
+                    background: statusBg(inv.status), color: statusColor(inv.status),
+                    border: `1px solid ${statusColor(inv.status)}33`,
+                    padding: "4px 14px", borderRadius: 99, fontSize: 10, fontWeight: 800, textTransform: "uppercase",
+                  }}>
+                    {inv.status}
+                  </span>
+                </div>
+              ))}
+            </div>
+          )}
+        </div>
+      )}
+
+      {/* ── SETTINGS & LINKS TAB ── */}
+      {tab === "settings" && (
+        <div className="fade" style={{ maxWidth: 600 }}>
+          <div className="gc" style={{ padding: 28, marginBottom: 20 }}>
+            <div className="ho" style={{ fontSize: 14, marginBottom: 6 }}>General Submission Link</div>
+            <div style={{ fontSize: 13, color: C.sub, marginBottom: 18, lineHeight: 1.6 }}>
+              Share this link with any employee — no individual invite required.
+              The employee fills Section A, then provides this same link to their two guarantors.
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <input className="inp" readOnly value={generalLink} style={{ flex: 1, fontSize: 12, color: C.muted }} />
+              <button className="bp" onClick={copyLink}>
+                {copied ? "✓ Copied!" : "Copy Link"}
+              </button>
+            </div>
+          </div>
+
+          <div className="gc" style={{ padding: 28 }}>
+            <div className="ho" style={{ fontSize: 14, marginBottom: 16 }}>Form Status</div>
+            <div style={{
+              display: "flex", alignItems: "center", justifyContent: "space-between",
+              padding: "16px 20px",
+              background: isCollecting ? `${T.gold}0D` : `${C.border}30`,
+              border: `1px solid ${isCollecting ? T.gold + "30" : C.border}`,
+              borderRadius: 10,
+            }}>
+              <div>
+                <div style={{ fontSize: 14, fontWeight: 700, color: C.text }}>Guarantor Form Collection</div>
+                <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>
+                  {isCollecting ? "✓ Form is active — employees can submit their guarantor forms." : "⊘ Form is closed — submission links will be rejected."}
+                </div>
+              </div>
+              <div
+                onClick={!togglingForm ? toggleCollecting : undefined}
+                style={{
+                  width: 52, height: 28, borderRadius: 14, cursor: "pointer",
+                  background: isCollecting ? T.gold : C.border,
+                  position: "relative", transition: "all 0.25s ease",
+                  opacity: togglingForm ? 0.6 : 1, flexShrink: 0,
+                }}
+              >
+                <div style={{
+                  position: "absolute", top: 3, left: isCollecting ? 27 : 3,
+                  width: 22, height: 22, borderRadius: "50%", background: "#fff",
+                  transition: "left 0.25s ease", boxShadow: "0 1px 4px #0004",
+                }} />
+              </div>
+            </div>
+          </div>
+        </div>
+      )}
+
+      {/* ── SUBMISSION DETAIL MODAL ── */}
+      {selected && (
+        <GuarantorReviewModal sub={selected} onClose={() => setSelected(null)} onRefresh={() => { setSelected(null); load(); }} />
+      )}
+    </div>
+  );
+}
+
+// ─── GUARANTOR REVIEW MODAL ───────────────────────────────────────────────────
+function GuarantorReviewModal({ sub, onClose, onRefresh }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [full, setFull] = useState(null);
+  const [loading, setLoading] = useState(true);
+  const [reviewing, setReviewing] = useState(false);
+  const [activeGuarantor, setActiveGuarantor] = useState(1);
+
+  useEffect(() => {
+    apiFetch(`${API_BASE}/guarantor/submissions/${sub.id}`)
+      .then(d => setFull(d))
+      .catch(e => alert(e.message))
+      .finally(() => setLoading(false));
+  }, [sub.id]);
+
+  const review = async (section, status, reason = "") => {
+    setReviewing(true);
+    try {
+      await apiFetch(`${API_BASE}/guarantor/submissions/${sub.id}/review`, {
+        method: "POST",
+        body: JSON.stringify({ section, status, reason }),
+      });
+      // Refresh local data
+      const d = await apiFetch(`${API_BASE}/guarantor/submissions/${sub.id}`);
+      setFull(d);
+    } catch (e) { alert(e.message); }
+    finally { setReviewing(false); }
+  };
+
+  const btn = { padding: "8px 16px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" };
+
+  const ReviewActions = ({ section, status, reason }) => {
+    const [showReject, setShowReject] = useState(false);
+    const [rejReason, setRejReason] = useState(reason || "");
+
+    if (status === "approved") return (
+      <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#10B981", fontSize: 12, fontWeight: 800 }}>
+        <span style={{ background: "#10B98118", padding: "4px 10px", borderRadius: 6 }}>✓ SECTION APPROVED</span>
+        <button onClick={() => review(section, "pending")} style={{ background: "none", border: "none", color: C.muted, fontSize: 10, cursor: "pointer", textDecoration: "underline" }}>Undo</button>
+      </div>
+    );
+    
+    return (
+      <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+        {!showReject ? (
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <button onClick={() => review(section, "approved")} style={{ ...btn, background: "#10B98118", color: "#10B981", border: "1px solid #10B98133" }}>Approve Section</button>
+            <button onClick={() => setShowReject(true)} style={{ ...btn, background: "#EF444418", color: "#EF4444", border: "1px solid #EF444433" }}>Reject Section</button>
+            {status === "rejected" && <span style={{ fontSize: 11, color: "#EF4444", fontWeight: 600 }}>Currently Rejected</span>}
+          </div>
+        ) : (
+          <div>
+            <div style={{ ...lbl, marginBottom: 8 }}>Reason for Rejection</div>
+            <textarea 
+              placeholder="e.g. ID card is expired or blurry..."
+              style={{ ...inp, height: 60, marginBottom: 10, fontSize: 13 }}
+              value={rejReason} onChange={e => setRejReason(e.target.value)}
+            />
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => review(section, "rejected", rejReason)} style={{ ...btn, background: "#EF4444", color: "#fff", border: "none" }}>Confirm Rejection</button>
+              <button onClick={() => setShowReject(false)} style={{ ...btn, background: "none", border: "none", color: C.muted }}>Cancel</button>
+            </div>
+          </div>
+        )}
+      </div>
+    );
+  };
+
+  const ol = { display: "flex", flexDirection: "column", gap: 2 };
+  const lbl = { fontSize: 11, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4 };
+  const val = { fontSize: 14, color: C.text, fontWeight: 600, marginTop: 2 };
+
+  const Field = ({ label, value }) => (
+    <div style={ol}>
+      <div style={lbl}>{label}</div>
+      <div style={val}>{value || "—"}</div>
+    </div>
+  );
+
+  const SectionHeader = ({ title, subtitle }) => (
+    <div style={{ borderBottom: `2px solid ${T.gold}33`, paddingBottom: 10, marginBottom: 20 }}>
+      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 15, color: T.gold, fontWeight: 700 }}>{title}</div>
+      {subtitle && <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>{subtitle}</div>}
+    </div>
+  );
+
+  return (
+    <div style={{
+      position: "fixed", inset: 0, background: "#000000BB", zIndex: 9999,
+      display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+    }} onClick={e => e.target === e.currentTarget && onClose()}>
+      <div style={{
+        background: C.surface, borderRadius: 20, width: "100%", maxWidth: 800,
+        maxHeight: "90vh", overflow: "hidden", display: "flex", flexDirection: "column",
+        boxShadow: "0 32px 100px #00000066",
+      }}>
+        {/* Modal header */}
+        <div style={{ padding: "22px 28px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+          <div>
+            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, color: T.gold, fontWeight: 700 }}>
+              Employee Guarantor's Form
+            </div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
+              {sub.employee_name} · {sub.employee_email}
+            </div>
+          </div>
+          <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, fontSize: 22, cursor: "pointer", padding: 4 }}>✕</button>
+        </div>
+
+        {loading ? (
+          <div style={{ padding: 60, textAlign: "center", color: C.muted }}>Loading…</div>
+        ) : !full ? (
+          <div style={{ padding: 40, textAlign: "center", color: "#EF4444" }}>Could not load submission details.</div>
+        ) : (
+          <div style={{ overflow: "auto", flex: 1, padding: 28 }}>
+            {/* Section A: Employee Details */}
+            <div className="gc" style={{ padding: 24, marginBottom: 20 }}>
+              <SectionHeader title="Section A: Employee Details" subtitle="Completed by the Employee" />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+                <Field label="Full Name" value={full.employee_name} />
+                <Field label="Position" value={full.position} />
+                <Field label="Staff ID" value={full.staff_id} />
+                <Field label="Date of Employment" value={full.date_of_employment} />
+                <Field label="Phone Number" value={full.employee_phone} />
+                <Field label="Email Address" value={full.employee_email} />
+                <div style={{ gridColumn: "1/-1" }}>
+                  <Field label="Residential Address" value={full.employee_address} />
+                </div>
+              </div>
+              {/* Employee Signature */}
+              {full.employee_signature_url && (
+                <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+                  <div style={lbl}>Employee Signature</div>
+                  <img src={full.employee_signature_url} alt="Employee Sig"
+                    style={{ maxHeight: 60, maxWidth: 220, marginTop: 8, border: `1px solid ${C.border}`, borderRadius: 8, padding: 6, background: "#fff" }}
+                    onError={e => e.target.style.display = "none"} />
+                </div>
+              )}
+              <ReviewActions section="a" status={full.section_a_status} reason={full.section_a_reason} />
+            </div>
+
+            {/* Guarantor tabs */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+              {[1, 2].map(n => (
+                <button key={n} onClick={() => setActiveGuarantor(n)}
+                  style={{
+                    padding: "8px 24px", borderRadius: 99, fontSize: 13, fontWeight: 700, cursor: "pointer",
+                    border: `1px solid ${activeGuarantor === n ? T.gold : C.border}`,
+                    background: activeGuarantor === n ? `${T.gold}18` : "transparent",
+                    color: activeGuarantor === n ? T.gold : C.muted,
+                  }}>
+                  Guarantor {n} {full[`guarantor${n}`] ? "✓" : "(pending)"}
+                </button>
+              ))}
+            </div>
+
+            {/* Guarantor details */}
+            {[1, 2].map(n => {
+              const g = full[`guarantor${n}`];
+              if (activeGuarantor !== n) return null;
+              if (!g) return (
+                <div key={n} style={{ padding: "40px", textAlign: "center", color: C.muted, border: `2px dashed ${C.border}`, borderRadius: 14 }}>
+                  <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
+                  <div style={{ fontSize: 14, fontWeight: 700 }}>Guarantor {n} has not submitted their form yet.</div>
+                </div>
+              );
+
+              return (
+                <div key={n}>
+                  {/* Section B */}
+                  <div className="gc" style={{ padding: 24, marginBottom: 20 }}>
+                    <SectionHeader title={`Section B: Guarantor ${n} Details`} subtitle="Completed by the Guarantor" />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+                      <Field label="Full Name" value={g.full_name} />
+                      <Field label="Relationship to Employee" value={g.relationship} />
+                      <Field label="Occupation" value={g.occupation} />
+                      <Field label="Position Held" value={g.position_held} />
+                      <Field label="Years at Current Job" value={g.years_at_job} />
+                      <Field label="Phone Number" value={g.phone} />
+                      <Field label="Email Address" value={g.email} />
+                      <div style={{ gridColumn: "1/-1" }}>
+                        <Field label="Residential Address" value={g.address} />
+                      </div>
+                      <div style={{ gridColumn: "1/-1" }}>
+                        <Field label="Employer / Business Name & Address" value={g.employer_name} />
+                      </div>
+                      <Field label="Means of Identification" value={g.id_type} />
+                      <Field label="ID Number" value={g.id_number} />
+                    </div>
+                    {/* ID photo & passport */}
+                    <div style={{ display: "flex", gap: 20, marginTop: 20, flexWrap: "wrap" }}>
+                      {g.passport_photo_url && (
+                        <div>
+                          <div style={lbl}>Passport Photo</div>
+                          <img src={g.passport_photo_url} alt="Passport"
+                            style={{ width: 80, height: 80, borderRadius: 10, objectFit: "cover", marginTop: 8, border: `2px solid ${T.gold}40` }}
+                            onError={e => e.target.style.display = "none"} />
+                        </div>
+                      )}
+                      {g.id_document_url && (
+                        <div>
+                          <div style={lbl}>ID Document</div>
+                          <img src={g.id_document_url} alt="ID"
+                            style={{ height: 80, borderRadius: 10, objectFit: "cover", marginTop: 8, border: `1px solid ${C.border}` }}
+                            onError={e => e.target.style.display = "none"} />
+                        </div>
+                      )}
+                    </div>
+                  </div>
+
+                  {/* Section C: Declaration */}
+                  <div className="gc" style={{ padding: 24, marginBottom: 20 }}>
+                    <SectionHeader title={`Section C: Guarantor ${n} Declaration`} />
+                    <div style={{
+                      background: dark ? "#1A1D2480" : "#F8F9FB",
+                      border: `1px solid ${C.border}`, borderRadius: 10, padding: "18px 20px",
+                      fontSize: 13, color: C.sub, lineHeight: 1.8,
+                    }}>
+                      I, <strong style={{ color: C.text }}>{g.full_name}</strong>, of the above address, hereby solemnly declare that I know the above-named employee personally
+                      and vouch for their character, integrity, and conduct. I understand the employee will handle company funds, documents, and client relationships,
+                      and I guarantee they shall faithfully discharge all duties assigned. Should the employee be found liable for any act of fraud, dishonesty,
+                      negligence, misappropriation, or breach of company policy resulting in financial loss, I undertake to assist the company in ensuring restitution.
+                      I confirm I am gainfully employed, financially capable, and have not been convicted of any criminal offense.
+                    </div>
+                    {g.signature_url && (
+                      <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+                        <div style={lbl}>Guarantor {n} Signature</div>
+                        <img src={g.signature_url} alt={`Guarantor ${n} Sig`}
+                          style={{ maxHeight: 60, maxWidth: 220, marginTop: 8, border: `1px solid ${C.border}`, borderRadius: 8, padding: 6, background: "#fff" }}
+                          onError={e => e.target.style.display = "none"} />
+                      </div>
+                    )}
+                  </div>
+
+                  {/* Section D: Witness */}
+                  {g.witness_name && (
+                    <div className="gc" style={{ padding: 24, marginBottom: 20 }}>
+                      <SectionHeader title="Section D: Official Attestation" />
+                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
+                        <Field label="Witness Name" value={g.witness_name} />
+                        <Field label="Occupation" value={g.witness_occupation} />
+                        <Field label="Phone" value={g.witness_phone} />
+                        <Field label="Date" value={g.witness_date} />
+                        <div style={{ gridColumn: "1/-1" }}>
+                          <Field label="Witness Address" value={g.witness_address} />
+                        </div>
+                      </div>
+                    </div>
+                  )}
+                  <ReviewActions 
+                    section={n === 1 ? "b" : "c"} 
+                    status={n === 1 ? full.section_b_status : full.section_c_status} 
+                    reason={n === 1 ? full.section_b_reason : full.section_c_reason} 
+                  />
+                </div>
+              );
+            })}
+
+            {/* Company Use / Review Actions */}
+            {sub.status === "pending" && (
+              <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", paddingTop: 8 }}>
+                <button
+                  onClick={() => review("rejected")} disabled={reviewing}
+                  style={{
+                    padding: "11px 28px", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer",
+                    border: "1px solid #EF4444", background: "#EF444418", color: "#EF4444",
+                  }}>
+                  Reject
+                </button>
+                <button
+                  onClick={() => review("approved")} disabled={reviewing}
+                  style={{
+                    padding: "11px 28px", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer",
+                    border: `1px solid ${T.gold}`, background: `${T.gold}18`, color: T.gold,
+                  }}>
+                  {reviewing ? "Saving…" : "Approve"}
+                </button>
+              </div>
+            )}
+            {sub.status !== "pending" && (
+              <div style={{ textAlign: "right", paddingTop: 8 }}>
+                <span style={{
+                  padding: "8px 20px", borderRadius: 99, fontSize: 12, fontWeight: 800,
+                  textTransform: "uppercase", letterSpacing: 0.5,
+                  background: sub.status === "approved" ? "#10B98118" : "#EF444418",
+                  color: sub.status === "approved" ? "#10B981" : "#EF4444",
+                  border: `1px solid ${sub.status === "approved" ? "#10B98133" : "#EF444433"}`,
+                }}>
+                  {sub.status}
+                </span>
+              </div>
+            )}
+          </div>
+        )}
+      </div>
+    </div>
+  );
+}
+
+
+// ─────────────────────────────────────────────────────────────────────────────
+// PUBLIC GUARANTOR FORM  (standalone, accessed via ?guarantor_token=xxx)
+// Add this AFTER PublicBiodataForm in App.jsx
+// ─────────────────────────────────────────────────────────────────────────────
+
+function PublicGuarantorForm() {
+  const [phase, setPhase] = useState("email"); // email → section_a → section_b_1 → section_b_2 → success
+  const [token, setToken] = useState("");
+  const [email, setEmail] = useState("");
+  const [staffInfo, setStaffInfo] = useState(null);
+  const [checking, setChecking] = useState(false);
+  const [submitting, setSubmitting] = useState(false);
+  const [companyInfo, setCompanyInfo] = useState({ name: "Company Name", address: "Company Address", rc: "", phone: "", email_addr: "" });
+  const [currentGuarantor, setCurrentGuarantor] = useState(1); // which guarantor slot we're filling (1 or 2)
+
+  // Section A: Employee fields (editable by employee)
+  const [empForm, setEmpForm] = useState({
+    full_name: "", position: "", address: "", phone: "", email: "",
+    date_of_employment: "", staff_id: "",
+  });
+  const [empSigHasData, setEmpSigHasData] = useState(false);
+  const empSigRef = useRef(null);
+  const [empSigCtx, setEmpSigCtx] = useState(null);
+  const [empSigDrawing, setEmpSigDrawing] = useState(false);
+
+  // Section B+C+D: Guarantor fields (one set per guarantor)
+  const emptyGuarantor = () => ({
+    full_name: "", relationship: "", address: "", occupation: "",
+    employer_name: "", position_held: "", years_at_job: "", phone: "", email: "",
+    id_type: "", id_number: "",
+    witness_name: "", witness_address: "", witness_occupation: "", witness_phone: "",
+    passport_file: null, passport_preview: "", id_doc_file: null, id_doc_preview: "",
+  });
+  const [g1, setG1] = useState(emptyGuarantor());
+  const [g2, setG2] = useState(emptyGuarantor());
+  const g1SigRef = useRef(null); const g2SigRef = useRef(null);
+  const [g1SigCtx, setG1SigCtx] = useState(null); const [g2SigCtx, setG2SigCtx] = useState(null);
+  const [g1SigHasData, setG1SigHasData] = useState(false); const [g2SigHasData, setG2SigHasData] = useState(false);
+  const [g1SigDrawing, setG1SigDrawing] = useState(false); const [g2SigDrawing, setG2SigDrawing] = useState(false);
+
+  useEffect(() => {
+    const params = new URLSearchParams(window.location.search);
+    const t = params.get("guarantor_token");
+    const e = params.get("email");
+    if (t) setToken(t);
+    if (e) {
+      setEmail(e);
+      // Auto-trigger check if email is in URL
+      setTimeout(() => checkEmail(e), 500);
+    }
+    // fetch company info
+    fetch(`${API_BASE}/guarantor/company-info`).then(r => r.json()).then(d => setCompanyInfo(d)).catch(() => { });
+  }, []);
+
+  // ── Canvas helpers (shared with biodata form pattern) ──────────────────────
+  const initSigCanvas = (ref, setCtx) => {
+    const canvas = ref.current;
+    if (!canvas) return;
+    const rect = canvas.getBoundingClientRect();
+    const dpr = window.devicePixelRatio || 1;
+    canvas.width = Math.round(rect.width * dpr);
+    canvas.height = Math.round(rect.height * dpr);
+    const ctx = canvas.getContext("2d");
+    ctx.scale(dpr, dpr);
+    ctx.strokeStyle = "#1A1D24"; ctx.lineWidth = 2.5;
+    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    setCtx(ctx);
+  };
+  const getPos = (e, canvas) => {
+    const rect = canvas.getBoundingClientRect();
+    if (e.touches) return { x: e.touches[0].clientX - rect.left, y: e.touches[0].clientY - rect.top };
+    return { x: e.clientX - rect.left, y: e.clientY - rect.top };
+  };
+  const makeSigHandlers = (ref, ctx, setCtx, drawing, setDrawing, setHasData) => ({
+    start: (e) => {
+      e.preventDefault();
+      const canvas = ref.current;
+      if (!canvas || !ctx) { initSigCanvas(ref, setCtx); return; }
+      setDrawing(true); setHasData(true);
+      const pos = getPos(e, canvas);
+      ctx.beginPath(); ctx.moveTo(pos.x, pos.y);
+    },
+    move: (e) => {
+      e.preventDefault();
+      if (!drawing || !ctx) return;
+      const canvas = ref.current;
+      const pos = getPos(e, canvas);
+      ctx.lineTo(pos.x, pos.y); ctx.stroke();
+    },
+    end: () => setDrawing(false),
+    clear: () => {
+      const canvas = ref.current;
+      if (!canvas || !ctx) return;
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
+      setHasData(false);
+    },
+  });
+
+  // Mount canvases after phase change
+  useEffect(() => {
+    if (phase === "section_a") {
+      setTimeout(() => initSigCanvas(empSigRef, setEmpSigCtx), 150);
+    }
+    if (phase === "section_b_1") {
+      setTimeout(() => initSigCanvas(g1SigRef, setG1SigCtx), 150);
+    }
+    if (phase === "section_b_2") {
+      setTimeout(() => initSigCanvas(g2SigRef, setG2SigCtx), 150);
+    }
+  }, [phase]);
+
+  const empSig = makeSigHandlers(empSigRef, empSigCtx, setEmpSigCtx, empSigDrawing, setEmpSigDrawing, setEmpSigHasData);
+  const g1Sig = makeSigHandlers(g1SigRef, g1SigCtx, setG1SigCtx, g1SigDrawing, setG1SigDrawing, setG1SigHasData);
+  const g2Sig = makeSigHandlers(g2SigRef, g2SigCtx, setG2SigCtx, g2SigDrawing, setG2SigDrawing, setG2SigHasData);
+
+  // ── Token / email verification ─────────────────────────────────────────────
+  const checkEmail = async (overrideEmail) => {
+    const eAddr = overrideEmail || email.trim();
+    if (!eAddr) return;
+    setChecking(true);
+    try {
+      const res = await fetch(`${API_BASE}/guarantor/public/check?token=${token}&email=${encodeURIComponent(eAddr)}`);
+      if (!res.ok) { const err = await res.json(); alert(err.detail || "Error verifying token."); setChecking(false); return; }
+      const data = await res.json();
+      setStaffInfo(data.staff_info);
+      
+      if (data.submission) {
+        // RESUME LOGIC
+        const s = data.submission;
+        setEmpForm({
+          full_name: s.employee_name || "",
+          position: s.position || "",
+          address: s.employee_address || "",
+          phone: s.employee_phone || "",
+          email: s.employee_email || "",
+          date_of_employment: s.date_of_employment || "",
+          staff_id: s.staff_id || "",
+          signature_url: s.employee_signature_url
+        });
+        
+        if (s.g1) setG1(prev => ({ ...prev, ...s.g1 }));
+        if (s.g2) setG2(prev => ({ ...prev, ...s.g2 }));
+
+        // Decide phase
+        if (!s.employee_signature_url) setPhase("section_a");
+        else if (!s.g1 || !s.g1.signature_url) setPhase("section_b_1");
+        else if (!s.g2 || !s.g2.signature_url) setPhase("section_b_2");
+        else setPhase("success");
+      } else {
+        if (data.staff_info) {
+          setEmpForm(f => ({
+            ...f,
+            full_name: data.staff_info.full_name || "",
+            position: data.staff_info.job_title || "",
+            email: eAddr,
+            staff_id: data.staff_info.staff_id || "",
+          }));
+        }
+        setPhase("section_a");
+      }
+    } catch (e) { console.error(e); alert("Connection error. Please try again."); }
+    finally { setChecking(false); }
+  };
+
+  const handleFileChange = (file, setter, fieldKey) => {
+    if (!file) return;
+    const reader = new FileReader();
+    reader.onloadend = () => setter(prev => ({ ...prev, [fieldKey + "_file"]: file, [fieldKey + "_preview"]: reader.result }));
+    reader.readAsDataURL(file);
+  };
+
+  // ── Submit Section A + proceed to Guarantor 1 ─────────────────────────────
+  const [relayLink, setRelayLink] = useState("");
+  const submitSectionA = async () => {
+    const req = ["full_name", "position", "address", "phone", "email", "date_of_employment"];
+    for (const f of req) {
+      if (!empForm[f]?.trim()) { alert(`Please fill in: ${f.replace(/_/g, " ")}`); return; }
+    }
+    if (!empSigHasData) { alert("Please draw your signature in Section A."); return; }
+    
+    setSubmitting(true);
+    try {
+      const fd = new FormData();
+      fd.append("token", token);
+      fd.append("email", email.trim());
+      fd.append("section", "employee");
+      
+      const payload = { ...empForm, signature: empSigRef.current.toDataURL("image/png") };
+      fd.append("data", JSON.stringify(payload));
+      
+      const res = await fetch(`${API_BASE}/guarantor/public/save-partial`, { method: "POST", body: fd });
+      const d = await res.json();
+      setRelayLink(d.relay_link);
+      setPhase("relay_screen");
+    } catch (e) { alert(e.message); }
+    finally { setSubmitting(false); }
+  };
+
+  // ── Submit Guarantor form ─────────────────────────────────────────────────
+  const submitGuarantor = async (gNum) => {
+    const g = gNum === 1 ? g1 : g2;
+    const sigRef = gNum === 1 ? g1SigRef : g2SigRef;
+    const sigHasData = gNum === 1 ? g1SigHasData : g2SigHasData;
+
+    const req = ["full_name", "relationship", "address", "occupation", "employer_name", "position_held", "years_at_job", "phone", "email", "id_type", "id_number"];
+    for (const f of req) {
+      if (!g[f]?.trim()) { alert(`Please fill in Guarantor ${gNum}: ${f.replace(/_/g, " ")}`); return; }
+    }
+    if (!sigHasData) { alert(`Please draw Guarantor ${gNum}'s signature.`); return; }
+    if (!g.passport_file && !g.passport_photo_url) { alert(`Please upload Guarantor ${gNum}'s passport photograph.`); return; }
+
+    setSubmitting(true);
+    try {
+      // 1. Partial Save Section (B or C)
+      const fd = new FormData();
+      fd.append("token", token);
+      fd.append("email", email.trim());
+      fd.append("section", gNum === 1 ? "g1" : "g2");
+      
+      const payload = { ...g, signature: sigRef.current.toDataURL("image/png") };
+      fd.append("data", JSON.stringify(payload));
+      
+      const res = await fetch(`${API_BASE}/guarantor/public/save-partial`, { method: "POST", body: fd });
+      if (!res.ok) throw new Error("Failed to save progress.");
+
+      if (gNum === 1) {
+        setPhase("section_b_2");
+      } else {
+        // Final Finalization
+        const finalizeFd = new FormData();
+        finalizeFd.append("token", token);
+        finalizeFd.append("email", email.trim());
+        // We reuse the original submit endpoint for final file processing if needed, 
+        // but for now let's just mark it done.
+        setPhase("success");
+      }
+    } catch (e) { alert(e.message); }
+    finally { setSubmitting(false); }
+  };
+
+  // ── Shared styling ─────────────────────────────────────────────────────────
+  const G = "#C47D0A";
+  const inp = {
+    background: "#F8F9FB", border: "1px solid #DDE3EE", color: "#1A2130",
+    padding: "12px 16px", borderRadius: 10, fontSize: 14, outline: "none",
+    fontFamily: "inherit", width: "100%", boxSizing: "border-box",
+  };
+  const lbl = { fontSize: 11, fontWeight: 700, color: "#6B7280", letterSpacing: 0.5, textTransform: "uppercase", marginBottom: 5, display: "block" };
+  const card = { background: "#fff", borderRadius: 16, padding: "28px 32px", boxShadow: "0 4px 24px #00000012", marginBottom: 20 };
+  const sectionTitle = { fontFamily: "'Playfair Display',serif", fontSize: 16, color: G, fontWeight: 700, marginBottom: 6 };
+  const sectionSub = { fontSize: 12, color: "#6B7280", marginBottom: 20 };
+  const sigBox = {
+    border: "1.5px solid #DDE3EE", borderRadius: 10, height: 90, width: "100%",
+    background: "#F8F9FB", cursor: "crosshair", touchAction: "none", display: "block",
+  };
+
+  const FormField = ({ label, children, required, gridSpan }) => (
+    <div style={{ gridColumn: gridSpan ? "1/-1" : undefined }}>
+      <label style={lbl}>{label}{required && <span style={{ color: "#EF4444" }}> *</span>}</label>
+      {children}
+    </div>
+  );
+
+  const SigBlock = ({ label, sigRef, handlers, hasData }) => (
+    <div>
+      <label style={lbl}>{label} <span style={{ color: "#EF4444" }}>*</span></label>
+      <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+        <canvas
+          ref={sigRef} style={sigBox}
+          onMouseDown={handlers.start} onMouseMove={handlers.move} onMouseUp={handlers.end} onMouseLeave={handlers.end}
+          onTouchStart={handlers.start} onTouchMove={handlers.move} onTouchEnd={handlers.end}
+        />
+        {hasData && (
+          <button onClick={handlers.clear} style={{ padding: "6px 14px", background: "none", border: "1px solid #DDE3EE", borderRadius: 8, fontSize: 12, color: "#6B7280", cursor: "pointer", whiteSpace: "nowrap" }}>
+            Clear
+          </button>
+        )}
+      </div>
+      {!hasData && <div style={{ fontSize: 11, color: "#99AABB", marginTop: 4 }}>Draw your signature above</div>}
+    </div>
+  );
+
+  const wrap = {
+    minHeight: "100vh",
+    background: "linear-gradient(135deg, #0B0C0F 0%, #1A1D24 100%)",
+    display: "flex", flexDirection: "column", alignItems: "center",
+    padding: "40px 20px 80px", fontFamily: "'Segoe UI', Arial, sans-serif",
+  };
+  const container = { width: "100%", maxWidth: 720 };
+
+  // Progress indicator
+  const phaseLabels = { email: 0, section_a: 1, relay_screen: 1, section_b_1: 2, section_b_2: 3, success: 4 };
+  const phaseNum = phaseLabels[phase] || 0;
+  const steps = ["Verify", "Employee", "Guarantor 1", "Guarantor 2", "Done"];
+
+  // ─── LETTER HEAD ───────────────────────────────────────────────────────────
+  const Letterhead = () => (
+    <div style={{ ...card, textAlign: "center", borderTop: `4px solid ${G}`, paddingBottom: 20 }}>
+      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, fontWeight: 900, color: "#1A2130", letterSpacing: 0.5 }}>
+        {companyInfo.name || "[Company Name]"}
+      </div>
+      <div style={{ fontSize: 12, color: "#6B7280", marginTop: 4 }}>
+        {companyInfo.address || "[Company Address]"}
+      </div>
+      {(companyInfo.rc || companyInfo.phone || companyInfo.email_addr) && (
+        <div style={{ fontSize: 11, color: "#99AABB", marginTop: 4 }}>
+          {[companyInfo.rc, companyInfo.phone, companyInfo.email_addr].filter(Boolean).join("  |  ")}
+        </div>
+      )}
+      <div style={{
+        marginTop: 18, padding: "10px 28px", display: "inline-block",
+        background: `${G}12`, border: `1px solid ${G}33`, borderRadius: 8,
+      }}>
+        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 15, fontWeight: 700, color: G, letterSpacing: 1 }}>
+          EMPLOYEE GUARANTOR'S FORM
+        </div>
+      </div>
+    </div>
+  );
+
+  // ─── Progress bar ──────────────────────────────────────────────────────────
+  const Progress = () => (
+    <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 28 }}>
+      {steps.map((s, i) => (
+        <React.Fragment key={s}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: i < steps.length - 1 ? "none" : 1 }}>
+            <div style={{
+              width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
+              fontSize: 13, fontWeight: 800,
+              background: i < phaseNum ? G : i === phaseNum ? `${G}33` : "#1A1D24",
+              border: `2px solid ${i <= phaseNum ? G : "#2D2F36"}`,
+              color: i < phaseNum ? "#0B0C0F" : i === phaseNum ? G : "#6B7280",
+            }}>
+              {i < phaseNum ? "✓" : i + 1}
+            </div>
+            <div style={{ fontSize: 10, color: i === phaseNum ? G : "#6B7280", marginTop: 5, fontWeight: i === phaseNum ? 700 : 400, whiteSpace: "nowrap" }}>
+              {s}
+            </div>
+          </div>
+          {i < steps.length - 1 && (
+            <div style={{ flex: 1, height: 2, background: i < phaseNum ? G : "#2D2F36", margin: "0 4px", marginBottom: 18 }} />
+          )}
+        </React.Fragment>
+      ))}
+    </div>
+  );
+
+  // ─── SUCCESS ───────────────────────────────────────────────────────────────
+  if (phase === "success") {
+    return (
+      <div style={wrap}>
+        <div style={{ ...container, display: "flex", alignItems: "center", justifyContent: "center", minHeight: "70vh" }}>
+          <div style={{ background: "#fff", borderRadius: 20, padding: 60, textAlign: "center", boxShadow: "0 24px 80px #00000044", width: "100%" }}>
+            <div style={{ width: 80, height: 80, background: "#D1FAE5", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px", fontSize: 36 }}>✓</div>
+            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 28, fontWeight: 900, color: "#0B0C0F", marginBottom: 12 }}>
+              Form Submitted!
+            </div>
+            <div style={{ fontSize: 14, color: "#6B7280", lineHeight: 1.8, marginBottom: 28, maxWidth: 400, margin: "0 auto 28px" }}>
+              Your guarantor form has been submitted successfully and is now under review by the HR team.
+              You will be notified of the outcome via email.
+            </div>
+            <div style={{ fontSize: 12, color: "#99AABB" }}>
+              Submitted: {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}
+            </div>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── PHASE: EMAIL VERIFICATION ─────────────────────────────────────────────
+  if (phase === "email") {
+    return (
+      <div style={wrap}>
+        <div style={container}>
+          <Letterhead />
+          <div style={{ ...card, textAlign: "center" }}>
+            <div style={{ fontSize: 15, fontWeight: 700, color: "#1A2130", marginBottom: 8 }}>Enter your email address to begin</div>
+            <div style={{ fontSize: 13, color: "#6B7280", marginBottom: 24, lineHeight: 1.6 }}>
+              Enter the email address associated with your employee record to access the guarantor form.
+            </div>
+            <input
+              style={{ ...inp, marginBottom: 14 }}
+              type="email" placeholder="your.email@company.com"
+              value={email} onChange={e => setEmail(e.target.value)}
+              onKeyDown={e => e.key === "Enter" && checkEmail()}
+            />
+            <button
+              onClick={checkEmail} disabled={checking || !email.trim()}
+              style={{
+                width: "100%", padding: "13px 0", borderRadius: 10, fontWeight: 800, fontSize: 14,
+                background: checking ? "#ccc" : G, color: "#fff", border: "none", cursor: "pointer",
+                letterSpacing: 0.5,
+              }}>
+              {checking ? "Verifying…" : "Continue →"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── PHASE: RELAY SCREEN (Share with Guarantors) ───────────────────────────
+  if (phase === "relay_screen") {
+    return (
+      <div style={wrap}>
+        <div style={container}>
+          <Letterhead />
+          <div style={{ ...card, textAlign: "center" }}>
+            <div style={{ width: 60, height: 60, background: "#D1FAE5", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 24 }}>✓</div>
+            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 20, fontWeight: 900, color: "#1A2130", marginBottom: 8 }}>Section A Complete!</div>
+            <div style={{ fontSize: 13, color: "#6B7280", marginBottom: 24, lineHeight: 1.8 }}>
+              Great job. Your details have been saved. Now, please share this **one-click link** with your two guarantors to complete the process.
+            </div>
+            
+            <div style={{ background: "#F8F9FB", border: "1.5px dashed #DDE3EE", borderRadius: 12, padding: 20, marginBottom: 24 }}>
+              <div style={lbl}>Your Unique Guarantor Link</div>
+              <div style={{ fontSize: 13, color: G, fontWeight: 700, wordBreak: "break-all", marginTop: 8, marginBottom: 16 }}>{relayLink}</div>
+              <button 
+                onClick={() => { navigator.clipboard.writeText(relayLink); alert("Link copied!"); }}
+                style={{ background: G, color: "#fff", border: "none", padding: "10px 20px", borderRadius: 8, fontSize: 13, fontWeight: 700, cursor: "pointer" }}>
+                Copy Link to Share
+              </button>
+            </div>
+
+            <div style={{ fontSize: 12, color: "#99AABB" }}>
+              The guarantors will use this link to fill their sections directly without needing your email.
+            </div>
+            
+            <button 
+              onClick={() => setPhase("section_b_1")}
+              style={{ marginTop: 32, background: "none", border: "none", color: G, fontWeight: 700, fontSize: 14, cursor: "pointer", textDecoration: "underline" }}>
+              Continue as Guarantor 1 (if sitting with them) →
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── PHASE: SECTION A – EMPLOYEE DETAILS ──────────────────────────────────
+  if (phase === "section_a") {
+    const set = (k, v) => setEmpForm(f => ({ ...f, [k]: v }));
+    return (
+      <div style={wrap}>
+        <div style={container}>
+          <Letterhead />
+          <Progress />
+          <div style={card}>
+            <div style={sectionTitle}>Section A: Employee Details</div>
+            <div style={sectionSub}>To be completed by the Employee. Please verify all pre-filled information.</div>
+            
+            {submission && submission.section_a_status === "rejected" && (
+              <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 12, padding: "16px 20px", marginBottom: 24, display: "flex", gap: 14 }}>
+                <div style={{ fontSize: 20 }}>⚠️</div>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#991B1B" }}>Submission Rejected by HR</div>
+                  <div style={{ fontSize: 12, color: "#B91C1C", marginTop: 2 }}>Reason: {submission.section_a_reason || "Please correct the details below."}</div>
+                </div>
+              </div>
+            )}
+
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <FormField label="Full Name of Employee" required gridSpan>
+                <input style={inp} value={empForm.full_name} onChange={e => set("full_name", e.target.value)} />
+              </FormField>
+              <FormField label="Position" required>
+                <input style={inp} value={empForm.position} onChange={e => set("position", e.target.value)} />
+              </FormField>
+              <FormField label="Date of Employment" required>
+                <input style={{ ...inp }} type="date" value={empForm.date_of_employment} onChange={e => set("date_of_employment", e.target.value)} />
+              </FormField>
+              <FormField label="Staff ID No." >
+                <input style={inp} value={empForm.staff_id} onChange={e => set("staff_id", e.target.value)} />
+              </FormField>
+              <FormField label="Phone Number" required>
+                <input style={inp} value={empForm.phone} onChange={e => set("phone", e.target.value)} />
+              </FormField>
+              <FormField label="Email Address" required>
+                <input style={inp} type="email" value={empForm.email} onChange={e => set("email", e.target.value)} />
+              </FormField>
+              <FormField label="Residential Address" required gridSpan>
+                <input style={inp} value={empForm.address} onChange={e => set("address", e.target.value)} />
+              </FormField>
+            </div>
+
+            <div style={{ marginTop: 20, padding: "14px 18px", background: `${G}0D`, border: `1px solid ${G}22`, borderRadius: 10, fontSize: 13, color: "#556677", lineHeight: 1.7 }}>
+              I hereby present the persons below as my guarantors and confirm that all information provided is true.
+            </div>
+
+            <div style={{ marginTop: 20 }}>
+              <SigBlock label="Employee Signature" sigRef={empSigRef} handlers={empSig} hasData={empSigHasData} />
+            </div>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
+            <button onClick={submitSectionA} style={{
+              padding: "13px 36px", borderRadius: 10, fontWeight: 800, fontSize: 14,
+              background: G, color: "#fff", border: "none", cursor: "pointer", letterSpacing: 0.5,
+            }}>
+              Next: Guarantor 1 →
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  }
+
+  // ─── SHARED: GUARANTOR SECTION B+C+D FORM ─────────────────────────────────
+  const renderGuarantorForm = (gNum, g, setG, sigRef, sigHandlers, sigHasData, onSubmit) => {
+    const set = (k, v) => setG(f => ({ ...f, [k]: v }));
+    const ID_TYPES = ["NIN", "Int'l Passport", "Driver's License", "Voter's Card"];
+
+    return (
+      <div style={wrap}>
+        <div style={container}>
+          <Letterhead />
+          <Progress />
+
+          {/* Section B */}
+          <div style={card}>
+            <div style={sectionTitle}>Section B: Guarantor {gNum} Details</div>
+            <div style={sectionSub}>To be completed by Guarantor {gNum}. All fields marked * are required.</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <FormField label="Full Name of Guarantor" required gridSpan>
+                <input style={inp} value={g.full_name} onChange={e => set("full_name", e.target.value)} />
+              </FormField>
+              <FormField label="Relationship to Employee" required>
+                <input style={inp} value={g.relationship} onChange={e => set("relationship", e.target.value)} placeholder="e.g. Uncle, Colleague, Employer" />
+              </FormField>
+              <FormField label="Occupation" required>
+                <input style={inp} value={g.occupation} onChange={e => set("occupation", e.target.value)} />
+              </FormField>
+              <FormField label="Position Held" required>
+                <input style={inp} value={g.position_held} onChange={e => set("position_held", e.target.value)} />
+              </FormField>
+              <FormField label="Years at Current Job/Business" required>
+                <input style={inp} type="number" min="0" value={g.years_at_job} onChange={e => set("years_at_job", e.target.value)} />
+              </FormField>
+              <FormField label="Phone Number" required>
+                <input style={inp} value={g.phone} onChange={e => set("phone", e.target.value)} />
+              </FormField>
+              <FormField label="Email Address" required>
+                <input style={inp} type="email" value={g.email} onChange={e => set("email", e.target.value)} />
+              </FormField>
+              <FormField label="Residential Address" required gridSpan>
+                <input style={inp} value={g.address} onChange={e => set("address", e.target.value)} />
+              </FormField>
+              <FormField label="Name & Address of Employer / Business" required gridSpan>
+                <input style={inp} value={g.employer_name} onChange={e => set("employer_name", e.target.value)} />
+              </FormField>
+
+              {/* ID type */}
+              <FormField label="Means of Identification" required gridSpan>
+                <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+                  {ID_TYPES.map(t => (
+                    <label key={t} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13, color: "#1A2130", cursor: "pointer", fontWeight: g.id_type === t ? 700 : 400 }}>
+                      <input type="radio" name={`id_type_g${gNum}`} value={t} checked={g.id_type === t} onChange={() => set("id_type", t)}
+                        style={{ accentColor: G, width: 16, height: 16 }} />
+                      {t}
+                    </label>
+                  ))}
+                </div>
+              </FormField>
+              <FormField label="ID Number" required>
+                <input style={inp} value={g.id_number} onChange={e => set("id_number", e.target.value)} />
+              </FormField>
+
+              {/* Passport photo upload */}
+              <FormField label="Passport Photograph" required>
+                <div>
+                  <input type="file" accept="image/*" id={`passport_g${gNum}`} style={{ display: "none" }}
+                    onChange={e => handleFileChange(e.target.files[0], setG, "passport")} />
+                  <label htmlFor={`passport_g${gNum}`} style={{
+                    display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 18px",
+                    background: g.passport_preview ? `${G}15` : "#F4F6FA", border: `1.5px dashed ${g.passport_preview ? G : "#DDE3EE"}`,
+                    borderRadius: 10, fontSize: 13, color: g.passport_preview ? G : "#6B7280", cursor: "pointer", fontWeight: 600,
+                  }}>
+                    📷 {g.passport_preview ? "Photo selected ✓" : "Upload Passport Photo"}
+                  </label>
+                  {g.passport_preview && (
+                    <img src={g.passport_preview} alt="preview" style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8, marginLeft: 12, border: `2px solid ${G}40`, verticalAlign: "middle" }} />
+                  )}
+                </div>
+              </FormField>
+
+              {/* ID document upload */}
+              <FormField label="Copy of Valid ID">
+                <div>
+                  <input type="file" accept="image/*,application/pdf" id={`id_doc_g${gNum}`} style={{ display: "none" }}
+                    onChange={e => handleFileChange(e.target.files[0], setG, "id_doc")} />
+                  <label htmlFor={`id_doc_g${gNum}`} style={{
+                    display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 18px",
+                    background: g.id_doc_preview ? `${G}15` : "#F4F6FA", border: `1.5px dashed ${g.id_doc_preview ? G : "#DDE3EE"}`,
+                    borderRadius: 10, fontSize: 13, color: g.id_doc_preview ? G : "#6B7280", cursor: "pointer", fontWeight: 600,
+                  }}>
+                    📎 {g.id_doc_preview ? "ID document selected ✓" : "Upload ID Photocopy"}
+                  </label>
+                </div>
+              </FormField>
+            </div>
+          </div>
+
+          {/* Section C: Declaration */}
+          <div style={card}>
+            <div style={sectionTitle}>Section C: Guarantor's Declaration</div>
+            <div style={{ marginBottom: 20, padding: "18px 20px", background: "#F8F9FB", border: "1px solid #DDE3EE", borderRadius: 10, fontSize: 13, color: "#556677", lineHeight: 1.9 }}>
+              <div style={{ marginBottom: 14, fontWeight: 700, color: "#1A2130" }}>
+                I, <span style={{ borderBottom: "1.5px solid #C47D0A", color: "#C47D0A" }}>{g.full_name || "________________"}</span>, of the above address, do hereby solemnly declare as follows:
+              </div>
+              {[
+                "I know the above-named employee personally and can vouch for their character, integrity, and conduct.",
+                "I understand that the employee will be engaged in the sales of real estate properties and will handle company funds, documents, and client relationships.",
+                "I guarantee that the employee shall be of good behavior and shall faithfully discharge all duties assigned.",
+                "Should the employee be found liable for any act of fraud, dishonesty, negligence, misappropriation of funds, damage to company property, or breach of company policy resulting in financial loss, I undertake to assist the company in ensuring restitution or take responsibility up to the limit permitted by law.",
+                "I confirm that I am gainfully employed/self-employed, financially capable, and have not been convicted of any criminal offense.",
+                `I consent to ${companyInfo.name || "[Company Name]"} verifying any information provided herein.`,
+              ].map((item, i) => (
+                <div key={i} style={{ display: "flex", gap: 10, marginBottom: 10 }}>
+                  <div style={{ fontWeight: 700, color: G, minWidth: 20 }}>{i + 1}.</div>
+                  <div>{item}</div>
+                </div>
+              ))}
+            </div>
+
+            <SigBlock label={`Guarantor ${gNum} Signature`} sigRef={sigRef} handlers={sigHandlers} hasData={sigHasData} />
+          </div>
+
+          {/* Section D: Witness Attestation */}
+          <div style={card}>
+            <div style={sectionTitle}>Section D: Official Attestation</div>
+            <div style={sectionSub}>To be completed by a Witness (optional but recommended).</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
+              <FormField label="Name of Witness">
+                <input style={inp} value={g.witness_name} onChange={e => set("witness_name", e.target.value)} />
+              </FormField>
+              <FormField label="Occupation">
+                <input style={inp} value={g.witness_occupation} onChange={e => set("witness_occupation", e.target.value)} />
+              </FormField>
+              <FormField label="Phone">
+                <input style={inp} value={g.witness_phone} onChange={e => set("witness_phone", e.target.value)} />
+              </FormField>
+              <FormField label="Address" gridSpan>
+                <input style={inp} value={g.witness_address} onChange={e => set("witness_address", e.target.value)} />
+              </FormField>
+            </div>
+          </div>
+
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
+            {gNum === 2 && (
+              <button onClick={() => setPhase("section_b_1")} style={{
+                padding: "13px 28px", borderRadius: 10, fontWeight: 700, fontSize: 14,
+                background: "none", color: "#6B7280", border: "1px solid #DDE3EE", cursor: "pointer",
+              }}>
+                ← Back
+              </button>
+            )}
+            {gNum === 1 && <div />}
+            <button onClick={() => onSubmit(gNum)} disabled={submitting} style={{
+              padding: "13px 36px", borderRadius: 10, fontWeight: 800, fontSize: 14,
+              background: G, color: "#fff", border: "none", cursor: "pointer", letterSpacing: 0.5,
+            }}>
+              {submitting ? "Submitting…" : gNum === 1 ? "Next: Guarantor 2 →" : "Submit Form ✓"}
+            </button>
+          </div>
+        </div>
+      </div>
+    );
+  };
+
+  if (phase === "section_b_1") {
+    return renderGuarantorForm(1, g1, setG1, g1SigRef, g1Sig, g1SigHasData, submitGuarantor);
+  }
+  if (phase === "section_b_2") {
+    return renderGuarantorForm(2, g2, setG2, g2SigRef, g2Sig, g2SigHasData, submitGuarantor);
+  }
+
+  return null;
+}
+
 function HRAdminPortal({ user, onLogout }) {
   const nav = [
     // ── Overview (auto-loads first) ──
@@ -11202,6 +12503,7 @@ function HRAdminPortal({ user, onLogout }) {
     { isHeader: true, label: "People & Org" },
     { id: "staff", icon: "users", label: "Employees" },
     { id: "biodata", icon: "file", label: "Bio Data Collection" },
+    { id: "guarantors", icon: "file", label: "Guarantor Forms" },
     { id: "org_chart", icon: "org", label: "Org Chart" },
     { id: "departments", icon: "home", label: "Departments" },
     { id: "diversity", icon: "star", label: "Diversity & Inclusion" },
@@ -11280,6 +12582,7 @@ function HRAdminPortal({ user, onLogout }) {
       if (p === "ats_pipeline") return <ATSPipeline />;
       if (p === "interviews") return <InterviewScheduler />;
       if (p === "offers") return <OffersManager />;
+      if (p === "guarantors") return <GuarantorManager />;
       if (p === "talent_pool") return <TalentPool />;
       // Hub 2: People
       if (p === "staff") return <StaffDirectory authRole="hr" />;
@@ -11546,6 +12849,7 @@ function StaffPortal({ user, onLogout }) {
     { id: "hr_requests", icon: "star", label: "Requests" },
     { id: "grievances", icon: "alert", label: "Grievances" },
     { id: "disciplinary", icon: "mis", label: "My Flags" },
+    { id: "guarantors", icon: "task", label: "My Guarantors" },
     { isHeader: true, label: "Administration" },
     { id: "tasks", icon: "tasks", label: "My Tasks" },
   ];
@@ -11604,6 +12908,7 @@ function StaffPortal({ user, onLogout }) {
       if (pg === "policy_library") return <PolicyLibrary isHR={false} />;
       if (pg === "internal_job_board") return <InternalJobBoard isHR={false} user={user} />;
       if (pg === "training" || pg === "compliance_training") return <LearningHub isHR={false} defaultTab={pg === "compliance_training" ? "compliance" : "trainings"} />;
+      if (pg === "guarantors") return <MyGuarantors />;
 
       return (
         <div className="fade">
@@ -14675,6 +15980,15 @@ export default function App() {
     return (
       <ThemeCtx.Provider value={{ dark, toggle }}>
         <PublicBiodataForm />
+      </ThemeCtx.Provider>
+    );
+  }
+
+  const guarantorToken = urlParams.get("guarantor_token");
+  if (guarantorToken) {
+    return (
+      <ThemeCtx.Provider value={{ dark, toggle }}>
+        <PublicGuarantorForm />
       </ThemeCtx.Provider>
     );
   }
