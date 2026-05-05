@@ -11862,61 +11862,51 @@ function PublicGuarantorForm() {
   // ── Canvas helpers (shared with biodata form pattern) ──────────────────────
   const initSigCanvas = (ref, setCtx) => {
     const canvas = ref.current;
-    if (!canvas) return;
+    if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
+    if (rect.width === 0) return null;
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.round(rect.width * dpr);
     canvas.height = Math.round(rect.height * dpr);
     const ctx = canvas.getContext("2d");
     ctx.scale(dpr, dpr);
-    ctx.strokeStyle = "#000000"; ctx.lineWidth = 2.8;
-    ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctx.strokeStyle = "#1A1D24";
+    ctx.lineWidth = 2.8;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
     setCtx(ctx);
+    return ctx;
   };
   const getPos = (e, canvas) => {
     const rect = canvas.getBoundingClientRect();
     const clientX = e.touches ? e.touches[0].clientX : e.clientX;
     const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    
-    // Scale coordinates back to internal canvas resolution if needed, 
-    // but since we use ctx.scale(dpr, dpr), we must return CSS pixels.
-    return { 
-      x: clientX - rect.left, 
-      y: clientY - rect.top 
-    };
+    return { x: clientX - rect.left, y: clientY - rect.top };
   };
   const makeSigHandlers = (ref, ctx, setCtx, drawing, setDrawing, setHasData) => ({
     start: (e) => {
-      if (e.cancelable) e.preventDefault();
+      e.preventDefault();
       const canvas = ref.current;
       if (!canvas) return;
       let activeCtx = ctx;
-      if (!activeCtx) {
-        // Init and capture ctx immediately
-        const rect = canvas.getBoundingClientRect();
-        const dpr = window.devicePixelRatio || 1;
-        canvas.width = Math.round(rect.width * dpr);
-        canvas.height = Math.round(rect.height * dpr);
-        activeCtx = canvas.getContext("2d");
-        activeCtx.scale(dpr, dpr);
-        activeCtx.strokeStyle = "#000000"; activeCtx.lineWidth = 2.8;
-        activeCtx.lineCap = "round"; activeCtx.lineJoin = "round";
-        setCtx(activeCtx);
-      }
+      if (!activeCtx) activeCtx = initSigCanvas(ref, setCtx);
+      if (!activeCtx) return;
       setDrawing(true); setHasData(true);
       const pos = getPos(e, canvas);
       activeCtx.beginPath(); activeCtx.moveTo(pos.x, pos.y);
     },
     move: (e) => {
-      if (drawing && e.cancelable) e.preventDefault();
-      if (!drawing || !ctx) return;
+      e.preventDefault();
+      if (!drawing) return;
       const canvas = ref.current;
+      if (!canvas) return;
+      let activeCtx = ctx || canvas.getContext("2d");
       const pos = getPos(e, canvas);
-      ctx.lineTo(pos.x, pos.y); ctx.stroke();
+      activeCtx.lineTo(pos.x, pos.y); activeCtx.stroke();
     },
     end: () => {
       setDrawing(false);
-      if (ctx) ctx.beginPath(); // Reset path for next stroke
+      if (ctx) ctx.beginPath();
     },
     clear: () => {
       const canvas = ref.current;
