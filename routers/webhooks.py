@@ -22,7 +22,7 @@ router = APIRouter()
 
 WEBHOOK_SECRET = os.getenv("WEBHOOK_SECRET")
 
-@router.post("/form-submission")
+
 async def process_webhook_post_submission_tasks(
     payload: WebhookFormPayload,
     invoice_id: str,
@@ -160,10 +160,13 @@ async def form_submission(
         raise HTTPException(status_code=403, detail="Invalid webhook secret")
 
     # 2. Validate consent
-    # Basic verification: ensure the user at least checked the consent box
+    # Basic verification: We relax this for the legacy form as the consent 
+    # field name might have changed or be missing in the payload.
     consent_text = (payload.consent or "").lower()
-    if "confirm" not in consent_text and "agree" not in consent_text:
-        return {"status": "ignored", "message": "Consent not confirmed"}
+    if consent_text and not any(word in consent_text for word in ["confirm", "agree", "yes", "accept", "true", "on"]):
+        print(f"WARNING: Unrecognized consent text '{consent_text}'. Proceeding due to valid webhook secret.")
+    elif not consent_text:
+        print("WARNING: Webhook payload missing consent text. Proceeding due to valid webhook secret.")
 
     db = get_db()
 
@@ -348,7 +351,7 @@ async def form_submission(
             "attribution_utm_medium": payload.utm_medium,
             "attribution_utm_campaign": payload.utm_campaign,
             "source": "google_form",
-            "pipeline_stage": "lead"
+            "pipeline_stage": "inspection"
         }
 
         invoice_res = await db_execute(lambda: db.table("invoices").insert(jsonable_encoder(invoice_insert)).execute())

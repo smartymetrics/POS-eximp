@@ -4,7 +4,7 @@ from fastapi.responses import StreamingResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from models import InvoiceCreate, SendDocumentRequest, VoidReceiptRequest
 from database import get_db, db_execute
-from routers.auth import verify_token, resolve_admin_token
+from routers.auth import verify_token, resolve_admin_token, has_any_role
 from routers.analytics import log_activity
 from email_service import send_invoice_email, send_receipt_email, send_statement_email, send_void_notification_email
 from pdf_service import generate_invoice_pdf, generate_receipt_pdf, generate_statement_pdf
@@ -298,7 +298,7 @@ async def void_invoice_receipts(
     Only Admins can perform this.
     """
     db = get_db()
-    if current_admin.get("role") != "admin":
+    if not has_any_role(current_admin, "admin"):
         raise HTTPException(status_code=403, detail="Only administrators can void receipts")
     
     # 1. Fetch invoice to get client_id and check existence
@@ -404,7 +404,7 @@ async def edit_invoice(
     
     for field, value in payload.items():
         if field in admin_only_fields:
-            if role != "admin":
+            if not has_any_role(current_admin, "admin"):
                 raise HTTPException(status_code=403, detail=f"Permission denied to edit {field}")
             update_data[field] = value
         elif field in staff_allowed_fields:

@@ -61,11 +61,17 @@ def has_any_role(admin_payload: dict, *roles) -> bool:
             flat_roles.extend(r)
         else:
             flat_roles.append(r)
-    user_roles = {r.strip() for r in (admin_payload.get("role") or "").split(",") if r.strip()}
+    role_str = admin_payload.get("role") or ""
+    primary_role_str = admin_payload.get("primary_role") or ""
+    all_roles_str = f"{role_str},{primary_role_str}"
+    
+    user_roles = {r.strip().lower().replace(" ", "_") for r in all_roles_str.split(",") if r.strip()}
+    flat_roles_normalized = {r.strip().lower().replace(" ", "_") for r in flat_roles if r}
+    
     # Always allow super_admin
     if "super_admin" in user_roles:
         return True
-    return bool(user_roles & {r.strip() for r in flat_roles if r})
+    return bool(user_roles & flat_roles_normalized)
 
 
 # Alias for dependency consistency
