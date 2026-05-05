@@ -1,7 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, BackgroundTasks
 from fastapi.encoders import jsonable_encoder
 from database import get_db, db_execute
-from routers.auth import verify_token
+from routers.auth import verify_token, has_any_role
 from routers.analytics import log_activity
 from models import PaymentCreate, PaymentUpdate
 from pdf_service import generate_refund_receipt_pdf
@@ -147,7 +147,7 @@ async def update_payment(
     current_admin=Depends(verify_token)
 ):
     db = get_db()
-    if current_admin.get("role") != "admin":
+    if not has_any_role(current_admin, "admin"):
         raise HTTPException(status_code=403, detail="Only administrators can edit payments")
     
     # 1. Fetch current payment to get invoice_id

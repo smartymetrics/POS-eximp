@@ -342,7 +342,6 @@ async def edit_verification(
     current_admin=Depends(verify_token)
 ):
     db = get_db()
-    role = current_admin.get("role")
     
     # 1. Fetch verification
     v_res = await db_execute(lambda: db.table("pending_verifications").select("*").eq("id", id).execute())
@@ -358,7 +357,7 @@ async def edit_verification(
     # Field-level role checks
     admin_only_fields = ["deposit_amount", "payment_date"]
     
-    if role != "admin":
+    if not has_any_role(current_admin, "admin"):
         for field in admin_only_fields:
             if field in update_data:
                 raise HTTPException(status_code=403, detail=f"Permission denied to edit {field}")

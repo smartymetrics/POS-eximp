@@ -7294,7 +7294,19 @@ function RecognitionWall({ user }) {
 // ─── HUB: REMOTE WORK ────────────────────────────────────────────────────────
 function RemoteWork() {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
-  const { user, isHR } = useAuth ? useAuth() : { user: null, isHR: false };
+  // Derive user & isHR from the JWT token stored in localStorage
+  const _rwToken = typeof localStorage !== "undefined" ? localStorage.getItem("ec_token") : null;
+  let _rwUser = null, _rwIsHR = false;
+  try {
+    if (_rwToken) {
+      const _p = JSON.parse(atob(_rwToken.split(".")[1]));
+      _rwUser = { id: _p.sub, full_name: _p.full_name, email: _p.email };
+      const _roles = (_p.role || "").toLowerCase().split(",").map(r => r.trim());
+      _rwIsHR = _roles.some(r => ["admin", "super_admin", "hr_admin", "operations"].includes(r));
+    }
+  } catch (_) {}
+  const user = _rwUser;
+  const isHR = _rwIsHR;
   const currentUserId = user?.id || null;
   const [requests, setRequests] = useState([]); const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);

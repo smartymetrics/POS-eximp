@@ -74,7 +74,7 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     Log exactly what failed in the 422 error.
     This helps us see if it's a bad email format or missing field.
     """
-    print(f"❌ VALIDATION ERROR at {request.url.path}: {exc.errors()}")
+    print(f"[ERROR] VALIDATION ERROR at {request.url.path}: {exc.errors()}")
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
         content={"detail": exc.errors(), "body": exc.body},
