@@ -11869,7 +11869,7 @@ function PublicGuarantorForm() {
     canvas.height = Math.round(rect.height * dpr);
     const ctx = canvas.getContext("2d");
     ctx.scale(dpr, dpr);
-    ctx.strokeStyle = "#1A1D24"; ctx.lineWidth = 2.5;
+    ctx.strokeStyle = "#000000"; ctx.lineWidth = 2.8;
     ctx.lineCap = "round"; ctx.lineJoin = "round";
     setCtx(ctx);
   };
@@ -11880,15 +11880,28 @@ function PublicGuarantorForm() {
   };
   const makeSigHandlers = (ref, ctx, setCtx, drawing, setDrawing, setHasData) => ({
     start: (e) => {
-      e.preventDefault();
+      if (e.cancelable) e.preventDefault();
       const canvas = ref.current;
-      if (!canvas || !ctx) { initSigCanvas(ref, setCtx); return; }
+      if (!canvas) return;
+      let activeCtx = ctx;
+      if (!activeCtx) {
+        // Init and capture ctx immediately
+        const rect = canvas.getBoundingClientRect();
+        const dpr = window.devicePixelRatio || 1;
+        canvas.width = Math.round(rect.width * dpr);
+        canvas.height = Math.round(rect.height * dpr);
+        activeCtx = canvas.getContext("2d");
+        activeCtx.scale(dpr, dpr);
+        activeCtx.strokeStyle = "#000000"; activeCtx.lineWidth = 2.8;
+        activeCtx.lineCap = "round"; activeCtx.lineJoin = "round";
+        setCtx(activeCtx);
+      }
       setDrawing(true); setHasData(true);
       const pos = getPos(e, canvas);
-      ctx.beginPath(); ctx.moveTo(pos.x, pos.y);
+      activeCtx.beginPath(); activeCtx.moveTo(pos.x, pos.y);
     },
     move: (e) => {
-      e.preventDefault();
+      if (drawing && e.cancelable) e.preventDefault();
       if (!drawing || !ctx) return;
       const canvas = ref.current;
       const pos = getPos(e, canvas);
@@ -12075,11 +12088,11 @@ function PublicGuarantorForm() {
   );
 
   const SigBlock = ({ label, sigRef, handlers, hasData }) => (
-    <div style={{ background: "rgba(0,0,0,0.15)", padding: 20, borderRadius: 16, border: "1px solid rgba(255,255,255,0.05)" }}>
+    <div style={{ background: "rgba(0,0,0,0.25)", padding: 24, borderRadius: 20, border: "1px solid rgba(255,255,255,0.05)" }}>
       <label style={lbl}>{label} <span style={{ color: "#EF4444" }}>*</span></label>
-      <div style={{ display: "flex", gap: 14, alignItems: "flex-start" }}>
+      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
         <canvas
-          ref={sigRef} style={{ ...sigBox, background: "#fff", filter: "invert(1) contrast(1.1)" }}
+          ref={sigRef} style={{ ...sigBox, background: "#FFFFFF", filter: "none" }}
           onMouseDown={handlers.start} onMouseMove={handlers.move} onMouseUp={handlers.end} onMouseLeave={handlers.end}
           onTouchStart={handlers.start} onTouchMove={handlers.move} onTouchEnd={handlers.end}
         />
