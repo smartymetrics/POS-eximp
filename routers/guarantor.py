@@ -174,6 +174,28 @@ async def review_submission(id: str, data: dict, current_admin=Depends(verify_to
                         "message": msg,
                     }).execute()
                 )
+
+            # Send rejection email with a direct re-fill link
+            if status == "rejected":
+                inv_res = await db_execute(
+                    lambda: db.table("guarantor_invites")
+                    .select("token")
+                    .eq("email", emp_email)
+                    .order("created_at", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+                if inv_res.data:
+                    invite_token = inv_res.data[0]["token"]
+                    base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
+                    if not base_url.endswith("/hr"):
+                        base_url = f"{base_url}/hr"
+                    form_link = f"{base_url}/?guarantor_token={invite_token}&email={emp_email}"
+                    labels = {"a": "Employee Details (Section A)", "b": "Guarantor 1 (Section B)", "c": "Guarantor 2 (Section C)"}
+                    sec_label = labels.get(section, "a section")
+                    await _send_guarantor_rejection_email(
+                        emp_email, sec_label, reason, form_link
+                    )
     except Exception:
         pass  # Notification failure should not block the review
 
@@ -235,6 +257,26 @@ async def bulk_review_submission(id: str, data: dict, current_admin=Depends(veri
                         "message": msg,
                     }).execute()
                 )
+
+            # Send rejection email with a direct re-fill link for all sections
+            if status == "rejected":
+                inv_res = await db_execute(
+                    lambda: db.table("guarantor_invites")
+                    .select("token")
+                    .eq("email", emp_email)
+                    .order("created_at", desc=True)
+                    .limit(1)
+                    .execute()
+                )
+                if inv_res.data:
+                    invite_token = inv_res.data[0]["token"]
+                    base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
+                    if not base_url.endswith("/hr"):
+                        base_url = f"{base_url}/hr"
+                    form_link = f"{base_url}/?guarantor_token={invite_token}&email={emp_email}"
+                    await _send_guarantor_rejection_email(
+                        emp_email, "All Sections", reason, form_link
+                    )
     except Exception:
         pass
 
@@ -285,6 +327,107 @@ async def create_invite(data: dict, request: Request, current_admin=Depends(veri
         logging.getLogger(__name__).error(f"Guarantor invite email failed for {email}: {e}")
 
     return res.data[0]
+
+
+
+async def _send_guarantor_rejection_email(
+    email_addr: str, section_label: str, reason: str, form_link: str
+):
+    """Send a rejection email to the employee with a direct link to re-fill the rejected section(s)."""
+    import resend
+    resend.api_key = os.getenv("RESEND_API_KEY")
+    from_email = os.getenv("FROM_EMAIL", "hr@eximps-cloves.com")
+
+    reason_block = f"""
+                <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:3px;padding:16px 20px;margin:20px 0;color:#DC2626;font-size:13px;line-height:1.7;">
+                  <strong>Reason:</strong> {reason}
+                </div>""" if reason else ""
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+    <body style="margin:0;padding:0;background:#F5F0E8;font-family:'Segoe UI',Arial,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0E8;padding:40px 20px;">
+        <tr><td align="center">
+          <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:4px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+            <!-- Header -->
+            <tr>
+              <td style="background:#0D1B2A;padding:0;border-left:6px solid #DC2626;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="padding:28px 36px;">
+                      <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Eximp &amp; Cloves Infrastructure Limited</div>
+                      <div style="font-size:10px;color:#DC2626;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-top:4px;">Human Resources Division</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <!-- Body -->
+            <tr>
+              <td style="padding:40px 36px;">
+                <div style="width:56px;height:56px;background:#FEE2E2;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:20px;font-size:26px;text-align:center;line-height:56px;">✕</div>
+                <p style="font-size:13px;color:#DC2626;margin:0 0 8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;">Action Required</p>
+                <h1 style="font-size:22px;font-weight:800;color:#0D1B2A;margin:0 0 20px;line-height:1.3;">Guarantor Form — Revision Needed</h1>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 12px;">Dear Employee,</p>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">
+                  HR has reviewed your Guarantor Form and requires a revision for the following section:
+                  <strong>{section_label}</strong>.
+                </p>
+                {reason_block}
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 28px;">
+                  Please use the button below to return to your form, correct the flagged section(s), and re-sign where required.
+                </p>
+                <!-- CTA -->
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td align="center" style="padding:0 0 28px;">
+                      <a href="{form_link}" style="display:inline-block;background:#B8860B;color:#ffffff;text-decoration:none;padding:16px 40px;border-radius:3px;font-size:14px;font-weight:700;letter-spacing:0.5px;">
+                        Return to Form &amp; Re-sign &rarr;
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+                <!-- Link fallback -->
+                <div style="background:#F8F9FB;border:1px solid #E8E2D9;border-radius:3px;padding:16px 18px;margin-bottom:24px;">
+                  <p style="font-size:11px;color:#6B7280;margin:0 0 6px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">Or copy this link into your browser</p>
+                  <p style="font-size:12px;color:#B8860B;margin:0;word-break:break-all;font-family:monospace;">{form_link}</p>
+                </div>
+                <div style="background:#FEF9EC;border:1px solid #B8860B;border-radius:3px;padding:14px 18px;">
+                  <p style="font-size:13px;font-weight:800;color:#92640A;margin:0 0 4px;">⚠ Remember — Login Required</p>
+                  <p style="font-size:13px;color:#78510A;line-height:1.7;margin:0;">
+                    Ensure you are already logged into your staff account before opening the link.
+                  </p>
+                </div>
+              </td>
+            </tr>
+            <!-- Footer -->
+            <tr>
+              <td style="background:#F8F9FB;border-top:1px solid #E8E2D9;padding:20px 36px;">
+                <p style="font-size:11px;color:#9CA3AF;margin:0;line-height:1.6;">
+                  <strong style="color:#6B7280;">Eximp &amp; Cloves Infrastructure Limited</strong><br>
+                  RC 8311800 &nbsp;|&nbsp; 57B, Isaac John Street, Yaba, Lagos &nbsp;|&nbsp; +234 912 686 4383<br>
+                  This is an automated HR system notification.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+    """
+
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, lambda: resend.Emails.send({{
+        "from":     f"Eximp & Cloves HR <{{from_email}}>",
+        "to":       [email_addr],
+        "subject":  f"Action Required: Guarantor Form Revision — {{section_label}}",
+        "html":     html,
+        "reply_to": "hr@eximps-cloves.com",
+    }}))
 
 
 async def _send_guarantor_invite_email(email_addr: str, inviter_name: str, form_link: str):
@@ -509,9 +652,25 @@ async def check_public_token(token: str, email: str):
             )
         invite = invite_res.data[0]
         if invite["status"] != "pending":
-            raise HTTPException(
-                status_code=400, detail="This invitation link has already been used."
+            # Allow re-access if any section on their submission was rejected by HR
+            sub_check_res = await db_execute(
+                lambda: db.table("guarantor_submissions")
+                .select("section_a_status,section_b_status,section_c_status")
+                .eq("employee_email", email)
+                .limit(1)
+                .execute()
             )
+            has_rejected_section = False
+            if sub_check_res.data:
+                s = sub_check_res.data[0]
+                has_rejected_section = any(
+                    s.get(f"section_{x}_status") == "rejected" for x in ("a", "b", "c")
+                )
+            if not has_rejected_section:
+                raise HTTPException(
+                    status_code=400,
+                    detail="This invitation link has already been used.",
+                )
         expires_at = datetime.fromisoformat(invite["expires_at"].replace("Z", "+00:00"))
         if expires_at < datetime.now(timezone.utc):
             raise HTTPException(status_code=400, detail="This invitation link has expired.")

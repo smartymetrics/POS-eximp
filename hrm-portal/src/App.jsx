@@ -12145,7 +12145,16 @@ function PublicGuarantorForm() {
         setEmpForm({ full_name: s.employee_name || "", position: s.position || "", address: s.employee_address || "", phone: s.employee_phone || "", email: s.employee_email || eAddr, date_of_employment: s.date_of_employment || "", staff_id: s.staff_id || "" });
         if (s.g1) setG1(p => ({ ...p, ...s.g1 }));
         if (s.g2) setG2(p => ({ ...p, ...s.g2 }));
-        if (!s.employee_signature_url) setPhase("section_a");
+        // Rejected sections take priority — open the first rejected one
+        // so the staff only has to re-fill/re-sign what HR flagged.
+        const aRejected = s.section_a_status === "rejected";
+        const bRejected = s.section_b_status === "rejected";
+        const cRejected = s.section_c_status === "rejected";
+        if (aRejected) setPhase("section_a");
+        else if (bRejected) setPhase("section_b_1");
+        else if (cRejected) setPhase("section_b_2");
+        // Normal first-time fill flow (no prior rejection)
+        else if (!s.employee_signature_url) setPhase("section_a");
         else if (!s.g1?.signature_url) setPhase("section_b_1");
         else if (!s.g2?.signature_url) setPhase("section_b_2");
         else setPhase("success");

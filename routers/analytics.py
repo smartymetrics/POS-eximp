@@ -249,12 +249,26 @@ async def get_activity(
     is_privileged = any(r in role.lower() for r in ["admin", "operations"])
     
     query = db.table("activity_log").select("*, admins(full_name), clients(assigned_rep_id)")
-    
+
     if not is_privileged:
         # Restricted users (Sales, Marketing, Staff) see:
         # 1. Activities they performed
         # 2. Activities related to clients assigned to them
-        query = query.or_(f"performed_by.eq.{admin_id},clients.assigned_rep_id.eq.{admin_id}")
+        #
+        # NOTE: PostgREST or_() cannot filter on embedded/related table columns
+        # (e.g. clients.assigned_rep_id). Instead, we pre-fetch the IDs of clients
+        # assigned to this rep and use client_id.in.(...) in the or_ expression.
+        assigned_res = await db_execute(
+            lambda: db.table("clients").select("id").eq("assigned_rep_id", admin_id).execute()
+        )
+        assigned_client_ids = [c["id"] for c in (assigned_res.data or [])]
+
+        if assigned_client_ids:
+            ids_csv = ",".join(assigned_client_ids)
+            query = query.or_(f"performed_by.eq.{admin_id},client_id.in.({ids_csv})")
+        else:
+            # No assigned clients — only show own activity
+            query = query.eq("performed_by", admin_id)
 
     data = (await db_execute(lambda: query\
         .order("created_at", desc=True)\

@@ -104,7 +104,20 @@ def _approval_email_html(staff_name: str) -> str:
       </div>""")
 
 
-def _rejection_email_html(staff_name: str, reason: str) -> str:
+def _rejection_email_html(staff_name: str, reason: str, resubmit_link: str = None) -> str:
+    if resubmit_link:
+        link_block = f'''
+        <div style="margin:24px 0;">
+          <a href="{resubmit_link}" style="display:inline-block;background:#C47D0A;color:#fff;text-decoration:none;padding:14px 32px;border-radius:10px;font-weight:700;font-size:14px;letter-spacing:0.5px;">
+            Re-submit / Re-sign Form →
+          </a>
+          <p style="color:#9CA3AF;font-size:12px;margin-top:12px;">
+            If the button doesn't work, copy and paste this link:<br>
+            <a href="{resubmit_link}" style="color:#C47D0A;word-break:break-all;">{resubmit_link}</a>
+          </p>
+        </div>'''
+    else:
+        link_block = "<p style=\"color:#374151;line-height:1.7;\">Please use your original form link to resubmit or contact HR if you need a new link.</p>"
     return _base_email_wrapper(f"""
       <div style="padding:36px 32px;">
         <div style="width:60px;height:60px;background:#FEE2E2;border-radius:50%;display:flex;align-items:center;justify-content:center;margin-bottom:20px;">
@@ -119,7 +132,7 @@ def _rejection_email_html(staff_name: str, reason: str) -> str:
         <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:8px;padding:16px 20px;margin:20px 0;color:#DC2626;font-size:13px;line-height:1.6;">
           {reason}
         </div>
-        <p style="color:#374151;line-height:1.7;">Please use your original form link to resubmit or contact HR if you need a new link.</p>
+        {link_block}
       </div>""")
 
 
@@ -599,7 +612,13 @@ async def review_submission(submission_id: str, body: ReviewAction, token=Depend
         if body.action == "approve":
             await _send_email(sub["email"], "Your Bio Data Has Been Approved", _approval_email_html(full_name))
         else:
-            await _send_email(sub["email"], "Your Bio Data Requires Revision", _rejection_email_html(full_name, body.rejection_reason or "Please contact HR for details."))
+            # Fetch invite token so staff can click back to re-submit/re-sign
+            resubmit_link = None
+            if sub.get("invite_id"):
+                inv_res = await db_execute(lambda: db.table("biodata_invites").select("token").eq("id", sub["invite_id"]).limit(1).execute())
+                if inv_res.data and inv_res.data[0].get("token"):
+                    resubmit_link = f"{APP_BASE_URL}/hr/?token={inv_res.data[0]['token']}"
+            await _send_email(sub["email"], "Your Bio Data Requires Revision", _rejection_email_html(full_name, body.rejection_reason or "Please contact HR for details.", resubmit_link))
     except Exception as e:
         logger.error(f"Review notification email failed: {e}")
 
