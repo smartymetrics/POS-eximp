@@ -62,58 +62,6 @@ def _sign_guarantor(g: dict) -> dict:
 
 # ── Admin Endpoints ───────────────────────────────────────────────────────────
 
-@router.get("/my-submission")
-async def get_my_submission(current_user=Depends(verify_token)):
-    """Fetch the guarantor submission and invite token for the current logged-in staff."""
-    db = get_db()
-    email = current_user.get("email")
-    if not email:
-        raise HTTPException(status_code=400, detail="User email not found in token")
-
-    # 1. Get submission
-    sub_res = await db_execute(
-        lambda: db.table("guarantor_submissions")
-        .select("*, guarantors(*)")
-        .eq("employee_email", email)
-        .execute()
-    )
-    
-    submission = None
-    if sub_res.data:
-        submission = sub_res.data[0]
-        _sign_sub(submission)
-        guarantors = submission.pop("guarantors", []) or []
-        submission["g1"] = next((g for g in guarantors if g["slot_number"] == 1), None)
-        submission["g2"] = next((g for g in guarantors if g["slot_number"] == 2), None)
-        for key in ("g1", "g2"):
-            if submission[key]:
-                _sign_guarantor(submission[key])
-
-    # 2. Get invite token (to build the re-fill link)
-    inv_res = await db_execute(
-        lambda: db.table("guarantor_invites")
-        .select("token")
-        .eq("email", email)
-        .order("created_at", desc=True)
-        .limit(1)
-        .execute()
-    )
-    token = inv_res.data[0]["token"] if inv_res.data else None
-
-    # 3. Get general link if no personal token exists
-    if not token:
-        settings_res = await db_execute(
-            lambda: db.table("guarantor_settings").select("general_link_token").limit(1).execute()
-        )
-        if settings_res.data:
-            token = settings_res.data[0]["general_link_token"]
-
-    return {
-        "submission": submission,
-        "token": token,
-        "email": email
-    }
-
 @router.get("/submissions")
 async def get_submissions(current_admin=Depends(verify_token)):
     if not has_any_role(current_admin, "admin", "super_admin", "hr_admin"):
@@ -823,17 +771,24 @@ async def save_partial_submission(
     if section == "employee":
         sig_path = _upload_sig(fields.get("signature"), "employee_sig")
 
+        meta = _signing_meta(request)
         payload: dict = {
-            "id":                   submission_id,
-            "employee_name":        fields.get("full_name"),
-            "employee_email":       email,
-            "position":             fields.get("position"),
-            "staff_id":             fields.get("staff_id"),
-            "date_of_employment":   fields.get("date_of_employment"),
-            "employee_phone":       fields.get("phone"),
-            "employee_address":     fields.get("address"),
-            "section_a_status":     "pending",
-            "submitted_at":         datetime.utcnow().isoformat(),
+            "id":                       submission_id,
+            "employee_name":            fields.get("full_name"),
+            "employee_email":           email,
+            "position":                 fields.get("position"),
+            "staff_id":                 fields.get("staff_id"),
+            "date_of_employment":       fields.get("date_of_employment"),
+            "employee_phone":           fields.get("phone"),
+            "employee_address":         fields.get("address"),
+            "section_a_status":         "pending",
+            "submitted_at":             datetime.utcnow().isoformat(),
+            # Signing audit trail
+            "employee_signed_at":       meta["signed_at"],
+            "employee_ip":              meta["ip"],
+            "employee_device_type":     meta["device_type"],
+            "employee_user_agent":      meta["user_agent"],
+            "employee_signed_date":     fields.get("signed_date"),
         }
         if sig_path:
             payload["employee_signature_url"] = sig_path
@@ -851,6 +806,7 @@ async def save_partial_submission(
         passport_path = await _upload_file(passport_photo, f"g{slot}_passport")
         id_doc_path   = await _upload_file(id_document,    f"g{slot}_id")
 
+        meta = _signing_meta(request)
         g_payload: dict = {
             "submission_id":    submission_id,
             "slot_number":      slot,
@@ -865,11 +821,12 @@ async def save_partial_submission(
             "email":            fields.get("email"),
             "id_type":          fields.get("id_type"),
             "id_number":        fields.get("id_number"),
-            "witness_name":     fields.get("witness_name"),
-            "witness_occupation": fields.get("witness_occupation"),
-            "witness_phone":    fields.get("witness_phone"),
-            "witness_address":  fields.get("witness_address"),
-            "witness_date":     fields.get("witness_date"),
+            # Signing audit trail
+            "signed_at":        meta["signed_at"],
+            "ip_address":       meta["ip"],
+            "device_type":      meta["device_type"],
+            "user_agent":       meta["user_agent"],
+            "signed_date":      fields.get("signed_date"),
         }
         if sig_path:
             g_payload["signature_url"] = sig_path
@@ -920,6 +877,29 @@ async def save_partial_submission(
         "relay_link":    relay_link,
     }
 
+
+
+def _parse_device_type(ua: str) -> str:
+    """Derive a simple device category from the User-Agent string."""
+    ua_l = ua.lower()
+    if any(k in ua_l for k in ("iphone", "android", "mobile", "blackberry", "windows phone")):
+        return "Mobile"
+    if any(k in ua_l for k in ("ipad", "tablet")):
+        return "Tablet"
+    return "Desktop"
+
+
+def _signing_meta(request) -> dict:
+    """Return IP address, user-agent, device type, and UTC timestamp from an HTTP request."""
+    forwarded = request.headers.get("x-forwarded-for", "")
+    ip = forwarded.split(",")[0].strip() if forwarded else (request.client.host if request.client else "unknown")
+    ua = request.headers.get("user-agent", "unknown")
+    return {
+        "ip":          ip,
+        "user_agent":  ua,
+        "device_type": _parse_device_type(ua),
+        "signed_at":   datetime.utcnow().isoformat(),
+    }
 
 @router.get("/company-info")
 async def get_company_info():

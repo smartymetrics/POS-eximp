@@ -11695,6 +11695,19 @@ function GuarantorReviewModal({ sub, onClose, onRefresh }) {
                     onError={e => e.target.style.display = "none"} />
                 </div>
               )}
+              {(full.employee_signed_at || full.employee_ip) && (
+                <>
+                  <hr style={{ border: "none", borderTop: `1px solid ${C.border}`, margin: "16px 0 12px" }} />
+                  <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: C.muted, marginBottom: 10 }}>🔒 Signing Audit Trail</div>
+                  <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 4, padding: "14px 18px" }}>
+                    <F label="Signed At (UTC)" value={full.employee_signed_at ? new Date(full.employee_signed_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "medium" }) : "—"} />
+                    <F label="Form Date (Self-reported)" value={full.employee_signed_date || "—"} />
+                    <F label="IP Address" value={full.employee_ip || "—"} />
+                    <F label="Device Type" value={full.employee_device_type || "—"} />
+                    <div style={{ gridColumn: "1/-1" }}><F label="User Agent" value={full.employee_user_agent || "—"} /></div>
+                  </div>
+                </>
+              )}
               <ReviewActions section="a" status={full.section_a_status} reason={full.section_a_reason} />
             </div>
 
@@ -11770,15 +11783,17 @@ function GuarantorReviewModal({ sub, onClose, onRefresh }) {
                       </div>
                     )}
 
-                    {g.witness_name && (
+                    {/* Signing Audit Trail — Guarantor */}
+                    {(g.signed_at || g.ip_address) && (
                       <>
                         <hr style={{ border: "none", borderTop: `1px solid ${C.border}`, margin: "20px 0" }} />
-                        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: C.muted, marginBottom: 12 }}>Section D — Witness</div>
-                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 24px" }}>
-                          <F label="Witness Name" value={g.witness_name} />
-                          <F label="Occupation" value={g.witness_occupation} />
-                          <F label="Phone" value={g.witness_phone} />
-                          <div style={{ gridColumn: "1/-1" }}><F label="Address" value={g.witness_address} /></div>
+                        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: C.muted, marginBottom: 12 }}>🔒 Signing Audit Trail</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "10px 24px", background: C.surface, border: `1px solid ${C.border}`, borderRadius: 4, padding: "14px 18px" }}>
+                          <F label="Signed At (UTC)" value={g.signed_at ? new Date(g.signed_at).toLocaleString("en-GB", { dateStyle: "medium", timeStyle: "medium" }) : "—"} />
+                          <F label="Form Date (Self-reported)" value={g.signed_date || "—"} />
+                          <F label="IP Address" value={g.ip_address || "—"} />
+                          <F label="Device Type" value={g.device_type || "—"} />
+                          <div style={{ gridColumn: "1/-1" }}><F label="User Agent" value={g.user_agent || "—"} /></div>
                         </div>
                       </>
                     )}
@@ -11970,14 +11985,13 @@ function PublicGuarantorForm() {
 
   const [empForm, setEmpForm] = useState({
     full_name: "", position: "", address: "", phone: "",
-    email: "", date_of_employment: "", staff_id: "",
+    email: "", date_of_employment: "", staff_id: "", signed_date: "",
   });
 
   const emptyG = () => ({
     full_name: "", relationship: "", address: "", occupation: "",
     employer_name: "", position_held: "", years_at_job: "", phone: "",
     email: "", id_type: "", id_number: "",
-    witness_name: "", witness_address: "", witness_occupation: "", witness_phone: "",
     passport_file: null, passport_preview: "", id_doc_file: null, id_doc_preview: "",
   });
   const [g1, setG1] = useState(emptyG());
@@ -12186,7 +12200,7 @@ function PublicGuarantorForm() {
     try {
       const fd = new FormData();
       fd.append("token", token); fd.append("email", email.trim()); fd.append("section", "employee");
-      fd.append("data", JSON.stringify({ ...empForm, signature: empSigRef.current.toDataURL("image/png") }));
+      fd.append("data", JSON.stringify({ ...empForm, signature: empSigRef.current.toDataURL("image/png"), signed_date: empForm.signed_date || new Date().toISOString().split("T")[0] }));
       const res = await fetch(`${API_BASE}/guarantor/public/save-partial`, { method: "POST", body: fd });
       if (!res.ok) throw new Error((await res.json()).detail || "Failed to save.");
       const d = await res.json();
@@ -12210,7 +12224,7 @@ function PublicGuarantorForm() {
     try {
       const fd = new FormData();
       fd.append("token", token); fd.append("email", email.trim()); fd.append("section", gNum === 1 ? "g1" : "g2");
-      const payload = { ...g, signature: sigRef.current.toDataURL("image/png") };
+      const payload = { ...g, signature: sigRef.current.toDataURL("image/png"), signed_date: g.signed_date || new Date().toISOString().split("T")[0] };
       delete payload.passport_file; delete payload.id_doc_file;
       fd.append("data", JSON.stringify(payload));
       if (g.passport_file) fd.append("passport_photo", g.passport_file);
@@ -12319,7 +12333,16 @@ function PublicGuarantorForm() {
             <div style={{ background: "#F8F9FB", border: "1px solid #E8E2D9", borderRadius: 3, padding: "14px 18px", marginBottom: 18, fontSize: 13, color: "#374151", lineHeight: 1.8 }}>
               I hereby present the persons named below as my guarantors and confirm that all information provided is accurate and truthful.
             </div>
-            <SigPad label="Employee Signature" sigRef={empSigRef} handlers={empSig} hasSig={empHasSig} />
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 24, flexWrap: "wrap", marginTop: 4 }}>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <SigPad label="Employee Signature" sigRef={empSigRef} handlers={empSig} hasSig={empHasSig} />
+              </div>
+              <div style={{ minWidth: 160, marginBottom: 6 }}>
+                <label style={{ display: "block", fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: GF_NAVY, marginBottom: 6 }}>Date <span style={{ color: "#DC2626" }}>*</span></label>
+                <input type="date" style={{ width: "100%", border: "1.5px solid #DDE3EE", borderRadius: 3, padding: "10px 12px", fontSize: 13, color: GF_NAVY, background: "#FAFBFC", outline: "none" }}
+                  value={empForm.signed_date || ""} onChange={e => setEmpForm(f => ({ ...f, signed_date: e.target.value }))} max={new Date().toISOString().split("T")[0]} />
+              </div>
+            </div>
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
             <button onClick={submitSectionA} disabled={submitting} style={{ ...css.btn, opacity: submitting ? 0.6 : 1 }}>
@@ -12411,21 +12434,19 @@ function PublicGuarantorForm() {
                 </div>
               ))}
             </div>
-            <SigPad label={`Guarantor ${gNum} Signature`} sigRef={sigRef} handlers={sigHandlers} hasSig={hasSig} />
-          </div>
-
-          {/* Section D: Witness */}
-          <div style={css.card}>
-            <div style={css.seclbl}>Section D — Attestation</div>
-            <div style={css.sectitle}>Witness Information</div>
-            <div style={css.secsub}>Optional but recommended. To be completed by an independent witness.</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px 20px" }}>
-              <Fld label="Name of Witness"><Inp value={g.witness_name} onChange={e => set("witness_name", e.target.value)} /></Fld>
-              <Fld label="Occupation"><Inp value={g.witness_occupation} onChange={e => set("witness_occupation", e.target.value)} /></Fld>
-              <Fld label="Phone Number"><Inp value={g.witness_phone} onChange={e => set("witness_phone", e.target.value)} /></Fld>
-              <Fld label="Address" gridSpan><Inp value={g.witness_address} onChange={e => set("witness_address", e.target.value)} /></Fld>
+            <div style={{ display: "flex", alignItems: "flex-end", gap: 24, flexWrap: "wrap", marginTop: 4 }}>
+              <div style={{ flex: 1, minWidth: 200 }}>
+                <SigPad label={`Guarantor ${gNum} Signature`} sigRef={sigRef} handlers={sigHandlers} hasSig={hasSig} />
+              </div>
+              <div style={{ minWidth: 160, marginBottom: 6 }}>
+                <label style={{ display: "block", fontSize: 10, fontWeight: 700, letterSpacing: 1.2, textTransform: "uppercase", color: GF_NAVY, marginBottom: 6 }}>Date <span style={{ color: "#DC2626" }}>*</span></label>
+                <input type="date" style={{ width: "100%", border: "1.5px solid #DDE3EE", borderRadius: 3, padding: "10px 12px", fontSize: 13, color: GF_NAVY, background: "#FAFBFC", outline: "none" }}
+                  value={g.signed_date || ""} onChange={e => set("signed_date", e.target.value)} max={new Date().toISOString().split("T")[0]} />
+              </div>
             </div>
           </div>
+
+          {/* Section D (Attestation) removed per HR directive */}
 
           <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
             {gNum === 2 ? <button onClick={() => setPhase("section_b_1")} style={css.btn2}>← Back</button> : <div />}
@@ -12868,7 +12889,7 @@ function StaffPortal({ user, onLogout }) {
       if (pg === "policy_library") return <PolicyLibrary isHR={false} />;
       if (pg === "internal_job_board") return <InternalJobBoard isHR={false} user={user} />;
       if (pg === "training" || pg === "compliance_training") return <LearningHub isHR={false} defaultTab={pg === "compliance_training" ? "compliance" : "trainings"} />;
-      if (pg === "guarantors") return <MyGuarantors user={user} />;
+      if (pg === "guarantors") return <MyGuarantors />;
 
       return (
         <div className="fade">
@@ -15582,117 +15603,6 @@ function MyPeerReviews({ user }) {
     </div>
   );
 }
-
-// ─── EMPLOYEE: MY GUARANTORS ──────────────────────────────────────────────────
-function MyGuarantors({ user }) {
-  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
-  const [data, setData] = useState(null);
-  const [loading, setLoading] = useState(true);
-
-  const load = async () => {
-    setLoading(true);
-    try {
-      const res = await apiFetch(`${API_BASE}/guarantor/my-submission`);
-      setData(res);
-    } catch (e) { console.error(e); }
-    finally { setLoading(false); }
-  };
-
-  useEffect(() => { load(); }, [user.id]);
-
-  const sub = data?.submission;
-  const token = data?.token;
-  const email = data?.email;
-
-  const statusColor = (st) => ({ pending: T.gold, approved: "#10B981", rejected: "#EF4444" }[st] || C.muted);
-  const statusBg = (st) => ({ pending: `${T.gold}18`, approved: "#10B98118", rejected: "#EF444418" }[st] || C.surface);
-
-  if (loading) return <div style={{ padding: 60, textAlign: "center", color: C.muted }}>Loading your guarantor status...</div>;
-
-  const sections = [
-    { id: "a", label: "Section A: Employee Details", status: sub?.section_a_status || "pending", reason: sub?.section_a_reason },
-    { id: "b", label: "Section B: Guarantor 1", status: sub?.section_b_status || "pending", reason: sub?.section_b_reason },
-    { id: "c", label: "Section C: Guarantor 2", status: sub?.section_c_status || "pending", reason: sub?.section_c_reason },
-  ];
-
-  const overallStatus = sub?.status || "pending";
-  const formLink = token ? `${window.location.origin}${window.location.pathname}?guarantor_token=${token}&email=${encodeURIComponent(email)}` : null;
-
-  return (
-    <div className="fade">
-      <div style={{ marginBottom: 28 }}>
-        <div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>My Guarantor Forms</div>
-        <div style={{ fontSize: 13, color: C.sub }}>
-          Track the status of your guarantor submissions. You are required to have two independent guarantors.
-        </div>
-      </div>
-
-      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 24, alignItems: "flex-start" }}>
-        {/* Left: Status Cards */}
-        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
-          {sections.map(sec => (
-            <div key={sec.id} className="gc" style={{ padding: 24, borderLeft: `4px solid ${statusColor(sec.status)}` }}>
-              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
-                <div>
-                  <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{sec.label}</div>
-                  {sec.status === "rejected" && sec.reason && (
-                    <div style={{ marginTop: 10, padding: "10px 14px", background: "#EF444410", border: "1px solid #EF444422", borderRadius: 8 }}>
-                      <div style={{ fontSize: 11, color: "#EF4444", fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Revision Required</div>
-                      <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.5 }}>{sec.reason}</div>
-                    </div>
-                  )}
-                  {sec.status === "approved" && <div style={{ fontSize: 12, color: "#10B981", marginTop: 4, fontWeight: 600 }}>✓ Verified by HR</div>}
-                  {sec.status === "pending" && <div style={{ fontSize: 12, color: T.gold, marginTop: 4, fontWeight: 600 }}>Awaiting completion or HR review</div>}
-                </div>
-                <span style={{
-                  background: statusBg(sec.status), color: statusColor(sec.status),
-                  border: `1px solid ${statusColor(sec.status)}33`,
-                  padding: "4px 14px", borderRadius: 99, fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5,
-                }}>
-                  {sec.status}
-                </span>
-              </div>
-            </div>
-          ))}
-        </div>
-
-        {/* Right: Actions / Summary */}
-        <div className="gc" style={{ padding: 24, position: "sticky", top: 20 }}>
-          <div style={{ textAlign: "center", marginBottom: 20 }}>
-            <div style={{ fontSize: 11, color: C.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Overall Submission Status</div>
-            <div style={{
-              display: "inline-block", padding: "8px 20px", borderRadius: 12,
-              background: statusBg(overallStatus), color: statusColor(overallStatus),
-              border: `2px solid ${statusColor(overallStatus)}33`,
-              fontSize: 16, fontWeight: 900, textTransform: "uppercase", letterSpacing: 1
-            }}>
-              {overallStatus}
-            </div>
-          </div>
-
-          <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.6, marginBottom: 20, textAlign: "center" }}>
-            {overallStatus === "approved"
-              ? "Your guarantor documentation is complete and has been verified by HR. No further action is required."
-              : "Please ensure all sections are completed and any rejected sections are corrected."}
-          </div>
-
-          {overallStatus !== "approved" && formLink && (
-            <a href={formLink} target="_blank" rel="noreferrer" className="bp" style={{ display: "block", textAlign: "center", textDecoration: "none", padding: "14px 0" }}>
-              {sub ? "Update / Resubmit Form" : "Start Filling Form"}
-            </a>
-          )}
-
-          {!formLink && overallStatus !== "approved" && (
-            <div style={{ padding: 14, background: `${T.gold}11`, borderRadius: 8, border: `1px solid ${T.gold}33`, fontSize: 12, color: T.gold, textAlign: "center" }}>
-              Contact HR to receive your personalized guarantor form link.
-            </div>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
 
 function CultureHub({ authRole }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
