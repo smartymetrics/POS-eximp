@@ -11884,7 +11884,10 @@ function GuarantorReviewModal({ sub, onClose, onRefresh }) {
               <div style={{ flex: 1, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center", background: C.surface, padding: 20 }}>
                 <img src={docViewer.url} alt={docViewer.type} style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 6 }} onError={e => {
                   e.target.style.display = "none";
-                  e.target.parentElement.innerHTML = '<div style="color: ' + C.muted + '; text-align: center;">Could not load document</div>';
+                  const msg = document.createElement("div");
+                  msg.style.cssText = "color:" + C.muted + ";text-align:center;font-size:13px;padding:20px";
+                  msg.textContent = "Could not load document";
+                  e.target.parentElement.appendChild(msg);
                 }} />
               </div>
             </div>
