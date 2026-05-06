@@ -12220,6 +12220,7 @@ function PublicGuarantorForm() {
     }
     if (!hasSig) { alert("Please draw your signature."); return; }
     if (!g.passport_file && !g.passport_photo_url) { alert("Please upload a passport photograph."); return; }
+    if (!g.id_doc_file && !g.id_document_url) { alert("Please upload a copy of your valid ID document."); return; }
     setSubmitting(true);
     try {
       const fd = new FormData();
@@ -12343,6 +12344,9 @@ function PublicGuarantorForm() {
                   value={empForm.signed_date || ""} onChange={e => setEmpForm(f => ({ ...f, signed_date: e.target.value }))} max={new Date().toISOString().split("T")[0]} />
               </div>
             </div>
+            <div style={{ fontSize: 10, color: "#6B7280", marginTop: 12, fontStyle: "italic", lineHeight: 1.5, opacity: 0.8 }}>
+              ⚖️ <strong>Compliance Notice:</strong> To ensure the legal integrity of this digital signature, your IP address and device metadata will be securely recorded in the audit trail for this submission.
+            </div>
           </div>
           <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
             <button onClick={submitSectionA} disabled={submitting} style={{ ...css.btn, opacity: submitting ? 0.6 : 1 }}>
@@ -12373,7 +12377,7 @@ function PublicGuarantorForm() {
             <div style={css.secsub}>To be completed by Guarantor {gNum}. All fields marked * are required.</div>
             <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px 20px" }}>
               <Fld label="Full Name of Guarantor" required gridSpan><Inp value={g.full_name} onChange={e => set("full_name", e.target.value)} /></Fld>
-              <Fld label="Relationship to Employee" required><Inp value={g.relationship} onChange={e => set("relationship", e.target.value)} placeholder="e.g. Uncle, Colleague, Employer" /></Fld>
+              <Fld label="Relationship to Employee" required gridSpan><Inp value={g.relationship} onChange={e => set("relationship", e.target.value)} placeholder="e.g. Uncle, Colleague, Employer" /></Fld>
               <Fld label="Occupation" required><Inp value={g.occupation} onChange={e => set("occupation", e.target.value)} /></Fld>
               <Fld label="Position Held" required><Inp value={g.position_held} onChange={e => set("position_held", e.target.value)} /></Fld>
               <Fld label="Years at Current Employment" required><input style={css.inp} type="number" min="0" value={g.years_at_job} onChange={e => set("years_at_job", e.target.value)} /></Fld>
@@ -12401,7 +12405,7 @@ function PublicGuarantorForm() {
                   {g.passport_preview && <img src={g.passport_preview} alt="preview" style={{ width: 50, height: 50, objectFit: "cover", borderRadius: 4, marginLeft: 10, border: `2px solid ${GOLD}40`, verticalAlign: "middle" }} />}
                 </div>
               </Fld>
-              <Fld label="Copy of Valid ID Document">
+              <Fld label="Copy of Valid ID Document" required>
                 <div>
                   <input type="file" accept="image/*,application/pdf" id={`id_g${gNum}`} style={{ display: "none" }} onChange={e => handleFile(e.target.files[0], setG, "id_doc")} />
                   <label htmlFor={`id_g${gNum}`} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 16px", border: `1.5px dashed ${g.id_doc_preview ? GOLD : "#DDE3EE"}`, borderRadius: 3, fontSize: 12, cursor: "pointer", color: g.id_doc_preview ? GOLD : "#6B7280", background: "#FAFBFC" }}>
@@ -12443,6 +12447,9 @@ function PublicGuarantorForm() {
                 <input type="date" style={{ width: "100%", border: "1.5px solid #DDE3EE", borderRadius: 3, padding: "10px 12px", fontSize: 13, color: GF_NAVY, background: "#FAFBFC", outline: "none" }}
                   value={g.signed_date || ""} onChange={e => set("signed_date", e.target.value)} max={new Date().toISOString().split("T")[0]} />
               </div>
+            </div>
+            <div style={{ fontSize: 10, color: "#6B7280", marginTop: 12, fontStyle: "italic", lineHeight: 1.5, opacity: 0.8 }}>
+              ⚖️ <strong>Compliance Notice:</strong> To ensure the legal integrity of this digital signature, your IP address and device metadata will be securely recorded in the audit trail for this submission.
             </div>
           </div>
 

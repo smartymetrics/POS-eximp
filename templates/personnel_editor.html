@@ -303,7 +303,7 @@
         window.editor = editor;
         window.exec = (cmd) => editor.chain().focus()[cmd]().run();
         window.setListType = (style) => {
-            const typeMap = { 'decimal': '1', 'lower-alpha': 'a', 'lower-roman': 'i' };
+            const typeMap = { 'decimal': '1', 'lower-alpha': 'a', 'lower-roman': 'i', 'upper-alpha': 'A', 'upper-roman': 'I' };
             const type = typeMap[style] || '1';
 
             if (!editor.isActive('orderedList')) {
@@ -594,7 +594,9 @@
         document.getElementById('btn-bullet-list')?.addEventListener('click', () => editor.chain().focus().toggleBulletList().run());
         document.getElementById('btn-num-list')?.addEventListener('click', () => window.setListType('decimal'));
         document.getElementById('btn-alpha-list')?.addEventListener('click', () => window.setListType('lower-alpha'));
+        document.getElementById('btn-ALPHA-list')?.addEventListener('click', () => window.setListType('upper-alpha'));
         document.getElementById('btn-roman-list')?.addEventListener('click', () => window.setListType('lower-roman'));
+        document.getElementById('btn-ROMAN-list')?.addEventListener('click', () => window.setListType('upper-roman'));
         document.getElementById('btn-indent')?.addEventListener('click', () => window.indentList());
         document.getElementById('btn-outdent')?.addEventListener('click', () => window.outdentList());
 
@@ -2506,7 +2508,9 @@
             <button id="btn-bullet-list" class="ribbon-btn" title="Bullet List">• List</button>
             <button id="btn-num-list" class="ribbon-btn" title="Numbered List (1, 2, 3)">1. List</button>
             <button id="btn-alpha-list" class="ribbon-btn" title="Lettered List (a, b, c)">a. List</button>
+            <button id="btn-ALPHA-list" class="ribbon-btn" title="Lettered List (A, B, C)">A. List</button>
             <button id="btn-roman-list" class="ribbon-btn" title="Roman Numeral List (i, ii, iii)">i. List</button>
+            <button id="btn-ROMAN-list" class="ribbon-btn" title="Roman Numeral List (I, II, III)">I. List</button>
             <div class="ribbon-divider"></div>
             <button id="btn-indent" onclick="window.indentList()" class="ribbon-btn" title="Indent (Tab)">→ Indent</button>
             <button id="btn-outdent" onclick="window.outdentList()" class="ribbon-btn" title="Outdent (Shift+Tab)">← Outdent</button>
