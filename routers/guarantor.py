@@ -62,6 +62,58 @@ def _sign_guarantor(g: dict) -> dict:
 
 # ── Admin Endpoints ───────────────────────────────────────────────────────────
 
+@router.get("/my-submission")
+async def get_my_submission(current_user=Depends(verify_token)):
+    """Fetch the guarantor submission and invite token for the current logged-in staff."""
+    db = get_db()
+    email = current_user.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="User email not found in token")
+
+    # 1. Get submission
+    sub_res = await db_execute(
+        lambda: db.table("guarantor_submissions")
+        .select("*, guarantors(*)")
+        .eq("employee_email", email)
+        .execute()
+    )
+    
+    submission = None
+    if sub_res.data:
+        submission = sub_res.data[0]
+        _sign_sub(submission)
+        guarantors = submission.pop("guarantors", []) or []
+        submission["g1"] = next((g for g in guarantors if g["slot_number"] == 1), None)
+        submission["g2"] = next((g for g in guarantors if g["slot_number"] == 2), None)
+        for key in ("g1", "g2"):
+            if submission[key]:
+                _sign_guarantor(submission[key])
+
+    # 2. Get invite token (to build the re-fill link)
+    inv_res = await db_execute(
+        lambda: db.table("guarantor_invites")
+        .select("token")
+        .eq("email", email)
+        .order("created_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+    token = inv_res.data[0]["token"] if inv_res.data else None
+
+    # 3. Get general link if no personal token exists
+    if not token:
+        settings_res = await db_execute(
+            lambda: db.table("guarantor_settings").select("general_link_token").limit(1).execute()
+        )
+        if settings_res.data:
+            token = settings_res.data[0]["general_link_token"]
+
+    return {
+        "submission": submission,
+        "token": token,
+        "email": email
+    }
+
 @router.get("/submissions")
 async def get_submissions(current_admin=Depends(verify_token)):
     if not has_any_role(current_admin, "admin", "super_admin", "hr_admin"):

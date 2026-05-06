@@ -12868,7 +12868,7 @@ function StaffPortal({ user, onLogout }) {
       if (pg === "policy_library") return <PolicyLibrary isHR={false} />;
       if (pg === "internal_job_board") return <InternalJobBoard isHR={false} user={user} />;
       if (pg === "training" || pg === "compliance_training") return <LearningHub isHR={false} defaultTab={pg === "compliance_training" ? "compliance" : "trainings"} />;
-      if (pg === "guarantors") return <MyGuarantors />;
+      if (pg === "guarantors") return <MyGuarantors user={user} />;
 
       return (
         <div className="fade">
@@ -15582,6 +15582,117 @@ function MyPeerReviews({ user }) {
     </div>
   );
 }
+
+// ─── EMPLOYEE: MY GUARANTORS ──────────────────────────────────────────────────
+function MyGuarantors({ user }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [data, setData] = useState(null);
+  const [loading, setLoading] = useState(true);
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const res = await apiFetch(`${API_BASE}/guarantor/my-submission`);
+      setData(res);
+    } catch (e) { console.error(e); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, [user.id]);
+
+  const sub = data?.submission;
+  const token = data?.token;
+  const email = data?.email;
+
+  const statusColor = (st) => ({ pending: T.gold, approved: "#10B981", rejected: "#EF4444" }[st] || C.muted);
+  const statusBg = (st) => ({ pending: `${T.gold}18`, approved: "#10B98118", rejected: "#EF444418" }[st] || C.surface);
+
+  if (loading) return <div style={{ padding: 60, textAlign: "center", color: C.muted }}>Loading your guarantor status...</div>;
+
+  const sections = [
+    { id: "a", label: "Section A: Employee Details", status: sub?.section_a_status || "pending", reason: sub?.section_a_reason },
+    { id: "b", label: "Section B: Guarantor 1", status: sub?.section_b_status || "pending", reason: sub?.section_b_reason },
+    { id: "c", label: "Section C: Guarantor 2", status: sub?.section_c_status || "pending", reason: sub?.section_c_reason },
+  ];
+
+  const overallStatus = sub?.status || "pending";
+  const formLink = token ? `${window.location.origin}${window.location.pathname}?guarantor_token=${token}&email=${encodeURIComponent(email)}` : null;
+
+  return (
+    <div className="fade">
+      <div style={{ marginBottom: 28 }}>
+        <div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>My Guarantor Forms</div>
+        <div style={{ fontSize: 13, color: C.sub }}>
+          Track the status of your guarantor submissions. You are required to have two independent guarantors.
+        </div>
+      </div>
+
+      <div style={{ display: "grid", gridTemplateColumns: "1fr 320px", gap: 24, alignItems: "flex-start" }}>
+        {/* Left: Status Cards */}
+        <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+          {sections.map(sec => (
+            <div key={sec.id} className="gc" style={{ padding: 24, borderLeft: `4px solid ${statusColor(sec.status)}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{sec.label}</div>
+                  {sec.status === "rejected" && sec.reason && (
+                    <div style={{ marginTop: 10, padding: "10px 14px", background: "#EF444410", border: "1px solid #EF444422", borderRadius: 8 }}>
+                      <div style={{ fontSize: 11, color: "#EF4444", fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>Revision Required</div>
+                      <div style={{ fontSize: 13, color: "#374151", lineHeight: 1.5 }}>{sec.reason}</div>
+                    </div>
+                  )}
+                  {sec.status === "approved" && <div style={{ fontSize: 12, color: "#10B981", marginTop: 4, fontWeight: 600 }}>✓ Verified by HR</div>}
+                  {sec.status === "pending" && <div style={{ fontSize: 12, color: T.gold, marginTop: 4, fontWeight: 600 }}>Awaiting completion or HR review</div>}
+                </div>
+                <span style={{
+                  background: statusBg(sec.status), color: statusColor(sec.status),
+                  border: `1px solid ${statusColor(sec.status)}33`,
+                  padding: "4px 14px", borderRadius: 99, fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5,
+                }}>
+                  {sec.status}
+                </span>
+              </div>
+            </div>
+          ))}
+        </div>
+
+        {/* Right: Actions / Summary */}
+        <div className="gc" style={{ padding: 24, position: "sticky", top: 20 }}>
+          <div style={{ textAlign: "center", marginBottom: 20 }}>
+            <div style={{ fontSize: 11, color: C.muted, fontWeight: 800, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>Overall Submission Status</div>
+            <div style={{
+              display: "inline-block", padding: "8px 20px", borderRadius: 12,
+              background: statusBg(overallStatus), color: statusColor(overallStatus),
+              border: `2px solid ${statusColor(overallStatus)}33`,
+              fontSize: 16, fontWeight: 900, textTransform: "uppercase", letterSpacing: 1
+            }}>
+              {overallStatus}
+            </div>
+          </div>
+
+          <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.6, marginBottom: 20, textAlign: "center" }}>
+            {overallStatus === "approved"
+              ? "Your guarantor documentation is complete and has been verified by HR. No further action is required."
+              : "Please ensure all sections are completed and any rejected sections are corrected."}
+          </div>
+
+          {overallStatus !== "approved" && formLink && (
+            <a href={formLink} target="_blank" rel="noreferrer" className="bp" style={{ display: "block", textAlign: "center", textDecoration: "none", padding: "14px 0" }}>
+              {sub ? "Update / Resubmit Form" : "Start Filling Form"}
+            </a>
+          )}
+
+          {!formLink && overallStatus !== "approved" && (
+            <div style={{ padding: 14, background: `${T.gold}11`, borderRadius: 8, border: `1px solid ${T.gold}33`, fontSize: 12, color: T.gold, textAlign: "center" }}>
+              Contact HR to receive your personalized guarantor form link.
+            </div>
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
 
 function CultureHub({ authRole }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
