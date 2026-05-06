@@ -1010,8 +1010,31 @@ async def submit_payout_claim_from_portal(
         # ── Commission calculation by payment type ──
         #   Initial Deposit → commission on FULL property value (deal trigger)
         #   Instalment      → commission on the reported instalment amount only
-        COMMISSION_RATE = Decimal("0.10")
-        WHT_RATE = Decimal("0.05")
+        #
+        # Rate resolution order:
+        #   1. Vendor's own gross_commission_rate (set per-partner in the dashboard)
+        #   2. System default: Partners = 15%, Staff = 10%
+        # WHT resolution: vendor's own wht_rate, defaulting to 5%
+        _DEFAULT_COMM = Decimal("0.15") if type == "partner" else Decimal("0.10")
+        _DEFAULT_WHT  = Decimal("0.05")
+
+        if type == "partner":
+            _vrate_res = await db_execute(lambda: db.table("vendors")
+                .select("gross_commission_rate, wht_rate")
+                .eq("email", payee_email)
+                .execute())
+            if _vrate_res.data and _vrate_res.data[0].get("gross_commission_rate"):
+                _raw_comm = float(_vrate_res.data[0]["gross_commission_rate"])
+                # stored as percentage (e.g. 15.0) — normalise to decimal
+                COMMISSION_RATE = Decimal(str(_raw_comm / 100 if _raw_comm > 1 else _raw_comm))
+                _raw_wht = float(_vrate_res.data[0].get("wht_rate") or 5.0)
+                WHT_RATE = Decimal(str(_raw_wht / 100 if _raw_wht > 1 else _raw_wht))
+            else:
+                COMMISSION_RATE = _DEFAULT_COMM
+                WHT_RATE        = _DEFAULT_WHT
+        else:
+            COMMISSION_RATE = _DEFAULT_COMM
+            WHT_RATE        = _DEFAULT_WHT
 
         if payment_type == "initial_deposit" and property_price and property_price > 0:
             commission_base = Decimal(str(property_price))

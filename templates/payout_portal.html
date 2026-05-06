@@ -766,8 +766,12 @@
                 subNav.classList.remove('hidden');
                 setSubTab(subTab);
             } else if (tab === 'partner') {
+                // Show invoice section directly — do NOT call setSubTab() here because
+                // setSubTab() only understands 'office' / 'staff_commission' and will
+                // immediately re-hide the invoice section when passed 'partner'.
                 invSection.classList.remove('hidden');
-                setSubTab('partner'); // Refresh label
+                const labelEl = document.getElementById('amount-label');
+                if (labelEl) labelEl.innerText = 'Enter Amount Paid by Client (NGN)';
             }
             validateLookupState();
         }
@@ -893,9 +897,16 @@
             const cp = document.getElementById('commission-preview');
             if (d.rep_status !== 'conflict') {
                 cp.classList.remove('hidden');
+                // Partners earn 15% gross; staff earn 10% gross. WHT is 5% of gross for both.
+                const commRate = (currentTab === 'partner') ? 0.15 : 0.10;
+                const netRate = commRate * (1 - 0.05); // after 5% WHT
+                const commPct = (currentTab === 'partner') ? '15%' : '10%';
+                // Update the label in the preview card so it reflects the actual rate
+                const grossLabelEl = cp.querySelector('div > div:first-child > div:first-child');
+                if (grossLabelEl) grossLabelEl.innerText = `Gross (${commPct})`;
                 const base = d.payment_type === 'initial_deposit' ? d.property_price : null;
-                document.getElementById('cp-gross').innerText = base ? '₦' + (base * 0.1).toLocaleString() : '10% of Claim';
-                document.getElementById('cp-net').innerText = base ? '₦' + (base * 0.095).toLocaleString() : '9.5% of Claim';
+                document.getElementById('cp-gross').innerText = base ? '₦' + (base * commRate).toLocaleString() : `${commPct} of Claim`;
+                document.getElementById('cp-net').innerText = base ? '₦' + (base * netRate).toLocaleString() : `${(netRate * 100).toFixed(2)}% of Claim`;
                 document.getElementById('cp-note').innerHTML = d.payment_type === 'initial_deposit' ? '★ Initial Deposit: Commission calculated on FULL price.' : 'Instalment: Commission calculated on the amount entered below.' + (d.rep_status === 'yours' ? '<br><strong>✅ Initial Deposit commission already accorded.</strong>' : '');
             } else cp.classList.add('hidden');
 
