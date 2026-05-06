@@ -11838,10 +11838,12 @@ function PublicGuarantorForm() {
   const [g1, setG1] = useState(emptyG());
   const [g2, setG2] = useState(emptyG());
 
-  // Canvas refs — using refs for ctx/drawing state avoids stale closures mid-draw
+  // Canvas refs
   const empSigRef = useRef(null); const g1SigRef = useRef(null); const g2SigRef = useRef(null);
-  const empCtxRef = useRef(null); const g1CtxRef = useRef(null); const g2CtxRef = useRef(null);
+  // Track drawing state in refs (avoids stale closures, no re-renders)
   const empDrawRef = useRef(false); const g1DrawRef = useRef(false); const g2DrawRef = useRef(false);
+  // Track whether canvas has been sized (prevent double-scale bug)
+  const empSizedRef = useRef(false); const g1SizedRef = useRef(false); const g2SizedRef = useRef(false);
   const [empHasSig, setEmpHasSig] = useState(false);
   const [g1HasSig, setG1HasSig] = useState(false);
   const [g2HasSig, setG2HasSig] = useState(false);
@@ -11855,55 +11857,87 @@ function PublicGuarantorForm() {
     if (e) setEmail(e);
     fetch(`${API_BASE}/guarantor/company-info`)
       .then(r => r.json()).then(d => setCompanyInfo(d)).catch(() => { });
-    // Auto-verify if both are present
     if (t && e) setTimeout(() => doCheck(e, t), 400);
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Canvas init (robust: multiple retries + ResizeObserver) ───────────
-  const initCanvas = (canvasRef, ctxRef) => {
+  // ── Canvas setup: size the backing store once per phase ───────────────
+  // Key insight: setting canvas.width/height resets ALL state including transforms.
+  // So we must apply ctx.scale() exactly once after each resize — tracked by sizedRef.
+  const setupCanvas = (canvasRef, sizedRef) => {
     const canvas = canvasRef.current;
-    if (!canvas) return null;
+    if (!canvas) return false;
     const rect = canvas.getBoundingClientRect();
-    if (!rect.width) return null;
+    if (!rect.width || !rect.height) return false;
     const dpr = window.devicePixelRatio || 1;
-    canvas.width = Math.round(rect.width * dpr);
-    canvas.height = Math.round(rect.height * dpr);
-    const ctx = canvas.getContext("2d");
-    ctx.scale(dpr, dpr);
-    ctx.strokeStyle = "#1A1A2E";
-    ctx.lineWidth = 2.2; ctx.lineCap = "round"; ctx.lineJoin = "round";
-    ctxRef.current = ctx;
-    return ctx;
+    const w = Math.round(rect.width * dpr);
+    const h = Math.round(rect.height * dpr);
+    // Only resize if dimensions changed (avoids wiping existing drawing)
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+      sizedRef.current = false; // dimensions changed, need to re-apply scale
+    }
+    if (!sizedRef.current) {
+      const ctx = canvas.getContext("2d");
+      ctx.setTransform(1, 0, 0, 1, 0, 0); // reset any previous transform
+      ctx.scale(dpr, dpr);
+      ctx.strokeStyle = "#1A1A2E";
+      ctx.lineWidth = 2.5;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      sizedRef.current = true;
+    }
+    return true;
   };
 
   useEffect(() => {
-    const map = { section_a: [empSigRef, empCtxRef], section_b_1: [g1SigRef, g1CtxRef], section_b_2: [g2SigRef, g2CtxRef] };
+    const map = {
+      section_a: [empSigRef, empSizedRef],
+      section_b_1: [g1SigRef, g1SizedRef],
+      section_b_2: [g2SigRef, g2SizedRef],
+    };
     const pair = map[phase];
     if (!pair) return;
-    const [cRef, ctxRef] = pair;
-    const attempt = () => initCanvas(cRef, ctxRef);
+    const [cRef, sRef] = pair;
+    // Reset sized flag so new phase gets fresh scale
+    sRef.current = false;
+    const attempt = () => setupCanvas(cRef, sRef);
     const t1 = setTimeout(attempt, 50);
     const t2 = setTimeout(attempt, 200);
     const t3 = setTimeout(attempt, 500);
     let ro;
-    if (cRef.current && window.ResizeObserver) {
-      ro = new ResizeObserver(() => { if (!ctxRef.current) attempt(); });
-      ro.observe(cRef.current);
+    if (window.ResizeObserver) {
+      ro = new ResizeObserver(attempt);
+      // Observe after a tick so the ref is attached
+      setTimeout(() => { if (cRef.current) ro.observe(cRef.current); }, 10);
     }
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); if (ro) ro.disconnect(); };
   }, [phase]);
 
+  // ── Get cursor/touch position relative to canvas CSS coords ──────────
   const getXY = (e, canvas) => {
     const rect = canvas.getBoundingClientRect();
     const src = e.touches ? e.touches[0] : e;
     return { x: src.clientX - rect.left, y: src.clientY - rect.top };
   };
 
-  const makeSigHandlers = (cRef, ctxRef, drawRef, setHas) => ({
+  // ── Get a ready context — setup if needed, always re-apply stroke style
+  const getCtx = (cRef, sRef) => {
+    if (!setupCanvas(cRef, sRef)) return null;
+    const ctx = cRef.current.getContext("2d");
+    // Re-apply stroke style in case context was reset
+    ctx.strokeStyle = "#1A1A2E";
+    ctx.lineWidth = 2.5;
+    ctx.lineCap = "round";
+    ctx.lineJoin = "round";
+    return ctx;
+  };
+
+  const makeSigHandlers = (cRef, sRef, drawRef, setHas) => ({
     onMouseDown: (e) => {
       e.preventDefault();
-      let ctx = ctxRef.current || initCanvas(cRef, ctxRef);
+      const ctx = getCtx(cRef, sRef);
       if (!ctx) return;
       drawRef.current = true; setHas(true);
       const p = getXY(e, cRef.current);
@@ -11911,15 +11945,17 @@ function PublicGuarantorForm() {
     },
     onMouseMove: (e) => {
       e.preventDefault();
-      if (!drawRef.current || !ctxRef.current) return;
+      if (!drawRef.current) return;
+      const ctx = cRef.current?.getContext("2d");
+      if (!ctx) return;
       const p = getXY(e, cRef.current);
-      ctxRef.current.lineTo(p.x, p.y); ctxRef.current.stroke();
+      ctx.lineTo(p.x, p.y); ctx.stroke();
     },
-    onMouseUp: (e) => { e.preventDefault(); drawRef.current = false; ctxRef.current?.beginPath(); },
-    onMouseLeave: (e) => { e.preventDefault(); drawRef.current = false; ctxRef.current?.beginPath(); },
+    onMouseUp: (e) => { e.preventDefault(); drawRef.current = false; cRef.current?.getContext("2d")?.beginPath(); },
+    onMouseLeave: (e) => { e.preventDefault(); drawRef.current = false; cRef.current?.getContext("2d")?.beginPath(); },
     onTouchStart: (e) => {
       e.preventDefault();
-      let ctx = ctxRef.current || initCanvas(cRef, ctxRef);
+      const ctx = getCtx(cRef, sRef);
       if (!ctx) return;
       drawRef.current = true; setHas(true);
       const p = getXY(e, cRef.current);
@@ -11927,23 +11963,26 @@ function PublicGuarantorForm() {
     },
     onTouchMove: (e) => {
       e.preventDefault();
-      if (!drawRef.current || !ctxRef.current) return;
+      if (!drawRef.current) return;
+      const ctx = cRef.current?.getContext("2d");
+      if (!ctx) return;
       const p = getXY(e, cRef.current);
-      ctxRef.current.lineTo(p.x, p.y); ctxRef.current.stroke();
+      ctx.lineTo(p.x, p.y); ctx.stroke();
     },
-    onTouchEnd: (e) => { e.preventDefault(); drawRef.current = false; ctxRef.current?.beginPath(); },
+    onTouchEnd: (e) => { e.preventDefault(); drawRef.current = false; cRef.current?.getContext("2d")?.beginPath(); },
     clear: () => {
-      const canvas = cRef.current; const ctx = ctxRef.current;
-      if (!canvas || !ctx) return;
+      const canvas = cRef.current;
+      if (!canvas) return;
       const dpr = window.devicePixelRatio || 1;
+      const ctx = canvas.getContext("2d");
       ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
       setHas(false);
     },
   });
 
-  const empSig = makeSigHandlers(empSigRef, empCtxRef, empDrawRef, setEmpHasSig);
-  const g1Sig = makeSigHandlers(g1SigRef, g1CtxRef, g1DrawRef, setG1HasSig);
-  const g2Sig = makeSigHandlers(g2SigRef, g2CtxRef, g2DrawRef, setG2HasSig);
+  const empSig = makeSigHandlers(empSigRef, empSizedRef, empDrawRef, setEmpHasSig);
+  const g1Sig = makeSigHandlers(g1SigRef, g1SizedRef, g1DrawRef, setG1HasSig);
+  const g2Sig = makeSigHandlers(g2SigRef, g2SizedRef, g2DrawRef, setG2HasSig);
 
   // ── Verify token + email ──────────────────────────────────────────────
   const doCheck = async (overEmail, overToken) => {
