@@ -12331,13 +12331,19 @@ function PublicGuarantorForm() {
         }
 
         // ── EMPLOYEE (no slot hint) ────────────────────────────────────
-        // Rejected sections take priority
+        // Employee's own section A rejected — send them back to re-fill it
         if (aRejected) { setPhase("section_a"); return; }
-        if (bRejected) { setPhase("section_b_1"); return; }
-        if (cRejected) { setPhase("section_b_2"); return; }
-        // Employee already submitted section A — show relay screen so they
-        // can share guarantor links (not push them into a guarantor form)
-        if (s.employee_signature_url) { setRelayLink(s.relay_link || ""); setPhase("relay_screen"); return; }
+        // Guarantor sections rejected — employee stays on relay screen with a warning banner.
+        // The guarantor must re-fill via their own link; the employee cannot fill it for them.
+        if (s.employee_signature_url) {
+          // The check endpoint doesn't return relay_link — reconstruct it from the current token + email,
+          // mirroring how the backend builds it in save-partial: /?guarantor_token={token}&email={email}
+          const builtLink = s.relay_link ||
+            `${window.location.origin}${window.location.pathname}?guarantor_token=${encodeURIComponent(tok)}&email=${encodeURIComponent(eAddr)}`;
+          setRelayLink(builtLink);
+          setPhase("relay_screen");
+          return;
+        }
         // First-time employee fill
         setPhase("section_a");
       } else {
@@ -12471,83 +12477,123 @@ function PublicGuarantorForm() {
   );
 
   // ── RELAY SCREEN ───────────────────────────────────────────────────────
-  if (phase === "relay_screen") return (
-    <div style={css.page}><Topbar />
-      <div style={css.wrap}><Progress />
-        <div style={{ ...css.card, textAlign: "center" }}>
-          <div style={{ width: 60, height: 60, borderRadius: "50%", background: "#ECFDF5", border: "2px solid #10B981", color: "#10B981", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px", fontSize: 20 }}>✓</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: NAVY, marginBottom: 10 }}>Your Details Are On Record</div>
-          <div style={{ fontSize: 13, color: "#6B7280", marginBottom: 24, lineHeight: 1.8 }}>
-            Your section has been saved. Share the links below with your two guarantors — each guarantor should open their own link and complete their section.
+  if (phase === "relay_screen") {
+    const g1Rejected = submission?.section_b_status === "rejected";
+    const g2Rejected = submission?.section_c_status === "rejected";
+    const anyRejected = g1Rejected || g2Rejected;
+    return (
+      <div style={css.page}><Topbar />
+        <div style={css.wrap}><Progress />
+          <div style={{ ...css.card, textAlign: "center" }}>
+            <div style={{ width: 60, height: 60, borderRadius: "50%", background: "#ECFDF5", border: "2px solid #10B981", color: "#10B981", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px", fontSize: 20 }}>✓</div>
+            <div style={{ fontSize: 20, fontWeight: 800, color: NAVY, marginBottom: 10 }}>Your Details Are On Record</div>
+            <div style={{ fontSize: 13, color: "#6B7280", marginBottom: anyRejected ? 16 : 24, lineHeight: 1.8 }}>
+              Your section has been saved. Share the links below with your two guarantors — each guarantor should open their own link and complete their section.
+            </div>
+            {anyRejected && (
+              <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 8, padding: "14px 18px", textAlign: "left", marginBottom: 8 }}>
+                <div style={{ display: "flex", gap: 10, alignItems: "flex-start" }}>
+                  <span style={{ fontSize: 18, flexShrink: 0 }}>⚠️</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 700, color: "#991B1B", marginBottom: 4 }}>
+                      {g1Rejected && g2Rejected ? "Both guarantors need to resubmit" : g1Rejected ? "Guarantor 1 needs to resubmit" : "Guarantor 2 needs to resubmit"}
+                    </div>
+                    <div style={{ fontSize: 12, color: "#B91C1C", lineHeight: 1.6 }}>
+                      HR has rejected one or more guarantor sections. Please resend the relevant link(s) below — your guarantor(s) must open their link, review the rejection reason, and resubmit their section. You cannot fill in the guarantor forms yourself.
+                    </div>
+                    {g1Rejected && submission?.section_b_reason && (
+                      <div style={{ marginTop: 8, fontSize: 11, color: "#7F1D1D", background: "#FEE2E2", borderRadius: 4, padding: "6px 10px" }}>
+                        <strong>Guarantor 1 rejection reason:</strong> {submission.section_b_reason}
+                      </div>
+                    )}
+                    {g2Rejected && submission?.section_c_reason && (
+                      <div style={{ marginTop: 6, fontSize: 11, color: "#7F1D1D", background: "#FEE2E2", borderRadius: 4, padding: "6px 10px" }}>
+                        <strong>Guarantor 2 rejection reason:</strong> {submission.section_c_reason}
+                      </div>
+                    )}
+                  </div>
+                </div>
+              </div>
+            )}
           </div>
-        </div>
 
-        {/* Guarantor 1 Link */}
-        <div style={{ ...css.card, background: "#F0F9FF", borderColor: "#0EA5E9" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-            <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#0EA5E9", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700 }}>1</div>
-            <div style={{ flex: 1, textAlign: "left" }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>Guarantor 1 Form Link</div>
-              <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>Share this link with your first guarantor</div>
+          {/* Guarantor 1 Link */}
+          <div style={{ ...css.card, background: g1Rejected ? "#FFF1F2" : "#F0F9FF", borderColor: g1Rejected ? "#F87171" : "#0EA5E9" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+              <div style={{ width: 32, height: 32, borderRadius: "50%", background: g1Rejected ? "#EF4444" : "#0EA5E9", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700 }}>1</div>
+              <div style={{ flex: 1, textAlign: "left" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>Guarantor 1 Form Link</div>
+                  {g1Rejected && <span style={{ fontSize: 10, fontWeight: 700, background: "#FEE2E2", color: "#B91C1C", padding: "2px 8px", borderRadius: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>Needs Resubmission</span>}
+                </div>
+                <div style={{ fontSize: 11, color: g1Rejected ? "#B91C1C" : "#6B7280", marginTop: 2 }}>
+                  {g1Rejected ? "Resend this link — guarantor must re-fill and resubmit" : "Share this link with your first guarantor"}
+                </div>
+              </div>
+            </div>
+            <div style={{ background: "#fff", border: `1px solid ${g1Rejected ? "#F8717130" : "#0EA5E930"}`, borderRadius: 4, padding: "12px 14px", marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
+              <input readOnly value={`${relayLink}&guarantor=1`} style={{
+                flex: 1, fontSize: 11, padding: "8px 0", border: "none", background: "transparent",
+                color: NAVY, fontFamily: "monospace", outline: "none"
+              }} />
+              <button onClick={() => {
+                navigator.clipboard.writeText(`${relayLink}&guarantor=1`);
+                alert("Guarantor 1 link copied!");
+              }} style={{
+                padding: "8px 14px", borderRadius: 4, fontSize: 10, fontWeight: 700,
+                background: g1Rejected ? "#EF4444" : "#0EA5E9", color: "#fff", border: "none", cursor: "pointer", whiteSpace: "nowrap"
+              }}>
+                Copy
+              </button>
             </div>
           </div>
-          <div style={{ background: "#fff", border: "1px solid #0EA5E930", borderRadius: 4, padding: "12px 14px", marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
-            <input readOnly value={`${relayLink}&guarantor=1`} style={{
-              flex: 1, fontSize: 11, padding: "8px 0", border: "none", background: "transparent",
-              color: NAVY, fontFamily: "monospace", outline: "none"
-            }} />
-            <button onClick={() => {
-              navigator.clipboard.writeText(`${relayLink}&guarantor=1`);
-              alert("Guarantor 1 link copied!");
-            }} style={{
-              padding: "8px 14px", borderRadius: 4, fontSize: 10, fontWeight: 700,
-              background: "#0EA5E9", color: "#fff", border: "none", cursor: "pointer", whiteSpace: "nowrap"
-            }}>
-              Copy
-            </button>
-          </div>
-        </div>
 
-        {/* Guarantor 2 Link */}
-        <div style={{ ...css.card, background: "#F0FDF4", borderColor: "#10B981" }}>
-          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
-            <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#10B981", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700 }}>2</div>
-            <div style={{ flex: 1, textAlign: "left" }}>
-              <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>Guarantor 2 Form Link</div>
-              <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>Share this link with your second guarantor</div>
+          {/* Guarantor 2 Link */}
+          <div style={{ ...css.card, background: g2Rejected ? "#FFF1F2" : "#F0FDF4", borderColor: g2Rejected ? "#F87171" : "#10B981" }}>
+            <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+              <div style={{ width: 32, height: 32, borderRadius: "50%", background: g2Rejected ? "#EF4444" : "#10B981", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700 }}>2</div>
+              <div style={{ flex: 1, textAlign: "left" }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
+                  <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>Guarantor 2 Form Link</div>
+                  {g2Rejected && <span style={{ fontSize: 10, fontWeight: 700, background: "#FEE2E2", color: "#B91C1C", padding: "2px 8px", borderRadius: 12, textTransform: "uppercase", letterSpacing: 0.5 }}>Needs Resubmission</span>}
+                </div>
+                <div style={{ fontSize: 11, color: g2Rejected ? "#B91C1C" : "#6B7280", marginTop: 2 }}>
+                  {g2Rejected ? "Resend this link — guarantor must re-fill and resubmit" : "Share this link with your second guarantor"}
+                </div>
+              </div>
+            </div>
+            <div style={{ background: "#fff", border: `1px solid ${g2Rejected ? "#F8717130" : "#10B98130"}`, borderRadius: 4, padding: "12px 14px", marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
+              <input readOnly value={`${relayLink}&guarantor=2`} style={{
+                flex: 1, fontSize: 11, padding: "8px 0", border: "none", background: "transparent",
+                color: NAVY, fontFamily: "monospace", outline: "none"
+              }} />
+              <button onClick={() => {
+                navigator.clipboard.writeText(`${relayLink}&guarantor=2`);
+                alert("Guarantor 2 link copied!");
+              }} style={{
+                padding: "8px 14px", borderRadius: 4, fontSize: 10, fontWeight: 700,
+                background: g2Rejected ? "#EF4444" : "#10B981", color: "#fff", border: "none", cursor: "pointer", whiteSpace: "nowrap"
+              }}>
+                Copy
+              </button>
             </div>
           </div>
-          <div style={{ background: "#fff", border: "1px solid #10B98130", borderRadius: 4, padding: "12px 14px", marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
-            <input readOnly value={`${relayLink}&guarantor=2`} style={{
-              flex: 1, fontSize: 11, padding: "8px 0", border: "none", background: "transparent",
-              color: NAVY, fontFamily: "monospace", outline: "none"
-            }} />
-            <button onClick={() => {
-              navigator.clipboard.writeText(`${relayLink}&guarantor=2`);
-              alert("Guarantor 2 link copied!");
-            }} style={{
-              padding: "8px 14px", borderRadius: 4, fontSize: 10, fontWeight: 700,
-              background: "#10B981", color: "#fff", border: "none", cursor: "pointer", whiteSpace: "nowrap"
-            }}>
-              Copy
-            </button>
-          </div>
-        </div>
 
-        {/* Note */}
-        <div style={{ ...css.card, background: "#FFFBEB", borderColor: "#F59E0B", textAlign: "left" }}>
-          <div style={{ fontSize: 11, fontWeight: 700, color: "#92400E", letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>💡 Next Steps</div>
-          <ul style={{ fontSize: 12, color: "#78350F", lineHeight: 1.8, margin: 0, paddingLeft: 20 }}>
-            <li>Copy each link above (click the Copy button)</li>
-            <li>Send Guarantor 1 link to your first guarantor</li>
-            <li>Send Guarantor 2 link to your second guarantor</li>
-            <li>They will complete their forms independently</li>
-            <li>HR will review all submissions when complete</li>
-          </ul>
+          {/* Note */}
+          <div style={{ ...css.card, background: "#FFFBEB", borderColor: "#F59E0B", textAlign: "left" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#92400E", letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>💡 Next Steps</div>
+            <ul style={{ fontSize: 12, color: "#78350F", lineHeight: 1.8, margin: 0, paddingLeft: 20 }}>
+              <li>Copy each link above (click the Copy button)</li>
+              <li>Send Guarantor 1 link to your first guarantor</li>
+              <li>Send Guarantor 2 link to your second guarantor</li>
+              <li>They will complete their forms independently</li>
+              <li>HR will review all submissions when complete</li>
+            </ul>
+          </div>
         </div>
       </div>
-    </div>
-  );
+    );
+  }
 
   // ── SECTION A ─────────────────────────────────────────────────────────
   if (phase === "section_a") {
