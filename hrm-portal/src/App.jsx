@@ -9293,6 +9293,38 @@ function ExpensesManager() {
   const [payingId, setPayingId] = useState(null);
   // ── Pay modal (partial / full reimbursement) ──
   const [payModal, setPayModal] = useState(null);
+  // ── Receipt / proof document viewer (mirrors payout dashboard) ──
+  const [viewingReceipt, setViewingReceipt] = useState(null); // { id, receipt_url, description, selectedIdx }
+  const [previewUrl, setPreviewUrl] = useState(null);
+  const [previewLoading, setPreviewLoading] = useState(false);
+
+  useEffect(() => {
+    if (!viewingReceipt) {
+      if (previewUrl) URL.revokeObjectURL(previewUrl);
+      setPreviewUrl(null);
+      return;
+    }
+
+    async function loadPreview() {
+      setPreviewLoading(true);
+      const idx = viewingReceipt.selectedIdx || 0;
+      const url = `${API_BASE}/hr/expenses/${viewingReceipt.id}/view-receipt?file_index=${idx}&token=${localStorage.getItem("ec_token")}`;
+
+      try {
+        const res = await fetch(url);
+        if (!res.ok) throw new Error();
+        const blob = await res.blob();
+        const objUrl = URL.createObjectURL(blob);
+        setPreviewUrl(objUrl);
+      } catch (e) {
+        console.error("Preview load failed", e);
+      } finally {
+        setPreviewLoading(false);
+      }
+    }
+
+    loadPreview();
+  }, [viewingReceipt?.id, viewingReceipt?.selectedIdx]);
 
   const fmt = n => n != null ? `₦${Number(n).toLocaleString()}` : "—";
 
@@ -9663,7 +9695,15 @@ function ExpensesManager() {
                                 return <span style={{ fontSize: 9, color: "#F59E0B", fontWeight: 700 }}>₦{paid.toLocaleString()} / ₦{net.toLocaleString()}</span>;
                               })()}
                               {normalize(e.status) === "paid" && <span style={{ fontSize: 10, color: "#10B981", fontWeight: 800 }}>✓ Reimbursed</span>}
-                              {e.receipt_url && <a href={e.receipt_url} target="_blank" rel="noreferrer" className="bg" style={{ fontSize: 10, padding: "4px 10px" }}>Receipt</a>}
+                              {e.receipt_url && (
+                                <button
+                                  className="bg"
+                                  style={{ fontSize: 10, padding: "4px 10px", cursor: "pointer", border: "none" }}
+                                  onClick={() => setViewingReceipt({ id: e.id, receipt_url: e.receipt_url, description: e.description, selectedIdx: 0 })}
+                                >
+                                  📎 Receipt
+                                </button>
+                              )}
                             </div>
                           </td>
                         </tr>
@@ -9930,7 +9970,13 @@ function ExpensesManager() {
               </div>
             )}
             {(detail.receipt_url || detail.proforma_url) && (
-              <a href={detail.receipt_url || detail.proforma_url} target="_blank" rel="noreferrer" className="bp" style={{ textDecoration: "none", textAlign: "center", fontSize: 13, padding: "10px 0" }}>📎 View Attached Document</a>
+              <button
+                className="bp"
+                style={{ textDecoration: "none", textAlign: "center", fontSize: 13, padding: "10px 0", cursor: "pointer", border: "none", width: "100%" }}
+                onClick={() => setViewingReceipt({ id: detail.id, receipt_url: detail.receipt_url || detail.proforma_url, description: detail.description, selectedIdx: 0 })}
+              >
+                📎 View Attached Document
+              </button>
             )}
           </div>
         </Modal>
@@ -10077,13 +10123,120 @@ function ExpensesManager() {
             </div>
             <div className="g2" style={{ gap: 12 }}>
               <div><Lbl>Date Incurred</Lbl><input type="date" className="inp" value={form.date} onChange={e => setForm(f => ({ ...f, date: e.target.value }))} /></div>
-              <div><Lbl>Receipt URL</Lbl><input className="inp" value={form.receipt_url} onChange={e => setForm(f => ({ ...f, receipt_url: e.target.value }))} placeholder="https://…" /></div>
+              <div>
+                <Lbl>Receipt / Proof</Lbl>
+                <input
+                  type="file"
+                  accept="image/*,application/pdf"
+                  className="inp"
+                  style={{ paddingTop: 6 }}
+                  onChange={async (ev) => {
+                    const file = ev.target.files?.[0];
+                    if (!file) return;
+                    const fd = new FormData();
+                    fd.append("file", file);
+                    try {
+                      const res = await fetch(`${API_BASE}/hr/expenses/upload-receipt`, {
+                        method: "POST",
+                        headers: { Authorization: `Bearer ${localStorage.getItem("ec_token")}` },
+                        body: fd,
+                      });
+                      const data = await res.json();
+                      if (data.path) setForm(f => ({ ...f, receipt_url: data.path }));
+                      else alert("Upload failed — try again");
+                    } catch {
+                      alert("Upload failed — check your connection");
+                    }
+                  }}
+                />
+                {form.receipt_url && (
+                  <div style={{ fontSize: 10, color: "#10B981", marginTop: 4 }}>
+                    ✓ File uploaded — will be attached on submit
+                  </div>
+                )}
+              </div>
             </div>
             <div><Lbl>Remarks / Notes</Lbl><textarea className="inp" value={form.remarks} onChange={e => setForm(f => ({ ...f, remarks: e.target.value }))} placeholder="Any additional context for this expense claim..." style={{ minHeight: 72 }} /></div>
             <button className="bp" onClick={submit} style={{ padding: 14 }}>Submit Expense</button>
           </div>
         </Modal>
       )}
+
+      {/* ══════════════════════ RECEIPT VIEWER MODAL ══════════════════════ */}
+      {viewingReceipt && (() => {
+        const raw = viewingReceipt.receipt_url || "";
+        let paths = [];
+        if (raw.startsWith("[")) {
+          try { paths = JSON.parse(raw); } catch { paths = [raw]; }
+        } else if (raw) {
+          paths = [raw];
+        }
+        return (
+          <Modal onClose={() => setViewingReceipt(null)} title="Expense Proof Documents" width={760}>
+            <div style={{ display: "flex", flexDirection: "column", gap: 20 }}>
+              <div style={{ padding: 14, background: `${T.orange}0D`, borderRadius: 12, border: `1px solid ${T.orange}22` }}>
+                <div style={{ fontSize: 11, color: C.sub, textTransform: "uppercase", letterSpacing: 1, marginBottom: 8 }}>
+                  Proof Documentation — {viewingReceipt.description || "Expense Claim"}
+                </div>
+                <div style={{ display: "flex", flexWrap: "wrap", gap: 10 }}>
+                  {paths.length > 0 ? paths.map((p, i) => {
+                    const isActive = (viewingReceipt.selectedIdx || 0) === i;
+                    return (
+                      <button
+                        key={i}
+                        onClick={() => setViewingReceipt(prev => ({ ...prev, selectedIdx: i }))}
+                        className="bg"
+                        style={{
+                          display: "flex", alignItems: "center", gap: 8, padding: "8px 14px", border: `1px solid ${isActive ? T.orange : "transparent"}`,
+                          background: isActive ? `${T.orange}11` : C.bg, cursor: "pointer"
+                        }}
+                      >
+                        <svg width="14" height="14" fill="none" stroke={isActive ? T.orange : "currentColor"} strokeWidth="2" viewBox="0 0 24 24">
+                          <path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z" />
+                          <polyline points="14 2 14 8 20 8" />
+                        </svg>
+                        <span style={{ fontSize: 12, color: isActive ? T.orange : C.text, fontWeight: isActive ? 700 : 400 }}>
+                          {p.startsWith("http") ? `External #${i + 1}` : `RECEIPT #${i + 1}`}
+                        </span>
+                      </button>
+                    );
+                  }) : (
+                    <div style={{ fontSize: 13, color: C.muted }}>No proof files attached to this expense.</div>
+                  )}
+                </div>
+              </div>
+
+              <div style={{
+                height: 500, background: "#000", borderRadius: 12, overflow: "hidden", position: "relative",
+                display: "flex", alignItems: "center", justifyContent: "center"
+              }}>
+                {previewLoading ? (
+                  <div style={{ textAlign: "center", color: "#666" }}>
+                    <div style={{ width: 30, height: 30, border: "2px solid #333", borderTopColor: T.orange, borderRadius: "50%", animation: "spin 1s linear infinite", margin: "0 auto 12px" }}></div>
+                    <div style={{ fontSize: 12, fontWeight: 700, letterSpacing: 1 }}>RETRIEVING DOCUMENT...</div>
+                  </div>
+                ) : previewUrl ? (
+                  (() => {
+                    const idx = viewingReceipt.selectedIdx || 0;
+                    const path = paths[idx] || "";
+                    const isPdf = path.toLowerCase().endsWith(".pdf");
+                    if (isPdf) {
+                      return <iframe src={previewUrl} style={{ width: "100%", height: "100%", border: "none" }} />;
+                    } else {
+                      return <img src={previewUrl} style={{ maxWidth: "100%", maxHeight: "100%", objectFit: "contain" }} alt="Receipt Preview" />;
+                    }
+                  })()
+                ) : (
+                  <div style={{ textAlign: "center", color: "#666" }}>
+                    <div style={{ fontSize: 32, marginBottom: 12 }}>📄</div>
+                    <div style={{ fontSize: 14 }}>No preview available</div>
+                  </div>
+                )}
+              </div>
+            </div>
+          </Modal>
+        );
+      })()}
     </div>
   );
 }

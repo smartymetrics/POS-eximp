@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request, Depends, HTTPException, status
 from fastapi.staticfiles import StaticFiles
 from fastapi.templating import Jinja2Templates
-from fastapi.responses import HTMLResponse, RedirectResponse
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
 from fastapi.middleware.cors import CORSMiddleware
 import uvicorn
 from contextlib import asynccontextmanager
@@ -99,6 +99,12 @@ async def auth_exception_handler(request: Request, exc: HTTPException):
     return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
 
 app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/hr", include_in_schema=False)
+@app.get("/hr/", include_in_schema=False)
+async def hr_index():
+    return FileResponse("hrm-portal/dist/index.html")
+
 app.mount("/hr", StaticFiles(directory="hrm-portal/dist", html=True), name="hr")
 templates = Jinja2Templates(directory="templates")
 

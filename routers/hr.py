@@ -7,7 +7,7 @@ from typing import List, Optional
 from pydantic import BaseModel
 from datetime import date, datetime, timedelta, timezone
 from database import get_db, db_execute
-from routers.auth import verify_token
+from routers.auth import verify_token, resolve_admin_token
 from models import (
     KPITemplateCreate, KPITemplateUpdate, PerformanceReviewCreate,
     LeaveRequestCreate, LeaveRequestUpdate, StaffDocumentCreate, 
@@ -3755,6 +3755,94 @@ async def update_expense(expense_id: str, request: Request, current_admin: dict 
                     print(f"[EXPENSE EMAIL] non-blocking error: {email_err}")
 
     return res.data[0] if res.data else None
+
+# ─── EXPENSE RECEIPT ENDPOINTS ──────────────────────────────────────────────
+
+@router.get("/expenses/{expense_id}/view-receipt")
+async def view_expense_receipt(
+    expense_id: str,
+    file_index: int = 0,
+    current_admin: dict = Depends(resolve_admin_token),
+):
+    """
+    Securely serves an expense receipt/proof document via a Supabase signed URL.
+    Mirrors the payout dashboard /view-document endpoint so HR staff can view
+    proof files uploaded by staff without them being 404'd by the static server.
+
+    receipt_url may be:
+      - A plain storage path:  "portal_claims/abc.jpeg"
+      - A JSON array of paths: '["portal_claims/a.jpeg","portal_claims/b.pdf"]'
+      - A full https:// URL (external — redirect directly)
+    """
+    import json
+    from fastapi.responses import RedirectResponse
+    from storage_service import generate_signed_url
+
+    db = get_db()
+    res = await db_execute(
+        lambda: db.table("expenditure_requests")
+        .select("receipt_url, proforma_url")
+        .eq("id", expense_id)
+        .maybe_single()
+        .execute()
+    )
+    if not res or not res.data:
+        raise HTTPException(status_code=404, detail="Expense record not found")
+
+    raw = res.data.get("receipt_url") or res.data.get("proforma_url")
+    if not raw:
+        raise HTTPException(status_code=404, detail="No receipt document attached to this expense")
+
+    # Resolve single path vs JSON array
+    path = raw
+    if raw.startswith("["):
+        try:
+            paths = json.loads(raw)
+            if isinstance(paths, list) and paths:
+                idx = max(0, min(file_index, len(paths) - 1))
+                path = paths[idx]
+        except (ValueError, json.JSONDecodeError):
+            pass  # fall through — treat as plain string
+
+    # External URL → redirect directly
+    if path.startswith("http"):
+        return RedirectResponse(url=path)
+
+    # Private Supabase storage → generate signed URL
+    signed_url = generate_signed_url("Cloud Infrastructure", path)
+    if not signed_url:
+        raise HTTPException(status_code=500, detail="Failed to generate secure access link for receipt")
+
+    return RedirectResponse(url=signed_url)
+
+
+@router.post("/expenses/upload-receipt")
+async def upload_expense_receipt(
+    file: UploadFile = File(...),
+    current_admin: dict = Depends(verify_token),
+):
+    """
+    Uploads a proof/receipt file for an expense claim to Supabase private storage
+    (same bucket as payout portal: 'Cloud Infrastructure').
+    Returns the storage path so the frontend can POST it as receipt_url when
+    submitting a new expense, or PATCH it onto an existing one.
+    """
+    from storage_service import upload_portal_file
+
+    if not file or not file.filename:
+        raise HTTPException(status_code=400, detail="No file provided")
+
+    file_ext = file.filename.rsplit(".", 1)[-1] if "." in file.filename else "bin"
+    # Namespace under portal_claims/ to match payout dashboard convention
+    file_path = f"portal_claims/{uuid.uuid4().hex}.{file_ext}"
+    file_bytes = await file.read()
+
+    ok = upload_portal_file(file_path, file_bytes, file.content_type)
+    if not ok:
+        raise HTTPException(status_code=500, detail="Failed to upload receipt file. Please retry.")
+
+    return {"path": file_path}
+
 
 @router.get("/peer-reviews")
 async def get_peer_reviews(current_admin: dict = Depends(verify_token)):
