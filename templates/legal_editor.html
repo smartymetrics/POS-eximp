@@ -668,8 +668,9 @@
                 <button class="toolbar-btn" onclick="exec('indent')" title="Increase Indent"><i
                         class="fas fa-indent"></i></button>
                 <div class="toolbar-divider"></div>
-                <button class="toolbar-btn" onclick="exec('removeFormat')" title="Clear Formatting"><i
-                        class="fas fa-eraser"></i></button>
+                <button class="toolbar-btn" onclick="exec('removeFormat')" title="Clear Formatting"><i class="fas fa-eraser"></i></button>
+                <div class="toolbar-divider"></div>
+                <input type="color" oninput="exec('foreColor', this.value)" class="w-8 h-8 bg-transparent border-none cursor-pointer outline-none p-0" title="Text Color">
             </div>
 
             <!-- Editor View -->
@@ -1047,8 +1048,8 @@
             await loadContractData();
         };
 
-        function exec(cmd) {
-            document.execCommand(cmd, false, null);
+        function exec(cmd, val = null) {
+            document.execCommand(cmd, false, val);
             autoSaveToBuffer();
         }
 

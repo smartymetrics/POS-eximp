@@ -279,12 +279,18 @@
                     else fontDropdown.value = "'Tinos', serif";
                 }
 
-                const sizeDropdown = document.getElementById('font-size');
-                if (sizeDropdown) {
-                    const attrs = editor.getAttributes('textStyle');
-                    if (attrs.fontSize) sizeDropdown.value = attrs.fontSize;
-                    else sizeDropdown.value = "11";
-                }
+                    if (sizeDropdown) {
+                        const attrs = editor.getAttributes('textStyle');
+                        if (attrs.fontSize) sizeDropdown.value = attrs.fontSize;
+                        else sizeDropdown.value = "11";
+                    }
+
+                    const colorPicker = document.getElementById('text-color');
+                    if (colorPicker) {
+                        const attrs = editor.getAttributes('textStyle');
+                        if (attrs.color) colorPicker.value = attrs.color;
+                        else colorPicker.value = "#000000";
+                    }
 
                 window.updateWordCount();
             },
@@ -561,6 +567,12 @@
         document.getElementById('font-size')?.addEventListener('change', (e) => {
             const fontSize = e.target.value;
             editor.chain().focus().setFontSize(fontSize).run();
+        });
+
+        // ── TEXT COLOR ──
+        document.getElementById('text-color')?.addEventListener('input', (e) => {
+            const color = e.target.value;
+            editor.chain().focus().setColor(color).run();
         });
 
         // ── HEADING STYLE ──
@@ -1990,7 +2002,7 @@
 
         /* ── EDITOR BODY ── */
         .document-body * {
-            color: #000 !important;
+            /* color: #000 !important; */
         }
 
         .ProseMirror {
@@ -2005,14 +2017,14 @@
             white-space: pre-wrap;
             user-select: text;
             -webkit-user-select: text;
-            color: #000 !important;
+            color: #000;
             background-color: #fff !important;
             caret-color: #000 !important;
         }
 
         /* Ensure all Tiptap elements within the editor are black */
         .ProseMirror p, .ProseMirror span, .ProseMirror div, .ProseMirror strong, .ProseMirror em {
-            color: #000 !important;
+            /* Allow custom colors */
         }
 
         .ProseMirror ol { list-style-type: decimal; }
@@ -2462,6 +2474,10 @@
                 <option value="16">16</option>
                 <option value="18">18</option>
             </select>
+            <div class="ribbon-divider"></div>
+            <div class="flex items-center gap-1 px-1">
+                <input type="color" id="text-color" class="w-8 h-8 rounded border-none cursor-pointer bg-transparent" title="Text Color" value="#000000">
+            </div>
             <div class="ribbon-divider"></div>
             <button onclick="window.insertBranding('seal')" class="ribbon-btn" title="Apply Company Seal">🔖
                 Seal</button>
