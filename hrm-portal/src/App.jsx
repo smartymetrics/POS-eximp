@@ -11511,6 +11511,8 @@ function GuarantorReviewModal({ sub, onClose, onRefresh }) {
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState(false);
   const [activeGuarantor, setActiveG] = useState(1);
+  const [docViewer, setDocViewer] = useState(null); // { gNum, type, url }
+  const [showGuarantorLinks, setShowGuarantorLinks] = useState(false);
 
   useEffect(() => {
     apiFetch(`${API_BASE}/guarantor/submissions/${sub.id}`)
@@ -11711,19 +11713,60 @@ function GuarantorReviewModal({ sub, onClose, onRefresh }) {
               <ReviewActions section="a" status={full.section_a_status} reason={full.section_a_reason} />
             </div>
 
+            {/* Guarantor Tabs + Links Button */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 12, justifyContent: "space-between", alignItems: "center" }}>
+              <div style={{ display: "flex", gap: 8 }}>
+                {[1, 2].map(n => (
+                  <button key={n} onClick={() => setActiveG(n)} style={{
+                    padding: "8px 22px", borderRadius: 4, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                    border: `1px solid ${activeGuarantor === n ? GOLD : C.border}`,
+                    background: activeGuarantor === n ? `${GOLD}15` : "transparent",
+                    color: activeGuarantor === n ? GOLD : C.muted,
+                  }}>
+                    Guarantor {n} {full[`guarantor${n}`] ? "✓" : "(pending)"}
+                  </button>
+                ))}
+              </div>
+              <button onClick={() => setShowGuarantorLinks(!showGuarantorLinks)} style={{
+                padding: "8px 14px", borderRadius: 4, fontSize: 11, fontWeight: 700, cursor: "pointer",
+                background: `${GOLD}15`, color: GOLD, border: `1px solid ${GOLD}40`,
+              }}>
+                📎 Sent Links
+              </button>
+            </div>
+
+            {/* Guarantor Links Display */}
+            {showGuarantorLinks && full?.relay_link && (
+              <div style={{ background: `${GOLD}08`, border: `1px solid ${GOLD}30`, borderRadius: 6, padding: 16, marginBottom: 12 }}>
+                <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Links Sent to Guarantors</div>
+                {[1, 2].map(n => {
+                  const link = `${full.relay_link}&guarantor=${n}`;
+                  return (
+                    <div key={n} style={{ marginBottom: n === 1 ? 12 : 0 }}>
+                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>Guarantor {n}</div>
+                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                        <input readOnly value={link} style={{
+                          flex: 1, fontSize: 10, padding: "8px 12px", border: `1px solid ${C.border}`,
+                          borderRadius: 4, background: C.surface, color: C.text, fontFamily: "monospace", wordBreak: "break-all"
+                        }} />
+                        <button onClick={() => {
+                          navigator.clipboard.writeText(link);
+                          alert("Guarantor " + n + " link copied!");
+                        }} style={{
+                          padding: "8px 12px", borderRadius: 4, fontSize: 10, fontWeight: 700,
+                          background: GOLD, color: "#fff", border: "none", cursor: "pointer", whiteSpace: "nowrap"
+                        }}>
+                          Copy
+                        </button>
+                      </div>
+                    </div>
+                  );
+                })}
+              </div>
+            )}
+
             {/* Guarantor Tabs */}
             <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
-              {[1, 2].map(n => (
-                <button key={n} onClick={() => setActiveG(n)} style={{
-                  padding: "8px 22px", borderRadius: 4, fontSize: 12, fontWeight: 700, cursor: "pointer",
-                  border: `1px solid ${activeGuarantor === n ? GOLD : C.border}`,
-                  background: activeGuarantor === n ? `${GOLD}15` : "transparent",
-                  color: activeGuarantor === n ? GOLD : C.muted,
-                }}>
-                  Guarantor {n} {full[`guarantor${n}`] ? "✓" : "(pending)"}
-                </button>
-              ))}
-            </div>
 
             {/* Guarantor Detail */}
             {[1, 2].map(n => {
@@ -11757,18 +11800,22 @@ function GuarantorReviewModal({ sub, onClose, onRefresh }) {
 
                     <div style={{ display: "flex", gap: 20, marginTop: 16, flexWrap: "wrap" }}>
                       {g.passport_photo_url && (
-                        <div>
+                        <div style={{ cursor: "pointer" }} onClick={() => setDocViewer({ gNum: n, type: "Passport Photo", url: g.passport_photo_url })}>
                           <div style={lbl}>Passport Photo</div>
                           <img src={g.passport_photo_url} alt="Passport"
-                            style={{ width: 72, height: 72, borderRadius: 6, objectFit: "cover", marginTop: 6, border: `2px solid ${GOLD}40` }}
+                            style={{ width: 72, height: 72, borderRadius: 6, objectFit: "cover", marginTop: 6, border: `2px solid ${GOLD}40`, transition: "opacity 0.2s", opacity: 0.8, cursor: "pointer" }}
+                            onMouseEnter={e => e.target.style.opacity = "1"}
+                            onMouseLeave={e => e.target.style.opacity = "0.8"}
                             onError={e => e.target.style.display = "none"} />
                         </div>
                       )}
                       {g.id_document_url && (
-                        <div>
+                        <div style={{ cursor: "pointer" }} onClick={() => setDocViewer({ gNum: n, type: "ID Document", url: g.id_document_url })}>
                           <div style={lbl}>ID Document</div>
                           <img src={g.id_document_url} alt="ID"
-                            style={{ height: 72, borderRadius: 6, objectFit: "cover", marginTop: 6, border: `1px solid ${C.border}` }}
+                            style={{ height: 72, borderRadius: 6, objectFit: "cover", marginTop: 6, border: `1px solid ${C.border}`, transition: "opacity 0.2s", opacity: 0.8, cursor: "pointer" }}
+                            onMouseEnter={e => e.target.style.opacity = "1"}
+                            onMouseLeave={e => e.target.style.opacity = "0.8"}
                             onError={e => e.target.style.display = "none"} />
                         </div>
                       )}
@@ -11813,6 +11860,34 @@ function GuarantorReviewModal({ sub, onClose, onRefresh }) {
                 </div>
               </div>
             )}
+          </div>
+        )}
+
+        {/* Document Viewer Modal */}
+        {docViewer && (
+          <div style={{
+            position: "fixed", inset: 0, background: "#000000CC", zIndex: 10000,
+            display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
+          }} onClick={e => e.target === e.currentTarget && setDocViewer(null)}>
+            <div style={{
+              background: C.surface, borderRadius: 8, width: "100%", maxWidth: 700,
+              maxHeight: "85vh", overflow: "hidden", display: "flex", flexDirection: "column",
+              boxShadow: "0 40px 120px #00000080", border: `1px solid ${C.border}`,
+            }}>
+              <div style={{ padding: "16px 24px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 16, fontWeight: 700, color: C.text }}>Guarantor {docViewer.gNum} Document</div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>{docViewer.type}</div>
+                </div>
+                <button onClick={() => setDocViewer(null)} style={{ background: "none", border: "none", color: C.muted, fontSize: 24, cursor: "pointer", lineHeight: 1 }}>✕</button>
+              </div>
+              <div style={{ flex: 1, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center", background: C.surface, padding: 20 }}>
+                <img src={docViewer.url} alt={docViewer.type} style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 6 }} onError={e => {
+                  e.target.style.display = "none";
+                  e.target.parentElement.innerHTML = '<div style="color: ' + C.muted + '; text-align: center;">Could not load document</div>';
+                }} />
+              </div>
+            </div>
           </div>
         )}
       </div>
@@ -12006,14 +12081,18 @@ function PublicGuarantorForm() {
   const [empHasSig, setEmpHasSig] = useState(false);
   const [g1HasSig, setG1HasSig] = useState(false);
   const [g2HasSig, setG2HasSig] = useState(false);
+  const [slotHint, setSlotHint] = useState(null); // "1" or "2" — set from ?slot= param for guarantor-specific links
+  const [successRole, setSuccessRole] = useState("employee"); // "employee" | "guarantor"
 
   // ── On mount: read URL params ─────────────────────────────────────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const t = params.get("guarantor_token") || "";
     const e = params.get("email") || "";
+    const g = params.get("guarantor") || params.get("slot") || ""; // Support both ?guarantor= and ?slot= formats
     if (t) setToken(t);
     if (e) setEmail(e);
+    if (g) setSlotHint(g);
     fetch(`${API_BASE}/guarantor/company-info`)
       .then(r => r.json()).then(d => setCompanyInfo(d)).catch(() => { });
     if (t && e) setTimeout(() => doCheck(e, t), 400);
@@ -12049,6 +12128,15 @@ function PublicGuarantorForm() {
     }
     return true;
   };
+
+  // ── Auto-select guarantor slot if specified in URL ──────────────────
+  useEffect(() => {
+    if (phase === "relay_screen" && slotHint === "1") {
+      setPhase("section_b_1");
+    } else if (phase === "relay_screen" && slotHint === "2") {
+      setPhase("section_b_2");
+    }
+  }, [phase, slotHint]);
 
   useEffect(() => {
     const map = {
@@ -12239,8 +12327,8 @@ function PublicGuarantorForm() {
       if (g.id_doc_file) fd.append("id_document", g.id_doc_file);
       const res = await fetch(`${API_BASE}/guarantor/public/save-partial`, { method: "POST", body: fd });
       if (!res.ok) throw new Error((await res.json()).detail || "Submission failed.");
-      if (gNum === 1) setPhase("section_b_2");
-      else setPhase("success");
+      setSuccessRole("guarantor");
+      setPhase("success"); // Always show success — guarantors fill only their slot
     } catch (e) { alert(e.message); }
     finally { setSubmitting(false); }
   };
@@ -12259,14 +12347,31 @@ function PublicGuarantorForm() {
   if (phase === "success") return (
     <div style={css.page}><Topbar />
       <div style={css.wrap}><Progress />
-        <div style={{ ...css.card, textAlign: "center", padding: "56px 40px" }}>
-          <div style={{ width: 60, height: 60, borderRadius: "50%", background: "#ECFDF5", border: "2px solid #10B981", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 26, color: "#10B981" }}>✓</div>
-          <div style={{ fontSize: 26, fontWeight: 800, color: NAVY, marginBottom: 12 }}>Form Submitted Successfully</div>
-          <div style={{ fontSize: 14, color: "#6B7280", lineHeight: 1.8, maxWidth: 420, margin: "0 auto 22px" }}>
+        <div style={{ ...css.card, textAlign: "center", padding: "64px 48px", background: "linear-gradient(135deg, #ECFDF5 0%, #F0FDF4 100%)", borderColor: "#10B981" }}>
+          <div style={{ width: 80, height: 80, borderRadius: "50%", background: "#10B981", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 28px", fontSize: 40, color: "#fff", boxShadow: "0 8px 24px rgba(16, 185, 129, 0.3)" }}>✓</div>
+          <div style={{ fontSize: 32, fontWeight: 900, color: "#065F46", marginBottom: 16, letterSpacing: -0.5 }}>Form Submitted Successfully</div>
+          <div style={{ fontSize: 15, color: "#047857", lineHeight: 1.9, maxWidth: 480, margin: "0 auto 28px", fontWeight: 500 }}>
             Your guarantor form has been received and is currently under review by HR. You will be notified by email once verification is complete.
           </div>
-          <div style={{ fontSize: 10, color: GOLD, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>
-            Official HR Record · {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}
+          <div style={{ background: "#fff", border: "1px solid #10B98140", borderRadius: 8, padding: "16px 20px", margin: "0 auto 24px", maxWidth: 380, textAlign: "left" }}>
+            <div style={{ fontSize: 11, fontWeight: 700, color: "#10B981", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>📋 Submission Details</div>
+            <div style={{ display: "flex", justifyContent: "space-between", gap: 16 }}>
+              <div>
+                <div style={{ fontSize: 10, color: "#6B7280", fontWeight: 600, marginBottom: 3 }}>Role</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#065F46" }}>{successRole === "employee" ? "Employee" : "Guarantor"}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: "#6B7280", fontWeight: 600, marginBottom: 3 }}>Submitted</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#065F46" }}>{new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "short", year: "numeric" })}</div>
+              </div>
+              <div>
+                <div style={{ fontSize: 10, color: "#6B7280", fontWeight: 600, marginBottom: 3 }}>Time</div>
+                <div style={{ fontSize: 13, fontWeight: 700, color: "#065F46" }}>{new Date().toLocaleTimeString("en-GB", { hour: "2-digit", minute: "2-digit" })}</div>
+              </div>
+            </div>
+          </div>
+          <div style={{ fontSize: 12, color: "#10B981", fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", paddingTop: 20, borderTop: "1px solid #10B98140" }}>
+            Official HR Record · Eximp &amp; Cloves Infrastructure
           </div>
         </div>
       </div>
@@ -12297,21 +12402,75 @@ function PublicGuarantorForm() {
     <div style={css.page}><Topbar />
       <div style={css.wrap}><Progress />
         <div style={{ ...css.card, textAlign: "center" }}>
-          <div style={{ width: 50, height: 50, borderRadius: "50%", background: "#ECFDF5", border: "2px solid #10B981", color: "#10B981", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px", fontSize: 20 }}>✓</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: NAVY, marginBottom: 10 }}>Your Details Saved</div>
-          <div style={{ fontSize: 13, color: "#6B7280", marginBottom: 26, lineHeight: 1.8, maxWidth: 460, margin: "0 auto 24px" }}>
-            Share the link below with your two guarantors. Each guarantor should open the link and complete their section independently.
+          <div style={{ width: 60, height: 60, borderRadius: "50%", background: "#ECFDF5", border: "2px solid #10B981", color: "#10B981", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px", fontSize: 20 }}>✓</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: NAVY, marginBottom: 10 }}>Your Details Saved Successfully</div>
+          <div style={{ fontSize: 13, color: "#6B7280", marginBottom: 24, lineHeight: 1.8 }}>
+            Now share these links with your two guarantors. Each guarantor should open their link and complete their section.
           </div>
-          <div style={{ background: "#F8F9FB", border: "1px dashed #DDE3EE", borderRadius: 4, padding: "22px 26px", marginBottom: 22, textAlign: "left" }}>
-            <div style={css.flbl}>Your Unique Guarantor Form Link</div>
-            <div style={{ fontSize: 12, color: NAVY, fontFamily: "monospace", wordBreak: "break-all", marginTop: 8, lineHeight: 1.6, background: "#fff", border: "1px solid #DDE3EE", padding: "10px 14px", borderRadius: 3 }}>{relayLink}</div>
-            <button onClick={() => { navigator.clipboard.writeText(relayLink); alert("Link copied to clipboard!"); }} style={{ ...css.btn, marginTop: 14, fontSize: 12, padding: "10px 22px" }}>
-              Copy Link
+        </div>
+
+        {/* Guarantor 1 Link */}
+        <div style={{ ...css.card, background: "#F0F9FF", borderColor: "#0EA5E9" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+            <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#0EA5E9", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700 }}>1</div>
+            <div style={{ flex: 1, textAlign: "left" }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>Guarantor 1 Form Link</div>
+              <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>Share this link with your first guarantor</div>
+            </div>
+          </div>
+          <div style={{ background: "#fff", border: "1px solid #0EA5E930", borderRadius: 4, padding: "12px 14px", marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
+            <input readOnly value={`${relayLink}&guarantor=1`} style={{
+              flex: 1, fontSize: 11, padding: "8px 0", border: "none", background: "transparent",
+              color: NAVY, fontFamily: "monospace", outline: "none"
+            }} />
+            <button onClick={() => {
+              navigator.clipboard.writeText(`${relayLink}&guarantor=1`);
+              alert("Guarantor 1 link copied!");
+            }} style={{
+              padding: "8px 14px", borderRadius: 4, fontSize: 10, fontWeight: 700,
+              background: "#0EA5E9", color: "#fff", border: "none", cursor: "pointer", whiteSpace: "nowrap"
+            }}>
+              Copy
             </button>
           </div>
-          <hr style={css.hr} />
-          <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>If you are one of the guarantors and are present now, you may fill their section here:</div>
-          <button onClick={() => setPhase("section_b_1")} style={{ ...css.btn2, fontSize: 12 }}>Fill as Guarantor 1 →</button>
+        </div>
+
+        {/* Guarantor 2 Link */}
+        <div style={{ ...css.card, background: "#F0FDF4", borderColor: "#10B981" }}>
+          <div style={{ display: "flex", alignItems: "center", gap: 12, marginBottom: 14 }}>
+            <div style={{ width: 32, height: 32, borderRadius: "50%", background: "#10B981", color: "#fff", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 16, fontWeight: 700 }}>2</div>
+            <div style={{ flex: 1, textAlign: "left" }}>
+              <div style={{ fontSize: 14, fontWeight: 700, color: NAVY }}>Guarantor 2 Form Link</div>
+              <div style={{ fontSize: 11, color: "#6B7280", marginTop: 2 }}>Share this link with your second guarantor</div>
+            </div>
+          </div>
+          <div style={{ background: "#fff", border: "1px solid #10B98130", borderRadius: 4, padding: "12px 14px", marginBottom: 12, display: "flex", gap: 8, alignItems: "center" }}>
+            <input readOnly value={`${relayLink}&guarantor=2`} style={{
+              flex: 1, fontSize: 11, padding: "8px 0", border: "none", background: "transparent",
+              color: NAVY, fontFamily: "monospace", outline: "none"
+            }} />
+            <button onClick={() => {
+              navigator.clipboard.writeText(`${relayLink}&guarantor=2`);
+              alert("Guarantor 2 link copied!");
+            }} style={{
+              padding: "8px 14px", borderRadius: 4, fontSize: 10, fontWeight: 700,
+              background: "#10B981", color: "#fff", border: "none", cursor: "pointer", whiteSpace: "nowrap"
+            }}>
+              Copy
+            </button>
+          </div>
+        </div>
+
+        {/* Note */}
+        <div style={{ ...css.card, background: "#FFFBEB", borderColor: "#F59E0B", textAlign: "left" }}>
+          <div style={{ fontSize: 11, fontWeight: 700, color: "#92400E", letterSpacing: 1, textTransform: "uppercase", marginBottom: 8 }}>💡 Next Steps</div>
+          <ul style={{ fontSize: 12, color: "#78350F", lineHeight: 1.8, margin: 0, paddingLeft: 20 }}>
+            <li>Copy each link above (click the Copy button)</li>
+            <li>Send Guarantor 1 link to your first guarantor</li>
+            <li>Send Guarantor 2 link to your second guarantor</li>
+            <li>They will complete their forms independently</li>
+            <li>HR will review all submissions when complete</li>
+          </ul>
         </div>
       </div>
     </div>
