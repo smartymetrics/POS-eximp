@@ -370,13 +370,26 @@ async def _send_guarantor_invite_email(email_addr: str, inviter_name: str, form_
                   </p>
                 </div>
 
+                <!-- Login Notice -->
+                <div style="background:#FEF9EC;border:1px solid #B8860B;border-radius:3px;padding:16px 20px;margin-bottom:20px;">
+                  <p style="font-size:13px;font-weight:800;color:#92640A;margin:0 0 6px;">⚠ Important — Login Required</p>
+                  <p style="font-size:13px;color:#78510A;line-height:1.7;margin:0;">
+                    This form requires you to be logged in to the company portal.
+                    <strong>Before clicking the link or copying it into your browser, please ensure you are already
+                    logged in to your staff account at
+                    <a href="https://app.eximps-cloves.com/hr" style="color:#B8860B;">app.eximps-cloves.com/hr</a>.</strong>
+                    Once logged in, then open or paste the form link in the same browser.
+                  </p>
+                </div>
+
                 <!-- Instructions -->
                 <div style="border-left:3px solid #B8860B;padding:16px 20px;background:#FDFBF7;margin-bottom:28px;">
-                  <p style="font-size:13px;font-weight:700;color:#0D1B2A;margin:0 0 10px;">Instructions</p>
+                  <p style="font-size:13px;font-weight:700;color:#0D1B2A;margin:0 0 10px;">How to complete your form</p>
                   <ol style="font-size:13px;color:#374151;line-height:1.9;margin:0;padding-left:18px;">
-                    <li>Click the button above to open the form.</li>
-                    <li>Verify your identity with your company email address.</li>
-                    <li>Complete <strong>Section A</strong> — your personal employment details.</li>
+                    <li>Log in to your staff account at <a href="https://app.eximps-cloves.com/hr" style="color:#B8860B;">app.eximps-cloves.com/hr</a> first.</li>
+                    <li>Once logged in, click the button above <em>in the same browser</em>, or copy and paste the link below into that browser.</li>
+                    <li>Verify your identity with your company email address on the form.</li>
+                    <li>Complete <strong>Section A</strong> — your personal employment details and signature.</li>
                     <li>Share the generated link with your <strong>two guarantors</strong> to complete Sections B &amp; C.</li>
                   </ol>
                 </div>
