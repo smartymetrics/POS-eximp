@@ -12021,8 +12021,9 @@ function PublicGuarantorForm() {
   }, []);
 
   // ── Canvas setup: size the backing store once per phase ───────────────
-  // Key insight: setting canvas.width/height resets ALL state including transforms.
-  // So we must apply ctx.scale() exactly once after each resize — tracked by sizedRef.
+  // We set canvas.width/height = CSS size * dpr for a crisp HiDPI backing store.
+  // We do NOT apply ctx.scale() — instead, getXY() maps coordinates using the
+  // ratio (canvas.width / rect.width) so strokes are always exactly under the pointer.
   const setupCanvas = (canvasRef, sizedRef) => {
     const canvas = canvasRef.current;
     if (!canvas) return false;
@@ -12035,14 +12036,13 @@ function PublicGuarantorForm() {
     if (canvas.width !== w || canvas.height !== h) {
       canvas.width = w;
       canvas.height = h;
-      sizedRef.current = false; // dimensions changed, need to re-apply scale
+      sizedRef.current = false;
     }
     if (!sizedRef.current) {
       const ctx = canvas.getContext("2d");
-      ctx.setTransform(1, 0, 0, 1, 0, 0); // reset any previous transform
-      ctx.scale(dpr, dpr);
+      ctx.setTransform(1, 0, 0, 1, 0, 0); // NO dpr scale — getXY handles it
       ctx.strokeStyle = "#1A1A2E";
-      ctx.lineWidth = 2.5;
+      ctx.lineWidth = 2.5 * dpr;           // scale line width manually
       ctx.lineCap = "round";
       ctx.lineJoin = "round";
       sizedRef.current = true;
@@ -12074,20 +12074,27 @@ function PublicGuarantorForm() {
     return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); if (ro) ro.disconnect(); };
   }, [phase]);
 
-  // ── Get cursor/touch position relative to canvas CSS coords ──────────
+  // ── Get cursor/touch position mapped to canvas coordinate space ───────
+  // Uses ratio-based mapping: always correct regardless of DPR, scroll, or zoom.
   const getXY = (e, canvas) => {
     const rect = canvas.getBoundingClientRect();
     const src = e.touches ? e.touches[0] : e;
-    return { x: src.clientX - rect.left, y: src.clientY - rect.top };
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    return {
+      x: (src.clientX - rect.left) * scaleX,
+      y: (src.clientY - rect.top) * scaleY,
+    };
   };
 
   // ── Get a ready context — setup if needed, always re-apply stroke style
   const getCtx = (cRef, sRef) => {
     if (!setupCanvas(cRef, sRef)) return null;
-    const ctx = cRef.current.getContext("2d");
-    // Re-apply stroke style in case context was reset
+    const canvas = cRef.current;
+    const dpr = window.devicePixelRatio || 1;
+    const ctx = canvas.getContext("2d");
     ctx.strokeStyle = "#1A1A2E";
-    ctx.lineWidth = 2.5;
+    ctx.lineWidth = 2.5 * dpr;
     ctx.lineCap = "round";
     ctx.lineJoin = "round";
     return ctx;
