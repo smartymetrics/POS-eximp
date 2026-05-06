@@ -30,12 +30,20 @@ router = APIRouter()
 # ── Helpers ──────────────────────────────────────────────────────────────────
 
 def _build_base_url(request: Request) -> str:
-    """Return APP_BASE_URL env var, or derive it from the request."""
+    """
+    Return the public frontend base URL.
+    The Vite app is built with base: '/hr/' so all links must include /hr/.
+    Set APP_BASE_URL=https://yourapp.com in .env — the /hr/ is appended automatically.
+    Example result: https://yourapp.com/hr
+    """
     base = os.getenv("APP_BASE_URL", "").rstrip("/")
-    if base:
-        return base
-    # Derive from request (works for local dev)
-    return str(request.base_url).rstrip("/")
+    if not base:
+        # Derive from request origin (works for local dev / reverse proxy)
+        base = str(request.base_url).rstrip("/")
+    # The frontend is always mounted at /hr/ (vite base: '/hr/')
+    if not base.endswith("/hr"):
+        base = f"{base}/hr"
+    return base
 
 
 def _sign_sub(sub: dict) -> dict:
@@ -245,7 +253,7 @@ async def get_invites(current_admin=Depends(verify_token)):
 
 
 @router.post("/invites")
-async def create_invite(data: dict, current_admin=Depends(verify_token)):
+async def create_invite(data: dict, request: Request, current_admin=Depends(verify_token)):
     if not has_any_role(current_admin, "admin", "super_admin", "hr_admin"):
         raise HTTPException(status_code=403, detail="Forbidden")
     db = get_db()
@@ -264,7 +272,151 @@ async def create_invite(data: dict, current_admin=Depends(verify_token)):
             "created_by": current_admin["sub"],
         }).execute()
     )
+
+    # ── Send the invite email ───────────────────────────────────────────────
+    try:
+        base_url   = _build_base_url(request)
+        form_link  = f"{base_url}/?guarantor_token={token}&email={email}"
+        inviter_name = current_admin.get("name") or current_admin.get("email") or "HR"
+        await _send_guarantor_invite_email(email, inviter_name, form_link)
+    except Exception as e:
+        # Log but don't fail — the invite is already saved; HR can share the link manually
+        import logging
+        logging.getLogger(__name__).error(f"Guarantor invite email failed for {email}: {e}")
+
     return res.data[0]
+
+
+async def _send_guarantor_invite_email(email_addr: str, inviter_name: str, form_link: str):
+    """Send a professional guarantor form invitation email via Resend."""
+    import resend
+    resend.api_key = os.getenv("RESEND_API_KEY")
+    from_email = os.getenv("FROM_EMAIL", "hr@eximps-cloves.com")
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+    <body style="margin:0;padding:0;background:#F5F0E8;font-family:'Segoe UI',Arial,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0E8;padding:40px 20px;">
+        <tr><td align="center">
+          <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:4px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+
+            <!-- Header bar -->
+            <tr>
+              <td style="background:#0D1B2A;padding:0 0 0 0;border-left:6px solid #B8860B;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="padding:28px 36px;">
+                      <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">
+                        Eximp &amp; Cloves Infrastructure Limited
+                      </div>
+                      <div style="font-size:10px;color:#B8860B;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-top:4px;">
+                        Human Resources Division
+                      </div>
+                    </td>
+                    <td align="right" style="padding:28px 36px;">
+                      <div style="display:inline-block;border:1px solid #B8860B;color:#B8860B;font-size:9px;font-weight:800;letter-spacing:2px;text-transform:uppercase;padding:5px 12px;border-radius:2px;">
+                        Confidential
+                      </div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+
+            <!-- Body -->
+            <tr>
+              <td style="padding:40px 36px;">
+                <p style="font-size:13px;color:#6B7280;margin:0 0 8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;">
+                  Official HR Communication
+                </p>
+                <h1 style="font-size:24px;font-weight:800;color:#0D1B2A;margin:0 0 24px;line-height:1.2;">
+                  Guarantor Form Submission Required
+                </h1>
+
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">
+                  Dear Employee,
+                </p>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">
+                  As part of your employment documentation process, you are required to complete the
+                  <strong>Employee Guarantor's Form</strong>. This form must be filled out by you
+                  and two independent guarantors before your file can be considered complete.
+                </p>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 32px;">
+                  Please click the button below to access your secure, personalised form. Once you
+                  complete your section, a link will be generated for you to share with your guarantors.
+                </p>
+
+                <!-- CTA Button -->
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td align="center" style="padding:0 0 32px;">
+                      <a href="{form_link}"
+                         style="display:inline-block;background:#0D1B2A;color:#ffffff;text-decoration:none;padding:16px 40px;border-radius:3px;font-size:14px;font-weight:700;letter-spacing:0.5px;">
+                        Open Guarantor Form &rarr;
+                      </a>
+                    </td>
+                  </tr>
+                </table>
+
+                <!-- Link fallback -->
+                <div style="background:#F8F9FB;border:1px solid #E8E2D9;border-radius:3px;padding:16px 18px;margin-bottom:28px;">
+                  <p style="font-size:11px;color:#6B7280;margin:0 0 6px;font-weight:700;letter-spacing:1px;text-transform:uppercase;">
+                    Or copy this link into your browser
+                  </p>
+                  <p style="font-size:12px;color:#B8860B;margin:0;word-break:break-all;font-family:monospace;">
+                    {form_link}
+                  </p>
+                </div>
+
+                <!-- Instructions -->
+                <div style="border-left:3px solid #B8860B;padding:16px 20px;background:#FDFBF7;margin-bottom:28px;">
+                  <p style="font-size:13px;font-weight:700;color:#0D1B2A;margin:0 0 10px;">Instructions</p>
+                  <ol style="font-size:13px;color:#374151;line-height:1.9;margin:0;padding-left:18px;">
+                    <li>Click the button above to open the form.</li>
+                    <li>Verify your identity with your company email address.</li>
+                    <li>Complete <strong>Section A</strong> — your personal employment details.</li>
+                    <li>Share the generated link with your <strong>two guarantors</strong> to complete Sections B &amp; C.</li>
+                  </ol>
+                </div>
+
+                <p style="font-size:13px;color:#9CA3AF;line-height:1.7;margin:0;">
+                  This link is unique to your account and expires in <strong>7 days</strong>.
+                  If you have any questions, please contact HR at
+                  <a href="mailto:hr@eximps-cloves.com" style="color:#B8860B;">hr@eximps-cloves.com</a>.
+                </p>
+              </td>
+            </tr>
+
+            <!-- Footer -->
+            <tr>
+              <td style="background:#F8F9FB;border-top:1px solid #E8E2D9;padding:20px 36px;">
+                <p style="font-size:11px;color:#9CA3AF;margin:0;line-height:1.6;">
+                  <strong style="color:#6B7280;">Eximp &amp; Cloves Infrastructure Limited</strong><br>
+                  RC 8311800 &nbsp;|&nbsp; 57B, Isaac John Street, Yaba, Lagos &nbsp;|&nbsp; +234 912 686 4383<br>
+                  This email was sent by {inviter_name} via the HR Management System.
+                  It contains confidential employment information intended solely for the named recipient.
+                </p>
+              </td>
+            </tr>
+
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+    """
+
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, lambda: resend.Emails.send({
+        "from":     f"Eximp & Cloves HR <{from_email}>",
+        "to":       [email_addr],
+        "subject":  "Action Required: Complete Your Employee Guarantor Form",
+        "html":     html,
+        "reply_to": "hr@eximps-cloves.com",
+    }))
 
 
 @router.get("/general-link")
@@ -279,9 +431,8 @@ async def get_general_link(request: Request):
     settings = settings_res.data[0]
     base_url  = _build_base_url(request)
 
-    # The frontend serves the guarantor form at /?guarantor_token=... (not /hr)
-    # Use APP_BASE_URL env var to configure the correct public URL for your deployment.
-    link = f"{base_url}?guarantor_token={settings['general_link_token']}"
+    # The Vite app is mounted at /hr/ so the public form URL is /hr/?guarantor_token=...
+    link = f"{base_url}/?guarantor_token={settings['general_link_token']}"
 
     return {
         "link":         link,
@@ -535,9 +686,9 @@ async def save_partial_submission(
         except Exception:
             pass
 
-    # Build relay link using APP_BASE_URL
+    # Build relay link — the Vite app is mounted at /hr/
     base_url   = _build_base_url(request)
-    relay_link = f"{base_url}?guarantor_token={token}&email={email}"
+    relay_link = f"{base_url}/?guarantor_token={token}&email={email}"
 
     return {
         "status":        "success",
