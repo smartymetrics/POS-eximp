@@ -11510,61 +11510,112 @@ function GuarantorReviewModal({ sub, onClose, onRefresh }) {
   const [full, setFull] = useState(null);
   const [loading, setLoading] = useState(true);
   const [reviewing, setReviewing] = useState(false);
-  const [activeGuarantor, setActiveGuarantor] = useState(1);
+  const [activeGuarantor, setActiveG] = useState(1);
 
   useEffect(() => {
     apiFetch(`${API_BASE}/guarantor/submissions/${sub.id}`)
-      .then(d => setFull(d))
-      .catch(e => alert(e.message))
-      .finally(() => setLoading(false));
+      .then(d => setFull(d)).catch(e => alert(e.message)).finally(() => setLoading(false));
   }, [sub.id]);
 
-  const review = async (section, status, reason = "") => {
+  const doReview = async (section, status, reason = "") => {
     setReviewing(true);
     try {
       await apiFetch(`${API_BASE}/guarantor/submissions/${sub.id}/review`, {
         method: "POST",
         body: JSON.stringify({ section, status, reason }),
       });
-      // Refresh local data
       const d = await apiFetch(`${API_BASE}/guarantor/submissions/${sub.id}`);
       setFull(d);
     } catch (e) { alert(e.message); }
     finally { setReviewing(false); }
   };
 
-  const btn = { padding: "8px 16px", borderRadius: 8, fontSize: 12, fontWeight: 700, cursor: "pointer" };
+  const bulkReview = async (status) => {
+    if (!window.confirm(`Are you sure you want to ${status} ALL sections of this submission?`)) return;
+    setReviewing(true);
+    try {
+      await apiFetch(`${API_BASE}/guarantor/submissions/${sub.id}/bulk-review`, {
+        method: "POST",
+        body: JSON.stringify({ status }),
+      });
+      const d = await apiFetch(`${API_BASE}/guarantor/submissions/${sub.id}`);
+      setFull(d);
+    } catch (e) { alert(e.message); }
+    finally { setReviewing(false); }
+  };
 
-  const ReviewActions = ({ section, status, reason }) => {
-    const [showReject, setShowReject] = useState(false);
-    const [rejReason, setRejReason] = useState(reason || "");
+  const GOLD = T.gold;
+  const lbl = { fontSize: 10, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 };
+  const val = { fontSize: 14, color: C.text, marginTop: 3, fontWeight: 500 };
+
+  const F = ({ label, value }) => (
+    <div>
+      <div style={lbl}>{label}</div>
+      <div style={val}>{value || "—"}</div>
+    </div>
+  );
+
+  const SectionBadge = ({ status }) => {
+    const map = { approved: ["#10B981", "#ECFDF5", "Approved"], rejected: ["#EF4444", "#FEF2F2", "Rejected"], pending: [GOLD, `${GOLD}15`, "Pending"] };
+    const [col, bg, text] = map[status] || [C.muted, C.surface, "Not submitted"];
+    return (
+      <span style={{ background: bg, color: col, border: `1px solid ${col}33`, padding: "3px 12px", borderRadius: 99, fontSize: 10, fontWeight: 800, textTransform: "uppercase", letterSpacing: 0.5 }}>
+        {text}
+      </span>
+    );
+  };
+
+  const ReviewActions = ({ section, status, reason: existingReason }) => {
+    const [showRejectForm, setShowRejectForm] = useState(false);
+    const [reason, setReason] = useState(existingReason || "");
 
     if (status === "approved") return (
-      <div style={{ display: "flex", alignItems: "center", gap: 8, color: "#10B981", fontSize: 12, fontWeight: 800 }}>
-        <span style={{ background: "#10B98118", padding: "4px 10px", borderRadius: 6 }}>✓ SECTION APPROVED</span>
-        <button onClick={() => review(section, "pending")} style={{ background: "none", border: "none", color: C.muted, fontSize: 10, cursor: "pointer", textDecoration: "underline" }}>Undo</button>
+      <div style={{ display: "flex", alignItems: "center", gap: 10, marginTop: 14 }}>
+        <span style={{ color: "#10B981", fontSize: 12, fontWeight: 700 }}>✓ Section Approved</span>
+        <button onClick={() => doReview(section, "pending")} disabled={reviewing}
+          style={{ border: "none", background: "none", color: C.muted, fontSize: 11, cursor: "pointer", textDecoration: "underline" }}>
+          Undo
+        </button>
       </div>
     );
-    
+
     return (
       <div style={{ marginTop: 16, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
-        {!showReject ? (
-          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
-            <button onClick={() => review(section, "approved")} style={{ ...btn, background: "#10B98118", color: "#10B981", border: "1px solid #10B98133" }}>Approve Section</button>
-            <button onClick={() => setShowReject(true)} style={{ ...btn, background: "#EF444418", color: "#EF4444", border: "1px solid #EF444433" }}>Reject Section</button>
-            {status === "rejected" && <span style={{ fontSize: 11, color: "#EF4444", fontWeight: 600 }}>Currently Rejected</span>}
+        {!showRejectForm ? (
+          <div style={{ display: "flex", gap: 10, flexWrap: "wrap", alignItems: "center" }}>
+            <button onClick={() => doReview(section, "approved")} disabled={reviewing}
+              style={{ padding: "8px 20px", borderRadius: 4, fontSize: 12, fontWeight: 700, cursor: "pointer", background: "#10B98118", color: "#10B981", border: "1px solid #10B98140" }}>
+              ✓ Approve Section
+            </button>
+            <button onClick={() => setShowRejectForm(true)} disabled={reviewing}
+              style={{ padding: "8px 20px", borderRadius: 4, fontSize: 12, fontWeight: 700, cursor: "pointer", background: "#EF444418", color: "#EF4444", border: "1px solid #EF444440" }}>
+              ✗ Reject Section
+            </button>
+            {status === "rejected" && <span style={{ fontSize: 11, color: "#EF4444", fontWeight: 600 }}>⚠ Currently rejected</span>}
           </div>
         ) : (
           <div>
-            <div style={{ ...lbl, marginBottom: 8 }}>Reason for Rejection</div>
-            <textarea 
-              placeholder="e.g. ID card is expired or blurry..."
-              style={{ ...inp, height: 60, marginBottom: 10, fontSize: 13 }}
-              value={rejReason} onChange={e => setRejReason(e.target.value)}
+            <div style={{ ...lbl, marginBottom: 6 }}>Reason for Rejection <span style={{ color: "#EF4444" }}>*</span></div>
+            <textarea
+              value={reason} onChange={e => setReason(e.target.value)}
+              placeholder="e.g. ID card is expired, address is incomplete…"
+              style={{
+                width: "100%", boxSizing: "border-box", padding: "10px 14px",
+                border: "1px solid #DDE3EE", borderRadius: 3, fontSize: 13,
+                background: C.surface, color: C.text, resize: "vertical", height: 70,
+                fontFamily: "inherit",
+              }}
             />
-            <div style={{ display: "flex", gap: 10 }}>
-              <button onClick={() => review(section, "rejected", rejReason)} style={{ ...btn, background: "#EF4444", color: "#fff", border: "none" }}>Confirm Rejection</button>
-              <button onClick={() => setShowReject(false)} style={{ ...btn, background: "none", border: "none", color: C.muted }}>Cancel</button>
+            <div style={{ display: "flex", gap: 10, marginTop: 10 }}>
+              <button onClick={() => { if (!reason.trim()) { alert("Please provide a reason."); return; } doReview(section, "rejected", reason); setShowRejectForm(false); }}
+                disabled={reviewing}
+                style={{ padding: "8px 20px", borderRadius: 4, fontSize: 12, fontWeight: 700, cursor: "pointer", background: "#EF4444", color: "#fff", border: "none" }}>
+                Confirm Rejection
+              </button>
+              <button onClick={() => setShowRejectForm(false)}
+                style={{ padding: "8px 16px", borderRadius: 4, fontSize: 12, cursor: "pointer", background: "none", border: "none", color: C.muted }}>
+                Cancel
+              </button>
             </div>
           </div>
         )}
@@ -11572,134 +11623,131 @@ function GuarantorReviewModal({ sub, onClose, onRefresh }) {
     );
   };
 
-  const ol = { display: "flex", flexDirection: "column", gap: 2 };
-  const lbl = { fontSize: 11, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.4 };
-  const val = { fontSize: 14, color: C.text, fontWeight: 600, marginTop: 2 };
-
-  const Field = ({ label, value }) => (
-    <div style={ol}>
-      <div style={lbl}>{label}</div>
-      <div style={val}>{value || "—"}</div>
+  const SectionHeader = ({ label, title, status }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", borderBottom: `2px solid ${GOLD}22`, paddingBottom: 10, marginBottom: 20 }}>
+      <div>
+        <div style={{ fontSize: 9, color: GOLD, fontWeight: 700, letterSpacing: 2, textTransform: "uppercase", marginBottom: 3 }}>{label}</div>
+        <div style={{ fontSize: 17, fontWeight: 700, color: C.text }}>{title}</div>
+      </div>
+      {status && <SectionBadge status={status} />}
     </div>
   );
 
-  const SectionHeader = ({ title, subtitle }) => (
-    <div style={{ borderBottom: `2px solid ${T.gold}33`, paddingBottom: 10, marginBottom: 20 }}>
-      <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 15, color: T.gold, fontWeight: 700 }}>{title}</div>
-      {subtitle && <div style={{ fontSize: 11, color: C.muted, marginTop: 3 }}>{subtitle}</div>}
-    </div>
-  );
+  const overallApproved = full && full.section_a_status === "approved" && full.section_b_status === "approved" && full.section_c_status === "approved";
 
   return (
     <div style={{
-      position: "fixed", inset: 0, background: "#000000BB", zIndex: 9999,
+      position: "fixed", inset: 0, background: "#000000CC", zIndex: 9999,
       display: "flex", alignItems: "center", justifyContent: "center", padding: 20,
     }} onClick={e => e.target === e.currentTarget && onClose()}>
       <div style={{
-        background: C.surface, borderRadius: 20, width: "100%", maxWidth: 800,
-        maxHeight: "90vh", overflow: "hidden", display: "flex", flexDirection: "column",
-        boxShadow: "0 32px 100px #00000066",
+        background: C.surface, borderRadius: 8, width: "100%", maxWidth: 820,
+        maxHeight: "92vh", overflow: "hidden", display: "flex", flexDirection: "column",
+        boxShadow: "0 40px 120px #00000080", border: `1px solid ${C.border}`,
       }}>
         {/* Modal header */}
-        <div style={{ padding: "22px 28px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+        <div style={{ padding: "18px 28px", borderBottom: `1px solid ${C.border}`, display: "flex", justifyContent: "space-between", alignItems: "center", flexShrink: 0 }}>
           <div>
-            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 18, color: T.gold, fontWeight: 700 }}>
-              Employee Guarantor's Form
-            </div>
-            <div style={{ fontSize: 12, color: C.muted, marginTop: 3 }}>
-              {sub.employee_name} · {sub.employee_email}
-            </div>
+            <div style={{ fontSize: 18, color: C.text, fontWeight: 800 }}>Employee Guarantor's Form</div>
+            <div style={{ fontSize: 12, color: C.muted, marginTop: 2 }}>{sub.employee_name} · {sub.employee_email}</div>
           </div>
-          <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, fontSize: 22, cursor: "pointer", padding: 4 }}>✕</button>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            {full && !overallApproved && (
+              <>
+                <button onClick={() => bulkReview("approved")} disabled={reviewing}
+                  style={{ padding: "7px 16px", borderRadius: 4, fontSize: 11, fontWeight: 700, cursor: "pointer", background: "#10B98118", color: "#10B981", border: "1px solid #10B98140" }}>
+                  Approve All
+                </button>
+                <button onClick={() => bulkReview("rejected")} disabled={reviewing}
+                  style={{ padding: "7px 16px", borderRadius: 4, fontSize: 11, fontWeight: 700, cursor: "pointer", background: "#EF444418", color: "#EF4444", border: "1px solid #EF444440" }}>
+                  Reject All
+                </button>
+              </>
+            )}
+            <button onClick={onClose} style={{ background: "none", border: "none", color: C.muted, fontSize: 22, cursor: "pointer", lineHeight: 1 }}>✕</button>
+          </div>
         </div>
 
         {loading ? (
-          <div style={{ padding: 60, textAlign: "center", color: C.muted }}>Loading…</div>
+          <div style={{ padding: 60, textAlign: "center", color: C.muted }}>Loading submission…</div>
         ) : !full ? (
           <div style={{ padding: 40, textAlign: "center", color: "#EF4444" }}>Could not load submission details.</div>
         ) : (
           <div style={{ overflow: "auto", flex: 1, padding: 28 }}>
-            {/* Section A: Employee Details */}
-            <div className="gc" style={{ padding: 24, marginBottom: 20 }}>
-              <SectionHeader title="Section A: Employee Details" subtitle="Completed by the Employee" />
-              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
-                <Field label="Full Name" value={full.employee_name} />
-                <Field label="Position" value={full.position} />
-                <Field label="Staff ID" value={full.staff_id} />
-                <Field label="Date of Employment" value={full.date_of_employment} />
-                <Field label="Phone Number" value={full.employee_phone} />
-                <Field label="Email Address" value={full.employee_email} />
-                <div style={{ gridColumn: "1/-1" }}>
-                  <Field label="Residential Address" value={full.employee_address} />
-                </div>
+
+            {/* Section A */}
+            <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: "22px 24px", marginBottom: 16 }}>
+              <SectionHeader label="Section A" title="Employee Details" status={full.section_a_status} />
+              <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 24px" }}>
+                <F label="Full Name" value={full.employee_name} />
+                <F label="Position" value={full.position} />
+                <F label="Staff ID" value={full.staff_id} />
+                <F label="Date of Employment" value={full.date_of_employment} />
+                <F label="Phone" value={full.employee_phone} />
+                <F label="Email" value={full.employee_email} />
+                <div style={{ gridColumn: "1/-1" }}><F label="Residential Address" value={full.employee_address} /></div>
               </div>
-              {/* Employee Signature */}
               {full.employee_signature_url && (
-                <div style={{ marginTop: 20, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+                <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${C.border}` }}>
                   <div style={lbl}>Employee Signature</div>
-                  <img src={full.employee_signature_url} alt="Employee Sig"
-                    style={{ maxHeight: 60, maxWidth: 220, marginTop: 8, border: `1px solid ${C.border}`, borderRadius: 8, padding: 6, background: "#fff" }}
+                  <img src={full.employee_signature_url} alt="Sig"
+                    style={{ maxHeight: 55, maxWidth: 200, marginTop: 8, border: `1px solid ${C.border}`, borderRadius: 4, padding: 6, background: "#fff" }}
                     onError={e => e.target.style.display = "none"} />
                 </div>
               )}
               <ReviewActions section="a" status={full.section_a_status} reason={full.section_a_reason} />
             </div>
 
-            {/* Guarantor tabs */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 16 }}>
+            {/* Guarantor Tabs */}
+            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
               {[1, 2].map(n => (
-                <button key={n} onClick={() => setActiveGuarantor(n)}
-                  style={{
-                    padding: "8px 24px", borderRadius: 99, fontSize: 13, fontWeight: 700, cursor: "pointer",
-                    border: `1px solid ${activeGuarantor === n ? T.gold : C.border}`,
-                    background: activeGuarantor === n ? `${T.gold}18` : "transparent",
-                    color: activeGuarantor === n ? T.gold : C.muted,
-                  }}>
+                <button key={n} onClick={() => setActiveG(n)} style={{
+                  padding: "8px 22px", borderRadius: 4, fontSize: 12, fontWeight: 700, cursor: "pointer",
+                  border: `1px solid ${activeGuarantor === n ? GOLD : C.border}`,
+                  background: activeGuarantor === n ? `${GOLD}15` : "transparent",
+                  color: activeGuarantor === n ? GOLD : C.muted,
+                }}>
                   Guarantor {n} {full[`guarantor${n}`] ? "✓" : "(pending)"}
                 </button>
               ))}
             </div>
 
-            {/* Guarantor details */}
+            {/* Guarantor Detail */}
             {[1, 2].map(n => {
               const g = full[`guarantor${n}`];
               if (activeGuarantor !== n) return null;
               if (!g) return (
-                <div key={n} style={{ padding: "40px", textAlign: "center", color: C.muted, border: `2px dashed ${C.border}`, borderRadius: 14 }}>
-                  <div style={{ fontSize: 32, marginBottom: 12 }}>⏳</div>
-                  <div style={{ fontSize: 14, fontWeight: 700 }}>Guarantor {n} has not submitted their form yet.</div>
+                <div key={n} style={{ padding: "48px", textAlign: "center", color: C.muted, border: `2px dashed ${C.border}`, borderRadius: 6 }}>
+                  <div style={{ fontSize: 28, marginBottom: 12 }}>⏳</div>
+                  <div style={{ fontSize: 14, fontWeight: 600 }}>Guarantor {n} has not submitted their section yet.</div>
                 </div>
               );
 
+              const secKey = n === 1 ? "b" : "c";
               return (
                 <div key={n}>
-                  {/* Section B */}
-                  <div className="gc" style={{ padding: 24, marginBottom: 20 }}>
-                    <SectionHeader title={`Section B: Guarantor ${n} Details`} subtitle="Completed by the Guarantor" />
-                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
-                      <Field label="Full Name" value={g.full_name} />
-                      <Field label="Relationship to Employee" value={g.relationship} />
-                      <Field label="Occupation" value={g.occupation} />
-                      <Field label="Position Held" value={g.position_held} />
-                      <Field label="Years at Current Job" value={g.years_at_job} />
-                      <Field label="Phone Number" value={g.phone} />
-                      <Field label="Email Address" value={g.email} />
-                      <div style={{ gridColumn: "1/-1" }}>
-                        <Field label="Residential Address" value={g.address} />
-                      </div>
-                      <div style={{ gridColumn: "1/-1" }}>
-                        <Field label="Employer / Business Name & Address" value={g.employer_name} />
-                      </div>
-                      <Field label="Means of Identification" value={g.id_type} />
-                      <Field label="ID Number" value={g.id_number} />
+                  <div style={{ background: C.card, border: `1px solid ${C.border}`, borderRadius: 6, padding: "22px 24px", marginBottom: 12 }}>
+                    <SectionHeader label={`Section B — Guarantor ${n}`} title="Guarantor Details" status={full[`section_${secKey}_status`]} />
+                    <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "14px 24px" }}>
+                      <F label="Full Name" value={g.full_name} />
+                      <F label="Relationship to Employee" value={g.relationship} />
+                      <F label="Occupation" value={g.occupation} />
+                      <F label="Position Held" value={g.position_held} />
+                      <F label="Years at Current Job" value={g.years_at_job} />
+                      <F label="Phone" value={g.phone} />
+                      <F label="Email" value={g.email} />
+                      <div style={{ gridColumn: "1/-1" }}><F label="Residential Address" value={g.address} /></div>
+                      <div style={{ gridColumn: "1/-1" }}><F label="Employer / Business" value={g.employer_name} /></div>
+                      <F label="Means of ID" value={g.id_type} />
+                      <F label="ID Number" value={g.id_number} />
                     </div>
-                    {/* ID photo & passport */}
-                    <div style={{ display: "flex", gap: 20, marginTop: 20, flexWrap: "wrap" }}>
+
+                    <div style={{ display: "flex", gap: 20, marginTop: 16, flexWrap: "wrap" }}>
                       {g.passport_photo_url && (
                         <div>
                           <div style={lbl}>Passport Photo</div>
                           <img src={g.passport_photo_url} alt="Passport"
-                            style={{ width: 80, height: 80, borderRadius: 10, objectFit: "cover", marginTop: 8, border: `2px solid ${T.gold}40` }}
+                            style={{ width: 72, height: 72, borderRadius: 6, objectFit: "cover", marginTop: 6, border: `2px solid ${GOLD}40` }}
                             onError={e => e.target.style.display = "none"} />
                         </div>
                       )}
@@ -11707,93 +11755,47 @@ function GuarantorReviewModal({ sub, onClose, onRefresh }) {
                         <div>
                           <div style={lbl}>ID Document</div>
                           <img src={g.id_document_url} alt="ID"
-                            style={{ height: 80, borderRadius: 10, objectFit: "cover", marginTop: 8, border: `1px solid ${C.border}` }}
+                            style={{ height: 72, borderRadius: 6, objectFit: "cover", marginTop: 6, border: `1px solid ${C.border}` }}
                             onError={e => e.target.style.display = "none"} />
                         </div>
                       )}
                     </div>
-                  </div>
 
-                  {/* Section C: Declaration */}
-                  <div className="gc" style={{ padding: 24, marginBottom: 20 }}>
-                    <SectionHeader title={`Section C: Guarantor ${n} Declaration`} />
-                    <div style={{
-                      background: dark ? "#1A1D2480" : "#F8F9FB",
-                      border: `1px solid ${C.border}`, borderRadius: 10, padding: "18px 20px",
-                      fontSize: 13, color: C.sub, lineHeight: 1.8,
-                    }}>
-                      I, <strong style={{ color: C.text }}>{g.full_name}</strong>, of the above address, hereby solemnly declare that I know the above-named employee personally
-                      and vouch for their character, integrity, and conduct. I understand the employee will handle company funds, documents, and client relationships,
-                      and I guarantee they shall faithfully discharge all duties assigned. Should the employee be found liable for any act of fraud, dishonesty,
-                      negligence, misappropriation, or breach of company policy resulting in financial loss, I undertake to assist the company in ensuring restitution.
-                      I confirm I am gainfully employed, financially capable, and have not been convicted of any criminal offense.
-                    </div>
                     {g.signature_url && (
-                      <div style={{ marginTop: 18, paddingTop: 16, borderTop: `1px solid ${C.border}` }}>
+                      <div style={{ marginTop: 16, paddingTop: 14, borderTop: `1px solid ${C.border}` }}>
                         <div style={lbl}>Guarantor {n} Signature</div>
-                        <img src={g.signature_url} alt={`Guarantor ${n} Sig`}
-                          style={{ maxHeight: 60, maxWidth: 220, marginTop: 8, border: `1px solid ${C.border}`, borderRadius: 8, padding: 6, background: "#fff" }}
+                        <img src={g.signature_url} alt="Sig"
+                          style={{ maxHeight: 55, maxWidth: 200, marginTop: 8, border: `1px solid ${C.border}`, borderRadius: 4, padding: 6, background: "#fff" }}
                           onError={e => e.target.style.display = "none"} />
                       </div>
                     )}
-                  </div>
 
-                  {/* Section D: Witness */}
-                  {g.witness_name && (
-                    <div className="gc" style={{ padding: 24, marginBottom: 20 }}>
-                      <SectionHeader title="Section D: Official Attestation" />
-                      <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 18 }}>
-                        <Field label="Witness Name" value={g.witness_name} />
-                        <Field label="Occupation" value={g.witness_occupation} />
-                        <Field label="Phone" value={g.witness_phone} />
-                        <Field label="Date" value={g.witness_date} />
-                        <div style={{ gridColumn: "1/-1" }}>
-                          <Field label="Witness Address" value={g.witness_address} />
+                    {g.witness_name && (
+                      <>
+                        <hr style={{ border: "none", borderTop: `1px solid ${C.border}`, margin: "20px 0" }} />
+                        <div style={{ fontSize: 10, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase", color: C.muted, marginBottom: 12 }}>Section D — Witness</div>
+                        <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "12px 24px" }}>
+                          <F label="Witness Name" value={g.witness_name} />
+                          <F label="Occupation" value={g.witness_occupation} />
+                          <F label="Phone" value={g.witness_phone} />
+                          <div style={{ gridColumn: "1/-1" }}><F label="Address" value={g.witness_address} /></div>
                         </div>
-                      </div>
-                    </div>
-                  )}
-                  <ReviewActions 
-                    section={n === 1 ? "b" : "c"} 
-                    status={n === 1 ? full.section_b_status : full.section_c_status} 
-                    reason={n === 1 ? full.section_b_reason : full.section_c_reason} 
-                  />
+                      </>
+                    )}
+
+                    <ReviewActions section={secKey} status={full[`section_${secKey}_status`]} reason={full[`section_${secKey}_reason`]} />
+                  </div>
                 </div>
               );
             })}
 
-            {/* Company Use / Review Actions */}
-            {sub.status === "pending" && (
-              <div style={{ display: "flex", gap: 12, justifyContent: "flex-end", paddingTop: 8 }}>
-                <button
-                  onClick={() => review("rejected")} disabled={reviewing}
-                  style={{
-                    padding: "11px 28px", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer",
-                    border: "1px solid #EF4444", background: "#EF444418", color: "#EF4444",
-                  }}>
-                  Reject
-                </button>
-                <button
-                  onClick={() => review("approved")} disabled={reviewing}
-                  style={{
-                    padding: "11px 28px", borderRadius: 10, fontWeight: 700, fontSize: 14, cursor: "pointer",
-                    border: `1px solid ${T.gold}`, background: `${T.gold}18`, color: T.gold,
-                  }}>
-                  {reviewing ? "Saving…" : "Approve"}
-                </button>
-              </div>
-            )}
-            {sub.status !== "pending" && (
-              <div style={{ textAlign: "right", paddingTop: 8 }}>
-                <span style={{
-                  padding: "8px 20px", borderRadius: 99, fontSize: 12, fontWeight: 800,
-                  textTransform: "uppercase", letterSpacing: 0.5,
-                  background: sub.status === "approved" ? "#10B98118" : "#EF444418",
-                  color: sub.status === "approved" ? "#10B981" : "#EF4444",
-                  border: `1px solid ${sub.status === "approved" ? "#10B98133" : "#EF444433"}`,
-                }}>
-                  {sub.status}
-                </span>
+            {overallApproved && (
+              <div style={{ background: "#ECFDF5", border: "1px solid #10B981", borderRadius: 6, padding: "16px 20px", display: "flex", alignItems: "center", gap: 12 }}>
+                <span style={{ color: "#10B981", fontSize: 20 }}>✓</span>
+                <div>
+                  <div style={{ fontSize: 13, fontWeight: 700, color: "#065F46" }}>All sections approved</div>
+                  <div style={{ fontSize: 12, color: "#047857", marginTop: 2 }}>This submission has been fully verified by HR.</div>
+                </div>
               </div>
             )}
           </div>
@@ -11804,213 +11806,196 @@ function GuarantorReviewModal({ sub, onClose, onRefresh }) {
 }
 
 
-// ─────────────────────────────────────────────────────────────────────────────
-// PUBLIC GUARANTOR FORM  (standalone, accessed via ?guarantor_token=xxx)
-// Add this AFTER PublicBiodataForm in App.jsx
-// ─────────────────────────────────────────────────────────────────────────────
-
+// ════════════════════════════════════════════════════════════════════════════
+//  PUBLIC GUARANTOR FORM  — accessed via ?guarantor_token=xxx
+// ════════════════════════════════════════════════════════════════════════════
 function PublicGuarantorForm() {
-  const [phase, setPhase] = useState("email"); // email → section_a → section_b_1 → section_b_2 → success
+  const [phase, setPhase] = useState("email");
   const [token, setToken] = useState("");
   const [email, setEmail] = useState("");
-  const [staffInfo, setStaffInfo] = useState(null);
   const [checking, setChecking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-  const [companyInfo, setCompanyInfo] = useState({ name: "Company Name", address: "Company Address", rc: "", phone: "", email_addr: "" });
-  const [currentGuarantor, setCurrentGuarantor] = useState(1); // which guarantor slot we're filling (1 or 2)
-  const [submission, setSubmission] = useState(null); // Added to track full submission object
-
-  // Section A: Employee fields (editable by employee)
-  const [empForm, setEmpForm] = useState({
-    full_name: "", position: "", address: "", phone: "", email: "",
-    date_of_employment: "", staff_id: "",
+  const [companyInfo, setCompanyInfo] = useState({
+    name: "Eximp & Cloves Infrastructure Limited",
+    address: "57B, Isaac John Street, Yaba, Lagos",
+    rc: "RC 8311800", phone: "+234 912 686 4383", email_addr: "hr@eximps-cloves.com",
   });
-  const [empSigHasData, setEmpSigHasData] = useState(false);
-  const empSigRef = useRef(null);
-  const [empSigCtx, setEmpSigCtx] = useState(null);
-  const [empSigDrawing, setEmpSigDrawing] = useState(false);
+  const [submission, setSubmission] = useState(null);
+  const [relayLink, setRelayLink] = useState("");
 
-  // Section B+C+D: Guarantor fields (one set per guarantor)
-  const emptyGuarantor = () => ({
+  const [empForm, setEmpForm] = useState({
+    full_name: "", position: "", address: "", phone: "",
+    email: "", date_of_employment: "", staff_id: "",
+  });
+
+  const emptyG = () => ({
     full_name: "", relationship: "", address: "", occupation: "",
-    employer_name: "", position_held: "", years_at_job: "", phone: "", email: "",
-    id_type: "", id_number: "",
+    employer_name: "", position_held: "", years_at_job: "", phone: "",
+    email: "", id_type: "", id_number: "",
     witness_name: "", witness_address: "", witness_occupation: "", witness_phone: "",
     passport_file: null, passport_preview: "", id_doc_file: null, id_doc_preview: "",
   });
-  const [g1, setG1] = useState(emptyGuarantor());
-  const [g2, setG2] = useState(emptyGuarantor());
-  const g1SigRef = useRef(null); const g2SigRef = useRef(null);
-  const [g1SigCtx, setG1SigCtx] = useState(null); const [g2SigCtx, setG2SigCtx] = useState(null);
-  const [g1SigHasData, setG1SigHasData] = useState(false); const [g2SigHasData, setG2SigHasData] = useState(false);
-  const [g1SigDrawing, setG1SigDrawing] = useState(false); const [g2SigDrawing, setG2SigDrawing] = useState(false);
+  const [g1, setG1] = useState(emptyG());
+  const [g2, setG2] = useState(emptyG());
 
+  // Canvas refs — using refs for ctx/drawing state avoids stale closures mid-draw
+  const empSigRef = useRef(null); const g1SigRef = useRef(null); const g2SigRef = useRef(null);
+  const empCtxRef = useRef(null); const g1CtxRef = useRef(null); const g2CtxRef = useRef(null);
+  const empDrawRef = useRef(false); const g1DrawRef = useRef(false); const g2DrawRef = useRef(false);
+  const [empHasSig, setEmpHasSig] = useState(false);
+  const [g1HasSig, setG1HasSig] = useState(false);
+  const [g2HasSig, setG2HasSig] = useState(false);
+
+  // ── On mount: read URL params ─────────────────────────────────────────
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
-    const t = params.get("guarantor_token");
-    const e = params.get("email");
+    const t = params.get("guarantor_token") || "";
+    const e = params.get("email") || "";
     if (t) setToken(t);
-    if (e) {
-      setEmail(e);
-      // Auto-trigger check if email is in URL
-      setTimeout(() => checkEmail(e), 500);
-    }
-    // fetch company info
-    fetch(`${API_BASE}/guarantor/company-info`).then(r => r.json()).then(d => setCompanyInfo(d)).catch(() => { });
+    if (e) setEmail(e);
+    fetch(`${API_BASE}/guarantor/company-info`)
+      .then(r => r.json()).then(d => setCompanyInfo(d)).catch(() => { });
+    // Auto-verify if both are present
+    if (t && e) setTimeout(() => doCheck(e, t), 400);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ── Canvas helpers (shared with biodata form pattern) ──────────────────────
-  const initSigCanvas = (ref, setCtx) => {
-    const canvas = ref.current;
+  // ── Canvas init (robust: multiple retries + ResizeObserver) ───────────
+  const initCanvas = (canvasRef, ctxRef) => {
+    const canvas = canvasRef.current;
     if (!canvas) return null;
     const rect = canvas.getBoundingClientRect();
-    if (rect.width === 0) return null;
+    if (!rect.width) return null;
     const dpr = window.devicePixelRatio || 1;
     canvas.width = Math.round(rect.width * dpr);
     canvas.height = Math.round(rect.height * dpr);
     const ctx = canvas.getContext("2d");
     ctx.scale(dpr, dpr);
-    ctx.strokeStyle = "#1A1D24";
-    ctx.lineWidth = 2.8;
-    ctx.lineCap = "round";
-    ctx.lineJoin = "round";
-    setCtx(ctx);
+    ctx.strokeStyle = "#1A1A2E";
+    ctx.lineWidth = 2.2; ctx.lineCap = "round"; ctx.lineJoin = "round";
+    ctxRef.current = ctx;
     return ctx;
   };
-  const getPos = (e, canvas) => {
+
+  useEffect(() => {
+    const map = { section_a: [empSigRef, empCtxRef], section_b_1: [g1SigRef, g1CtxRef], section_b_2: [g2SigRef, g2CtxRef] };
+    const pair = map[phase];
+    if (!pair) return;
+    const [cRef, ctxRef] = pair;
+    const attempt = () => initCanvas(cRef, ctxRef);
+    const t1 = setTimeout(attempt, 50);
+    const t2 = setTimeout(attempt, 200);
+    const t3 = setTimeout(attempt, 500);
+    let ro;
+    if (cRef.current && window.ResizeObserver) {
+      ro = new ResizeObserver(() => { if (!ctxRef.current) attempt(); });
+      ro.observe(cRef.current);
+    }
+    return () => { clearTimeout(t1); clearTimeout(t2); clearTimeout(t3); if (ro) ro.disconnect(); };
+  }, [phase]);
+
+  const getXY = (e, canvas) => {
     const rect = canvas.getBoundingClientRect();
-    const clientX = e.touches ? e.touches[0].clientX : e.clientX;
-    const clientY = e.touches ? e.touches[0].clientY : e.clientY;
-    return { x: clientX - rect.left, y: clientY - rect.top };
+    const src = e.touches ? e.touches[0] : e;
+    return { x: src.clientX - rect.left, y: src.clientY - rect.top };
   };
-  const makeSigHandlers = (ref, ctx, setCtx, drawing, setDrawing, setHasData) => ({
-    start: (e) => {
+
+  const makeSigHandlers = (cRef, ctxRef, drawRef, setHas) => ({
+    onMouseDown: (e) => {
       e.preventDefault();
-      const canvas = ref.current;
-      if (!canvas) return;
-      let activeCtx = ctx;
-      if (!activeCtx) activeCtx = initSigCanvas(ref, setCtx);
-      if (!activeCtx) return;
-      setDrawing(true); setHasData(true);
-      const pos = getPos(e, canvas);
-      activeCtx.beginPath(); activeCtx.moveTo(pos.x, pos.y);
+      let ctx = ctxRef.current || initCanvas(cRef, ctxRef);
+      if (!ctx) return;
+      drawRef.current = true; setHas(true);
+      const p = getXY(e, cRef.current);
+      ctx.beginPath(); ctx.moveTo(p.x, p.y);
     },
-    move: (e) => {
+    onMouseMove: (e) => {
       e.preventDefault();
-      if (!drawing) return;
-      const canvas = ref.current;
-      if (!canvas) return;
-      let activeCtx = ctx || canvas.getContext("2d");
-      const pos = getPos(e, canvas);
-      activeCtx.lineTo(pos.x, pos.y); activeCtx.stroke();
+      if (!drawRef.current || !ctxRef.current) return;
+      const p = getXY(e, cRef.current);
+      ctxRef.current.lineTo(p.x, p.y); ctxRef.current.stroke();
     },
-    end: () => {
-      setDrawing(false);
-      if (ctx) ctx.beginPath();
+    onMouseUp: (e) => { e.preventDefault(); drawRef.current = false; ctxRef.current?.beginPath(); },
+    onMouseLeave: (e) => { e.preventDefault(); drawRef.current = false; ctxRef.current?.beginPath(); },
+    onTouchStart: (e) => {
+      e.preventDefault();
+      let ctx = ctxRef.current || initCanvas(cRef, ctxRef);
+      if (!ctx) return;
+      drawRef.current = true; setHas(true);
+      const p = getXY(e, cRef.current);
+      ctx.beginPath(); ctx.moveTo(p.x, p.y);
     },
+    onTouchMove: (e) => {
+      e.preventDefault();
+      if (!drawRef.current || !ctxRef.current) return;
+      const p = getXY(e, cRef.current);
+      ctxRef.current.lineTo(p.x, p.y); ctxRef.current.stroke();
+    },
+    onTouchEnd: (e) => { e.preventDefault(); drawRef.current = false; ctxRef.current?.beginPath(); },
     clear: () => {
-      const canvas = ref.current;
+      const canvas = cRef.current; const ctx = ctxRef.current;
       if (!canvas || !ctx) return;
-      ctx.clearRect(0, 0, canvas.width, canvas.height);
-      setHasData(false);
+      const dpr = window.devicePixelRatio || 1;
+      ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+      setHas(false);
     },
   });
 
-  // Mount canvases after phase change
-  useEffect(() => {
-    if (phase === "section_a") {
-      setTimeout(() => initSigCanvas(empSigRef, setEmpSigCtx), 150);
-    }
-    if (phase === "section_b_1") {
-      setTimeout(() => initSigCanvas(g1SigRef, setG1SigCtx), 150);
-    }
-    if (phase === "section_b_2") {
-      setTimeout(() => initSigCanvas(g2SigRef, setG2SigCtx), 150);
-    }
-  }, [phase]);
+  const empSig = makeSigHandlers(empSigRef, empCtxRef, empDrawRef, setEmpHasSig);
+  const g1Sig = makeSigHandlers(g1SigRef, g1CtxRef, g1DrawRef, setG1HasSig);
+  const g2Sig = makeSigHandlers(g2SigRef, g2CtxRef, g2DrawRef, setG2HasSig);
 
-  const empSig = makeSigHandlers(empSigRef, empSigCtx, setEmpSigCtx, empSigDrawing, setEmpSigDrawing, setEmpSigHasData);
-  const g1Sig = makeSigHandlers(g1SigRef, g1SigCtx, setG1SigCtx, g1SigDrawing, setG1SigDrawing, setG1SigHasData);
-  const g2Sig = makeSigHandlers(g2SigRef, g2SigCtx, setG2SigCtx, g2SigDrawing, setG2SigDrawing, setG2SigHasData);
-
-  // ── Token / email verification ─────────────────────────────────────────────
-  const checkEmail = async (overrideEmail) => {
-    const eAddr = overrideEmail || email.trim();
-    if (!eAddr) return;
+  // ── Verify token + email ──────────────────────────────────────────────
+  const doCheck = async (overEmail, overToken) => {
+    const eAddr = (overEmail || email).trim();
+    const tok = overToken || token;
+    if (!eAddr || !tok) { alert("Please enter your email address."); return; }
     setChecking(true);
     try {
-      const res = await fetch(`${API_BASE}/guarantor/public/check?token=${token}&email=${encodeURIComponent(eAddr)}`);
-      if (!res.ok) { const err = await res.json(); alert(err.detail || "Error verifying token."); setChecking(false); return; }
+      const res = await fetch(`${API_BASE}/guarantor/public/check?token=${encodeURIComponent(tok)}&email=${encodeURIComponent(eAddr)}`);
+      if (!res.ok) { const e = await res.json().catch(() => ({})); alert(e.detail || "Invalid or expired link."); return; }
       const data = await res.json();
-      setStaffInfo(data.staff_info);
-      
       if (data.submission) {
-        // RESUME LOGIC
         const s = data.submission;
         setSubmission(s);
-        setEmpForm({
-          full_name: s.employee_name || "",
-          position: s.position || "",
-          address: s.employee_address || "",
-          phone: s.employee_phone || "",
-          email: s.employee_email || "",
-          date_of_employment: s.date_of_employment || "",
-          staff_id: s.staff_id || "",
-          signature_url: s.employee_signature_url
-        });
-        
-        if (s.g1) setG1(prev => ({ ...prev, ...s.g1 }));
-        if (s.g2) setG2(prev => ({ ...prev, ...s.g2 }));
-
-        // Decide phase
+        setEmpForm({ full_name: s.employee_name || "", position: s.position || "", address: s.employee_address || "", phone: s.employee_phone || "", email: s.employee_email || eAddr, date_of_employment: s.date_of_employment || "", staff_id: s.staff_id || "" });
+        if (s.g1) setG1(p => ({ ...p, ...s.g1 }));
+        if (s.g2) setG2(p => ({ ...p, ...s.g2 }));
         if (!s.employee_signature_url) setPhase("section_a");
-        else if (!s.g1 || !s.g1.signature_url) setPhase("section_b_1");
-        else if (!s.g2 || !s.g2.signature_url) setPhase("section_b_2");
+        else if (!s.g1?.signature_url) setPhase("section_b_1");
+        else if (!s.g2?.signature_url) setPhase("section_b_2");
         else setPhase("success");
       } else {
         setSubmission(null);
         if (data.staff_info) {
-          setEmpForm(f => ({
-            ...f,
-            full_name: data.staff_info.full_name || "",
-            position: data.staff_info.job_title || "",
-            email: eAddr,
-            staff_id: data.staff_info.staff_id || "",
-          }));
+          setEmpForm(f => ({ ...f, full_name: data.staff_info.full_name || "", position: data.staff_info.job_title || "", email: eAddr, staff_id: data.staff_info.staff_id || "" }));
         }
         setPhase("section_a");
       }
-    } catch (e) { console.error(e); alert("Connection error. Please try again."); }
+    } catch { alert("Connection error. Please try again."); }
     finally { setChecking(false); }
   };
 
-  const handleFileChange = (file, setter, fieldKey) => {
+  const handleFile = (file, setter, key) => {
     if (!file) return;
-    const reader = new FileReader();
-    reader.onloadend = () => setter(prev => ({ ...prev, [fieldKey + "_file"]: file, [fieldKey + "_preview"]: reader.result }));
-    reader.readAsDataURL(file);
+    const r = new FileReader();
+    r.onloadend = () => setter(p => ({ ...p, [`${key}_file`]: file, [`${key}_preview`]: r.result }));
+    r.readAsDataURL(file);
   };
 
-  // ── Submit Section A + proceed to Guarantor 1 ─────────────────────────────
-  const [relayLink, setRelayLink] = useState("");
+  // ── Submit Section A ──────────────────────────────────────────────────
   const submitSectionA = async () => {
-    const req = ["full_name", "position", "address", "phone", "email", "date_of_employment"];
-    for (const f of req) {
+    for (const f of ["full_name", "position", "address", "phone", "email", "date_of_employment"]) {
       if (!empForm[f]?.trim()) { alert(`Please fill in: ${f.replace(/_/g, " ")}`); return; }
     }
-    if (!empSigHasData) { alert("Please draw your signature in Section A."); return; }
-    
+    if (!empHasSig) { alert("Please draw your signature before continuing."); return; }
     setSubmitting(true);
     try {
       const fd = new FormData();
-      fd.append("token", token);
-      fd.append("email", email.trim());
-      fd.append("section", "employee");
-      
-      const payload = { ...empForm, signature: empSigRef.current.toDataURL("image/png") };
-      fd.append("data", JSON.stringify(payload));
-      
+      fd.append("token", token); fd.append("email", email.trim()); fd.append("section", "employee");
+      fd.append("data", JSON.stringify({ ...empForm, signature: empSigRef.current.toDataURL("image/png") }));
       const res = await fetch(`${API_BASE}/guarantor/public/save-partial`, { method: "POST", body: fd });
+      if (!res.ok) throw new Error((await res.json()).detail || "Failed to save.");
       const d = await res.json();
       setRelayLink(d.relay_link);
       setPhase("relay_screen");
@@ -12018,324 +12003,237 @@ function PublicGuarantorForm() {
     finally { setSubmitting(false); }
   };
 
-  // ── Submit Guarantor form ─────────────────────────────────────────────────
+  // ── Submit Guarantor section ──────────────────────────────────────────
   const submitGuarantor = async (gNum) => {
     const g = gNum === 1 ? g1 : g2;
     const sigRef = gNum === 1 ? g1SigRef : g2SigRef;
-    const sigHasData = gNum === 1 ? g1SigHasData : g2SigHasData;
-
-    const req = ["full_name", "relationship", "address", "occupation", "employer_name", "position_held", "years_at_job", "phone", "email", "id_type", "id_number"];
-    for (const f of req) {
-      if (!g[f]?.trim()) { alert(`Please fill in Guarantor ${gNum}: ${f.replace(/_/g, " ")}`); return; }
+    const hasSig = gNum === 1 ? g1HasSig : g2HasSig;
+    for (const f of ["full_name", "relationship", "address", "occupation", "employer_name", "position_held", "years_at_job", "phone", "email", "id_type", "id_number"]) {
+      if (!g[f]?.trim()) { alert(`Please fill in: ${f.replace(/_/g, " ")}`); return; }
     }
-    if (!sigHasData) { alert(`Please draw Guarantor ${gNum}'s signature.`); return; }
-    if (!g.passport_file && !g.passport_photo_url) { alert(`Please upload Guarantor ${gNum}'s passport photograph.`); return; }
-
+    if (!hasSig) { alert("Please draw your signature."); return; }
+    if (!g.passport_file && !g.passport_photo_url) { alert("Please upload a passport photograph."); return; }
     setSubmitting(true);
     try {
-      // 1. Partial Save Section (B or C)
       const fd = new FormData();
-      fd.append("token", token);
-      fd.append("email", email.trim());
-      fd.append("section", gNum === 1 ? "g1" : "g2");
-      
+      fd.append("token", token); fd.append("email", email.trim()); fd.append("section", gNum === 1 ? "g1" : "g2");
       const payload = { ...g, signature: sigRef.current.toDataURL("image/png") };
+      delete payload.passport_file; delete payload.id_doc_file;
       fd.append("data", JSON.stringify(payload));
-      
+      if (g.passport_file) fd.append("passport_photo", g.passport_file);
+      if (g.id_doc_file) fd.append("id_document", g.id_doc_file);
       const res = await fetch(`${API_BASE}/guarantor/public/save-partial`, { method: "POST", body: fd });
-      if (!res.ok) throw new Error("Failed to save progress.");
-
-      if (gNum === 1) {
-        setPhase("section_b_2");
-      } else {
-        // Final Finalization
-        const finalizeFd = new FormData();
-        finalizeFd.append("token", token);
-        finalizeFd.append("email", email.trim());
-        // We reuse the original submit endpoint for final file processing if needed, 
-        // but for now let's just mark it done.
-        setPhase("success");
-      }
+      if (!res.ok) throw new Error((await res.json()).detail || "Submission failed.");
+      if (gNum === 1) setPhase("section_b_2");
+      else setPhase("success");
     } catch (e) { alert(e.message); }
     finally { setSubmitting(false); }
   };
 
-  // ── Shared styling ─────────────────────────────────────────────────────────
-  const G = "#C47D0A";
-  const inp = {
-    background: "rgba(255,255,255,0.03)", border: "1px solid rgba(255,255,255,0.08)", color: "#fff",
-    padding: "14px 18px", borderRadius: 14, fontSize: 14, outline: "none",
-    fontFamily: "inherit", width: "100%", boxSizing: "border-box", transition: "0.3s",
-  };
-  const lbl = { fontSize: 10, fontWeight: 800, color: "#94A3B8", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 6, display: "block" };
-  const card = {
-    background: "rgba(30, 32, 40, 0.6)", backdropFilter: "blur(20px)",
-    borderRadius: 24, padding: "32px 40px", border: "1px solid rgba(255,255,255,0.05)",
-    boxShadow: "0 40px 100px -20px rgba(0,0,0,0.5)", marginBottom: 24
-  };
-  const sectionTitle = { fontFamily: "'Playfair Display',serif", fontSize: 18, color: "#fff", fontWeight: 700, marginBottom: 4 };
-  const sectionSub = { fontSize: 12, color: "#94A3B8", marginBottom: 24 };
-  const sigBox = {
-    border: "1px solid rgba(255,255,255,0.1)", borderRadius: 12, height: 100, width: "100%",
-    background: "rgba(0,0,0,0.2)", cursor: "crosshair", touchAction: "none", display: "block",
+  // ── Design tokens ─────────────────────────────────────────────────────
+  const GOLD = "#B8860B"; const NAVY = "#0D1B2A";
+  const css = {
+    page: { minHeight: "100vh", background: "linear-gradient(160deg,#F5F0E8 0%,#FAF8F4 60%,#EDE9E0 100%)", fontFamily: "'DM Sans','Segoe UI',sans-serif", padding: "0 0 80px" },
+    topbar: { background: NAVY, padding: "14px 32px", display: "flex", justifyContent: "space-between", alignItems: "center" },
+    topbarTxt: { color: "#fff", fontSize: 11, fontWeight: 600, letterSpacing: 1.5, textTransform: "uppercase", opacity: 0.5 },
+    wrap: { maxWidth: 760, margin: "0 auto", padding: "0 20px" },
+    lhead: { background: "#fff", borderLeft: `6px solid ${GOLD}`, padding: "36px 44px 28px", marginTop: 24, boxShadow: "0 2px 20px rgba(0,0,0,0.07)" },
+    card: { background: "#fff", border: "1px solid #E8E2D9", borderRadius: 4, padding: "32px 40px", marginBottom: 14, boxShadow: "0 1px 6px rgba(0,0,0,0.04)" },
+    seclbl: { fontSize: 9, fontWeight: 800, letterSpacing: 2.5, textTransform: "uppercase", color: GOLD, marginBottom: 5 },
+    sectitle: { fontSize: 21, fontWeight: 700, color: NAVY, marginBottom: 3, lineHeight: 1.2 },
+    secsub: { fontSize: 13, color: "#6B7280", marginBottom: 26 },
+    flbl: { fontSize: 10, fontWeight: 700, letterSpacing: 1.4, textTransform: "uppercase", color: "#94A3B8", marginBottom: 5, display: "block" },
+    inp: { width: "100%", boxSizing: "border-box", padding: "11px 14px", border: "1px solid #DDE3EE", borderRadius: 3, fontSize: 14, color: NAVY, background: "#FAFBFC", fontFamily: "inherit", outline: "none" },
+    btn: { padding: "13px 40px", borderRadius: 3, border: "none", background: NAVY, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" },
+    btn2: { padding: "12px 28px", borderRadius: 3, border: `1px solid ${NAVY}`, background: "transparent", color: NAVY, fontSize: 13, fontWeight: 600, cursor: "pointer" },
+    sigbox: { width: "100%", height: 108, display: "block", borderRadius: 3, border: "1.5px dashed #B8C0CC", background: "#FAFBFC", cursor: "crosshair", touchAction: "none" },
+    hr: { border: "none", borderTop: "1px solid #E8E2D9", margin: "22px 0" },
   };
 
-  const FormField = ({ label, children, required, gridSpan }) => (
-    <div style={{ gridColumn: gridSpan ? "1/-1" : undefined }}>
-      <label style={lbl}>{label}{required && <span style={{ color: "#EF4444" }}> *</span>}</label>
-      {children}
+  const steps = ["Verify", "Employee", "Guarantor 1", "Guarantor 2", "Complete"];
+  const idx = { email: 0, section_a: 1, relay_screen: 1, section_b_1: 2, section_b_2: 3, success: 4 };
+  const cur = idx[phase] || 0;
+
+  const Topbar = () => (
+    <div style={css.topbar}>
+      <span style={css.topbarTxt}>Eximp & Cloves Infrastructure · HR Division</span>
+      <span style={css.topbarTxt}>Confidential</span>
     </div>
   );
 
-  const SigBlock = ({ label, sigRef, handlers, hasData }) => (
-    <div style={{ background: "rgba(0,0,0,0.25)", padding: 24, borderRadius: 20, border: "1px solid rgba(255,255,255,0.05)" }}>
-      <label style={lbl}>{label} <span style={{ color: "#EF4444" }}>*</span></label>
-      <div style={{ display: "flex", gap: 16, alignItems: "flex-start" }}>
-        <canvas
-          ref={sigRef} style={{ ...sigBox, background: "#FFFFFF", filter: "none" }}
-          onMouseDown={handlers.start} onMouseMove={handlers.move} onMouseUp={handlers.end} onMouseLeave={handlers.end}
-          onTouchStart={handlers.start} onTouchMove={handlers.move} onTouchEnd={handlers.end}
-        />
-        {hasData && (
-          <button onClick={handlers.clear} style={{ padding: "8px 16px", background: "rgba(255,255,255,0.05)", border: "1px solid rgba(255,255,255,0.1)", borderRadius: 10, fontSize: 11, fontWeight: 700, color: "#fff", cursor: "pointer", whiteSpace: "nowrap" }}>
-            Clear
-          </button>
-        )}
-      </div>
-      {!hasData && <div style={{ fontSize: 11, color: "#556677", marginTop: 8 }}>Draw your signature in the white area</div>}
-    </div>
-  );
-
-  const wrap = {
-    minHeight: "100vh",
-    background: "linear-gradient(135deg, #0B0C0F 0%, #1A1D24 100%)",
-    display: "flex", flexDirection: "column", alignItems: "center",
-    padding: "40px 20px 80px", fontFamily: "'Segoe UI', Arial, sans-serif",
-  };
-  const container = { width: "100%", maxWidth: 720 };
-
-  // Progress indicator
-  const phaseLabels = { email: 0, section_a: 1, relay_screen: 1, section_b_1: 2, section_b_2: 3, success: 4 };
-  const phaseNum = phaseLabels[phase] || 0;
-  const steps = ["Verify", "Employee", "Guarantor 1", "Guarantor 2", "Done"];
-
-  // ─── LETTER HEAD ───────────────────────────────────────────────────────────
   const Letterhead = () => (
-    <div style={{ ...card, textAlign: "center", background: "#ffffff", borderTop: `8px solid ${G}`, padding: "48px 40px", boxShadow: "0 25px 70px rgba(0,0,0,0.15)", overflow: "hidden", position: "relative" }}>
-      {/* Decorative background element */}
-      <div style={{ position: "absolute", top: -50, right: -50, width: 200, height: 200, background: `${G}08`, borderRadius: "50%" }} />
-      
-      <div style={{ display: "flex", flexDirection: "column", alignItems: "center", marginBottom: 24, position: "relative", zIndex: 1 }}>
-        <div style={{ background: "#f8fafc", padding: 12, borderRadius: 16, marginBottom: 20, boxShadow: "0 4px 12px rgba(0,0,0,0.05)" }}>
-          <img src="/static/img/logo.svg" alt="Eximp & Cloves Logo" style={{ height: 60, display: "block" }} 
-               onError={e => { e.target.src = "https://www.eximps-cloves.com/logo.svg"; e.target.style.filter="contrast(1.1)"; }} />
+    <div style={css.lhead}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 14 }}>
+        <div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: NAVY, lineHeight: 1.15 }}>{companyInfo.name}</div>
+          <div style={{ fontSize: 12, color: "#6B7280", marginTop: 6, lineHeight: 1.65 }}>
+            {companyInfo.address}{companyInfo.phone && <><br />{companyInfo.phone}</>}
+          </div>
         </div>
-        <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 28, fontWeight: 900, color: "#0F172A", letterSpacing: "-0.5px", marginBottom: 6 }}>
-          {companyInfo.name || "Eximp & Cloves Infrastructure"}
-        </div>
-        <div style={{ fontSize: 13, color: "#64748B", maxWidth: 480, margin: "0 auto", lineHeight: 1.6, fontWeight: 500, fontStyle: "italic" }}>
-          {companyInfo.address}
-        </div>
-      </div>
-      {(companyInfo.rc || companyInfo.phone || companyInfo.email_addr) && (
-        <div style={{ display: "flex", justifyContent: "center", gap: 16, fontSize: 11, color: "#99AABB", fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>
-          {companyInfo.rc && <span>RC {companyInfo.rc}</span>}
-          {companyInfo.phone && <span>·</span>}
-          {companyInfo.phone && <span>{companyInfo.phone}</span>}
-        </div>
-      )}
-      <div style={{
-        marginTop: 28, padding: "12px 40px", display: "inline-block",
-        background: `${G}12`, border: `1px solid ${G}20`, borderRadius: 12, color: G
-      }}>
-        <div style={{ fontFamily: "'Outfit',sans-serif", fontSize: 13, fontWeight: 900, letterSpacing: 2 }}>
-          EMPLOYEE GUARANTOR'S FORM
+        <div style={{ textAlign: "right" }}>
+          <div style={{ display: "inline-block", padding: "7px 18px", border: `1px solid ${GOLD}`, color: GOLD, fontSize: 10, fontWeight: 800, letterSpacing: 2.2, textTransform: "uppercase", borderRadius: 2 }}>
+            Employee Guarantor's Form
+          </div>
+          {companyInfo.rc && <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 7 }}>{companyInfo.rc}</div>}
         </div>
       </div>
     </div>
   );
 
-  // ─── Progress bar ──────────────────────────────────────────────────────────
   const Progress = () => (
-    <div style={{ display: "flex", alignItems: "center", gap: 0, marginBottom: 28 }}>
+    <div style={{ display: "flex", alignItems: "flex-start", margin: "26px 0 30px" }}>
       {steps.map((s, i) => (
         <Fragment key={s}>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center", flex: i < steps.length - 1 ? "none" : 1 }}>
-            <div style={{
-              width: 32, height: 32, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center",
-              fontSize: 13, fontWeight: 800,
-              background: i < phaseNum ? G : i === phaseNum ? `${G}33` : "#1A1D24",
-              border: `2px solid ${i <= phaseNum ? G : "#2D2F36"}`,
-              color: i < phaseNum ? "#0B0C0F" : i === phaseNum ? G : "#6B7280",
-            }}>
-              {i < phaseNum ? "✓" : i + 1}
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <div style={{ width: 27, height: 27, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, background: i < cur ? GOLD : i === cur ? NAVY : "#E8E2D9", color: i <= cur ? "#fff" : "#9CA3AF", border: `2px solid ${i < cur ? GOLD : i === cur ? NAVY : "#DDE3EE"}` }}>
+              {i < cur ? "✓" : i + 1}
             </div>
-            <div style={{ fontSize: 10, color: i === phaseNum ? G : "#6B7280", marginTop: 5, fontWeight: i === phaseNum ? 700 : 400, whiteSpace: "nowrap" }}>
-              {s}
-            </div>
+            <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: i === cur ? NAVY : "#9CA3AF", marginTop: 5, whiteSpace: "nowrap" }}>{s}</div>
           </div>
           {i < steps.length - 1 && (
-            <div style={{ flex: 1, height: 2, background: i < phaseNum ? G : "#2D2F36", margin: "0 4px", marginBottom: 18 }} />
+            <div style={{ flex: 1, display: "flex", alignItems: "center", paddingBottom: 16 }}>
+              <div style={{ flex: 1, height: 1.5, background: i < cur ? GOLD : "#DDE3EE", margin: "0 5px" }} />
+            </div>
           )}
         </Fragment>
       ))}
     </div>
   );
 
-  // ─── SUCCESS ───────────────────────────────────────────────────────────────
-  if (phase === "success") {
-    return (
-      <div style={wrap}>
-        <div style={{ ...container, display: "flex", alignItems: "center", justifyContent: "center", minHeight: "70vh" }}>
-          <div style={{ ...card, textAlign: "center", padding: 60, width: "100%" }}>
-            <div style={{ width: 80, height: 80, background: "rgba(16, 185, 129, 0.1)", border: "1px solid rgba(16, 185, 129, 0.3)", color: "#10B981", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px", fontSize: 36 }}>✓</div>
-            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 32, fontWeight: 900, color: "#fff", marginBottom: 12 }}>
-              Submission Successful
-            </div>
-            <div style={{ fontSize: 14, color: "#94A3B8", lineHeight: 1.8, marginBottom: 32, maxWidth: 420, margin: "0 auto 32px" }}>
-              Your guarantor form has been recorded and is currently being processed by our HR department.
-              You will receive an update via email once the verification is complete.
-            </div>
-            <div style={{ fontSize: 12, color: G, fontWeight: 700, textTransform: "uppercase", letterSpacing: 1 }}>
-              Official HR Record · {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}
-            </div>
+  const Fld = ({ label, required, gridSpan, children }) => (
+    <div style={{ gridColumn: gridSpan ? "1/-1" : undefined }}>
+      <label style={css.flbl}>{label}{required && <span style={{ color: "#EF4444" }}> *</span>}</label>
+      {children}
+    </div>
+  );
+
+  const Inp = ({ value, onChange, type = "text", placeholder }) => (
+    <input style={css.inp} type={type} value={value} onChange={onChange} placeholder={placeholder}
+      onFocus={e => e.target.style.borderColor = GOLD}
+      onBlur={e => e.target.style.borderColor = "#DDE3EE"} />
+  );
+
+  const SigPad = ({ label, sigRef, handlers, hasSig }) => (
+    <div>
+      <label style={css.flbl}>{label} <span style={{ color: "#EF4444" }}>*</span></label>
+      <div style={{ position: "relative" }}>
+        <canvas ref={sigRef} style={css.sigbox} {...handlers} />
+        {!hasSig && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none", fontSize: 12, color: "#B8C0CC", fontStyle: "italic" }}>
+            Draw signature here
+          </div>
+        )}
+      </div>
+      {hasSig && (
+        <button onClick={handlers.clear} style={{ marginTop: 7, padding: "4px 14px", border: "1px solid #DDE3EE", background: "none", color: "#6B7280", fontSize: 11, borderRadius: 3, cursor: "pointer" }}>
+          Clear & Redo
+        </button>
+      )}
+    </div>
+  );
+
+  const RejBanner = ({ reason }) => reason ? (
+    <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 3, padding: "14px 18px", marginBottom: 22, display: "flex", gap: 12 }}>
+      <span style={{ fontSize: 16 }}>⚠</span>
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#991B1B" }}>Section Rejected by HR</div>
+        <div style={{ fontSize: 12, color: "#B91C1C", marginTop: 2 }}>Reason: {reason}</div>
+        <div style={{ fontSize: 11, color: "#B91C1C", marginTop: 3 }}>Please correct the information below and resubmit.</div>
+      </div>
+    </div>
+  ) : null;
+
+  // ── SUCCESS ────────────────────────────────────────────────────────────
+  if (phase === "success") return (
+    <div style={css.page}><Topbar />
+      <div style={css.wrap}><Progress />
+        <div style={{ ...css.card, textAlign: "center", padding: "56px 40px" }}>
+          <div style={{ width: 60, height: 60, borderRadius: "50%", background: "#ECFDF5", border: "2px solid #10B981", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 20px", fontSize: 26, color: "#10B981" }}>✓</div>
+          <div style={{ fontSize: 26, fontWeight: 800, color: NAVY, marginBottom: 12 }}>Form Submitted Successfully</div>
+          <div style={{ fontSize: 14, color: "#6B7280", lineHeight: 1.8, maxWidth: 420, margin: "0 auto 22px" }}>
+            Your guarantor form has been received and is currently under review by HR. You will be notified by email once verification is complete.
+          </div>
+          <div style={{ fontSize: 10, color: GOLD, fontWeight: 700, letterSpacing: 1.5, textTransform: "uppercase" }}>
+            Official HR Record · {new Date().toLocaleDateString("en-GB", { day: "2-digit", month: "long", year: "numeric" })}
           </div>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
 
-  // ─── PHASE: EMAIL VERIFICATION ─────────────────────────────────────────────
-  if (phase === "email") {
-    return (
-      <div style={wrap}>
-        <div style={container}>
-          <Letterhead />
-          <div style={{ ...card, textAlign: "center", paddingTop: 48 }}>
-            <div style={{ fontSize: 18, fontWeight: 700, color: "#fff", marginBottom: 12 }}>Employee Verification</div>
-            <div style={{ fontSize: 14, color: "#94A3B8", marginBottom: 32, lineHeight: 1.6, maxWidth: 400, margin: "0 auto 32px" }}>
-              Please enter your business email to access your personalized guarantor form.
-            </div>
-            <input
-              style={{ ...inp, textAlign: "center", fontSize: 16, marginBottom: 16, background: "rgba(255,255,255,0.05)" }}
-              type="email" placeholder="name@eximps-cloves.com"
-              value={email} onChange={e => setEmail(e.target.value)}
-              onKeyDown={e => e.key === "Enter" && checkEmail()}
-            />
-            <button
-              onClick={checkEmail} disabled={checking || !email.trim()}
-              style={{
-                width: "100%", padding: "13px 0", borderRadius: 10, fontWeight: 800, fontSize: 14,
-                background: checking ? "#ccc" : G, color: "#fff", border: "none", cursor: "pointer",
-                letterSpacing: 0.5,
-              }}>
-              {checking ? "Verifying…" : "Continue →"}
+  // ── EMAIL PHASE ────────────────────────────────────────────────────────
+  if (phase === "email") return (
+    <div style={css.page}><Topbar />
+      <div style={css.wrap}><Letterhead />
+        <div style={{ ...css.card, marginTop: 16, textAlign: "center", padding: "44px 44px" }}>
+          <div style={{ fontSize: 22, fontWeight: 800, color: NAVY, marginBottom: 10 }}>Employee Verification</div>
+          <div style={{ fontSize: 13, color: "#6B7280", marginBottom: 28, lineHeight: 1.7, maxWidth: 400, margin: "0 auto 24px" }}>
+            Enter your company email address to access your personalized guarantor form.
+          </div>
+          <Inp type="email" value={email} onChange={e => setEmail(e.target.value)} placeholder="firstname.lastname@eximps-cloves.com" />
+          <div style={{ height: 12 }} />
+          <button onClick={() => doCheck()} disabled={checking || !email.trim()} style={{ ...css.btn, width: "100%", opacity: checking ? 0.6 : 1 }}>
+            {checking ? "Verifying…" : "Continue →"}
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+
+  // ── RELAY SCREEN ───────────────────────────────────────────────────────
+  if (phase === "relay_screen") return (
+    <div style={css.page}><Topbar />
+      <div style={css.wrap}><Progress />
+        <div style={{ ...css.card, textAlign: "center" }}>
+          <div style={{ width: 50, height: 50, borderRadius: "50%", background: "#ECFDF5", border: "2px solid #10B981", color: "#10B981", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px", fontSize: 20 }}>✓</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: NAVY, marginBottom: 10 }}>Your Details Saved</div>
+          <div style={{ fontSize: 13, color: "#6B7280", marginBottom: 26, lineHeight: 1.8, maxWidth: 460, margin: "0 auto 24px" }}>
+            Share the link below with your two guarantors. Each guarantor should open the link and complete their section independently.
+          </div>
+          <div style={{ background: "#F8F9FB", border: "1px dashed #DDE3EE", borderRadius: 4, padding: "22px 26px", marginBottom: 22, textAlign: "left" }}>
+            <div style={css.flbl}>Your Unique Guarantor Form Link</div>
+            <div style={{ fontSize: 12, color: NAVY, fontFamily: "monospace", wordBreak: "break-all", marginTop: 8, lineHeight: 1.6, background: "#fff", border: "1px solid #DDE3EE", padding: "10px 14px", borderRadius: 3 }}>{relayLink}</div>
+            <button onClick={() => { navigator.clipboard.writeText(relayLink); alert("Link copied to clipboard!"); }} style={{ ...css.btn, marginTop: 14, fontSize: 12, padding: "10px 22px" }}>
+              Copy Link
             </button>
           </div>
+          <hr style={css.hr} />
+          <div style={{ fontSize: 12, color: "#9CA3AF", marginBottom: 16 }}>If you are one of the guarantors and are present now, you may fill their section here:</div>
+          <button onClick={() => setPhase("section_b_1")} style={{ ...css.btn2, fontSize: 12 }}>Fill as Guarantor 1 →</button>
         </div>
       </div>
-    );
-  }
+    </div>
+  );
 
-  // ─── PHASE: RELAY SCREEN (Share with Guarantors) ───────────────────────────
-  if (phase === "relay_screen") {
-    return (
-      <div style={wrap}>
-        <div style={container}>
-          <Letterhead />
-          <div style={{ ...card, textAlign: "center" }}>
-            <div style={{ width: 60, height: 60, background: "rgba(16, 185, 129, 0.1)", color: "#10B981", borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 24px", fontSize: 24 }}>✓</div>
-            <div style={{ fontFamily: "'Playfair Display',serif", fontSize: 22, fontWeight: 900, color: "#fff", marginBottom: 12 }}>Employee Details Saved</div>
-            <div style={{ fontSize: 14, color: "#94A3B8", marginBottom: 32, lineHeight: 1.8 }}>
-              Now, please share this **Unique Link** with your two guarantors. They can click it to complete their sections directly.
-            </div>
-            
-            <div style={{ background: "rgba(0,0,0,0.3)", border: "1px dashed rgba(255,255,255,0.15)", borderRadius: 16, padding: 24, marginBottom: 32 }}>
-              <div style={lbl}>Your Unique Guarantor Link</div>
-              <div style={{ fontSize: 14, color: G, fontWeight: 700, wordBreak: "break-all", marginTop: 12, marginBottom: 20 }}>{relayLink}</div>
-              <button 
-                onClick={() => { navigator.clipboard.writeText(relayLink); alert("Link copied!"); }}
-                style={{ background: G, color: "#000", border: "none", padding: "12px 24px", borderRadius: 12, fontSize: 13, fontWeight: 800, cursor: "pointer" }}>
-                Copy Link to Share
-              </button>
-            </div>
-
-            <div style={{ fontSize: 12, color: "#556677" }}>
-              The guarantors will use this link to access the form securely.
-            </div>
-            
-            <button 
-              onClick={() => setPhase("section_b_1")}
-              style={{ marginTop: 40, background: "none", border: "none", color: G, fontWeight: 700, fontSize: 13, cursor: "pointer", textDecoration: "underline", textTransform: "uppercase", letterSpacing: 1 }}>
-              Proceed as Guarantor 1 (if present) →
-            </button>
-          </div>
-        </div>
-      </div>
-    );
-  }
-
-  // ─── PHASE: SECTION A – EMPLOYEE DETAILS ──────────────────────────────────
+  // ── SECTION A ─────────────────────────────────────────────────────────
   if (phase === "section_a") {
     const set = (k, v) => setEmpForm(f => ({ ...f, [k]: v }));
     return (
-      <div style={wrap}>
-        <div style={container}>
-          <Letterhead />
-          <Progress />
-          <div style={card}>
-            <div style={sectionTitle}>Section A: Employee Details</div>
-            <div style={sectionSub}>To be completed by the Employee. Please verify all pre-filled information.</div>
-            
-            {submission && submission.section_a_status === "rejected" && (
-              <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 12, padding: "16px 20px", marginBottom: 24, display: "flex", gap: 14 }}>
-                <div style={{ fontSize: 20 }}>⚠️</div>
-                <div>
-                  <div style={{ fontSize: 13, fontWeight: 700, color: "#991B1B" }}>Submission Rejected by HR</div>
-                  <div style={{ fontSize: 12, color: "#B91C1C", marginTop: 2 }}>Reason: {submission.section_a_reason || "Please correct the details below."}</div>
-                </div>
-              </div>
-            )}
-
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-              <FormField label="Full Name of Employee" required gridSpan>
-                <input style={inp} value={empForm.full_name} onChange={e => set("full_name", e.target.value)} />
-              </FormField>
-              <FormField label="Position" required>
-                <input style={inp} value={empForm.position} onChange={e => set("position", e.target.value)} />
-              </FormField>
-              <FormField label="Date of Employment" required>
-                <input style={{ ...inp }} type="date" value={empForm.date_of_employment} onChange={e => set("date_of_employment", e.target.value)} />
-              </FormField>
-              <FormField label="Staff ID No." >
-                <input style={inp} value={empForm.staff_id} onChange={e => set("staff_id", e.target.value)} />
-              </FormField>
-              <FormField label="Phone Number" required>
-                <input style={inp} value={empForm.phone} onChange={e => set("phone", e.target.value)} />
-              </FormField>
-              <FormField label="Email Address" required>
-                <input style={inp} type="email" value={empForm.email} onChange={e => set("email", e.target.value)} />
-              </FormField>
-              <FormField label="Residential Address" required gridSpan>
-                <input style={inp} value={empForm.address} onChange={e => set("address", e.target.value)} />
-              </FormField>
+      <div style={css.page}><Topbar />
+        <div style={css.wrap}><Letterhead /><Progress />
+          <RejBanner reason={submission?.section_a_status === "rejected" ? submission.section_a_reason : null} />
+          <div style={css.card}>
+            <div style={css.seclbl}>Section A</div>
+            <div style={css.sectitle}>Employee Details</div>
+            <div style={css.secsub}>To be completed by the employee. Please verify all pre-filled information.</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px 20px" }}>
+              <Fld label="Full Name" required gridSpan><Inp value={empForm.full_name} onChange={e => set("full_name", e.target.value)} /></Fld>
+              <Fld label="Position / Job Title" required><Inp value={empForm.position} onChange={e => set("position", e.target.value)} /></Fld>
+              <Fld label="Date of Employment" required><input style={css.inp} type="date" value={empForm.date_of_employment} onChange={e => set("date_of_employment", e.target.value)} /></Fld>
+              <Fld label="Staff ID Number"><Inp value={empForm.staff_id} onChange={e => set("staff_id", e.target.value)} /></Fld>
+              <Fld label="Phone Number" required><Inp value={empForm.phone} onChange={e => set("phone", e.target.value)} /></Fld>
+              <Fld label="Email Address" required><Inp type="email" value={empForm.email} onChange={e => set("email", e.target.value)} /></Fld>
+              <Fld label="Residential Address" required gridSpan><Inp value={empForm.address} onChange={e => set("address", e.target.value)} /></Fld>
             </div>
-
-            <div style={{ marginTop: 20, padding: "14px 18px", background: `${G}0D`, border: `1px solid ${G}22`, borderRadius: 10, fontSize: 13, color: "#556677", lineHeight: 1.7 }}>
-              I hereby present the persons below as my guarantors and confirm that all information provided is true.
+            <hr style={css.hr} />
+            <div style={{ background: "#F8F9FB", border: "1px solid #E8E2D9", borderRadius: 3, padding: "14px 18px", marginBottom: 18, fontSize: 13, color: "#374151", lineHeight: 1.8 }}>
+              I hereby present the persons named below as my guarantors and confirm that all information provided is accurate and truthful.
             </div>
-
-            <div style={{ marginTop: 20 }}>
-              <SigBlock label="Employee Signature" sigRef={empSigRef} handlers={empSig} hasData={empSigHasData} />
-            </div>
+            <SigPad label="Employee Signature" sigRef={empSigRef} handlers={empSig} hasSig={empHasSig} />
           </div>
-
-          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 4 }}>
-            <button onClick={submitSectionA} style={{
-              padding: "13px 36px", borderRadius: 10, fontWeight: 800, fontSize: 14,
-              background: G, color: "#fff", border: "none", cursor: "pointer", letterSpacing: 0.5,
-            }}>
-              Next: Guarantor 1 →
+          <div style={{ display: "flex", justifyContent: "flex-end", marginTop: 8 }}>
+            <button onClick={submitSectionA} disabled={submitting} style={{ ...css.btn, opacity: submitting ? 0.6 : 1 }}>
+              {submitting ? "Saving…" : "Save & Continue →"}
             </button>
           </div>
         </div>
@@ -12343,161 +12241,106 @@ function PublicGuarantorForm() {
     );
   }
 
-  // ─── SHARED: GUARANTOR SECTION B+C+D FORM ─────────────────────────────────
-  const renderGuarantorForm = (gNum, g, setG, sigRef, sigHandlers, sigHasData, onSubmit) => {
-    const set = (k, v) => setG(f => ({ ...f, [k]: v }));
+  // ── GUARANTOR FORM (shared for G1 + G2) ───────────────────────────────
+  const renderGuarantorForm = (gNum, g, setG, sigRef, sigHandlers, hasSig, onSubmit) => {
+    const set = (k, v) => setG(p => ({ ...p, [k]: v }));
     const ID_TYPES = ["NIN", "Int'l Passport", "Driver's License", "Voter's Card"];
+    const secKey = gNum === 1 ? "b" : "c";
+    const rejReason = submission?.[`section_${secKey}_status`] === "rejected" ? submission[`section_${secKey}_reason`] : null;
 
     return (
-      <div style={wrap}>
-        <div style={container}>
-          <Letterhead />
-          <Progress />
+      <div style={css.page}><Topbar />
+        <div style={css.wrap}><Letterhead /><Progress />
+          <RejBanner reason={rejReason} />
 
           {/* Section B */}
-          <div style={card}>
-            <div style={sectionTitle}>Section B: Guarantor {gNum} Details</div>
-            <div style={sectionSub}>To be completed by Guarantor {gNum}. All fields marked * are required.</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-              <FormField label="Full Name of Guarantor" required gridSpan>
-                <input style={inp} value={g.full_name} onChange={e => set("full_name", e.target.value)} />
-              </FormField>
-              <FormField label="Relationship to Employee" required>
-                <input style={inp} value={g.relationship} onChange={e => set("relationship", e.target.value)} placeholder="e.g. Uncle, Colleague, Employer" />
-              </FormField>
-              <FormField label="Occupation" required>
-                <input style={inp} value={g.occupation} onChange={e => set("occupation", e.target.value)} />
-              </FormField>
-              <FormField label="Position Held" required>
-                <input style={inp} value={g.position_held} onChange={e => set("position_held", e.target.value)} />
-              </FormField>
-              <FormField label="Years at Current Job/Business" required>
-                <input style={inp} type="number" min="0" value={g.years_at_job} onChange={e => set("years_at_job", e.target.value)} />
-              </FormField>
-              <FormField label="Phone Number" required>
-                <input style={inp} value={g.phone} onChange={e => set("phone", e.target.value)} />
-              </FormField>
-              <FormField label="Email Address" required>
-                <input style={inp} type="email" value={g.email} onChange={e => set("email", e.target.value)} />
-              </FormField>
-              <FormField label="Residential Address" required gridSpan>
-                <input style={inp} value={g.address} onChange={e => set("address", e.target.value)} />
-              </FormField>
-              <FormField label="Name & Address of Employer / Business" required gridSpan>
-                <input style={inp} value={g.employer_name} onChange={e => set("employer_name", e.target.value)} />
-              </FormField>
-
-              {/* ID type */}
-              <FormField label="Means of Identification" required gridSpan>
-                <div style={{ display: "flex", gap: 12, flexWrap: "wrap" }}>
+          <div style={css.card}>
+            <div style={css.seclbl}>Section B — Guarantor {gNum}</div>
+            <div style={css.sectitle}>Guarantor {gNum} Details</div>
+            <div style={css.secsub}>To be completed by Guarantor {gNum}. All fields marked * are required.</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px 20px" }}>
+              <Fld label="Full Name of Guarantor" required gridSpan><Inp value={g.full_name} onChange={e => set("full_name", e.target.value)} /></Fld>
+              <Fld label="Relationship to Employee" required><Inp value={g.relationship} onChange={e => set("relationship", e.target.value)} placeholder="e.g. Uncle, Colleague, Employer" /></Fld>
+              <Fld label="Occupation" required><Inp value={g.occupation} onChange={e => set("occupation", e.target.value)} /></Fld>
+              <Fld label="Position Held" required><Inp value={g.position_held} onChange={e => set("position_held", e.target.value)} /></Fld>
+              <Fld label="Years at Current Employment" required><input style={css.inp} type="number" min="0" value={g.years_at_job} onChange={e => set("years_at_job", e.target.value)} /></Fld>
+              <Fld label="Phone Number" required><Inp value={g.phone} onChange={e => set("phone", e.target.value)} /></Fld>
+              <Fld label="Email Address" required><Inp type="email" value={g.email} onChange={e => set("email", e.target.value)} /></Fld>
+              <Fld label="Residential Address" required gridSpan><Inp value={g.address} onChange={e => set("address", e.target.value)} /></Fld>
+              <Fld label="Name & Address of Employer / Business" required gridSpan><Inp value={g.employer_name} onChange={e => set("employer_name", e.target.value)} /></Fld>
+              <Fld label="Means of Identification" required gridSpan>
+                <div style={{ display: "flex", gap: 22, flexWrap: "wrap", marginTop: 4 }}>
                   {ID_TYPES.map(t => (
-                    <label key={t} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13, color: "#1A2130", cursor: "pointer", fontWeight: g.id_type === t ? 700 : 400 }}>
-                      <input type="radio" name={`id_type_g${gNum}`} value={t} checked={g.id_type === t} onChange={() => set("id_type", t)}
-                        style={{ accentColor: G, width: 16, height: 16 }} />
+                    <label key={t} style={{ display: "flex", alignItems: "center", gap: 7, fontSize: 13, color: NAVY, cursor: "pointer" }}>
+                      <input type="radio" name={`id_g${gNum}`} value={t} checked={g.id_type === t} onChange={() => set("id_type", t)} style={{ accentColor: GOLD, width: 15, height: 15 }} />
                       {t}
                     </label>
                   ))}
                 </div>
-              </FormField>
-              <FormField label="ID Number" required>
-                <input style={inp} value={g.id_number} onChange={e => set("id_number", e.target.value)} />
-              </FormField>
-
-              {/* Passport photo upload */}
-              <FormField label="Passport Photograph" required>
+              </Fld>
+              <Fld label="ID Number" required><Inp value={g.id_number} onChange={e => set("id_number", e.target.value)} /></Fld>
+              <Fld label="Passport Photograph" required>
                 <div>
-                  <input type="file" accept="image/*" id={`passport_g${gNum}`} style={{ display: "none" }}
-                    onChange={e => handleFileChange(e.target.files[0], setG, "passport")} />
-                  <label htmlFor={`passport_g${gNum}`} style={{
-                    display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 18px",
-                    background: g.passport_preview ? `${G}15` : "#F4F6FA", border: `1.5px dashed ${g.passport_preview ? G : "#DDE3EE"}`,
-                    borderRadius: 10, fontSize: 13, color: g.passport_preview ? G : "#6B7280", cursor: "pointer", fontWeight: 600,
-                  }}>
+                  <input type="file" accept="image/*" id={`pp_g${gNum}`} style={{ display: "none" }} onChange={e => handleFile(e.target.files[0], setG, "passport")} />
+                  <label htmlFor={`pp_g${gNum}`} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 16px", border: `1.5px dashed ${g.passport_preview ? GOLD : "#DDE3EE"}`, borderRadius: 3, fontSize: 12, cursor: "pointer", color: g.passport_preview ? GOLD : "#6B7280", background: "#FAFBFC" }}>
                     📷 {g.passport_preview ? "Photo selected ✓" : "Upload Passport Photo"}
                   </label>
-                  {g.passport_preview && (
-                    <img src={g.passport_preview} alt="preview" style={{ width: 64, height: 64, objectFit: "cover", borderRadius: 8, marginLeft: 12, border: `2px solid ${G}40`, verticalAlign: "middle" }} />
-                  )}
+                  {g.passport_preview && <img src={g.passport_preview} alt="preview" style={{ width: 50, height: 50, objectFit: "cover", borderRadius: 4, marginLeft: 10, border: `2px solid ${GOLD}40`, verticalAlign: "middle" }} />}
                 </div>
-              </FormField>
-
-              {/* ID document upload */}
-              <FormField label="Copy of Valid ID">
+              </Fld>
+              <Fld label="Copy of Valid ID Document">
                 <div>
-                  <input type="file" accept="image/*,application/pdf" id={`id_doc_g${gNum}`} style={{ display: "none" }}
-                    onChange={e => handleFileChange(e.target.files[0], setG, "id_doc")} />
-                  <label htmlFor={`id_doc_g${gNum}`} style={{
-                    display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 18px",
-                    background: g.id_doc_preview ? `${G}15` : "#F4F6FA", border: `1.5px dashed ${g.id_doc_preview ? G : "#DDE3EE"}`,
-                    borderRadius: 10, fontSize: 13, color: g.id_doc_preview ? G : "#6B7280", cursor: "pointer", fontWeight: 600,
-                  }}>
-                    📎 {g.id_doc_preview ? "ID document selected ✓" : "Upload ID Photocopy"}
+                  <input type="file" accept="image/*,application/pdf" id={`id_g${gNum}`} style={{ display: "none" }} onChange={e => handleFile(e.target.files[0], setG, "id_doc")} />
+                  <label htmlFor={`id_g${gNum}`} style={{ display: "inline-flex", alignItems: "center", gap: 8, padding: "10px 16px", border: `1.5px dashed ${g.id_doc_preview ? GOLD : "#DDE3EE"}`, borderRadius: 3, fontSize: 12, cursor: "pointer", color: g.id_doc_preview ? GOLD : "#6B7280", background: "#FAFBFC" }}>
+                    📎 {g.id_doc_preview ? "Document selected ✓" : "Upload ID Photocopy"}
                   </label>
                 </div>
-              </FormField>
+              </Fld>
             </div>
           </div>
 
           {/* Section C: Declaration */}
-          <div style={card}>
-            <div style={sectionTitle}>Section C: Guarantor's Declaration</div>
-            <div style={{ marginBottom: 20, padding: "18px 20px", background: "#F8F9FB", border: "1px solid #DDE3EE", borderRadius: 10, fontSize: 13, color: "#556677", lineHeight: 1.9 }}>
-              <div style={{ marginBottom: 14, fontWeight: 700, color: "#1A2130" }}>
-                I, <span style={{ borderBottom: "1.5px solid #C47D0A", color: "#C47D0A" }}>{g.full_name || "________________"}</span>, of the above address, do hereby solemnly declare as follows:
-              </div>
+          <div style={css.card}>
+            <div style={css.seclbl}>Section C — Declaration</div>
+            <div style={css.sectitle}>Guarantor's Declaration</div>
+            <div style={{ background: "#F8F9FB", border: "1px solid #E8E2D9", borderRadius: 3, padding: "18px 22px", marginBottom: 22, fontSize: 13, color: "#374151", lineHeight: 1.9 }}>
+              <p style={{ marginTop: 0, marginBottom: 12 }}>
+                I, <strong style={{ color: NAVY, borderBottom: `1.5px solid ${GOLD}` }}>{g.full_name || "___________________"}</strong>, of the above address, do hereby solemnly declare as follows:
+              </p>
               {[
                 "I know the above-named employee personally and can vouch for their character, integrity, and conduct.",
                 "I understand that the employee will be engaged in the sales of real estate properties and will handle company funds, documents, and client relationships.",
-                "I guarantee that the employee shall be of good behavior and shall faithfully discharge all duties assigned.",
+                "I guarantee that the employee shall be of good behaviour and shall faithfully discharge all duties assigned.",
                 "Should the employee be found liable for any act of fraud, dishonesty, negligence, misappropriation of funds, damage to company property, or breach of company policy resulting in financial loss, I undertake to assist the company in ensuring restitution or take responsibility up to the limit permitted by law.",
-                "I confirm that I am gainfully employed/self-employed, financially capable, and have not been convicted of any criminal offense.",
-                `I consent to ${companyInfo.name || "[Company Name]"} verifying any information provided herein.`,
+                "I confirm that I am gainfully employed/self-employed, financially capable, and have not been convicted of any criminal offence.",
+                `I consent to ${companyInfo.name || "the Company"} verifying any information provided herein.`,
               ].map((item, i) => (
-                <div key={i} style={{ display: "flex", gap: 10, marginBottom: 10 }}>
-                  <div style={{ fontWeight: 700, color: G, minWidth: 20 }}>{i + 1}.</div>
+                <div key={i} style={{ display: "flex", gap: 12, marginBottom: 9 }}>
+                  <div style={{ fontWeight: 800, color: GOLD, minWidth: 18, flexShrink: 0 }}>{i + 1}.</div>
                   <div>{item}</div>
                 </div>
               ))}
             </div>
-
-            <SigBlock label={`Guarantor ${gNum} Signature`} sigRef={sigRef} handlers={sigHandlers} hasData={sigHasData} />
+            <SigPad label={`Guarantor ${gNum} Signature`} sigRef={sigRef} handlers={sigHandlers} hasSig={hasSig} />
           </div>
 
-          {/* Section D: Witness Attestation */}
-          <div style={card}>
-            <div style={sectionTitle}>Section D: Official Attestation</div>
-            <div style={sectionSub}>To be completed by a Witness (optional but recommended).</div>
-            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 16 }}>
-              <FormField label="Name of Witness">
-                <input style={inp} value={g.witness_name} onChange={e => set("witness_name", e.target.value)} />
-              </FormField>
-              <FormField label="Occupation">
-                <input style={inp} value={g.witness_occupation} onChange={e => set("witness_occupation", e.target.value)} />
-              </FormField>
-              <FormField label="Phone">
-                <input style={inp} value={g.witness_phone} onChange={e => set("witness_phone", e.target.value)} />
-              </FormField>
-              <FormField label="Address" gridSpan>
-                <input style={inp} value={g.witness_address} onChange={e => set("witness_address", e.target.value)} />
-              </FormField>
+          {/* Section D: Witness */}
+          <div style={css.card}>
+            <div style={css.seclbl}>Section D — Attestation</div>
+            <div style={css.sectitle}>Witness Information</div>
+            <div style={css.secsub}>Optional but recommended. To be completed by an independent witness.</div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: "15px 20px" }}>
+              <Fld label="Name of Witness"><Inp value={g.witness_name} onChange={e => set("witness_name", e.target.value)} /></Fld>
+              <Fld label="Occupation"><Inp value={g.witness_occupation} onChange={e => set("witness_occupation", e.target.value)} /></Fld>
+              <Fld label="Phone Number"><Inp value={g.witness_phone} onChange={e => set("witness_phone", e.target.value)} /></Fld>
+              <Fld label="Address" gridSpan><Inp value={g.witness_address} onChange={e => set("witness_address", e.target.value)} /></Fld>
             </div>
           </div>
 
-          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 4 }}>
-            {gNum === 2 && (
-              <button onClick={() => setPhase("section_b_1")} style={{
-                padding: "13px 28px", borderRadius: 10, fontWeight: 700, fontSize: 14,
-                background: "none", color: "#6B7280", border: "1px solid #DDE3EE", cursor: "pointer",
-              }}>
-                ← Back
-              </button>
-            )}
-            {gNum === 1 && <div />}
-            <button onClick={() => onSubmit(gNum)} disabled={submitting} style={{
-              padding: "13px 36px", borderRadius: 10, fontWeight: 800, fontSize: 14,
-              background: G, color: "#fff", border: "none", cursor: "pointer", letterSpacing: 0.5,
-            }}>
-              {submitting ? "Submitting…" : gNum === 1 ? "Next: Guarantor 2 →" : "Submit Form ✓"}
+          <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginTop: 8 }}>
+            {gNum === 2 ? <button onClick={() => setPhase("section_b_1")} style={css.btn2}>← Back</button> : <div />}
+            <button onClick={() => onSubmit(gNum)} disabled={submitting} style={{ ...css.btn, opacity: submitting ? 0.6 : 1 }}>
+              {submitting ? "Submitting…" : gNum === 1 ? "Save & Continue to Guarantor 2 →" : "Submit Form ✓"}
             </button>
           </div>
         </div>
@@ -12505,15 +12348,11 @@ function PublicGuarantorForm() {
     );
   };
 
-  if (phase === "section_b_1") {
-    return renderGuarantorForm(1, g1, setG1, g1SigRef, g1Sig, g1SigHasData, submitGuarantor);
-  }
-  if (phase === "section_b_2") {
-    return renderGuarantorForm(2, g2, setG2, g2SigRef, g2Sig, g2SigHasData, submitGuarantor);
-  }
-
+  if (phase === "section_b_1") return renderGuarantorForm(1, g1, setG1, g1SigRef, g1Sig, g1HasSig, submitGuarantor);
+  if (phase === "section_b_2") return renderGuarantorForm(2, g2, setG2, g2SigRef, g2Sig, g2HasSig, submitGuarantor);
   return null;
 }
+
 
 function HRAdminPortal({ user, onLogout }) {
   const nav = [
