@@ -11528,6 +11528,28 @@ function GuarantorReviewModal({ sub, onClose, onRefresh }) {
       });
       const d = await apiFetch(`${API_BASE}/guarantor/submissions/${sub.id}`);
       setFull(d);
+      if (sub.staff_id && status !== "pending") {
+        const sectionLabel = section === "a" ? "Employee Details" : section === "b" ? "Guarantor 1 Details" : "Guarantor 2 Details";
+        const bellMsg = status === "rejected"
+          ? `⚠️ Your guarantor form section "${sectionLabel}" was rejected by HR. Reason: ${reason || "No reason provided."}. Please contact HR to resolve this.`
+          : `✅ Your guarantor form section "${sectionLabel}" has been approved by HR.`;
+        // Bell notification for both outcomes (non-blocking)
+        apiFetch(`${API_BASE}/hr/notifications`, {
+          method: "POST",
+          body: JSON.stringify({ staff_id: sub.staff_id, type: "guarantor_review", message: bellMsg }),
+        }).catch(() => { });
+        // Email only on rejection (non-blocking)
+        if (status === "rejected" && sub.employee_email) {
+          apiFetch(`${API_BASE}/hr/recruitment/send-email`, {
+            method: "POST",
+            body: JSON.stringify({
+              email: sub.employee_email,
+              subject: `⚠️ Guarantor Form — Section Rejected: ${sectionLabel}`,
+              message: `Dear ${sub.employee_name || "Staff Member"},\n\nYour guarantor form submission has been reviewed by HR and the following section requires attention:\n\nSection: ${sectionLabel}\nStatus: REJECTED\nReason: ${reason || "No specific reason provided."}\n\nPlease log in to the HR portal to review the feedback and contact HR to discuss next steps.\n\nRegards,\nHR Team`,
+            }),
+          }).catch(() => { });
+        }
+      }
     } catch (e) { alert(e.message); }
     finally { setReviewing(false); }
   };
@@ -11542,6 +11564,27 @@ function GuarantorReviewModal({ sub, onClose, onRefresh }) {
       });
       const d = await apiFetch(`${API_BASE}/guarantor/submissions/${sub.id}`);
       setFull(d);
+      if (sub.staff_id) {
+        const bellMsg = status === "approved"
+          ? `✅ Your entire guarantor form submission has been approved by HR. Welcome aboard!`
+          : `⚠️ Your guarantor form submission was rejected by HR across all sections. Please contact HR for next steps.`;
+        // Bell notification for both outcomes (non-blocking)
+        apiFetch(`${API_BASE}/hr/notifications`, {
+          method: "POST",
+          body: JSON.stringify({ staff_id: sub.staff_id, type: "guarantor_review", message: bellMsg }),
+        }).catch(() => { });
+        // Email only on rejection (non-blocking)
+        if (status === "rejected" && sub.employee_email) {
+          apiFetch(`${API_BASE}/hr/recruitment/send-email`, {
+            method: "POST",
+            body: JSON.stringify({
+              email: sub.employee_email,
+              subject: `⚠️ Guarantor Form Submission — Rejected`,
+              message: `Dear ${sub.employee_name || "Staff Member"},\n\nYour guarantor form submission has been reviewed by HR and has been rejected across all sections.\n\nPlease log in to the HR portal to view the detailed feedback for each section, then contact HR to discuss next steps and resubmission.\n\nRegards,\nHR Team`,
+            }),
+          }).catch(() => { });
+        }
+      }
     } catch (e) { alert(e.message); }
     finally { setReviewing(false); }
   };
@@ -11736,37 +11779,49 @@ function GuarantorReviewModal({ sub, onClose, onRefresh }) {
             </div>
 
             {/* Guarantor Links Display */}
-            {showGuarantorLinks && full?.relay_link && (
-              <div style={{ background: `${GOLD}08`, border: `1px solid ${GOLD}30`, borderRadius: 6, padding: 16, marginBottom: 12 }}>
-                <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Links Sent to Guarantors</div>
-                {[1, 2].map(n => {
-                  const link = `${full.relay_link}&guarantor=${n}`;
-                  return (
-                    <div key={n} style={{ marginBottom: n === 1 ? 12 : 0 }}>
-                      <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>Guarantor {n}</div>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
-                        <input readOnly value={link} style={{
-                          flex: 1, fontSize: 10, padding: "8px 12px", border: `1px solid ${C.border}`,
-                          borderRadius: 4, background: C.surface, color: C.text, fontFamily: "monospace", wordBreak: "break-all"
-                        }} />
-                        <button onClick={() => {
-                          navigator.clipboard.writeText(link);
-                          alert("Guarantor " + n + " link copied!");
-                        }} style={{
-                          padding: "8px 12px", borderRadius: 4, fontSize: 10, fontWeight: 700,
-                          background: GOLD, color: "#fff", border: "none", cursor: "pointer", whiteSpace: "nowrap"
-                        }}>
-                          Copy
-                        </button>
+            {showGuarantorLinks && (
+              full?.relay_link ? (
+                <div style={{ background: `${GOLD}08`, border: `1px solid ${GOLD}30`, borderRadius: 6, padding: 16, marginBottom: 12 }}>
+                  <div style={{ fontSize: 11, fontWeight: 700, color: GOLD, letterSpacing: 1, textTransform: "uppercase", marginBottom: 10 }}>Links Sent to Guarantors</div>
+                  {[1, 2].map(n => {
+                    const link = `${full.relay_link}&guarantor=${n}`;
+                    return (
+                      <div key={n} style={{ marginBottom: n === 1 ? 12 : 0 }}>
+                        <div style={{ fontSize: 10, color: C.muted, marginBottom: 6 }}>Guarantor {n}</div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                          <input readOnly value={link} style={{
+                            flex: 1, fontSize: 10, padding: "8px 12px", border: `1px solid ${C.border}`,
+                            borderRadius: 4, background: C.surface, color: C.text, fontFamily: "monospace", wordBreak: "break-all"
+                          }} />
+                          <button onClick={() => {
+                            navigator.clipboard.writeText(link);
+                            alert("Guarantor " + n + " link copied!");
+                          }} style={{
+                            padding: "8px 12px", borderRadius: 4, fontSize: 10, fontWeight: 700,
+                            background: GOLD, color: "#fff", border: "none", cursor: "pointer", whiteSpace: "nowrap"
+                          }}>
+                            Copy
+                          </button>
+                        </div>
                       </div>
+                    );
+                  })}
+                </div>
+              ) : (
+                <div style={{ background: `${GOLD}08`, border: `1px solid ${GOLD}30`, borderRadius: 6, padding: "14px 18px", marginBottom: 12, display: "flex", alignItems: "flex-start", gap: 12 }}>
+                  <span style={{ fontSize: 18, flexShrink: 0 }}>ℹ️</span>
+                  <div>
+                    <div style={{ fontSize: 12, fontWeight: 700, color: GOLD, marginBottom: 4 }}>Links not available for this submission</div>
+                    <div style={{ fontSize: 12, color: C.muted, lineHeight: 1.6 }}>
+                      The shareable guarantor links are only stored when the employee submits via the public form. This submission may have been created before link tracking was enabled, or the link data was not returned by the server.
                     </div>
-                  );
-                })}
-              </div>
+                    <div style={{ fontSize: 11, color: C.muted, marginTop: 8 }}>
+                      <strong style={{ color: C.text }}>Employee:</strong> {sub.employee_name} ({sub.employee_email})
+                    </div>
+                  </div>
+                </div>
+              )
             )}
-
-            {/* Guarantor Tabs */}
-            <div style={{ display: "flex", gap: 8, marginBottom: 12 }}>
 
             {/* Guarantor Detail */}
             {[1, 2].map(n => {
@@ -12132,14 +12187,8 @@ function PublicGuarantorForm() {
     return true;
   };
 
-  // ── Auto-select guarantor slot if specified in URL ──────────────────
-  useEffect(() => {
-    if (phase === "relay_screen" && slotHint === "1") {
-      setPhase("section_b_1");
-    } else if (phase === "relay_screen" && slotHint === "2") {
-      setPhase("section_b_2");
-    }
-  }, [phase, slotHint]);
+  // Slot-based routing is now handled entirely inside doCheck.
+  // No auto-advance from relay_screen needed here.
 
   useEffect(() => {
     const map = {
@@ -12247,6 +12296,9 @@ function PublicGuarantorForm() {
     const tok = overToken || token;
     if (!eAddr || !tok) { alert("Please enter your email address."); return; }
     setChecking(true);
+    // Read slotHint fresh from URL so it's available inside this async fn
+    const urlSlot = new URLSearchParams(window.location.search).get("guarantor") ||
+      new URLSearchParams(window.location.search).get("slot") || null;
     try {
       const res = await fetch(`${API_BASE}/guarantor/public/check?token=${encodeURIComponent(tok)}&email=${encodeURIComponent(eAddr)}`);
       if (!res.ok) { const e = await res.json().catch(() => ({})); alert(e.detail || "Invalid or expired link."); return; }
@@ -12257,19 +12309,37 @@ function PublicGuarantorForm() {
         setEmpForm({ full_name: s.employee_name || "", position: s.position || "", address: s.employee_address || "", phone: s.employee_phone || "", email: s.employee_email || eAddr, date_of_employment: s.date_of_employment || "", staff_id: s.staff_id || "" });
         if (s.g1) setG1(p => ({ ...p, ...s.g1 }));
         if (s.g2) setG2(p => ({ ...p, ...s.g2 }));
-        // Rejected sections take priority — open the first rejected one
-        // so the staff only has to re-fill/re-sign what HR flagged.
+
         const aRejected = s.section_a_status === "rejected";
         const bRejected = s.section_b_status === "rejected";
         const cRejected = s.section_c_status === "rejected";
-        if (aRejected) setPhase("section_a");
-        else if (bRejected) setPhase("section_b_1");
-        else if (cRejected) setPhase("section_b_2");
-        // Normal first-time fill flow (no prior rejection)
-        else if (!s.employee_signature_url) setPhase("section_a");
-        else if (!s.g1?.signature_url) setPhase("section_b_1");
-        else if (!s.g2?.signature_url) setPhase("section_b_2");
-        else setPhase("success");
+
+        // ── GUARANTOR LINK: slot is locked to 1 or 2 ──────────────────
+        if (urlSlot === "1") {
+          // This is Guarantor 1's personal link
+          if (bRejected) setPhase("section_b_1");           // HR rejected — let them re-fill
+          else if (s.g1?.signature_url) { setSuccessRole("guarantor"); setPhase("success"); } // already submitted
+          else setPhase("section_b_1");                     // first time filling
+          return;
+        }
+        if (urlSlot === "2") {
+          // This is Guarantor 2's personal link
+          if (cRejected) setPhase("section_b_2");
+          else if (s.g2?.signature_url) { setSuccessRole("guarantor"); setPhase("success"); }
+          else setPhase("section_b_2");
+          return;
+        }
+
+        // ── EMPLOYEE (no slot hint) ────────────────────────────────────
+        // Rejected sections take priority
+        if (aRejected) { setPhase("section_a"); return; }
+        if (bRejected) { setPhase("section_b_1"); return; }
+        if (cRejected) { setPhase("section_b_2"); return; }
+        // Employee already submitted section A — show relay screen so they
+        // can share guarantor links (not push them into a guarantor form)
+        if (s.employee_signature_url) { setRelayLink(s.relay_link || ""); setPhase("relay_screen"); return; }
+        // First-time employee fill
+        setPhase("section_a");
       } else {
         setSubmission(null);
         if (data.staff_info) {
@@ -12406,9 +12476,9 @@ function PublicGuarantorForm() {
       <div style={css.wrap}><Progress />
         <div style={{ ...css.card, textAlign: "center" }}>
           <div style={{ width: 60, height: 60, borderRadius: "50%", background: "#ECFDF5", border: "2px solid #10B981", color: "#10B981", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 18px", fontSize: 20 }}>✓</div>
-          <div style={{ fontSize: 20, fontWeight: 800, color: NAVY, marginBottom: 10 }}>Your Details Saved Successfully</div>
+          <div style={{ fontSize: 20, fontWeight: 800, color: NAVY, marginBottom: 10 }}>Your Details Are On Record</div>
           <div style={{ fontSize: 13, color: "#6B7280", marginBottom: 24, lineHeight: 1.8 }}>
-            Now share these links with your two guarantors. Each guarantor should open their link and complete their section.
+            Your section has been saved. Share the links below with your two guarantors — each guarantor should open their own link and complete their section.
           </div>
         </div>
 
