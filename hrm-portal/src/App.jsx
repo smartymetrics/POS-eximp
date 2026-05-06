@@ -11807,6 +11807,151 @@ function GuarantorReviewModal({ sub, onClose, onRefresh }) {
 
 
 // ════════════════════════════════════════════════════════════════════════════
+//  PUBLIC GUARANTOR FORM — static design tokens & sub-components
+//  Defined OUTSIDE the component so they are stable references across renders.
+//  This prevents React from unmounting/remounting inputs on every keystroke.
+// ════════════════════════════════════════════════════════════════════════════
+
+const GF_GOLD = "#B8860B";
+const GF_NAVY = "#0D1B2A";
+
+const GF_CSS = {
+  page: { minHeight: "100vh", background: "linear-gradient(160deg,#F5F0E8 0%,#FAF8F4 60%,#EDE9E0 100%)", fontFamily: "'DM Sans','Segoe UI',sans-serif", padding: "0 0 80px" },
+  topbar: { background: GF_NAVY, padding: "14px 32px", display: "flex", justifyContent: "space-between", alignItems: "center" },
+  topbarTxt: { color: "#fff", fontSize: 11, fontWeight: 600, letterSpacing: 1.5, textTransform: "uppercase", opacity: 0.5 },
+  wrap: { maxWidth: 760, margin: "0 auto", padding: "0 20px" },
+  lhead: { background: "#fff", borderLeft: `6px solid ${GF_GOLD}`, padding: "36px 44px 28px", marginTop: 24, boxShadow: "0 2px 20px rgba(0,0,0,0.07)" },
+  card: { background: "#fff", border: "1px solid #E8E2D9", borderRadius: 4, padding: "32px 40px", marginBottom: 14, boxShadow: "0 1px 6px rgba(0,0,0,0.04)" },
+  seclbl: { fontSize: 9, fontWeight: 800, letterSpacing: 2.5, textTransform: "uppercase", color: GF_GOLD, marginBottom: 5 },
+  sectitle: { fontSize: 21, fontWeight: 700, color: GF_NAVY, marginBottom: 3, lineHeight: 1.2 },
+  secsub: { fontSize: 13, color: "#6B7280", marginBottom: 26 },
+  flbl: { fontSize: 10, fontWeight: 700, letterSpacing: 1.4, textTransform: "uppercase", color: "#94A3B8", marginBottom: 5, display: "block" },
+  inp: { width: "100%", boxSizing: "border-box", padding: "11px 14px", border: "1px solid #DDE3EE", borderRadius: 3, fontSize: 14, color: GF_NAVY, background: "#FAFBFC", fontFamily: "inherit", outline: "none" },
+  btn: { padding: "13px 40px", borderRadius: 3, border: "none", background: GF_NAVY, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" },
+  btn2: { padding: "12px 28px", borderRadius: 3, border: `1px solid ${GF_NAVY}`, background: "transparent", color: GF_NAVY, fontSize: 13, fontWeight: 600, cursor: "pointer" },
+  sigbox: { width: "100%", height: 160, display: "block", borderRadius: 3, border: "1.5px dashed #B8C0CC", background: "#FAFBFC", cursor: "crosshair", touchAction: "none" },
+  hr: { border: "none", borderTop: "1px solid #E8E2D9", margin: "22px 0" },
+};
+
+const GF_STEPS = ["Verify", "Employee", "Guarantor 1", "Guarantor 2", "Complete"];
+const GF_PHASE_IDX = { email: 0, section_a: 1, relay_screen: 1, section_b_1: 2, section_b_2: 3, success: 4 };
+
+// Static sub-components — no props that change per-keystroke, so React never remounts them
+function GF_Topbar() {
+  return (
+    <div style={GF_CSS.topbar}>
+      <span style={GF_CSS.topbarTxt}>Eximp &amp; Cloves Infrastructure · HR Division</span>
+      <span style={GF_CSS.topbarTxt}>Confidential</span>
+    </div>
+  );
+}
+
+function GF_Letterhead({ companyInfo }) {
+  return (
+    <div style={GF_CSS.lhead}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 14 }}>
+        <div>
+          <div style={{ fontSize: 24, fontWeight: 800, color: GF_NAVY, lineHeight: 1.15 }}>{companyInfo.name}</div>
+          <div style={{ fontSize: 12, color: "#6B7280", marginTop: 6, lineHeight: 1.65 }}>
+            {companyInfo.address}{companyInfo.phone && <><br />{companyInfo.phone}</>}
+          </div>
+        </div>
+        <div style={{ textAlign: "right" }}>
+          <div style={{ display: "inline-block", padding: "7px 18px", border: `1px solid ${GF_GOLD}`, color: GF_GOLD, fontSize: 10, fontWeight: 800, letterSpacing: 2.2, textTransform: "uppercase", borderRadius: 2 }}>
+            Employee Guarantor's Form
+          </div>
+          {companyInfo.rc && <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 7 }}>{companyInfo.rc}</div>}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+function GF_Progress({ phase }) {
+  const cur = GF_PHASE_IDX[phase] || 0;
+  return (
+    <div style={{ display: "flex", alignItems: "flex-start", margin: "26px 0 30px" }}>
+      {GF_STEPS.map((s, i) => (
+        <Fragment key={s}>
+          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
+            <div style={{ width: 27, height: 27, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, background: i < cur ? GF_GOLD : i === cur ? GF_NAVY : "#E8E2D9", color: i <= cur ? "#fff" : "#9CA3AF", border: `2px solid ${i < cur ? GF_GOLD : i === cur ? GF_NAVY : "#DDE3EE"}` }}>
+              {i < cur ? "✓" : i + 1}
+            </div>
+            <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: i === cur ? GF_NAVY : "#9CA3AF", marginTop: 5, whiteSpace: "nowrap" }}>{s}</div>
+          </div>
+          {i < GF_STEPS.length - 1 && (
+            <div style={{ flex: 1, display: "flex", alignItems: "center", paddingBottom: 16 }}>
+              <div style={{ flex: 1, height: 1.5, background: i < cur ? GF_GOLD : "#DDE3EE", margin: "0 5px" }} />
+            </div>
+          )}
+        </Fragment>
+      ))}
+    </div>
+  );
+}
+
+// Pure layout wrappers — children change, but the wrapper itself is stable
+function GF_Fld({ label, required, gridSpan, children }) {
+  return (
+    <div style={{ gridColumn: gridSpan ? "1/-1" : undefined }}>
+      <label style={GF_CSS.flbl}>{label}{required && <span style={{ color: "#EF4444" }}> *</span>}</label>
+      {children}
+    </div>
+  );
+}
+
+// GF_Inp: a plain <input> wrapper — defined outside so its identity is stable.
+// onChange/value come in as props; React reconciles the existing DOM node instead of remounting.
+function GF_Inp({ value, onChange, type = "text", placeholder, style: extraStyle }) {
+  return (
+    <input
+      style={{ ...GF_CSS.inp, ...extraStyle }}
+      type={type}
+      value={value}
+      onChange={onChange}
+      placeholder={placeholder}
+      onFocus={e => { e.target.style.borderColor = GF_GOLD; }}
+      onBlur={e => { e.target.style.borderColor = "#DDE3EE"; }}
+    />
+  );
+}
+
+function GF_SigPad({ label, sigRef, handlers, hasSig }) {
+  return (
+    <div>
+      <label style={GF_CSS.flbl}>{label} <span style={{ color: "#EF4444" }}>*</span></label>
+      <div style={{ position: "relative" }}>
+        <canvas ref={sigRef} style={GF_CSS.sigbox} {...handlers} />
+        {!hasSig && (
+          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none", fontSize: 12, color: "#B8C0CC", fontStyle: "italic" }}>
+            Draw signature here
+          </div>
+        )}
+      </div>
+      {hasSig && (
+        <button onClick={handlers.clear} style={{ marginTop: 7, padding: "4px 14px", border: "1px solid #DDE3EE", background: "none", color: "#6B7280", fontSize: 11, borderRadius: 3, cursor: "pointer" }}>
+          Clear &amp; Redo
+        </button>
+      )}
+    </div>
+  );
+}
+
+function GF_RejBanner({ reason }) {
+  if (!reason) return null;
+  return (
+    <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 3, padding: "14px 18px", marginBottom: 22, display: "flex", gap: 12 }}>
+      <span style={{ fontSize: 16 }}>⚠</span>
+      <div>
+        <div style={{ fontSize: 13, fontWeight: 700, color: "#991B1B" }}>Section Rejected by HR</div>
+        <div style={{ fontSize: 12, color: "#B91C1C", marginTop: 2 }}>Reason: {reason}</div>
+        <div style={{ fontSize: 11, color: "#B91C1C", marginTop: 3 }}>Please correct the information below and resubmit.</div>
+      </div>
+    </div>
+  );
+}
+
+// ════════════════════════════════════════════════════════════════════════════
 //  PUBLIC GUARANTOR FORM  — accessed via ?guarantor_token=xxx
 // ════════════════════════════════════════════════════════════════════════════
 function PublicGuarantorForm() {
@@ -12069,118 +12214,15 @@ function PublicGuarantorForm() {
     finally { setSubmitting(false); }
   };
 
-  // ── Design tokens ─────────────────────────────────────────────────────
-  const GOLD = "#B8860B"; const NAVY = "#0D1B2A";
-  const css = {
-    page: { minHeight: "100vh", background: "linear-gradient(160deg,#F5F0E8 0%,#FAF8F4 60%,#EDE9E0 100%)", fontFamily: "'DM Sans','Segoe UI',sans-serif", padding: "0 0 80px" },
-    topbar: { background: NAVY, padding: "14px 32px", display: "flex", justifyContent: "space-between", alignItems: "center" },
-    topbarTxt: { color: "#fff", fontSize: 11, fontWeight: 600, letterSpacing: 1.5, textTransform: "uppercase", opacity: 0.5 },
-    wrap: { maxWidth: 760, margin: "0 auto", padding: "0 20px" },
-    lhead: { background: "#fff", borderLeft: `6px solid ${GOLD}`, padding: "36px 44px 28px", marginTop: 24, boxShadow: "0 2px 20px rgba(0,0,0,0.07)" },
-    card: { background: "#fff", border: "1px solid #E8E2D9", borderRadius: 4, padding: "32px 40px", marginBottom: 14, boxShadow: "0 1px 6px rgba(0,0,0,0.04)" },
-    seclbl: { fontSize: 9, fontWeight: 800, letterSpacing: 2.5, textTransform: "uppercase", color: GOLD, marginBottom: 5 },
-    sectitle: { fontSize: 21, fontWeight: 700, color: NAVY, marginBottom: 3, lineHeight: 1.2 },
-    secsub: { fontSize: 13, color: "#6B7280", marginBottom: 26 },
-    flbl: { fontSize: 10, fontWeight: 700, letterSpacing: 1.4, textTransform: "uppercase", color: "#94A3B8", marginBottom: 5, display: "block" },
-    inp: { width: "100%", boxSizing: "border-box", padding: "11px 14px", border: "1px solid #DDE3EE", borderRadius: 3, fontSize: 14, color: NAVY, background: "#FAFBFC", fontFamily: "inherit", outline: "none" },
-    btn: { padding: "13px 40px", borderRadius: 3, border: "none", background: NAVY, color: "#fff", fontSize: 13, fontWeight: 700, cursor: "pointer" },
-    btn2: { padding: "12px 28px", borderRadius: 3, border: `1px solid ${NAVY}`, background: "transparent", color: NAVY, fontSize: 13, fontWeight: 600, cursor: "pointer" },
-    sigbox: { width: "100%", height: 108, display: "block", borderRadius: 3, border: "1.5px dashed #B8C0CC", background: "#FAFBFC", cursor: "crosshair", touchAction: "none" },
-    hr: { border: "none", borderTop: "1px solid #E8E2D9", margin: "22px 0" },
-  };
-
-  const steps = ["Verify", "Employee", "Guarantor 1", "Guarantor 2", "Complete"];
-  const idx = { email: 0, section_a: 1, relay_screen: 1, section_b_1: 2, section_b_2: 3, success: 4 };
-  const cur = idx[phase] || 0;
-
-  const Topbar = () => (
-    <div style={css.topbar}>
-      <span style={css.topbarTxt}>Eximp & Cloves Infrastructure · HR Division</span>
-      <span style={css.topbarTxt}>Confidential</span>
-    </div>
-  );
-
-  const Letterhead = () => (
-    <div style={css.lhead}>
-      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", flexWrap: "wrap", gap: 14 }}>
-        <div>
-          <div style={{ fontSize: 24, fontWeight: 800, color: NAVY, lineHeight: 1.15 }}>{companyInfo.name}</div>
-          <div style={{ fontSize: 12, color: "#6B7280", marginTop: 6, lineHeight: 1.65 }}>
-            {companyInfo.address}{companyInfo.phone && <><br />{companyInfo.phone}</>}
-          </div>
-        </div>
-        <div style={{ textAlign: "right" }}>
-          <div style={{ display: "inline-block", padding: "7px 18px", border: `1px solid ${GOLD}`, color: GOLD, fontSize: 10, fontWeight: 800, letterSpacing: 2.2, textTransform: "uppercase", borderRadius: 2 }}>
-            Employee Guarantor's Form
-          </div>
-          {companyInfo.rc && <div style={{ fontSize: 11, color: "#9CA3AF", marginTop: 7 }}>{companyInfo.rc}</div>}
-        </div>
-      </div>
-    </div>
-  );
-
-  const Progress = () => (
-    <div style={{ display: "flex", alignItems: "flex-start", margin: "26px 0 30px" }}>
-      {steps.map((s, i) => (
-        <Fragment key={s}>
-          <div style={{ display: "flex", flexDirection: "column", alignItems: "center" }}>
-            <div style={{ width: 27, height: 27, borderRadius: "50%", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 11, fontWeight: 800, background: i < cur ? GOLD : i === cur ? NAVY : "#E8E2D9", color: i <= cur ? "#fff" : "#9CA3AF", border: `2px solid ${i < cur ? GOLD : i === cur ? NAVY : "#DDE3EE"}` }}>
-              {i < cur ? "✓" : i + 1}
-            </div>
-            <div style={{ fontSize: 9, fontWeight: 600, letterSpacing: 1, textTransform: "uppercase", color: i === cur ? NAVY : "#9CA3AF", marginTop: 5, whiteSpace: "nowrap" }}>{s}</div>
-          </div>
-          {i < steps.length - 1 && (
-            <div style={{ flex: 1, display: "flex", alignItems: "center", paddingBottom: 16 }}>
-              <div style={{ flex: 1, height: 1.5, background: i < cur ? GOLD : "#DDE3EE", margin: "0 5px" }} />
-            </div>
-          )}
-        </Fragment>
-      ))}
-    </div>
-  );
-
-  const Fld = ({ label, required, gridSpan, children }) => (
-    <div style={{ gridColumn: gridSpan ? "1/-1" : undefined }}>
-      <label style={css.flbl}>{label}{required && <span style={{ color: "#EF4444" }}> *</span>}</label>
-      {children}
-    </div>
-  );
-
-  const Inp = ({ value, onChange, type = "text", placeholder }) => (
-    <input style={css.inp} type={type} value={value} onChange={onChange} placeholder={placeholder}
-      onFocus={e => e.target.style.borderColor = GOLD}
-      onBlur={e => e.target.style.borderColor = "#DDE3EE"} />
-  );
-
-  const SigPad = ({ label, sigRef, handlers, hasSig }) => (
-    <div>
-      <label style={css.flbl}>{label} <span style={{ color: "#EF4444" }}>*</span></label>
-      <div style={{ position: "relative" }}>
-        <canvas ref={sigRef} style={css.sigbox} {...handlers} />
-        {!hasSig && (
-          <div style={{ position: "absolute", inset: 0, display: "flex", alignItems: "center", justifyContent: "center", pointerEvents: "none", fontSize: 12, color: "#B8C0CC", fontStyle: "italic" }}>
-            Draw signature here
-          </div>
-        )}
-      </div>
-      {hasSig && (
-        <button onClick={handlers.clear} style={{ marginTop: 7, padding: "4px 14px", border: "1px solid #DDE3EE", background: "none", color: "#6B7280", fontSize: 11, borderRadius: 3, cursor: "pointer" }}>
-          Clear & Redo
-        </button>
-      )}
-    </div>
-  );
-
-  const RejBanner = ({ reason }) => reason ? (
-    <div style={{ background: "#FEF2F2", border: "1px solid #FCA5A5", borderRadius: 3, padding: "14px 18px", marginBottom: 22, display: "flex", gap: 12 }}>
-      <span style={{ fontSize: 16 }}>⚠</span>
-      <div>
-        <div style={{ fontSize: 13, fontWeight: 700, color: "#991B1B" }}>Section Rejected by HR</div>
-        <div style={{ fontSize: 12, color: "#B91C1C", marginTop: 2 }}>Reason: {reason}</div>
-        <div style={{ fontSize: 11, color: "#B91C1C", marginTop: 3 }}>Please correct the information below and resubmit.</div>
-      </div>
-    </div>
-  ) : null;
+  // ── Point to module-level constants (moved outside to prevent re-render on keystroke) ──
+  const GOLD = GF_GOLD; const NAVY = GF_NAVY; const css = GF_CSS;
+  const Topbar = GF_Topbar;
+  const Fld = GF_Fld;
+  const Inp = GF_Inp;
+  const SigPad = GF_SigPad;
+  const RejBanner = GF_RejBanner;
+  const Letterhead = () => <GF_Letterhead companyInfo={companyInfo} />;
+  const Progress = () => <GF_Progress phase={phase} />;
 
   // ── SUCCESS ────────────────────────────────────────────────────────────
   if (phase === "success") return (
