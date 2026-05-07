@@ -244,10 +244,21 @@ async def confirm_verification(
                 }
                 
                 if is_partner:
-                    # Look up vendor_id by email
-                    v_res = await db_execute(lambda: db.table("vendors").select("id").eq("email", verify_rec.get("sales_rep_name")).execute())
+                    # BUG FIX #4: Use sales_rep_email (dedicated column) instead of sales_rep_name (display name)
+                    # sales_rep_name is display name (e.g. "John Doe"), not an email address.
+                    # First try sales_rep_email if available, then fallback to looking up via expenditure_requests
+                    email_to_use = verify_rec.get("sales_rep_email") or verify_rec.get("sales_rep_name")
+                    v_res = await db_execute(lambda: db.table("vendors").select("id").eq("email", email_to_use).execute())
                     if v_res.data:
                         earning_payload["vendor_id"] = v_res.data[0]["id"]
+                    else:
+                        # Fallback: join through expenditure_requests to get vendor_id directly
+                        try:
+                            exp_res = await db_execute(lambda: db.table("expenditure_requests").select("vendor_id").eq("pending_verification_id", id).execute())
+                            if exp_res.data and exp_res.data[0].get("vendor_id"):
+                                earning_payload["vendor_id"] = exp_res.data[0]["vendor_id"]
+                        except Exception:
+                            pass
                 else:
                     earning_payload["sales_rep_id"] = rep_id
 
@@ -257,13 +268,14 @@ async def confirm_verification(
                 # --- UNIFIED WORKFLOW: Update linked Expenditure Request ---
                 # If this verification was triggered from the Portal, find and update the claim request.
                 if is_portal_source:
+                    # BUG FIX #3: Use 'id' (function parameter) instead of undefined 'request_id'
                     await db_execute(lambda: db.table("expenditure_requests")
                         .update({
                             "status": "approved", # Move to approved status as payment is now confirmed
                             "payment_id": payment_id,
-                            "hr_note": f"Auto-approved via Verification #{request_id}"
+                            "hr_note": f"Auto-approved via Verification #{id}"
                         })
-                        .eq("pending_verification_id", request_id)
+                        .eq("pending_verification_id", id)
                         .execute()
                     )
                 
@@ -336,13 +348,31 @@ async def reject_verification(
 
     # 3. Mark invoice form deposit payments as voided so they are excluded from
     # revenue analytics, statements, and commission calculations.
+    # BUG FIX #6: Also match portal_reported payments (not just form_deposit)
+    # Portal submissions use reference pattern like "CLAIM-xxx" or payment_method "portal_reported"
     payment_query = db.table("payments")
     payment_query = payment_query.select("*")
     payment_query = payment_query.eq("invoice_id", verify_rec["invoice_id"])
     payment_query = payment_query.eq("is_voided", False)
-    payment_query = payment_query.ilike("reference", "%form_deposit")
-    pmt_res = await db_execute(lambda: payment_query.execute())
+    
+    # Query for form_deposit payments
+    pmt_res = await db_execute(lambda: payment_query.ilike("reference", "%form_deposit").execute())
     payments_to_void = pmt_res.data or []
+    
+    # Also query for portal_reported payments (CLAIM-* reference or payment_method = portal_reported)
+    portal_query = db.table("payments")
+    portal_query = portal_query.select("*")
+    portal_query = portal_query.eq("invoice_id", verify_rec["invoice_id"])
+    portal_query = portal_query.eq("is_voided", False)
+    portal_query = portal_query.eq("payment_method", "portal_reported")
+    portal_res = await db_execute(lambda: portal_query.execute())
+    
+    # Combine both lists, avoiding duplicates
+    portal_payments = portal_res.data or []
+    all_payment_ids = [p["id"] for p in payments_to_void] + [p["id"] for p in portal_payments if p["id"] not in [pv["id"] for pv in payments_to_void]]
+    
+    # Update payments_to_void to include both types
+    payments_to_void = payments_to_void + [p for p in portal_payments if p["id"] not in [pv["id"] for pv in payments_to_void]]
 
     if not payments_to_void and verify_rec.get("deposit_amount") is not None:
         # Fallback: match deposit amount and form deposit note if the reference

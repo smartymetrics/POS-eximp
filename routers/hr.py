@@ -993,6 +993,15 @@ async def run_payroll(current_admin: dict = Depends(verify_token)):
                                 .execute())
     existing_staff_ids = {r["staff_id"] for r in existing.data} if existing.data else set()
 
+    # 0. Fetch Global Tax Config
+    tax_config_res = await db_execute(lambda: db.table("hr_tax_config").select("*").limit(1).execute())
+    tax_config = tax_config_res.data[0] if tax_config_res.data else {
+        "paye_enabled": True,
+        "pension_employee_rate": 8.0,
+        "pension_employer_rate": 10.0,
+        "nhf_rate": 2.5
+    }
+
     payroll_inserts = []
     
     for s in staff_list:
@@ -1002,16 +1011,26 @@ async def run_payroll(current_admin: dict = Depends(verify_token)):
         p = s.get("staff_profiles", [{}])[0] if s.get("staff_profiles") else {}
         base = float(p.get("base_salary") or 0)
         
-        # Nigerian Tax Engine (PAYE / Pension)
+        # Nigerian Tax Engine (PAYE / Pension / NHF)
+        p_rate = (tax_config.get("pension_employee_rate") or 8.0) / 100.0
+        er_p_rate = (tax_config.get("pension_employer_rate") or 10.0) / 100.0
+        nhf_rate = (tax_config.get("nhf_rate") or 0.0) / 100.0
+        
         monthly_tax = 0.0
         monthly_pension = 0.0
+        monthly_nhf = 0.0
         monthly_cra = 0.0
+        monthly_er_pension = 0.0
         
-        if base > 30000: # Minimum wage exemption
+        if base > 30000 and tax_config.get("paye_enabled", True): # Minimum wage exemption
             annual_gross = base * 12
-            annual_pension = annual_gross * 0.08
-            annual_cra = max(200000.0, annual_gross * 0.01) + (0.2 * annual_gross)
-            taxable_income = max(0.0, annual_gross - annual_pension - annual_cra)
+            annual_pension = annual_gross * p_rate
+            annual_nhf = annual_gross * nhf_rate
+            annual_er_pension = annual_gross * er_p_rate
+            
+            # CRA: 20% of Gross + (Higher of 1% of Gross or 200,000)
+            annual_cra = (0.2 * annual_gross) + max(200000.0, 0.01 * annual_gross)
+            taxable_income = max(0.0, annual_gross - annual_pension - annual_nhf - annual_cra)
             
             annual_tax = 0.0
             brackets = [
@@ -1036,9 +1055,11 @@ async def run_payroll(current_admin: dict = Depends(verify_token)):
                  
             monthly_tax = round(annual_tax / 12, 2)
             monthly_pension = round(annual_pension / 12, 2)
+            monthly_nhf = round(annual_nhf / 12, 2)
             monthly_cra = round(annual_cra / 12, 2)
+            monthly_er_pension = round(annual_er_pension / 12, 2)
             
-        net = round(base - monthly_tax - monthly_pension, 2)
+        net = round(base - monthly_tax - monthly_pension - monthly_nhf, 2)
         
         payroll_inserts.append({
             "staff_id": s["id"],
@@ -1047,10 +1068,21 @@ async def run_payroll(current_admin: dict = Depends(verify_token)):
             "gross_pay": base,
             "tax": monthly_tax,
             "pension": monthly_pension,
+            "nhf": monthly_nhf,
+            "employer_pension": monthly_er_pension,
             "cra": monthly_cra,
             "net_pay": net,
             "status": "pending",
-            "processed_by": current_admin["sub"]
+            "processed_by": current_admin["sub"],
+            "net_pay_breakdown": {
+                "base_salary": base,
+                "gross_annual": base * 12,
+                "monthly_tax": monthly_tax,
+                "monthly_pension": monthly_pension,
+                "monthly_nhf": monthly_nhf,
+                "monthly_cra": monthly_cra,
+                "annual_taxable": taxable_income if base > 30000 else 0
+            }
         })
 
     # Bulk insert if there are records to create

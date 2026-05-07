@@ -2587,6 +2587,7 @@ function Payroll() {
   const [showAdd, setShowAdd] = useState(false);
   const [staff, setStaff] = useState([]);
   const [nf, setNf] = useState({ uid: "", gross: "", tax: "0", notes: "" });
+  const [selectedPayslip, setSelectedPayslip] = useState(null);
   const fmt = n => n != null ? `₦${Number(n).toLocaleString()}` : "—";
 
   const handleRunPayroll = async () => {
@@ -2715,7 +2716,7 @@ function Payroll() {
                         <td style={{ fontWeight: 700 }}>{fmt(p.gross_pay)}</td>
                         <td style={{ color: T.orange, fontWeight: 800, fontSize: 14 }}>{fmt(p.net_pay)}</td>
                         <td><span className={`tg ${p.status === "paid" ? "tg2" : "ty"}`}>{p.status}</span></td>
-                        <td><button className="bg" style={{ fontSize: 11, padding: "5px 12px" }}>Payslip</button></td>
+                        <td><button className="bg" style={{ fontSize: 11, padding: "5px 12px" }} onClick={() => setSelectedPayslip(p)}>Payslip</button></td>
                       </tr>
                     ))}
                   </tbody>
@@ -2723,9 +2724,63 @@ function Payroll() {
               </div>
             </div>
           )}
+          {selectedPayslip && <PayslipBreakdown p={selectedPayslip} onClose={() => setSelectedPayslip(null)} dark={dark} />}
         </>
       )}
     </div>
+  );
+}
+
+function PayslipBreakdown({ p, onClose, dark }) {
+  const C = dark ? DARK : LIGHT;
+  const breakdown = p.net_pay_breakdown || {};
+  const fmt = n => n != null ? `₦${Number(n).toLocaleString()}` : "—";
+
+  return (
+    <Modal onClose={onClose} title="Payslip Breakdown" width={540}>
+      <div style={{ display: "flex", flexDirection: "column", gap: 24 }}>
+        <div style={{ textAlign: "center", paddingBottom: 12, borderBottom: `1px solid ${C.border}` }}>
+          <div style={{ fontSize: 11, color: C.muted, textTransform: "uppercase", letterSpacing: 1.5, fontWeight: 800 }}>Monthly Remuneration</div>
+          <div className="ho" style={{ fontSize: 32, marginTop: 4 }}>{fmt(p.net_pay)}</div>
+          <div className="tg tg2" style={{ marginTop: 10 }}>Net Payout</div>
+        </div>
+
+        <div className="g2" style={{ gap: 20 }}>
+          <div className="field">
+            <div className="fl">Gross Earnings</div>
+            <div className="fv">{fmt(p.gross_pay)}</div>
+          </div>
+          <div className="field" style={{ background: "#EF44440D", borderColor: "#EF44441A" }}>
+            <div className="fl" style={{ color: "#EF4444" }}>Total Deductions</div>
+            <div className="fv" style={{ color: "#EF4444" }}>{fmt(p.gross_pay - p.net_pay)}</div>
+          </div>
+        </div>
+
+        <div>
+          <div className="fl" style={{ marginBottom: 12 }}>Detailed Deductions</div>
+          <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
+             <table className="ht">
+                <tbody>
+                  <tr><td style={{ border: "none" }}>Personal Income Tax (PAYE)</td><td style={{ border: "none", textAlign: "right", fontWeight: 700, color: "#EF4444" }}>- {fmt(p.tax)}</td></tr>
+                  <tr><td style={{ border: "none" }}>Pension Contribution</td><td style={{ border: "none", textAlign: "right", fontWeight: 700, color: "#EF4444" }}>- {fmt(p.pension)}</td></tr>
+                  {p.nhf > 0 && <tr><td style={{ border: "none" }}>National Housing Fund (NHF)</td><td style={{ border: "none", textAlign: "right", fontWeight: 700, color: "#EF4444" }}>- {fmt(p.nhf)}</td></tr>}
+                </tbody>
+             </table>
+          </div>
+        </div>
+
+        {breakdown.annual_taxable > 0 && (
+          <div style={{ background: C.surface, padding: 16, borderRadius: 12, border: `1px dashed ${C.border}` }}>
+            <div className="fl" style={{ marginBottom: 8 }}>Tax Engine Intelligence</div>
+            <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.5 }}>
+              Calculated on an annual taxable income of <strong>{fmt(breakdown.annual_taxable)}</strong> after applying a Consolidated Relief Allowance (CRA) of <strong>{fmt(breakdown.monthly_cra * 12)}</strong>.
+            </div>
+          </div>
+        )}
+
+        <button className="bp" onClick={onClose} style={{ padding: 14 }}>Close Breakdown</button>
+      </div>
+    </Modal>
   );
 }
 
@@ -3220,6 +3275,7 @@ function StaffPayroll({ user }) {
   const [data, setData] = useState({ payslips: [], commissions: null });
   const [loading, setLoading] = useState(true);
   const [viewingDocs, setViewingDocs] = useState(null);
+  const [selectedPayslip, setSelectedPayslip] = useState(null);
   const [searchTerm, setSearchTerm] = useState("");
   const [dates, setDates] = useState({
     start: new Date(new Date().getFullYear(), new Date().getMonth() - 2, 1).toISOString().split('T')[0],
@@ -3298,13 +3354,19 @@ function StaffPayroll({ user }) {
                           <td>{fmt(p.gross_pay)}</td>
                           <td style={{ color: T.orange, fontWeight: 800 }}>{fmt(p.net_pay)}</td>
                           <td><span className={`tg ${p.status === "paid" ? "tg2" : "ty"}`}>{p.status}</span></td>
-                          <td><button className="bg" style={{ fontSize: 10, padding: "4px 10px" }}>View PDF</button></td>
+                          <td>
+                            <div style={{ display: "flex", gap: 6 }}>
+                              <button className="bg" style={{ fontSize: 10, padding: "4px 10px" }} onClick={() => setSelectedPayslip(p)}>Breakdown</button>
+                              <button className="bg" style={{ fontSize: 10, padding: "4px 10px" }}>View PDF</button>
+                            </div>
+                          </td>
                         </tr>
                       ))}
                     </tbody>
                   </table>
                 </div>
               )}
+              {selectedPayslip && <PayslipBreakdown p={selectedPayslip} onClose={() => setSelectedPayslip(null)} dark={dark} />}
             </div>
           ) : (
             <div>
