@@ -187,11 +187,14 @@ async def set_rep_rate(payload: CommissionRateCreate, background_tasks: Backgrou
     return new_rate.data[0]
 
 @router.get("/earnings")
-async def list_earnings(rep_id: Optional[str] = None, is_paid: Optional[bool] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, current_admin=Depends(verify_token)):
+async def list_earnings(rep_id: Optional[str] = None, vendor_id: Optional[str] = None, is_paid: Optional[bool] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, current_admin=Depends(verify_token)):
     db = get_db()
-    query = db.table("commission_earnings").select("*, sales_reps(name), clients(full_name), invoices(invoice_number)").eq("is_voided", False).order("created_at", desc=True)
+    # Support both Sales Reps and Vendors (Partners)
+    query = db.table("commission_earnings").select("*, sales_reps(name), vendors(name), clients(full_name), invoices(invoice_number)").eq("is_voided", False).order("created_at", desc=True)
     if rep_id:
         query = query.eq("sales_rep_id", rep_id)
+    if vendor_id:
+        query = query.eq("vendor_id", vendor_id)
     if is_paid is not None:
         query = query.eq("is_paid", is_paid)
     if start_date:
@@ -204,7 +207,7 @@ async def list_earnings(rep_id: Optional[str] = None, is_paid: Optional[bool] = 
 @router.get("/earnings/rep/{rep_id}")
 async def rep_earnings(rep_id: str, current_admin=Depends(verify_token)):
     db = get_db()
-    res = await db_execute(lambda: db.table("commission_earnings").select("*, clients(full_name), invoices(invoice_number)").eq("sales_rep_id", rep_id).eq("is_voided", False).order("created_at", desc=True).execute())
+    res = await db_execute(lambda: db.table("commission_earnings").select("*, sales_reps(name), vendors(name), clients(full_name), invoices(invoice_number)").eq("sales_rep_id", rep_id).eq("is_voided", False).order("created_at", desc=True).execute())
     return res.data
 
 @router.patch("/earnings/{id}/adjust")
@@ -264,7 +267,7 @@ async def summary_owed(current_admin=Depends(verify_token)):
 async def detailed_owed(rep_id: str, current_admin=Depends(verify_token)):
     db = get_db()
     # Include amount_paid so frontend can show balance accurately
-    res = await db_execute(lambda: db.table("commission_earnings").select("*, clients(full_name), invoices(invoice_number)").eq("sales_rep_id", rep_id).eq("is_paid", False).eq("is_voided", False).order("created_at", desc=True).execute())
+    res = await db_execute(lambda: db.table("commission_earnings").select("*, sales_reps(name), vendors(name), clients(full_name), invoices(invoice_number)").eq("sales_rep_id", rep_id).eq("is_paid", False).eq("is_voided", False).order("created_at", desc=True).execute())
     # Annotate each record with the true balance remaining
     for e in res.data:
         e["balance_owed"] = round(float(e["final_amount"]) - float(e.get("amount_paid") or 0), 2)

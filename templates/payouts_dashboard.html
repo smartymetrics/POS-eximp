@@ -2790,6 +2790,7 @@
             const filteredData = data.filter(c => {
                 if (!searchTerm) return true;
                 return (c.sales_reps?.name || "").toLowerCase().includes(searchTerm) ||
+                    (c.vendors?.name || "").toLowerCase().includes(searchTerm) ||
                     (c.clients?.full_name || "").toLowerCase().includes(searchTerm) ||
                     (c.invoices?.invoice_number || "").toLowerCase().includes(searchTerm) ||
                     (c.estate_name || "").toLowerCase().includes(searchTerm);
@@ -2804,14 +2805,17 @@
                 const gross = c.gross_commission || c.commission_amount || (net / 0.95);
                 const wht = c.wht_amount || (gross - net);
                 const rate = c.commission_rate || (gross / (c.payment_amount || 1) * 100);
-                const repName = c.sales_reps?.name || 'Unknown Rep';
+                
+                // Handle both Staff (sales_reps) and Partners (vendors)
+                const repName = c.sales_reps?.name || c.vendors?.name || 'Unknown Rep';
+                const repId = c.sales_rep_id || c.vendor_id || 'UNKNOWN';
 
                 return `
                 <tr>
                     <td>${new Date(c.created_at).toLocaleDateString()}</td>
                     <td>
                         <div style="font-weight:700;">${repName}</div>
-                        <small style="color:var(--gray); text-transform:uppercase; font-size:9px;">${c.sales_rep_id.slice(0, 8)}</small>
+                        <small style="color:var(--gray); text-transform:uppercase; font-size:9px;">${repId.slice(0, 8)}</small>
                     </td>
                     <td>
                         <div style="font-weight:700;">${c.clients?.full_name || 'Legacy Client'}</div>

@@ -2660,63 +2660,106 @@ async def verify_bill_request(
     action = data.action  # 'pending' or 'rejected'
     
     if action == 'pending':
-        # --- BI-DIRECTIONAL SYNC (Revenue CRM) ---
+        # --- UNIFIED VERIFICATION WORKFLOW ---
         if req.get("invoice_id"):
             inv_id = req["invoice_id"]
-            # Fetch Invoice and Client for receipting
-            inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", inv_id).execute())
-            if inv_res.data:
-                invoice = inv_res.data[0]
-                client = invoice.get("clients")
-                # 1. Update Invoice Balance
-                # Note: We need the client's payment amount, not the commission (gross).
-                # The commission_base is what we want. We'll try to extract it from the claim or metadata.
-                # For now, if it's a commission claim, we reverse-calc the payment amount from the gross commission.
-                is_commission = req.get("payment_type") in ["initial_deposit", "instalment"]
-                client_payment_amount = float(req["amount_gross"])
-                if is_commission:
-                    # gross = payment * rate -> payment = gross / rate
-                    # BUG FIX: Handle wht_rate as a decimal (0.05) or percentage (5.0)
-                    rate = float(req.get("wht_rate", 0.1))
-                    if rate > 1.0: rate = rate / 100.0
+            
+            # 1. Resolve or Create the Client Payment record
+            payment_id = req.get("payment_id")
+            client_payment_amount = 0
+            
+            # Scenario A: Claiming on a new payment reported via portal
+            if not payment_id and req.get("pending_verification_id"):
+                p_verif_id = req["pending_verification_id"]
+                # Confirm the verification record (mirrors verifications.py logic)
+                verif_res = await db_execute(lambda: db.table("pending_verifications").select("*").eq("id", p_verif_id).execute())
+                if verif_res.data:
+                    verif = verif_res.data[0]
+                    client_payment_amount = float(verif.get("deposit_amount", 0))
                     
-                    if rate > 0:
-                        client_payment_amount = float(req["amount_gross"]) / rate
-                    else:
-                        client_payment_amount = float(req["amount_gross"])
-                    # Actually, let's use the property_price if initial_deposit, else try to find the payment amount
-                    # I'll update the portal submit to store the payment_amount in metadata
-                    client_payment_amount = float(req.get("description", "").split("Amt: ")[-1].split()[0]) if "Amt: " in req.get("description", "") else float(req["amount_gross"])
-                
-                new_paid = float(invoice.get("amount_paid", 0)) + client_payment_amount
-                await db_execute(lambda: db.table("invoices").update({"amount_paid": new_paid, "status": "paid" if new_paid >= float(invoice["amount"]) else "partial"}).eq("id", inv_id).execute())
+                    # Create the payments record
+                    pay_res = await db_execute(lambda: db.table("payments").insert({
+                        "invoice_id": inv_id,
+                        "client_id": verif["client_id"],
+                        "amount": client_payment_amount,
+                        "payment_method": "portal_reported",
+                        "reference": f"CONF-{p_verif_id[:8]}",
+                        "payment_date": verif.get("payment_date") or datetime.now(timezone.utc).isoformat(),
+                        "recorded_by": current_admin['sub']
+                    }).execute())
+                    
+                    if pay_res.data:
+                        payment_id = pay_res.data[0]["id"]
+                        # Mark verification as confirmed
+                        await db_execute(lambda: db.table("pending_verifications").update({
+                            "status": "confirmed",
+                            "reviewed_by": current_admin['sub'],
+                            "reviewed_at": datetime.now(timezone.utc).isoformat()
+                        }).eq("id", p_verif_id).execute())
+            
+            # Scenario B: Claiming on an already confirmed payment
+            elif payment_id:
+                p_res = await db_execute(lambda: db.table("payments").select("amount").eq("id", payment_id).execute())
+                if p_res.data:
+                    client_payment_amount = float(p_res.data[0]["amount"])
+            
+            # Scenario C: Fallback (Legacy parsing)
+            else:
+                desc = req.get("description", "")
+                if "Payment ID: " in desc:
+                    legacy_pid = desc.split("Payment ID: ")[-1].split("\n")[0].strip()
+                    if legacy_pid and len(legacy_pid) > 30: # Check if it looks like a UUID
+                        payment_id = legacy_pid
+                        p_res = await db_execute(lambda: db.table("payments").select("amount").eq("id", payment_id).execute())
+                        if p_res.data:
+                            client_payment_amount = float(p_res.data[0]["amount"])
 
-                # 2. Assign Rep if missing
-                if not invoice.get("sales_rep_id"):
-                    vendor = req.get("vendors")
-                    if vendor and vendor.get("email"):
-                        rep_res = await db_execute(lambda: db.table("sales_reps").select("id").eq("email", vendor["email"]).execute())
-                        if rep_res.data:
-                            await db_execute(lambda: db.table("invoices").update({"sales_rep_id": rep_res.data[0]["id"]}).eq("id", inv_id).execute())
-
-                # 3. Log CRM Payment
-                payment_payload = {
-                    "client_id": invoice["client_id"],
-                    "invoice_id": inv_id,
-                    "amount": client_payment_amount,
-                    "payment_method": "portal_reported",
-                    "reference": f"CLAIM-{req['id'][:8]}",
-                    "payment_date": datetime.now(timezone.utc).isoformat(),
-                }
-                await db_execute(lambda: db.table("payments").insert(payment_payload).execute())
-
-                # 4. Sync Commission Ledger (Option A)
-                # This will create the commission_earnings record for the rep
+            # 2. Update Invoice and Ledger if we have a valid payment
+            if payment_id:
+                # Sync Invoice Balance (if it wasn't already synced by payment trigger)
+                from commission_service import sync_invoice_commissions
                 bg_tasks.add_task(sync_invoice_commissions, inv_id, db, current_admin['sub'])
+                
+                # 3. Create structural Commission Ledger entry
+                # Resolve beneficiary (Sales Rep email lookup)
+                vendor = req.get("vendors") or {}
+                payee_email = vendor.get("email")
+                
+                if payee_email:
+                    # Look for sales rep first
+                    rep_res = await db_execute(lambda: db.table("sales_reps").select("id").eq("email", payee_email).execute())
+                    sales_rep_id = rep_res.data[0]["id"] if (rep_res.data and len(rep_res.data) > 0) else None
+                    
+                    # Create the earnings record
+                    # We use vendor_id for partners and sales_rep_id for staff
+                    earning_payload = {
+                        "invoice_id": inv_id,
+                        "payment_id": payment_id,
+                        "client_id": req["client_id"] if req.get("client_id") else None, 
+                        "estate_name": req.get("title", "").split(": ")[-1], # Fallback
+                        "payment_amount": client_payment_amount,
+                        "commission_rate": float(req.get("wht_rate") or 5.0) * 2, # Rough estimate
+                        "commission_amount": float(req["net_payout_amount"]),
+                        "gross_commission": float(req["amount_gross"]),
+                        "wht_amount": float(req.get("wht_amount") or 0),
+                        "net_commission": float(req["net_payout_amount"]),
+                        "is_paid": False,
+                    }
+                    
+                    if sales_rep_id:
+                        earning_payload["sales_rep_id"] = sales_rep_id
+                    else:
+                        # Partner support (requires the vendor_id column added in migration)
+                        earning_payload["vendor_id"] = vendor.get("id")
+                    
+                    # Try to fetch missing client_id/estate from invoice
+                    inv_meta = await db_execute(lambda: db.table("invoices").select("client_id, property_name").eq("id", inv_id).execute())
+                    if inv_meta.data:
+                        earning_payload["client_id"] = inv_meta.data[0]["client_id"]
+                        earning_payload["estate_name"] = inv_meta.data[0]["property_name"]
 
-                # 5. Notify Client (Automated Receipt)
-                if client and client.get("email"):
-                    bg_tasks.add_task(send_receipt_email, invoice, client, current_admin['sub'])
+                    # INSERT
+                    await db_execute(lambda: db.table("commission_earnings").insert(earning_payload).execute())
 
     # Update Expenditure Status
     update_payload = {
@@ -3626,6 +3669,33 @@ async def submit_payout_claim_from_portal(
         elif len(uploaded_paths) > 1:
             file_url = json.dumps(uploaded_paths)  # JSON array for multi-file
 
+    # ── Portal Payment Verification ──
+    # When the claimant supplies a client_paid_amount (only shown when the invoice
+    # has no existing unpaid commission claim), create a pending_verifications row
+    # so Finance can confirm it in the Verifications tab — badged as "Portal".
+    pending_verif_id = None
+    if client_paid_amount and client_paid_amount > 0 and linked_invoice_id and type in ("partner", "staff_commission"):
+        try:
+            inv_for_verif = await db_execute(lambda: db.table("invoices").select("client_id").eq("id", linked_invoice_id).execute())
+            verif_client_id = inv_for_verif.data[0]["client_id"] if inv_for_verif.data else None
+            if verif_client_id:
+                verif_payload = {
+                    "invoice_id": linked_invoice_id,
+                    "client_id": verif_client_id,
+                    "deposit_amount": float(client_paid_amount),
+                    "payment_proof_url": file_url,
+                    "payment_date": datetime.now(timezone.utc).date().isoformat(),
+                    "sales_rep_name": payee_name,
+                    "status": "pending",
+                    "source": "portal",
+                    "submission_type": type,  # "partner" or "staff_commission"
+                }
+                v_res = await db_execute(lambda: db.table("pending_verifications").insert(verif_payload).execute())
+                if v_res.data:
+                    pending_verif_id = v_res.data[0]["id"]
+        except Exception as verif_err:
+            print(f"[WARN] Failed to create pending_verifications row for portal submission: {verif_err}")
+
     # 4. Create Record
     payload = {
         "title": title,
@@ -3651,33 +3721,10 @@ async def submit_payout_claim_from_portal(
         "is_disputed": is_dispute,
         "dispute_reason": dispute_reason if is_dispute else None,
         "vendor_invoice_number": invoice_number,
+        "pending_verification_id": pending_verif_id, # Structural link for unified workflow
     }
 
     await db_execute(lambda: db.table("expenditure_requests").insert(payload).execute())
-
-    # ── Portal Payment Verification ──
-    # When the claimant supplies a client_paid_amount (only shown when the invoice
-    # has no existing unpaid commission claim), create a pending_verifications row
-    # so Finance can confirm it in the Verifications tab — badged as "Portal".
-    if client_paid_amount and client_paid_amount > 0 and linked_invoice_id and type in ("partner", "staff_commission"):
-        try:
-            inv_for_verif = await db_execute(lambda: db.table("invoices").select("client_id").eq("id", linked_invoice_id).execute())
-            verif_client_id = inv_for_verif.data[0]["client_id"] if inv_for_verif.data else None
-            if verif_client_id:
-                verif_payload = {
-                    "invoice_id": linked_invoice_id,
-                    "client_id": verif_client_id,
-                    "deposit_amount": float(client_paid_amount),
-                    "payment_proof_url": file_url,
-                    "payment_date": datetime.now(timezone.utc).date().isoformat(),
-                    "sales_rep_name": payee_name,
-                    "status": "pending",
-                    "source": "portal",
-                    "submission_type": type,  # "partner" or "staff_commission"
-                }
-                await db_execute(lambda: db.table("pending_verifications").insert(verif_payload).execute())
-        except Exception as verif_err:
-            print(f"[WARN] Failed to create pending_verifications row for portal submission: {verif_err}")
 
     # Notify all HRM admins of new payout/commission submission
     try:
@@ -3881,37 +3928,14 @@ async def submit_payout_claims_bulk(payload: BulkSubmitPayload):
             "is_disputed": payload.is_dispute,
             "dispute_reason": payload.dispute_reason if payload.is_dispute else None,
             "vendor_invoice_number": payload.invoice_number,
+            "payment_id": claim.payment_id, # Structural link for unified workflow
         }
         res = await db_execute(lambda: db.table("expenditure_requests").insert(row).execute())
         if res.data:
             created_ids.append(res.data[0]["id"])
 
-        # Write commission_earnings for already-confirmed payments.
-        # claim.payment_id is the real payments.id — the money is confirmed in the system.
-        # This populates the Commissions tab in the payouts dashboard immediately.
-        if _rep_id and _client_id and claim.payment_id and not payload.is_dispute:
-            try:
-                # Guard: skip if already in ledger for this payment
-                existing = await db_execute(lambda: db.table("commission_earnings")
-                    .select("id").eq("payment_id", claim.payment_id).eq("sales_rep_id", _rep_id).execute()
-                )
-                if not existing.data:
-                    await db_execute(lambda: db.table("commission_earnings").insert({
-                        "sales_rep_id":    _rep_id,
-                        "invoice_id":      payload.invoice_id,
-                        "payment_id":      claim.payment_id,
-                        "client_id":       _client_id,
-                        "estate_name":     _property_name,
-                        "payment_amount":  claim.amount,
-                        "commission_rate": float(COMMISSION_RATE * 100),
-                        "commission_amount": float(net),
-                        "gross_commission":  float(gross),
-                        "wht_amount":        float(wht),
-                        "net_commission":    float(net),
-                        "is_paid": False,
-                    }).execute())
-            except Exception as ce:
-                print(f"[WARN] commission_earnings insert failed for payment {claim.payment_id}: {ce}")
+        # NOTE: In the unified workflow, we NO LONGER write to commission_earnings here.
+        # The ledger entry is created ONLY when Finance clicks 'Verify' in the Payouts Dashboard.
 
     # ── Optional: new client payment log ──
     file_url = None  # bulk endpoint doesn't handle file uploads — rep attaches separately
@@ -3930,7 +3954,8 @@ async def submit_payout_claims_bulk(payload: BulkSubmitPayload):
                     "source": "portal",
                     "submission_type": payload.type,
                 }
-                await db_execute(lambda: db.table("pending_verifications").insert(verif_payload).execute())
+                v_res = await db_execute(lambda: db.table("pending_verifications").insert(verif_payload).execute())
+                pending_verif_id = v_res.data[0]["id"] if (v_res.data and len(v_res.data) > 0) else None
 
                 # If rep also wants to claim commission on the new payment, create one more request
                 if payload.claim_on_new_payment:
@@ -3954,6 +3979,7 @@ async def submit_payout_claims_bulk(payload: BulkSubmitPayload):
                         "category": category,
                         "payment_type": "instalment",
                         "vendor_invoice_number": payload.invoice_number,
+                        "pending_verification_id": pending_verif_id, # Structural link for unified workflow
                     }
                     res = await db_execute(lambda: db.table("expenditure_requests").insert(row).execute())
                     if res.data:

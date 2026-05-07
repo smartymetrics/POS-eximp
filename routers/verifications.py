@@ -226,21 +226,46 @@ async def confirm_verification(
             if payment_id:
                 # commission_rate stored as percentage (e.g. 10.0), not decimal
                 stored_rate = round(gross_rate * 100, 4) if is_portal_source else config["gross_rate"]
+                
+                is_partner = (verify_rec.get("submission_type") == "partner")
+                
                 # Insert professional earnings record
-                earning_res = await db_execute(lambda: db.table("commission_earnings").insert({
-                    "sales_rep_id": rep_id,
+                earning_payload = {
                     "invoice_id": invoice["id"],
                     "payment_id": payment_id,
                     "client_id": client["id"],
                     "estate_name": invoice["property_name"],
                     "payment_amount": deposit,
                     "commission_rate": stored_rate,
-                    "commission_amount": net_comm, # Compatibility field
+                    "commission_amount": net_comm, 
                     "gross_commission": gross_comm,
                     "wht_amount": wht_amt,
                     "net_commission": net_comm
-                }).execute())
+                }
+                
+                if is_partner:
+                    # Look up vendor_id by email
+                    v_res = await db_execute(lambda: db.table("vendors").select("id").eq("email", verify_rec.get("sales_rep_name")).execute())
+                    if v_res.data:
+                        earning_payload["vendor_id"] = v_res.data[0]["id"]
+                else:
+                    earning_payload["sales_rep_id"] = rep_id
+
+                earning_res = await db_execute(lambda: db.table("commission_earnings").insert(earning_payload).execute())
                 earning = earning_res.data[0]
+                
+                # --- UNIFIED WORKFLOW: Update linked Expenditure Request ---
+                # If this verification was triggered from the Portal, find and update the claim request.
+                if is_portal_source:
+                    await db_execute(lambda: db.table("expenditure_requests")
+                        .update({
+                            "status": "approved", # Move to approved status as payment is now confirmed
+                            "payment_id": payment_id,
+                            "hr_note": f"Auto-approved via Verification #{request_id}"
+                        })
+                        .eq("pending_verification_id", request_id)
+                        .execute()
+                    )
                 
                 if rep:
                     background_tasks.add_task(
