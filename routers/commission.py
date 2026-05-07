@@ -341,33 +341,45 @@ async def mark_payout(payload: CommissionPayout, background_tasks: BackgroundTas
         await db_execute(lambda: db.table("commission_earnings").update(update_data).eq("id", earning["id"]).execute())
         remaining = round(remaining - to_apply, 2)
     
-    rep_res = await db_execute(lambda: db.table("sales_reps").select("name").eq("id", payload.sales_rep_id).execute())
-    rep_name = rep_res.data[0]["name"] if rep_res.data else "Rep"
-    
+    # Fetch Recipient Details for Notification (Sales Rep or Vendor)
+    recipient_obj = None
+    recipient_name = "Recipient"
+    recipient_email = None
+
+    if payload.sales_rep_id:
+        rep_obj_res = await db_execute(lambda: db.table("sales_reps").select("*").eq("id", payload.sales_rep_id).single().execute())
+        recipient_obj = rep_obj_res.data
+        if recipient_obj:
+            recipient_name = recipient_obj["name"]
+            recipient_email = recipient_obj.get("email")
+    elif getattr(payload, "vendor_id", None):
+        vendor_obj_res = await db_execute(lambda: db.table("vendors").select("*").eq("id", payload.vendor_id).single().execute())
+        recipient_obj = vendor_obj_res.data
+        if recipient_obj:
+            recipient_name = recipient_obj["name"]
+            recipient_email = recipient_obj.get("email")
+
     background_tasks.add_task(
         log_activity,
         "commission_payout",
-        f"Processed commission payout of NGN {payment_amount:,.2f} to {rep_name}",
+        f"Processed commission payout of NGN {payment_amount:,.2f} to {recipient_name}",
         performed_by=current_admin["sub"]
     )
     
     # Send Payout Email
-    rep_obj_res = await db_execute(lambda: db.table("sales_reps").select("*").eq("id", payload.sales_rep_id).single().execute())
-    rep_obj = rep_obj_res.data
-    if rep_obj:
-        background_tasks.add_task(send_commission_paid_email, rep_obj, batch.data[0])
+    if recipient_email:
+        background_tasks.add_task(send_commission_paid_email, recipient_obj, batch.data[0])
         
         # --- NEW: Sync with Portal Claim Requests & Send Bell Notification ---
         from routers.hr import send_notification
         
-        # 1. Fetch staff admin_id if this rep is a staff member
-        if rep_obj.get("email"):
-            admin_res = await db_execute(lambda: db.table("admins").select("id").eq("email", rep_obj["email"]).execute())
-            if admin_res.data:
-                staff_id = admin_res.data[0]["id"]
-                
-                # 2. Send Bell Notification
-                await send_notification(
+        # 1. Fetch staff admin_id if this is a staff member
+        admin_res = await db_execute(lambda: db.table("admins").select("id").eq("email", recipient_email).execute())
+        if admin_res.data:
+            staff_id = admin_res.data[0]["id"]
+            
+            # 2. Send Bell Notification
+            await send_notification(
                     staff_id,
                     "Commission Paid",
                     f"💸 Good news! A commission payout of ₦{payment_amount:,.2f} has been processed. Reference: {payload.reference}",
@@ -376,22 +388,35 @@ async def mark_payout(payload: CommissionPayout, background_tasks: BackgroundTas
                 
                 # 3. Mark any matching Portal Claims (Expenditure Requests) as PAID
                 # Find all invoice IDs in this batch
-                earning_ids = [e["id"] for e in earnings]
-                earning_details = await db_execute(lambda: db.table("commission_earnings").select("invoice_id").in_("id", earning_ids).execute())
-                invoice_ids = list(set([d["invoice_id"] for d in earning_details.data if d.get("invoice_id")]))
-                
                 if invoice_ids:
-                    await db_execute(lambda: db.table("expenditure_requests")
-                        .update({
-                            "status": "paid",
-                            "paid_at": datetime.now().isoformat(),
-                            "payout_reference": payload.reference,
-                            "hr_note": f"Paid via Commission Payout Batch {batch_id}"
-                        })
+                    # Fetch requests linked to these invoices to also find pending_verification_ids
+                    req_res = await db_execute(lambda: db.table("expenditure_requests")
+                        .select("id, pending_verification_id")
                         .in_("invoice_id", invoice_ids)
-                        .eq("status", "approved") # Only update those already approved
-                        .execute()
-                    )
+                        .in_("status", ["pending", "approved", "pending_verification"])
+                        .execute())
+                    
+                    if req_res.data:
+                        req_ids = [r["id"] for r in req_res.data]
+                        p_verif_ids = [r["pending_verification_id"] for r in req_res.data if r.get("pending_verification_id")]
+                        
+                        # 1. Mark requests as PAID
+                        await db_execute(lambda: db.table("expenditure_requests")
+                            .update({
+                                "status": "paid",
+                                "paid_at": datetime.now().isoformat(),
+                                "payout_reference": payload.reference,
+                                "hr_note": f"Paid via Commission Payout Batch {batch_id}"
+                            })
+                            .in_("id", req_ids)
+                            .execute())
+                        
+                        # 2. Mark linked verifications as confirmed to clear the Verifications queue
+                        if p_verif_ids:
+                            await db_execute(lambda: db.table("pending_verifications")
+                                .update({"status": "confirmed"})
+                                .in_("id", p_verif_ids)
+                                .execute())
     
     return {"message": "Payout successful", "batch": batch.data[0], "amount_paid": payment_amount}
 
@@ -455,22 +480,28 @@ async def pay_single_commission(id: str, payload: dict, background_tasks: Backgr
         "payout_reference": payload.get("reference")
     }).eq("id", id).execute())
 
+    # 4. Fetch details for notification
+    earning = (await db_execute(lambda: db.table("commission_earnings").select("*, sales_reps(*), vendors(*), invoices(*)").eq("id", id).execute())).data[0]
+    
+    recipient_obj = earning.get("sales_reps") or earning.get("vendors")
+    if not recipient_obj:
+        raise HTTPException(status_code=404, detail="Recipient (Sales Rep or Vendor) not found for this earning.")
+
     # 5. Log activity
     background_tasks.add_task(
         log_activity,
         "commission_payout",
-        f"Paid commission of NGN {net_amount:,.2f} to {earning['sales_reps']['name']}",
+        f"Paid commission of NGN {net_amount:,.2f} to {recipient_obj['name']}",
         performed_by=current_admin["sub"]
     )
     
     # 6. Send Email
-    background_tasks.add_task(send_commission_paid_email, earning["sales_reps"], batch.data[0])
+    if recipient_obj.get("email"):
+        background_tasks.add_task(send_commission_paid_email, recipient_obj, batch.data[0])
 
-    # --- NEW: Sync with Portal Claim & Send Bell Notification ---
-    from routers.hr import send_notification
-    rep_email = earning["sales_reps"].get("email")
-    if rep_email:
-        admin_res = await db_execute(lambda: db.table("admins").select("id").eq("email", rep_email).execute())
+    recipient_email = recipient_obj.get("email")
+    if recipient_email:
+        admin_res = await db_execute(lambda: db.table("admins").select("id").eq("email", recipient_email).execute())
         if admin_res.data:
             staff_id = admin_res.data[0]["id"]
             
@@ -484,17 +515,32 @@ async def pay_single_commission(id: str, payload: dict, background_tasks: Backgr
             
             # 2. Mark Portal Claim (Expenditure Request) as PAID
             if earning.get("invoice_id"):
-                await db_execute(lambda: db.table("expenditure_requests")
-                    .update({
-                        "status": "paid",
-                        "paid_at": datetime.now().isoformat(),
-                        "payout_reference": payload.get("reference"),
-                        "hr_note": "Processed via Commissions dashboard"
-                    })
+                req_res = await db_execute(lambda: db.table("expenditure_requests")
+                    .select("id, pending_verification_id")
                     .eq("invoice_id", earning["invoice_id"])
                     .in_("status", ["pending", "approved", "pending_verification"])
-                    .execute()
-                )
+                    .execute())
+                
+                if req_res.data:
+                    req_ids = [r["id"] for r in req_res.data]
+                    p_verif_ids = [r["pending_verification_id"] for r in req_res.data if r.get("pending_verification_id")]
+
+                    await db_execute(lambda: db.table("expenditure_requests")
+                        .update({
+                            "status": "paid",
+                            "paid_at": datetime.now().isoformat(),
+                            "payout_reference": payload.get("reference"),
+                            "hr_note": "Processed via Commissions dashboard"
+                        })
+                        .in_("id", req_ids)
+                        .execute()
+                    )
+                    
+                    if p_verif_ids:
+                        await db_execute(lambda: db.table("pending_verifications")
+                            .update({"status": "confirmed"})
+                            .in_("id", p_verif_ids)
+                            .execute())
 
     return {"message": "Payout recorded successfully", "batch_id": batch_id}
 

@@ -1,43 +1,3 @@
-from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks, File, UploadFile, Form, Body, Request
-from fastapi.responses import StreamingResponse, HTMLResponse
-from fastapi.templating import Jinja2Templates
-from pydantic import BaseModel
-from database import get_db, db_execute
-from models import ExpenditureRequestCreate, PayoutReview, AssetCreate, VendorCreate, VoidExpenditureRequest, PayoutPaymentData
-from routers.auth import verify_token, has_any_role, require_roles, resolve_admin_token
-from email_service import send_payout_receipt_email, send_portal_invite_email, send_report_email, send_receipt_email
-from commission_service import sync_invoice_commissions
-from report_service import ReportService
-from datetime import datetime, timezone, timedelta
-from decimal import Decimal
-from typing import Optional, List, Dict, Any
-import json
-import uuid
-import pandas as pd
-import io
-import logging
-
-router = APIRouter()
-logger = logging.getLogger(__name__)
-templates = Jinja2Templates(directory="templates")
-
-@router.get("/procurement-dashboard", response_class=HTMLResponse)
-async def procurement_dashboard(
-    request: Request, 
-    start_date: Optional[str] = None,
-    end_date: Optional[str] = None,
-    current_admin=Depends(require_roles(["super_admin"]))
-):
-    """
-    Estate Development & Procurement Dashboard.
-    Only accessible by Super Admins.
-    """
-    analytics = await ReportService.get_procurement_analytics(start_date, end_date)
-    return templates.TemplateResponse("procurement_dashboard.html", {
-        "request": request,
-        "admin": current_admin,
-        "analytics": analytics
-    })
 
 
 
@@ -2723,45 +2683,49 @@ async def verify_bill_request(
                 bg_tasks.add_task(sync_invoice_commissions, inv_id, db, current_admin['sub'])
                 
                 # 3. Create structural Commission Ledger entry
-                # Resolve beneficiary (Sales Rep email lookup)
-                vendor = req.get("vendors") or {}
-                payee_email = vendor.get("email")
-                
-                if payee_email:
-                    # Look for sales rep first
-                    rep_res = await db_execute(lambda: db.table("sales_reps").select("id").eq("email", payee_email).execute())
-                    sales_rep_id = rep_res.data[0]["id"] if (rep_res.data and len(rep_res.data) > 0) else None
+                if vendor.get("id"):
+                    # Check if already exists to prevent duplicates
+                    existing_ce = await db_execute(lambda: db.table("commission_earnings")
+                        .select("id")
+                        .eq("payment_id", payment_id)
+                        .or_(f"vendor_id.eq.{vendor['id']},sales_rep_id.not.is.null") # Basic check
+                        .execute())
                     
-                    # Create the earnings record
-                    # We use vendor_id for partners and sales_rep_id for staff
-                    earning_payload = {
-                        "invoice_id": inv_id,
-                        "payment_id": payment_id,
-                        "client_id": req["client_id"] if req.get("client_id") else None, 
-                        "estate_name": req.get("title", "").split(": ")[-1], # Fallback
-                        "payment_amount": client_payment_amount,
-                        "commission_rate": float(req.get("wht_rate") or 5.0) * 2, # Rough estimate
-                        "commission_amount": float(req["net_payout_amount"]),
-                        "gross_commission": float(req["amount_gross"]),
-                        "wht_amount": float(req.get("wht_amount") or 0),
-                        "net_commission": float(req["net_payout_amount"]),
-                        "is_paid": False,
-                    }
-                    
-                    if sales_rep_id:
-                        earning_payload["sales_rep_id"] = sales_rep_id
-                    else:
-                        # Partner support (requires the vendor_id column added in migration)
-                        earning_payload["vendor_id"] = vendor.get("id")
-                    
-                    # Try to fetch missing client_id/estate from invoice
-                    inv_meta = await db_execute(lambda: db.table("invoices").select("client_id, property_name").eq("id", inv_id).execute())
-                    if inv_meta.data:
-                        earning_payload["client_id"] = inv_meta.data[0]["client_id"]
-                        earning_payload["estate_name"] = inv_meta.data[0]["property_name"]
+                    if not existing_ce.data:
+                        # Look for sales rep first if email exists
+                        sales_rep_id = None
+                        if payee_email:
+                            rep_res = await db_execute(lambda: db.table("sales_reps").select("id").eq("email", payee_email).execute())
+                            sales_rep_id = rep_res.data[0]["id"] if (rep_res.data and len(rep_res.data) > 0) else None
+                        
+                        # Create the earnings record
+                        earning_payload = {
+                            "invoice_id": inv_id,
+                            "payment_id": payment_id,
+                            "client_id": req["client_id"] if req.get("client_id") else None, 
+                            "estate_name": req.get("title", "").split(": ")[-1], # Fallback
+                            "payment_amount": client_payment_amount,
+                            "commission_rate": float(req.get("wht_rate") or 5.0) * 2, # Rough estimate
+                            "commission_amount": float(req["net_payout_amount"]),
+                            "gross_commission": float(req["amount_gross"]),
+                            "wht_amount": float(req.get("wht_amount") or 0),
+                            "net_commission": float(req["net_payout_amount"]),
+                            "is_paid": False,
+                        }
+                        
+                        if sales_rep_id:
+                            earning_payload["sales_rep_id"] = sales_rep_id
+                        else:
+                            earning_payload["vendor_id"] = vendor.get("id")
+                        
+                        # Try to fetch missing client_id/estate from invoice
+                        inv_meta = await db_execute(lambda: db.table("invoices").select("client_id, property_name").eq("id", inv_id).execute())
+                        if inv_meta.data:
+                            earning_payload["client_id"] = inv_meta.data[0]["client_id"]
+                            earning_payload["estate_name"] = inv_meta.data[0]["property_name"]
 
-                    # INSERT
-                    await db_execute(lambda: db.table("commission_earnings").insert(earning_payload).execute())
+                        # INSERT
+                        await db_execute(lambda: db.table("commission_earnings").insert(earning_payload).execute())
 
     # Update Expenditure Status
     update_payload = {
