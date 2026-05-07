@@ -158,6 +158,9 @@ class StaffProfileUpdate(BaseModel):
     exit_reason: Optional[str] = None
     tin: Optional[str] = None
 
+class TINUpdate(BaseModel):
+    tin: str
+
 class CompanyAssetCreate(BaseModel):
     asset_name: str
     asset_type: Optional[str] = "Equipment"
