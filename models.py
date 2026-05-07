@@ -386,7 +386,8 @@ class CommissionAdjustment(BaseModel):
     adjustment_reason: str
 
 class CommissionPayout(BaseModel):
-    sales_rep_id: str
+    sales_rep_id: Optional[str] = None
+    vendor_id: Optional[str] = None
     earning_ids: list[str]
     reference: Optional[str] = None
     notes: Optional[str] = None

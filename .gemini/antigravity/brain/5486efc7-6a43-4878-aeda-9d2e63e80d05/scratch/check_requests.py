@@ -7,14 +7,11 @@ import json
 
 async def check():
     db = get_db()
-    res = await db_execute(lambda: db.table('expenditure_requests')
-        .select('id, title, status, vendor_id, invoice_id, payment_id, vendors(name)')
-        .neq('status', 'voided')
-        .order('created_at', desc=True)
-        .limit(10)
-        .execute())
+    res = await db_execute(lambda: db.table("sales_reps").select("name, wht_rate").limit(5).execute())
+    print("Sales Rep Rates:", res.data)
     
-    print(json.dumps(res.data, indent=2))
+    res2 = await db_execute(lambda: db.table("commission_earnings").select("wht_amount, wht_rate, gross_commission").limit(5).execute())
+    print("Commission Rates:", res2.data)
 
 if __name__ == "__main__":
     asyncio.run(check())

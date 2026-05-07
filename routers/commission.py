@@ -245,21 +245,32 @@ async def adjust_earnings(id: str, payload: CommissionAdjustment, background_tas
 @router.get("/owed")
 async def summary_owed(current_admin=Depends(verify_token)):
     db = get_db()
-    res = await db_execute(lambda: db.table("commission_earnings").select("*, sales_reps(name)").eq("is_paid", False).eq("is_voided", False).execute())
+    res = await db_execute(lambda: db.table("commission_earnings").select("*, sales_reps(name), vendors(name)").eq("is_paid", False).eq("is_voided", False).execute())
     
-    owed = defaultdict(lambda: {"total": 0.0, "count": 0, "name": "", "partially_paid": False})
+    owed = defaultdict(lambda: {"total": 0.0, "count": 0, "name": "", "partially_paid": False, "type": "rep"})
     for e in res.data:
-        rep_id = e["sales_rep_id"]
-        owed[rep_id]["name"] = e["sales_reps"]["name"] if e.get("sales_reps") else "Unknown"
+        # Use sales_rep_id or vendor_id for grouping
+        group_id = e.get("sales_rep_id") or e.get("vendor_id")
+        if not group_id: continue
+        
+        if e.get("sales_reps"):
+            owed[group_id]["name"] = e["sales_reps"]["name"]
+            owed[group_id]["type"] = "rep"
+        elif e.get("vendors"):
+            owed[group_id]["name"] = e["vendors"]["name"]
+            owed[group_id]["type"] = "vendor"
+        else:
+            owed[group_id]["name"] = "Unknown"
+            
         # Subtract any partial payments already applied
         amount_paid = float(e.get("amount_paid") or 0)
-        balance = float(e["final_amount"]) - amount_paid
-        owed[rep_id]["total"] += balance
-        owed[rep_id]["count"] += 1
+        balance = float(e.get("final_amount") or e.get("commission_amount") or 0) - amount_paid
+        owed[group_id]["total"] += balance
+        owed[group_id]["count"] += 1
         if amount_paid > 0:
-            owed[rep_id]["partially_paid"] = True
+            owed[group_id]["partially_paid"] = True
         
-    result = [{"rep_id": k, **v} for k, v in owed.items()]
+    result = [{"id": k, **v} for k, v in owed.items()]
     return sorted(result, key=lambda x: x["total"], reverse=True)
 
 
@@ -307,13 +318,18 @@ async def mark_payout(payload: CommissionPayout, background_tasks: BackgroundTas
         raise HTTPException(status_code=400, detail=f"Payment amount exceeds total owed (NGN {total_owed:,.2f})")
 
     # Create payout batch record
-    batch = await db_execute(lambda: db.table("payout_batches").insert({
-        "sales_rep_id": payload.sales_rep_id,
+    batch_payload = {
         "total_amount": payment_amount,
         "reference": payload.reference,
         "notes": payload.notes,
         "paid_by": current_admin["sub"]
-    }).execute())
+    }
+    if payload.sales_rep_id:
+        batch_payload["sales_rep_id"] = payload.sales_rep_id
+    if payload.vendor_id:
+        batch_payload["vendor_id"] = payload.vendor_id
+        
+    batch = await db_execute(lambda: db.table("payout_batches").insert(batch_payload).execute())
     batch_id = batch.data[0]["id"]
     
     # --- Waterfall Distribution ---
@@ -423,7 +439,7 @@ async def mark_payout(payload: CommissionPayout, background_tasks: BackgroundTas
 @router.get("/payouts")
 async def list_payouts(rep_id: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, current_admin=Depends(verify_token)):
     db = get_db()
-    query = db.table("payout_batches").select("*, sales_reps(name), admins:paid_by(full_name)").order("paid_at", desc=True)
+    query = db.table("payout_batches").select("*, sales_reps(name), vendors(name), admins:paid_by(full_name)").order("paid_at", desc=True)
     if rep_id:
         query = query.eq("sales_rep_id", rep_id)
     if start_date:
@@ -460,13 +476,18 @@ async def pay_single_commission(id: str, payload: dict, background_tasks: Backgr
     net_amount = float(earning.get("net_commission") or earning.get("final_amount") or earning["commission_amount"])
     
     # 3. Create a mini-batch for this single payout
-    batch = await db_execute(lambda: db.table("payout_batches").insert({
-        "sales_rep_id": earning["sales_rep_id"],
+    batch_payload = {
         "total_amount": net_amount,
         "reference": payload.get("reference", "DIRECT-PAY"),
         "notes": f"Single payout for earning {id}",
         "paid_by": current_admin["sub"]
-    }).execute())
+    }
+    if earning.get("sales_rep_id"):
+        batch_payload["sales_rep_id"] = earning["sales_rep_id"]
+    if earning.get("vendor_id"):
+        batch_payload["vendor_id"] = earning["vendor_id"]
+        
+    batch = await db_execute(lambda: db.table("payout_batches").insert(batch_payload).execute())
     batch_id = batch.data[0]["id"]
 
     # 4. Update the earning record
