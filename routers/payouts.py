@@ -4175,25 +4175,26 @@ async def get_payout_stats(
             # Everything else (Company vendors or tagged 'office') defaults to operational expenses
             cat = "ops"
             
-        # 1. Payout Aggregation (Cash Flow)
-        segment_stats[cat]["paid"] += paid
-        total_paid += paid
-        
-        # 2. Liability Aggregation (Owed) - Mutually Exclusive
-        # Commissions are handled in the second loop (the ledger)
-        if cat != "commissions":
-            segment_stats[cat]["owed"] += owed
-            total_ap += owed
-        
-        # Analytics
+        # Analytics Setup
         p_name = v_info.get('name', 'General Vendor')
         r_name = (r.get('admins') or {}).get('full_name', 'System')
+
+        # 1. Payout Aggregation (Cash Flow) & Liability Aggregation (Owed)
+        # Commissions are handled exclusively in the second loop (the ledger) to avoid double counting
+        if cat != "commissions":
+            segment_stats[cat]["paid"] += paid
+            total_paid += paid
+            segment_stats[cat]["owed"] += owed
+            total_ap += owed
+            total_wht += wht
+            total_gross += gross
+            if owed > 0: 
+                creditors[p_name] = creditors.get(p_name, 0) + owed
+        
+        # Analytics (Always track payees/requesters regardless of cat)
         payees[p_name] = payees.get(p_name, 0) + paid
         requesters[r_name] = requesters.get(r_name, 0) + gross
-        if cat != "commissions" and owed > 0: 
-            creditors[p_name] = creditors.get(p_name, 0) + owed
         
-        total_gross += gross; total_wht += wht
         period_totals[bucket] = period_totals.get(bucket, 0) + gross
 
     # PROCESS COMMISSION EARNINGS (The Ledger of Liability & Legacy Payouts)
@@ -4247,7 +4248,8 @@ async def get_payout_stats(
         elif age_days <= 90: aging["61-90"] += unpaid
         else: aging["90+"] += unpaid
 
-    # WHT Compliance (from Paid records)
+    # WHT Compliance (Unified: Expenditures + Commissions)
+    # 1. Expenditures
     comp_res = await db_execute(lambda: db.table("expenditure_requests")
         .select("wht_amount, is_wht_remitted")
         .gt("wht_amount", 0)
@@ -4257,6 +4259,30 @@ async def get_payout_stats(
         val = float(r['wht_amount'] or 0)
         if r.get('is_wht_remitted'): compliance["remitted"] += val
         else: compliance["pending"] += val
+
+    # 2. Commissions
+    try:
+        comm_comp_res = await db_execute(lambda: db.table("commission_earnings")
+            .select("wht_amount, is_wht_remitted")
+            .gt("wht_amount", 0)
+            .eq("is_paid", True)
+            .execute())
+        for c in (comm_comp_res.data or []):
+            val = float(c.get('wht_amount') or 0)
+            if c.get('is_wht_remitted'): compliance["remitted"] += val
+            else: compliance["pending"] += val
+    except Exception as e:
+        if "is_wht_remitted" in str(e):
+            # Fallback: Count all paid commission WHT as pending
+            comm_pending_res = await db_execute(lambda: db.table("commission_earnings")
+                .select("wht_amount")
+                .gt("wht_amount", 0)
+                .eq("is_paid", True)
+                .execute())
+            for c in (comm_pending_res.data or []):
+                compliance["pending"] += float(c.get('wht_amount') or 0)
+        else:
+            raise
 
     # Global Metrics (Current Snapshot)
     active_res = await db_execute(lambda: db.table("expenditure_requests").select("id", count="exact").eq("status", "pending").execute())

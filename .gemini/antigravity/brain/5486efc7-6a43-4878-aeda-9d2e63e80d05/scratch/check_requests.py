@@ -7,11 +7,8 @@ import json
 
 async def check():
     db = get_db()
-    res = await db_execute(lambda: db.table("sales_reps").select("name, wht_rate").limit(5).execute())
-    print("Sales Rep Rates:", res.data)
-    
-    res2 = await db_execute(lambda: db.table("commission_earnings").select("wht_amount, wht_rate, gross_commission").limit(5).execute())
-    print("Commission Rates:", res2.data)
+    res = await db_execute(lambda: db.rpc("exec_sql", {"sql_body": "SELECT column_name FROM information_schema.columns WHERE table_name = 'commission_earnings'"}).execute())
+    print("Commission Columns:", [r["column_name"] for r in res.data])
 
 if __name__ == "__main__":
     asyncio.run(check())

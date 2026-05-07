@@ -3688,7 +3688,46 @@
         let whtPendingList = [];
 
         function openWhtRemittanceModal() {
-            whtPendingList = requestsData.filter(r => (r.status === 'paid' || r.status === 'partially_paid') && !r.is_wht_remitted && (r.wht_amount || 0) > 0);
+            // --- Source 1: Payout Portal WHT (expenditure_requests) ---
+            const payoutWht = (requestsData || []).filter(r =>
+                (r.status === 'paid' || r.status === 'partially_paid') &&
+                !r.is_wht_remitted &&
+                (r.wht_amount || 0) > 0
+            ).map(r => ({
+                id: r.id,
+                type: 'payout',
+                date: r.paid_at ? new Date(r.paid_at).toLocaleDateString() : 'N/A',
+                payee: r.vendors?.name || r.admins?.full_name || 'N/A',
+                label: r.title || 'Payout Claim',
+                wht_amount: r.wht_amount
+            }));
+
+            // Track invoice numbers from payouts to avoid duplicates
+            const payoutInvoices = new Set();
+            payoutWht.forEach(p => {
+                const match = p.label.match(/EC-\d+/);
+                if (match) payoutInvoices.add(match[0]);
+            });
+
+            // --- Source 2: Commission Ledger WHT (commission_earnings) ---
+            const commWht = (window.commissionData || []).filter(c =>
+                c.is_paid &&
+                !c.is_wht_remitted &&
+                (c.wht_amount || 0) > 0
+            ).map(c => {
+                const invNum = c.invoices?.invoice_number || 'Direct';
+                return {
+                    id: c.id,
+                    type: 'commission',
+                    date: c.paid_at ? new Date(c.paid_at).toLocaleDateString() : 'N/A',
+                    payee: c.sales_reps?.name || c.vendors?.name || 'Unknown',
+                    label: `Commission: ${invNum}`,
+                    invKey: invNum,
+                    wht_amount: c.wht_amount
+                };
+            }).filter(c => !payoutInvoices.has(c.invKey));
+
+            whtPendingList = [...payoutWht, ...commWht];
 
             const tbody = document.getElementById('wht-checklist-body');
             if (whtPendingList.length === 0) {
@@ -3697,13 +3736,18 @@
             } else {
                 document.getElementById('wht-select-all').disabled = false;
                 document.getElementById('wht-select-all').checked = false;
-                tbody.innerHTML = whtPendingList.map(req => `
+                tbody.innerHTML = whtPendingList.map(item => `
                     <tr>
-                        <td><input type="checkbox" class="wht-checkbox" value="${req.id}" data-amount="${req.wht_amount}" onclick="calcWhtTotal()" style="accent-color:var(--gold);"></td>
-                        <td>${req.paid_at ? new Date(req.paid_at).toLocaleDateString() : 'N/A'}</td>
-                        <td style="font-weight:700;">${req.vendors?.name || 'N/A'}</td>
-                        <td style="font-size:11px; color:var(--gray);">${req.title}</td>
-                        <td style="color:var(--error); font-weight:700;">₦${req.wht_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
+                        <td><input type="checkbox" class="wht-checkbox" value="${item.id}" data-amount="${item.wht_amount}" data-type="${item.type}" onclick="calcWhtTotal()" style="accent-color:var(--gold);"></td>
+                        <td>${item.date}</td>
+                        <td style="font-weight:700;">${item.payee}</td>
+                        <td style="font-size:11px; color:var(--gray);">
+                            ${item.label}
+                            <span style="font-size:9px; font-weight:700; color:${item.type === 'commission' ? 'var(--gold)' : 'var(--gray)'}; border:1px solid; padding:1px 5px; border-radius:3px; margin-left:4px;">
+                                ${item.type === 'commission' ? 'COMMISSION' : 'PAYOUT'}
+                            </span>
+                        </td>
+                        <td style="color:var(--error); font-weight:700;">₦${parseFloat(item.wht_amount).toLocaleString(undefined, { minimumFractionDigits: 2 })}</td>
                     </tr>
                 `).join('');
             }
@@ -3734,26 +3778,51 @@
             }
 
             const checkboxes = document.querySelectorAll('.wht-checkbox:checked');
-            const ids = Array.from(checkboxes).map(cb => cb.value);
-
-            if (ids.length === 0) {
+            if (checkboxes.length === 0) {
                 toast("Select at least one liability to clear.", "error");
                 return;
             }
 
-            try {
-                const res = await apiFetch(`/api/payouts/requests/remit-wht`, {
-                    method: 'POST',
-                    body: JSON.stringify({ receipt_reference: ref, request_ids: ids })
-                });
-
-                if (res.ok) {
-                    toast(`Successfully cleared ${ids.length} WHT liabilities`, "success");
-                    closeModal('whtRemittanceModal');
-                    fetchRequests();
+            // Split IDs by type
+            const payoutIds = [];
+            const commissionIds = [];
+            checkboxes.forEach(cb => {
+                if (cb.getAttribute('data-type') === 'commission') {
+                    commissionIds.push(cb.value);
                 } else {
-                    const err = await res.json();
-                    toast(err.detail || "Remittance Failed", "error");
+                    payoutIds.push(cb.value);
+                }
+            });
+
+            try {
+                const promises = [];
+
+                // Route payout WHT to payout endpoint
+                if (payoutIds.length > 0) {
+                    promises.push(apiFetch(`/api/payouts/requests/remit-wht`, {
+                        method: 'POST',
+                        body: JSON.stringify({ receipt_reference: ref, request_ids: payoutIds })
+                    }));
+                }
+
+                // Route commission WHT to commission endpoint
+                if (commissionIds.length > 0) {
+                    promises.push(apiFetch(`/api/commission/remit-wht`, {
+                        method: 'POST',
+                        body: JSON.stringify({ receipt_reference: ref, ids: commissionIds })
+                    }));
+                }
+
+                const results = await Promise.all(promises);
+                const allOk = results.every(r => r.ok);
+
+                if (allOk) {
+                    toast(`Successfully cleared ${checkboxes.length} WHT liabilities`, "success");
+                    closeModal('whtRemittanceModal');
+                    await Promise.all([fetchRequests(), fetchCommissions(), fetchStats()]);
+                } else {
+                    const errs = await Promise.all(results.filter(r => !r.ok).map(r => r.json()));
+                    toast(errs[0]?.detail || "Remittance partially failed", "error");
                 }
             } catch (e) {
                 toast("Network Error", "error");
