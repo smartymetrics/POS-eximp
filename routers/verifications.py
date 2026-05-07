@@ -146,28 +146,62 @@ async def confirm_verification(
             rep = rep_res.data[0]
             
     if rep_id:
-            # Use the rate logic with configurations
-            config = get_commission_config(
-                sales_rep_id=rep_id,
-                estate_name=invoice["property_name"],
-                verification_date=date.today(),
-                db=db
-            )
             deposit = float(verify_rec["deposit_amount"])
-            gross_comm = round(deposit * config["gross_rate"] / 100, 2)
-            wht_amt = round(gross_comm * config["wht_rate"] / 100, 2)
-            net_comm = gross_comm - wht_amt
-            
-            # Robust payment lookup: try reference first, then any payment on this invoice with 'deposit'
-            ref = f"{verify_rec['payment_date']}_form_deposit"
+            is_portal_source = verify_rec.get("source") == "portal"
+
+            if is_portal_source:
+                # Portal submissions: read rates directly from system_settings.
+                # submission_type tells us which rate bucket to use.
+                _sys_res = await db_execute(lambda: db.table("system_settings")
+                    .select("key, value")
+                    .in_("key", ["default_commission_rate", "default_partner_commission_rate", "default_wht_rate"])
+                    .execute()
+                )
+                _sys = {s["key"]: s["value"] for s in (_sys_res.data or [])}
+
+                def _pct(key, fallback):
+                    try:
+                        v = float(_sys.get(key) or fallback)
+                        return v if v <= 1 else v / 100
+                    except Exception:
+                        return fallback
+
+                sub_type = verify_rec.get("submission_type", "")
+                if sub_type == "partner":
+                    gross_rate = _pct("default_partner_commission_rate", 0.15)
+                else:
+                    gross_rate = _pct("default_commission_rate", 0.10)
+                wht_rate = _pct("default_wht_rate", 0.05)
+
+                gross_comm = round(deposit * gross_rate, 2)
+                wht_amt    = round(gross_comm * wht_rate, 2)
+                net_comm   = gross_comm - wht_amt
+            else:
+                # Subscription form: use the full per-rep waterfall as before
+                config = get_commission_config(
+                    sales_rep_id=rep_id,
+                    estate_name=invoice["property_name"],
+                    verification_date=date.today(),
+                    db=db
+                )
+                gross_comm = round(deposit * config["gross_rate"] / 100, 2)
+                wht_amt    = round(gross_comm * config["wht_rate"] / 100, 2)
+                net_comm   = gross_comm - wht_amt
+
+            # Payment reference — differs by source so lookups never cross-match
+            if is_portal_source:
+                ref = f"{verify_rec['payment_date']}_portal_reported"
+            else:
+                ref = f"{verify_rec['payment_date']}_form_deposit"
             
             pay_res = await db_execute(lambda: db.table("payments").select("id").eq("invoice_id", invoice["id"]).eq("reference", ref).execute())
             if not pay_res.data:
-                 # Fallback: find any payment on this invoice with webhook-style reference
+                 # Fallback: find any payment on this invoice matching the source pattern
+                 ref_pattern = "%portal_reported" if is_portal_source else "%form_deposit"
                  pay_res = await db_execute(lambda: db.table("payments")\
                     .select("id")\
                     .eq("invoice_id", invoice["id"])\
-                    .ilike("reference", "%form_deposit")\
+                    .ilike("reference", ref_pattern)\
                     .execute())
 
             payment_id = None
@@ -183,7 +217,7 @@ async def confirm_verification(
                     "reference": ref,
                     "payment_date": verify_rec.get("payment_date") or str(date.today()),
                     "payment_method": "Bank Transfer", # Verified manually
-                    "notes": "Verified deposit from subscription portal"
+                    "notes": "Verified portal-reported payment" if is_portal_source else "Verified deposit from subscription portal"
                 }
                 new_pay = await db_execute(lambda: db.table("payments").insert(jsonable_encoder(payment_payload)).execute())
                 if new_pay.data:

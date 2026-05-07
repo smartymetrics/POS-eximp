@@ -941,6 +941,10 @@ async def submit_payout_claim_from_portal(
     property_price: Optional[float] = Form(None),    # full property value (for deposit commission)
     is_dispute: bool = Form(False),                  # True when another rep is already assigned
     dispute_reason: Optional[str] = Form(None),      # required when is_dispute=True
+    # ── Portal payment verification field ──
+    # Only sent when the invoice has no existing unpaid commission claim.
+    # Represents the actual amount the client paid (not the commission).
+    client_paid_amount: Optional[float] = Form(None),
     files: List[UploadFile] = File(default=[])  # Accepts one or many proof uploads
 ):
     """
@@ -1249,6 +1253,30 @@ async def submit_payout_claim_from_portal(
     }
 
     await db_execute(lambda: db.table("expenditure_requests").insert(payload).execute())
+
+    # ── Portal Payment Verification ──
+    # When the claimant supplies a client_paid_amount (only shown when the invoice
+    # has no existing unpaid commission claim), create a pending_verifications row
+    # so Finance can confirm it in the Verifications tab — badged as "Portal".
+    if client_paid_amount and client_paid_amount > 0 and linked_invoice_id and type in ("partner", "staff_commission"):
+        try:
+            inv_for_verif = await db_execute(lambda: db.table("invoices").select("client_id").eq("id", linked_invoice_id).execute())
+            verif_client_id = inv_for_verif.data[0]["client_id"] if inv_for_verif.data else None
+            if verif_client_id:
+                verif_payload = {
+                    "invoice_id": linked_invoice_id,
+                    "client_id": verif_client_id,
+                    "deposit_amount": float(client_paid_amount),
+                    "payment_proof_url": file_url,
+                    "payment_date": datetime.now(timezone.utc).date().isoformat(),
+                    "sales_rep_name": payee_name,
+                    "status": "pending",
+                    "source": "portal",
+                    "submission_type": type,  # "partner" or "staff_commission"
+                }
+                await db_execute(lambda: db.table("pending_verifications").insert(verif_payload).execute())
+        except Exception as verif_err:
+            print(f"[WARN] Failed to create pending_verifications row for portal submission: {verif_err}")
 
     # Notify all HRM admins of new payout/commission submission
     try:

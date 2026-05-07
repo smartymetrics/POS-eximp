@@ -542,6 +542,26 @@
                     </div>
                 </div>
 
+                <!-- Client paid amount — only shown when invoice has no pending commission claim -->
+                <div id="client-paid-section" class="hidden" style="margin-top:14px;">
+                    <div
+                        style="padding:12px 14px; background:rgba(99,102,241,0.06); border:1px solid rgba(99,102,241,0.2); border-radius:12px;">
+                        <div
+                            style="font-size:11px; font-weight:700; color:#6366f1; text-transform:uppercase; letter-spacing:0.05em; margin-bottom:8px;">
+                            <i class="fas fa-money-bill-wave" style="margin-right:5px;"></i>Client Payment Amount
+                        </div>
+                        <div style="font-size:11px; color:var(--muted); margin-bottom:10px; line-height:1.5;">
+                            Enter the actual amount paid by the client. This lets Finance verify the
+                            payment before your commission claim is processed.
+                        </div>
+                        <div class="input-wrapper">
+                            <i class="fas fa-naira-sign"></i>
+                            <input type="number" id="client_paid_amount" min="0" step="0.01"
+                                placeholder="Amount client paid (e.g. 500000)">
+                        </div>
+                    </div>
+                </div>
+
                 <input type="hidden" id="hid_payment_type"><input type="hidden" id="hid_property_price"><input
                     type="hidden" id="hid_is_dispute" value="false"><input type="hidden" id="hid_invoice_id">
             </div>
@@ -1110,6 +1130,22 @@
             }
 
             // ── Hidden fields for submit ──
+            // ── Client-paid-amount field visibility ──
+            // Show when: it's a commission tab AND the invoice has no pending commission claims yet.
+            // This lets the partner/staff report the client's payment for Finance to verify.
+            const clientPaidSection = document.getElementById('client-paid-section');
+            const isCommissionTabForPaid = (currentTab === 'partner' || (currentTab === 'disbursement' && subTab === 'staff_commission'));
+            const hasPendingClaims = (d.pending_portal_claims || []).length > 0;
+            if (clientPaidSection) {
+                if (isCommissionTabForPaid && !hasPendingClaims) {
+                    clientPaidSection.classList.remove('hidden');
+                } else {
+                    clientPaidSection.classList.add('hidden');
+                    const cpAmtEl = document.getElementById('client_paid_amount');
+                    if (cpAmtEl) cpAmtEl.value = '';
+                }
+            }
+
             const hidPt = document.getElementById('hid_payment_type'); if (hidPt) hidPt.value = d.payment_type;
             const hidInv = document.getElementById('hid_invoice_id'); if (hidInv) hidInv.value = d.invoice_id;
             const invResultEl = document.getElementById('inv-result'); if (invResultEl) invResultEl.classList.remove('hidden');
@@ -1179,6 +1215,13 @@
             formData.append('payment_type', document.getElementById('hid_payment_type').value);
             formData.append('is_dispute', isDispute);
             formData.append('dispute_reason', isDispute ? document.getElementById('dispute_reason').value : "");
+
+            // Portal payment verification — only append when the field is visible
+            const cpSection = document.getElementById('client-paid-section');
+            const cpAmtEl = document.getElementById('client_paid_amount');
+            if (cpSection && !cpSection.classList.contains('hidden') && cpAmtEl && cpAmtEl.value) {
+                formData.append('client_paid_amount', cpAmtEl.value);
+            }
 
             // Logic for Remarks vs Dropdown
             const isOffice = (currentTab === 'disbursement' && subTab === 'office');
