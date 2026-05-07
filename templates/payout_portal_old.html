@@ -953,9 +953,7 @@
         }
 
         function updateReadonlyAmountDisplay(d) {
-            // Populate the readonly commission summary card with resolved figures.
-            // This is a PREVIEW only — the actual payout amounts are driven by
-            // the per-row checkboxes in the payment history table (selectedClaims).
+            // Populate the readonly commission summary card with resolved figures
             const commRate = d.commission_rate || 0.10;
             const whtRate = d.commission_wht || 0.05;
             const netRate = d.commission_net_rate || (commRate * (1 - whtRate));
@@ -964,10 +962,6 @@
             const base = nextUnclaimed ? nextUnclaimed.commission_base
                 : (d.payment_type === 'initial_deposit' ? d.property_price : null);
 
-            const isDeposit = nextUnclaimed
-                ? nextUnclaimed.payment_type === 'initial_deposit'
-                : d.payment_type === 'initial_deposit';
-
             const gross = base ? Math.round(base * commRate) : null;
             const net = base ? Math.round(base * netRate) : null;
 
@@ -975,21 +969,13 @@
             const roGross = document.getElementById('ro-gross');
             const roNet = document.getElementById('ro-net');
 
-            // For initial deposits, commission is calculated on the FULL property price
-            // (not just the deposit instalment amount). Show this clearly.
-            const baseLabel = base
-                ? '₦' + base.toLocaleString() + (isDeposit ? ' (full price)' : '')
-                : '—';
-            if (roBase) roBase.innerText = baseLabel;
+            if (roBase) roBase.innerText = base ? '₦' + base.toLocaleString() : '—';
             if (roGross) roGross.innerText = gross ? '₦' + gross.toLocaleString() : '—';
             if (roNet) roNet.innerText = net ? '₦' + net.toLocaleString() : '—';
 
-            // For commission tabs the backend recalculates the actual payout from the
-            // payment_id and invoice — do NOT forward the commission_base (property price)
-            // as claim_amount or the backend will use it as the raw claim figure.
-            // Zero it out; the bulk submit path uses the claims[] array instead.
+            // Also populate the hidden input so the backend still receives the value
             const input = document.getElementById('claim_amount');
-            if (input) input.value = 0;
+            if (input && base) input.value = base;
         }
 
         async function lookupInvoice() {
@@ -1073,20 +1059,16 @@
                     const commBase = p.commission_base || (isDeposit ? d.property_price : p.amount);
                     const grossComm = Math.round(commBase * commRate);
                     const netComm = Math.round(commBase * netRate);
-                    const status = p.commission_status; // "paid" | "pending" | "unclaimed"
-                    // Only "unclaimed" payments can be selected — no existing claim at all
+                    const status = p.commission_status; // "claimed" | "pending" | "unclaimed"
                     const canSelect = status === 'unclaimed';
 
                     // Status chip
                     let chipHTML = '';
-                    if (status === 'paid') {
-                        // Commission was confirmed & paid out via the ledger
-                        chipHTML = '<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;background:rgba(16,185,129,0.12);color:var(--success);">✓ Paid</span>';
+                    if (status === 'claimed') {
+                        chipHTML = '<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;background:rgba(16,185,129,0.12);color:var(--success);">✓ Claimed</span>';
                     } else if (status === 'pending') {
-                        // A portal claim already exists for this payment — awaiting approval
                         chipHTML = '<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;background:rgba(234,179,8,0.12);color:#EAB308;">⏳ In Queue</span>';
                     } else {
-                        // Unclaimed — show the claimable net commission amount
                         chipHTML = `<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;background:rgba(196,125,10,0.12);color:var(--brand);">₦${netComm.toLocaleString()} net</span>`;
                     }
 

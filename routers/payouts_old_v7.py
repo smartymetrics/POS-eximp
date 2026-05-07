@@ -257,11 +257,7 @@ async def verify_bill_request(
     
     if action == 'pending':
         # --- BI-DIRECTIONAL SYNC (Revenue CRM) ---
-        # BUG FIX #1 & #2: Only create payments for commission claims (initial_deposit, instalment).
-        # Non-commission claims (office expenditures, contractor payouts) should not pollute payments table.
-        is_commission = req.get("payment_type") in ["initial_deposit", "instalment"]
-        
-        if req.get("invoice_id") and is_commission:
+        if req.get("invoice_id"):
             inv_id = req["invoice_id"]
             # Fetch Invoice and Client for receipting
             inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", inv_id).execute())
@@ -269,24 +265,24 @@ async def verify_bill_request(
                 invoice = inv_res.data[0]
                 client = invoice.get("clients")
                 # 1. Update Invoice Balance
-                # BUG FIX #1: Extract the actual client payment amount from description field.
-                # Portal submit stores: f"Portal submission via {type}\nClientAmt: {commission_base}"
-                # commission_base is the actual client payment amount, not the commission.
-                try:
-                    # Parse ClientAmt: from description
-                    desc = req.get("description", "")
-                    if "ClientAmt: " in desc:
-                        client_payment_amount = float(desc.split("ClientAmt: ")[-1].split()[0])
+                # Note: We need the client's payment amount, not the commission (gross).
+                # The commission_base is what we want. We'll try to extract it from the claim or metadata.
+                # For now, if it's a commission claim, we reverse-calc the payment amount from the gross commission.
+                is_commission = req.get("payment_type") in ["initial_deposit", "instalment"]
+                client_payment_amount = float(req["amount_gross"])
+                if is_commission:
+                    # gross = payment * rate -> payment = gross / rate
+                    # BUG FIX: Handle wht_rate as a decimal (0.05) or percentage (5.0)
+                    rate = float(req.get("wht_rate", 0.1))
+                    if rate > 1.0: rate = rate / 100.0
+                    
+                    if rate > 0:
+                        client_payment_amount = float(req["amount_gross"]) / rate
                     else:
-                        # Fallback: if old format, try old Amt: pattern
-                        if "Amt: " in desc:
-                            client_payment_amount = float(desc.split("Amt: ")[-1].split()[0])
-                        else:
-                            # Last resort: use commission_base from request if stored
-                            client_payment_amount = float(req.get("commission_base", req["amount_gross"]))
-                except (ValueError, IndexError):
-                    # If parsing fails, use commission_base or fall back to amount_gross
-                    client_payment_amount = float(req.get("commission_base", req["amount_gross"]))
+                        client_payment_amount = float(req["amount_gross"])
+                    # Actually, let's use the property_price if initial_deposit, else try to find the payment amount
+                    # I'll update the portal submit to store the payment_amount in metadata
+                    client_payment_amount = float(req.get("description", "").split("Amt: ")[-1].split()[0]) if "Amt: " in req.get("description", "") else float(req["amount_gross"])
                 
                 new_paid = float(invoice.get("amount_paid", 0)) + client_payment_amount
                 await db_execute(lambda: db.table("invoices").update({"amount_paid": new_paid, "status": "paid" if new_paid >= float(invoice["amount"]) else "partial"}).eq("id", inv_id).execute())
@@ -299,27 +295,16 @@ async def verify_bill_request(
                         if rep_res.data:
                             await db_execute(lambda: db.table("invoices").update({"sales_rep_id": rep_res.data[0]["id"]}).eq("id", inv_id).execute())
 
-                # 3. Log CRM Payment (only for commission claims)
-                # BUG FIX #5: Check if payment already exists before inserting to prevent duplicates
-                # This can happen if bulk_submit already created the payment and then Finance clicks Verify.
-                existing_pmt = await db_execute(lambda: db.table("payments")
-                    .select("id")
-                    .eq("invoice_id", inv_id)
-                    .eq("amount", client_payment_amount)
-                    .ilike("reference", f"CLAIM-%")
-                    .execute()
-                )
-                
-                if not existing_pmt.data:
-                    payment_payload = {
-                        "client_id": invoice["client_id"],
-                        "invoice_id": inv_id,
-                        "amount": client_payment_amount,
-                        "payment_method": "portal_reported",
-                        "reference": f"CLAIM-{req['id'][:8]}",
-                        "payment_date": datetime.now(timezone.utc).isoformat(),
-                    }
-                    await db_execute(lambda: db.table("payments").insert(payment_payload).execute())
+                # 3. Log CRM Payment
+                payment_payload = {
+                    "client_id": invoice["client_id"],
+                    "invoice_id": inv_id,
+                    "amount": client_payment_amount,
+                    "payment_method": "portal_reported",
+                    "reference": f"CLAIM-{req['id'][:8]}",
+                    "payment_date": datetime.now(timezone.utc).isoformat(),
+                }
+                await db_execute(lambda: db.table("payments").insert(payment_payload).execute())
 
                 # 4. Sync Commission Ledger (Option A)
                 # This will create the commission_earnings record for the rep
@@ -898,7 +883,7 @@ def _build_previous_payments(all_payments, ledger_claimed_ids, unclaimed_payment
             "method": p.get("payment_method") or "—",
             "payment_type": "initial_deposit" if i == 0 else "instalment",
             "commission_status": (
-                "paid"      if p["id"] in ledger_claimed_ids else
+                "claimed"   if p["id"] in ledger_claimed_ids else
                 "unclaimed" if p["id"] in _unclaimed_ids else
                 "pending"
             ),
@@ -1238,18 +1223,9 @@ async def submit_payout_claim_from_portal(
             file_url = json.dumps(uploaded_paths)  # JSON array for multi-file
 
     # 4. Create Record
-    # BUG FIX for Bug #1: Store actual client payment (commission_base) in description, not commission (gross)
-    # For commission types: commission_base is the actual payment, gross is calculated commission
-    # For other types: gross is the amount paid
-    if type in ["staff_commission", "partner"]:
-        # Store both the client amount and the commission for audit trail
-        description = f"Portal submission via {type}\nClientAmt: {commission_base}\nCommission: {gross}"
-    else:
-        description = f"Portal submission via {type}\nAmt: {gross}"
-    
     payload = {
         "title": title,
-        "description": description,
+        "description": f"Portal submission via {type}\nAmt: {gross}",
         "remarks": remarks or None,
         "vendor_id": vendor_id,
         "invoice_id": linked_invoice_id,
@@ -1257,7 +1233,6 @@ async def submit_payout_claim_from_portal(
         "wht_rate": 5 if type in ["staff_commission", "partner"] else 0,
         "wht_amount": float(wht),
         "net_payout_amount": float(net),
-        "commission_base": float(commission_base) if type in ["staff_commission", "partner"] else float(gross),
         "receipt_url": file_url,
         "status": final_status,
         "payout_reference": payout_reference if final_status == "paid" else None,
@@ -3341,7 +3316,7 @@ def _build_previous_payments(all_payments, ledger_claimed_ids, unclaimed_payment
             "method": p.get("payment_method") or "—",
             "payment_type": "initial_deposit" if i == 0 else "instalment",
             "commission_status": (
-                "paid"      if p["id"] in ledger_claimed_ids else
+                "claimed"   if p["id"] in ledger_claimed_ids else
                 "unclaimed" if p["id"] in _unclaimed_ids else
                 "pending"
             ),
