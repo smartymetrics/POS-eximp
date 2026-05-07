@@ -224,6 +224,8 @@ async def confirm_verification(
                     payment_id = new_pay.data[0]["id"]
             
             if payment_id:
+                # commission_rate stored as percentage (e.g. 10.0), not decimal
+                stored_rate = round(gross_rate * 100, 4) if is_portal_source else config["gross_rate"]
                 # Insert professional earnings record
                 earning_res = await db_execute(lambda: db.table("commission_earnings").insert({
                     "sales_rep_id": rep_id,
@@ -232,7 +234,7 @@ async def confirm_verification(
                     "client_id": client["id"],
                     "estate_name": invoice["property_name"],
                     "payment_amount": deposit,
-                    "commission_rate": config["gross_rate"],
+                    "commission_rate": stored_rate,
                     "commission_amount": net_comm, # Compatibility field
                     "gross_commission": gross_comm,
                     "wht_amount": wht_amt,
@@ -248,6 +250,10 @@ async def confirm_verification(
                         invoice=invoice,
                         earning=earning
                     )
+
+    # Sync invoice amount_paid and pipeline stage from payments table
+    from commission_service import sync_invoice_commissions
+    background_tasks.add_task(sync_invoice_commissions, invoice_id=verify_rec["invoice_id"], db=db, performed_by=current_admin["sub"])
 
     # 4. Send Documents
     background_tasks.add_task(send_receipt_and_statement_email, invoice, client, all_inv.data)
