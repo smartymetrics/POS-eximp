@@ -875,6 +875,16 @@ async def portal_lookup_invoice(invoice_number: str, claimant_email: Optional[st
         # Frontend uses this to warn the claimant about missed commissions.
         "unclaimed_payments": unclaimed_payments,
         "unclaimed_count": len(unclaimed_payments),
+        # Portal claims that are pending verification/approval (not yet paid, not rejected)
+        # Frontend shows these so the claimant knows what's already in the queue.
+        "pending_portal_claims": [
+            {
+                "payment_type": c.get("payment_type"),
+                "status": c.get("status"),
+            }
+            for c in portal_claims
+            if c.get("status") not in ("rejected", "paid")
+        ],
         # ── Full payment history ──
         "previous_payments": [
             {

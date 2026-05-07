@@ -584,9 +584,40 @@
                 <div class="form-group"
                     style="padding: 20px; background: rgba(196,125,10,0.03); border: 1px solid var(--border); border-radius: 16px;">
                     <label style="color:var(--brand);" id="amount-label">Claim Amount (NGN)</label>
-                    <div class="input-wrapper">
+
+                    <!-- Shown for office/contractor tabs — free entry -->
+                    <div class="input-wrapper" id="claim-amount-wrap">
                         <i class="fas fa-coins"></i>
                         <input type="number" id="claim_amount" required step="0.01" placeholder="0.00">
+                    </div>
+
+                    <!-- Shown for staff/partner after invoice verified — readonly summary -->
+                    <div id="claim-amount-readonly" class="hidden"
+                        style="padding:14px 16px; background:rgba(196,125,10,0.06); border:1px solid rgba(196,125,10,0.2); border-radius:12px;">
+                        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; font-size:12px;">
+                            <div>
+                                <div
+                                    style="color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:0.05em;">
+                                    Commission Base</div>
+                                <div id="ro-base" style="font-weight:700; color:var(--text); margin-top:3px;">—</div>
+                            </div>
+                            <div>
+                                <div
+                                    style="color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:0.05em;">
+                                    Gross Commission</div>
+                                <div id="ro-gross" style="font-weight:700; color:var(--brand); margin-top:3px;">—</div>
+                            </div>
+                            <div>
+                                <div
+                                    style="color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:0.05em;">
+                                    Net After WHT</div>
+                                <div id="ro-net" style="font-weight:700; color:var(--success); margin-top:3px;">—</div>
+                            </div>
+                        </div>
+                        <div style="margin-top:8px; font-size:10px; color:var(--muted);">
+                            <i class="fas fa-lock" style="margin-right:4px;"></i>Commission calculated automatically
+                            from invoice data. No manual entry needed.
+                        </div>
                     </div>
                     <div id="already-paid-wrap" class="checkbox-row">
                         <input type="checkbox" id="already_paid" onchange="toggleAlreadyPaid()">
@@ -771,7 +802,9 @@
                 // immediately re-hide the invoice section when passed 'partner'.
                 invSection.classList.remove('hidden');
                 const labelEl = document.getElementById('amount-label');
-                if (labelEl) labelEl.innerText = 'Enter Amount Paid by Client (NGN)';
+                if (labelEl) labelEl.innerText = 'Commission Summary';
+                // Reset to editable until invoice is verified
+                showAmountField(true);
             }
             validateLookupState();
         }
@@ -798,8 +831,10 @@
             const labelEl = document.getElementById('amount-label');
             if (labelEl) {
                 const isCommission = (currentTab === 'partner' || (currentTab === 'disbursement' && subTab === 'staff_commission'));
-                labelEl.innerText = isCommission ? "Enter Amount Paid by Client (NGN)" : "Claim Amount (NGN)";
+                labelEl.innerText = isCommission ? 'Commission Summary' : 'Claim Amount (NGN)';
             }
+            // Reset to editable input when switching sub-tabs — invoice not yet verified
+            showAmountField(true);
         }
 
         function validateLookupState() {
@@ -838,6 +873,53 @@
         function clearInvoiceResult() {
             invoiceData = null;
             ['inv-result', 'inv-error', 'inv-loading'].forEach(id => document.getElementById(id).classList.add('hidden'));
+            // Reset amount field to editable when invoice is cleared
+            const isCommission = (currentTab === 'partner' || (currentTab === 'disbursement' && subTab === 'staff_commission'));
+            if (isCommission) showAmountField(true);
+        }
+
+        function showAmountField(editable) {
+            // editable=true  → show free-entry input (office/contractor or before invoice verified)
+            // editable=false → show readonly commission summary (after invoice verified for staff/partner)
+            const wrap = document.getElementById('claim-amount-wrap');
+            const readonly = document.getElementById('claim-amount-readonly');
+            const input = document.getElementById('claim_amount');
+            if (!wrap || !readonly) return;
+            if (editable) {
+                wrap.classList.remove('hidden');
+                readonly.classList.add('hidden');
+                if (input) input.required = true;
+            } else {
+                wrap.classList.add('hidden');
+                readonly.classList.remove('hidden');
+                if (input) input.required = false; // not required — backend computes it
+            }
+        }
+
+        function updateReadonlyAmountDisplay(d) {
+            // Populate the readonly commission summary card with resolved figures
+            const commRate = d.commission_rate || 0.10;
+            const whtRate = d.commission_wht || 0.05;
+            const netRate = d.commission_net_rate || (commRate * (1 - whtRate));
+
+            const nextUnclaimed = (d.unclaimed_payments || [])[0];
+            const base = nextUnclaimed ? nextUnclaimed.commission_base
+                : (d.payment_type === 'initial_deposit' ? d.property_price : null);
+
+            const gross = base ? Math.round(base * commRate) : null;
+            const net = base ? Math.round(base * netRate) : null;
+
+            const roBase = document.getElementById('ro-base');
+            const roGross = document.getElementById('ro-gross');
+            const roNet = document.getElementById('ro-net');
+
+            if (roBase) roBase.innerText = base ? '₦' + base.toLocaleString() : '—';
+            if (roGross) roGross.innerText = gross ? '₦' + gross.toLocaleString() : '—';
+            if (roNet) roNet.innerText = net ? '₦' + net.toLocaleString() : '—';
+
+            // Also populate the hidden input so the backend still receives the value
+            const input = document.getElementById('claim_amount');
+            if (input && base) input.value = base;
         }
 
         async function lookupInvoice() {
@@ -920,36 +1002,70 @@
             }
 
             const unclaimedCount = (d.unclaimed_payments || []).length;
-            if (missedBanner && unclaimedCount > 1) {
-                // Multiple unclaimed — show each one so claimant knows what's outstanding
+            const pendingClaims = d.pending_portal_claims || [];
+
+            // Build banner content
+            let bannerHTML = '';
+
+            if (unclaimedCount > 1) {
+                // Multiple payments with no claim at all — list them
                 const rows = d.unclaimed_payments.map((p, i) => {
                     const label = p.payment_type === 'initial_deposit' ? '★ Initial Deposit' : `Instalment #${p.seq}`;
-                    const marker = i === 0 ? ' ← <strong>claiming this now</strong>' : '';
-                    return `<div style="margin-top:4px;">• ${label} — ₦${p.amount.toLocaleString()} on ${p.date}${marker}</div>`;
+                    const marker = i === 0 ? ' <span style="color:var(--brand);">← claiming this now</span>' : '';
+                    return `<div style="margin-top:5px;">• ${label} — ₦${p.amount.toLocaleString()} on ${p.date}${marker}</div>`;
                 }).join('');
-                missedBanner.innerHTML = `
+                bannerHTML += `
                     <div style="font-weight:700;color:#EAB308;margin-bottom:6px;">
                         <i class="fas fa-exclamation-circle"></i> ${unclaimedCount} Unclaimed Commissions Found
                     </div>
-                    <div style="color:var(--muted);">
-                        You have missed commission(s) on this invoice. This form will capture the
-                        <strong>oldest unclaimed payment first</strong>. Please come back to claim each remaining one.
+                    <div style="color:var(--muted);margin-bottom:6px;">
+                        This form captures the <strong>oldest unclaimed payment first</strong>.
+                        Please come back to claim each remaining one separately.
                     </div>
                     ${rows}`;
-                missedBanner.classList.remove('hidden');
+            }
 
-                // Auto-fill claim amount with the oldest unclaimed payment amount
+            if (pendingClaims.length > 0) {
+                // Show any claims already in the queue (pending verification/approval)
+                const pendingRows = pendingClaims.map(c => {
+                    const label = c.payment_type === 'initial_deposit' ? '★ Initial Deposit' : 'Instalment';
+                    const badge = c.status === 'pending_verification' ? '⏳ Awaiting Verification'
+                        : c.status === 'pending' ? '🔍 Under Review'
+                            : c.status === 'approved' ? '✅ Approved'
+                                : c.status;
+                    return `<div style="margin-top:5px;">• ${label} commission — ${badge}</div>`;
+                }).join('');
+                bannerHTML += `
+                    <div style="font-weight:700;color:#60A5FA;margin-bottom:4px;margin-top:${unclaimedCount > 1 ? '10px' : '0'};">
+                        <i class="fas fa-clock"></i> Claims Already Submitted
+                    </div>
+                    ${pendingRows}`;
+            }
+
+            if (unclaimedCount === 0 && pendingClaims.length === 0) {
+                bannerHTML = `<div style="color:var(--muted);">
+                    <i class="fas fa-check-circle" style="color:var(--success);"></i>
+                    All confirmed payments on this invoice have been claimed.
+                </div>`;
+            }
+
+            if (missedBanner) {
+                if (bannerHTML) {
+                    missedBanner.innerHTML = bannerHTML;
+                    missedBanner.classList.remove('hidden');
+                } else {
+                    missedBanner.innerHTML = '';
+                    missedBanner.classList.add('hidden');
+                }
+            }
+
+            // Auto-fill claim amount for instalment (not initial deposit — backend uses full price)
+            if (unclaimedCount > 0) {
                 const oldest = d.unclaimed_payments[0];
                 const claimAmountEl = document.getElementById('claim_amount');
                 if (oldest.payment_type !== 'initial_deposit' && claimAmountEl) {
                     claimAmountEl.value = oldest.amount;
                 }
-            } else if (missedBanner && unclaimedCount === 0) {
-                missedBanner.innerHTML = `<div style="color:var(--muted);"><i class="fas fa-check-circle" style="color:var(--success);"></i> All confirmed payments on this invoice have been claimed.</div>`;
-                missedBanner.classList.remove('hidden');
-            } else if (missedBanner) {
-                missedBanner.innerHTML = '';
-                missedBanner.classList.add('hidden');
             }
 
             // ── Commission preview ──
@@ -982,6 +1098,15 @@
                     (d.rep_status === 'yours' ? '<br><strong>✅ You are the assigned rep.</strong>' : '');
             } else {
                 cp.classList.add('hidden');
+            }
+
+            // ── Amount field: hide and replace with readonly summary for commission tabs ──
+            const isCommissionTab = (currentTab === 'partner' || (currentTab === 'disbursement' && subTab === 'staff_commission'));
+            if (isCommissionTab) {
+                showAmountField(false);
+                updateReadonlyAmountDisplay(d);
+            } else {
+                showAmountField(true);
             }
 
             // ── Hidden fields for submit ──
