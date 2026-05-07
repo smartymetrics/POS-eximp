@@ -476,6 +476,7 @@ async def pay_single_commission(id: str, payload: dict, background_tasks: Backgr
     net_amount = float(earning.get("net_commission") or earning.get("final_amount") or earning["commission_amount"])
     
     # 3. Create a mini-batch for this single payout
+    # Build payload — sales_rep_id for staff, vendor_id for partners
     batch_payload = {
         "total_amount": net_amount,
         "reference": payload.get("reference", "DIRECT-PAY"),
@@ -484,10 +485,20 @@ async def pay_single_commission(id: str, payload: dict, background_tasks: Backgr
     }
     if earning.get("sales_rep_id"):
         batch_payload["sales_rep_id"] = earning["sales_rep_id"]
+
+    # Try with vendor_id first; fall back if column doesn't exist yet
+    vendor_batch_payload = dict(batch_payload)
     if earning.get("vendor_id"):
-        batch_payload["vendor_id"] = earning["vendor_id"]
+        vendor_batch_payload["vendor_id"] = earning["vendor_id"]
         
-    batch = await db_execute(lambda: db.table("payout_batches").insert(batch_payload).execute())
+    try:
+        batch = await db_execute(lambda: db.table("payout_batches").insert(vendor_batch_payload).execute())
+    except Exception as e:
+        if "vendor_id" in str(e):
+            # Column not migrated yet — insert without vendor_id
+            batch = await db_execute(lambda: db.table("payout_batches").insert(batch_payload).execute())
+        else:
+            raise
     batch_id = batch.data[0]["id"]
 
     # 4. Update the earning record

@@ -3220,7 +3220,7 @@
                     </td>
                     <td style="color:var(--error)">
                         ${req.wht_amount > 0 ? `- ₦${req.wht_amount.toLocaleString(undefined, { minimumFractionDigits: 2 })}` : '—'}
-                        ${req.wht_rate > 0 ? `<div style="font-size:9px; color:var(--gray)">Rate: ${(req.wht_rate * 100).toFixed(0)}%</div>` : ''}
+                        ${req.wht_rate > 0 ? `<div style="font-size:9px; color:var(--gray)">Rate: ${parseFloat(req.wht_rate).toFixed(1)}%</div>` : ''}
                     </td>
                     <td style="color:var(--success); font-weight:700;">₦${req.net_payout_amount.toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
                     <td style="color:var(--success)">₦${(req.amount_paid || 0).toLocaleString(undefined, { minimumFractionDigits: 2, maximumFractionDigits: 2 })}</td>
@@ -3281,7 +3281,7 @@
             const req = requestsData.find(r => r.id === id);
 
             // Set initial inputs
-            document.getElementById('wht-rate').value = (req.wht_rate * 100).toFixed(1);
+            document.getElementById('wht-rate').value = parseFloat(req.wht_rate).toFixed(1);
             document.getElementById('wht-toggle').checked = req.is_wht_applicable;
             recalculateWHT();
 
