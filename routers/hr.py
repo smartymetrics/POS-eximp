@@ -156,6 +156,7 @@ class StaffProfileUpdate(BaseModel):
     leave_quota: Optional[int] = None
     exit_date: Optional[date] = None
     exit_reason: Optional[str] = None
+    tin: Optional[str] = None
 
 class CompanyAssetCreate(BaseModel):
     asset_name: str
@@ -244,6 +245,9 @@ class PolicyCreate(BaseModel):
     summary: Optional[str] = None
     document_url: Optional[str] = None
     effective_date: Optional[date] = None
+
+class TINUpdate(BaseModel):
+    tin: str
 
 # ─── ENDPOINTS ────────────────────────────────────────────────────────────────
 
@@ -441,6 +445,25 @@ async def update_staff_profile(staff_id: str, update: StaffProfileUpdate, curren
                 await db_execute(lambda: db.table("staff_profiles").insert(profile_updates).execute())
 
     return {"message": "Profile updated successfully"}
+
+@router.patch("/profile/tin")
+async def update_my_tin(body: TINUpdate, current_admin: dict = Depends(verify_token)):
+    """Silent patch: Staff member updates their own TIN without requiring a full profile edit."""
+    db = get_db()
+    staff_id = current_admin["sub"]
+    
+    # Update staff_profiles
+    profile_exists = await db_execute(lambda: db.table("staff_profiles").select("id").eq("admin_id", staff_id).execute())
+    if profile_exists.data:
+        await db_execute(lambda: db.table("staff_profiles").update({"tin": body.tin, "updated_at": datetime.utcnow().isoformat()}).eq("admin_id", staff_id).execute())
+    else:
+        await db_execute(lambda: db.table("staff_profiles").insert({
+            "admin_id": staff_id,
+            "tin": body.tin,
+            "updated_at": datetime.utcnow().isoformat()
+        }).execute())
+        
+    return {"message": "TIN updated successfully"}
 
 @router.get("/performance/{staff_id}")
 async def get_performance_score(staff_id: str, current_admin: dict = Depends(verify_token)):

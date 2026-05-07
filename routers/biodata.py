@@ -400,6 +400,7 @@ async def submit_biodata(
     coordinates_lng: str = Form(...),
     coordinates_accuracy: str = Form(""),
     submitted_at: str = Form(...),
+    tin: str = Form(None),
     passport_photo: UploadFile = File(None),
     signature_data: str = Form(...),  # base64 PNG from canvas
 ):
@@ -485,6 +486,7 @@ async def submit_biodata(
         "coordinates_lng": float(coordinates_lng) if coordinates_lng else None,
         "coordinates_accuracy": float(coordinates_accuracy) if coordinates_accuracy else None,
         "submitted_at": submitted_at,
+        "tin": tin,
         "status": "pending",
     }
     await db_execute(lambda: db.table("biodata_submissions").insert(row).execute())
@@ -595,6 +597,7 @@ async def review_submission(submission_id: str, body: ReviewAction, token=Depend
                 "emergency_contact": sub.get("next_of_kin_name"),
                 "passport_photo_path": sub.get("passport_photo_path"),
                 "signature_path": sub.get("signature_path"),
+                "tin": sub.get("tin"),
                 "updated_at": datetime.utcnow().isoformat(),
             }
             # Check existing profile

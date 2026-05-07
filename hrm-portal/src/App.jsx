@@ -10736,6 +10736,7 @@ function BiodataReviewModal({ sub, onClose, onRefresh }) {
                   ["Home Address", s.present_home_address],
                   ["Next of Kin", s.next_of_kin_name],
                   ["NOK Phone", s.next_of_kin_phone],
+                  ["TIN", s.tin],
                 ].map(([label, val]) => (
                   <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "8px 0", borderBottom: `1px solid ${C.border}22`, fontSize: 13 }}>
                     <span style={{ color: C.muted, fontWeight: 600, flexShrink: 0, width: "45%" }}>{label}</span>
@@ -10976,7 +10977,7 @@ function PublicBiodataForm() {
     surname: "", other_names: "", marital_status: "", gender: "",
     job_title: "", date_of_birth: "", joining_date: "",
     present_home_address: "", mobile_phone: "", house_phone: "",
-    next_of_kin_name: "", next_of_kin_phone: "",
+    next_of_kin_name: "", next_of_kin_phone: "", tin: "",
   });
   const [passportFile, setPassportFile] = useState(null);
   const [passportPreview, setPassportPreview] = useState("");
@@ -11114,7 +11115,7 @@ function PublicBiodataForm() {
 
   const handleSubmit = async () => {
     // Validate
-    const required = ["surname", "other_names", "marital_status", "gender", "job_title", "date_of_birth", "joining_date", "present_home_address", "mobile_phone", "next_of_kin_name", "next_of_kin_phone"];
+    const required = ["surname", "other_names", "marital_status", "gender", "job_title", "date_of_birth", "joining_date", "present_home_address", "mobile_phone", "next_of_kin_name", "next_of_kin_phone", "tin"];
     for (const f of required) {
       if (!form[f]?.trim()) { alert(`Please fill in: ${f.replace(/_/g, " ")}`); return; }
     }
@@ -11309,6 +11310,7 @@ function PublicBiodataForm() {
               ["house_phone", "House Phone", "tel"],
               ["next_of_kin_name", "Next of Kin Name *", "text"],
               ["next_of_kin_phone", "Next of Kin Phone *", "tel"],
+              ["tin", "Tax Identification Number (TIN) *", "text"],
             ].map(([key, label, type]) => (
               <div key={key}>
                 <label style={lbl}>{label}</label>
@@ -13299,6 +13301,59 @@ function DashboardPeerReviewWidget({ userId }) {
   );
 }
 
+
+function TINUpdateModal({ onClose }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [tin, setTin] = useState("");
+  const [loading, setLoading] = useState(false);
+
+  const save = async () => {
+    if (!tin.trim()) return;
+    setLoading(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/profile/tin`, {
+        method: "PATCH",
+        body: JSON.stringify({ tin: tin.trim() })
+      });
+      alert("Tax Identification Number (TIN) updated successfully!");
+      onClose(true);
+    } catch (e) { alert(e.message); }
+    finally { setLoading(false); }
+  };
+
+  return (
+    <div className="md-overlay" style={{ zIndex: 10000 }}>
+      <div className="md-card" style={{ maxWidth: 400, padding: 32, textAlign: "center" }}>
+        <div style={{ fontSize: 40, marginBottom: 16 }}>📋</div>
+        <div style={{ fontSize: 20, fontWeight: 900, marginBottom: 8, color: C.text }}>TIN Required</div>
+        <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.6, marginBottom: 24 }}>
+          To complete your official payroll and tax records, we require your <strong>Tax Identification Number (TIN)</strong>.
+        </div>
+        <div style={{ textAlign: "left", marginBottom: 20 }}>
+          <label style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase", marginBottom: 6, display: "block" }}>Enter TIN</label>
+          <input 
+            style={{ width: "100%", padding: 12, borderRadius: 10, border: `1px solid ${C.border}`, background: C.surface, color: C.text, outline: "none" }}
+            placeholder="Enter your TIN number"
+            value={tin} onChange={e => setTin(e.target.value)}
+          />
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+          <button onClick={save} disabled={loading || !tin.trim()} style={{
+            width: "100%", padding: 14, background: T.orange, color: "#fff", border: "none", borderRadius: 10, fontWeight: 800, cursor: "pointer"
+          }}>
+            {loading ? "Updating..." : "Update TIN →"}
+          </button>
+          <button onClick={() => onClose(false)} style={{
+            width: "100%", padding: 10, background: "none", color: C.muted, border: "none", fontSize: 12, cursor: "pointer"
+          }}>
+            Remind Me Later
+          </button>
+        </div>
+      </div>
+    </div>
+  );
+}
+
 function StaffPortal({ user, onLogout }) {
   const nav = [
     { isHeader: true, label: "People & Org" },
@@ -13345,6 +13400,14 @@ function StaffPortal({ user, onLogout }) {
   const [tasks, setTasks] = useState([]);
   const [perf, setPerf] = useState(null);
   const [loading, setLoading] = useState(true);
+  const [showTinModal, setShowTinModal] = useState(false);
+
+  useEffect(() => {
+    // Check if TIN is missing for existing staff (silent patch)
+    if (user && !user.tin) {
+      setShowTinModal(true);
+    }
+  }, [user]);
 
   useEffect(() => {
     setLoading(true);
@@ -13400,6 +13463,14 @@ function StaffPortal({ user, onLogout }) {
 
       return (
         <div className="fade">
+          {showTinModal && <TINUpdateModal onClose={(success) => {
+            setShowTinModal(false);
+            if (success) {
+              // Optionally refresh profile if needed, but closing is enough for the UI to be clean
+              // Update local state to avoid re-prompting in current session
+              user.tin = "UPDATED"; 
+            }
+          }} />}
           <div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Welcome, {user.full_name?.split(" ")[0]} 👋</div>
           <div style={{ fontSize: 13, color: C.sub, marginBottom: 22 }}>{user.staff_profiles?.[0]?.job_title || user.role} · {user.department}</div>
 

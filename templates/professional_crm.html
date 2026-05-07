@@ -1806,14 +1806,22 @@
                 });
                 const data = await res.json();
                 
-                document.getElementById("hot-leads").textContent = data.hot_leads;
-                document.getElementById("warm-leads").textContent = data.warm_leads;
-                document.getElementById("cold-leads").textContent = data.total_leads - data.hot_leads - data.warm_leads;
+                if (data.detail) {
+                    console.warn("Access denied or API error:", data.detail);
+                    document.getElementById("hotLeadsTable").innerHTML = `<tr><td colspan="6" style="padding: 40px; text-align: center; color: #EF4444;">${data.detail}</td></tr>`;
+                    hidePageLoader();
+                    return;
+                }
                 
-                const totalPipeline = data.prioritized_leads.reduce((sum, lead) => sum + (lead.total_deals * 500000), 0);
+                document.getElementById("hot-leads").textContent = data.hot_leads || 0;
+                document.getElementById("warm-leads").textContent = data.warm_leads || 0;
+                document.getElementById("cold-leads").textContent = (data.total_leads || 0) - (data.hot_leads || 0) - (data.warm_leads || 0);
+                
+                const prioritized = data.prioritized_leads || [];
+                const totalPipeline = prioritized.reduce((sum, lead) => sum + (lead.total_deals * 500000), 0);
                 document.getElementById("total-pipeline").textContent = `₦${(totalPipeline / 1000000).toFixed(1)}M`;
                 
-                const html = data.prioritized_leads.map((lead, index) => `
+                const html = prioritized.map((lead, index) => `
                     <tr class="animate-fade-in stagger-${(index % 5) + 1}">
                         <td style="padding: 12px; font-weight: 600;">${lead.client_name}</td>
                         <td style="text-align: right; padding: 12px; font-size: 18px; font-weight: 700; color: var(--gold);">${lead.score}</td>

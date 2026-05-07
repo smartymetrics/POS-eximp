@@ -112,9 +112,11 @@ async def login(data: AdminLogin):
         raise HTTPException(status_code=401, detail="Invalid credentials")
     if admin.get("is_archived"):
         raise HTTPException(status_code=403, detail="This account has been archived")
-    # Fetch staff type from profiles
-    profile_res = await db_execute(lambda: db.table("staff_profiles").select("staff_type").eq("admin_id", admin["id"]).execute())
-    staff_type = profile_res.data[0]["staff_type"] if profile_res.data else "full"
+    # Fetch staff info from profiles
+    profile_res = await db_execute(lambda: db.table("staff_profiles").select("staff_type, tin").eq("admin_id", admin["id"]).execute())
+    profile = profile_res.data[0] if profile_res.data else {}
+    staff_type = profile.get("staff_type", "full")
+    tin = profile.get("tin")
 
     token = create_token({
         "sub": admin["id"], 
@@ -131,7 +133,8 @@ async def login(data: AdminLogin):
             "email": admin["email"], 
             "role": admin.get("role") or "staff",
             "primary_role": admin.get("primary_role", "staff"),
-            "staff_type": staff_type
+            "staff_type": staff_type,
+            "tin": tin
         }
     }
 
@@ -140,8 +143,17 @@ async def login(data: AdminLogin):
 @router.get("/me")
 async def me(current_admin=Depends(verify_token)):
     db = get_db()
-    result = await db_execute(lambda: db.table("admins").select("id, full_name, email, role, primary_role, created_at").eq("id", current_admin["sub"]).execute())
-    return result.data[0] if result.data else {}
+    res = await db_execute(lambda: db.table("admins").select("id, full_name, email, role, primary_role, created_at").eq("id", current_admin["sub"]).execute())
+    if not res.data: return {}
+    admin = res.data[0]
+    
+    # Fetch profile
+    prof_res = await db_execute(lambda: db.table("staff_profiles").select("staff_type, tin").eq("admin_id", admin["id"]).execute())
+    profile = prof_res.data[0] if prof_res.data else {}
+    
+    admin["staff_type"] = profile.get("staff_type", "full")
+    admin["tin"] = profile.get("tin")
+    return admin
 
 
 # CREATE TEAM MEMBER (admin only)
@@ -196,12 +208,7 @@ def require_roles(allowed_roles: list[str]):
     Uses resolve_admin_token to support both Header and Query Param tokens.
     """
     async def role_checker(current_admin=Depends(resolve_admin_token)):
-        user_roles = [r.strip() for r in current_admin.get("role", "").split(",")]
-        # Global override for super_admin
-        if "super_admin" in user_roles:
-            return current_admin
-            
-        if not any(role in user_roles for role in allowed_roles):
+        if not has_any_role(current_admin, allowed_roles):
             raise HTTPException(
                 status_code=403, 
                 detail=f"Access denied. Required roles: {', '.join(allowed_roles)}"
