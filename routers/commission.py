@@ -385,7 +385,6 @@ async def mark_payout(payload: CommissionPayout, background_tasks: BackgroundTas
                         .update({
                             "status": "paid",
                             "paid_at": datetime.now().isoformat(),
-                            "paid_by": current_admin["sub"],
                             "payout_reference": payload.reference,
                             "hr_note": f"Paid via Commission Payout Batch {batch_id}"
                         })
@@ -489,7 +488,6 @@ async def pay_single_commission(id: str, payload: dict, background_tasks: Backgr
                     .update({
                         "status": "paid",
                         "paid_at": datetime.now().isoformat(),
-                        "paid_by": current_admin["sub"],
                         "payout_reference": payload.get("reference"),
                         "hr_note": "Processed via Commissions dashboard"
                     })
