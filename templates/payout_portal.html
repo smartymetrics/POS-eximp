@@ -851,18 +851,27 @@
             try {
                 const res = await fetch(`/api/payouts/portal/lookup-invoice?invoice_number=${invNum}&claimant_email=${email}`);
                 const data = await res.json();
+                console.log('lookup-invoice response:', JSON.stringify(data));
                 if (data.status === "success") {
                     renderInvoiceResult(data);
                 } else {
-                    document.getElementById('inv-error-text').innerText = data.detail;
-                    document.getElementById('inv-error').classList.remove('hidden');
+                    const errEl = document.getElementById('inv-error-text');
+                    const errBox = document.getElementById('inv-error');
+                    if (errEl) errEl.innerText = data.detail || data.message || JSON.stringify(data);
+                    if (errBox) errBox.classList.remove('hidden');
                 }
-            } catch (e) { }
+            } catch (e) {
+                document.getElementById('inv-error-text').innerText = 'Something went wrong. Please try again or contact support.';
+                document.getElementById('inv-error').classList.remove('hidden');
+                console.error('Invoice lookup error:', e);
+            }
             finally { document.getElementById('inv-loading').classList.add('hidden'); btn.disabled = false; }
         }
 
         function renderInvoiceResult(d) {
             invoiceData = d;
+
+            // ── Payment type badge ──
             const badge = document.getElementById('payment-type-badge');
             if (d.payment_type === 'initial_deposit') {
                 badge.style.background = 'rgba(196,125,10,0.15)'; badge.style.color = 'var(--brand)';
@@ -872,6 +881,7 @@
                 badge.innerHTML = `<i class="fas fa-layer-group"></i> Instalment #${d.payment_sequence}`;
             }
 
+            // ── Rep assignment ──
             const assignmentEl = document.getElementById('inv-assignment');
             if (d.rep_status === 'unassigned') {
                 assignmentEl.innerText = 'Available to Claim';
@@ -889,30 +899,95 @@
             document.getElementById('inv-paid').innerText = '₦' + d.amount_paid.toLocaleString();
             document.getElementById('inv-balance').innerText = '₦' + d.balance.toLocaleString();
 
-            ['rep-unassigned', 'rep-yours', 'rep-conflict'].forEach(id => document.getElementById(id).classList.add('hidden'));
-            if (d.rep_status === 'unassigned') document.getElementById('rep-unassigned').classList.remove('hidden');
-            else if (d.rep_status === 'yours') document.getElementById('rep-yours').classList.remove('hidden');
-            else { document.getElementById('conflict-rep-name').innerText = d.assigned_rep_name; document.getElementById('rep-conflict').classList.remove('hidden'); }
+            ['rep-unassigned', 'rep-yours', 'rep-conflict'].forEach(id => { const el = document.getElementById(id); if (el) el.classList.add('hidden'); });
+            if (d.rep_status === 'unassigned') { const el = document.getElementById('rep-unassigned'); if (el) el.classList.remove('hidden'); }
+            else if (d.rep_status === 'yours') { const el = document.getElementById('rep-yours'); if (el) el.classList.remove('hidden'); }
+            else {
+                const nameEl = document.getElementById('conflict-rep-name'); if (nameEl) nameEl.innerText = d.assigned_rep_name || '';
+                const conflictEl = document.getElementById('rep-conflict'); if (conflictEl) conflictEl.classList.remove('hidden');
+            }
 
+            // ── Missed commissions warning ──
+            // If more than one payment is unclaimed, warn the claimant so they know
+            // to come back and claim each one separately after this submission.
+            const invResult = document.getElementById('inv-result');
+            let missedBanner = document.getElementById('missed-commissions-banner');
+            if (!missedBanner && invResult) {
+                missedBanner = document.createElement('div');
+                missedBanner.id = 'missed-commissions-banner';
+                missedBanner.style.cssText = 'padding:14px;background:rgba(234,179,8,0.06);border:1px solid rgba(234,179,8,0.25);border-radius:12px;margin-top:12px;font-size:12px;line-height:1.6;';
+                invResult.appendChild(missedBanner);
+            }
+
+            const unclaimedCount = (d.unclaimed_payments || []).length;
+            if (missedBanner && unclaimedCount > 1) {
+                // Multiple unclaimed — show each one so claimant knows what's outstanding
+                const rows = d.unclaimed_payments.map((p, i) => {
+                    const label = p.payment_type === 'initial_deposit' ? '★ Initial Deposit' : `Instalment #${p.seq}`;
+                    const marker = i === 0 ? ' ← <strong>claiming this now</strong>' : '';
+                    return `<div style="margin-top:4px;">• ${label} — ₦${p.amount.toLocaleString()} on ${p.date}${marker}</div>`;
+                }).join('');
+                missedBanner.innerHTML = `
+                    <div style="font-weight:700;color:#EAB308;margin-bottom:6px;">
+                        <i class="fas fa-exclamation-circle"></i> ${unclaimedCount} Unclaimed Commissions Found
+                    </div>
+                    <div style="color:var(--muted);">
+                        You have missed commission(s) on this invoice. This form will capture the
+                        <strong>oldest unclaimed payment first</strong>. Please come back to claim each remaining one.
+                    </div>
+                    ${rows}`;
+                missedBanner.classList.remove('hidden');
+
+                // Auto-fill claim amount with the oldest unclaimed payment amount
+                const oldest = d.unclaimed_payments[0];
+                const claimAmountEl = document.getElementById('claim_amount');
+                if (oldest.payment_type !== 'initial_deposit' && claimAmountEl) {
+                    claimAmountEl.value = oldest.amount;
+                }
+            } else if (missedBanner && unclaimedCount === 0) {
+                missedBanner.innerHTML = `<div style="color:var(--muted);"><i class="fas fa-check-circle" style="color:var(--success);"></i> All confirmed payments on this invoice have been claimed.</div>`;
+                missedBanner.classList.remove('hidden');
+            } else if (missedBanner) {
+                missedBanner.innerHTML = '';
+                missedBanner.classList.add('hidden');
+            }
+
+            // ── Commission preview ──
+            // Rates come from the backend (resolved from vendor override → global setting → hardcoded default)
+            // so the preview always matches what the submit endpoint will actually calculate.
             const cp = document.getElementById('commission-preview');
             if (d.rep_status !== 'conflict') {
                 cp.classList.remove('hidden');
-                // Partners earn 15% gross; staff earn 10% gross. WHT is 5% of gross for both.
-                const commRate = (currentTab === 'partner') ? 0.15 : 0.10;
-                const netRate = commRate * (1 - 0.05); // after 5% WHT
-                const commPct = (currentTab === 'partner') ? '15%' : '10%';
-                // Update the label in the preview card so it reflects the actual rate
+                const commRate = d.commission_rate || ((currentTab === 'partner') ? 0.15 : 0.10);
+                const whtRate = d.commission_wht || 0.05;
+                const netRate = d.commission_net_rate || (commRate * (1 - whtRate));
+                const commPct = d.commission_rate_pct || (Math.round(commRate * 10000) / 100 + '%');
+
                 const grossLabelEl = cp.querySelector('div > div:first-child > div:first-child');
                 if (grossLabelEl) grossLabelEl.innerText = `Gross (${commPct})`;
-                const base = d.payment_type === 'initial_deposit' ? d.property_price : null;
-                document.getElementById('cp-gross').innerText = base ? '₦' + (base * commRate).toLocaleString() : `${commPct} of Claim`;
-                document.getElementById('cp-net').innerText = base ? '₦' + (base * netRate).toLocaleString() : `${(netRate * 100).toFixed(2)}% of Claim`;
-                document.getElementById('cp-note').innerHTML = d.payment_type === 'initial_deposit' ? '★ Initial Deposit: Commission calculated on FULL price.' : 'Instalment: Commission calculated on the amount entered below.' + (d.rep_status === 'yours' ? '<br><strong>✅ Initial Deposit commission already accorded.</strong>' : '');
-            } else cp.classList.add('hidden');
 
-            document.getElementById('hid_payment_type').value = d.payment_type;
-            document.getElementById('hid_invoice_id').value = d.invoice_id;
-            document.getElementById('inv-result').classList.remove('hidden');
+                // Use the next unclaimed payment's commission_base for the preview
+                const nextUnclaimed = d.unclaimed_payments && d.unclaimed_payments[0];
+                const base = nextUnclaimed ? nextUnclaimed.commission_base : (d.payment_type === 'initial_deposit' ? d.property_price : null);
+                const cpGross = document.getElementById('cp-gross');
+                const cpNet = document.getElementById('cp-net');
+                const cpNote = document.getElementById('cp-note');
+                if (cpGross) cpGross.innerText = base ? '₦' + Math.round(base * commRate).toLocaleString() : `${commPct} of Claim`;
+                if (cpNet) cpNet.innerText = base ? '₦' + Math.round(base * netRate).toLocaleString() : `${Math.round(netRate * 100 * 100) / 100}% of Claim`;
+
+                const isDeposit = d.payment_type === 'initial_deposit';
+                if (cpNote) cpNote.innerHTML = isDeposit
+                    ? `★ Initial Deposit: Commission calculated on FULL property price at ${commPct}.`
+                    : `Instalment: Commission at ${commPct} calculated on the instalment amount.` +
+                    (d.rep_status === 'yours' ? '<br><strong>✅ You are the assigned rep.</strong>' : '');
+            } else {
+                cp.classList.add('hidden');
+            }
+
+            // ── Hidden fields for submit ──
+            const hidPt = document.getElementById('hid_payment_type'); if (hidPt) hidPt.value = d.payment_type;
+            const hidInv = document.getElementById('hid_invoice_id'); if (hidInv) hidInv.value = d.invoice_id;
+            const invResultEl = document.getElementById('inv-result'); if (invResultEl) invResultEl.classList.remove('hidden');
         }
 
         function toggleAlreadyPaid() {

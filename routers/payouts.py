@@ -683,39 +683,130 @@ async def portal_lookup_invoice(invoice_number: str, claimant_email: Optional[st
     inv = res.data[0]
     invoice_id = inv["id"]
 
-    # 2. Commission History — Detect if an 'Initial Deposit Commission' has been claimed
-    #    We check expenditure_requests for this invoice to see if anyone has already triggered the deal commission.
-    claims_res = await db_execute(lambda: db.table("expenditure_requests")
-        .select("id")
-        .eq("vendor_invoice_number", invoice_number)
-        .eq("payment_type", "initial_deposit")
-        .neq("status", "rejected")
-        .execute()
-    )
-    has_initial_claim = len(claims_res.data or []) > 0
-    payment_type = "initial_deposit" if not has_initial_claim else "instalment"
-    
-    # Also fetch client payments for the history list
+    # 2. Fetch ALL actual confirmed client payments for this invoice (oldest first).
+    #    This is the ground truth — we use real payments, not portal claims, to decide
+    #    what has and hasn't been claimed yet.
     payments_res = await db_execute(lambda: db.table("payments")
         .select("id, amount, created_at, payment_method")
         .eq("invoice_id", invoice_id)
         .order("created_at")
         .execute()
     )
-    prior_payments = payments_res.data or []
-    payment_count = len(prior_payments)
-    payment_sequence = payment_count + 1
+    all_payments = payments_res.data or []
+    payment_count = len(all_payments)
 
-    property_price = float(inv.get("amount") or 0)
+    property_price     = float(inv.get("amount") or 0)
     amount_paid_so_far = float(inv.get("amount_paid") or 0)
-    balance = max(0.0, property_price - amount_paid_so_far)
+    balance            = max(0.0, property_price - amount_paid_so_far)
 
-    # Commission base:
-    #   Initial deposit → commission on full property value (the deal is triggered)
-    #   Instalment      → commission on the instalment amount the rep reports
-    commission_base = property_price if payment_type == "initial_deposit" else None  # None = use claim_amount
-    commission_rate = 0.05   # 5% gross (10% less 50% WHT effectively; matches existing 10%/5WHT)
-    commission_preview = round(property_price * commission_rate, 2) if payment_type == "initial_deposit" else None
+    # 3. Find which payments have already been claimed.
+    #    Source A: commission_earnings ledger (dashboard-verified commissions).
+    #    Source B: expenditure_requests portal claims (self-reported, pending approval).
+    commission_earnings_res = await db_execute(lambda: db.table("commission_earnings")
+        .select("payment_id")
+        .eq("invoice_id", invoice_id)
+        .execute()
+    )
+    ledger_claimed_payment_ids = {
+        e["payment_id"] for e in (commission_earnings_res.data or []) if e.get("payment_id")
+    }
+
+    portal_claims_res = await db_execute(lambda: db.table("expenditure_requests")
+        .select("id, payment_type, status")
+        .eq("vendor_invoice_number", invoice_number)
+        .neq("status", "rejected")
+        .execute()
+    )
+    portal_claims = portal_claims_res.data or []
+    # Count how many initial_deposit and instalment claims already exist in the portal
+    portal_initial_count    = len([c for c in portal_claims if c.get("payment_type") == "initial_deposit"])
+    portal_instalment_count = len([c for c in portal_claims if c.get("payment_type") == "instalment"])
+
+    # 4. Build the unclaimed payments list.
+    #    payment index 0 = initial deposit, 1+ = instalments.
+    unclaimed_payments = []
+    instalment_portal_used = 0
+    for i, p in enumerate(all_payments):
+        ptype = "initial_deposit" if i == 0 else "instalment"
+
+        # Check ledger first (most authoritative)
+        if p["id"] in ledger_claimed_payment_ids:
+            continue
+
+        # Check portal claims by type+sequence
+        if ptype == "initial_deposit" and portal_initial_count > 0:
+            continue
+        if ptype == "instalment":
+            if instalment_portal_used < portal_instalment_count:
+                instalment_portal_used += 1
+                continue
+
+        comm_base = property_price if ptype == "initial_deposit" else float(p.get("amount") or 0)
+        unclaimed_payments.append({
+            "seq":            i + 1,
+            "payment_id":     p["id"],
+            "amount":         float(p.get("amount") or 0),
+            "date":           (p.get("created_at") or "")[:10],
+            "method":         p.get("payment_method") or "—",
+            "payment_type":   ptype,
+            "commission_base": comm_base,
+        })
+
+    # 5. Determine what to present to the claimant.
+    #    - If unclaimed payments exist, point them at the OLDEST unclaimed one first.
+    #    - payment_sequence reflects the NEXT UNCLAIMED payment position, not total count.
+    if unclaimed_payments:
+        next_unclaimed   = unclaimed_payments[0]
+        payment_type     = next_unclaimed["payment_type"]
+        commission_base  = next_unclaimed["commission_base"]
+        payment_sequence = next_unclaimed["seq"]  # actual position in payment history
+    else:
+        # All confirmed payments are already claimed
+        payment_type     = "instalment"
+        commission_base  = None
+        payment_sequence = payment_count + 1
+
+    # ── Resolve display commission rate for the preview card ──
+    # Read global defaults from system_settings so the preview matches what submit will calculate.
+    _prev_sys_res = await db_execute(lambda: db.table("system_settings")
+        .select("key, value")
+        .in_("key", ["default_commission_rate", "default_partner_commission_rate", "default_wht_rate"])
+        .execute()
+    )
+    _prev_sys = {s["key"]: s["value"] for s in (_prev_sys_res.data or [])}
+
+    # Check vendor-specific rate first
+    _prev_vrate_res = await db_execute(lambda: db.table("vendors")
+        .select("gross_commission_rate, wht_rate, is_commission_partner")
+        .eq("email", claimant_email)
+        .execute()
+    )
+    _prev_vdata = ((_prev_vrate_res.data or [None])[0]) or {}
+    _is_partner = bool(_prev_vdata.get("is_commission_partner"))
+
+    def _pct(val, fallback):
+        try:
+            v = float(val)
+            return v / 100 if v > 1 else v
+        except Exception:
+            return fallback
+
+    if _prev_vdata.get("gross_commission_rate"):
+        _display_gross_rate = _pct(_prev_vdata["gross_commission_rate"], 0.15 if _is_partner else 0.10)
+        _display_wht_rate   = _pct(_prev_vdata.get("wht_rate") or 5, 0.05)
+    elif _is_partner and _prev_sys.get("default_partner_commission_rate"):
+        _display_gross_rate = _pct(_prev_sys["default_partner_commission_rate"], 0.15)
+        _display_wht_rate   = _pct(_prev_sys.get("default_wht_rate") or 5, 0.05)
+    elif not _is_partner and _prev_sys.get("default_commission_rate"):
+        _display_gross_rate = _pct(_prev_sys["default_commission_rate"], 0.10)
+        _display_wht_rate   = _pct(_prev_sys.get("default_wht_rate") or 5, 0.05)
+    else:
+        _display_gross_rate = 0.15 if _is_partner else 0.10
+        _display_wht_rate   = 0.05
+
+    commission_rate    = round(_display_gross_rate, 4)
+    commission_wht     = round(_display_wht_rate, 4)
+    commission_preview = round(commission_base * commission_rate, 2) if (payment_type == "initial_deposit" and commission_base) else None
 
     # 3. Sales rep conflict detection
     rep_status = "unassigned"
@@ -767,16 +858,24 @@ async def portal_lookup_invoice(invoice_number: str, claimant_email: Optional[st
         "balance": balance,
         # ── Payment type intelligence ──
         "payment_type": payment_type,            # "initial_deposit" | "instalment"
-        "payment_sequence": payment_sequence,    # 1, 2, 3 …
-        "payment_count": payment_count,          # how many prior payments exist
+        "payment_sequence": payment_sequence,    # total payments + 1
+        "payment_count": payment_count,          # how many confirmed client payments exist
         # ── Commission preview ──
-        "commission_rate": commission_rate,
-        "commission_base": commission_base,      # None → use reported claim_amount
-        "commission_preview": commission_preview,# pre-calc for deposit; null for instalment
+        "commission_rate": commission_rate,       # gross rate as decimal e.g. 0.15
+        "commission_wht":  commission_wht,        # WHT rate as decimal e.g. 0.05
+        "commission_net_rate": round(commission_rate * (1 - commission_wht), 6),
+        "commission_rate_pct": f"{round(commission_rate * 100, 2):.4g}%",  # display e.g. "15%"
+        "commission_base": commission_base,       # None → use reported claim_amount
+        "commission_preview": commission_preview, # pre-calc for deposit; null for instalment
         # ── Rep assignment ──
         "rep_status": rep_status,                # "unassigned" | "yours" | "conflict"
         "assigned_rep_name": assigned_rep_name,
-        # ── History ──
+        # ── Unclaimed payments ──
+        # Full list of confirmed client payments that have no commission claim yet.
+        # Frontend uses this to warn the claimant about missed commissions.
+        "unclaimed_payments": unclaimed_payments,
+        "unclaimed_count": len(unclaimed_payments),
+        # ── Full payment history ──
         "previous_payments": [
             {
                 "seq": i + 1,
@@ -784,7 +883,7 @@ async def portal_lookup_invoice(invoice_number: str, claimant_email: Optional[st
                 "date": (p.get("created_at") or "")[:10],
                 "method": p.get("payment_method") or "—"
             }
-            for i, p in enumerate(prior_payments)
+            for i, p in enumerate(all_payments)
         ]
     }
 
@@ -1007,34 +1106,58 @@ async def submit_payout_claim_from_portal(
                     is_high_risk = True
                     risk_notes.append("🚩 ANONYMOUS INVOICE: Not yet linked to a verified client record.")
 
-        # ── Commission calculation by payment type ──
-        #   Initial Deposit → commission on FULL property value (deal trigger)
-        #   Instalment      → commission on the reported instalment amount only
+        # ── Commission rate resolution (3-tier waterfall) ──
         #
-        # Rate resolution order:
-        #   1. Vendor's own gross_commission_rate (set per-partner in the dashboard)
-        #   2. System default: Partners = 15%, Staff = 10%
-        # WHT resolution: vendor's own wht_rate, defaulting to 5%
-        _DEFAULT_COMM = Decimal("0.15") if type == "partner" else Decimal("0.10")
-        _DEFAULT_WHT  = Decimal("0.05")
+        # Tier 1 — Vendor's own rate (per-partner override set in dashboard)
+        # Tier 2 — system_settings global defaults
+        #           · default_partner_commission_rate  (partners)
+        #           · default_commission_rate          (staff)
+        #           · default_wht_rate                 (both)
+        # Tier 3 — hardcoded fallback: Partners = 15%, Staff = 10%, WHT = 5%
+
+        # Fetch global settings once (used as Tier 2 fallback)
+        _sys_res = await db_execute(lambda: db.table("system_settings")
+            .select("key, value")
+            .in_("key", ["default_commission_rate", "default_partner_commission_rate", "default_wht_rate"])
+            .execute()
+        )
+        _sys = {s["key"]: s["value"] for s in (_sys_res.data or [])}
+
+        def _to_dec(pct_str, fallback):
+            """Convert a stored percentage string e.g. '15' or '0.15' to a Decimal fraction."""
+            try:
+                v = Decimal(str(pct_str))
+                return v / 100 if v > 1 else v
+            except Exception:
+                return Decimal(str(fallback))
 
         if type == "partner":
+            # Tier 1: vendor's own rate
             _vrate_res = await db_execute(lambda: db.table("vendors")
                 .select("gross_commission_rate, wht_rate")
                 .eq("email", payee_email)
-                .execute())
-            if _vrate_res.data and _vrate_res.data[0].get("gross_commission_rate"):
-                _raw_comm = float(_vrate_res.data[0]["gross_commission_rate"])
-                # stored as percentage (e.g. 15.0) — normalise to decimal
-                COMMISSION_RATE = Decimal(str(_raw_comm / 100 if _raw_comm > 1 else _raw_comm))
-                _raw_wht = float(_vrate_res.data[0].get("wht_rate") or 5.0)
-                WHT_RATE = Decimal(str(_raw_wht / 100 if _raw_wht > 1 else _raw_wht))
+                .execute()
+            )
+            _vdata = (_vrate_res.data or [None])[0] or {}
+            if _vdata.get("gross_commission_rate"):
+                COMMISSION_RATE = _to_dec(_vdata["gross_commission_rate"], 0.15)
+                WHT_RATE        = _to_dec(_vdata.get("wht_rate") or 5, 0.05)
+            elif _sys.get("default_partner_commission_rate"):
+                # Tier 2: global partner default from system_settings
+                COMMISSION_RATE = _to_dec(_sys["default_partner_commission_rate"], 0.15)
+                WHT_RATE        = _to_dec(_sys.get("default_wht_rate") or 5, 0.05)
             else:
-                COMMISSION_RATE = _DEFAULT_COMM
-                WHT_RATE        = _DEFAULT_WHT
+                # Tier 3: hardcoded
+                COMMISSION_RATE = Decimal("0.15")
+                WHT_RATE        = Decimal("0.05")
         else:
-            COMMISSION_RATE = _DEFAULT_COMM
-            WHT_RATE        = _DEFAULT_WHT
+            # Staff: no per-vendor override — use global setting or hardcoded
+            if _sys.get("default_commission_rate"):
+                COMMISSION_RATE = _to_dec(_sys["default_commission_rate"], 0.10)
+                WHT_RATE        = _to_dec(_sys.get("default_wht_rate") or 5, 0.05)
+            else:
+                COMMISSION_RATE = Decimal("0.10")
+                WHT_RATE        = Decimal("0.05")
 
         if payment_type == "initial_deposit" and property_price and property_price > 0:
             commission_base = Decimal(str(property_price))
