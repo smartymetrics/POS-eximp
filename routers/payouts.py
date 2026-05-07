@@ -2382,7 +2382,9 @@ async def publish_estate(draft_id: str, current_admin=Depends(require_roles(["su
     if created_prop_ids:
         await db_execute(lambda: db.table("procurement_expenses").update({"property_id": created_prop_ids[0]}).eq("estate_draft_id", draft_id).execute())
 
-    return {"status": "success", "properties_created": len(created_prop_ids)}from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks, File, UploadFile, Form, Body, Request
+    return {"status": "success", "properties_created": len(created_prop_ids)}
+
+from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks, File, UploadFile, Form, Body, Request
 from fastapi.responses import StreamingResponse, HTMLResponse
 from fastapi.templating import Jinja2Templates
 from pydantic import BaseModel
