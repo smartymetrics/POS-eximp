@@ -681,9 +681,11 @@ async def portal_lookup_invoice(invoice_number: str, claimant_email: Optional[st
     # 2. Fetch ALL actual confirmed client payments for this invoice (oldest first).
     #    This is the ground truth — we use real payments, not portal claims, to decide
     #    what has and hasn't been claimed yet.
+    #    EXCLUDE voided payments (is_voided = true).
     payments_res = await db_execute(lambda: db.table("payments")
         .select("id, amount, created_at, payment_method")
         .eq("invoice_id", invoice_id)
+        .eq("is_voided", False)
         .order("created_at")
         .execute()
     )
@@ -3124,9 +3126,11 @@ async def portal_lookup_invoice(invoice_number: str, claimant_email: Optional[st
     # 2. Fetch ALL actual confirmed client payments for this invoice (oldest first).
     #    This is the ground truth — we use real payments, not portal claims, to decide
     #    what has and hasn't been claimed yet.
+    #    EXCLUDE voided payments (is_voided = true).
     payments_res = await db_execute(lambda: db.table("payments")
         .select("id, amount, created_at, payment_method")
         .eq("invoice_id", invoice_id)
+        .eq("is_voided", False)
         .order("created_at")
         .execute()
     )

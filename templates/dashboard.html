@@ -5043,7 +5043,10 @@
         if (!res.ok) throw new Error('Failed to fetch payments');
         const inv = await res.json();
 
-        if (!inv.payments || !inv.payments.length) {
+        // Filter out voided payments (is_voided = true)
+        const activePayments = (inv.payments || []).filter(p => !p.is_voided);
+
+        if (!activePayments || !activePayments.length) {
           container.innerHTML = '<div class="empty-state" style="padding: 40px;"><p>No payments recorded for this invoice.</p></div>';
           return;
         }
@@ -5062,7 +5065,7 @@
             </tr>
           </thead>
           <tbody>
-            ${inv.payments.map(p => `
+            ${activePayments.map(p => `
               <tr>
                 <td style="padding-left: 24px;">${p.payment_date}</td>
                 <td>
