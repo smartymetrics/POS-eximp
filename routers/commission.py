@@ -527,6 +527,36 @@ async def pay_single_commission(id: str, payload: dict, background_tasks: Backgr
     )
     
     # 6. Send Email
+    # 4. Mark any corresponding Portal Claims (Expenditure Requests) as PAID
+    if earning.get("invoice_id"):
+        req_res = await db_execute(lambda: db.table("expenditure_requests")
+            .select("id, pending_verification_id")
+            .eq("invoice_id", earning["invoice_id"])
+            .in_("status", ["pending", "approved", "pending_verification"])
+            .execute())
+        
+        if req_res.data:
+            req_ids = [r["id"] for r in req_res.data]
+            p_verif_ids = [r["pending_verification_id"] for r in req_res.data if r.get("pending_verification_id")]
+
+            await db_execute(lambda: db.table("expenditure_requests")
+                .update({
+                    "status": "paid",
+                    "paid_at": datetime.now().isoformat(),
+                    "payout_reference": payload.get("reference"),
+                    "hr_note": "Processed via Commissions dashboard"
+                })
+                .in_("id", req_ids)
+                .execute()
+            )
+            
+            if p_verif_ids:
+                await db_execute(lambda: db.table("pending_verifications")
+                    .update({"status": "confirmed"})
+                    .in_("id", p_verif_ids)
+                    .execute())
+
+    # 5. Handle Notifications (Bell for Staff, Email for all)
     if recipient_obj.get("email"):
         background_tasks.add_task(send_commission_paid_email, recipient_obj, batch.data[0])
 
@@ -536,42 +566,13 @@ async def pay_single_commission(id: str, payload: dict, background_tasks: Backgr
         if admin_res.data:
             staff_id = admin_res.data[0]["id"]
             
-            # 1. Send Bell Notification
+            # Send Bell Notification to Staff
             await send_notification(
                 staff_id,
                 "Commission Paid",
                 f"💸 Your commission of ₦{net_amount:,.2f} for Invoice #{earning['invoices']['invoice_number']} has been paid.",
                 "commission_paid"
             )
-            
-            # 2. Mark Portal Claim (Expenditure Request) as PAID
-            if earning.get("invoice_id"):
-                req_res = await db_execute(lambda: db.table("expenditure_requests")
-                    .select("id, pending_verification_id")
-                    .eq("invoice_id", earning["invoice_id"])
-                    .in_("status", ["pending", "approved", "pending_verification"])
-                    .execute())
-                
-                if req_res.data:
-                    req_ids = [r["id"] for r in req_res.data]
-                    p_verif_ids = [r["pending_verification_id"] for r in req_res.data if r.get("pending_verification_id")]
-
-                    await db_execute(lambda: db.table("expenditure_requests")
-                        .update({
-                            "status": "paid",
-                            "paid_at": datetime.now().isoformat(),
-                            "payout_reference": payload.get("reference"),
-                            "hr_note": "Processed via Commissions dashboard"
-                        })
-                        .in_("id", req_ids)
-                        .execute()
-                    )
-                    
-                    if p_verif_ids:
-                        await db_execute(lambda: db.table("pending_verifications")
-                            .update({"status": "confirmed"})
-                            .in_("id", p_verif_ids)
-                            .execute())
 
     return {"message": "Payout recorded successfully", "batch_id": batch_id}
 
