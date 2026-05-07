@@ -380,43 +380,42 @@ async def mark_payout(payload: CommissionPayout, background_tasks: BackgroundTas
             
             # 2. Send Bell Notification
             await send_notification(
-                    staff_id,
-                    "Commission Paid",
-                    f"💸 Good news! A commission payout of ₦{payment_amount:,.2f} has been processed. Reference: {payload.reference}",
-                    "commission_paid"
-                )
+                staff_id,
+                "Commission Paid",
+                f"💸 Good news! A commission payout of ₦{payment_amount:,.2f} has been processed. Reference: {payload.reference}",
+                "commission_paid"
+            )
+            
+            # 3. Mark any matching Portal Claims (Expenditure Requests) as PAID
+            # Find all invoice IDs in this batch
+            if invoice_ids:
+                # Fetch requests linked to these invoices to also find pending_verification_ids
+                req_res = await db_execute(lambda: db.table("expenditure_requests")
+                    .select("id, pending_verification_id")
+                    .in_("invoice_id", invoice_ids)
+                    .in_("status", ["pending", "approved", "pending_verification"])
+                    .execute())
                 
-                # 3. Mark any matching Portal Claims (Expenditure Requests) as PAID
-                # Find all invoice IDs in this batch
-                if invoice_ids:
-                    # Fetch requests linked to these invoices to also find pending_verification_ids
-                    req_res = await db_execute(lambda: db.table("expenditure_requests")
-                        .select("id, pending_verification_id")
-                        .in_("invoice_id", invoice_ids)
-                        .in_("status", ["pending", "approved", "pending_verification"])
-                        .execute())
+                if req_res.data:
+                    req_ids = [r["id"] for r in req_res.data]
+                    p_verif_ids = [r["pending_verification_id"] for r in req_res.data if r.get("pending_verification_id")]
                     
-                    if req_res.data:
-                        req_ids = [r["id"] for r in req_res.data]
-                        p_verif_ids = [r["pending_verification_id"] for r in req_res.data if r.get("pending_verification_id")]
-                        
-                        # 1. Mark requests as PAID
-                        await db_execute(lambda: db.table("expenditure_requests")
-                            .update({
-                                "status": "paid",
-                                "paid_at": datetime.now().isoformat(),
-                                "payout_reference": payload.reference,
-                                "hr_note": f"Paid via Commission Payout Batch {batch_id}"
-                            })
+                    # 1. Mark requests as PAID
+                    await db_execute(lambda: db.table("expenditure_requests")
+                        .update({
+                            "status": "paid",
+                            "paid_at": datetime.now().isoformat(),
+                            "payout_reference": payload.reference,
+                            "hr_note": f"Paid via Commission Payout Batch {batch_id}"
+                        })
                             .in_("id", req_ids)
                             .execute())
-                        
-                        # 2. Mark linked verifications as confirmed to clear the Verifications queue
-                        if p_verif_ids:
-                            await db_execute(lambda: db.table("pending_verifications")
-                                .update({"status": "confirmed"})
-                                .in_("id", p_verif_ids)
-                                .execute())
+                    # 2. Mark linked verifications as confirmed to clear the Verifications queue
+                    if p_verif_ids:
+                        await db_execute(lambda: db.table("pending_verifications")
+                            .update({"status": "confirmed"})
+                            .in_("id", p_verif_ids)
+                            .execute())
     
     return {"message": "Payout successful", "batch": batch.data[0], "amount_paid": payment_amount}
 

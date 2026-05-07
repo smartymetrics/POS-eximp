@@ -1,5 +1,25 @@
+from fastapi import APIRouter, HTTPException, Depends, Query, BackgroundTasks, File, UploadFile, Form, Body, Request
+from fastapi.responses import StreamingResponse, HTMLResponse
+from fastapi.templating import Jinja2Templates
+from pydantic import BaseModel
+from database import get_db, db_execute
+from models import ExpenditureRequestCreate, PayoutReview, AssetCreate, VendorCreate, VoidExpenditureRequest, PayoutPaymentData
+from routers.auth import verify_token, has_any_role, require_roles, resolve_admin_token
+from email_service import send_payout_receipt_email, send_portal_invite_email, send_report_email, send_receipt_email
+from commission_service import sync_invoice_commissions
+from report_service import ReportService
+from datetime import datetime, timezone, timedelta
+from decimal import Decimal
+from typing import Optional, List, Dict, Any
+import json
+import uuid
+import pandas as pd
+import io
+import logging
 
-
+router = APIRouter()
+logger = logging.getLogger(__name__)
+templates = Jinja2Templates(directory="templates")
 
 # ─── WHT 2025 HELPER ──────────────────────────────────────────
 def calculate_wht_2025(amount: Decimal, category: str, has_tin: bool = True, is_resident: bool = True) -> dict:
