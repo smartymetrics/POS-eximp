@@ -189,10 +189,33 @@
         .document-body ol[type="A"] { list-style-type: upper-alpha !important; }
         .document-body ol[type="i"] { list-style-type: lower-roman !important; }
         .document-body ol[type="I"] { list-style-type: upper-roman !important; }
+        
+        /* ── TABLES ── */
+        .document-body table {
+            border-collapse: collapse;
+            table-layout: fixed;
+            width: 100% !important;
+            margin: 12pt 0;
+            overflow: hidden;
+        }
+        .document-body td, .document-body th {
+            min-width: 1em;
+            border: 1px solid #000 !important;
+            padding: 4px 8px;
+            vertical-align: top;
+            box-sizing: border-box;
+            position: relative;
+        }
+        .document-body th {
+            font-weight: bold;
+            text-align: left;
+            background-color: #f8f9fa;
+        }
 
         .document-body li {
-            margin-bottom: 4pt;
+            margin-bottom: 8pt;
             display: list-item;
+            padding-left: 5px;
         }
 
         /* ── SMART LEGAL WIDGETS (Preview) ── */

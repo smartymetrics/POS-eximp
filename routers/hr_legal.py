@@ -1071,25 +1071,50 @@ async def _send_matter_executed_email(matter_id: str, signing_token: str, signer
   /* ── MAIN CONTENT (Pushed down by padding) ── */
   .main-wrapper {{ position: relative; z-index: 200; width: 100%; }}
   
-  .header-content {{ padding: 50px 60px 10px; width: 100%; box-sizing: border-box; page-break-inside: avoid; }}
+  .header-content {{ padding: 50px 60px 10px; width: 100%; box-sizing: border-box; }}
   .logo-box {{ float: left; width: 50%; }}
   .contact-box {{ float: right; width: 45%; border-left: 2px solid #000; padding: 4px 15px; font-size: 9pt; line-height: 1.4; color: #111; font-weight: 700; font-variant-caps: all-small-caps; letter-spacing: 0.05em; font-family: 'Inter', sans-serif; }}
   .contact-box a {{ color: #C47D0A; text-decoration: none; }}
   
   .clear {{ clear: both; height: 1px; }}
-  .divider {{ height: 2px; background: #eee; margin: 10px 60px 0; page-break-after: avoid; }}
+  .divider {{ height: 2px; background: #eee; margin: 10px 60px 0; }}
   
-  .body {{ padding: 30px 72px; line-height: 1.6; text-align: justify; }}
-  .body p {{ margin-bottom: 12pt; min-height: 1.2em; }}
-  .body ol, .body ul {{ padding: 0 0 0 40px; margin: 12pt 0; list-style-position: outside; }}
-  .body li {{ margin-bottom: 8pt; padding-left: 5px; }}
+  .body-content {{ padding: 30px 72px; line-height: 1.6; text-align: justify; }}
+  .body-content p {{ margin-bottom: 12pt; min-height: 1.2em; }}
+  .body-content ol, .body-content ul {{ padding: 0 0 0 40px; margin: 12pt 0; list-style-position: outside; }}
+  .body-content li {{ margin-bottom: 8pt; padding-left: 5px; }}
   
-  /* Force page break avoidance for small elements */
+  /* Automatic Parent-Child Nesting */
+  .body-content ol {{ list-style-type: decimal; }}
+  .body-content ol ol {{ list-style-type: lower-alpha; margin: 6pt 0; }}
+  .body-content ol ol ol {{ list-style-type: lower-roman; margin: 4pt 0; }}
+  .body-content ul {{ list-style-type: disc; }}
+  .body-content ul ul {{ list-style-type: circle; }}
+  
+  /* Force specific types if overridden by user */
+  .body-content ol[type="a"] {{ list-style-type: lower-alpha !important; }}
+  .body-content ol[type="A"] {{ list-style-type: upper-alpha !important; }}
+  .body-content ol[type="i"] {{ list-style-type: lower-roman !important; }}
+  .body-content ol[type="I"] {{ list-style-type: upper-roman !important; }}
+  
+  /* Indentation Levels */
+  .body-content [data-indent="1"] {{ margin-left: 40px !important; }}
+  .body-content [data-indent="2"] {{ margin-left: 80px !important; }}
+  .body-content [data-indent="3"] {{ margin-left: 120px !important; }}
+  .body-content [data-indent="4"] {{ margin-left: 160px !important; }}
+  .body-content [data-indent="5"] {{ margin-left: 200px !important; }}
+  .body-content [data-indent="6"] {{ margin-left: 240px !important; }}
+  .body-content [data-indent="7"] {{ margin-left: 280px !important; }}
+  
+  /* Tables */
+  .body-content table {{ border-collapse: collapse; width: 100% !important; margin: 12pt 0; }}
+  .body-content td, .body-content th {{ border: 1px solid #000 !important; padding: 4px 8px; vertical-align: top; }}
+  .body-content th {{ background: #f8f9fa; font-weight: bold; }}
+  
+  .body-content img {{ max-width: 100%; height: auto; display: block; }}
+  
   h1, h2, h3, h4 {{ page-break-after: avoid; }}
-  .legal-badge {{ page-break-inside: avoid; }}
-  
-  /* ── FOOTER (Fixed to bottom, but careful with overflow) ── */
-  .footer {{ position: absolute; bottom: 0; left: 0; width: 100%; height: 12px; page-break-inside: avoid; }}
+  .footer {{ position: absolute; bottom: 0; left: 0; width: 100%; height: 12px; }}
   .footer-bars {{ display: flex; height: 12px; width: 100%; }}
   .fb {{ flex: 1; background: #000; }}
   .fg {{ flex: 1; background: #C47D0A; }}
@@ -1110,7 +1135,7 @@ async def _send_matter_executed_email(matter_id: str, signing_token: str, signer
       <div class="clear"></div>
     </div>
     <div class="divider"></div>
-    <div class="body">{body_html}</div>
+    <div class="body-content">{body_html}</div>
   </div>
   
   <div class="footer">
@@ -1739,6 +1764,37 @@ async def export_matter_pdf(matter_id: str, token: str = None, request: Request 
   .body-content ol[type="A"] {{ list-style-type: upper-alpha !important; }}
   .body-content ol[type="i"] {{ list-style-type: lower-roman !important; }}
   .body-content ol[type="I"] {{ list-style-type: upper-roman !important; }}
+  
+  /* Indentation Levels */
+  .body-content [data-indent="1"] {{ margin-left: 40px !important; }}
+  .body-content [data-indent="2"] {{ margin-left: 80px !important; }}
+  .body-content [data-indent="3"] {{ margin-left: 120px !important; }}
+  .body-content [data-indent="4"] {{ margin-left: 160px !important; }}
+  .body-content [data-indent="5"] {{ margin-left: 200px !important; }}
+  .body-content [data-indent="6"] {{ margin-left: 240px !important; }}
+  .body-content [data-indent="7"] {{ margin-left: 280px !important; }}
+  
+  /* ── TABLES ── */
+  .body-content table {{
+    border-collapse: collapse;
+    table-layout: fixed;
+    width: 100% !important;
+    margin: 12pt 0;
+    overflow: hidden;
+  }}
+  .body-content td, .body-content th {{
+    min-width: 1em;
+    border: 1px solid #000 !important;
+    padding: 4px 8px;
+    vertical-align: top;
+    box-sizing: border-box;
+    position: relative;
+  }}
+  .body-content th {{
+    font-weight: bold;
+    text-align: left;
+    background-color: #f8f9fa;
+  }}
   .body-content img {{ max-width: 100%; height: auto; display: block; }}
   
   .footer {{ position: absolute; bottom: 0; left: 0; width: 100%; }}
