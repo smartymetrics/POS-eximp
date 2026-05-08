@@ -1340,6 +1340,26 @@
             finally { btn.innerHTML = 'Submit Record'; btn.disabled = false; }
         };
 
+        function handleFile(input) {
+            const files = input.files;
+            const fileList = document.getElementById('fileList');
+            const fileName = document.getElementById('fileName');
+            
+            if (files.length > 0) {
+                fileName.textContent = `${files.length} file(s) selected`;
+                fileList.style.display = 'block';
+                fileList.innerHTML = Array.from(files).map((f, i) => 
+                    `<div style="padding:6px 0; font-size:10px; color:var(--text);">
+                        <i class="fas fa-file"></i> ${f.name} (${(f.size / 1024).toFixed(2)} KB)
+                    </div>`
+                ).join('');
+            } else {
+                fileName.textContent = 'Click to upload Proof(s)';
+                fileList.style.display = 'none';
+                fileList.innerHTML = '';
+            }
+        }
+
         window.addEventListener('DOMContentLoaded', () => {
             const token = new URLSearchParams(window.location.search).get('token');
             if (token) checkInvitation(token); else setMainTab('company');
