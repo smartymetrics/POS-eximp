@@ -499,7 +499,7 @@ async def upload_sealed_contract(invoice_id: str, file: UploadFile = File(...), 
         
         await db_execute(lambda: db.table("contract_documents").insert({
             "invoice_id": invoice_id,
-            "document_type": "sealed_lawyer_copy",
+            "document_type": "executed",
             "generated_by": current_admin["sub"]
         }).execute())
 
