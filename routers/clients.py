@@ -109,7 +109,7 @@ async def update_client(client_id: str, data: ClientUpdate, current_admin=Depend
         is_owner = str(client_check.data[0].get("assigned_rep_id")) == str(current_admin.get("sub"))
 
     roles_list = [r.strip().lower() for r in (role or "").split(",")]
-    is_privileged = any(r in ["admin", "operations", "customer_support"] for r in roles_list)
+    is_privileged = any(r in ["admin", "operations", "customer_support", "super_admin"] for r in roles_list)
 
     if not is_privileged and not is_owner:
         # Standard restriction for users who are neither admin nor owner

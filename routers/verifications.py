@@ -1,8 +1,9 @@
 from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi.responses import RedirectResponse
 from fastapi.encoders import jsonable_encoder
 from models import VerificationConfirm, VerificationReject, VerificationUpdate
 from database import get_db, db_execute
-from routers.auth import verify_token, has_any_role
+from routers.auth import verify_token, resolve_admin_token, has_any_role
 from email_service import send_receipt_and_statement_email, send_rejection_email, send_commission_earned_email
 from routers.analytics import log_activity
 from datetime import datetime, date
@@ -11,6 +12,81 @@ from commission_service import get_commission_config
 # Re-exported for other modules that depend on it
 
 router = APIRouter()
+
+
+@router.get("/{id}/view-proof")
+async def view_verification_proof(id: str, current_admin=Depends(resolve_admin_token)):
+    """
+    Return a short-lived signed URL for the payment_proof_url attached to a
+    pending_verifications row.  The stored value is a private bucket path
+    (not a public URL), so we must generate a signed URL before the browser
+    can display it.
+    """
+    from storage_service import generate_signed_url
+
+    db = get_db()
+    res = await db_execute(
+        lambda: db.table("pending_verifications")
+        .select("payment_proof_url")
+        .eq("id", id)
+        .execute()
+    )
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Verification record not found")
+
+    path = res.data[0].get("payment_proof_url")
+    if not path:
+        raise HTTPException(status_code=404, detail="No proof file attached to this record")
+
+    import json
+    from fastapi.responses import HTMLResponse
+
+    paths = []
+    if isinstance(path, list):
+        paths = path
+    elif isinstance(path, str):
+        if path.startswith("["):
+            try:
+                paths = json.loads(path)
+            except:
+                paths = [path]
+        else:
+            paths = [path]
+    else:
+        paths = [str(path)]
+
+    urls = []
+    for p in paths:
+        if p.startswith("http"):
+            urls.append({"url": p, "path": p, "success": True})
+        else:
+            s_url = generate_signed_url("Cloud Infrastructure", p)
+            if s_url:
+                urls.append({"url": s_url, "path": p, "success": True})
+            else:
+                urls.append({"url": "", "path": p, "success": False})
+
+    # If only one file and it succeeded, redirect directly
+    if len(urls) == 1 and urls[0]["success"]:
+        return RedirectResponse(url=urls[0]["url"])
+
+    html_content = "<html><body style='font-family:sans-serif; padding: 20px; text-align: center; background: #f9f9f9;'>"
+    html_content += "<h2 style='color: #333;'>Payment Receipts</h2>"
+    
+    for i, item in enumerate(urls):
+        if item["success"]:
+            html_content += f"<div style='margin-bottom: 10px;'><a href='{item['url']}' target='_blank' style='display:inline-block; padding:10px 20px; background:#1a5fb4; color:white; text-decoration:none; border-radius:5px; font-weight: bold;'>Open Receipt {i+1} in New Tab</a></div>"
+            html_content += f"<div style='margin-bottom: 40px;'><iframe src='{item['url']}' style='width:90%; max-width: 800px; height:600px; border:1px solid #ccc; background: white; border-radius: 8px;'></iframe></div>"
+        else:
+            html_content += f"<div style='margin-bottom: 40px; padding: 20px; border: 1px solid #f5c6cb; background: #f8d7da; color: #721c24; border-radius: 8px; width: 90%; max-width: 800px; margin-left: auto; margin-right: auto;'>"
+            html_content += f"<h3>Failed to load receipt {i+1}</h3>"
+            html_content += f"<p>Could not generate a secure link for: <strong>{item['path']}</strong></p>"
+            html_content += f"<p>This usually means the file does not exist in the Storage bucket at this exact path.</p>"
+            html_content += f"</div>"
+            
+    html_content += "</body></html>"
+    
+    return HTMLResponse(content=html_content)
 
 @router.get("/")
 async def list_verifications(current_admin=Depends(verify_token)):

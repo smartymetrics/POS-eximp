@@ -1248,37 +1248,38 @@
                 const isDispute = !document.getElementById('rep-conflict').classList.contains('hidden')
                     && document.getElementById('confirm-dispute').checked;
 
-                const body = {
-                    type: currentTab === 'disbursement' ? subTab : currentTab,
-                    payee_name: document.getElementById('payee_name').value,
-                    payee_email: document.getElementById('payee_email').value,
-                    payee_phone: document.getElementById('payee_phone').value || '',
-                    payee_id: document.getElementById('payee_id').value || '',
-                    payee_tin: document.getElementById('payee_tin').value || '',
-                    bank_name: document.getElementById('bank_name').value || null,
-                    acc_number: document.getElementById('acc_number').value || null,
-                    acc_name: document.getElementById('acc_name').value || null,
-                    invoice_number: document.getElementById('invoice_number').value,
-                    invoice_id: document.getElementById('hid_invoice_id').value,
-                    property_price: invoiceData.property_price || 0,
-                    is_dispute: isDispute,
-                    dispute_reason: isDispute ? document.getElementById('dispute_reason').value : null,
-                    remarks: document.getElementById('remarks').value || '',
-                    claims: selectedClaims.map(p => ({
-                        payment_id: p.payment_id,
-                        payment_type: p.payment_type,
-                        amount: p.amount,
-                        commission_base: p.commission_base || (p.payment_type === 'initial_deposit' ? invoiceData.property_price : p.amount),
-                    })),
-                    new_payment_amount: (newPayAmt > 0) ? newPayAmt : null,
-                    claim_on_new_payment: claimNew,
-                };
+                // Build multipart FormData so proof files are included with the claims
+                const bulkForm = new FormData();
+                bulkForm.append('type', currentTab === 'disbursement' ? subTab : currentTab);
+                bulkForm.append('payee_name', document.getElementById('payee_name').value);
+                bulkForm.append('payee_email', document.getElementById('payee_email').value);
+                bulkForm.append('payee_phone', document.getElementById('payee_phone').value || '');
+                bulkForm.append('payee_id', document.getElementById('payee_id').value || '');
+                bulkForm.append('payee_tin', document.getElementById('payee_tin').value || '');
+                bulkForm.append('bank_name', document.getElementById('bank_name').value || '');
+                bulkForm.append('acc_number', document.getElementById('acc_number').value || '');
+                bulkForm.append('acc_name', document.getElementById('acc_name').value || '');
+                bulkForm.append('invoice_number', document.getElementById('invoice_number').value);
+                bulkForm.append('invoice_id', document.getElementById('hid_invoice_id').value);
+                bulkForm.append('property_price', invoiceData.property_price || 0);
+                bulkForm.append('is_dispute', isDispute);
+                bulkForm.append('dispute_reason', isDispute ? document.getElementById('dispute_reason').value : '');
+                bulkForm.append('remarks', document.getElementById('remarks').value || '');
+                bulkForm.append('claims_json', JSON.stringify(selectedClaims.map(p => ({
+                    payment_id: p.payment_id,
+                    payment_type: p.payment_type,
+                    amount: p.amount,
+                    commission_base: p.commission_base || (p.payment_type === 'initial_deposit' ? invoiceData.property_price : p.amount),
+                }))));
+                bulkForm.append('new_payment_amount', (newPayAmt > 0) ? newPayAmt : '');
+                bulkForm.append('claim_on_new_payment', claimNew);
+                // Attach proof-of-payment files
+                Array.from(document.getElementById('fileInput').files).forEach(f => bulkForm.append('files', f));
 
                 try {
                     const res = await fetch('/api/payouts/portal/submit-bulk', {
                         method: 'POST',
-                        headers: { 'Content-Type': 'application/json' },
-                        body: JSON.stringify(body),
+                        body: bulkForm,
                     });
                     const result = await res.json();
                     if (result.status === 'success') {
@@ -1344,11 +1345,11 @@
             const files = input.files;
             const fileList = document.getElementById('fileList');
             const fileName = document.getElementById('fileName');
-            
+
             if (files.length > 0) {
                 fileName.textContent = `${files.length} file(s) selected`;
                 fileList.style.display = 'block';
-                fileList.innerHTML = Array.from(files).map((f, i) => 
+                fileList.innerHTML = Array.from(files).map((f, i) =>
                     `<div style="padding:6px 0; font-size:10px; color:var(--text);">
                         <i class="fas fa-file"></i> ${f.name} (${(f.size / 1024).toFixed(2)} KB)
                     </div>`

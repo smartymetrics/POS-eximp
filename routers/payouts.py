@@ -1380,13 +1380,56 @@ class BulkSubmitPayload(BaseModel):
 
 
 @router.post("/portal/submit-bulk")
-async def submit_payout_claims_bulk(payload: BulkSubmitPayload):
+async def submit_payout_claims_bulk(
+    # ── Identity fields (Form) ──
+    type: str = Form(...),
+    payee_name: str = Form(...),
+    payee_email: str = Form(...),
+    payee_phone: str = Form(""),
+    payee_id: str = Form(""),
+    payee_tin: str = Form(""),
+    bank_name: Optional[str] = Form(None),
+    acc_number: Optional[str] = Form(None),
+    acc_name: Optional[str] = Form(None),
+    invoice_number: str = Form(...),
+    invoice_id: str = Form(...),
+    property_price: float = Form(0),
+    is_dispute: bool = Form(False),
+    dispute_reason: Optional[str] = Form(None),
+    remarks: str = Form(""),
+    claims_json: str = Form("[]"),
+    new_payment_amount: Optional[float] = Form(None),
+    claim_on_new_payment: bool = Form(False),
+    files: List[UploadFile] = File(default=[]),
+):
     """
     Bulk commission claim endpoint for the portal payment history table.
     Creates one expenditure_request per selected payment row so Finance can
     approve each one individually. Also optionally creates a pending_verifications
     row for a new client payment not yet in the system.
+    Accepts multipart/form-data so proof-of-payment files can be attached.
     """
+    import types as _types
+    payload = _types.SimpleNamespace(
+        type=type,
+        payee_name=payee_name,
+        payee_email=payee_email,
+        payee_phone=payee_phone,
+        payee_id=payee_id,
+        payee_tin=payee_tin,
+        bank_name=bank_name,
+        acc_number=acc_number,
+        acc_name=acc_name,
+        invoice_number=invoice_number,
+        invoice_id=invoice_id,
+        property_price=property_price,
+        is_dispute=is_dispute,
+        dispute_reason=dispute_reason,
+        remarks=remarks,
+        new_payment_amount=new_payment_amount,
+        claim_on_new_payment=claim_on_new_payment,
+        claims=[BulkClaimItem(**c) for c in json.loads(claims_json)],
+    )
     db = get_db()
 
     if not payload.claims and not payload.new_payment_amount:
@@ -1536,8 +1579,42 @@ async def submit_payout_claims_bulk(payload: BulkSubmitPayload):
             except Exception as ce:
                 print(f"[WARN] commission_earnings insert failed for payment {claim.payment_id}: {ce}")
 
+    # ── Upload proof-of-payment files (now supported in bulk submit) ──
+    file_url = None
+    if files:
+        uploaded_paths = []
+        upload_errors = []
+        for f in files:
+            if f and f.filename:
+                file_ext = f.filename.rsplit('.', 1)[-1] if '.' in f.filename else 'bin'
+                file_path = f"portal_claims/{payload.payee_email.replace('@','_')}_{uuid.uuid4().hex}.{file_ext}"
+                file_bytes = await f.read()
+                ok = upload_portal_file(file_path, file_bytes, f.content_type)
+                if ok:
+                    uploaded_paths.append(file_path)
+                else:
+                    upload_errors.append(f.filename)
+        if upload_errors:
+            raise HTTPException(
+                status_code=500,
+                detail=f"Failed to upload proof file(s): {', '.join(upload_errors)}. Please retry."
+            )
+        if len(uploaded_paths) == 1:
+            file_url = uploaded_paths[0]
+        elif len(uploaded_paths) > 1:
+            file_url = json.dumps(uploaded_paths)
+
+    # Back-fill receipt_url on all expenditure_requests created above
+    if file_url and created_ids:
+        try:
+            await db_execute(lambda: db.table("expenditure_requests")
+                .update({"receipt_url": file_url})
+                .in_("id", created_ids)
+                .execute())
+        except Exception as _fu_err:
+            print(f"[WARN] Could not backfill receipt_url on bulk claims: {_fu_err}")
+
     # ── Optional: new client payment log ──
-    file_url = None  # bulk endpoint doesn't handle file uploads — rep attaches separately
     if payload.new_payment_amount and payload.new_payment_amount > 0:
         try:
             inv_for_verif = await db_execute(lambda: db.table("invoices").select("client_id").eq("id", payload.invoice_id).execute())
@@ -1552,6 +1629,7 @@ async def submit_payout_claims_bulk(payload: BulkSubmitPayload):
                     "status": "pending",
                     "source": "portal",
                     "submission_type": payload.type,
+                    "payment_proof_url": file_url,
                 }
                 await db_execute(lambda: db.table("pending_verifications").insert(verif_payload).execute())
 

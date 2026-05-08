@@ -105,6 +105,15 @@ async def submit_subscription(
             
         if payload.get("payment_receipt_b64"):
             payload["payment_receipt_url"] = await SubscriptionService.process_base64_file(payload.get("payment_receipt_b64"), invoice_temp_num, "receipt")
+
+        # Multi-file receipt: front-end sends payment_receipt_urls as a list.
+        # Serialise to a JSON string so the single DB column stores all paths.
+        if payload.get("payment_receipt_urls"):
+            import json as _json
+            urls = payload["payment_receipt_urls"]
+            if isinstance(urls, list) and len(urls) > 0:
+                # Store JSON array; keep legacy field pointing to the first URL
+                payload["payment_receipt_url"] = _json.dumps(urls)
         
         # 3. Process the full land purchase workflow
         sales_rep_id = payload.get("sales_rep_id")
@@ -150,4 +159,3 @@ async def upload_subscription_file(
     except Exception as e:
         print(f"ASYNC UPLOAD ERROR: {e}")
         return JSONResponse(status_code=500, content={"status": "error", "message": str(e)})
-
