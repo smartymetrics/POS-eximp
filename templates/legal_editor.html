@@ -486,6 +486,50 @@
         .pulse-gold {
             animation: pulse-gold 2s infinite;
         }
+
+        /* List Styling Fix */
+        .paper-canvas ol,
+        .paper-canvas ul {
+            margin: 12px 0;
+            padding-left: 32px;
+        }
+
+        .paper-canvas ol {
+            list-style-type: decimal;
+        }
+
+        .paper-canvas ol ol {
+            list-style-type: lower-alpha;
+            padding-left: 40px;
+        }
+
+        .paper-canvas ol ol ol {
+            list-style-type: lower-roman;
+            padding-left: 40px;
+        }
+
+        .paper-canvas ul {
+            list-style-type: disc;
+        }
+
+        .paper-canvas ul ul {
+            list-style-type: circle;
+            padding-left: 40px;
+        }
+
+        .paper-canvas ul ul ul {
+            list-style-type: square;
+            padding-left: 40px;
+        }
+
+        .paper-canvas li {
+            margin: 6px 0;
+            line-height: 1.6;
+        }
+
+        .paper-canvas li li {
+            margin: 4px 0;
+        }
     </style>
 </head>
 
@@ -668,9 +712,11 @@
                 <button class="toolbar-btn" onclick="exec('indent')" title="Increase Indent"><i
                         class="fas fa-indent"></i></button>
                 <div class="toolbar-divider"></div>
-                <button class="toolbar-btn" onclick="exec('removeFormat')" title="Clear Formatting"><i class="fas fa-eraser"></i></button>
+                <button class="toolbar-btn" onclick="exec('removeFormat')" title="Clear Formatting"><i
+                        class="fas fa-eraser"></i></button>
                 <div class="toolbar-divider"></div>
-                <input type="color" oninput="exec('foreColor', this.value)" class="w-8 h-8 bg-transparent border-none cursor-pointer outline-none p-0" title="Text Color">
+                <input type="color" oninput="exec('foreColor', this.value)"
+                    class="w-8 h-8 bg-transparent border-none cursor-pointer outline-none p-0" title="Text Color">
             </div>
 
             <!-- Editor View -->
@@ -1423,7 +1469,7 @@
                         'Content-Type': 'application/json',
                         'Authorization': `Bearer ${localStorage.getItem('ec_token')}`
                     },
-                    body: JSON.stringify(contractBuffer) // Send the full buffer
+                    body: JSON.stringify(contractBuffer)
                 });
 
                 if (res.ok) {

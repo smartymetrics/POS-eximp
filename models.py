@@ -453,7 +453,7 @@ class ExtendSigningLink(BaseModel):
     days: int = 7
 
 class CustomContractHTMLUpdate(BaseModel):
-    html_content: str
+    html_content: Optional[str] = None
     cover_html: Optional[str] = None
     execution_html: Optional[str] = None
     lawfirm_name: Optional[str] = None

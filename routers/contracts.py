@@ -1093,45 +1093,51 @@ async def get_contract_html(invoice_id: str, current_admin=Depends(verify_token)
 
 @router.put("/{invoice_id}/custom-html")
 async def update_contract_html(invoice_id: str, payload: CustomContractHTMLUpdate, current_admin=Depends(verify_token)):
-    if not has_any_role(current_admin, "admin", "lawyer"):
-        raise HTTPException(status_code=403, detail="Unauthorized")
+    try:
+        if not has_any_role(current_admin, "admin", "lawyer"):
+            raise HTTPException(status_code=403, detail="Unauthorized")
+            
+        db = get_db()
         
-    db = get_db()
-    
-    # 1. Check if invoice exists
-    inv_res = await db_execute(lambda: db.table("invoices").select("id").eq("id", invoice_id).execute())
-    if not inv_res.data:
-        raise HTTPException(status_code=404, detail="Invoice not found")
+        # 1. Check if invoice exists
+        inv_res = await db_execute(lambda: db.table("invoices").select("id").eq("id", invoice_id).execute())
+        if not inv_res.data:
+            raise HTTPException(status_code=404, detail="Invoice not found")
+            
+        # 2. Prevent editing ONLY if contract has been fully executed (not just if session exists)
+        session_res = await db_execute(lambda: db.table("contract_signing_sessions").select("status").eq("invoice_id", invoice_id).execute())
+        if session_res.data and session_res.data[0]["status"] == "executed":
+            raise HTTPException(status_code=400, detail="Cannot edit contract wording after it has been executed")
+            
+        # 3. Build update data with provided fields
+        update_data = {"updated_at": datetime.now().isoformat()}
         
-    # 2. Prevent editing if contract is already signed
-    session_res = await db_execute(lambda: db.table("contract_signing_sessions").select("status").eq("invoice_id", invoice_id).neq("status", "expired").execute())
-    if session_res.data and session_res.data[0]["status"] == "completed":
-        raise HTTPException(status_code=400, detail="Cannot edit contract wording after it has been fully executed")
-        
-    # 3. Save the custom HTML to Supabase
-    update_data = {
-        "custom_contract_html": payload.html_content,
-        "updated_at": datetime.now().isoformat()
-    }
-    if payload.cover_html is not None:
-        update_data["custom_cover_html"] = payload.cover_html
-    if payload.execution_html is not None:
-        update_data["custom_execution_html"] = payload.execution_html
-    if payload.lawfirm_name is not None:
-        update_data["custom_lawfirm_name"] = payload.lawfirm_name
-    if payload.lawfirm_address is not None:
-        update_data["custom_lawfirm_address"] = payload.lawfirm_address
+        if payload.html_content is not None:
+            update_data["custom_contract_html"] = payload.html_content
+        if payload.cover_html is not None:
+            update_data["custom_cover_html"] = payload.cover_html
+        if payload.execution_html is not None:
+            update_data["custom_execution_html"] = payload.execution_html
+        if payload.lawfirm_name is not None:
+            update_data["custom_lawfirm_name"] = payload.lawfirm_name
+        if payload.lawfirm_address is not None:
+            update_data["custom_lawfirm_address"] = payload.lawfirm_address
 
-    await db_execute(lambda: db.table("invoices").update(update_data).eq("id", invoice_id).execute())
-    
-    await log_activity(
-        "contract_wording_updated",
-        f"Contract wordings updated manually for invoice {invoice_id}",
-        current_admin["sub"],
-        invoice_id=invoice_id
-    )
-    
-    return {"message": "Custom contract wordings saved successfully"}
+        await db_execute(lambda: db.table("invoices").update(update_data).eq("id", invoice_id).execute())
+        
+        await log_activity(
+            "contract_wording_updated",
+            f"Contract wordings updated manually for invoice {invoice_id}",
+            current_admin["sub"],
+            invoice_id=invoice_id
+        )
+        
+        return {"message": "Custom contract wordings saved successfully"}
+    except HTTPException:
+        raise
+    except Exception as e:
+        print(f"[ERROR] update_contract_html failed for {invoice_id}: {str(e)}")
+        raise HTTPException(status_code=400, detail=f"Update failed: {str(e)}")
 
 # --- NEW LEGAL DASHBOARD ENDPOINTS ---
 

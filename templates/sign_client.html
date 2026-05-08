@@ -234,7 +234,17 @@
         body: JSON.stringify(payload)
       });
       const result = await res.json();
-      if (!res.ok) throw new Error(result.detail || 'Submission failed');
+      if (!res.ok) {
+        let errMsg = 'Submission failed';
+        if (result.detail) {
+          if (Array.isArray(result.detail)) {
+            errMsg = result.detail.map(e => e.msg || JSON.stringify(e)).join('\n');
+          } else {
+            errMsg = String(result.detail);
+          }
+        }
+        throw new Error(errMsg);
+      }
       document.getElementById('form-card').style.display = 'none';
       document.getElementById('success-card').style.display = 'block';
       window.scrollTo(0, 0);
