@@ -113,6 +113,11 @@ class PropertyUpdate(BaseModel):
     total_plots: Optional[int] = None
 
 
+class EstateVisibilityToggle(BaseModel):
+    estate_name: str
+    is_active: bool
+
+
 # ─── INVOICES ────────────────────────────────────────────────
 class InvoiceVoid(BaseModel):
     reason: str

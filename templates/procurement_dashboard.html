@@ -366,6 +366,9 @@
                                 {% if item.is_draft %}
                                 <span
                                     class="px-2 py-0.5 bg-blue-500/20 text-blue-400 text-[10px] font-bold rounded-md border border-blue-500/30">DRAFT</span>
+                                {% elif item.is_archived %}
+                                <span
+                                    class="px-2 py-0.5 bg-amber-500/20 text-amber-400 text-[10px] font-bold rounded-md border border-amber-500/30">PRIVATE</span>
                                 {% else %}
                                 <span
                                     class="px-2 py-0.5 bg-emerald-500/20 text-emerald-400 text-[10px] font-bold rounded-md border border-emerald-500/30">PUBLIC</span>
@@ -478,9 +481,15 @@
                                 class="px-4 py-1.5 bg-blue-600 hover:bg-blue-500 text-white text-[10px] font-bold rounded-lg transition-all shadow-lg uppercase">Publish
                                 to ERP</button>
                             {% else %}
+                            {% if item.is_archived %}
+                            <button onclick="toggleEstateActive('{{ item.name }}', true)"
+                                class="px-4 py-1.5 bg-amber-500/10 hover:bg-amber-500/20 text-amber-400 text-[10px] font-bold rounded-lg transition-all uppercase border border-amber-500/20">Make
+                                Public</button>
+                            {% else %}
                             <button onclick="toggleEstateActive('{{ item.name }}', false)"
                                 class="px-4 py-1.5 bg-white/5 hover:bg-white/10 text-gray-400 text-[10px] font-bold rounded-lg transition-all uppercase">Make
                                 Private</button>
+                            {% endif %}
                             {% endif %}
                         </div>
                     </div>
@@ -1221,6 +1230,30 @@
                 const res = await fetch(`/api/payouts/estates/${draftId}/publish?token=${TOKEN}`, { method: 'POST' });
                 if (res.ok) { alert('Estate is now Live.'); location.reload(); }
             } catch (e) { alert(e.message); }
+        }
+
+        async function toggleEstateActive(estateName, active) {
+            const mode = active ? 'Public' : 'Private';
+            if (!confirm(`Are you sure you want to make ${estateName} ${mode}?\n\n- Private: Hidden from marketing/public views.\n- Clean-up: If no sales exist, properties will be permanently deleted.`)) return;
+
+            showLoading();
+            try {
+                const res = await fetch(`/api/properties/toggle-visibility?token=${TOKEN}`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ estate_name: estateName, is_active: active })
+                });
+                if (res.ok) {
+                    location.reload();
+                } else {
+                    const err = await res.json();
+                    alert('Error: ' + (err.detail || 'Failed to update visibility'));
+                }
+            } catch (e) {
+                alert('Error: ' + e.message);
+            } finally {
+                hideLoading();
+            }
         }
 
         function viewEstateManagement(data) {

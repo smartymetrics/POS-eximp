@@ -379,8 +379,8 @@ class ReportService:
         Includes both live Properties and pre-launch Estate Drafts.
         Supports time-frame filtering for tax/performance reporting.
         """
-        # 1. Fetch live properties
-        prop_res = supabase.table("properties").select("*").eq("is_archived", False).execute()
+        # 1. Fetch properties (including archived ones for procurement tracking)
+        prop_res = supabase.table("properties").select("*").execute()
         properties = prop_res.data or []
         
         # 2. Fetch estate drafts
@@ -442,7 +442,8 @@ class ReportService:
                     "budget": float(p.get("budget") or 0),
                     "total_plots": 0,
                     "variations": [],
-                    "is_draft": False
+                    "is_draft": False,
+                    "is_archived": p.get("is_archived", False)
                 }
             
             # Add to IDs for expense matching
@@ -704,7 +705,8 @@ class ReportService:
                 "plots_available": plots_available,
                 "financials": financials,
                 "breakdown": expense_breakdown,
-                "is_draft": data["is_draft"],
+                "is_draft": data.get("is_draft", False),
+                "is_archived": data.get("is_archived", False),
                 "pareto_drivers": pareto_items[:5],
                 "pareto_count": len(pareto_items),
                 "risks": risks,

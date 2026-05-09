@@ -223,6 +223,36 @@ async def record_payout_payment(request_id: str, data: PayoutPaymentData, bg_tas
         
     update_res = await db_execute(lambda: db.table("expenditure_requests").update(update_payload).eq("id", request_id).execute())
     
+    # 3b. Sync Commission Ledger if this is a commission payout
+    if req.get("category") in ["Sales Commission", "Partner Payout"] and req.get("invoice_id"):
+        try:
+            # Find matching commission record (unpaid and not voided)
+            ce_res = await db_execute(lambda: db.table("commission_earnings")
+                .select("id, net_commission, final_amount, amount_paid")
+                .eq("invoice_id", req["invoice_id"])
+                .eq("is_voided", False)
+                .execute())
+            
+            if ce_res.data:
+                for ce in ce_res.data:
+                    net = float(ce.get("net_commission") or ce.get("final_amount") or 0)
+                    already_paid = float(ce.get("amount_paid") or 0)
+                    new_ce_paid = already_paid + amount_to_pay
+                    
+                    ce_update = {
+                        "amount_paid": round(new_ce_paid, 2),
+                        "payout_reference": data.reference,
+                    }
+                    # If new_paid >= net (within float fuzziness), mark as fully paid
+                    if new_ce_paid >= net - 0.05:
+                        ce_update["is_paid"] = True
+                        ce_update["paid_at"] = datetime.now(timezone.utc).isoformat()
+                        ce_update["paid_by"] = current_admin['sub']
+                    
+                    await db_execute(lambda: db.table("commission_earnings").update(ce_update).eq("id", ce["id"]).execute())
+        except Exception as ce_sync_err:
+            print(f"[WARN] Failed to sync commission ledger for request {request_id}: {ce_sync_err}")
+    
     # Trigger automated receipt
     if update_res.data:
         req_with_vendor = await db_execute(lambda: db.table("expenditure_requests").select("*, vendors(*)").eq("id", request_id).execute())
@@ -1262,6 +1292,7 @@ async def submit_payout_claim_from_portal(
         "commission_base": float(commission_base) if type in ["staff_commission", "partner"] else float(gross),
         "receipt_url": file_url,
         "status": final_status,
+        "amount_paid": float(net) if is_already_paid else 0,
         "payout_reference": payout_reference if final_status == "paid" else None,
         "paid_at": datetime.now(timezone.utc).isoformat() if is_already_paid else None,
         "is_high_risk": is_high_risk,
@@ -1815,7 +1846,7 @@ async def get_payout_stats(
 
     # 2b. Commission Earnings Query (The Earned Ledger)
     comm_query = db.table("commission_earnings")\
-        .select("*, sales_reps(name)")\
+        .select("*, sales_reps(name), vendors(name)")\
         .eq("is_voided", False)\
         .gte("created_at", start_ts)\
         .lte("created_at", end_ts)
@@ -1903,7 +1934,7 @@ async def get_payout_stats(
         segment_stats["commissions"]["owed"] += owed
         total_ap += owed
         
-        rep_name = (c.get('sales_reps') or {}).get('name', 'Staff Partner')
+        rep_name = (c.get('sales_reps') or {}).get('name') or (c.get('vendors') or {}).get('name') or 'Staff Partner'
         payees[rep_name] = payees.get(rep_name, 0) + paid_in_ledger
         if owed > 0: 
             creditors[rep_name] = creditors.get(rep_name, 0) + owed
@@ -4233,7 +4264,7 @@ async def get_payout_stats(
 
     # 2b. Commission Earnings Query (The Earned Ledger)
     comm_query = db.table("commission_earnings")\
-        .select("*, sales_reps(name)")\
+        .select("*, sales_reps(name), vendors(name)")\
         .eq("is_voided", False)\
         .gte("created_at", start_ts)\
         .lte("created_at", end_ts)

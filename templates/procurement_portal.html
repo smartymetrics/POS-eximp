@@ -469,9 +469,12 @@
             background-size: 16px;
         }
 
-        select option {
+        select option,
+        select optgroup {
             background: #1c1c1f;
+            color: #ffffff;
         }
+
 
         textarea {
             padding-left: 14px;
@@ -1265,7 +1268,7 @@
     <div class="app-shell">
         <!-- SIDEBAR -->
         <nav class="sidebar">
-            <div class="sidebar-logo">E</div>
+            <img src="/static/img/logo.png" alt="Eximp & Cloves" style="width: 36px; height: auto; margin-bottom: 24px; object-fit: contain; filter: brightness(0) invert(1);">
             <div class="sidebar-nav">
                 <button class="sidebar-btn active" onclick="showPage('new-submission')" id="nav-new">
                     <i class="fa-solid fa-file-invoice"></i>
@@ -1443,25 +1446,76 @@
                                     <i class="input-icon fa-solid fa-landmark"></i>
                                     <select id="v-bank">
                                         <option value="">Select bank…</option>
-                                        <option>Access Bank</option>
-                                        <option>Fidelity Bank</option>
-                                        <option>First Bank of Nigeria</option>
-                                        <option>First City Monument Bank (FCMB)</option>
-                                        <option>Guaranty Trust Bank (GTBank)</option>
-                                        <option>Heritage Bank</option>
-                                        <option>Keystone Bank</option>
-                                        <option>Polaris Bank</option>
-                                        <option>Stanbic IBTC Bank</option>
-                                        <option>Sterling Bank</option>
-                                        <option>Union Bank</option>
-                                        <option>United Bank for Africa (UBA)</option>
-                                        <option>Unity Bank</option>
-                                        <option>Wema Bank</option>
-                                        <option>Zenith Bank</option>
-                                        <option>Opay</option>
-                                        <option>Kuda Bank</option>
-                                        <option>Palmpay</option>
-                                        <option>Moniepoint</option>
+                                        <optgroup label="Commercial Banks">
+                                            <option value="Access Bank">Access Bank</option>
+                                            <option value="Citibank Nigeria">Citibank Nigeria</option>
+                                            <option value="Ecobank Nigeria">Ecobank Nigeria</option>
+                                            <option value="Fidelity Bank">Fidelity Bank</option>
+                                            <option value="First Bank of Nigeria">First Bank of Nigeria</option>
+                                            <option value="First City Monument Bank (FCMB)">First City Monument Bank (FCMB)</option>
+                                            <option value="Globus Bank">Globus Bank</option>
+                                            <option value="Guaranty Trust Bank (GTBank)">Guaranty Trust Bank (GTBank)</option>
+                                            <option value="Heritage Bank">Heritage Bank</option>
+                                            <option value="Keystone Bank">Keystone Bank</option>
+                                            <option value="Nova Bank">Nova Bank</option>
+                                            <option value="Optimus Bank">Optimus Bank</option>
+                                            <option value="Parallex Bank">Parallex Bank</option>
+                                            <option value="Polaris Bank">Polaris Bank</option>
+                                            <option value="PremiumTrust Bank">PremiumTrust Bank</option>
+                                            <option value="Providus Bank">Providus Bank</option>
+                                            <option value="Signature Bank">Signature Bank</option>
+                                            <option value="Stanbic IBTC Bank">Stanbic IBTC Bank</option>
+                                            <option value="Standard Chartered Bank">Standard Chartered Bank</option>
+                                            <option value="Sterling Bank">Sterling Bank</option>
+                                            <option value="SunTrust Bank">SunTrust Bank</option>
+                                            <option value="Titan Trust Bank">Titan Trust Bank</option>
+                                            <option value="Union Bank of Nigeria">Union Bank of Nigeria</option>
+                                            <option value="United Bank for Africa (UBA)">United Bank for Africa (UBA)</option>
+                                            <option value="Unity Bank">Unity Bank</option>
+                                            <option value="Wema Bank">Wema Bank</option>
+                                            <option value="Zenith Bank">Zenith Bank</option>
+                                        </optgroup>
+                                        <optgroup label="Non-Interest Banks">
+                                            <option value="Jaiz Bank">Jaiz Bank</option>
+                                            <option value="Lotus Bank">Lotus Bank</option>
+                                            <option value="Taj Bank">Taj Bank</option>
+                                        </optgroup>
+                                        <optgroup label="Merchant Banks">
+                                            <option value="Coronation Merchant Bank">Coronation Merchant Bank</option>
+                                            <option value="FBNQuest Merchant Bank">FBNQuest Merchant Bank</option>
+                                            <option value="Rand Merchant Bank">Rand Merchant Bank</option>
+                                        </optgroup>
+                                        <optgroup label="Fintechs & Payment Platforms">
+                                            <option value="9PSB">9PSB</option>
+                                            <option value="Branch">Branch</option>
+                                            <option value="Carbon (OneFi)">Carbon (OneFi)</option>
+                                            <option value="Eyowo">Eyowo</option>
+                                            <option value="FairMoney Microfinance Bank">FairMoney Microfinance Bank</option>
+                                            <option value="Gomoney">Gomoney</option>
+                                            <option value="Kuda Bank">Kuda Bank</option>
+                                            <option value="Mint Digital Bank">Mint Digital Bank</option>
+                                            <option value="MoMo PSB (MTN)">MoMo PSB (MTN)</option>
+                                            <option value="Moneyie">Moneyie</option>
+                                            <option value="Moniepoint (TeamApt)">Moniepoint (TeamApt)</option>
+                                            <option value="Opay">Opay</option>
+                                            <option value="Paga">Paga</option>
+                                            <option value="Palmpay">Palmpay</option>
+                                            <option value="Raven Bank">Raven Bank</option>
+                                            <option value="Renmoney">Renmoney</option>
+                                            <option value="Rubies Bank">Rubies Bank</option>
+                                            <option value="Safe Haven Microfinance Bank">Safe Haven Microfinance Bank</option>
+                                            <option value="Smartcash PSB (Airtel)">Smartcash PSB (Airtel)</option>
+                                            <option value="Sparkle Microfinance Bank">Sparkle Microfinance Bank</option>
+                                            <option value="VFD Microfinance Bank (VBank)">VFD Microfinance Bank (VBank)</option>
+                                        </optgroup>
+                                        <optgroup label="Major Microfinance Banks">
+                                            <option value="Accion Microfinance Bank">Accion Microfinance Bank</option>
+                                            <option value="Hasal Microfinance Bank">Hasal Microfinance Bank</option>
+                                            <option value="LAPO Microfinance Bank">LAPO Microfinance Bank</option>
+                                            <option value="Mainstreet Microfinance Bank">Mainstreet Microfinance Bank</option>
+                                            <option value="Mutual Trust Microfinance Bank">Mutual Trust Microfinance Bank</option>
+                                            <option value="NPF Microfinance Bank">NPF Microfinance Bank</option>
+                                        </optgroup>
                                     </select>
                                 </div>
                                 <div class="input-error">Select your bank</div>
@@ -1843,17 +1897,76 @@
                                     <i class="input-icon fa-solid fa-landmark"></i>
                                     <select id="p-bank">
                                         <option value="">Select bank…</option>
-                                        <option>Access Bank</option>
-                                        <option>Fidelity Bank</option>
-                                        <option>First Bank of Nigeria</option>
-                                        <option>GTBank</option>
-                                        <option>UBA</option>
-                                        <option>Zenith Bank</option>
-                                        <option>Stanbic IBTC</option>
-                                        <option>Polaris Bank</option>
-                                        <option>Opay</option>
-                                        <option>Kuda Bank</option>
-                                        <option>Moniepoint</option>
+                                        <optgroup label="Commercial Banks">
+                                            <option value="Access Bank">Access Bank</option>
+                                            <option value="Citibank Nigeria">Citibank Nigeria</option>
+                                            <option value="Ecobank Nigeria">Ecobank Nigeria</option>
+                                            <option value="Fidelity Bank">Fidelity Bank</option>
+                                            <option value="First Bank of Nigeria">First Bank of Nigeria</option>
+                                            <option value="First City Monument Bank (FCMB)">First City Monument Bank (FCMB)</option>
+                                            <option value="Globus Bank">Globus Bank</option>
+                                            <option value="Guaranty Trust Bank (GTBank)">Guaranty Trust Bank (GTBank)</option>
+                                            <option value="Heritage Bank">Heritage Bank</option>
+                                            <option value="Keystone Bank">Keystone Bank</option>
+                                            <option value="Nova Bank">Nova Bank</option>
+                                            <option value="Optimus Bank">Optimus Bank</option>
+                                            <option value="Parallex Bank">Parallex Bank</option>
+                                            <option value="Polaris Bank">Polaris Bank</option>
+                                            <option value="PremiumTrust Bank">PremiumTrust Bank</option>
+                                            <option value="Providus Bank">Providus Bank</option>
+                                            <option value="Signature Bank">Signature Bank</option>
+                                            <option value="Stanbic IBTC Bank">Stanbic IBTC Bank</option>
+                                            <option value="Standard Chartered Bank">Standard Chartered Bank</option>
+                                            <option value="Sterling Bank">Sterling Bank</option>
+                                            <option value="SunTrust Bank">SunTrust Bank</option>
+                                            <option value="Titan Trust Bank">Titan Trust Bank</option>
+                                            <option value="Union Bank of Nigeria">Union Bank of Nigeria</option>
+                                            <option value="United Bank for Africa (UBA)">United Bank for Africa (UBA)</option>
+                                            <option value="Unity Bank">Unity Bank</option>
+                                            <option value="Wema Bank">Wema Bank</option>
+                                            <option value="Zenith Bank">Zenith Bank</option>
+                                        </optgroup>
+                                        <optgroup label="Non-Interest Banks">
+                                            <option value="Jaiz Bank">Jaiz Bank</option>
+                                            <option value="Lotus Bank">Lotus Bank</option>
+                                            <option value="Taj Bank">Taj Bank</option>
+                                        </optgroup>
+                                        <optgroup label="Merchant Banks">
+                                            <option value="Coronation Merchant Bank">Coronation Merchant Bank</option>
+                                            <option value="FBNQuest Merchant Bank">FBNQuest Merchant Bank</option>
+                                            <option value="Rand Merchant Bank">Rand Merchant Bank</option>
+                                        </optgroup>
+                                        <optgroup label="Fintechs & Payment Platforms">
+                                            <option value="9PSB">9PSB</option>
+                                            <option value="Branch">Branch</option>
+                                            <option value="Carbon (OneFi)">Carbon (OneFi)</option>
+                                            <option value="Eyowo">Eyowo</option>
+                                            <option value="FairMoney Microfinance Bank">FairMoney Microfinance Bank</option>
+                                            <option value="Gomoney">Gomoney</option>
+                                            <option value="Kuda Bank">Kuda Bank</option>
+                                            <option value="Mint Digital Bank">Mint Digital Bank</option>
+                                            <option value="MoMo PSB (MTN)">MoMo PSB (MTN)</option>
+                                            <option value="Moneyie">Moneyie</option>
+                                            <option value="Moniepoint (TeamApt)">Moniepoint (TeamApt)</option>
+                                            <option value="Opay">Opay</option>
+                                            <option value="Paga">Paga</option>
+                                            <option value="Palmpay">Palmpay</option>
+                                            <option value="Raven Bank">Raven Bank</option>
+                                            <option value="Renmoney">Renmoney</option>
+                                            <option value="Rubies Bank">Rubies Bank</option>
+                                            <option value="Safe Haven Microfinance Bank">Safe Haven Microfinance Bank</option>
+                                            <option value="Smartcash PSB (Airtel)">Smartcash PSB (Airtel)</option>
+                                            <option value="Sparkle Microfinance Bank">Sparkle Microfinance Bank</option>
+                                            <option value="VFD Microfinance Bank (VBank)">VFD Microfinance Bank (VBank)</option>
+                                        </optgroup>
+                                        <optgroup label="Major Microfinance Banks">
+                                            <option value="Accion Microfinance Bank">Accion Microfinance Bank</option>
+                                            <option value="Hasal Microfinance Bank">Hasal Microfinance Bank</option>
+                                            <option value="LAPO Microfinance Bank">LAPO Microfinance Bank</option>
+                                            <option value="Mainstreet Microfinance Bank">Mainstreet Microfinance Bank</option>
+                                            <option value="Mutual Trust Microfinance Bank">Mutual Trust Microfinance Bank</option>
+                                            <option value="NPF Microfinance Bank">NPF Microfinance Bank</option>
+                                        </optgroup>
                                     </select>
                                 </div>
                             </div>
@@ -1885,6 +1998,7 @@
 
     <script>
         // ── STATE ──────────────────────────────────────────────────────
+        const state = {
             step: 1,
             file: null,
             items: [],
@@ -1908,6 +2022,7 @@
             }
             renderSubmissions();
             renderProfilePage();
+            loadProjects();
         });
 
         // ── INVITATION TOKEN CHECK ──────────────────────────────────────
@@ -2664,6 +2779,27 @@
             el.className = 'show ' + type;
             clearTimeout(toastTimer);
             toastTimer = setTimeout(() => el.classList.remove('show'), 3800);
+        }
+        async function loadProjects() {
+            try {
+                const res = await fetch('/api/payouts/procurement-portal/projects');
+                const data = await res.json();
+                if (data.status === 'success') {
+                    const select = document.getElementById('v-project');
+                    if (select) {
+                        // Preserve the first option ("Select project...")
+                        select.innerHTML = '<option value="">Select project…</option>';
+                        data.data.forEach(p => {
+                            const opt = document.createElement('option');
+                            opt.value = p.id;
+                            opt.textContent = p.name;
+                            select.appendChild(opt);
+                        });
+                    }
+                }
+            } catch (err) {
+                console.error('Failed to load projects:', err);
+            }
         }
     </script>
 </body>

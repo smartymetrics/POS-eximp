@@ -1,6 +1,6 @@
 from fastapi import APIRouter, HTTPException, Depends
 from fastapi.encoders import jsonable_encoder
-from models import PropertyCreate, PropertyUpdate
+from models import PropertyCreate, PropertyUpdate, EstateVisibilityToggle
 from database import get_db, db_execute
 from routers.auth import verify_token
 
@@ -81,3 +81,67 @@ async def get_property(property_id: str, current_admin=Depends(verify_token)):
     if not result.data:
         raise HTTPException(status_code=404, detail="Property not found")
     return result.data[0]
+
+
+@router.patch("/toggle-visibility")
+async def toggle_estate_visibility(data: EstateVisibilityToggle, current_admin=Depends(verify_token)):
+    """
+    Hides an estate from public view.
+    If no invoices are attached to a property, it is deleted.
+    Otherwise, it's marked as inactive/archived.
+    """
+    db = get_db()
+    
+    # 1. Find all properties for this estate
+    props_res = await db_execute(lambda: db.table("properties").select("id").eq("estate_name", data.estate_name).execute())
+    if not props_res.data:
+        return {"status": "success", "message": "No properties found for this estate", "deleted": 0, "archived": 0}
+        
+    prop_ids = [p["id"] for p in props_res.data]
+    deleted_count = 0
+    archived_count = 0
+    
+    for pid in prop_ids:
+        # Check for invoices
+        inv_res = await db_execute(lambda: db.table("invoices").select("id").eq("property_id", pid).limit(1).execute())
+        
+        if not inv_res.data:
+            # DELETE
+            await db_execute(lambda: db.table("properties").delete().eq("id", pid).execute())
+            deleted_count += 1
+        else:
+            # ARCHIVE / MAKE PRIVATE
+            # Setting is_active=False hides it from public marketing views
+            # Setting is_archived=True is a fallback archive status
+            await db_execute(lambda: db.table("properties").update({
+                "is_active": data.is_active, 
+                "is_archived": not data.is_active
+            }).eq("id", pid).execute())
+            archived_count += 1
+            
+    # 2. Handle draft revert and procurement expense re-linking
+    if not data.is_active:
+        # Get the draft ID first
+        draft_res = await db_execute(lambda: db.table("estate_drafts").select("id").eq("name", data.estate_name).execute())
+        if draft_res.data:
+            draft_id = draft_res.data[0]["id"]
+            # Revert draft status
+            await db_execute(lambda: db.table("estate_drafts").update({"is_public": False}).eq("id", draft_id).execute())
+            
+            # Re-link expenses from properties back to the draft ID
+            # This ensures procurement history is preserved even if the property record is deleted
+            for pid in prop_ids:
+                await db_execute(lambda: db.table("procurement_expenses")
+                    .update({"property_id": None, "estate_draft_id": draft_id})
+                    .eq("property_id", pid)
+                    .execute())
+    else:
+        # If making public, we usually use the publish endpoint, but let's sync here too
+        await db_execute(lambda: db.table("estate_drafts").update({"is_public": True}).eq("name", data.estate_name).execute())
+
+    return {
+        "status": "success", 
+        "message": f"Processed {data.estate_name}", 
+        "deleted": deleted_count, 
+        "archived": archived_count
+    }

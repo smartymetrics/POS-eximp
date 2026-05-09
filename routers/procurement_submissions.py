@@ -624,6 +624,67 @@ async def fetch_vendor_by_email(email: str = Query(...)):
         raise HTTPException(status_code=500, detail="Error looking up vendor")
 
 
+# ── GET /procurement-portal/projects (public → list projects) ────────────
+@router.get("/procurement-portal/projects")
+async def get_procurement_projects():
+    """
+    Public endpoint to fetch active projects (properties and estate drafts)
+    for the procurement portal selection.
+    """
+    db = get_db()
+    try:
+        # 1. Fetch properties
+        props_res = await db_execute(lambda: db.table("properties")
+            .select("id, name, estate_name, is_archived")
+            .order("name")
+            .execute())
+        
+        # 2. Fetch estate drafts (only unpublished)
+        drafts_res = await db_execute(lambda: db.table("estate_drafts")
+            .select("id, name")
+            .eq("is_public", False)
+            .order("name")
+            .execute())
+            
+        projects = []
+        seen_estates = set()
+        
+        # Combine properties (Deduplicate by base estate name)
+        for p in (props_res.data or []):
+            p_name = p.get("name") or ""
+            estate_name = p.get("estate_name")
+            
+            # Fallback parsing if estate_name is not set
+            if not estate_name and p_name:
+                estate_name = p_name.split(" - ")[0]
+                for suffix in [" (Outright)", " (Installment)", " (Outright Payment)", " (Installment Payment)"]:
+                    if suffix in estate_name:
+                        estate_name = estate_name.split(suffix)[0]
+                        break
+            
+            if estate_name and estate_name not in seen_estates:
+                seen_estates.add(estate_name)
+                display_name = estate_name
+                if p.get("is_archived"):
+                    display_name += " (Private/Archived)"
+                projects.append({"id": p["id"], "name": display_name, "type": "property"})
+            
+        # Combine drafts (Avoid duplicates if somehow name matches a property)
+        for d in (drafts_res.data or []):
+            d_name = d.get("name")
+            if d_name and d_name not in seen_estates:
+                seen_estates.add(d_name)
+                projects.append({"id": d["id"], "name": f"{d_name} (Draft)", "type": "draft"})
+            
+        # Add "Other" as a fallback
+        projects.append({"id": "other", "name": "Other / Admin", "type": "other"})
+        
+        return {"status": "success", "data": projects}
+    except Exception as e:
+        logger.error(f"Error fetching projects: {e}")
+        return {"status": "error", "message": "Failed to load project list"}
+
+
 # ── POST /procurement-portal/upload  (public → upload attachment) ──────────
 @router.post("/procurement-portal/upload")
 async def upload_procurement_attachment(file: UploadFile = File(...)):
