@@ -998,7 +998,7 @@ async def get_global_absences(
 async def run_payroll(current_admin: dict = Depends(verify_token)):
     """Generate payroll records for all active staff for the current month."""
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
+    if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
          raise HTTPException(status_code=403, detail="HR Admin only")
          
     db = get_db()
@@ -1125,7 +1125,7 @@ async def run_payroll(current_admin: dict = Depends(verify_token)):
 async def create_manual_payroll(nf: ManualPayrollCreate, current_admin: dict = Depends(verify_token)):
     """Manually log a payroll record (bonus, contractor fee, etc). HR only."""
     user_roles = current_admin.get("role", "").split(",")
-    if "admin" not in user_roles and "hr_admin" not in user_roles:
+    if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
          raise HTTPException(status_code=403, detail="HR Admin only")
          
     db = get_db()
@@ -1479,6 +1479,61 @@ async def get_payslips(staff_id: Optional[str] = None, current_admin: dict = Dep
         
     res = await db_execute(lambda: query.execute())
     return res.data
+
+class PayrollUpdate(BaseModel):
+    gross_pay: Optional[float] = None
+    tax: Optional[float] = None
+    pension: Optional[float] = None
+    nhf: Optional[float] = None
+    net_pay: Optional[float] = None
+    status: Optional[str] = None
+    notes: Optional[str] = None
+
+@router.patch("/payroll/{record_id}")
+async def update_payroll_record(record_id: str, update: PayrollUpdate, current_admin: dict = Depends(verify_token)):
+    """Update a payroll record's figures or status. HR only."""
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+
+    db = get_db()
+    update_data = {k: v for k, v in update.dict().items() if v is not None}
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No fields to update")
+
+    # Recalculate net_pay if financial fields changed but net_pay not explicitly provided
+    if "net_pay" not in update_data and any(k in update_data for k in ["gross_pay", "tax", "pension", "nhf"]):
+        # Fetch existing record to compute net
+        existing = await db_execute(lambda: db.table("payroll_records").select("gross_pay,tax,pension,nhf").eq("id", record_id).single().execute())
+        if existing.data:
+            gross = update_data.get("gross_pay", existing.data.get("gross_pay", 0) or 0)
+            tax = update_data.get("tax", existing.data.get("tax", 0) or 0)
+            pension = update_data.get("pension", existing.data.get("pension", 0) or 0)
+            nhf = update_data.get("nhf", existing.data.get("nhf", 0) or 0)
+            update_data["net_pay"] = round(float(gross) - float(tax) - float(pension) - float(nhf), 2)
+
+    update_data["updated_at"] = datetime.utcnow().isoformat()
+    res = await db_execute(lambda: db.table("payroll_records").update(update_data).eq("id", record_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Payroll record not found")
+    return res.data[0]
+
+@router.delete("/payroll/{record_id}", status_code=status.HTTP_204_NO_CONTENT)
+async def delete_payroll_record(record_id: str, current_admin: dict = Depends(verify_token)):
+    """Delete a payroll record. HR only. Cannot delete already-paid records."""
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+
+    db = get_db()
+    # Safety check: do not allow deletion of paid records without explicit override
+    existing = await db_execute(lambda: db.table("payroll_records").select("id, status").eq("id", record_id).single().execute())
+    if not existing.data:
+        raise HTTPException(status_code=404, detail="Payroll record not found")
+    if existing.data.get("status") == "paid":
+        raise HTTPException(status_code=400, detail="Cannot delete a record with status 'paid'. Change the status first.")
+
+    await db_execute(lambda: db.table("payroll_records").delete().eq("id", record_id).execute())
 
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(current_admin: dict = Depends(verify_token)):

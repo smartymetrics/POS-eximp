@@ -17,6 +17,23 @@ from database import supabase
 router = APIRouter()
 APP_BASE_URL = os.getenv("APP_BASE_URL", "https://app.eximps-cloves.com")
 
+
+# ── HELPER: NOTIFICATION DISPATCHER ──────────────────────────────────
+async def _create_notification(db, recipient_admin_id: str, notif_type: str, title: str, message: str, matter_id: str = None):
+    """Non-critical helper — inserts a notification for a specific admin. Never raises."""
+    try:
+        await db_execute(lambda: db.table("legal_notifications").insert({
+            "recipient_id": recipient_admin_id,
+            "type": notif_type,
+            "title": title,
+            "message": message,
+            "matter_id": matter_id,
+            "is_read": False,
+        }).execute())
+    except Exception as e:
+        print(f"[Notification] Failed to create notification: {e}")
+
+
 # ── HELPER: LEGAL BRANDING ──
 async def get_branding_urls():
     """Fetches high-fidelity Seal and Stamp URLs from the Signature Vault (company_signatures table)."""
@@ -63,48 +80,63 @@ async def get_branding_urls():
 # ── HELPER: PERMISSION CHECK ──
 async def check_matter_access(matter_id: str, current_admin: dict, required_level: str = "View"):
     """
-    Verifies if an admin has access to a legal matter.
-    Levels: 'View', 'Edit', 'Full' (Drafter has 'Full')
+    Verifies if an admin has access to a specific legal matter.
+
+    ACCESS LEVELS: View < Edit < Full
+    ─────────────────────────────────────────────────────────
+    • super_admin / admin  → always Full (oversight role)
+    • Drafter              → always Full (owns the matter)
+    • Explicit collaborator → granted at their invited level only
+    • Everyone else        → 403, regardless of job role.
+
+    There are NO role-based backdoors. No Personnel bypass.
+    HR cannot see legal matters they were not invited to.
+    Lawyers cannot see HR contracts they were not invited to.
+    Invitation is the ONLY cross-role gateway.
     """
     db = get_db()
     admin_id = current_admin["sub"]
     user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
-    
-    # 1. Is the admin the drafter or a super-admin?
-    matter_res = await db_execute(lambda: db.table("legal_matters").select("drafter_id, category").eq("id", matter_id).execute())
+
+    # 1. Fetch the matter (we need drafter_id at minimum)
+    matter_res = await db_execute(
+        lambda: db.table("legal_matters").select("drafter_id, title").eq("id", matter_id).execute()
+    )
     if not matter_res.data:
         raise HTTPException(status_code=404, detail="Legal matter not found")
-    
     matter = matter_res.data[0]
-    
-    # Check if admin is the drafter
+
+    # 2. Super admins — full unrestricted oversight
+    if any(r in ["admin", "super_admin"] for r in user_roles):
+        return "Full"
+
+    # 3. Drafter — full access to their own matter
     if str(matter.get("drafter_id")) == str(admin_id):
         return "Full"
-        
-    # Global 'View' bypass for HR and Legal on Personnel matters
-    if required_level == "View" and matter.get("category") == "Personnel":
-        if any(r in ["admin", "super_admin", "legal", "hr_admin", "hr"] for r in user_roles):
-            return "View"
-        
-    # Check roles for Super Admin
-    # (Simplified for now - assuming we can fetch role if needed, but for now we check collaborators)
-    
-    # 2. Check collaborators table
-    collab_res = await db_execute(lambda: db.table("legal_matter_collaborators")\
-        .select("permission_level")\
-        .eq("matter_id", matter_id)\
-        .eq("admin_id", admin_id).execute())
-    
+
+    # 4. Explicit collaborator — access at their invited level only
+    collab_res = await db_execute(
+        lambda: db.table("legal_matter_collaborators")
+        .select("permission_level")
+        .eq("matter_id", matter_id)
+        .eq("admin_id", admin_id)
+        .execute()
+    )
     if collab_res.data:
         level = collab_res.data[0]["permission_level"]
-        # Basic check: Edit requires 'Edit' or 'Full'. View requires anything.
         if required_level == "Edit" and level not in ["Edit", "Full"]:
-            raise HTTPException(status_code=403, detail="Insufficient permissions to edit this matter")
+            raise HTTPException(
+                status_code=403,
+                detail="You have View-only access to this matter. Ask the drafter to upgrade your permissions."
+            )
         return level
 
-    raise HTTPException(status_code=403, detail="You do not have permission to access this legal matter")
+    # 5. No access — clear, honest message
+    raise HTTPException(
+        status_code=403,
+        detail="Access denied. You were not invited to this legal matter."
+    )
 
-# ── ENDPOINTS ──
 
 @router.get("/branding")
 async def get_legal_branding_api(current_admin=Depends(verify_token_optional)):
@@ -127,69 +159,214 @@ async def get_collaborator_candidates(current_admin=Depends(verify_token)):
 
 @router.get("/matters")
 async def get_legal_matters(category: str = None, staff_id: str = None, current_admin=Depends(verify_token)):
-    """Fetch all legal matters accessible to the current admin."""
+    """
+    Fetch legal matters accessible to the current admin.
+
+    ACCESS MODEL:
+    ─────────────────────────────────────────────────────────
+    • super_admin / admin  → sees ALL matters (oversight only)
+    • All other roles (legal, hr, hr_admin, operations, etc.) → sees ONLY:
+        - Matters they drafted themselves
+        - Matters they were explicitly invited to as a collaborator
+    • Staff portal → handled by /staff/self/visible-matters
+
+    Invitation is the ONLY cross-role gateway.
+    HR cannot see legal matters. Lawyers cannot see HR contracts.
+    Unless the drafter explicitly invites them.
+    """
+    import asyncio
     db = get_db()
     admin_id = current_admin["sub"]
     user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
-    
-    # If the user is a lawyer, super_admin, or HR, they can see everything.
-    # Otherwise, they only see matters where they are the drafter or collaborator.
-    is_privileged = any(r in ["admin", "super_admin", "legal", "hr_admin", "operations"] for r in user_roles)
-    
-    query = db.table("legal_matters").select("*, drafter:admins!legal_matters_drafter_id_fkey(full_name), staff:admins!legal_matters_staff_id_fkey(full_name)")
-    if category:
-        query = query.eq("category", category)
-    if staff_id:
-        query = query.eq("staff_id", staff_id)
-    elif not is_privileged:
-        # Restricted view: Only drafted or collaborated
-        # This is slightly tricky for PostgREST 'or' logic, so we'll fetch drafted mostly
-        query = query.eq("drafter_id", admin_id)
-        
-    res = await db_execute(lambda: query.order("created_at", desc=True).execute())
-    matters = res.data or []
-
-    if not matters:
-        return []
-
-    # Batch-fetch all collaborator records for the current admin (avoids N+1)
-    matter_ids = [m["id"] for m in matters]
-    collab_res = await db_execute(lambda: db.table("legal_matter_collaborators")
-        .select("matter_id, permission_level")
-        .eq("admin_id", admin_id)
-        .in_("matter_id", matter_ids)
-        .execute()
-    )
-    # Build a map: matter_id → permission_level
-    collab_map = {c["matter_id"]: c["permission_level"] for c in (collab_res.data or [])}
-
     is_super = any(r in ["admin", "super_admin"] for r in user_roles)
 
-    for m in matters:
-        is_drafter = str(m.get("drafter_id")) == str(admin_id)
-        collab_level = collab_map.get(m["id"])
-        # can_edit: drafter always can. Collaborator needs Edit or Full. Super-admin can always.
-        m["can_edit"] = is_drafter or is_super or (collab_level in ["Edit", "Full"])
-        # can_delete: only the drafter or a super-admin
-        m["can_delete"] = is_drafter or is_super
-        m["is_drafter"] = is_drafter
+    select_clause = (
+        "*, "
+        "drafter:admins!legal_matters_drafter_id_fkey(full_name), "
+        "staff:admins!legal_matters_staff_id_fkey(full_name)"
+    )
 
+    if is_super:
+        # ── Super admins: unrestricted oversight ──
+        query = db.table("legal_matters").select(select_clause)
+        if category:
+            query = query.eq("category", category)
+        if staff_id:
+            query = query.eq("staff_id", staff_id)
+        res = await db_execute(lambda: query.order("created_at", desc=True).execute())
+        matters = res.data or []
+        for m in matters:
+            m["is_drafter"]  = str(m.get("drafter_id")) == str(admin_id)
+            m["can_edit"]    = True
+            m["can_delete"]  = True
+            m["access_via"]  = "super_admin"
+        return matters
+
+    # ── Invitation-gated: all other roles ──
+    # 1. Get all matters this admin was invited to (and the permission level)
+    collab_res = await db_execute(
+        lambda: db.table("legal_matter_collaborators")
+        .select("matter_id, permission_level")
+        .eq("admin_id", admin_id)
+        .execute()
+    )
+    collab_map   = {c["matter_id"]: c["permission_level"] for c in (collab_res.data or [])}
+    invited_ids  = list(collab_map.keys())
+
+    # 2. Build queries
+    drafted_q = db.table("legal_matters").select(select_clause).eq("drafter_id", admin_id)
+    if category:
+        drafted_q = drafted_q.eq("category", category)
+    if staff_id:
+        drafted_q = drafted_q.eq("staff_id", staff_id)
+
+    async def fetch_drafted():
+        return await db_execute(lambda: drafted_q.order("created_at", desc=True).execute())
+
+    async def fetch_invited():
+        if not invited_ids:
+            return type("R", (), {"data": []})()
+        q = db.table("legal_matters").select(select_clause).in_("id", invited_ids)
+        if category:
+            q = q.eq("category", category)
+        if staff_id:
+            q = q.eq("staff_id", staff_id)
+        return await db_execute(lambda: q.order("created_at", desc=True).execute())
+
+    drafted_res, invited_res = await asyncio.gather(fetch_drafted(), fetch_invited())
+
+    # 3. Merge, deduplicate (drafter wins)
+    seen    = set()
+    matters = []
+
+    for m in (drafted_res.data or []):
+        m["is_drafter"] = True
+        m["can_edit"]   = True
+        m["can_delete"] = True
+        m["access_via"] = "drafter"
+        seen.add(m["id"])
+        matters.append(m)
+
+    for m in (invited_res.data or []):
+        if m["id"] in seen:
+            continue
+        level = collab_map.get(m["id"], "View")
+        m["is_drafter"] = False
+        m["can_edit"]   = level in ["Edit", "Full"]
+        m["can_delete"] = False
+        m["access_via"] = f"invited:{level}"
+        seen.add(m["id"])
+        matters.append(m)
+
+    matters.sort(key=lambda x: x.get("created_at", ""), reverse=True)
     return matters
 
 
 @router.get("/staff/{staff_id}/matters")
 async def get_staff_matters(staff_id: str, current_admin=Depends(verify_token)):
-    """HR Portal: Fetch all matters for a specific employee (HR/Legal only)."""
-    user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
-    if not any(r in ["admin", "super_admin", "hr_admin", "hr", "legal"] for r in user_roles):
-        raise HTTPException(status_code=403, detail="Only HR and Legal staff can view staff matters")
-    
+    """
+    HR Portal: Fetch matters linked to a specific staff member.
+
+    ACCESS MODEL:
+    • super_admin / admin  → sees all matters for this staff member
+    • HR / Legal / others  → sees only matters they drafted OR were invited to
+      (visibility is per-matter via invitation, not role-based)
+    • Staff portal         → handled by /staff/self/visible-matters (staff_visible=true only)
+    """
+    import asyncio
     db = get_db()
-    res = await db_execute(lambda: db.table("legal_matters")\
-        .select("*, drafter:admins!legal_matters_drafter_id_fkey(full_name), staff:admins!legal_matters_staff_id_fkey(full_name)")\
-        .eq("staff_id", staff_id)\
-        .order("created_at", desc=True).execute())
-    return res.data or []
+    admin_id = current_admin["sub"]
+    user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
+
+    # Gate: only admins/HR/Legal can query staff matters at all
+    allowed_roles = ["admin", "super_admin", "hr_admin", "hr", "legal"]
+    if not any(r in allowed_roles for r in user_roles):
+        raise HTTPException(status_code=403, detail="Only HR, Legal, and Admins can view staff matters")
+
+    select_clause = (
+        "*, "
+        "drafter:admins!legal_matters_drafter_id_fkey(full_name), "
+        "staff:admins!legal_matters_staff_id_fkey(full_name)"
+    )
+    is_super = any(r in ["admin", "super_admin"] for r in user_roles)
+
+    if is_super:
+        # Super admins see everything for this staff member
+        res = await db_execute(
+            lambda: db.table("legal_matters")
+            .select(select_clause)
+            .eq("staff_id", staff_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+        matters = res.data or []
+        for m in matters:
+            m["access_via"] = "super_admin"
+            m["can_edit"]   = True
+            m["is_drafter"] = str(m.get("drafter_id")) == str(admin_id)
+        return matters
+
+    # For all other roles: invitation-gated
+    # Fetch collaborated matter IDs for this admin
+    collab_res = await db_execute(
+        lambda: db.table("legal_matter_collaborators")
+        .select("matter_id, permission_level")
+        .eq("admin_id", admin_id)
+        .execute()
+    )
+    collab_map  = {c["matter_id"]: c["permission_level"] for c in (collab_res.data or [])}
+    invited_ids = list(collab_map.keys())
+
+    # Matters this admin drafted, filtered to this staff member
+    async def fetch_drafted():
+        return await db_execute(
+            lambda: db.table("legal_matters")
+            .select(select_clause)
+            .eq("staff_id", staff_id)
+            .eq("drafter_id", admin_id)
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+    # Invited matters for this staff member
+    async def fetch_invited():
+        if not invited_ids:
+            return type("R", (), {"data": []})()
+        return await db_execute(
+            lambda: db.table("legal_matters")
+            .select(select_clause)
+            .eq("staff_id", staff_id)
+            .in_("id", invited_ids)
+            .order("created_at", desc=True)
+            .execute()
+        )
+
+    drafted_res, invited_res = await asyncio.gather(fetch_drafted(), fetch_invited())
+
+    seen    = set()
+    matters = []
+    for m in (drafted_res.data or []):
+        m["is_drafter"] = True
+        m["can_edit"]   = True
+        m["can_delete"] = True
+        m["access_via"] = "drafter"
+        seen.add(m["id"])
+        matters.append(m)
+
+    for m in (invited_res.data or []):
+        if m["id"] in seen:
+            continue
+        level = collab_map.get(m["id"], "View")
+        m["is_drafter"] = False
+        m["can_edit"]   = level in ["Edit", "Full"]
+        m["can_delete"] = False
+        m["access_via"] = f"invited:{level}"
+        seen.add(m["id"])
+        matters.append(m)
+
+    matters.sort(key=lambda x: x.get("created_at", ""), reverse=True)
+    return matters
+
 
 @router.post("/matters")
 async def initiate_matter(data: dict, current_admin=Depends(verify_token)):
@@ -221,7 +398,8 @@ async def initiate_matter(data: dict, current_admin=Depends(verify_token)):
         "external_party_email": data.get("external_party_email"),
         "priority": data.get("priority", "Normal"),
         "hr_memo": data.get("hr_memo"),
-        "status": data.get("status", "Draft")
+        "status": data.get("status", "Draft"),
+        "staff_visible": data.get("staff_visible", False),  # Always private by default
     }
 
     res = await db_execute(lambda: db.table("legal_matters").insert(matter_data).execute())
@@ -313,16 +491,40 @@ async def add_collaborator(matter_id: str, data: dict, current_admin=Depends(ver
     res = await db_execute(lambda: db.table("legal_matter_collaborators").insert(collab_data).execute())
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to add collaborator")
-        
+
+    # Fetch matter title for notification
+    matter_info = await db_execute(lambda: db.table("legal_matters").select("title, category").eq("id", matter_id).execute())
+    matter_title = matter_info.data[0]["title"] if matter_info.data else "a legal matter"
+    matter_cat = matter_info.data[0]["category"] if matter_info.data else "Contract"
+    inviter_name = current_admin.get("full_name", "HR")
+    invitation_note = data.get("invitation_note", "")
+
     # Audit
     await db_execute(lambda: db.table("legal_matter_history").insert({
         "matter_id": matter_id,
-        "action": "Permission Granted",
+        "action": "Lawyer Invited",
         "performed_by": admin_id,
-        "performed_by_name": current_admin.get("full_name", "Unknown"),
-        "description": f"Granted {collab_data['permission_level']} access to admin {data.get('admin_id')}"
+        "performed_by_name": inviter_name,
+        "description": f"Granted {collab_data['permission_level']} access. Invitation note: {invitation_note or 'None'}"
     }).execute())
-    
+
+    # Fire notification to invited collaborator
+    notif_msg = (
+        f"{inviter_name} has invited you to collaborate on a {matter_cat}: \"{matter_title}\". "
+        f"Permission: {collab_data['permission_level']}."
+    )
+    if invitation_note:
+        notif_msg += f" Note: {invitation_note}"
+
+    await _create_notification(
+        db,
+        recipient_admin_id=collab_data["admin_id"],
+        notif_type="invite",
+        title="⚖️ You've been invited to collaborate",
+        message=notif_msg,
+        matter_id=matter_id,
+    )
+
     return res.data[0]
 
 @router.delete("/matters/{matter_id}/collaborators/{target_admin_id}")
@@ -1409,37 +1611,43 @@ async def get_case_categories(current_admin=Depends(verify_token)):
 @router.patch("/matters/{matter_id}/visibility")
 async def toggle_matter_visibility(matter_id: str, data: dict, current_admin=Depends(verify_token)):
     """
-    HR/Legal only: Toggle whether staff member can see this matter.
-    Only matters marked staff_visible=true are shown to the personnel.
+    Toggle whether a staff member can see this matter in their portal.
+
+    ACCESS: Only the drafter, an invited collaborator with Edit access,
+    or a super_admin can change visibility.
+    Role alone (e.g. 'hr') is NOT sufficient — you must own or be invited to the matter.
     """
-    user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
-    if not any(r in ["admin", "super_admin", "hr_admin", "hr", "legal"] for r in user_roles):
-        raise HTTPException(status_code=403, detail="Only HR and Legal can control visibility")
-    
+    # Uses check_matter_access — this enforces invitation-gated access automatically
+    await check_matter_access(matter_id, current_admin, required_level="Edit")
+
     admin_id = current_admin["sub"]
     db = get_db()
-    
-    # Verify matter exists
-    matter_res = await db_execute(lambda: db.table("legal_matters").select("id").eq("id", matter_id).execute())
+
+    matter_res = await db_execute(
+        lambda: db.table("legal_matters").select("id, title").eq("id", matter_id).execute()
+    )
     if not matter_res.data:
         raise HTTPException(status_code=404, detail="Matter not found")
-    
-    # Update visibility
+
     staff_visible = data.get("staff_visible", False)
-    await db_execute(lambda: db.table("legal_matters").update({
-        "staff_visible": staff_visible,
-        "updated_at": datetime.now().isoformat()
-    }).eq("id", matter_id).execute())
-    
-    # Audit trail
+
+    await db_execute(
+        lambda: db.table("legal_matters").update({
+            "staff_visible": staff_visible,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }).eq("id", matter_id).execute()
+    )
+
     await db_execute(lambda: db.table("legal_matter_history").insert({
         "matter_id": matter_id,
         "action": "Visibility Changed",
         "performed_by": admin_id,
-        "description": f"Matter marked as {'visible' if staff_visible else 'confidential'} to staff member"
+        "performed_by_name": current_admin.get("full_name", "Unknown"),
+        "description": f"Contract marked as {'PUBLIC (visible to staff)' if staff_visible else 'PRIVATE (hidden from staff)'} by {current_admin.get('full_name', 'Unknown')}"
     }).execute())
-    
+
     return {"status": "updated", "staff_visible": staff_visible}
+
 
 @router.get("/staff/self/visible-matters")
 async def get_staff_visible_matters(current_admin=Depends(verify_token)):
@@ -2292,3 +2500,362 @@ async def get_legal_execution_trends(current_admin: dict = Depends(verify_token)
         "executed": executed,
         "pending": pending
     }
+
+# ══════════════════════════════════════════════════════════════════════
+#  NOTIFICATIONS SYSTEM — endpoints below
+# ══════════════════════════════════════════════════════════════════════
+
+
+@router.get("/notifications")
+async def get_my_notifications(current_admin=Depends(verify_token)):
+    """Fetch all notifications for the currently logged-in admin/lawyer/HR."""
+    db = get_db()
+    admin_id = current_admin["sub"]
+    try:
+        res = await db_execute(
+            lambda: db.table("legal_notifications")
+            .select("*")
+            .eq("recipient_id", admin_id)
+            .order("created_at", desc=True)
+            .limit(100)
+            .execute()
+        )
+        return res.data or []
+    except Exception as e:
+        # If the table doesn't exist yet, return empty — graceful degradation
+        print(f"[Notifications] Table may not exist yet: {e}")
+        return []
+
+
+@router.patch("/notifications/{notif_id}/read")
+async def mark_notification_read(notif_id: str, current_admin=Depends(verify_token)):
+    """Mark a single notification as read."""
+    db = get_db()
+    admin_id = current_admin["sub"]
+    await db_execute(
+        lambda: db.table("legal_notifications")
+        .update({"is_read": True})
+        .eq("id", notif_id)
+        .eq("recipient_id", admin_id)
+        .execute()
+    )
+    return {"status": "read"}
+
+
+@router.patch("/notifications/read-all")
+async def mark_all_notifications_read(current_admin=Depends(verify_token)):
+    """Mark all notifications for the current admin as read."""
+    db = get_db()
+    admin_id = current_admin["sub"]
+    await db_execute(
+        lambda: db.table("legal_notifications")
+        .update({"is_read": True})
+        .eq("recipient_id", admin_id)
+        .eq("is_read", False)
+        .execute()
+    )
+    return {"status": "all_read"}
+
+
+# ── ENHANCED: add_collaborator now fires a notification to the invited lawyer ──
+
+@router.post("/matters/{matter_id}/collaborators/notify")
+async def add_collaborator_with_notification(matter_id: str, data: dict, current_admin=Depends(verify_token)):
+    """
+    Add a collaborator AND send them a notification.
+    This enhanced version replaces the silent add_collaborator for HR-initiated invites.
+    """
+    admin_id = current_admin["sub"]
+    await check_matter_access(matter_id, current_admin, required_level="Edit")
+
+    db = get_db()
+    invited_admin_id = data.get("admin_id")
+    permission_level = data.get("permission_level", "Edit")
+    invitation_note = data.get("invitation_note", "")
+
+    if not invited_admin_id:
+        raise HTTPException(status_code=400, detail="admin_id is required")
+
+    # Fetch matter title for notification message
+    matter_res = await db_execute(
+        lambda: db.table("legal_matters").select("title, category").eq("id", matter_id).execute()
+    )
+    matter_title = matter_res.data[0]["title"] if matter_res.data else "a legal matter"
+    matter_category = matter_res.data[0]["category"] if matter_res.data else "Contract"
+
+    # Insert collaborator record
+    collab_data = {
+        "matter_id": matter_id,
+        "admin_id": invited_admin_id,
+        "permission_level": permission_level
+    }
+    res = await db_execute(
+        lambda: db.table("legal_matter_collaborators").insert(collab_data).execute()
+    )
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to add collaborator")
+
+    # Audit log
+    await db_execute(lambda: db.table("legal_matter_history").insert({
+        "matter_id": matter_id,
+        "action": "Lawyer Invited",
+        "performed_by": admin_id,
+        "performed_by_name": current_admin.get("full_name", "HR"),
+        "description": f"Lawyer invited with {permission_level} access. Note: {invitation_note or 'None'}"
+    }).execute())
+
+    # Fire notification to invited lawyer
+    inviter_name = current_admin.get("full_name", "HR")
+    notif_message = (
+        f"{inviter_name} has invited you to collaborate on a {matter_category}: \"{matter_title}\". "
+        f"Permission: {permission_level}."
+    )
+    if invitation_note:
+        notif_message += f" Note: {invitation_note}"
+
+    await _create_notification(
+        db,
+        recipient_admin_id=invited_admin_id,
+        notif_type="invite",
+        title=f"⚖️ You've been invited to collaborate",
+        message=notif_message,
+        matter_id=matter_id,
+    )
+
+    return res.data[0]
+
+
+# ── ENHANCED: POST /matters now fires notifications ──
+
+@router.post("/matters/hr-initiate")
+async def hr_initiate_contract(data: dict, current_admin=Depends(verify_token)):
+    """
+    HR-specific contract initiation with:
+    - staff_visible control (default False)
+    - optional immediate lawyer invitation + notification
+    - internal memo storage
+    Lawyers are NEVER notified unless explicitly invited by HR.
+    """
+    db = get_db()
+    admin_id = current_admin["sub"]
+    user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
+
+    allowed = any(r in ["hr", "hr_admin", "admin", "super_admin"] for r in user_roles)
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Only HR can use this endpoint")
+
+    # Build matter
+    matter_data = {
+        "title": data.get("title", "Untitled Contract"),
+        "category": data.get("category", "Employment Contract"),
+        "drafter_id": admin_id,
+        "staff_id": data.get("staff_id"),
+        "external_party_name": data.get("external_party_name"),
+        "external_party_email": data.get("external_party_email"),
+        "priority": data.get("priority", "Normal"),
+        "hr_memo": data.get("hr_memo"),
+        "status": "Draft",
+        "staff_visible": data.get("staff_visible", False),  # PRIVATE by default
+    }
+
+    res = await db_execute(lambda: db.table("legal_matters").insert(matter_data).execute())
+    if not res.data:
+        raise HTTPException(status_code=500, detail="Failed to create contract")
+
+    matter = res.data[0]
+    matter_id = matter["id"]
+
+    # Audit
+    hr_name = current_admin.get("full_name", "HR")
+    await db_execute(lambda: db.table("legal_matter_history").insert({
+        "matter_id": matter_id,
+        "action": "Contract Created by HR",
+        "performed_by": admin_id,
+        "performed_by_name": hr_name,
+        "description": f"Contract '{matter_data['title']}' created by {hr_name} via HR Contract Kitchen. Staff visibility: {matter_data['staff_visible']}"
+    }).execute())
+
+    # If lawyer invite requested
+    lawyer_id = data.get("lawyer_id")
+    lawyer_note = data.get("lawyer_note", "")
+    if lawyer_id:
+        collab_data = {
+            "matter_id": matter_id,
+            "admin_id": lawyer_id,
+            "permission_level": data.get("lawyer_permission", "Edit"),
+        }
+        await db_execute(lambda: db.table("legal_matter_collaborators").insert(collab_data).execute())
+
+        # Fetch lawyer name for audit
+        lawyer_res = await db_execute(
+            lambda: db.table("admins").select("full_name").eq("id", lawyer_id).execute()
+        )
+        lawyer_name = lawyer_res.data[0]["full_name"] if lawyer_res.data else "Lawyer"
+
+        await db_execute(lambda: db.table("legal_matter_history").insert({
+            "matter_id": matter_id,
+            "action": "Lawyer Invited at Creation",
+            "performed_by": admin_id,
+            "performed_by_name": hr_name,
+            "description": f"{lawyer_name} invited to collaborate at contract creation"
+        }).execute())
+
+        # Notify lawyer
+        notif_msg = (
+            f"{hr_name} has invited you to collaborate on a new contract: \"{matter_data['title']}\". "
+            f"Type: {matter_data['category']}."
+        )
+        if lawyer_note:
+            notif_msg += f" Note from HR: {lawyer_note}"
+
+        await _create_notification(
+            db,
+            recipient_admin_id=lawyer_id,
+            notif_type="invite",
+            title="⚖️ HR has invited you to a new contract",
+            message=notif_msg,
+            matter_id=matter_id,
+        )
+
+    return matter
+
+
+# ── ENHANCED: visibility toggle now notifies staff (when made public) ──
+
+@router.patch("/matters/{matter_id}/visibility/notify")
+async def toggle_visibility_with_notification(matter_id: str, data: dict, current_admin=Depends(verify_token)):
+    """
+    Visibility toggle that also:
+    - Notifies the staff member when made public (if staff_id is set)
+    - Fires an internal notification to lawyers on the matter
+    """
+    db = get_db()
+    admin_id = current_admin["sub"]
+    user_roles = {r.strip() for r in (current_admin.get("role") or "").split(",") if r.strip()}
+
+    allowed = any(r in ["hr", "hr_admin", "admin", "super_admin", "legal"] for r in user_roles)
+    if not allowed:
+        raise HTTPException(status_code=403, detail="Only HR and Legal can control visibility")
+
+    staff_visible = data.get("staff_visible", False)
+
+    # Fetch matter
+    matter_res = await db_execute(
+        lambda: db.table("legal_matters").select("*").eq("id", matter_id).execute()
+    )
+    if not matter_res.data:
+        raise HTTPException(status_code=404, detail="Matter not found")
+    matter = matter_res.data[0]
+
+    # Update
+    await db_execute(
+        lambda: db.table("legal_matters").update({
+            "staff_visible": staff_visible,
+            "updated_at": datetime.now(timezone.utc).isoformat()
+        }).eq("id", matter_id).execute()
+    )
+
+    # Audit
+    hr_name = current_admin.get("full_name", "HR")
+    await db_execute(lambda: db.table("legal_matter_history").insert({
+        "matter_id": matter_id,
+        "action": "Visibility Updated",
+        "performed_by": admin_id,
+        "performed_by_name": hr_name,
+        "description": f"Contract marked as {'PUBLIC (visible to staff)' if staff_visible else 'PRIVATE (hidden from staff)'}"
+    }).execute())
+
+    # Notify collaborators (lawyers on this matter) about visibility change
+    collabs_res = await db_execute(
+        lambda: db.table("legal_matter_collaborators").select("admin_id").eq("matter_id", matter_id).execute()
+    )
+    if collabs_res.data:
+        for c in collabs_res.data:
+            if c["admin_id"] == admin_id:
+                continue  # don't notify self
+            await _create_notification(
+                db,
+                recipient_admin_id=c["admin_id"],
+                notif_type="visibility",
+                title=f"👁 Contract visibility changed",
+                message=f"'{matter['title']}' has been made {'public (visible to staff)' if staff_visible else 'private (hidden from staff)'} by {hr_name}.",
+                matter_id=matter_id,
+            )
+
+    return {"status": "updated", "staff_visible": staff_visible}
+
+
+# ── POST /matters/:id/dispatch-signature with HR notification ──
+
+@router.post("/matters/{matter_id}/notify-signing-dispatched")
+async def notify_signing_dispatched(matter_id: str, current_admin=Depends(verify_token)):
+    """
+    Called after dispatch-signature to fire notifications to all collaborators
+    on the matter that signing has been dispatched.
+    """
+    db = get_db()
+    admin_id = current_admin["sub"]
+
+    matter_res = await db_execute(
+        lambda: db.table("legal_matters").select("title, category").eq("id", matter_id).execute()
+    )
+    if not matter_res.data:
+        raise HTTPException(status_code=404, detail="Matter not found")
+    matter = matter_res.data[0]
+
+    collabs_res = await db_execute(
+        lambda: db.table("legal_matter_collaborators").select("admin_id").eq("matter_id", matter_id).execute()
+    )
+    sender_name = current_admin.get("full_name", "HR")
+
+    if collabs_res.data:
+        for c in collabs_res.data:
+            if c["admin_id"] == admin_id:
+                continue
+            await _create_notification(
+                db,
+                recipient_admin_id=c["admin_id"],
+                notif_type="signing",
+                title="✍️ Contract dispatched for signing",
+                message=f"'{matter['title']}' has been sent for signature by {sender_name}.",
+                matter_id=matter_id,
+            )
+
+    return {"status": "notified"}
+
+
+# ── Resend signature notification ──
+
+@router.post("/matters/{matter_id}/resend-signature")
+async def resend_signature_link(matter_id: str, current_admin=Depends(verify_token)):
+    """Resend the signing link and notify collaborators."""
+    db = get_db()
+    admin_id = current_admin["sub"]
+    await check_matter_access(matter_id, current_admin, required_level="Edit")
+
+    matter_res = await db_execute(
+        lambda: db.table("legal_matters").select("title, category, external_party_email, staff_id").eq("id", matter_id).execute()
+    )
+    if not matter_res.data:
+        raise HTTPException(status_code=404, detail="Matter not found")
+    matter = matter_res.data[0]
+
+    # Notify collaborators
+    collabs_res = await db_execute(
+        lambda: db.table("legal_matter_collaborators").select("admin_id").eq("matter_id", matter_id).execute()
+    )
+    sender_name = current_admin.get("full_name", "HR")
+    if collabs_res.data:
+        for c in collabs_res.data:
+            if c["admin_id"] == admin_id:
+                continue
+            await _create_notification(
+                db,
+                recipient_admin_id=c["admin_id"],
+                notif_type="signing",
+                title="🔄 Signing link resent",
+                message=f"The signing link for '{matter['title']}' was resent by {sender_name}.",
+                matter_id=matter_id,
+            )
+
+    return {"status": "resent", "message": "Signing link resent successfully."}

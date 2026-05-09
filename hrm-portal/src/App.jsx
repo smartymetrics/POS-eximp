@@ -2578,15 +2578,82 @@ function Disciplinary({ viewOnly, userId, isManager }) {
   );
 }
 
-// ─── MODULE: PAYROLL ──────────────────────────────────────────────────────────
-function Payroll() {
+// ─── SUB-COMPONENT: PAYROLL RUNS HISTORY ──────────────────────────────────────
+const PayrollRunsHistory = ({ payroll }) => {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
-  const [tab, setTab] = useState("payslips");
+  // Group by month/year based on period_start
+  const groups = payroll.reduce((acc, p) => {
+    if (!p.period_start) return acc;
+    const d = new Date(p.period_start);
+    const key = d.toLocaleDateString(undefined, { month: 'long', year: 'numeric' });
+    if (!acc[key]) acc[key] = { month: key, count: 0, gross: 0, net: 0, status: p.status, rawDate: d };
+    acc[key].count++;
+    acc[key].gross += p.gross_pay || 0;
+    acc[key].net += p.net_pay || 0;
+    // If any record in the batch is 'paid', we consider the batch 'paid' for display purposes
+    if (p.status === "paid") acc[key].status = "paid";
+    return acc;
+  }, {});
+
+  const runs = Object.values(groups).sort((a, b) => b.rawDate - a.rawDate);
+
+  return (
+    <div className="fade">
+      <div className="tw gc" style={{ padding: 0, overflow: "hidden" }}>
+        <table className="ht">
+          <thead>
+            <tr>
+              <th>Payroll Period</th>
+              <th>Staff Count</th>
+              <th>Total Gross</th>
+              <th>Total Net</th>
+              <th>Batch Status</th>
+              <th>Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {runs.map(r => (
+              <tr key={r.month}>
+                <td style={{ fontWeight: 800, color: T.orange }}>{r.month}</td>
+                <td>{r.count} Employees</td>
+                <td>₦{r.gross.toLocaleString()}</td>
+                <td>₦{r.net.toLocaleString()}</td>
+                <td>
+                  <span className={`tg ${r.status === 'paid' ? 'tg2' : 'to'}`}>
+                    {r.status === 'paid' ? 'DISBURSED' : 'PENDING'}
+                  </span>
+                </td>
+                <td>
+                  <button className="bg" style={{ fontSize: 11, padding: "6px 12px" }} onClick={() => alert("Batch detail view coming soon. Use 'Staff Payslips' tab to manage individual records.")}>
+                    View Batch Details
+                  </button>
+                </td>
+              </tr>
+            ))}
+            {runs.length === 0 && (
+              <tr>
+                <td colSpan="6" style={{ textAlign: "center", padding: 60 }}>
+                  <div style={{ color: C.muted, fontSize: 14 }}>No historical payroll runs found.</div>
+                  <div style={{ fontSize: 12, color: C.muted, marginTop: 4 }}>Run your first payroll from the 'Staff Payslips' tab.</div>
+                </td>
+              </tr>
+            )}
+          </tbody>
+        </table>
+      </div>
+    </div>
+  );
+};
+
+// ─── MODULE: PAYROLL ──────────────────────────────────────────────────────────
+function Payroll({ initialTab = "payslips" }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [tab, setTab] = useState(initialTab);
   const [payroll, setPayroll] = useState([]);
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [staff, setStaff] = useState([]);
-  const [nf, setNf] = useState({ uid: "", gross: "", tax: "0", notes: "" });
+  const [nf, setNf] = useState({ id: null, uid: "", gross: "", tax: "0", notes: "" });
   const [selectedPayslip, setSelectedPayslip] = useState(null);
   const fmt = n => n != null ? `₦${Number(n).toLocaleString()}` : "—";
 
@@ -2633,13 +2700,77 @@ function Payroll() {
         })
       });
       setShowAdd(false);
-      setNf({ uid: "", gross: "", tax: "0", notes: "" });
+      setNf({ id: null, uid: "", gross: "", tax: "0", notes: "" });
       const updated = await apiFetch(`${API_BASE}/hr/payroll/payslips`);
       setPayroll(updated);
     } catch (e) {
       alert("Error: " + e.message);
     } finally {
       setLoading(false);
+    }
+  };
+
+  // ── Edit state ──
+  const [editRecord, setEditRecord] = useState(null);
+  const [ef, setEf] = useState({ gross: "", tax: "0", pension: "0", nhf: "0", status: "pending" });
+  const [editBusy, setEditBusy] = useState(false);
+
+  const openEdit = (p) => {
+    setEditRecord(p);
+    setEf({
+      gross: String(p.gross_pay ?? ""),
+      tax: String(p.tax ?? "0"),
+      pension: String(p.pension ?? "0"),
+      nhf: String(p.nhf ?? "0"),
+      status: p.status ?? "pending"
+    });
+  };
+
+  const computeNet = () => {
+    const gross = parseFloat(ef.gross) || 0;
+    const tax = parseFloat(ef.tax) || 0;
+    const pension = parseFloat(ef.pension) || 0;
+    const nhf = parseFloat(ef.nhf) || 0;
+    return Math.max(0, gross - tax - pension - nhf);
+  };
+
+  const saveEdit = async () => {
+    if (!editRecord) return;
+    setEditBusy(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/payroll/${editRecord.id}`, {
+        method: "PATCH",
+        body: JSON.stringify({
+          gross_pay: parseFloat(ef.gross) || 0,
+          tax: parseFloat(ef.tax) || 0,
+          pension: parseFloat(ef.pension) || 0,
+          nhf: parseFloat(ef.nhf) || 0,
+          net_pay: computeNet(),
+          status: ef.status
+        })
+      });
+      setEditRecord(null);
+      const updated = await apiFetch(`${API_BASE}/hr/payroll/payslips`);
+      setPayroll(updated);
+    } catch (e) {
+      alert("Update failed: " + e.message);
+    } finally {
+      setEditBusy(false);
+    }
+  };
+
+  const deleteRecord = async (p) => {
+    if (p.status === "paid") {
+      alert("Cannot delete a paid payroll record. Change the status to 'pending' first.");
+      return;
+    }
+    const name = p.admins?.full_name || "this staff member";
+    if (!confirm(`Delete payroll record for ${name}? This action cannot be undone.`)) return;
+    try {
+      await apiFetch(`${API_BASE}/hr/payroll/${p.id}`, { method: "DELETE" });
+      setPayroll(prev => prev.filter(r => r.id !== p.id));
+    } catch (e) {
+      alert("Delete failed: " + e.message);
     }
   };
 
@@ -2652,7 +2783,7 @@ function Payroll() {
         </div>
         {tab === "payslips" && (
           <div style={{ display: "flex", gap: 12 }}>
-            <button className="bg" onClick={() => setShowAdd(true)}>+ Add Entry</button>
+            <button className="bg" onClick={() => { setNf({ id: null, uid: "", gross: "", tax: "0", notes: "" }); setShowAdd(true); }}>+ Add Entry</button>
             <button className="bp" onClick={handleRunPayroll}>Run Payroll</button>
           </div>
         )}
@@ -2663,18 +2794,24 @@ function Payroll() {
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }}><rect x="3" y="3" width="18" height="18" rx="2" /><line x1="3" y1="9" x2="21" y2="9" /><line x1="9" y1="21" x2="9" y2="9" /></svg>
           Staff Payslips
         </button>
+        <button className={`tab ${tab === "runs" ? "on" : "off"}`} onClick={() => setTab("runs")}>
+          <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }}><rect x="3" y="4" width="18" height="18" rx="2" /><line x1="16" y1="2" x2="16" y2="6" /><line x1="8" y1="2" x2="8" y2="6" /><line x1="3" y1="10" x2="21" y2="10" /></svg>
+          Payroll Runs History
+        </button>
         <button className={`tab ${tab === "commissions" ? "on" : "off"}`} onClick={() => setTab("commissions")}>
           <svg width="13" height="13" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" style={{ display: "inline", marginRight: 6, verticalAlign: "middle" }}><circle cx="12" cy="12" r="10" /><path d="M12 6v6l4 2" /></svg>
           Sales Commissions
         </button>
       </div>
 
-      {tab === "commissions" ? (
+      {tab === "runs" ? (
+        <PayrollRunsHistory payroll={payroll} />
+      ) : tab === "commissions" ? (
         <AgentCommissions />
       ) : (
         <>
           {showAdd && (
-            <Modal onClose={() => setShowAdd(false)} title="Manual Payroll Entry">
+            <Modal onClose={() => setShowAdd(false)} title={nf.id ? "Edit Payroll Entry" : "Manual Payroll Entry"}>
               <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
                 <div><Lbl>Personnel Identification *</Lbl>
                   <select className="inp" value={nf.uid} onChange={e => setNf(x => ({ ...x, uid: e.target.value }))}>
@@ -2688,6 +2825,47 @@ function Payroll() {
                 </div>
                 <div><Lbl>Transaction Justification / Notes</Lbl><textarea className="inp" placeholder="E.g. Performance Bonus for Q1, Contractor retainer, Reimbursement of expenses..." value={nf.notes} onChange={e => setNf(x => ({ ...x, notes: e.target.value }))} /></div>
                 <button className="bp" onClick={addManual} style={{ padding: 16, fontSize: 15 }}>Submit Payroll Record</button>
+              </div>
+            </Modal>
+          )}
+
+          {/* ── Edit Payroll Modal ── */}
+          {editRecord && (
+            <Modal onClose={() => setEditRecord(null)} title="Edit Payroll Record" width={520}>
+              <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
+                <div style={{ background: dark ? "rgba(251,176,64,0.08)" : "#FFF8EC", border: "1px solid #FBB04022", borderRadius: 10, padding: "12px 16px" }}>
+                  <div style={{ fontSize: 13, fontWeight: 800, color: dark ? "#F9FAFB" : "#111" }}>{editRecord.admins?.full_name}</div>
+                  <div style={{ fontSize: 11, color: dark ? "#9CA3AF" : "#6B7280" }}>Period: {editRecord.period_start ? new Date(editRecord.period_start).toLocaleDateString(undefined, { month: "long", year: "numeric" }) : "—"}</div>
+                </div>
+
+                <div className="g2" style={{ gap: 14 }}>
+                  <div><Lbl>Gross Pay (₦)</Lbl><input type="number" className="inp" value={ef.gross} onChange={e => setEf(x => ({ ...x, gross: e.target.value }))} /></div>
+                  <div><Lbl>PAYE Tax (₦)</Lbl><input type="number" className="inp" value={ef.tax} onChange={e => setEf(x => ({ ...x, tax: e.target.value }))} /></div>
+                </div>
+
+                <div className="g2" style={{ gap: 14 }}>
+                  <div><Lbl>Pension (₦)</Lbl><input type="number" className="inp" value={ef.pension} onChange={e => setEf(x => ({ ...x, pension: e.target.value }))} /></div>
+                  <div><Lbl>NHF (₦)</Lbl><input type="number" className="inp" value={ef.nhf} onChange={e => setEf(x => ({ ...x, nhf: e.target.value }))} /></div>
+                </div>
+
+                <div>
+                  <Lbl>Status</Lbl>
+                  <select className="inp" value={ef.status} onChange={e => setEf(x => ({ ...x, status: e.target.value }))}>
+                    <option value="pending">Pending</option>
+                    <option value="paid">Paid</option>
+                    <option value="cancelled">Cancelled</option>
+                  </select>
+                </div>
+
+                <div style={{ background: dark ? "rgba(74,222,128,0.07)" : "#F0FDF4", border: "1px solid #4ADE8022", borderRadius: 10, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                  <div style={{ fontSize: 12, color: C.sub }}>Computed Net Pay</div>
+                  <div style={{ fontSize: 18, fontWeight: 800, color: "#4ADE80" }}>₦{computeNet().toLocaleString()}</div>
+                </div>
+
+                <div style={{ display: "flex", gap: 10 }}>
+                  <button className="bp" style={{ flex: 1, padding: 13 }} onClick={saveEdit} disabled={editBusy}>{editBusy ? "Saving…" : "Save Changes"}</button>
+                  <button className="bg" style={{ flex: 1, padding: 13 }} onClick={() => setEditRecord(null)}>Cancel</button>
+                </div>
               </div>
             </Modal>
           )}
@@ -2707,7 +2885,7 @@ function Payroll() {
               </div>
               <div className="tw">
                 <table className="ht">
-                  <thead><tr>{["Staff Member", "Period", "Gross Pay", "Net Pay", "Status", ""].map(h => <th key={h}>{h}</th>)}</tr></thead>
+                  <thead><tr>{["Staff Member", "Period", "Gross Pay", "Net Pay", "Status", "Actions"].map(h => <th key={h}>{h}</th>)}</tr></thead>
                   <tbody>
                     {payroll.map(p => (
                       <tr key={p.id}>
@@ -2716,7 +2894,14 @@ function Payroll() {
                         <td style={{ fontWeight: 700 }}>{fmt(p.gross_pay)}</td>
                         <td style={{ color: T.orange, fontWeight: 800, fontSize: 14 }}>{fmt(p.net_pay)}</td>
                         <td><span className={`tg ${p.status === "paid" ? "tg2" : "ty"}`}>{p.status}</span></td>
-                        <td><button className="bg" style={{ fontSize: 11, padding: "5px 12px" }} onClick={() => setSelectedPayslip(p)}>Payslip</button></td>
+                        <td>
+                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                            <button className="bg" style={{ fontSize: 11, padding: "5px 12px" }} onClick={() => setSelectedPayslip(p)}>Payslip</button>
+                            <button className="bg" style={{ fontSize: 11, padding: "5px 12px", borderColor: T.orange, color: T.orange }} onClick={() => openEdit(p)}>Edit</button>
+                            <button className="bg" style={{ fontSize: 11, padding: "5px 10px", borderColor: "#F87171", color: "#F87171" }}
+                              onClick={() => deleteRecord(p)} title={p.status === "paid" ? "Cannot delete paid records" : "Delete record"}>✕</button>
+                          </div>
+                        </td>
                       </tr>
                     ))}
                   </tbody>
@@ -2759,13 +2944,13 @@ function PayslipBreakdown({ p, onClose, dark }) {
         <div>
           <div className="fl" style={{ marginBottom: 12 }}>Detailed Deductions</div>
           <div className="gc" style={{ padding: 0, overflow: "hidden" }}>
-             <table className="ht">
-                <tbody>
-                  <tr><td style={{ border: "none" }}>Personal Income Tax (PAYE)</td><td style={{ border: "none", textAlign: "right", fontWeight: 700, color: "#EF4444" }}>- {fmt(p.tax)}</td></tr>
-                  <tr><td style={{ border: "none" }}>Pension Contribution</td><td style={{ border: "none", textAlign: "right", fontWeight: 700, color: "#EF4444" }}>- {fmt(p.pension)}</td></tr>
-                  {p.nhf > 0 && <tr><td style={{ border: "none" }}>National Housing Fund (NHF)</td><td style={{ border: "none", textAlign: "right", fontWeight: 700, color: "#EF4444" }}>- {fmt(p.nhf)}</td></tr>}
-                </tbody>
-             </table>
+            <table className="ht">
+              <tbody>
+                <tr><td style={{ border: "none" }}>Personal Income Tax (PAYE)</td><td style={{ border: "none", textAlign: "right", fontWeight: 700, color: "#EF4444" }}>- {fmt(p.tax)}</td></tr>
+                <tr><td style={{ border: "none" }}>Pension Contribution</td><td style={{ border: "none", textAlign: "right", fontWeight: 700, color: "#EF4444" }}>- {fmt(p.pension)}</td></tr>
+                {p.nhf > 0 && <tr><td style={{ border: "none" }}>National Housing Fund (NHF)</td><td style={{ border: "none", textAlign: "right", fontWeight: 700, color: "#EF4444" }}>- {fmt(p.nhf)}</td></tr>}
+              </tbody>
+            </table>
           </div>
         </div>
 
@@ -4096,6 +4281,578 @@ function LegalManager({ staffId: initialStaffId, staffName: initialStaffName, is
 }
 
 
+// ══════════════════════════════════════════════════════════════════════
+//  CONTRACT KITCHEN — HR's full contract drafting, mailing, signing hub
+// ══════════════════════════════════════════════════════════════════════
+function ContractKitchen({ user }) {
+  const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const [matters, setMatters] = useState([]);
+  const [staffList, setStaffList] = useState([]);
+  const [lawyerList, setLawyerList] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [search, setSearch] = useState("");
+  const [filterStatus, setFilterStatus] = useState("All");
+  const [filterType, setFilterType] = useState("All");
+  const [view, setView] = useState("grid");
+
+  const [showNew, setShowNew] = useState(false);
+  const [showInviteModal, setShowInviteModal] = useState(null);
+  const [showVisModal, setShowVisModal] = useState(null);
+  const [showDetailModal, setShowDetailModal] = useState(null);
+
+  const [newForm, setNewForm] = useState({
+    title: "", category: "Employment Contract", priority: "Normal",
+    isExternal: false, staff_id: "", external_name: "", external_email: "",
+    notes: "", inviteLawyer: false, lawyer_id: "", lawyer_note: "",
+    staffVisible: false
+  });
+  const [saving, setSaving] = useState(false);
+
+  const [inviteForm, setInviteForm] = useState({ lawyer_id: "", note: "", permission: "Edit" });
+  const [inviting, setInviting] = useState(false);
+  const [collaborators, setCollaborators] = useState([]);
+  const [loadingCollabs, setLoadingCollabs] = useState(false);
+
+  const CK_COLORS = {
+    draft: { bg: "#F59E0B20", border: "#F59E0B", text: "#F59E0B" },
+    review: { bg: "#8B5CF620", border: "#8B5CF6", text: "#8B5CF6" },
+    "legal signing": { bg: "#3B82F620", border: "#3B82F6", text: "#60A5FA" },
+    executed: { bg: "#10B98120", border: "#10B981", text: "#10B981" },
+    voided: { bg: "#EF444420", border: "#EF4444", text: "#EF4444" },
+  };
+
+  const CONTRACT_TYPES = [
+    "Employment Contract", "Offer Letter", "NDA", "Consultancy Agreement",
+    "Freelance Contract", "Vendor Agreement", "Disciplinary Notice",
+    "Exit Settlement", "Service Agreement", "Personnel", "External"
+  ];
+
+  const load = async () => {
+    setLoading(true);
+    try {
+      const [mattersData, staffData, collabCands] = await Promise.all([
+        apiFetch(`${API_BASE}/hr-legal/matters`),
+        apiFetch(`${API_BASE}/hr/staff`),
+        apiFetch(`${API_BASE}/hr-legal/collaborator-candidates`).catch(() => [])
+      ]);
+      setMatters(mattersData || []);
+      setStaffList(staffData || []);
+      setLawyerList(collabCands || []);
+    } catch (e) { console.error("ContractKitchen load error:", e); }
+    finally { setLoading(false); }
+  };
+
+  useEffect(() => { load(); }, []);
+
+  const loadCollaborators = async (matterId) => {
+    setLoadingCollabs(true);
+    try {
+      const data = await apiFetch(`${API_BASE}/hr-legal/matters/${matterId}`);
+      setCollaborators(data.collaborators || []);
+    } catch (e) { console.error("Collab load error:", e); }
+    finally { setLoadingCollabs(false); }
+  };
+
+  const createContract = async () => {
+    if (!newForm.title.trim()) return alert("Contract title is required.");
+    if (!newForm.isExternal && !newForm.staff_id) return alert("Please select a staff member.");
+    if (newForm.isExternal && (!newForm.external_name || !newForm.external_email)) return alert("Name and email required for external parties.");
+    setSaving(true);
+    try {
+      const payload = {
+        title: newForm.title, category: newForm.category, priority: newForm.priority,
+        status: "Draft", hr_memo: newForm.notes,
+        staff_id: newForm.isExternal ? null : (newForm.staff_id || null),
+        external_party_name: newForm.isExternal ? newForm.external_name : null,
+        external_party_email: newForm.isExternal ? newForm.external_email : null,
+        staff_visible: newForm.staffVisible,
+      };
+      const matter = await apiFetch(`${API_BASE}/hr-legal/matters`, { method: "POST", body: JSON.stringify(payload) });
+
+      if (newForm.inviteLawyer && newForm.lawyer_id && matter?.id) {
+        await apiFetch(`${API_BASE}/hr-legal/matters/${matter.id}/collaborators`, {
+          method: "POST",
+          body: JSON.stringify({ admin_id: newForm.lawyer_id, permission_level: "Edit", invitation_note: newForm.lawyer_note })
+        }).catch(e => console.warn("Lawyer invite error:", e));
+      }
+
+      setShowNew(false);
+      setNewForm({ title: "", category: "Employment Contract", priority: "Normal", isExternal: false, staff_id: "", external_name: "", external_email: "", notes: "", inviteLawyer: false, lawyer_id: "", lawyer_note: "", staffVisible: false });
+      load();
+
+      // Navigate to editor
+      if (matter?.id) window.open(`/legal/advanced-editor?id=${matter.id}`, "_blank");
+    } catch (e) { alert(e.message || "Failed to create contract"); }
+    finally { setSaving(false); }
+  };
+
+  const inviteLawyer = async () => {
+    if (!inviteForm.lawyer_id) return alert("Select a lawyer.");
+    setInviting(true);
+    try {
+      await apiFetch(`${API_BASE}/hr-legal/matters/${showInviteModal}/collaborators`, {
+        method: "POST",
+        body: JSON.stringify({ admin_id: inviteForm.lawyer_id, permission_level: inviteForm.permission, invitation_note: inviteForm.note })
+      });
+      await loadCollaborators(showInviteModal);
+      setInviteForm({ lawyer_id: "", note: "", permission: "Edit" });
+      alert("Lawyer invited successfully.");
+    } catch (e) { alert(e.message || "Failed to invite lawyer"); }
+    finally { setInviting(false); }
+  };
+
+  const removeCollaborator = async (matterId, adminId) => {
+    if (!confirm("Remove this collaborator?")) return;
+    try {
+      await apiFetch(`${API_BASE}/hr-legal/matters/${matterId}/collaborators/${adminId}`, { method: "DELETE" });
+      await loadCollaborators(matterId);
+    } catch (e) { alert(e.message); }
+  };
+
+  const toggleVisibility = async (matter) => {
+    const newState = !matter.staff_visible;
+    try {
+      await apiFetch(`${API_BASE}/hr-legal/matters/${matter.id}/visibility`, {
+        method: "PATCH", body: JSON.stringify({ staff_visible: newState })
+      });
+      setMatters(prev => prev.map(m => m.id === matter.id ? { ...m, staff_visible: newState } : m));
+      if (showVisModal?.id === matter.id) setShowVisModal(prev => ({ ...prev, staff_visible: newState }));
+    } catch (e) { alert("Failed to update visibility"); }
+  };
+
+  const openEditor = (matter) => window.open(`/legal/advanced-editor?id=${matter.id}`, "_blank");
+
+  const dispatchSign = async (matterId) => {
+    if (!confirm("Send signing link to the recipient?")) return;
+    try {
+      const r = await apiFetch(`${API_BASE}/hr-legal/matters/${matterId}/dispatch-signature`, { method: "POST" });
+      alert(r.message || "Dispatched!");
+      load();
+    } catch (e) { alert(e.message); }
+  };
+
+  const resendSign = async (matterId) => {
+    try {
+      const r = await apiFetch(`${API_BASE}/hr-legal/matters/${matterId}/resend-signature`, { method: "POST" });
+      alert(r.message || "Resent!");
+    } catch (e) { alert(e.message); }
+  };
+
+  const getStatusColor = (s) => {
+    const k = (s || "").toLowerCase();
+    return CK_COLORS[k] || { bg: "#6B728020", border: "#6B7280", text: "#9CA3AF" };
+  };
+
+  const filtered = matters.filter(m => {
+    const matchSearch = !search ||
+      (m.title || "").toLowerCase().includes(search.toLowerCase()) ||
+      (m.external_party_name || "").toLowerCase().includes(search.toLowerCase());
+    const matchStatus = filterStatus === "All" || (m.status || "") === filterStatus;
+    const matchType = filterType === "All" || (m.category || "") === filterType;
+    return matchSearch && matchStatus && matchType;
+  });
+
+  const stats = {
+    total: matters.length,
+    draft: matters.filter(m => m.status === "Draft").length,
+    pending: matters.filter(m => m.status === "Legal Signing").length,
+    executed: matters.filter(m => m.status === "Executed").length,
+    staffVisible: matters.filter(m => m.staff_visible).length,
+  };
+
+  const cardBase = { background: dark ? "#1A1C22" : "#FFFFFF", border: `1px solid ${C.border}`, borderRadius: 14, padding: 20 };
+
+  const Toggle = ({ checked, onChange, color = "#10B981" }) => (
+    <label style={{ cursor: "pointer", position: "relative", display: "inline-block", width: 40, height: 22, flexShrink: 0 }}>
+      <input type="checkbox" checked={checked} onChange={onChange} style={{ opacity: 0, width: 0, height: 0 }} />
+      <span style={{ position: "absolute", inset: 0, borderRadius: 11, cursor: "pointer", background: checked ? color : C.border, transition: "background 0.2s" }}>
+        <span style={{ position: "absolute", height: 16, width: 16, left: checked ? 20 : 3, bottom: 3, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
+      </span>
+    </label>
+  );
+
+  return (
+    <div className="fade">
+      {/* Header */}
+      <div style={{ marginBottom: 24 }}>
+        <div style={{ display: "flex", alignItems: "flex-start", justifyContent: "space-between", flexWrap: "wrap", gap: 12 }}>
+          <div>
+            <h2 style={{ fontFamily: "'Playfair Display', serif", fontSize: 26, fontWeight: 700, color: C.text, marginBottom: 4 }}>⚖️ Contract Kitchen</h2>
+            <p style={{ fontSize: 12, color: C.muted }}>Draft · Invite Lawyers · Mail · Sign · Archive — all from one place</p>
+          </div>
+          <div style={{ display: "flex", gap: 10, alignItems: "center" }}>
+            <button onClick={() => setView(v => v === "grid" ? "list" : "grid")} style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.muted, borderRadius: 8, padding: "7px 12px", cursor: "pointer", fontSize: 12 }}>
+              {view === "grid" ? "☰ List" : "⊞ Grid"}
+            </button>
+            <button onClick={load} style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.muted, borderRadius: 8, padding: "7px 12px", cursor: "pointer", fontSize: 12 }}>⟳</button>
+            <button onClick={() => setShowNew(true)} style={{
+              background: "linear-gradient(135deg, #D4AF37, #B8963E)", color: "#fff", border: "none",
+              borderRadius: 10, padding: "10px 20px", fontWeight: 700, fontSize: 13, cursor: "pointer",
+              boxShadow: "0 4px 14px rgba(212,175,55,0.35)"
+            }}>+ New Contract</button>
+          </div>
+        </div>
+      </div>
+
+      {/* Stats */}
+      <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(120px,1fr))", gap: 10, marginBottom: 22 }}>
+        {[
+          { label: "Total", val: stats.total, color: "#60A5FA", icon: "📋" },
+          { label: "Drafts", val: stats.draft, color: "#F59E0B", icon: "✏️" },
+          { label: "Pending Sign", val: stats.pending, color: "#8B5CF6", icon: "✍️" },
+          { label: "Executed", val: stats.executed, color: "#10B981", icon: "✅" },
+          { label: "Staff Visible", val: stats.staffVisible, color: "#EC4899", icon: "👁" },
+        ].map(s => (
+          <div key={s.label} style={{ ...cardBase, padding: 14, textAlign: "center" }}>
+            <div style={{ fontSize: 18, marginBottom: 4 }}>{s.icon}</div>
+            <div style={{ fontSize: 22, fontWeight: 800, color: s.color }}>{s.val}</div>
+            <div style={{ fontSize: 9, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.8, marginTop: 2 }}>{s.label}</div>
+          </div>
+        ))}
+      </div>
+
+      {/* Filters */}
+      <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
+        <input value={search} onChange={e => setSearch(e.target.value)} placeholder="🔍  Search contracts..."
+          style={{ flex: 1, minWidth: 180, background: C.surface, border: `1px solid ${C.border}`, color: C.text, borderRadius: 9, padding: "8px 12px", fontSize: 12 }} />
+        <select value={filterStatus} onChange={e => setFilterStatus(e.target.value)} style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.text, borderRadius: 9, padding: "8px 12px", fontSize: 12 }}>
+          {["All", "Draft", "Review", "Legal Signing", "Executed", "Voided"].map(s => <option key={s}>{s}</option>)}
+        </select>
+        <select value={filterType} onChange={e => setFilterType(e.target.value)} style={{ background: C.surface, border: `1px solid ${C.border}`, color: C.text, borderRadius: 9, padding: "8px 12px", fontSize: 12 }}>
+          <option value="All">All Types</option>
+          {CONTRACT_TYPES.map(t => <option key={t}>{t}</option>)}
+        </select>
+      </div>
+
+      {/* Content */}
+      {loading ? (
+        <div style={{ textAlign: "center", padding: 60, color: C.muted }}>
+          <div style={{ fontSize: 40, marginBottom: 12, animation: "spin 1s linear infinite" }}>⚖️</div>
+          <div style={{ fontSize: 13, fontWeight: 600 }}>Loading the kitchen...</div>
+        </div>
+      ) : filtered.length === 0 ? (
+        <div style={{ textAlign: "center", padding: 60, color: C.muted, border: `1.5px dashed ${C.border}`, borderRadius: 14 }}>
+          <div style={{ fontSize: 42, marginBottom: 12 }}>📋</div>
+          <div style={{ fontSize: 14, fontWeight: 700, marginBottom: 6 }}>No contracts found</div>
+          <div style={{ fontSize: 12 }}>Click "New Contract" to start cooking</div>
+        </div>
+      ) : view === "grid" ? (
+        <div style={{ display: "grid", gridTemplateColumns: "repeat(auto-fill, minmax(340px, 1fr))", gap: 14 }}>
+          {filtered.map(m => (
+            <CKContractCard key={m.id} matter={m} staffList={staffList} getStatusColor={getStatusColor}
+              onEdit={() => openEditor(m)}
+              onInvite={() => { setShowInviteModal(m.id); loadCollaborators(m.id); }}
+              onVisibility={() => setShowVisModal(m)}
+              onDetail={() => setShowDetailModal(m)}
+              onDispatch={() => dispatchSign(m.id)}
+              onResend={() => resendSign(m.id)}
+              onDownload={() => window.open(`/api/hr-legal/matters/${m.id}/export`, "_blank")}
+              C={C} dark={dark} />
+          ))}
+        </div>
+      ) : (
+        <div style={{ ...cardBase, padding: 0, overflow: "hidden" }}>
+          <table style={{ width: "100%", borderCollapse: "collapse" }}>
+            <thead>
+              <tr style={{ background: dark ? "#111317" : "#F9FAFB", borderBottom: `1px solid ${C.border}` }}>
+                {["Contract", "Party", "Type", "Status", "Visibility", "Created", "Actions"].map(h => (
+                  <th key={h} style={{ padding: "12px 16px", fontSize: 10, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: 1, textAlign: "left" }}>{h}</th>
+                ))}
+              </tr>
+            </thead>
+            <tbody>
+              {filtered.map((m, i) => {
+                const sc = getStatusColor(m.status);
+                const party = m.staff_id ? (staffList.find(s => s.id === m.staff_id)?.full_name || "Staff") : (m.external_party_name || "External");
+                return (
+                  <tr key={m.id} style={{ borderBottom: `1px solid ${C.border}`, background: i % 2 ? (dark ? "#ffffff04" : "#F9FAFB") : "transparent" }}>
+                    <td style={{ padding: "12px 16px" }}>
+                      <div style={{ fontSize: 12, fontWeight: 700, color: C.text, maxWidth: 200, whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>{m.title}</div>
+                    </td>
+                    <td style={{ padding: "12px 16px", fontSize: 11, color: C.sub }}>{party}</td>
+                    <td style={{ padding: "12px 16px" }}><span style={{ fontSize: 9, fontWeight: 700, background: C.border, color: C.muted, borderRadius: 5, padding: "2px 7px" }}>{m.category}</span></td>
+                    <td style={{ padding: "12px 16px" }}><span style={{ fontSize: 9, fontWeight: 800, background: sc.bg, color: sc.text, borderRadius: 5, padding: "3px 7px" }}>{m.status}</span></td>
+                    <td style={{ padding: "12px 16px", fontSize: 10, color: m.staff_visible ? "#10B981" : C.muted, fontWeight: 600 }}>{m.staff_visible ? "👁 Public" : "🔒 Private"}</td>
+                    <td style={{ padding: "12px 16px", fontSize: 10, color: C.muted }}>{new Date(m.created_at).toLocaleDateString()}</td>
+                    <td style={{ padding: "12px 16px" }}>
+                      <div style={{ display: "flex", gap: 5 }}>
+                        {[
+                          ["✏️", "Edit", () => openEditor(m), "#33333322"],
+                          ["👥", "Collaborators", () => { setShowInviteModal(m.id); loadCollaborators(m.id); }, "#8B5CF620"],
+                          [m.staff_visible ? "👁" : "🔒", "Vis", () => setShowVisModal(m), m.staff_visible ? "#10B98120" : "#33333318"],
+                          ["📄", "Info", () => setShowDetailModal(m), "#60A5FA20"],
+                        ].map(([icon, label, fn, bg]) => (
+                          <button key={label} onClick={fn} title={label} style={{ background: bg, border: "none", color: C.muted, borderRadius: 6, padding: "4px 7px", cursor: "pointer", fontSize: 11 }}>{icon}</button>
+                        ))}
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })}
+            </tbody>
+          </table>
+        </div>
+      )}
+
+      {/* ── MODAL: New Contract ── */}
+      {showNew && (
+        <Modal onClose={() => setShowNew(false)} title="🍳 New Contract" width={600}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div><Lbl>Contract Title *</Lbl>
+              <input className="inp" placeholder="e.g. Employment Contract – John Doe 2026" value={newForm.title} onChange={e => setNewForm({ ...newForm, title: e.target.value })} />
+            </div>
+            <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 12 }}>
+              <div><Lbl>Contract Type</Lbl>
+                <select className="inp" value={newForm.category} onChange={e => setNewForm({ ...newForm, category: e.target.value })}>
+                  {CONTRACT_TYPES.map(t => <option key={t}>{t}</option>)}
+                </select>
+              </div>
+              <div><Lbl>Priority</Lbl>
+                <select className="inp" value={newForm.priority} onChange={e => setNewForm({ ...newForm, priority: e.target.value })}>
+                  <option>Critical</option><option>Normal</option><option>Low</option>
+                </select>
+              </div>
+            </div>
+
+            <div style={{ background: `${C.border}22`, borderRadius: 10, padding: 14 }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 10 }}>
+                <Lbl style={{ margin: 0 }}>Recipient *</Lbl>
+                <label style={{ display: "flex", alignItems: "center", gap: 6, fontSize: 11, cursor: "pointer", color: C.muted }}>
+                  <input type="checkbox" checked={newForm.isExternal} onChange={e => setNewForm({ ...newForm, isExternal: e.target.checked })} />
+                  External Party
+                </label>
+              </div>
+              {newForm.isExternal ? (
+                <div style={{ display: "grid", gridTemplateColumns: "1fr 1fr", gap: 10 }}>
+                  <input className="inp" placeholder="Full Name" value={newForm.external_name} onChange={e => setNewForm({ ...newForm, external_name: e.target.value })} />
+                  <input className="inp" placeholder="Email Address" type="email" value={newForm.external_email} onChange={e => setNewForm({ ...newForm, external_email: e.target.value })} />
+                </div>
+              ) : (
+                <select className="inp" value={newForm.staff_id} onChange={e => setNewForm({ ...newForm, staff_id: e.target.value })}>
+                  <option value="">— Select Staff Member —</option>
+                  {staffList.map(s => <option key={s.id} value={s.id}>{s.full_name} ({s.department || "No Dept"})</option>)}
+                </select>
+              )}
+            </div>
+
+            <div style={{ background: newForm.staffVisible ? "#10B98112" : `${C.border}18`, borderRadius: 10, padding: 14, border: `1px solid ${newForm.staffVisible ? "#10B98133" : C.border}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{newForm.staffVisible ? "👁 Visible to Staff" : "🔒 Hidden from Staff"}</div>
+                  <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{newForm.staffVisible ? "Staff will see this in their portal immediately" : "Staff cannot see this contract at all (default)"}</div>
+                </div>
+                <Toggle checked={newForm.staffVisible} onChange={e => setNewForm({ ...newForm, staffVisible: e.target.checked })} color="#10B981" />
+              </div>
+            </div>
+
+            <div style={{ background: `${C.border}18`, borderRadius: 10, padding: 14, border: `1px solid ${newForm.inviteLawyer ? "#8B5CF633" : C.border}` }}>
+              <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: newForm.inviteLawyer ? 12 : 0 }}>
+                <div>
+                  <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>👥 Invite Collaborator</div>
+                  <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>Collaborators see contracts once explicitly invited</div>
+                </div>
+                <Toggle checked={newForm.inviteLawyer} onChange={e => setNewForm({ ...newForm, inviteLawyer: e.target.checked })} color="#8B5CF6" />
+              </div>
+              {newForm.inviteLawyer && (
+                <div style={{ display: "flex", flexDirection: "column", gap: 8 }}>
+                  <select className="inp" value={newForm.lawyer_id} onChange={e => setNewForm({ ...newForm, lawyer_id: e.target.value })}>
+                    <option value="">— Select Collaborator —</option>
+                    {lawyerList.map(l => <option key={l.id} value={l.id}>{l.full_name} ({l.role || "Admin"})</option>)}
+                  </select>
+                  <textarea className="inp" rows={2} placeholder="Note to collaborator..." value={newForm.lawyer_note} onChange={e => setNewForm({ ...newForm, lawyer_note: e.target.value })} />
+                </div>
+              )}
+            </div>
+
+            <div><Lbl>Internal Memo (not sent to recipient)</Lbl>
+              <textarea className="inp" rows={3} placeholder="Context, instructions, notes for your records..." value={newForm.notes} onChange={e => setNewForm({ ...newForm, notes: e.target.value })} />
+            </div>
+
+            <button className="bp" style={{ padding: 14, fontSize: 13, fontWeight: 700 }} onClick={createContract} disabled={saving}>
+              {saving ? "Creating..." : "🍳 Create & Open in Editor"}
+            </button>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── MODAL: Invite Collaborator ── */}
+      {showInviteModal && (
+        <Modal onClose={() => { setShowInviteModal(null); setCollaborators([]); }} title="👥 Team Collaboration" width={480}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div style={{ padding: 12, background: "#8B5CF618", borderRadius: 10, border: "1px solid #8B5CF630", fontSize: 11, color: C.sub }}>
+              💡 Collaborators only discover this contract once you invite them. It is completely invisible to them otherwise.
+            </div>
+            <div><Lbl>Select Collaborator *</Lbl>
+              <select className="inp" value={inviteForm.lawyer_id} onChange={e => setInviteForm({ ...inviteForm, lawyer_id: e.target.value })}>
+                <option value="">— Select Collaborator —</option>
+                {lawyerList.map(l => <option key={l.id} value={l.id}>{l.full_name} ({l.role || "Admin"})</option>)}
+              </select>
+            </div>
+            <div><Lbl>Permission Level</Lbl>
+              <select className="inp" value={inviteForm.permission} onChange={e => setInviteForm({ ...inviteForm, permission: e.target.value })}>
+                <option value="View">View Only</option>
+                <option value="Edit">Edit (Full Collaboration)</option>
+              </select>
+            </div>
+            <div><Lbl>Invitation Note</Lbl>
+              <textarea className="inp" rows={3} placeholder="Message to the collaborator about this matter..." value={inviteForm.note} onChange={e => setInviteForm({ ...inviteForm, note: e.target.value })} />
+            </div>
+            <button className="bp" style={{ padding: 12 }} onClick={inviteLawyer} disabled={inviting}>
+              {inviting ? "Inviting..." : "👥 Send Invitation"}
+            </button>
+
+            <div style={{ borderTop: `1px solid ${C.border}`, paddingTop: 14 }}>
+              <div style={{ fontSize: 10, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: 1, marginBottom: 10 }}>Current Collaborators</div>
+              {loadingCollabs ? <div style={{ fontSize: 11, color: C.muted }}>Loading...</div> :
+                collaborators.length === 0 ? <div style={{ fontSize: 11, color: C.muted, fontStyle: "italic" }}>No collaborators yet.</div> :
+                  collaborators.map(c => (
+                    <div key={c.id} style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "8px 0", borderBottom: `1px solid ${C.border}` }}>
+                      <div>
+                        <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{c.admins?.full_name || "Unknown"}</div>
+                        <div style={{ fontSize: 10, color: C.muted }}>{c.permission_level}</div>
+                      </div>
+                      <button onClick={() => removeCollaborator(showInviteModal, c.admin_id)} style={{ background: "#EF444415", border: "1px solid #EF444430", color: "#EF4444", borderRadius: 6, padding: "3px 8px", fontSize: 10, cursor: "pointer" }}>Remove</button>
+                    </div>
+                  ))
+              }
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── MODAL: Visibility ── */}
+      {showVisModal && (
+        <Modal onClose={() => setShowVisModal(null)} title="👁 Staff Visibility Control" width={440}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 16 }}>
+            <div style={{ padding: 14, background: showVisModal.staff_visible ? "#10B98112" : "#F59E0B12", borderRadius: 12, border: `1px solid ${showVisModal.staff_visible ? "#10B98133" : "#F59E0B33"}` }}>
+              <div style={{ fontSize: 13, fontWeight: 800, color: showVisModal.staff_visible ? "#10B981" : "#F59E0B", marginBottom: 6 }}>
+                {showVisModal.staff_visible ? "🟢 Currently Visible to Staff" : "🔒 Currently Hidden from Staff"}
+              </div>
+              <div style={{ fontSize: 11, color: C.sub }}>
+                {showVisModal.staff_visible ? "The staff member can view this in their HR Portal under 'My Legal Matters'." : "The staff member cannot see this contract at all."}
+              </div>
+            </div>
+            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.7 }}>
+              <div style={{ marginBottom: 8, fontWeight: 700, color: C.text }}>{showVisModal.title}</div>
+              <div>Make it <strong style={{ color: "#10B981" }}>public</strong> for contracts the staff must acknowledge or sign — offer letters, employment agreements, NDAs. Keep it <strong style={{ color: "#F59E0B" }}>private</strong> for disciplinary matters or sensitive internal documents.</div>
+            </div>
+            <div style={{ display: "flex", gap: 10 }}>
+              <button onClick={() => toggleVisibility(showVisModal)} style={{
+                flex: 1, padding: 12, borderRadius: 10, cursor: "pointer", fontWeight: 700, fontSize: 13,
+                background: showVisModal.staff_visible ? "#EF444415" : "#10B98115",
+                color: showVisModal.staff_visible ? "#EF4444" : "#10B981",
+                border: `1px solid ${showVisModal.staff_visible ? "#EF444430" : "#10B98130"}`
+              }}>
+                {showVisModal.staff_visible ? "🔒 Make Private" : "👁 Make Public"}
+              </button>
+              <button onClick={() => setShowVisModal(null)} style={{ flex: 1, padding: 12, borderRadius: 10, border: `1px solid ${C.border}`, background: "transparent", color: C.muted, cursor: "pointer", fontWeight: 700 }}>Close</button>
+            </div>
+          </div>
+        </Modal>
+      )}
+
+      {/* ── MODAL: Detail ── */}
+      {showDetailModal && (
+        <Modal onClose={() => setShowDetailModal(null)} title="📄 Contract Details" width={520}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+            {[
+              ["Title", showDetailModal.title],
+              ["Type", showDetailModal.category],
+              ["Status", showDetailModal.status],
+              ["Priority", showDetailModal.priority],
+              ["Recipient", showDetailModal.staff_id ? (staffList.find(s => s.id === showDetailModal.staff_id)?.full_name || "Staff") : (showDetailModal.external_party_name || "External")],
+              ["Email", showDetailModal.external_party_email || "—"],
+              ["Staff Visible", showDetailModal.staff_visible ? "✅ Yes (Public)" : "🔒 No (Private)"],
+              ["Created", new Date(showDetailModal.created_at).toLocaleString()],
+            ].map(([label, val]) => (
+              <div key={label} style={{ display: "flex", justifyContent: "space-between", padding: "9px 0", borderBottom: `1px solid ${C.border}` }}>
+                <span style={{ fontSize: 10, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>{label}</span>
+                <span style={{ fontSize: 12, color: C.text, fontWeight: 600, maxWidth: "60%", textAlign: "right" }}>{val || "—"}</span>
+              </div>
+            ))}
+            {showDetailModal.hr_memo && (
+              <div style={{ padding: 12, background: "#F59E0B10", borderRadius: 10, border: "1px solid #F59E0B30", marginTop: 4 }}>
+                <div style={{ fontSize: 9, fontWeight: 800, color: "#F59E0B", marginBottom: 4 }}>INTERNAL MEMO</div>
+                <div style={{ fontSize: 11, color: C.sub }}>{showDetailModal.hr_memo}</div>
+              </div>
+            )}
+            <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
+              <button onClick={() => { setShowDetailModal(null); openEditor(showDetailModal); }} className="bp" style={{ flex: 1, padding: 11, fontSize: 12 }}>✏️ Open Editor</button>
+              {showDetailModal.status === "Executed" && (
+                <button onClick={() => window.open(`/api/hr-legal/matters/${showDetailModal.id}/export`, "_blank")} style={{ flex: 1, padding: 11, background: "#10B98115", border: "1px solid #10B98130", color: "#10B981", borderRadius: 9, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>📥 Download</button>
+              )}
+              {(showDetailModal.status === "Draft" || showDetailModal.status === "Review") && (
+                <button onClick={() => { setShowDetailModal(null); dispatchSign(showDetailModal.id); }} style={{ flex: 1, padding: 11, background: "#8B5CF615", border: "1px solid #8B5CF630", color: "#8B5CF6", borderRadius: 9, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>✈️ Send for Signing</button>
+              )}
+            </div>
+          </div>
+        </Modal>
+      )}
+    </div>
+  );
+}
+
+function CKContractCard({ matter, staffList, getStatusColor, onEdit, onInvite, onVisibility, onDetail, onDispatch, onResend, onDownload, C, dark }) {
+  const sc = getStatusColor(matter.status);
+  const party = matter.staff_id
+    ? (staffList.find(s => s.id === matter.staff_id)?.full_name || "Staff")
+    : (matter.external_party_name || "External Party");
+  const isInternal = !!matter.staff_id;
+
+  return (
+    <div style={{
+      background: dark ? "#1A1C22" : "#FFFFFF", border: `1px solid ${C.border}`,
+      borderTop: `3px solid ${sc.border}`, borderRadius: 14, padding: 18,
+      display: "flex", flexDirection: "column", gap: 12,
+    }}>
+      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "flex-start", gap: 8 }}>
+        <div style={{ flex: 1, minWidth: 0 }}>
+          <div style={{ fontSize: 13, fontWeight: 800, color: C.text, lineHeight: 1.3, marginBottom: 4, overflow: "hidden", textOverflow: "ellipsis", display: "-webkit-box", WebkitLineClamp: 2, WebkitBoxOrient: "vertical" }}>{matter.title}</div>
+          <div style={{ fontSize: 10, color: C.muted }}>{matter.category}</div>
+        </div>
+        <div style={{ display: "flex", flexDirection: "column", gap: 4, alignItems: "flex-end", flexShrink: 0 }}>
+          <span style={{ fontSize: 9, fontWeight: 800, background: sc.bg, color: sc.text, borderRadius: 6, padding: "3px 8px", border: `1px solid ${sc.border}30`, textTransform: "uppercase", letterSpacing: 0.5 }}>{matter.status}</span>
+          <span style={{ fontSize: 9, color: matter.staff_visible ? "#10B981" : C.muted, fontWeight: 600 }}>{matter.staff_visible ? "👁 Public" : "🔒 Private"}</span>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, alignItems: "center", padding: "8px 10px", background: dark ? "#ffffff08" : "#F3F4F6", borderRadius: 8 }}>
+        <div style={{ width: 28, height: 28, borderRadius: "50%", background: isInternal ? "#D4AF3730" : "#8B5CF630", display: "flex", alignItems: "center", justifyContent: "center", fontSize: 13 }}>
+          {isInternal ? "👤" : "🌐"}
+        </div>
+        <div>
+          <div style={{ fontSize: 12, fontWeight: 700, color: C.text }}>{party}</div>
+          <div style={{ fontSize: 10, color: C.muted }}>{isInternal ? "Internal Staff" : "External Party"}</div>
+        </div>
+      </div>
+
+      <div style={{ display: "flex", gap: 8, fontSize: 10, color: C.muted }}>
+        <span>📅 {new Date(matter.created_at).toLocaleDateString()}</span>
+        <span>·</span>
+        <span style={{ color: matter.priority === "Critical" ? "#EF4444" : matter.priority === "Low" ? C.muted : "#F59E0B", fontWeight: 600 }}>{matter.priority}</span>
+      </div>
+
+      <div style={{ display: "flex", flexWrap: "wrap", gap: 6, borderTop: `1px solid ${C.border}`, paddingTop: 12 }}>
+        {[
+          ["✏️ Edit", onEdit, "#33333320", C.muted, C.border],
+          ["⚖️ Lawyers", onInvite, "#8B5CF618", "#8B5CF6", "#8B5CF620"],
+          [matter.staff_visible ? "👁 Public" : "🔒 Private", onVisibility, matter.staff_visible ? "#10B98118" : "#33333318", matter.staff_visible ? "#10B981" : C.muted, matter.staff_visible ? "#10B98130" : C.border],
+          ["📄 Details", onDetail, "#60A5FA18", "#60A5FA", "#60A5FA20"],
+        ].map(([label, fn, bg, color, border]) => (
+          <button key={label} onClick={fn} style={{ background: bg, border: `1px solid ${border}`, color, borderRadius: 7, padding: "5px 10px", cursor: "pointer", fontSize: 10, fontWeight: 600 }}>{label}</button>
+        ))}
+        {matter.status === "Executed" ? (
+          <button onClick={onDownload} style={{ background: "#10B98118", border: "1px solid #10B98130", color: "#10B981", borderRadius: 7, padding: "5px 10px", cursor: "pointer", fontSize: 10, fontWeight: 700 }}>📥 Download</button>
+        ) : matter.status === "Legal Signing" ? (
+          <button onClick={onResend} style={{ background: "#F59E0B18", border: "1px solid #F59E0B30", color: "#F59E0B", borderRadius: 7, padding: "5px 10px", cursor: "pointer", fontSize: 10, fontWeight: 600 }}>🔄 Resend</button>
+        ) : (
+          <button onClick={onDispatch} style={{ background: "#3B82F618", border: "1px solid #3B82F630", color: "#60A5FA", borderRadius: 7, padding: "5px 10px", cursor: "pointer", fontSize: 10, fontWeight: 600 }}>✈️ Send for Signing</button>
+        )}
+      </div>
+    </div>
+  );
+}
+
 function QualificationsManager({ staffId, isHR }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [quals, setQuals] = useState([]);
@@ -4441,7 +5198,16 @@ function StaffDirectory({ authRole }) {
       phone_number: p.phone_number || "",
       emergency_contact: p.emergency_contact || "",
       address: p.address || "",
-      bio: p.bio || ""
+      bio: p.bio || "",
+      gender: p.gender || "",
+      dob: p.dob || "",
+      nationality: p.nationality || "",
+      marital_status: p.marital_status || "",
+      leave_quota: p.leave_quota || 20,
+      bank_name: p.bank_name || "",
+      account_number: p.account_number || "",
+      account_name: p.account_name || "",
+      base_salary: p.base_salary || ""
     });
     setEditMode(false);
   }, [view]);
@@ -4560,7 +5326,11 @@ function StaffDirectory({ authRole }) {
           gender: draftView.gender,
           nationality: draftView.nationality,
           marital_status: draftView.marital_status,
-          leave_quota: draftView.leave_quota ? parseInt(draftView.leave_quota, 10) : 20
+          leave_quota: draftView.leave_quota ? parseInt(draftView.leave_quota, 10) : 20,
+          bank_name: draftView.bank_name,
+          account_number: draftView.account_number,
+          account_name: draftView.account_name,
+          base_salary: draftView.base_salary ? parseFloat(draftView.base_salary) : null
         })
       });
       setView(prev => ({
@@ -4582,7 +5352,11 @@ function StaffDirectory({ authRole }) {
           gender: draftView.gender,
           nationality: draftView.nationality,
           marital_status: draftView.marital_status,
-          leave_quota: draftView.leave_quota
+          leave_quota: draftView.leave_quota,
+          bank_name: draftView.bank_name,
+          account_number: draftView.account_number,
+          account_name: draftView.account_name,
+          base_salary: draftView.base_salary
         }]
       }));
       loadStaff();
@@ -5017,10 +5791,21 @@ function StaffDirectory({ authRole }) {
 
           {dtTab === "bank" && (
             <div className="g1 fade" style={{ gap: 10, marginBottom: 18 }}>
-              <Field label="Bank Name" value={view.staff_profiles?.[0]?.bank_name} />
-              <Field label="Account Number" value={view.staff_profiles?.[0]?.account_number} />
-              <Field label="Account Name" value={view.staff_profiles?.[0]?.account_name} />
-              <Field label="Monthly Base Salary" value={view.staff_profiles?.[0]?.base_salary ? `₦${Number(view.staff_profiles[0].base_salary).toLocaleString()}` : "Not Set"} />
+              {editMode ? (
+                <>
+                  <div><Lbl>Bank Name</Lbl><input className="inp" value={draftView.bank_name || ""} onChange={e => setDraftView(d => ({ ...d, bank_name: e.target.value }))} /></div>
+                  <div><Lbl>Account Number</Lbl><input className="inp" value={draftView.account_number || ""} onChange={e => setDraftView(d => ({ ...d, account_number: e.target.value }))} /></div>
+                  <div><Lbl>Account Name</Lbl><input className="inp" value={draftView.account_name || ""} onChange={e => setDraftView(d => ({ ...d, account_name: e.target.value }))} /></div>
+                  <div><Lbl>Monthly Base Salary (₦)</Lbl><input type="number" className="inp" value={draftView.base_salary || ""} onChange={e => setDraftView(d => ({ ...d, base_salary: e.target.value }))} /></div>
+                </>
+              ) : (
+                <>
+                  <Field label="Bank Name" value={view.staff_profiles?.[0]?.bank_name} />
+                  <Field label="Account Number" value={view.staff_profiles?.[0]?.account_number} />
+                  <Field label="Account Name" value={view.staff_profiles?.[0]?.account_name} />
+                  <Field label="Monthly Base Salary" value={view.staff_profiles?.[0]?.base_salary ? `₦${Number(view.staff_profiles[0].base_salary).toLocaleString()}` : "Not Set"} />
+                </>
+              )}
               <div style={{ padding: 12, background: `${T.orange}0D`, border: `1px solid ${T.orange}22`, borderRadius: 8, fontSize: 12, color: (dark ? DARK : LIGHT).muted }}>
                 Payment info is only visible to HR and Finance teams.
               </div>
@@ -13025,7 +13810,6 @@ function HRAdminPortal({ user, onLogout }) {
     // HUB 6: COMPENSATION & BENEFITS
     { isHeader: true, label: "Compensation & Benefits" },
     { id: "payroll", icon: "payroll", label: "Payroll" },
-    { id: "payroll_runs", icon: "dollar", label: "Payroll Runs" },
     { id: "comp_bands", icon: "chart", label: "Compensation Bands" },
     { id: "bonuses", icon: "star", label: "Bonuses & Incentives" },
     { id: "benefits", icon: "shield", label: "Benefits" },
@@ -13042,7 +13826,7 @@ function HRAdminPortal({ user, onLogout }) {
     // HUB 8: DOCUMENTS & COMPLIANCE
     { isHeader: true, label: "Documents & Compliance" },
     { id: "legal_vault", icon: "file", label: "Documents" },
-    { id: "contracts", icon: "file", label: "Contracts" },
+    { id: "contracts", icon: "file", label: "⚖️ Contract Kitchen" },
     { id: "hr_letters", icon: "file", label: "HR Letters" },
     { id: "work_permits", icon: "globe", label: "Work Permits" },
     { id: "hr_requests", icon: "star", label: "Requests" },
@@ -13104,7 +13888,7 @@ function HRAdminPortal({ user, onLogout }) {
       if (p === "onboarding" || p === "onboarding_checklists") return <OnboardingHub isHR={true} />;
       if (p === "probation") return <ProbationTracker isHR={true} />;
       // Hub 6: Compensation
-      if (p === "payroll" || p === "payroll_runs") return <Payroll />;
+      if (p === "payroll") return <Payroll />;
       if (p === "comp_bands") return <CompensationBands isHR={true} />;
       if (p === "bonuses") return <BonusManager isHR={true} />;
       if (p === "benefits") return <BenefitsManager />;
@@ -13119,7 +13903,7 @@ function HRAdminPortal({ user, onLogout }) {
       if (p === "internal_job_board") return <InternalJobBoard isHR={true} user={user} />;
       // Hub 8: Documents
       if (p === "legal_vault") return <DocumentsVault isHR={true} />;
-      if (p === "contracts") return <LegalManager staffId={null} staffName={null} isHR={true} />;
+      if (p === "contracts") return <ContractKitchen user={user} />;
       if (p === "hr_letters") return <HRLetters isHR={true} />;
       if (p === "work_permits") return <WorkPermits isHR={true} />;
       if (p === "hr_requests") return <HRRequests user={user} isHR={true} />;
@@ -13331,7 +14115,7 @@ function TINUpdateModal({ onClose }) {
         </div>
         <div style={{ textAlign: "left", marginBottom: 20 }}>
           <label style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase", marginBottom: 6, display: "block" }}>Enter TIN</label>
-          <input 
+          <input
             style={{ width: "100%", padding: 12, borderRadius: 10, border: `1px solid ${C.border}`, background: C.surface, color: C.text, outline: "none" }}
             placeholder="Enter your TIN number"
             value={tin} onChange={e => setTin(e.target.value)}
@@ -13468,7 +14252,7 @@ function StaffPortal({ user, onLogout }) {
             if (success) {
               // Optionally refresh profile if needed, but closing is enough for the UI to be clean
               // Update local state to avoid re-prompting in current session
-              user.tin = "UPDATED"; 
+              user.tin = "UPDATED";
             }
           }} />}
           <div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Welcome, {user.full_name?.split(" ")[0]} 👋</div>

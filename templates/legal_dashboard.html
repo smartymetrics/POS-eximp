@@ -1041,6 +1041,15 @@
                     </svg>
                     Legal Archive
                 </div>
+                <div class="nav-link" onclick="switchTab('notifications')" id="nav-notifications-desktop">
+                    <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+                    Notifications
+                    <span id="notif-badge-desktop" class="hidden"
+                        style="margin-left:auto;background:#EF4444;color:#fff;border-radius:999px;font-size:9px;font-weight:800;padding:2px 6px;">0</span>
+                </div>
                 <a href="/legal/manual" target="_blank" class="nav-link">
                     <svg fill="none" stroke="currentColor" viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
@@ -1109,28 +1118,36 @@
                 <div class="rounded-2xl border border-brand-gold/20 bg-brand-gold/5 p-4">
                     <div class="flex items-center gap-2 mb-3">
                         <span class="text-brand-gold text-xs">⚖️</span>
-                        <p class="text-brand-gold text-[10px] font-bold uppercase tracking-widest">Legal Matters Pipeline</p>
+                        <p class="text-brand-gold text-[10px] font-bold uppercase tracking-widest">Legal Matters
+                            Pipeline</p>
                         <span class="text-gray-600 text-[9px] ml-auto">Internal &amp; External Matters</span>
                     </div>
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div class="bg-[#1A1C22] rounded-xl p-4 border border-white/5">
-                            <p class="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-2">Total Matters</p>
-                            <h3 class="text-3xl font-serif text-white" id="statMattersTotal"><span class="skeleton w-10 h-7">&nbsp;</span></h3>
+                            <p class="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-2">Total Matters
+                            </p>
+                            <h3 class="text-3xl font-serif text-white" id="statMattersTotal"><span
+                                    class="skeleton w-10 h-7">&nbsp;</span></h3>
                             <p class="text-gray-600 text-[9px] mt-1">All time</p>
                         </div>
                         <div class="bg-[#1A1C22] rounded-xl p-4 border border-white/5">
                             <p class="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-2">In Drafting</p>
-                            <h3 class="text-3xl font-serif text-amber-400" id="statMattersDraft"><span class="skeleton w-10 h-7">&nbsp;</span></h3>
+                            <h3 class="text-3xl font-serif text-amber-400" id="statMattersDraft"><span
+                                    class="skeleton w-10 h-7">&nbsp;</span></h3>
                             <p class="text-gray-600 text-[9px] mt-1">Status: Draft</p>
                         </div>
                         <div class="bg-[#1A1C22] rounded-xl p-4 border border-white/5">
-                            <p class="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-2">Under Review</p>
-                            <h3 class="text-3xl font-serif text-purple-400" id="statMattersActive"><span class="skeleton w-10 h-7">&nbsp;</span></h3>
+                            <p class="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-2">Under Review
+                            </p>
+                            <h3 class="text-3xl font-serif text-purple-400" id="statMattersActive"><span
+                                    class="skeleton w-10 h-7">&nbsp;</span></h3>
                             <p class="text-gray-600 text-[9px] mt-1">In-Progress / Review / Signing</p>
                         </div>
                         <div class="bg-[#1A1C22] rounded-xl p-4 border border-white/5">
-                            <p class="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-2">Closed Matters</p>
-                            <h3 class="text-3xl font-serif text-emerald-400" id="statMattersExecuted"><span class="skeleton w-10 h-7">&nbsp;</span></h3>
+                            <p class="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-2">Closed Matters
+                            </p>
+                            <h3 class="text-3xl font-serif text-emerald-400" id="statMattersExecuted"><span
+                                    class="skeleton w-10 h-7">&nbsp;</span></h3>
                             <p class="text-gray-600 text-[9px] mt-1">Status: Executed</p>
                         </div>
                     </div>
@@ -1140,28 +1157,37 @@
                 <div class="rounded-2xl border border-blue-500/20 bg-blue-500/5 p-4">
                     <div class="flex items-center gap-2 mb-3">
                         <span class="text-blue-400 text-xs">📝</span>
-                        <p class="text-blue-400 text-[10px] font-bold uppercase tracking-widest">Contract Execution Pipeline</p>
+                        <p class="text-blue-400 text-[10px] font-bold uppercase tracking-widest">Contract Execution
+                            Pipeline</p>
                         <span class="text-gray-600 text-[9px] ml-auto">Invoice-Based Signing Sessions</span>
                     </div>
                     <div class="grid grid-cols-2 md:grid-cols-4 gap-3">
                         <div class="bg-[#1A1C22] rounded-xl p-4 border border-white/5">
-                            <p class="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-2">Total Contracts</p>
-                            <h3 class="text-3xl font-serif text-white" id="statTotal"><span class="skeleton w-10 h-7">&nbsp;</span></h3>
+                            <p class="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-2">Total Contracts
+                            </p>
+                            <h3 class="text-3xl font-serif text-white" id="statTotal"><span
+                                    class="skeleton w-10 h-7">&nbsp;</span></h3>
                             <p class="text-gray-600 text-[9px] mt-1">Excl. voided</p>
                         </div>
                         <div class="bg-[#1A1C22] rounded-xl p-4 border border-white/5">
-                            <p class="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-2">Active Sessions</p>
-                            <h3 class="text-3xl font-serif text-blue-400" id="statActive"><span class="skeleton w-10 h-7">&nbsp;</span></h3>
+                            <p class="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-2">Active Sessions
+                            </p>
+                            <h3 class="text-3xl font-serif text-blue-400" id="statActive"><span
+                                    class="skeleton w-10 h-7">&nbsp;</span></h3>
                             <p class="text-gray-600 text-[9px] mt-1">Pending signatures</p>
                         </div>
                         <div class="bg-[#1A1C22] rounded-xl p-4 border border-white/5">
-                            <p class="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-2">Fully Executed</p>
-                            <h3 class="text-3xl font-serif text-emerald-400" id="statExecuted"><span class="skeleton w-10 h-7">&nbsp;</span></h3>
+                            <p class="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-2">Fully Executed
+                            </p>
+                            <h3 class="text-3xl font-serif text-emerald-400" id="statExecuted"><span
+                                    class="skeleton w-10 h-7">&nbsp;</span></h3>
                             <p class="text-gray-600 text-[9px] mt-1">Completed &amp; archived</p>
                         </div>
                         <div class="bg-[#1A1C22] rounded-xl p-4 border border-white/5">
-                            <p class="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-2">Awaiting Execution</p>
-                            <h3 class="text-3xl font-serif text-brand-gold" id="statPending"><span class="skeleton w-10 h-7">&nbsp;</span></h3>
+                            <p class="text-gray-500 text-[10px] font-bold uppercase tracking-wider mb-2">Awaiting
+                                Execution</p>
+                            <h3 class="text-3xl font-serif text-brand-gold" id="statPending"><span
+                                    class="skeleton w-10 h-7">&nbsp;</span></h3>
                             <p class="text-gray-600 text-[9px] mt-1">Ready to finalize</p>
                         </div>
                     </div>
@@ -1468,6 +1494,64 @@
             </div>
         </section>
 
+
+        <!-- Tab: Notifications -->
+        <section id="tab-notifications" class="tab-content hidden">
+            <header class="flex items-center justify-between mb-8">
+                <div>
+                    <h2 class="font-serif text-4xl mb-2">🔔 Notifications</h2>
+                    <p class="text-gray-500">Legal matters, contract invitations, and collaboration alerts pertaining to
+                        you.</p>
+                </div>
+                <div class="flex gap-3">
+                    <select id="notif-filter" onchange="filterNotifications()"
+                        class="bg-[#1A1C20] border border-[#2D2F36] text-gray-300 text-xs rounded-xl px-3 py-2 focus:outline-none">
+                        <option value="all">All Notifications</option>
+                        <option value="unread">Unread Only</option>
+                        <option value="invite">Invitations</option>
+                        <option value="contract">Contracts</option>
+                        <option value="signing">Signing</option>
+                        <option value="system">System</option>
+                    </select>
+                    <button onclick="markAllNotifRead()"
+                        class="text-xs font-bold text-gray-400 hover:text-brand-gold transition px-4 py-2 border border-[#2D2F36] rounded-xl">
+                        ✓ Mark All Read
+                    </button>
+                    <button onclick="fetchNotifications()"
+                        class="text-xs font-bold text-gray-400 hover:text-brand-gold transition px-4 py-2 border border-[#2D2F36] rounded-xl">
+                        ⟳ Refresh
+                    </button>
+                </div>
+            </header>
+
+            <!-- Notification Stats -->
+            <div class="grid grid-cols-4 gap-4 mb-8" id="notifStatsRow">
+                <div class="card border-[#2D2F36] !p-4 text-center">
+                    <div class="text-2xl font-serif text-red-400 font-bold" id="notifStatUnread">—</div>
+                    <div class="text-[10px] text-gray-500 uppercase tracking-widest mt-1">Unread</div>
+                </div>
+                <div class="card border-[#2D2F36] !p-4 text-center">
+                    <div class="text-2xl font-serif text-purple-400 font-bold" id="notifStatInvites">—</div>
+                    <div class="text-[10px] text-gray-500 uppercase tracking-widest mt-1">Invitations</div>
+                </div>
+                <div class="card border-[#2D2F36] !p-4 text-center">
+                    <div class="text-2xl font-serif text-brand-gold font-bold" id="notifStatContracts">—</div>
+                    <div class="text-[10px] text-gray-500 uppercase tracking-widest mt-1">Contract Alerts</div>
+                </div>
+                <div class="card border-[#2D2F36] !p-4 text-center">
+                    <div class="text-2xl font-serif text-emerald-400 font-bold" id="notifStatSigning">—</div>
+                    <div class="text-[10px] text-gray-500 uppercase tracking-widest mt-1">Signing Events</div>
+                </div>
+            </div>
+
+            <!-- Notification List -->
+            <div class="card border-[#2D2F36] !p-0 overflow-hidden">
+                <div id="notif-list" class="divide-y divide-[#2D2F36]">
+                    <div class="p-12 text-center text-gray-500 italic text-sm">Loading notifications...</div>
+                </div>
+            </div>
+        </section>
+
         <!-- Tab: Legal Archive -->
         <section id="tab-archive" class="tab-content hidden">
             <header class="mb-12">
@@ -1619,7 +1703,8 @@
         class="fixed inset-0 z-[160] flex items-center justify-center bg-black/90 backdrop-blur-sm hidden">
         <div class="card w-full max-w-md border-red-500/40 shadow-[0_0_50px_rgba(239,68,68,0.2)]">
             <div class="flex items-center gap-4 mb-6">
-                <div class="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center text-red-400 text-2xl flex-shrink-0">
+                <div
+                    class="w-12 h-12 rounded-full bg-red-500/10 flex items-center justify-center text-red-400 text-2xl flex-shrink-0">
                     &#9888;
                 </div>
                 <div>
@@ -1630,7 +1715,8 @@
             <div class="bg-white/5 border border-white/10 rounded-xl p-4 mb-6">
                 <p class="text-sm text-gray-300">You are about to permanently delete:</p>
                 <p class="text-sm font-bold text-white mt-1 truncate" id="deleteMatterTitle"></p>
-                <p class="text-xs text-red-400 mt-3">All associated history, memos, collaborators, and signing records will also be removed from the database.</p>
+                <p class="text-xs text-red-400 mt-3">All associated history, memos, collaborators, and signing records
+                    will also be removed from the database.</p>
             </div>
             <div class="flex gap-4">
                 <button onclick="closeDeleteMatterModal()"
@@ -1646,7 +1732,8 @@
     <!-- Initiation Modal -->
     <div id="initiateModal"
         class="fixed inset-0 z-[150] flex items-center justify-center bg-black/90 backdrop-blur-sm hidden p-4">
-        <div class="card w-full max-w-2xl max-h-[90vh] overflow-y-auto border-brand-gold shadow-[0_0_50px_rgba(196,125,10,0.3)]">
+        <div
+            class="card w-full max-w-2xl max-h-[90vh] overflow-y-auto border-brand-gold shadow-[0_0_50px_rgba(196,125,10,0.3)]">
             <div class="flex justify-between items-center mb-8">
                 <div>
                     <h3 class="font-serif text-2xl text-white">Initiate Legal Matter</h3>
@@ -1666,19 +1753,22 @@
                         </select>
                     </div>
                     <div>
-                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Subject /
+                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Subject
+                            /
                             Title</label>
                         <input type="text" id="initiate-title" placeholder="e.g. Employment Contract - John Doe"
                             class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-brand-gold text-sm">
                     </div>
                 </div>
-                
+
                 <div class="grid grid-cols-1 md:grid-cols-2 gap-6">
                     <div id="party-fields">
-                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Search Staff
+                        <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Search
+                            Staff
                             or Enter Name</label>
                         <input type="text" id="initiate-party-name" list="staff-search-results"
-                            oninput="handleStaffSearch(this.value)" placeholder="Search for staff or type external name..."
+                            oninput="handleStaffSearch(this.value)"
+                            placeholder="Search for staff or type external name..."
                             class="w-full bg-white/5 border border-white/10 rounded-xl px-4 py-3 text-white outline-none focus:border-brand-gold text-sm">
                         <datalist id="staff-search-results"></datalist>
                         <input type="hidden" id="initiate-staff-id" value="">
@@ -1691,12 +1781,15 @@
                     </div>
                 </div>
                 <div>
-                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Assign Drafter <span class="text-gray-600 normal-case font-normal">(optional — leave blank to draft yourself)</span></label>
+                    <label class="text-[10px] font-bold text-gray-500 uppercase tracking-widest block mb-2">Assign
+                        Drafter <span class="text-gray-600 normal-case font-normal">(optional — leave blank to draft
+                            yourself)</span></label>
                     <select id="initiate-drafter-id"
                         class="w-full bg-[#1A1C20] border border-white/10 rounded-xl px-4 py-3 text-white focus:border-brand-gold outline-none text-sm transition cursor-pointer">
                         <option value="">-- Myself (default) --</option>
                     </select>
-                    <p class="text-[10px] text-gray-600 mt-1.5">If you are HR/Admin initiating on behalf of Legal, assign the responsible lawyer here.</p>
+                    <p class="text-[10px] text-gray-600 mt-1.5">If you are HR/Admin initiating on behalf of Legal,
+                        assign the responsible lawyer here.</p>
                 </div>
             </div>
             <div class="flex gap-4 mt-10">
@@ -1850,25 +1943,30 @@
             if (tabId === 'external-matters') fetchExternalLegal();
             if (tabId === 'signature-vault') loadAuthorities();
             if (tabId === 'archive') fetchArchive();
+            if (tabId === 'notifications') fetchNotifications();
         }
 
         async function fetchPersonnelMatters() {
             try {
-                const res = await fetch(`${HR_LEGAL_API}/matters?category=Personnel`, {
+                const res = await fetch(`${HR_LEGAL_API}/matters`, {
                     headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
                 });
                 const data = await res.json();
-                renderMatterTable(data, 'personnelTableBody');
+                const internalTypes = ["Personnel", "Employment Contract", "Offer Letter", "NDA", "Disciplinary Notice", "Exit Settlement", "Personnel Policy"];
+                const filtered = data.filter(m => internalTypes.includes(m.category));
+                renderMatterTable(filtered, 'personnelTableBody');
             } catch (err) { console.error('Personnel fetch error:', err); }
         }
 
         async function fetchExternalLegal() {
             try {
-                const res = await fetch(`${HR_LEGAL_API}/matters?category=External`, {
+                const res = await fetch(`${HR_LEGAL_API}/matters`, {
                     headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
                 });
                 const data = await res.json();
-                renderMatterTable(data, 'externalTableBody');
+                const externalTypes = ["External", "Consultancy Agreement", "Freelance Contract", "Vendor Agreement", "Service Agreement", "Partnership Deed", "Other"];
+                const filtered = data.filter(m => externalTypes.includes(m.category));
+                renderMatterTable(filtered, 'externalTableBody');
             } catch (err) { console.error('External fetch error:', err); }
         }
 
@@ -2022,7 +2120,7 @@
                 document.getElementById('statExecuted').innerText = contractData.executed_contracts || 0;
                 document.getElementById('statPending').innerText = contractData.pending_execution || 0;
 
-            } catch (err) { 
+            } catch (err) {
                 console.error('Summary fetch error:', err);
                 // Optionally show error state in UI
             }
@@ -3012,6 +3110,8 @@
             fetchExecutionTrends();
             fetchHRStaff();
             setInterval(fetchActivity, 60000);
+            fetchNotifications(); // initial load
+            setInterval(fetchNotifications, 120000); // poll every 2 min
         };
 
         // --- INITIATION LOGIC ---
@@ -3568,6 +3668,150 @@
         }
 
         /* ─── Toast ───────────────────────────────────────────────── */
+
+        // ═══════════════════════════════════════════════════════════
+        //  NOTIFICATIONS SYSTEM
+        // ═══════════════════════════════════════════════════════════
+        let _allNotifications = [];
+        const NOTIF_ICONS = {
+            invite: '⚖️', contract: '📋', signing: '✍️', executed: '✅',
+            visibility: '👁', system: '🔔', memo: '💬', default: '🔔'
+        };
+        const NOTIF_COLORS = {
+            invite: '#8B5CF6', contract: '#D4AF37', signing: '#3B82F6',
+            executed: '#10B981', visibility: '#EC4899', system: '#6B7280',
+            memo: '#F59E0B', default: '#6B7280'
+        };
+
+        async function fetchNotifications() {
+            try {
+                const token = localStorage.getItem('ec_token');
+                const res = await fetch(`${HR_LEGAL_API}/notifications`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                if (!res.ok) { renderNotifications([]); return; }
+                const data = await res.json();
+                _allNotifications = data || [];
+                renderNotifications(_allNotifications);
+                updateNotifBadge(_allNotifications.filter(n => !n.is_read).length);
+                updateNotifStats(_allNotifications);
+            } catch (err) {
+                console.error('Notifications fetch error:', err);
+                renderNotifications([]);
+            }
+        }
+
+        function updateNotifBadge(count) {
+            const badges = ['notif-badge-mobile', 'notif-badge-desktop'];
+            badges.forEach(id => {
+                const el = document.getElementById(id);
+                if (!el) return;
+                if (count > 0) {
+                    el.textContent = count > 99 ? '99+' : count;
+                    el.classList.remove('hidden');
+                } else {
+                    el.classList.add('hidden');
+                }
+            });
+        }
+
+        function updateNotifStats(notifs) {
+            const unread = notifs.filter(n => !n.is_read).length;
+            const invites = notifs.filter(n => n.type === 'invite').length;
+            const contracts = notifs.filter(n => n.type === 'contract' || n.type === 'visibility').length;
+            const signing = notifs.filter(n => n.type === 'signing' || n.type === 'executed').length;
+            const el = (id, val) => { const e = document.getElementById(id); if (e) e.textContent = val; };
+            el('notifStatUnread', unread);
+            el('notifStatInvites', invites);
+            el('notifStatContracts', contracts);
+            el('notifStatSigning', signing);
+        }
+
+        function filterNotifications() {
+            const filter = document.getElementById('notif-filter')?.value || 'all';
+            if (filter === 'all') return renderNotifications(_allNotifications);
+            if (filter === 'unread') return renderNotifications(_allNotifications.filter(n => !n.is_read));
+            return renderNotifications(_allNotifications.filter(n => n.type === filter));
+        }
+
+        function renderNotifications(notifs) {
+            const container = document.getElementById('notif-list');
+            if (!container) return;
+            if (!notifs || notifs.length === 0) {
+                container.innerHTML = `<div style="padding:60px;text-align:center;color:#6B7280;">
+                    <div style="font-size:42px;margin-bottom:12px;">🔔</div>
+                    <div style="font-size:14px;font-weight:700;margin-bottom:6px;">No notifications</div>
+                    <div style="font-size:12px;">You're all caught up.</div>
+                </div>`;
+                return;
+            }
+            container.innerHTML = notifs.map(n => {
+                const icon = NOTIF_ICONS[n.type] || NOTIF_ICONS.default;
+                const color = NOTIF_COLORS[n.type] || NOTIF_COLORS.default;
+                const ts = n.created_at ? new Date(n.created_at).toLocaleString() : '';
+                const unreadStyle = !n.is_read ? 'border-left: 3px solid ' + color + ';' : '';
+                const bgStyle = !n.is_read ? 'background: ' + color + '08;' : '';
+                return `<div class="notif-item" id="notif-${n.id}" style="${bgStyle}${unreadStyle}padding:18px 24px;cursor:pointer;transition:background 0.2s;"
+                    onmouseenter="this.style.background='${color}12'"
+                    onmouseleave="this.style.background='${!n.is_read ? color + '08' : 'transparent'}'"
+                    onclick="handleNotifClick(${JSON.stringify(n).replace(/"/g, '&quot;')})">
+                    <div style="display:flex;gap:14px;align-items:flex-start;">
+                        <div style="width:40px;height:40px;border-radius:50%;background:${color}20;border:1px solid ${color}33;display:flex;align-items:center;justify-content:center;font-size:18px;flex-shrink:0;">${icon}</div>
+                        <div style="flex:1;min-width:0;">
+                            <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:8px;margin-bottom:4px;">
+                                <div style="font-size:13px;font-weight:${!n.is_read ? '800' : '600'};color:${!n.is_read ? '#F9FAFB' : '#9CA3AF'};line-height:1.3;">${n.title || 'Notification'}</div>
+                                <div style="display:flex;gap:6px;align-items:center;flex-shrink:0;">
+                                    ${!n.is_read ? `<span style="width:7px;height:7px;border-radius:50%;background:${color};display:inline-block;"></span>` : ''}
+                                    <span style="font-size:10px;color:#6B7280;white-space:nowrap;">${ts}</span>
+                                </div>
+                            </div>
+                            <div style="font-size:12px;color:#9CA3AF;line-height:1.5;margin-bottom:8px;">${n.message || ''}</div>
+                            <div style="display:flex;gap:8px;flex-wrap:wrap;">
+                                <span style="font-size:9px;font-weight:800;background:${color}18;color:${color};border:1px solid ${color}30;border-radius:5px;padding:2px 7px;text-transform:uppercase;letter-spacing:0.5px;">${n.type || 'system'}</span>
+                                ${n.matter_id ? `<button onclick="event.stopPropagation();openMatterFromNotif('${n.matter_id}')" style="font-size:9px;font-weight:700;background:#ffffff08;border:1px solid #2D2F36;color:#9CA3AF;border-radius:5px;padding:2px 9px;cursor:pointer;">Open Contract →</button>` : ''}
+                                ${!n.is_read ? `<button onclick="event.stopPropagation();markNotifRead('${n.id}')" style="font-size:9px;font-weight:700;background:#ffffff08;border:1px solid #2D2F36;color:#9CA3AF;border-radius:5px;padding:2px 9px;cursor:pointer;">Mark Read</button>` : ''}
+                            </div>
+                        </div>
+                    </div>
+                </div>`;
+            }).join('');
+        }
+
+        async function handleNotifClick(n) {
+            if (!n.is_read) await markNotifRead(n.id);
+            if (n.matter_id) openMatterFromNotif(n.matter_id);
+        }
+
+        function openMatterFromNotif(matterId) {
+            window.open(`/legal/view?id=${matterId}`, '_blank');
+        }
+
+        async function markNotifRead(notifId) {
+            try {
+                const token = localStorage.getItem('ec_token');
+                await fetch(`${HR_LEGAL_API}/notifications/${notifId}/read`, {
+                    method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` }
+                });
+                _allNotifications = _allNotifications.map(n => n.id === notifId ? { ...n, is_read: true } : n);
+                filterNotifications();
+                updateNotifBadge(_allNotifications.filter(n => !n.is_read).length);
+                updateNotifStats(_allNotifications);
+            } catch (err) { console.error('Mark read error:', err); }
+        }
+
+        async function markAllNotifRead() {
+            try {
+                const token = localStorage.getItem('ec_token');
+                await fetch(`${HR_LEGAL_API}/notifications/read-all`, {
+                    method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` }
+                });
+                _allNotifications = _allNotifications.map(n => ({ ...n, is_read: true }));
+                filterNotifications();
+                updateNotifBadge(0);
+                updateNotifStats(_allNotifications);
+            } catch (err) { console.error('Mark all read error:', err); }
+        }
+
         let _vaultToastTimer = null;
         function showVaultToast(msg, type) {
             type = type || 'success';
