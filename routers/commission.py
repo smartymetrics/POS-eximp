@@ -1,0 +1,673 @@
+from fastapi import APIRouter, Depends, HTTPException, status, BackgroundTasks
+from typing import List, Optional
+from datetime import date, datetime, timedelta
+from collections import defaultdict
+
+from models import CommissionRateCreate, CommissionAdjustment, CommissionPayout, DefaultRateUpdate, CommissionVoidRequest, SalesRepUpdate
+from database import get_db, db_execute
+from routers.auth import verify_token
+from routers.analytics import log_activity
+from email_service import send_commission_void_email, send_commission_paid_email
+
+router = APIRouter()
+
+@router.post("/migrate-legacy")
+async def migrate_legacy_rates(current_admin=Depends(verify_token)):
+    if current_admin.get("role") not in ["admin", "super_admin"]:
+        raise HTTPException(status_code=403, detail="Super admin only")
+        
+    db = get_db()
+    res = await db_execute(lambda: db.table("commission_earnings").select("*").eq("is_voided", False).execute())
+    records = res.data or []
+    updated = 0
+    
+    for r in records:
+        rate = float(r.get("commission_rate") or 0)
+        # If rate is 9.5, it's a legacy 'Net' record
+        if rate == 9.5 or (r.get("wht_amount") is None and rate > 0):
+            pay_amt = float(r.get("payment_amount") or 0)
+            new_gross_rate = 10.0 if rate == 9.5 else rate
+            new_wht_rate = 5.0
+            
+            gross_comm = round(pay_amt * new_gross_rate / 100, 2)
+            wht_amt = round(gross_comm * new_wht_rate / 100, 2)
+            net_comm = gross_comm - wht_amt
+            
+            await db_execute(lambda: db.table("commission_earnings").update({
+                "commission_rate": new_gross_rate,
+                "gross_commission": gross_comm,
+                "wht_amount": wht_amt,
+                "net_commission": net_comm,
+                "commission_amount": net_comm
+            }).eq("id", r["id"]).execute())
+            updated += 1
+            
+    return {"status": "success", "updated_records": updated}
+
+@router.post("/remit-wht")
+async def remit_commission_wht(data: dict, current_admin=Depends(verify_token)):
+    if current_admin.get("role") not in ["admin", "super_admin", "finance"]:
+        raise HTTPException(status_code=403, detail="Finance clearance required")
+        
+    ids = data.get("ids", [])
+    ref = data.get("receipt_reference")
+    
+    if not ids or not ref:
+        raise HTTPException(status_code=400, detail="IDs and Receipt Reference required")
+        
+    db = get_db()
+    await db_execute(lambda: db.table("commission_earnings").update({
+        "is_wht_remitted": True,
+        "wht_remitted_at": datetime.now().isoformat(),
+        "wht_receipt_ref": ref
+    }).in_("id", ids).execute())
+    
+    from routers.analytics import log_activity
+    await log_activity(
+        "commission_wht_remitted",
+        f"Remitted WHT for {len(ids)} commissions. Receipt: {ref}",
+        current_admin["id"]
+    )
+    
+    return {"status": "success", "cleared": len(ids)}
+
+@router.get("/sales-reps")
+async def list_sales_reps(current_admin=Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("sales_reps").select("*").order("name").execute())
+    return res.data
+
+@router.patch("/sales-reps/{rep_id}/commission-config")
+async def update_rep_commission_config(rep_id: str, payload: SalesRepUpdate, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+    if current_admin.get("role") not in ["admin", "super_admin", "hr", "operations"] and current_admin.get("primary_role") != "hr":
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    db = get_db()
+    
+    update_data = {}
+    if payload.commission_rate is not None: update_data["commission_rate"] = float(payload.commission_rate)
+    if payload.gross_commission_rate is not None: update_data["gross_commission_rate"] = float(payload.gross_commission_rate)
+    if payload.wht_rate is not None: update_data["wht_rate"] = float(payload.wht_rate)
+    
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No configuration fields provided")
+        
+    res = await db_execute(lambda: db.table("sales_reps").update(update_data).eq("id", rep_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Sales rep not found")
+        
+    background_tasks.add_task(
+        log_activity,
+        "sales_rep_commission_configured",
+        f"Updated commission configuration for {res.data[0]['name']}. New Rates: Comm={update_data.get('gross_commission_rate')}%, WHT={update_data.get('wht_rate')}%",
+        performed_by=current_admin["sub"]
+    )
+    return res.data[0]
+
+@router.get("/default-rate")
+async def get_default_rate(current_admin=Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("system_settings").select("*").in_("key", ["default_commission_rate", "default_wht_rate"]).execute())
+    
+    settings = {s["key"]: s["value"] for s in res.data}
+    return {
+        "rate": settings.get("default_commission_rate", "5.00"),
+        "wht_rate": settings.get("default_wht_rate", "5.00")
+    }
+
+@router.patch("/default-rate")
+async def update_default_rate(payload: DefaultRateUpdate, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+    if current_admin.get("role") not in ["admin", "super_admin", "hr", "operations"] and current_admin.get("primary_role") != "hr":
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    db = get_db()
+    
+    # Update Default Commission Rate
+    await db_execute(lambda: db.table("system_settings").upsert({
+        "key": "default_commission_rate",
+        "value": str(payload.rate),
+        "updated_by": current_admin["sub"],
+        "updated_at": datetime.now().isoformat()
+    }, on_conflict="key").execute())
+
+    # Update Default WHT Rate
+    await db_execute(lambda: db.table("system_settings").upsert({
+        "key": "default_wht_rate",
+        "value": str(payload.wht_rate),
+        "updated_by": current_admin["sub"],
+        "updated_at": datetime.now().isoformat()
+    }, on_conflict="key").execute())
+    
+    background_tasks.add_task(
+        log_activity,
+        "commission_default_rate_updated",
+        f"Updated default system rates: Commission={payload.rate}%, WHT={payload.wht_rate}%",
+        performed_by=current_admin["sub"]
+    )
+    return {"message": "Default rates updated", "rate": str(payload.rate), "wht_rate": str(payload.wht_rate)}
+
+@router.get("/rates/{rep_id}")
+async def get_rep_rates(rep_id: str, current_admin=Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("commission_rates").select("*, admins:set_by(full_name)").eq("sales_rep_id", rep_id).order("effective_from", desc=True).execute())
+    return res.data
+
+@router.post("/rates")
+async def set_rep_rate(payload: CommissionRateCreate, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+    if current_admin.get("role") not in ["admin", "super_admin", "hr", "operations"] and current_admin.get("primary_role") != "hr":
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    db = get_db()
+    
+    # 1. Deactivate current active rate for this estate
+    active_rates = await db_execute(lambda: db.table("commission_rates")\
+        .select("*")\
+        .eq("sales_rep_id", payload.sales_rep_id)\
+        .eq("estate_name", payload.estate_name)\
+        .is_("effective_to", "null")\
+        .execute())
+        
+    if active_rates.data:
+        yesterday = (date.today() - timedelta(days=1)).isoformat()
+        await db_execute(lambda: db.table("commission_rates").update({
+            "effective_to": yesterday
+        }).eq("id", active_rates.data[0]["id"]).execute())
+        
+    # 2. Insert new rate
+    new_rate = await db_execute(lambda: db.table("commission_rates").insert({
+        "sales_rep_id": payload.sales_rep_id,
+        "estate_name": payload.estate_name,
+        "rate": float(payload.rate),
+        "wht_rate": float(payload.wht_rate or 5.0),
+        "effective_from": payload.effective_from.isoformat(),
+        "reason": payload.reason,
+        "set_by": current_admin["sub"]
+    }).execute())
+
+    return new_rate.data[0]
+
+@router.get("/earnings")
+async def list_earnings(rep_id: Optional[str] = None, vendor_id: Optional[str] = None, is_paid: Optional[bool] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, current_admin=Depends(verify_token)):
+    db = get_db()
+    # Support both Sales Reps and Vendors (Partners)
+    query = db.table("commission_earnings").select("*, sales_reps(name), vendors(name), clients(full_name), invoices(invoice_number)").eq("is_voided", False).order("created_at", desc=True)
+    if rep_id:
+        query = query.eq("sales_rep_id", rep_id)
+    if vendor_id:
+        query = query.eq("vendor_id", vendor_id)
+    if is_paid is not None:
+        query = query.eq("is_paid", is_paid)
+    if start_date:
+        query = query.gte("created_at", f"{start_date}T00:00:00")
+    if end_date:
+        query = query.lte("created_at", f"{end_date}T23:59:59")
+    res = await db_execute(lambda: query.execute())
+    return res.data
+
+@router.get("/earnings/rep/{rep_id}")
+async def rep_earnings(rep_id: str, current_admin=Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("commission_earnings").select("*, sales_reps(name), vendors(name), clients(full_name), invoices(invoice_number)").eq("sales_rep_id", rep_id).eq("is_voided", False).order("created_at", desc=True).execute())
+    return res.data
+
+@router.patch("/earnings/{id}/adjust")
+async def adjust_earnings(id: str, payload: CommissionAdjustment, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+    if current_admin.get("role") not in ["admin", "super_admin", "hr", "operations"] and current_admin.get("primary_role") != "hr":
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    db = get_db()
+    
+    old_rec = await db_execute(lambda: db.table("commission_earnings").select("*").eq("id", id).execute())
+    if not old_rec.data:
+        raise HTTPException(status_code=404, detail="Earning record not found")
+        
+    rec = old_rec.data[0]
+    
+    if len(payload.adjustment_reason) < 10:
+        raise HTTPException(status_code=400, detail="Reason must be descriptive")
+        
+    res = await db_execute(lambda: db.table("commission_earnings").update({
+        "adjusted_amount": float(payload.adjusted_amount),
+        "adjustment_reason": payload.adjustment_reason,
+        "adjusted_by": current_admin["sub"],
+        "adjusted_at": datetime.now().isoformat()
+    }).eq("id", id).execute())
+    
+    background_tasks.add_task(
+        log_activity,
+        "commission_adjusted",
+        f"Commission for invoice {rec['invoice_id']} adjusted from {rec.get('final_amount', rec['commission_amount'])} to {payload.adjusted_amount}. Reason: {payload.adjustment_reason}",
+        performed_by=current_admin["sub"]
+    )
+    
+    return res.data[0]
+
+@router.get("/owed")
+async def summary_owed(current_admin=Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("commission_earnings").select("*, sales_reps(name), vendors(name)").eq("is_paid", False).eq("is_voided", False).execute())
+    
+    owed = defaultdict(lambda: {"total": 0.0, "count": 0, "name": "", "partially_paid": False, "type": "rep"})
+    for e in res.data:
+        # Use sales_rep_id or vendor_id for grouping
+        group_id = e.get("sales_rep_id") or e.get("vendor_id")
+        if not group_id: continue
+        
+        if e.get("sales_reps"):
+            owed[group_id]["name"] = e["sales_reps"]["name"]
+            owed[group_id]["type"] = "rep"
+        elif e.get("vendors"):
+            owed[group_id]["name"] = e["vendors"]["name"]
+            owed[group_id]["type"] = "vendor"
+        else:
+            owed[group_id]["name"] = "Unknown"
+            
+        # Subtract any partial payments already applied
+        amount_paid = float(e.get("amount_paid") or 0)
+        balance = float(e.get("final_amount") or e.get("commission_amount") or 0) - amount_paid
+        owed[group_id]["total"] += balance
+        owed[group_id]["count"] += 1
+        if amount_paid > 0:
+            owed[group_id]["partially_paid"] = True
+        
+    result = [{"id": k, **v} for k, v in owed.items()]
+    return sorted(result, key=lambda x: x["total"], reverse=True)
+
+
+@router.get("/owed/{rep_id}")
+async def detailed_owed(rep_id: str, current_admin=Depends(verify_token)):
+    db = get_db()
+    # Include amount_paid so frontend can show balance accurately
+    res = await db_execute(lambda: db.table("commission_earnings").select("*, sales_reps(name), vendors(name), clients(full_name), invoices(invoice_number)").eq("sales_rep_id", rep_id).eq("is_paid", False).eq("is_voided", False).order("created_at", desc=True).execute())
+    # Annotate each record with the true balance remaining
+    for e in res.data:
+        e["balance_owed"] = round(float(e["final_amount"]) - float(e.get("amount_paid") or 0), 2)
+    return res.data
+
+
+@router.post("/payout")
+async def mark_payout(payload: CommissionPayout, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+    if current_admin.get("role") not in ["admin", "super_admin", "hr", "operations"] and current_admin.get("primary_role") != "hr":
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    db = get_db()
+    if not payload.earning_ids:
+        raise HTTPException(status_code=400, detail="No earnings selected")
+    
+    # Fetch selected unpaid earnings ordered oldest-first for waterfall
+    earnings_query = await db_execute(lambda: db.table("commission_earnings")\
+        .select("id, final_amount, amount_paid, is_paid, invoice_id")\
+        .in_("id", payload.earning_ids)\
+        .eq("sales_rep_id", payload.sales_rep_id)\
+        .order("created_at", desc=False)\
+        .execute())
+    
+    earnings = [e for e in earnings_query.data if not e["is_paid"]]
+    
+    if not earnings:
+        raise HTTPException(status_code=400, detail="Selected earnings are already paid or total 0")
+    
+    total_owed = sum(float(e["final_amount"]) - float(e.get("amount_paid") or 0) for e in earnings)
+    
+    # If no specific amount given, pay everything in full
+    payment_amount = float(payload.total_amount) if payload.total_amount else total_owed
+    
+    if payment_amount <= 0:
+        raise HTTPException(status_code=400, detail="Payment amount must be greater than 0")
+    if payment_amount > total_owed:
+        raise HTTPException(status_code=400, detail=f"Payment amount exceeds total owed (NGN {total_owed:,.2f})")
+
+    # Create payout batch record
+    batch_payload = {
+        "total_amount": payment_amount,
+        "reference": payload.reference,
+        "notes": payload.notes,
+        "paid_by": current_admin["sub"]
+    }
+    if payload.sales_rep_id:
+        batch_payload["sales_rep_id"] = payload.sales_rep_id
+    if payload.vendor_id:
+        batch_payload["vendor_id"] = payload.vendor_id
+        
+    batch = await db_execute(lambda: db.table("payout_batches").insert(batch_payload).execute())
+    batch_id = batch.data[0]["id"]
+    
+    # --- Waterfall Distribution ---
+    remaining = payment_amount
+    for earning in earnings:
+        if remaining <= 0:
+            break
+        
+        already_paid = float(earning.get("amount_paid") or 0)
+        balance = float(earning["final_amount"]) - already_paid
+        to_apply = min(remaining, balance)
+        new_amount_paid = already_paid + to_apply
+        is_now_fully_paid = round(new_amount_paid, 2) >= round(float(earning["final_amount"]), 2)
+        
+        update_data = {
+            "amount_paid": round(new_amount_paid, 2),
+            "payout_batch_id": batch_id,
+            "payout_reference": payload.reference,
+        }
+        if is_now_fully_paid:
+            update_data["is_paid"] = True
+            update_data["paid_at"] = datetime.now().isoformat()
+            update_data["paid_by"] = current_admin["sub"]
+        
+        await db_execute(lambda: db.table("commission_earnings").update(update_data).eq("id", earning["id"]).execute())
+        remaining = round(remaining - to_apply, 2)
+    
+    # Fetch Recipient Details for Notification (Sales Rep or Vendor)
+    recipient_obj = None
+    recipient_name = "Recipient"
+    recipient_email = None
+
+    if payload.sales_rep_id:
+        rep_obj_res = await db_execute(lambda: db.table("sales_reps").select("*").eq("id", payload.sales_rep_id).single().execute())
+        recipient_obj = rep_obj_res.data
+        if recipient_obj:
+            recipient_name = recipient_obj["name"]
+            recipient_email = recipient_obj.get("email")
+    elif getattr(payload, "vendor_id", None):
+        vendor_obj_res = await db_execute(lambda: db.table("vendors").select("*").eq("id", payload.vendor_id).single().execute())
+        recipient_obj = vendor_obj_res.data
+        if recipient_obj:
+            recipient_name = recipient_obj["name"]
+            recipient_email = recipient_obj.get("email")
+
+    background_tasks.add_task(
+        log_activity,
+        "commission_payout",
+        f"Processed commission payout of NGN {payment_amount:,.2f} to {recipient_name}",
+        performed_by=current_admin["sub"]
+    )
+    
+    # Send Payout Email
+    if recipient_email:
+        background_tasks.add_task(send_commission_paid_email, recipient_obj, batch.data[0])
+        
+        # --- NEW: Sync with Portal Claim Requests & Send Bell Notification ---
+        from routers.hr import send_notification
+        
+        # 1. Fetch staff admin_id if this is a staff member
+        admin_res = await db_execute(lambda: db.table("admins").select("id").eq("email", recipient_email).execute())
+        if admin_res.data:
+            staff_id = admin_res.data[0]["id"]
+            
+            # 2. Send Bell Notification
+            await send_notification(
+                staff_id,
+                "Commission Paid",
+                f"💸 Good news! A commission payout of ₦{payment_amount:,.2f} has been processed. Reference: {payload.reference}",
+                "commission_paid"
+            )
+            
+            # 3. Mark any matching Portal Claims (Expenditure Requests) as PAID
+            # Find all invoice IDs in this batch
+            invoice_ids = [e["invoice_id"] for e in earnings if e.get("invoice_id")]
+            if invoice_ids:
+                # Fetch requests linked to these invoices to also find pending_verification_ids
+                req_res = await db_execute(lambda: db.table("expenditure_requests")
+                    .select("id, pending_verification_id")
+                    .in_("invoice_id", invoice_ids)
+                    .in_("status", ["pending", "approved", "pending_verification"])
+                    .execute())
+                
+                if req_res.data:
+                    req_ids = [r["id"] for r in req_res.data]
+                    p_verif_ids = [r["pending_verification_id"] for r in req_res.data if r.get("pending_verification_id")]
+                    
+                    # 1. Mark requests as PAID
+                    await db_execute(lambda: db.table("expenditure_requests")
+                        .update({
+                            "status": "paid",
+                            "paid_at": datetime.now().isoformat(),
+                            "payout_reference": payload.reference,
+                            "hr_note": f"Paid via Commission Payout Batch {batch_id}"
+                        })
+                            .in_("id", req_ids)
+                            .execute())
+                    # 2. Mark linked verifications as confirmed to clear the Verifications queue
+                    if p_verif_ids:
+                        await db_execute(lambda: db.table("pending_verifications")
+                            .update({"status": "confirmed"})
+                            .in_("id", p_verif_ids)
+                            .execute())
+    
+    return {"message": "Payout successful", "batch": batch.data[0], "amount_paid": payment_amount}
+
+
+@router.get("/payouts")
+async def list_payouts(rep_id: Optional[str] = None, start_date: Optional[str] = None, end_date: Optional[str] = None, current_admin=Depends(verify_token)):
+    db = get_db()
+    query = db.table("payout_batches").select("*, sales_reps(name), vendors(name), admins:paid_by(full_name)").order("paid_at", desc=True)
+    if rep_id:
+        query = query.eq("sales_rep_id", rep_id)
+    if start_date:
+        query = query.gte("paid_at", f"{start_date}T00:00:00")
+    if end_date:
+        query = query.lte("paid_at", f"{end_date}T23:59:59")
+    res = await db_execute(lambda: query.execute())
+    return res.data
+
+@router.post("/payouts/rep/{rep_id}")
+async def rep_payouts(rep_id: str, current_admin=Depends(verify_token)):
+    db = get_db()
+    res = await db_execute(lambda: db.table("payout_batches").select("*, admins:paid_by(full_name)").eq("sales_rep_id", rep_id).order("paid_at", desc=True).execute())
+    return res.data
+
+
+@router.post("/payout/{id}")
+async def pay_single_commission(id: str, payload: dict, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+    if current_admin.get("role") not in ["admin", "super_admin", "hr", "operations"] and current_admin.get("primary_role") != "hr":
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    db = get_db()
+    
+    # 1. Fetch the earning record
+    earning_res = await db_execute(lambda: db.table("commission_earnings").select("*, sales_reps(*)").eq("id", id).execute())
+    if not earning_res.data:
+        raise HTTPException(status_code=404, detail="Earning record not found")
+        
+    earning = earning_res.data[0]
+    if earning["is_paid"]:
+        raise HTTPException(status_code=400, detail="Commission already marked as paid")
+
+    # 2. Determine net amount (the actual cash to be paid)
+    net_amount = float(earning.get("net_commission") or earning.get("final_amount") or earning["commission_amount"])
+    
+    # 3. Create a mini-batch for this single payout
+    # Build payload — sales_rep_id for staff, vendor_id for partners
+    batch_payload = {
+        "total_amount": net_amount,
+        "reference": payload.get("reference", "DIRECT-PAY"),
+        "notes": f"Single payout for earning {id}",
+        "paid_by": current_admin["sub"]
+    }
+    if earning.get("sales_rep_id"):
+        batch_payload["sales_rep_id"] = earning["sales_rep_id"]
+
+    # Try with vendor_id first; fall back if column doesn't exist yet
+    vendor_batch_payload = dict(batch_payload)
+    if earning.get("vendor_id"):
+        vendor_batch_payload["vendor_id"] = earning["vendor_id"]
+        
+    try:
+        batch = await db_execute(lambda: db.table("payout_batches").insert(vendor_batch_payload).execute())
+    except Exception as e:
+        if "vendor_id" in str(e):
+            # Column not migrated yet — insert without vendor_id
+            batch = await db_execute(lambda: db.table("payout_batches").insert(batch_payload).execute())
+        else:
+            raise
+    batch_id = batch.data[0]["id"]
+
+    # 4. Update the earning record
+    await db_execute(lambda: db.table("commission_earnings").update({
+        "is_paid": True,
+        "paid_at": datetime.now().isoformat(),
+        "paid_by": current_admin["sub"],
+        "amount_paid": net_amount,
+        "payout_batch_id": batch_id,
+        "payout_reference": payload.get("reference")
+    }).eq("id", id).execute())
+
+    # 4. Fetch details for notification
+    earning = (await db_execute(lambda: db.table("commission_earnings").select("*, sales_reps(*), vendors(*), invoices(*)").eq("id", id).execute())).data[0]
+    
+    recipient_obj = earning.get("sales_reps") or earning.get("vendors")
+    if not recipient_obj:
+        raise HTTPException(status_code=404, detail="Recipient (Sales Rep or Vendor) not found for this earning.")
+
+    # 5. Log activity
+    background_tasks.add_task(
+        log_activity,
+        "commission_payout",
+        f"Paid commission of NGN {net_amount:,.2f} to {recipient_obj['name']}",
+        performed_by=current_admin["sub"]
+    )
+    
+    # 6. Send Email
+    # 4. Mark any corresponding Portal Claims (Expenditure Requests) as PAID
+    if earning.get("invoice_id"):
+        req_res = await db_execute(lambda: db.table("expenditure_requests")
+            .select("id, pending_verification_id")
+            .eq("invoice_id", earning["invoice_id"])
+            .in_("status", ["pending", "approved", "pending_verification"])
+            .execute())
+        
+        if req_res.data:
+            req_ids = [r["id"] for r in req_res.data]
+            p_verif_ids = [r["pending_verification_id"] for r in req_res.data if r.get("pending_verification_id")]
+
+            await db_execute(lambda: db.table("expenditure_requests")
+                .update({
+                    "status": "paid",
+                    "paid_at": datetime.now().isoformat(),
+                    "payout_reference": payload.get("reference"),
+                    "hr_note": "Processed via Commissions dashboard"
+                })
+                .in_("id", req_ids)
+                .execute()
+            )
+            
+            if p_verif_ids:
+                await db_execute(lambda: db.table("pending_verifications")
+                    .update({"status": "confirmed"})
+                    .in_("id", p_verif_ids)
+                    .execute())
+
+    # 5. Handle Notifications (Bell for Staff, Email for all)
+    if recipient_obj.get("email"):
+        background_tasks.add_task(send_commission_paid_email, recipient_obj, batch.data[0])
+
+    recipient_email = recipient_obj.get("email")
+    if recipient_email:
+        admin_res = await db_execute(lambda: db.table("admins").select("id").eq("email", recipient_email).execute())
+        if admin_res.data:
+            staff_id = admin_res.data[0]["id"]
+            
+            # Send Bell Notification to Staff
+            await send_notification(
+                staff_id,
+                "Commission Paid",
+                f"💸 Your commission of ₦{net_amount:,.2f} for Invoice #{earning['invoices']['invoice_number']} has been paid.",
+                "commission_paid"
+            )
+
+    return {"message": "Payout recorded successfully", "batch_id": batch_id}
+
+
+@router.get("/my")
+async def my_commissions(start_date: Optional[str] = None, end_date: Optional[str] = None, current_admin=Depends(verify_token)):
+    db = get_db()
+    email = current_admin.get("email")
+    
+    # 1. Find the Sales Rep linked to this staff member
+    rep_res = await db_execute(lambda: db.table("sales_reps").select("id, name").eq("email", email).execute())
+    
+    # Fallback to phone number if we can find it in staff profiles
+    if not rep_res.data:
+        profile = await db_execute(lambda: db.table("staff_profiles").select("phone_number").eq("admin_id", current_admin["sub"]).execute())
+        if profile.data and profile.data[0].get("phone_number"):
+            phone = profile.data[0]["phone_number"]
+            # Try matching exactly as stored or by stripping chars if necessary (keeping it simple first)
+            rep_res = await db_execute(lambda: db.table("sales_reps").select("id, name").eq("phone", phone).execute())
+
+    if not rep_res.data:
+        # Fallback to name if user requests it? For now, we return empty if no unique match found
+        return {"rep_id": None, "earnings": [], "payouts": [], "owed": 0}
+
+    rep_id = rep_res.data[0]["id"]
+    
+    # 2. Fetch Earnings
+    e_query = db.table("commission_earnings").select("*, clients(full_name), invoices(invoice_number)").eq("sales_rep_id", rep_id).eq("is_voided", False).order("created_at", desc=True)
+    if start_date: e_query = e_query.gte("created_at", f"{start_date}T00:00:00")
+    if end_date: e_query = e_query.lte("created_at", f"{end_date}T23:59:59")
+    earnings = await db_execute(lambda: e_query.execute())
+
+    # 3. Fetch Payouts
+    p_query = db.table("payout_batches").select("*").eq("sales_rep_id", rep_id).order("paid_at", desc=True)
+    if start_date: p_query = p_query.gte("paid_at", f"{start_date}T00:00:00")
+    if end_date: p_query = p_query.lte("paid_at", f"{end_date}T23:59:59")
+    payouts = await db_execute(lambda: p_query.execute())
+
+    # 4. Calc current balance (ignoring date filters for balance)
+    owed_res = await db_execute(lambda: db.table("commission_earnings").select("final_amount, amount_paid").eq("sales_rep_id", rep_id).eq("is_paid", False).eq("is_voided", False).execute())
+    total_owed = sum(float(e["final_amount"]) - float(e.get("amount_paid") or 0) for e in owed_res.data)
+
+    return {
+        "rep_id": rep_id,
+        "rep_name": rep_res.data[0]["name"],
+        "earnings": earnings.data,
+        "payouts": payouts.data,
+        "total_owed": total_owed
+    }
+
+@router.post("/earnings/{id}/void")
+async def void_earning(id: str, payload: CommissionVoidRequest, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+    if current_admin.get("role") not in ["admin", "super_admin", "hr", "operations"] and current_admin.get("primary_role") != "hr":
+        raise HTTPException(status_code=403, detail="Not authorized")
+        
+    db = get_db()
+    
+    # 1. Fetch record
+    earning_res = await db_execute(lambda: db.table("commission_earnings").select("*, sales_reps(*)").eq("id", id).execute())
+    if not earning_res.data:
+        raise HTTPException(status_code=404, detail="Earning record not found")
+        
+    earning = earning_res.data[0]
+    if earning["is_paid"]:
+        raise HTTPException(status_code=400, detail="Cannot void a paid commission record")
+        
+    # 2. Void it
+    await db_execute(lambda: db.table("commission_earnings").update({
+        "is_voided": True,
+        "voided_at": datetime.now().isoformat(),
+        "voided_by": current_admin["sub"],
+        "void_reason": payload.reason
+    }).eq("id", id).execute())
+    
+    # 3. Log and email
+    background_tasks.add_task(
+        log_activity,
+        "commission_voided",
+        f"Commission of NGN {earning['final_amount']:,.2f} voided. Reason: {payload.reason}",
+        performed_by=current_admin["sub"]
+    )
+    
+    # Fetch client and invoice for email context
+    inv_res = await db_execute(lambda: db.table("invoices").select("*").eq("id", earning["invoice_id"]).execute())
+    client_res = await db_execute(lambda: db.table("clients").select("*").eq("id", earning["client_id"]).execute())
+    
+    if inv_res.data and client_res.data:
+        background_tasks.add_task(
+            send_commission_void_email,
+            earning["sales_reps"],
+            client_res.data[0],
+            inv_res.data[0],
+            earning,
+            payload.reason
+        )
+    
+    return {"message": "Commission record voided successfully"}
