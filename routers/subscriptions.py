@@ -9,6 +9,37 @@ import os
 router = APIRouter()
 templates = Jinja2Templates(directory="templates")
 
+
+async def _notify_lawyers_subscription(client_name: str, property_name: str, invoice_number: str):
+    """
+    Fire a legal_notifications row for every admin whose role includes
+    'lawyer' or 'legal' when a new subscription form is submitted.
+    Non-critical — all errors are swallowed.
+    """
+    try:
+        db = get_db()
+        lawyers_res = await db_execute(
+            lambda: db.table("admins")
+                .select("id, role")
+                .eq("is_active", True)
+                .execute()
+        )
+        for admin in (lawyers_res.data or []):
+            roles = {r.strip().lower() for r in (admin.get("role") or "").split(",")}
+            if roles & {"lawyer", "legal", "super_admin", "admin"}:
+                try:
+                    await db_execute(lambda: db.table("legal_notifications").insert({
+                        "recipient_id": admin["id"],
+                        "type": "subscription",
+                        "title": f"📝 New subscription form — {property_name or 'Property'}",
+                        "message": f"{client_name or 'A prospect'} submitted a subscription form. Invoice: {invoice_number}.",
+                    }).execute())
+                except Exception:
+                    pass
+    except Exception as _e:
+        print(f"[LegalNotif] subscription notify error: {_e}")
+
+
 @router.get("/subscribe", response_class=HTMLResponse)
 async def get_subscription_form(request: Request, rep: str = None):
     """
@@ -119,6 +150,14 @@ async def submit_subscription(
         sales_rep_id = payload.get("sales_rep_id")
         result = await SubscriptionService.process_subscription(payload, sales_rep_id=sales_rep_id)
         
+        # ── Legal notification: new subscription form submitted ──
+        try:
+            client_name   = payload.get("full_name") or payload.get("name") or "A prospect"
+            property_name = payload.get("property_name") or payload.get("property") or "Property"
+            await _notify_lawyers_subscription(client_name, property_name, result["invoice_number"])
+        except Exception as _ne:
+            print(f"[LegalNotif] subscription post-notify error: {_ne}")
+
         return JSONResponse(content={
             "status": "success",
             "message": "Subscription received and being processed.",

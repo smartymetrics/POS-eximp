@@ -85,6 +85,36 @@ def _upload_client_signature(db, invoice_id: str, signature_base64: str) -> str:
         print(f"WARNING: Client signature upload failed: {e}")
         return signature_base64
 
+
+async def _notify_lawyers(db, notif_type: str, title: str, message: str, matter_id: str = None):
+    """
+    Fire a legal_notifications row for every admin whose role includes
+    'lawyer' or 'legal'.  Non-critical — errors are swallowed.
+    """
+    try:
+        lawyers_res = await db_execute(
+            lambda: db.table("admins")
+                .select("id, role")
+                .eq("is_active", True)
+                .execute()
+        )
+        for admin in (lawyers_res.data or []):
+            roles = {r.strip().lower() for r in (admin.get("role") or "").split(",")}
+            if roles & {"lawyer", "legal", "super_admin", "admin"}:
+                try:
+                    await db_execute(lambda: db.table("legal_notifications").insert({
+                        "recipient_id": admin["id"],
+                        "type": notif_type,
+                        "title": title,
+                        "message": message,
+                        "matter_id": matter_id,
+                    }).execute())
+                except Exception:
+                    pass
+    except Exception as _e:
+        print(f"[LegalNotif] {notif_type} broadcast error: {_e}")
+
+
 @router.get("/sign/client/{token}", response_class=HTMLResponse)
 async def get_client_signing_page(request: Request, token: str):
     return templates.TemplateResponse("sign_client.html", {"request": request})
@@ -160,6 +190,14 @@ async def submit_client_signature(token: str, data: ClientContractSignatureSubmi
             "system",
             client_id=invoice["client_id"],
             invoice_id=invoice["id"]
+        )
+
+        # ── Legal notification: client has signed ──
+        client_name = invoice.get("client_name") or invoice.get("invoice_number", "Client")
+        await _notify_lawyers(
+            db, "signing",
+            title=f"✍️ Client signed — {invoice.get('invoice_number', 'Contract')}",
+            message=f"{client_name} has signed their property contract."
         )
 
         return {"message": "Client contract signature recorded successfully"}
@@ -372,7 +410,15 @@ async def submit_witness_signature(token: str, data: WitnessSignatureSubmit, req
                 "system",
                 invoice_id=invoice["id"]
             )
-            
+
+        # ── Legal notification: witness has signed ──
+        await _notify_lawyers(
+            db, "witness",
+            title=f"🖊️ Witness {witness_num} signed — {invoice.get('invoice_number', 'Contract')}",
+            message=f"{data.full_name} has witnessed the contract."
+            + (" Contract is now fully witnessed and ready for execution." if new_status == "completed" else "")
+        )
+
         return {"message": "Signature recorded successfully", "witness_number": witness_num}
         
     except Exception as e:

@@ -1198,6 +1198,38 @@ async def submit_signature(signing_token: str, data: dict):
         "description": f"Contract signed by {data.get('signer_name')} ({data.get('signer_email')})"
     }).execute())
 
+    # ── Notify all collaborators: client has signed ──
+    try:
+        collab_res = await db_execute(
+            lambda: db.table("legal_matter_collaborators")
+                .select("admin_id")
+                .eq("matter_id", matter_id)
+                .execute()
+        )
+        matter_title_res = await db_execute(
+            lambda: db.table("legal_matters").select("title, drafter_id").eq("id", matter_id).execute()
+        )
+        matter_title = matter_title_res.data[0]["title"] if matter_title_res.data else "Contract"
+        drafter_id   = matter_title_res.data[0].get("drafter_id") if matter_title_res.data else None
+
+        recipients = set()
+        if drafter_id:
+            recipients.add(drafter_id)
+        for row in (collab_res.data or []):
+            recipients.add(row["admin_id"])
+
+        signer_name  = data.get("signer_name", "Client")
+        signer_email = data.get("signer_email", "")
+        for rid in recipients:
+            await _create_notification(
+                db, rid, "signing",
+                title=f"✍️ Contract signed — {matter_title}",
+                message=f"{signer_name} ({signer_email}) has signed the contract.",
+                matter_id=matter_id
+            )
+    except Exception as _ne:
+        print(f"[Notification] signing notify error: {_ne}")
+
     # ── Fire post-execution confirmation email (non-blocking) ──
     await _send_matter_executed_email(
         matter_id=matter_id,
@@ -1473,7 +1505,39 @@ async def acknowledge_document(signing_token: str, data: dict):
         "performed_by": None,
         "description": f"Contract acknowledged by {signer_name or 'staff member'} ({signer_email or 'unknown email'})"
     }).execute())
-    
+
+    # ── Notify collaborators: witness/staff has acknowledged ──
+    try:
+        collab_res2 = await db_execute(
+            lambda: db.table("legal_matter_collaborators")
+                .select("admin_id")
+                .eq("matter_id", matter_id)
+                .execute()
+        )
+        matter_title_res2 = await db_execute(
+            lambda: db.table("legal_matters").select("title, drafter_id").eq("id", matter_id).execute()
+        )
+        matter_title2 = matter_title_res2.data[0]["title"] if matter_title_res2.data else "Contract"
+        drafter_id2   = matter_title_res2.data[0].get("drafter_id") if matter_title_res2.data else None
+
+        recipients2 = set()
+        if drafter_id2:
+            recipients2.add(drafter_id2)
+        for row in (collab_res2.data or []):
+            recipients2.add(row["admin_id"])
+
+        ack_name  = signer_name or "Staff member"
+        ack_email = signer_email or ""
+        for rid in recipients2:
+            await _create_notification(
+                db, rid, "witness",
+                title=f"🖊️ Document acknowledged — {matter_title2}",
+                message=f"{ack_name} ({ack_email}) has acknowledged/witnessed the document.",
+                matter_id=matter_id
+            )
+    except Exception as _ne2:
+        print(f"[Notification] acknowledge notify error: {_ne2}")
+
     # ── Fire post-acknowledgment confirmation email (non-blocking) ──
     if signer_email:
         await _send_matter_executed_email(

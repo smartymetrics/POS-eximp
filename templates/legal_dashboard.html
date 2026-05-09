@@ -883,12 +883,25 @@
 
     <header class="mobile-top-bar" id="mobileTopBar">
         <h2 class="font-serif text-lg brand-gold">Legal Suite</h2>
-        <button onclick="openMobileNav()" class="mobile-nav-button" aria-label="Open navigation">
-            <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
-                stroke="currentColor">
-                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
-            </svg>
-        </button>
+        <div style="display:flex;align-items:center;gap:8px;">
+            <!-- Notification Bell — Mobile -->
+            <button id="notif-bell-mobile" onclick="toggleNotifPanel(event)" aria-label="Notifications"
+                style="position:relative;width:44px;height:44px;border-radius:14px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.08);color:#E5E7EB;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;">
+                <svg xmlns="http://www.w3.org/2000/svg" width="20" height="20" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                        d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                </svg>
+                <span id="notif-badge-mobile"
+                    style="display:none;position:absolute;top:6px;right:6px;width:18px;height:18px;background:#EF4444;color:#fff;border-radius:50%;font-size:9px;font-weight:800;align-items:center;justify-content:center;border:2px solid #111317;">0</span>
+            </button>
+            <button onclick="openMobileNav()" class="mobile-nav-button" aria-label="Open navigation">
+                <svg xmlns="http://www.w3.org/2000/svg" class="h-6 w-6" fill="none" viewBox="0 0 24 24"
+                    stroke="currentColor">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 6h16M4 12h16M4 18h16" />
+                </svg>
+            </button>
+        </div>
     </header>
 
     <div id="mobileNavDrawer" class="mobile-nav-drawer">
@@ -986,10 +999,22 @@
             <div class="flex items-center gap-3 mb-12">
                 <img src="/static/img/logo.svg" alt="Eximp & Cloves" class="h-10 w-auto"
                     onerror="this.src='https://via.placeholder.com/40x40?text=EC'">
-                <div class="leading-tight">
+                <div class="leading-tight flex-1">
                     <h1 class="font-serif text-xl brand-gold">Legal Suite</h1>
-                    <!-- <p class="text-[10px] text-gray-500 tracking-[0.2em] font-bold">EXIMP & CLOVES</p> -->
                 </div>
+                <!-- Notification Bell — Desktop Sidebar Header -->
+                <button id="notif-bell-desktop" onclick="toggleNotifPanel(event)" aria-label="Notifications"
+                    style="position:relative;width:38px;height:38px;border-radius:12px;background:rgba(255,255,255,0.04);border:1px solid rgba(255,255,255,0.07);color:#9CA3AF;cursor:pointer;display:inline-flex;align-items:center;justify-content:center;flex-shrink:0;transition:background 0.2s,color 0.2s;"
+                    onmouseenter="this.style.background='rgba(212,175,55,0.12)';this.style.color='#D4AF37'"
+                    onmouseleave="this.style.background='rgba(255,255,255,0.04)';this.style.color='#9CA3AF'">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="18" height="18" fill="none" viewBox="0 0 24 24"
+                        stroke="currentColor">
+                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
+                            d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+                    <span id="notif-badge-sidebar"
+                        style="display:none;position:absolute;top:5px;right:5px;width:16px;height:16px;background:#EF4444;color:#fff;border-radius:50%;font-size:8px;font-weight:800;align-items:center;justify-content:center;border:2px solid #111317;">0</span>
+                </button>
             </div>
 
             <nav>
@@ -3672,15 +3697,15 @@
         // ═══════════════════════════════════════════════════════════
         //  NOTIFICATIONS SYSTEM
         // ═══════════════════════════════════════════════════════════
-        let _allNotifications = [];
+        window._allNotifications = [];
         const NOTIF_ICONS = {
             invite: '⚖️', contract: '📋', signing: '✍️', executed: '✅',
-            visibility: '👁', system: '🔔', memo: '💬', default: '🔔'
+            visibility: '👁️', system: '🔔', memo: '💬', subscription: '📝', witness: '🖊️', collaborator: '🤝', default: '🔔'
         };
         const NOTIF_COLORS = {
             invite: '#8B5CF6', contract: '#D4AF37', signing: '#3B82F6',
             executed: '#10B981', visibility: '#EC4899', system: '#6B7280',
-            memo: '#F59E0B', default: '#6B7280'
+            memo: '#F59E0B', subscription: '#06B6D4', witness: '#F97316', collaborator: '#8B5CF6', default: '#6B7280'
         };
 
         async function fetchNotifications() {
@@ -3691,10 +3716,10 @@
                 });
                 if (!res.ok) { renderNotifications([]); return; }
                 const data = await res.json();
-                _allNotifications = data || [];
-                renderNotifications(_allNotifications);
-                updateNotifBadge(_allNotifications.filter(n => !n.is_read).length);
-                updateNotifStats(_allNotifications);
+                window._allNotifications = data || [];
+                renderNotifications(window._allNotifications);
+                updateNotifBadge(window._allNotifications.filter(n => !n.is_read).length);
+                updateNotifStats(window._allNotifications);
             } catch (err) {
                 console.error('Notifications fetch error:', err);
                 renderNotifications([]);
@@ -3702,7 +3727,13 @@
         }
 
         function updateNotifBadge(count) {
-            const badges = ['notif-badge-mobile', 'notif-badge-desktop'];
+            // Delegate to the bell panel's unified badge updater (keeps all 3 badges in sync)
+            if (typeof window.updateAllNotifBadges === 'function') {
+                window.updateAllNotifBadges(count);
+                return;
+            }
+            // Fallback: original behaviour for the nav-link badge only
+            const badges = ['notif-badge-desktop'];
             badges.forEach(id => {
                 const el = document.getElementById(id);
                 if (!el) return;
@@ -3729,9 +3760,9 @@
 
         function filterNotifications() {
             const filter = document.getElementById('notif-filter')?.value || 'all';
-            if (filter === 'all') return renderNotifications(_allNotifications);
-            if (filter === 'unread') return renderNotifications(_allNotifications.filter(n => !n.is_read));
-            return renderNotifications(_allNotifications.filter(n => n.type === filter));
+            if (filter === 'all') return renderNotifications(window._allNotifications);
+            if (filter === 'unread') return renderNotifications(window._allNotifications.filter(n => !n.is_read));
+            return renderNotifications(window._allNotifications.filter(n => n.type === filter));
         }
 
         function renderNotifications(notifs) {
@@ -3792,10 +3823,10 @@
                 await fetch(`${HR_LEGAL_API}/notifications/${notifId}/read`, {
                     method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` }
                 });
-                _allNotifications = _allNotifications.map(n => n.id === notifId ? { ...n, is_read: true } : n);
+                window._allNotifications = window._allNotifications.map(n => n.id === notifId ? { ...n, is_read: true } : n);
                 filterNotifications();
-                updateNotifBadge(_allNotifications.filter(n => !n.is_read).length);
-                updateNotifStats(_allNotifications);
+                updateNotifBadge(window._allNotifications.filter(n => !n.is_read).length);
+                updateNotifStats(window._allNotifications);
             } catch (err) { console.error('Mark read error:', err); }
         }
 
@@ -3805,10 +3836,10 @@
                 await fetch(`${HR_LEGAL_API}/notifications/read-all`, {
                     method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` }
                 });
-                _allNotifications = _allNotifications.map(n => ({ ...n, is_read: true }));
+                window._allNotifications = window._allNotifications.map(n => ({ ...n, is_read: true }));
                 filterNotifications();
                 updateNotifBadge(0);
-                updateNotifStats(_allNotifications);
+                updateNotifStats(window._allNotifications);
             } catch (err) { console.error('Mark all read error:', err); }
         }
 
@@ -3886,6 +3917,290 @@
         <span id="vaultToastIcon">&#9989;</span>
         <span id="vaultToastMsg">Done</span>
     </div>
+
+    <!-- ═══════════════════════════════════════════════════════════════
+     LEGAL NOTIFICATION BELL PANEL
+     Floats as a dropdown from the bell icon (mobile top-bar & desktop sidebar).
+     Shows the 5 most recent legal notifications with type-specific icons.
+     "View all" navigates to the full Notifications tab.
+     ═══════════════════════════════════════════════════════════════ -->
+
+    <!-- Overlay to close panel on outside click -->
+    <div id="notif-panel-overlay" onclick="closeNotifPanel()" style="display:none;position:fixed;inset:0;z-index:890;">
+    </div>
+
+    <!-- The panel itself -->
+    <div id="notif-panel" style="display:none;position:fixed;top:70px;right:20px;z-index:900;
+           width:360px;max-width:calc(100vw - 32px);
+           background:#1A1C22;border:1px solid rgba(255,255,255,0.08);
+           border-radius:18px;box-shadow:0 24px 64px rgba(0,0,0,0.6);
+           overflow:hidden;font-family:inherit;">
+
+        <!-- Header -->
+        <div style="padding:16px 20px 12px;border-bottom:1px solid rgba(255,255,255,0.06);
+                display:flex;align-items:center;justify-content:space-between;">
+            <div style="display:flex;align-items:center;gap:10px;">
+                <div
+                    style="width:32px;height:32px;border-radius:10px;background:rgba(212,175,55,0.12);
+                        border:1px solid rgba(212,175,55,0.25);display:flex;align-items:center;justify-content:center;">
+                    <svg xmlns="http://www.w3.org/2000/svg" width="16" height="16" fill="none" viewBox="0 0 24 24"
+                        stroke="#D4AF37" stroke-width="2">
+                        <path stroke-linecap="round" stroke-linejoin="round"
+                            d="M15 17h5l-1.405-1.405A2.032 2.032 0 0118 14.158V11a6.002 6.002 0 00-4-5.659V5a2 2 0 10-4 0v.341C7.67 6.165 6 8.388 6 11v3.159c0 .538-.214 1.055-.595 1.436L4 17h5m6 0v1a3 3 0 11-6 0v-1m6 0H9" />
+                    </svg>
+                </div>
+                <div>
+                    <div style="font-size:13px;font-weight:800;color:#F9FAFB;letter-spacing:-0.01em;">Legal Alerts</div>
+                    <div id="notif-panel-subtitle" style="font-size:10px;color:#6B7280;font-weight:600;">Loading…</div>
+                </div>
+            </div>
+            <button onclick="panelMarkAllRead()" style="font-size:10px;font-weight:700;color:#D4AF37;background:rgba(212,175,55,0.08);
+                   border:1px solid rgba(212,175,55,0.2);border-radius:8px;padding:4px 10px;cursor:pointer;
+                   transition:background 0.15s;" onmouseenter="this.style.background='rgba(212,175,55,0.18)'"
+                onmouseleave="this.style.background='rgba(212,175,55,0.08)'">
+                Mark all read
+            </button>
+        </div>
+
+        <!-- List -->
+        <div id="notif-panel-list"
+            style="max-height:380px;overflow-y:auto;scrollbar-width:thin;scrollbar-color:#2D2F36 transparent;">
+            <div style="padding:40px;text-align:center;color:#6B7280;font-size:12px;">Loading…</div>
+        </div>
+
+        <!-- Footer -->
+        <div style="padding:12px 20px;border-top:1px solid rgba(255,255,255,0.06);text-align:center;">
+            <button onclick="closeNotifPanel();switchTab('notifications')" style="font-size:11px;font-weight:700;color:#D4AF37;background:none;border:none;
+                   cursor:pointer;letter-spacing:0.02em;opacity:0.9;" onmouseenter="this.style.opacity='1'"
+                onmouseleave="this.style.opacity='0.9'">
+                View all notifications →
+            </button>
+        </div>
+    </div>
+
+    <script>
+        // ═══════════════════════════════════════════════════════════════
+        //  NOTIFICATION BELL PANEL  — drop-in enhancement
+        //  All badge updates go through updateAllNotifBadges() so mobile,
+        //  desktop sidebar, and the existing desktop nav badge stay in sync.
+        // ═══════════════════════════════════════════════════════════════
+
+        (function () {
+            // ── constants ────────────────────────────────────────────────
+            const PANEL_ICONS = {
+                invite: '⚖️',
+                contract: '📋',
+                signing: '✍️',
+                executed: '✅',
+                visibility: '👁️',
+                memo: '💬',
+                system: '🔔',
+                subscription: '📝',
+                witness: '🖊️',
+                collaborator: '🤝',
+                default: '🔔'
+            };
+            const PANEL_COLORS = {
+                invite: '#8B5CF6',
+                contract: '#D4AF37',
+                signing: '#3B82F6',
+                executed: '#10B981',
+                visibility: '#EC4899',
+                memo: '#F59E0B',
+                system: '#6B7280',
+                subscription: '#06B6D4',
+                witness: '#F97316',
+                collaborator: '#8B5CF6',
+                default: '#6B7280'
+            };
+
+            // ── badge helper — keeps mobile, sidebar, and sidebar-nav in sync ──
+            window.updateAllNotifBadges = function (count) {
+                // IDs: mobile top-bar, desktop sidebar header, desktop nav link badge
+                ['notif-badge-mobile', 'notif-badge-sidebar', 'notif-badge-desktop'].forEach(id => {
+                    const el = document.getElementById(id);
+                    if (!el) return;
+                    if (count > 0) {
+                        el.textContent = count > 99 ? '99+' : count;
+                        el.style.display = 'inline-flex';
+                        el.classList.remove('hidden'); // for the nav link badge which uses Tailwind
+                    } else {
+                        el.style.display = 'none';
+                        el.classList.add('hidden');
+                    }
+                });
+            };
+
+            // ── panel open / close ───────────────────────────────────────
+            window.toggleNotifPanel = function (e) {
+                e.stopPropagation();
+                const panel = document.getElementById('notif-panel');
+                const overlay = document.getElementById('notif-panel-overlay');
+                const isOpen = panel.style.display !== 'none';
+                if (isOpen) {
+                    closeNotifPanel();
+                } else {
+                    const btn = e.currentTarget;
+                    const rect = btn.getBoundingClientRect();
+                    const PANEL_W = 360;
+                    const GAP = 10;
+                    const vw = window.innerWidth;
+                    const isMobile = vw <= 1024;
+
+                    // Reset both axes so previous state never bleeds through
+                    panel.style.left = 'auto';
+                    panel.style.right = 'auto';
+                    panel.style.top = 'auto';
+
+                    if (isMobile) {
+                        // Mobile: pin to top-right, full stretch near the top bar
+                        panel.style.top = '70px';
+                        panel.style.right = '12px';
+                    } else {
+                        // Desktop: the bell lives inside the 260px sidebar.
+                        // Open the panel just to the RIGHT of the sidebar (260px + gap),
+                        // vertically aligned with the bell button.
+                        const SIDEBAR_W = 260;
+                        let left = SIDEBAR_W + GAP;
+
+                        // Safety clamp: never overflow the right edge of the viewport
+                        if (left + PANEL_W > vw - 8) {
+                            left = Math.max(8, vw - PANEL_W - 8);
+                        }
+
+                        panel.style.top = Math.max(8, rect.top) + 'px';
+                        panel.style.left = left + 'px';
+                    }
+
+                    panel.style.display = 'block';
+                    overlay.style.display = 'block';
+                    renderNotifPanel();
+                }
+            };
+
+            window.closeNotifPanel = function () {
+                document.getElementById('notif-panel').style.display = 'none';
+                document.getElementById('notif-panel-overlay').style.display = 'none';
+            };
+
+            // ── render panel items from the shared _allNotifications array ──
+            function renderNotifPanel() {
+                const list = document.getElementById('notif-panel-list');
+                const subtitle = document.getElementById('notif-panel-subtitle');
+                const notifs = (window._allNotifications || []).slice(0, 8); // show latest 8
+                const unread = (window._allNotifications || []).filter(n => !n.is_read).length;
+
+                subtitle.textContent = unread > 0 ? `${unread} unread` : 'All caught up';
+
+                if (!notifs.length) {
+                    list.innerHTML = `<div style="padding:48px 24px;text-align:center;color:#6B7280;">
+                <div style="font-size:36px;margin-bottom:10px;">⚖️</div>
+                <div style="font-size:13px;font-weight:700;color:#9CA3AF;margin-bottom:4px;">No legal alerts yet</div>
+                <div style="font-size:11px;">You'll be notified about contracts,<br>signatures, and collaborations here.</div>
+            </div>`;
+                    return;
+                }
+
+                list.innerHTML = notifs.map(n => {
+                    const icon = PANEL_ICONS[n.type] || PANEL_ICONS.default;
+                    const color = PANEL_COLORS[n.type] || PANEL_COLORS.default;
+                    const ts = n.created_at ? timeAgo(new Date(n.created_at)) : '';
+                    const unreadBorder = !n.is_read ? `border-left:3px solid ${color};` : 'border-left:3px solid transparent;';
+                    const bg = !n.is_read ? `background:${color}0D;` : '';
+
+                    return `<div style="${bg}${unreadBorder}padding:14px 18px;cursor:pointer;transition:background 0.15s;display:flex;gap:12px;align-items:flex-start;"
+                onmouseenter="this.style.background='${color}18'"
+                onmouseleave="this.style.background='${!n.is_read ? color + '0D' : 'transparent'}'"
+                onclick="handlePanelNotifClick(${JSON.stringify(n).replace(/"/g, '&quot;')})">
+                <div style="width:34px;height:34px;flex-shrink:0;border-radius:50%;background:${color}1A;
+                            border:1px solid ${color}33;display:flex;align-items:center;justify-content:center;font-size:15px;">${icon}</div>
+                <div style="flex:1;min-width:0;">
+                    <div style="display:flex;justify-content:space-between;align-items:flex-start;gap:6px;margin-bottom:2px;">
+                        <div style="font-size:12px;font-weight:${!n.is_read ? '800' : '600'};color:${!n.is_read ? '#F9FAFB' : '#9CA3AF'};line-height:1.3;flex:1;">${n.title || 'Notification'}</div>
+                        ${!n.is_read ? `<span style="width:6px;height:6px;border-radius:50%;background:${color};flex-shrink:0;margin-top:4px;"></span>` : ''}
+                    </div>
+                    <div style="font-size:11px;color:#6B7280;line-height:1.45;margin-bottom:4px;white-space:nowrap;overflow:hidden;text-overflow:ellipsis;">${n.message || ''}</div>
+                    <div style="display:flex;gap:6px;align-items:center;flex-wrap:wrap;">
+                        <span style="font-size:8px;font-weight:800;background:${color}18;color:${color};border:1px solid ${color}30;border-radius:4px;padding:1px 6px;text-transform:uppercase;letter-spacing:0.5px;">${n.type || 'system'}</span>
+                        <span style="font-size:10px;color:#4B5563;">${ts}</span>
+                    </div>
+                </div>
+            </div>`;
+                }).join('<div style="height:1px;background:rgba(255,255,255,0.04);margin:0 18px;"></div>');
+            }
+
+            window.handlePanelNotifClick = async function (n) {
+                closeNotifPanel();
+                if (!n.is_read) {
+                    // mark read optimistically
+                    if (window._allNotifications) {
+                        window._allNotifications = window._allNotifications.map(x =>
+                            x.id === n.id ? { ...x, is_read: true } : x
+                        );
+                        window.updateAllNotifBadges(window._allNotifications.filter(x => !x.is_read).length);
+                    }
+                    // API call (fire-and-forget)
+                    try {
+                        const token = localStorage.getItem('ec_token');
+                        await fetch(`${window.HR_LEGAL_API}/notifications/${n.id}/read`, {
+                            method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` }
+                        });
+                    } catch (_) { }
+                }
+                if (n.matter_id) {
+                    window.open(`/legal/view?id=${n.matter_id}`, '_blank');
+                } else {
+                    switchTab('notifications');
+                }
+            };
+
+            window.panelMarkAllRead = async function () {
+                try {
+                    const token = localStorage.getItem('ec_token');
+                    await fetch(`${window.HR_LEGAL_API}/notifications/read-all`, {
+                        method: 'PATCH', headers: { 'Authorization': `Bearer ${token}` }
+                    });
+                    if (window._allNotifications) {
+                        window._allNotifications = window._allNotifications.map(n => ({ ...n, is_read: true }));
+                    }
+                    window.updateAllNotifBadges(0);
+                    renderNotifPanel();
+                    // refresh the main notif tab if visible
+                    if (typeof filterNotifications === 'function') filterNotifications();
+                    if (typeof updateNotifStats === 'function') updateNotifStats(window._allNotifications || []);
+                } catch (err) { console.error('Mark all read error:', err); }
+            };
+
+            // ── utility: relative time ───────────────────────────────────
+            function timeAgo(date) {
+                const secs = Math.floor((Date.now() - date) / 1000);
+                if (secs < 60) return 'just now';
+                if (secs < 3600) return `${Math.floor(secs / 60)}m ago`;
+                if (secs < 86400) return `${Math.floor(secs / 3600)}h ago`;
+                return `${Math.floor(secs / 86400)}d ago`;
+            }
+
+            // ── patch the existing fetchNotifications so it also drives
+            //    the panel badges via updateAllNotifBadges ────────────────
+            // We wait for DOM ready then wrap the existing function.
+            document.addEventListener('DOMContentLoaded', function () {
+                const originalFetch = window.fetchNotifications;
+                if (typeof originalFetch === 'function') {
+                    window.fetchNotifications = async function () {
+                        await originalFetch();
+                        // _allNotifications is updated by originalFetch; sync all badges
+                        const unread = (window._allNotifications || []).filter(n => !n.is_read).length;
+                        window.updateAllNotifBadges(unread);
+                    };
+                }
+            });
+
+            // ── close on Escape ──────────────────────────────────────────
+            document.addEventListener('keydown', function (e) {
+                if (e.key === 'Escape') closeNotifPanel();
+            });
+        })();
+    </script>
 
 </body>
 
