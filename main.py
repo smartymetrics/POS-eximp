@@ -1,0 +1,433 @@
+from fastapi import FastAPI, Request, Depends, HTTPException, status
+from fastapi.staticfiles import StaticFiles
+from fastapi.templating import Jinja2Templates
+from fastapi.responses import HTMLResponse, RedirectResponse, FileResponse
+from fastapi.middleware.cors import CORSMiddleware
+import uvicorn
+from contextlib import asynccontextmanager
+
+from routers import (
+    auth,
+    clients,
+    properties,
+    invoices,
+    payments,
+    webhooks,
+    verifications,
+    analytics,
+    sales_reps,
+    reports,
+    commission,
+    contracts,
+    signing,
+    marketing_contacts,
+    marketing_campaigns,
+    marketing_segments,
+    marketing_analytics,
+    marketing_sequences,
+    marketing_webhooks,
+    marketing_media,
+    marketing_events,
+    crm,
+    crm_professional,
+    payouts,
+    procurement_submissions,
+    support,
+    revenue_intelligence,
+    scheduling,
+    notifications,
+    subscriptions,
+    hr,
+    hr_legal,
+    ws_support,
+    hrm_talent_chat,
+    biodata,
+    guarantor
+)
+from routers.auth import require_roles, resolve_admin_token
+from database import init_db
+from scheduler import start_scheduler, stop_scheduler
+
+@asynccontextmanager
+async def lifespan(app: FastAPI):
+    await init_db()
+    # Start the background scheduler
+    await start_scheduler()
+    yield
+    # Stop the background scheduler
+    await stop_scheduler()
+
+app = FastAPI(title="Eximp & Cloves - Finance System", version="1.0.0", lifespan=lifespan)
+
+app.add_middleware(
+    CORSMiddleware,
+    allow_origins=["*"],
+    allow_credentials=True,
+    allow_methods=["*"],
+    allow_headers=["*"],
+)
+
+from fastapi.exceptions import RequestValidationError
+from fastapi.responses import JSONResponse
+
+@app.exception_handler(RequestValidationError)
+async def validation_exception_handler(request: Request, exc: RequestValidationError):
+    """
+    Log exactly what failed in the 422 error.
+    This helps us see if it's a bad email format or missing field.
+    """
+    print(f"[ERROR] VALIDATION ERROR at {request.url.path}: {exc.errors()}")
+    return JSONResponse(
+        status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
+        content={"detail": exc.errors(), "body": exc.body},
+    )
+
+@app.exception_handler(HTTPException)
+async def auth_exception_handler(request: Request, exc: HTTPException):
+    """
+    Professionally handle Auth errors.
+    If a user is not logged in or doesn't have access, 
+    redirect them to login instead of showing raw JSON.
+    """
+    if exc.status_code in [401, 403]:
+        # Only redirect if it's a browser page request
+        accept = request.headers.get("accept", "")
+        if "text/html" in accept:
+            return RedirectResponse(url="/login?next=" + str(request.url.path))
+    
+    # Otherwise return the standard JSON error (for API calls)
+    from fastapi.responses import JSONResponse
+    return JSONResponse(status_code=exc.status_code, content={"detail": exc.detail})
+
+app.mount("/static", StaticFiles(directory="static"), name="static")
+
+@app.get("/hr", include_in_schema=False)
+@app.get("/hr/", include_in_schema=False)
+async def hr_index():
+    return FileResponse("hrm-portal/dist/index.html")
+
+app.mount("/hr", StaticFiles(directory="hrm-portal/dist", html=True), name="hr")
+templates = Jinja2Templates(directory="templates")
+
+app.include_router(auth.router, prefix="/auth", tags=["auth"])
+app.include_router(clients.router, prefix="/api/clients", tags=["clients"])
+app.include_router(properties.router, prefix="/api/properties", tags=["properties"])
+app.include_router(invoices.router, prefix="/api/invoices", tags=["invoices"])
+app.include_router(payments.router, prefix="/api/payments", tags=["payments"])
+app.include_router(webhooks.router, prefix="/api/webhooks", tags=["webhooks"])
+app.include_router(verifications.router, prefix="/api/verifications", tags=["verifications"])
+app.include_router(analytics.router, prefix="/api/analytics", tags=["analytics"])
+app.include_router(sales_reps.router, prefix="/api/sales-reps", tags=["sales-reps"])
+app.include_router(reports.router, prefix="/api/reports", tags=["reports"])
+app.include_router(commission.router, prefix="/api/commission", tags=["commission"])
+app.include_router(contracts.router, prefix="/api/contracts", tags=["contracts"])
+app.include_router(signing.router, tags=["signing"])
+marketing_roles = ["admin", "super_admin", "operations", "marketing"]
+
+app.include_router(marketing_contacts.router, prefix="/api/marketing/contacts", tags=["marketing"], dependencies=[Depends(require_roles(marketing_roles))])
+app.include_router(marketing_campaigns.router, prefix="/api/marketing/campaigns", tags=["marketing"], dependencies=[Depends(require_roles(marketing_roles))])
+app.include_router(marketing_segments.router, prefix="/api/marketing/segments", tags=["marketing"], dependencies=[Depends(require_roles(marketing_roles))])
+app.include_router(marketing_analytics.router, prefix="/api/marketing/analytics", tags=["marketing"], dependencies=[Depends(require_roles(marketing_roles))])
+app.include_router(marketing_sequences.router, prefix="/api/marketing/sequences", tags=["marketing"], dependencies=[Depends(require_roles(marketing_roles))])
+app.include_router(marketing_webhooks.router, tags=["webhooks"])  # tracking at root level, public
+app.include_router(marketing_media.router, prefix="/api/marketing/media", tags=["marketing"], dependencies=[Depends(require_roles(marketing_roles))])
+app.include_router(marketing_events.router, prefix="/api/marketing/events", tags=["marketing"], dependencies=[Depends(require_roles(marketing_roles))])
+app.include_router(crm.router, prefix="/api/crm", tags=["crm"], dependencies=[Depends(require_roles(["admin", "super_admin", "operations", "sales", "customer_support"]))])
+app.include_router(crm_professional.router, prefix="/api/crm/pro", tags=["crm"], dependencies=[Depends(require_roles(["admin", "super_admin", "operations", "sales", "customer_support"]))])
+app.include_router(payouts.router, prefix="/api/payouts", tags=["payouts"])
+app.include_router(procurement_submissions.router, prefix="/api/payouts", tags=["procurement"])
+app.include_router(support.router, prefix="/api/support", tags=["support"])
+app.include_router(revenue_intelligence.router, prefix="/api/intelligence", tags=["intelligence"])
+app.include_router(scheduling.router, prefix="/api/scheduling", tags=["scheduling"])
+app.include_router(notifications.router, prefix="/api/notifications", tags=["notifications"])
+app.include_router(ws_support.router, prefix="/api", tags=["live-chat"])
+app.include_router(subscriptions.router, tags=["subscriptions"])
+app.include_router(hr.router, prefix="/api/hr", tags=["hr"])
+app.include_router(hr_legal.router, prefix="/api/hr-legal", tags=["hr-legal"])
+app.include_router(hrm_talent_chat.router, prefix="/api", tags=["talent-chat"])
+app.include_router(biodata.router, prefix="/api/biodata", tags=["biodata"])
+app.include_router(guarantor.router, prefix="/api/guarantor", tags=["guarantor"])
+
+
+
+
+@app.get("/", response_class=HTMLResponse)
+async def root(request: Request):
+    return RedirectResponse(url="/dashboard")
+
+
+@app.get("/dashboard", response_class=HTMLResponse)
+async def dashboard(request: Request):
+    response = templates.TemplateResponse("dashboard.html", {"request": request})
+    response.headers["Cache-Control"] = "no-cache, no-store, must-revalidate"
+    response.headers["Pragma"] = "no-cache"
+    response.headers["Expires"] = "0"
+    return response
+
+
+@app.get("/crm", response_class=HTMLResponse)
+async def crm_dashboard(request: Request):
+    return templates.TemplateResponse("professional_crm.html", {"request": request})
+
+
+@app.get("/crm/professional", response_class=HTMLResponse)
+async def crm_professional_dashboard(request: Request):
+    return RedirectResponse(url="/crm")
+
+
+@app.get("/marketing", response_class=HTMLResponse)
+async def marketing_dashboard(request: Request):
+    return templates.TemplateResponse("marketing_dashboard.html", {"request": request})
+
+
+@app.get("/legal", response_class=HTMLResponse)
+async def legal_dashboard(request: Request):
+    return templates.TemplateResponse("legal_dashboard.html", {"request": request})
+
+
+@app.get("/login", response_class=HTMLResponse)
+async def login_page(request: Request):
+    return templates.TemplateResponse("login.html", {"request": request})
+
+
+@app.get("/crm-pro", response_class=HTMLResponse)
+async def professional_crm_dashboard(request: Request):
+    return RedirectResponse(url="/crm")
+
+
+@app.get("/clients", response_class=HTMLResponse)
+async def clients_page(request: Request):
+    return templates.TemplateResponse("clients.html", {"request": request})
+
+
+@app.get("/invoices", response_class=HTMLResponse)
+async def invoices_page(request: Request):
+    return templates.TemplateResponse("invoices.html", {"request": request})
+
+
+@app.get("/new-transaction", response_class=HTMLResponse)
+async def new_transaction_page(request: Request):
+    return templates.TemplateResponse("new_transaction.html", {"request": request})
+
+
+@app.get("/marketing", response_class=HTMLResponse)
+async def marketing_dashboard_page(request: Request):
+    return templates.TemplateResponse("marketing_dashboard.html", {"request": request})
+
+
+@app.get("/marketing/editor", response_class=HTMLResponse)
+async def marketing_editor_page(request: Request, id: str):
+    return templates.TemplateResponse("marketing_editor.html", {"request": request, "campaign_id": id})
+
+
+@app.get("/marketing/manual", response_class=HTMLResponse)
+async def marketing_manual_page(request: Request):
+    return templates.TemplateResponse("marketing_manual.html", {"request": request})
+
+
+@app.get("/legal", response_class=HTMLResponse)
+async def legal_dashboard_page(request: Request):
+    return templates.TemplateResponse("legal_dashboard.html", {"request": request})
+
+
+@app.get("/legal/editor", response_class=HTMLResponse)
+async def legal_editor_page(request: Request, id: str):
+    return templates.TemplateResponse("legal_editor.html", {"request": request, "invoice_id": id})
+
+
+@app.get("/legal/advanced-editor", response_class=HTMLResponse)
+async def legal_advanced_editor_page(request: Request, id: str = None):
+    return templates.TemplateResponse("personnel_editor.html", {"request": request, "matter_id": id})
+
+
+@app.get("/signing/{signing_token}", response_class=HTMLResponse)
+async def signing_page(request: Request, signing_token: str):
+    """Render the digital signing page."""
+    return templates.TemplateResponse("personnel_signing.html", {"request": request, "signing_token": signing_token, "is_preview": False})
+
+
+@app.get("/preview/{preview_token}", response_class=HTMLResponse)
+async def preview_page(request: Request, preview_token: str):
+    """Render the digital signing page in Read-Only Preview Mode."""
+    return templates.TemplateResponse("personnel_signing.html", {"request": request, "signing_token": None, "preview_token": preview_token, "is_preview": True})
+
+
+@app.get("/legal/my-matters", response_class=HTMLResponse)
+async def staff_legal_portal(request: Request):
+    """Staff HR Portal: View assigned legal matters marked visible."""
+    return templates.TemplateResponse("staff_legal_portal.html", {"request": request})
+
+
+@app.get("/legal/view", response_class=HTMLResponse)
+async def staff_document_viewer(request: Request, id: str):
+    """Staff HR Portal: View a specific legal document."""
+    return templates.TemplateResponse("staff_document_viewer.html", {"request": request, "matter_id": id})
+
+
+@app.get("/legal/manual", response_class=HTMLResponse)
+async def legal_manual_page(request: Request):
+    return templates.TemplateResponse("legal_manual.html", {"request": request})
+
+
+@app.get("/finance/payouts", response_class=HTMLResponse)
+async def payouts_dashboard_page(request: Request):
+    return templates.TemplateResponse("payouts_dashboard.html", {"request": request})
+
+@app.get("/finance/procurement", response_class=HTMLResponse)
+async def procurement_dashboard_page(request: Request, start_date: str = None, end_date: str = None, current_admin=Depends(require_roles(["super_admin"]))):
+    """Clean URL for the Procurement Dashboard (Super Admin Only)."""
+    from report_service import ReportService
+    from datetime import datetime, timedelta
+    
+    if not start_date and not end_date:
+        now = datetime.now()
+        start_date = (now - timedelta(days=30)).strftime("%Y-%m-%d")
+        end_date = now.strftime("%Y-%m-%d")
+        
+    analytics = await ReportService.get_procurement_analytics(start_date=start_date, end_date=end_date)
+    return templates.TemplateResponse("procurement_dashboard.html", {
+        "request": request,
+        "admin": current_admin,
+        "analytics": analytics
+    })
+
+
+@app.get("/finance/manual", response_class=HTMLResponse)
+async def finance_manual_page(request: Request):
+    return templates.TemplateResponse("finance_manual.html", {"request": request})
+
+
+@app.get("/procurement/portal", response_class=HTMLResponse)
+async def procurement_portal_page(request: Request):
+    return templates.TemplateResponse("procurement_portal.html", {"request": request})
+
+@app.get("/payout/portal/{token}", response_class=HTMLResponse)
+async def payout_portal_page(request: Request, token: str):
+    return templates.TemplateResponse("payout_portal.html", {"request": request, "token": token})
+
+@app.get("/book-inspection", response_class=HTMLResponse)
+async def book_inspection_page(request: Request):
+    return templates.TemplateResponse("book_inspection.html", {"request": request})
+
+@app.get("/support/portal/{ticket_id}", response_class=HTMLResponse)
+async def support_portal_page(request: Request, ticket_id: str):
+    return templates.TemplateResponse("support_portal.html", {"request": request, "ticket_id": ticket_id})
+
+@app.get("/support/chat/join/{invite_token}", response_class=HTMLResponse)
+async def chat_join_page(request: Request, invite_token: str):
+    return await render_chat_join(request, invite_token)
+
+@app.get("/join", response_class=HTMLResponse)
+async def short_chat_join_page(request: Request, token: str):
+    """Shorter link for client sharing that handles the token via query params."""
+    return await render_chat_join(request, token)
+
+async def render_chat_join(request: Request, token: str):
+    from database import get_db, db_execute
+    db = get_db()
+    
+    # 1. Fetch Inviter and Room Info
+    # This query joins chat_participants with admins and support_tickets to get the personalization data
+    query = """
+        SELECT 
+            a.full_name as inviter_name,
+            t.category as ticket_category
+        FROM chat_participants cp
+        JOIN admins a ON cp.invited_by_admin_id = a.id
+        JOIN chat_rooms cr ON cp.room_id = cr.id
+        JOIN support_tickets t ON cr.ticket_id = t.id
+        WHERE cp.invite_token = %s
+    """
+    # Using db_execute for safe execution
+    try:
+        # Note: Since we are using Supabase/PostgREST usually, I'll use the .rpc or .table interface if possible,
+        # but for complex joins, it's easier to use the .rpc if defined, or just multiple calls.
+        # Let's use multiple calls to be safe with the PostgREST library.
+        
+        cp_res = db.table("chat_participants").select("invited_by_admin_id, room_id").eq("invite_token", token).execute()
+        if not cp_res.data:
+            return templates.TemplateResponse("chat_join.html", {"request": request, "invite_token": token, "error": "Invalid or expired invitation link."})
+        
+        cp = cp_res.data[0]
+        admin_res = db.table("admins").select("full_name").eq("id", cp["invited_by_admin_id"]).execute()
+        room_res = db.table("chat_rooms").select("ticket_id").eq("id", cp["room_id"]).execute()
+        
+        inviter_name = admin_res.data[0]["full_name"] if admin_res.data else "a team member"
+        
+        ticket_id = room_res.data[0]["ticket_id"]
+        ticket_res = db.table("support_tickets").select("category").eq("id", ticket_id).execute()
+        category = ticket_res.data[0]["category"] if ticket_res.data else "support"
+
+        # Heuristic for Team Name
+        team_name = "Legal/Support"
+        if category == "property":
+            team_name = "Sales"
+        elif category == "legal":
+            team_name = "Legal"
+        else:
+            team_name = "Support"
+            
+        return templates.TemplateResponse("chat_join.html", {
+            "request": request, 
+            "invite_token": token,
+            "inviter_name": inviter_name,
+            "team_name": team_name
+        })
+    except Exception as e:
+        print(f"Error rendering join page: {e}")
+        return templates.TemplateResponse("chat_join.html", {"request": request, "invite_token": token, "error": "An error occurred while loading the invitation."})
+
+@app.get("/legal/{tag:path}")
+async def handle_legal_placeholders(tag: str):
+    """
+    Catch-all for Jinja placeholders like {{ signatures.witness1 }} when viewed 
+    literally in the browser editor. Returns a 1x1 transparent PNG for quiet logs.
+    Also handles legacy PDF download redirects for backward compatibility.
+    """
+    # 1. Signature Placeholder Interception
+    if "{{" in tag and "signatures" in tag:
+        import base64
+        from fastapi.responses import Response
+        # Return a 1x1 transparent PNG
+        return Response(content=base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="), media_type="image/png")
+    
+    # 2. Legacy Redirects for common PDF calls
+    if "api/invoices/pdf/" in tag:
+        from fastapi.responses import RedirectResponse
+        sub_id = tag.split("/")[-1]
+        return RedirectResponse(url=f"/api/invoices/{sub_id}/pdf/invoice")
+    
+    if "api/receipts/pdf/" in tag:
+        from fastapi.responses import RedirectResponse
+        sub_id = tag.split("/")[-1]
+        return RedirectResponse(url=f"/api/invoices/{sub_id}/pdf/receipt")
+
+    # 3. Fall through to 404
+    raise HTTPException(status_code=404, detail="Not Found")
+
+
+@app.get("/favicon.ico", include_in_schema=False)
+async def favicon():
+    """Returns a transparent 1x1 pixel for favicon requests to keep logs clean."""
+    import base64
+    from fastapi.responses import Response
+    return Response(content=base64.b64decode("iVBORw0KGgoAAAANSUhEUgAAAAEAAAABCAYAAAAfFcSJAAAAC0lEQVR42mNkYAAAAAYAAjCB0C8AAAAASUVORK5CYII="), media_type="image/png")
+
+
+@app.head("/health")
+@app.get("/health")
+async def health():
+    return {"status": "ok", "service": "Eximp & Cloves Finance System"}
+
+
+# if __name__ == "__main__":
+#    uvicorn.run("main:app", host="0.0.0.0", port=8000, reload=True)
+
+
+
+
+import os
+
+if __name__ == "__main__":
+    port = int(os.environ.get("PORT", 8000))
+    uvicorn.run("main:app", host="0.0.0.0", port=port, reload=True)
