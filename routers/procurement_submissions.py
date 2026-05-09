@@ -11,15 +11,24 @@
 # into procurement_expenses so they appear in the existing dashboard analytics.
 # ══════════════════════════════════════════════════════════════════════════
 
-from fastapi import APIRouter, HTTPException, Depends, Query
+from fastapi import APIRouter, HTTPException, Depends, Query, UploadFile, File
 from pydantic import BaseModel, EmailStr
 from typing import Optional, List, Any
 from database import get_db, db_execute
 from routers.auth import require_roles, resolve_admin_token
-from datetime import datetime, timezone
+from datetime import datetime, timezone, timedelta
 from decimal import Decimal
 import uuid
 import logging
+import os
+import mimetypes
+from storage_service import upload_portal_file, generate_signed_url
+from email_service import (
+    send_procurement_invite_email,
+    send_procurement_received_email,
+    send_procurement_approval_email,
+    send_procurement_rejection_email
+)
 
 router = APIRouter()
 logger = logging.getLogger(__name__)
@@ -64,6 +73,7 @@ class ProcurementSubmissionCreate(BaseModel):
     total_amount: float
     notes: Optional[str] = None
     line_items: List[LineItem] = []
+    attachments: Optional[List[str]] = []
 
 
 class SubmissionStatusUpdate(BaseModel):
@@ -261,6 +271,7 @@ async def create_procurement_submission(data: ProcurementSubmissionCreate):
         "total_amount": float(data.total_amount),
         "notes": data.notes,
         "line_items": [item.dict() for item in data.line_items],
+        "attachments": data.attachments or [],
         **project_links,
     }
 
@@ -270,7 +281,21 @@ async def create_procurement_submission(data: ProcurementSubmissionCreate):
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to save submission.")
 
-    return res.data[0]
+    submission = res.data[0]
+    
+    # ── Send Receipt Email ────────────────────────────────────────────────
+    try:
+        await send_procurement_received_email(
+            email_addr=submission.get("email"),
+            vendor_name=submission.get("vendor_name"),
+            submission_ref=submission.get("ref"),
+            project_name=submission.get("projectName") or submission.get("project") or "Eximp & Cloves Project",
+            total_amount=submission.get("total_amount")
+        )
+    except Exception as e:
+        logger.error(f"Failed to send submission receipt email: {e}")
+
+    return submission
 
 
 # ── GET /procurement-submissions  (dashboard → list) ─────────────────────
@@ -356,6 +381,32 @@ async def update_procurement_submission(
     # ── Fan out to procurement_expenses on approval ───────────────────────
     if data.status == "approved":
         await fan_out_to_expenses(updated, current_admin["sub"], db)
+        
+        # ── Send Approval Email ───────────────────────────────────────────
+        try:
+            await send_procurement_approval_email(
+                email_addr=updated.get("email"),
+                vendor_name=updated.get("vendor_name"),
+                submission_ref=updated.get("ref"),
+                project_name=updated.get("projectName") or updated.get("project") or "the project",
+                total_amount=updated.get("total_amount"),
+                pay_ref=updated.get("pay_reference") or ""
+            )
+        except Exception as e:
+            logger.error(f"Failed to send approval email: {e}")
+
+    elif data.status == "rejected":
+        # ── Send Rejection Email ──────────────────────────────────────────
+        try:
+            await send_procurement_rejection_email(
+                email_addr=updated.get("email"),
+                vendor_name=updated.get("vendor_name"),
+                submission_ref=updated.get("ref"),
+                project_name=updated.get("projectName") or updated.get("project") or "the project",
+                reason=data.rejection_reason or "Your quotation did not meet our current requirements."
+            )
+        except Exception as e:
+            logger.error(f"Failed to send rejection email: {e}")
 
     return updated
 
@@ -389,7 +440,6 @@ async def create_procurement_invite(
     token = str(uuid.uuid4())
     
     # Store in DB with 30-day expiry
-    from datetime import timedelta
     invite_payload = {
         "token": token,
         "vendor_email": data.vendor_email.lower(),
@@ -409,7 +459,28 @@ async def create_procurement_invite(
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to create invite")
     
-    invite_url = f"https://your-domain.com/procurement/portal?token={token}"
+    invite = res.data[0]
+    base_url = os.getenv("APP_BASE_URL", "https://app.eximps-cloves.com").rstrip("/")
+    invite_url = f"{base_url}/procurement/portal?token={token}"
+    
+    # ── Send Invitation Email ─────────────────────────────────────────────
+    try:
+        # Get admin name for branding
+        admin_name = "The Procurement Team"
+        try:
+            admin_res = await db_execute(lambda: db.table("staff_profiles").select("full_name").eq("id", current_admin["sub"]).single().execute())
+            if admin_res.data:
+                admin_name = admin_res.data["full_name"]
+        except: pass
+
+        await send_procurement_invite_email(
+            email_addr=data.vendor_email,
+            admin_name=admin_name,
+            invite_url=invite_url,
+            project_name=data.project or ""
+        )
+    except Exception as e:
+        logger.error(f"Failed to send procurement invite email: {e}")
     
     return {
         "status": "success",
@@ -551,3 +622,39 @@ async def fetch_vendor_by_email(email: str = Query(...)):
     except Exception as e:
         logger.error(f"Error fetching vendor: {e}")
         raise HTTPException(status_code=500, detail="Error looking up vendor")
+
+
+# ── POST /procurement-portal/upload  (public → upload attachment) ──────────
+@router.post("/procurement-portal/upload")
+async def upload_procurement_attachment(file: UploadFile = File(...)):
+    """
+    Public endpoint for vendors to upload supporting documents.
+    Returns the storage path.
+    """
+    try:
+        # 1. Read file bytes
+        file_bytes = await file.read()
+        if not file_bytes:
+            raise HTTPException(status_code=400, detail="File is empty")
+
+        # 2. Generate unique filename
+        ext = mimetypes.guess_extension(file.content_type) or ".bin"
+        unique_id = uuid.uuid4().hex[:8]
+        filename = f"{datetime.now().strftime('%Y%m%d_%H%M%S')}_{unique_id}{ext}"
+        storage_path = f"procurement_attachments/{filename}"
+
+        # 3. Upload to storage
+        success = upload_portal_file(storage_path, file_bytes, file.content_type)
+        if not success:
+            raise HTTPException(status_code=500, detail="Failed to upload file to storage")
+
+        return {
+            "status": "success",
+            "path": storage_path,
+            "filename": file.filename
+        }
+    except HTTPException:
+        raise
+    except Exception as e:
+        logger.error(f"Procurement upload error: {e}")
+        raise HTTPException(status_code=500, detail=str(e))

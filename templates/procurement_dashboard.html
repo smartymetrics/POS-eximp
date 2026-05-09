@@ -498,9 +498,22 @@
             <div class="flex items-center justify-between">
                 <div>
                     <h3 class="text-lg font-bold text-white mb-1">Invite Vendors to Submit Quotations</h3>
-                    <p class="text-[11px] text-gray-400">Send unique invitation links to vendors. They'll receive an email with a link to access the portal.</p>
+                    <p class="text-[11px] text-gray-400">Send unique invitation links to vendors or use the general link.</p>
                 </div>
                 <div class="text-2xl">📧</div>
+            </div>
+
+            <div class="p-4 bg-amber-500/5 border border-amber-500/10 rounded-xl mb-4">
+                <p class="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-2">General Invitation Link</p>
+                <div class="flex gap-2">
+                    <input type="text" readonly id="general-invite-link" value="" 
+                        class="flex-1 bg-black/40 border border-white/5 rounded-lg px-3 py-2 text-[10px] text-gray-400 outline-none">
+                    <button onclick="copyToClipboard(document.getElementById('general-invite-link').value)"
+                        class="px-4 py-2 bg-amber-500/10 text-amber-500 hover:bg-amber-500 hover:text-black border border-amber-500/20 rounded-lg text-[10px] font-bold uppercase transition-all">
+                        Copy
+                    </button>
+                </div>
+                <p class="text-[9px] text-gray-500 mt-2">Anyone with this link can access the portal and submit a quotation.</p>
             </div>
             
             <div class="grid grid-cols-1 md:grid-cols-3 gap-3 pt-2">
@@ -760,6 +773,12 @@
             <div id="d-rejection-block" class="hidden bg-red-500/5 rounded-xl border border-red-500/20 p-4">
                 <p class="text-[9px] font-black text-red-400 uppercase tracking-widest mb-2">Rejection Reason</p>
                 <p class="text-[11px] text-red-300 leading-relaxed" id="d-rejection-reason"></p>
+            </div>
+
+            <!-- Attachments block -->
+            <div id="d-attachments-block" class="hidden bg-white/3 rounded-xl border border-white/5 p-4">
+                <p class="text-[9px] font-black text-amber-500 uppercase tracking-widest mb-3">Supporting Documents</p>
+                <div id="d-attachments-list" class="space-y-2"></div>
             </div>
 
         </div>
@@ -1635,6 +1654,7 @@
             } else if (view === 'invites') {
                 invites.classList.remove('hidden');
                 btnInvites.className = ON;
+                document.getElementById('general-invite-link').value = window.location.origin + '/procurement/portal';
                 loadInvites();
             }
         }
@@ -1665,12 +1685,13 @@
                     
                     // Show success message
                     const msgBlock = document.getElementById('inv-message-block');
-                    document.getElementById('inv-message').innerHTML = `✓ Invite generated and copied to clipboard!`;
+                    document.getElementById('inv-message').innerHTML = `✓ Invite generated for ${email}!`;
                     msgBlock.classList.remove('hidden');
                     
                     // Copy invite URL to clipboard
-                    const inviteUrl = data.invite_url || `https://your-domain.com/procurement/portal?token=${data.token}`;
+                    const inviteUrl = data.invite_url || `${window.location.origin}/procurement/portal?token=${data.token}`;
                     navigator.clipboard.writeText(inviteUrl).catch(err => console.error('Copy failed:', err));
+                    alert('Invite link copied to clipboard!');
                     
                     // Clear form
                     document.getElementById('inv-email').value = '';
@@ -1710,7 +1731,7 @@
                     invList.innerHTML = invites
                         .filter(inv => inv.status === 'pending' || inv.status === 'accepted')
                         .map(inv => {
-                            const inviteUrl = `https://your-domain.com/procurement/portal?token=${inv.token}`;
+                            const inviteUrl = `${window.location.origin}/procurement/portal?token=${inv.token}`;
                             const expiresAt = new Date(inv.expires_at);
                             const isExpired = expiresAt < new Date();
                             const daysLeft = Math.ceil((expiresAt - new Date()) / (1000 * 60 * 60 * 24));
@@ -2313,6 +2334,27 @@
                 document.getElementById('d-rejection-reason').textContent = s.rejection_reason || s.rejectionReason;
             } else {
                 document.getElementById('d-rejection-block').classList.add('hidden');
+            }
+
+            // Attachments
+            const attList = document.getElementById('d-attachments-list');
+            const attBlock = document.getElementById('d-attachments-block');
+            const attachments = s.attachments || [];
+            if (attachments.length > 0) {
+                attBlock.classList.remove('hidden');
+                attList.innerHTML = attachments.map(path => {
+                    const name = path.split('/').pop();
+                    return `
+                        <a href="/api/storage/signed-url?path=${encodeURIComponent(path)}" target="_blank"
+                            class="flex items-center gap-3 p-2.5 bg-white/5 hover:bg-white/10 rounded-xl border border-white/5 transition-all group">
+                            <i class="fas fa-file-alt text-amber-500"></i>
+                            <span class="text-[11px] text-gray-300 group-hover:text-white flex-1 truncate">${name}</span>
+                            <i class="fas fa-external-link-alt text-[10px] text-gray-600"></i>
+                        </a>
+                    `;
+                }).join('');
+            } else {
+                attBlock.classList.add('hidden');
             }
 
             // Action bar

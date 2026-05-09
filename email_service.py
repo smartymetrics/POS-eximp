@@ -2444,3 +2444,182 @@ async def send_talent_chat_invite_email(email_addr: str, name: str, chat_url: st
         logger.info(f"Talent chat invite sent to {email_addr}")
     except Exception as e:
         logger.error(f"Failed to send talent chat invite to {email_addr}: {e}")
+
+# ─── PROCUREMENT SYSTEM EMAILS ───────────────────────────────────────────────
+
+def _procurement_invite_html(invite_url, admin_name, project_name):
+    return f"""
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;border-radius:8px;border:1px solid #ddd;overflow:hidden;">
+  <div style="background:#1A1A1A;padding:24px;text-align:center;">
+    <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style="max-height:48px;display:block;margin:0 auto;">
+  </div>
+  <div style="background:#F5A623;padding:12px 24px;text-align:center;">
+    <h2 style="color:#1A1A1A;margin:0;font-size:18px;">📋 Invitation to Quote</h2>
+  </div>
+  <div style="padding:32px 24px;background:#fff;">
+    <p style="color:#333;font-size:16px;">Dear Valued Vendor,</p>
+    <p style="color:#555;line-height:1.6;margin:16px 0;">
+      <strong>{admin_name}</strong> from <strong>Eximp &amp; Cloves Infrastructure Limited</strong> is inviting you to submit a quotation for procurement items related to <strong>{project_name or "our upcoming project"}</strong>.
+    </p>
+    <div style="background:#f9f9f9;padding:15px;border-radius:8px;border-left:4px solid #F5A623;margin:24px 0;font-size:14px;color:#333;">
+      <strong>How to Submit:</strong><br>
+      1. Click the button below to access our secure Procurement Portal.<br>
+      2. Upload your quotation file (Excel or CSV).<br>
+      3. Provide your banking and documentation details for processing.
+    </div>
+    <div style="text-align:center;margin:35px 0;">
+      <a href="{invite_url}" 
+         style="background-color:#1A1A1A;color:#F5A623;padding:14px 28px;text-decoration:none;border-radius:6px;font-weight:bold;font-size:16px;display:inline-block;border:2px solid #F5A623;">
+        Submit My Quotation
+      </a>
+    </div>
+    <p style="color:#999;font-size:12px;text-align:center;">
+      Note: This invitation is valid for 30 days. Please ensure your submission is accurate and complete.
+    </p>
+    <hr style="border-color:#eee;margin:30px 0;">
+    <p style="color:#999;font-size:12px;margin:0;text-align:center;">
+      Eximp &amp; Cloves Infrastructure Limited | RC 8311800<br>
+      57B, Isaac John Street, Yaba, Lagos
+    </p>
+  </div>
+</div>"""
+
+async def send_procurement_invite_email(email_addr: str, admin_name: str, invite_url: str, project_name: str = ""):
+    try:
+        await async_resend({
+            "from": f"Eximp & Cloves Procurement <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "reply_to": "procurement@eximps-cloves.com",
+            "subject": f"📋 Invitation to Quote — {project_name or 'Eximp & Cloves'}",
+            "html": _procurement_invite_html(invite_url, admin_name, project_name),
+        })
+        logger.info(f"Procurement invite sent to {email_addr}")
+    except Exception as e:
+        logger.error(f"Failed to send procurement invite to {email_addr}: {e}")
+
+def _procurement_received_html(vendor_name, submission_ref, project_name, total_amount):
+    return f"""
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;border-radius:8px;border:1px solid #ddd;overflow:hidden;">
+  <div style="background:#1A1A1A;padding:24px;text-align:center;">
+    <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style="max-height:48px;display:block;margin:0 auto;">
+  </div>
+  <div style="background:#10b981;padding:12px 24px;text-align:center;">
+    <h2 style="color:#fff;margin:0;font-size:18px;">✅ Quotation Received</h2>
+  </div>
+  <div style="padding:32px 24px;background:#fff;">
+    <p style="color:#333;font-size:16px;">Dear <strong>{vendor_name}</strong>,</p>
+    <p style="color:#555;line-height:1.6;margin:16px 0;">
+      Thank you for your submission. We have successfully received your quotation for <strong>{project_name or "our project"}</strong>.
+    </p>
+    <div style="background:#1A1A1A;padding:20px;border-radius:8px;margin:24px 0;">
+      <table style="width:100%;color:#ccc;font-size:13px;border-collapse:collapse;">
+        <tr><td style="padding:6px 0;color:#aaa;">Submission Ref:</td><td style="padding:6px 0;text-align:right;color:#F5A623;font-weight:bold;">{submission_ref}</td></tr>
+        <tr><td style="padding:6px 0;color:#aaa;">Total Amount:</td><td style="padding:6px 0;text-align:right;color:#fff;font-weight:bold;">₦{float(total_amount):,.2f}</td></tr>
+        <tr><td style="padding:6px 0;color:#aaa;">Status:</td><td style="padding:6px 0;text-align:right;color:#F5A623;">Under Review</td></tr>
+      </table>
+    </div>
+    <p style="color:#555;font-size:13px;">Our procurement team will review your submission and contact you if further information or clarification is required.</p>
+    <p style="color:#555;font-size:13px;margin-top:20px;">Best regards,<br>Eximp &amp; Cloves Procurement Team</p>
+    <hr style="border-color:#eee;margin:30px 0;">
+    <p style="color:#999;font-size:12px;margin:0;text-align:center;">
+      Eximp &amp; Cloves Infrastructure Limited | RC 8311800<br>
+      57B, Isaac John Street, Yaba, Lagos
+    </p>
+  </div>
+</div>"""
+
+async def send_procurement_received_email(email_addr: str, vendor_name: str, submission_ref: str, project_name: str, total_amount: float):
+    try:
+        await async_resend({
+            "from": f"Eximp & Cloves Procurement <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "reply_to": "procurement@eximps-cloves.com",
+            "subject": f"✅ Quotation Received — Ref: {submission_ref}",
+            "html": _procurement_received_html(vendor_name, submission_ref, project_name, total_amount),
+        })
+    except Exception as e:
+        logger.error(f"Failed to send procurement receipt to {email_addr}: {e}")
+
+def _procurement_approval_html(vendor_name, submission_ref, project_name, total_amount, pay_ref):
+    return f"""
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;border-radius:8px;border:1px solid #ddd;overflow:hidden;">
+  <div style="background:#1A1A1A;padding:24px;text-align:center;">
+    <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style="max-height:48px;display:block;margin:0 auto;">
+  </div>
+  <div style="background:#10b981;padding:12px 24px;text-align:center;">
+    <h2 style="color:#fff;margin:0;font-size:18px;">🎉 Quotation Approved</h2>
+  </div>
+  <div style="padding:32px 24px;background:#fff;">
+    <p style="color:#333;font-size:16px;">Dear <strong>{vendor_name}</strong>,</p>
+    <p style="color:#555;line-height:1.6;margin:16px 0;">
+      We are pleased to inform you that your quotation for <strong>{project_name}</strong> (Ref: {submission_ref}) has been <strong>Approved</strong>.
+    </p>
+    <div style="background:#1A1A1A;padding:20px;border-radius:8px;margin:24px 0;">
+      <table style="width:100%;color:#ccc;font-size:13px;border-collapse:collapse;">
+        <tr><td style="padding:6px 0;color:#aaa;">Approved Amount:</td><td style="padding:6px 0;text-align:right;color:#fff;font-weight:bold;">₦{float(total_amount):,.2f}</td></tr>
+        <tr><td style="padding:6px 0;color:#aaa;">Payment Status:</td><td style="padding:6px 0;text-align:right;color:#10b981;">Processing</td></tr>
+      </table>
+    </div>
+    <p style="color:#555;font-size:13px;">Our finance department will process the payment in accordance with our standard payment terms. You will receive a separate remittance advice once the payment is completed.</p>
+    <p style="color:#555;font-size:13px;margin-top:20px;">Thank you for your service.<br>Eximp &amp; Cloves Procurement Team</p>
+    <hr style="border-color:#eee;margin:30px 0;">
+    <p style="color:#999;font-size:12px;margin:0;text-align:center;">
+      Eximp &amp; Cloves Infrastructure Limited | RC 8311800<br>
+      57B, Isaac John Street, Yaba, Lagos
+    </p>
+  </div>
+</div>"""
+
+async def send_procurement_approval_email(email_addr: str, vendor_name: str, submission_ref: str, project_name: str, total_amount: float, pay_ref: str = ""):
+    try:
+        await async_resend({
+            "from": f"Eximp & Cloves Procurement <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "reply_to": "procurement@eximps-cloves.com",
+            "subject": f"🎉 Quotation Approved — Ref: {submission_ref}",
+            "html": _procurement_approval_html(vendor_name, submission_ref, project_name, total_amount, pay_ref),
+        })
+    except Exception as e:
+        logger.error(f"Failed to send procurement approval to {email_addr}: {e}")
+
+def _procurement_rejection_html(vendor_name, submission_ref, project_name, reason):
+    return f"""
+<div style="font-family:Arial,sans-serif;max-width:600px;margin:0 auto;border-radius:8px;border:1px solid #ddd;overflow:hidden;">
+  <div style="background:#1A1A1A;padding:24px;text-align:center;">
+    <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style="max-height:48px;display:block;margin:0 auto;">
+  </div>
+  <div style="background:#ef4444;padding:12px 24px;text-align:center;">
+    <h2 style="color:#fff;margin:0;font-size:18px;">❌ Quotation Status Update</h2>
+  </div>
+  <div style="padding:32px 24px;background:#fff;">
+    <p style="color:#333;font-size:16px;">Dear <strong>{vendor_name}</strong>,</p>
+    <p style="color:#555;line-height:1.6;margin:16px 0;">
+      Thank you for participating in our procurement process for <strong>{project_name}</strong> (Ref: {submission_ref}). 
+    </p>
+    <p style="color:#555;line-height:1.6;">
+      After careful review, we regret to inform you that your quotation was not selected for this project.
+    </p>
+    <div style="background:#fff5f5;border-left:4px solid #ef4444;padding:16px;margin:20px 0;font-size:13px;color:#b91c1c;">
+      <strong>Note:</strong> {reason or "Your quotation did not meet our current requirements or budget criteria."}
+    </div>
+    <p style="color:#555;font-size:13px;">We appreciate the time and effort you put into your submission and will keep your details on file for future opportunities.</p>
+    <p style="color:#555;font-size:13px;margin-top:20px;">Best regards,<br>Eximp &amp; Cloves Procurement Team</p>
+    <hr style="border-color:#eee;margin:30px 0;">
+    <p style="color:#999;font-size:12px;margin:0;text-align:center;">
+      Eximp &amp; Cloves Infrastructure Limited | RC 8311800<br>
+      57B, Isaac John Street, Yaba, Lagos
+    </p>
+  </div>
+</div>"""
+
+async def send_procurement_rejection_email(email_addr: str, vendor_name: str, submission_ref: str, project_name: str, reason: str):
+    try:
+        await async_resend({
+            "from": f"Eximp & Cloves Procurement <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "reply_to": "procurement@eximps-cloves.com",
+            "subject": f"Procurement Status Update — Ref: {submission_ref}",
+            "html": _procurement_rejection_html(vendor_name, submission_ref, project_name, reason),
+        })
+    except Exception as e:
+        logger.error(f"Failed to send procurement rejection to {email_addr}: {e}")
