@@ -614,6 +614,66 @@
             color: var(--error);
         }
 
+        .file-remove:hover {
+            color: var(--error);
+        }
+
+        /* ── MODE TOGGLE (Upload vs Manual) ── */
+        .mode-toggle {
+            display: flex;
+            gap: 6px;
+            background: var(--elevated);
+            border: 1px solid var(--border);
+            border-radius: 12px;
+            padding: 5px;
+            margin-bottom: 24px;
+        }
+
+        .mode-btn {
+            flex: 1;
+            padding: 9px 16px;
+            border-radius: 8px;
+            border: none;
+            background: transparent;
+            color: var(--muted);
+            font-size: 12px;
+            font-weight: 700;
+            text-transform: uppercase;
+            letter-spacing: 0.05em;
+            cursor: pointer;
+            transition: all 0.2s;
+            font-family: inherit;
+        }
+
+        .mode-btn.active {
+            background: rgba(196, 125, 10, 0.12);
+            color: var(--brand);
+            border: 1px solid rgba(196, 125, 10, 0.25);
+        }
+
+        .mode-btn i {
+            margin-right: 6px;
+        }
+
+        .manual-hint {
+            background: rgba(196, 125, 10, 0.06);
+            border: 1px solid rgba(196, 125, 10, 0.2);
+            border-radius: 12px;
+            padding: 14px 18px;
+            font-size: 12px;
+            color: var(--muted);
+            display: flex;
+            align-items: flex-start;
+            gap: 10px;
+            margin-bottom: 8px;
+        }
+
+        .manual-hint i {
+            color: var(--brand);
+            margin-top: 2px;
+            flex-shrink: 0;
+        }
+
         /* ── EDITABLE TABLE ── */
         .table-toolbar {
             display: flex;
@@ -1268,7 +1328,8 @@
     <div class="app-shell">
         <!-- SIDEBAR -->
         <nav class="sidebar">
-            <img src="/static/img/logo.png" alt="Eximp & Cloves" style="width: 36px; height: auto; margin-bottom: 24px; object-fit: contain; filter: brightness(0) invert(1);">
+            <img src="/static/img/logo.png" alt="Eximp & Cloves"
+                style="width: 36px; height: auto; margin-bottom: 24px; object-fit: contain; filter: brightness(0) invert(1);">
             <div class="sidebar-nav">
                 <button class="sidebar-btn active" onclick="showPage('new-submission')" id="nav-new">
                     <i class="fa-solid fa-file-invoice"></i>
@@ -1381,7 +1442,8 @@
                                         <i class="input-icon fa-solid fa-envelope"></i>
                                         <input type="email" id="v-email" placeholder="vendor@company.com">
                                     </div>
-                                    <button class="btn btn-primary btn-sm" onclick="identifyVendor()" id="btn-identify" style="height:44px">
+                                    <button class="btn btn-primary btn-sm" onclick="identifyVendor()" id="btn-identify"
+                                        style="height:44px">
                                         <i class="fa-solid fa-magnifying-glass"></i> Identify
                                     </button>
                                 </div>
@@ -1452,9 +1514,11 @@
                                             <option value="Ecobank Nigeria">Ecobank Nigeria</option>
                                             <option value="Fidelity Bank">Fidelity Bank</option>
                                             <option value="First Bank of Nigeria">First Bank of Nigeria</option>
-                                            <option value="First City Monument Bank (FCMB)">First City Monument Bank (FCMB)</option>
+                                            <option value="First City Monument Bank (FCMB)">First City Monument Bank
+                                                (FCMB)</option>
                                             <option value="Globus Bank">Globus Bank</option>
-                                            <option value="Guaranty Trust Bank (GTBank)">Guaranty Trust Bank (GTBank)</option>
+                                            <option value="Guaranty Trust Bank (GTBank)">Guaranty Trust Bank (GTBank)
+                                            </option>
                                             <option value="Heritage Bank">Heritage Bank</option>
                                             <option value="Keystone Bank">Keystone Bank</option>
                                             <option value="Nova Bank">Nova Bank</option>
@@ -1470,7 +1534,8 @@
                                             <option value="SunTrust Bank">SunTrust Bank</option>
                                             <option value="Titan Trust Bank">Titan Trust Bank</option>
                                             <option value="Union Bank of Nigeria">Union Bank of Nigeria</option>
-                                            <option value="United Bank for Africa (UBA)">United Bank for Africa (UBA)</option>
+                                            <option value="United Bank for Africa (UBA)">United Bank for Africa (UBA)
+                                            </option>
                                             <option value="Unity Bank">Unity Bank</option>
                                             <option value="Wema Bank">Wema Bank</option>
                                             <option value="Zenith Bank">Zenith Bank</option>
@@ -1490,7 +1555,8 @@
                                             <option value="Branch">Branch</option>
                                             <option value="Carbon (OneFi)">Carbon (OneFi)</option>
                                             <option value="Eyowo">Eyowo</option>
-                                            <option value="FairMoney Microfinance Bank">FairMoney Microfinance Bank</option>
+                                            <option value="FairMoney Microfinance Bank">FairMoney Microfinance Bank
+                                            </option>
                                             <option value="Gomoney">Gomoney</option>
                                             <option value="Kuda Bank">Kuda Bank</option>
                                             <option value="Mint Digital Bank">Mint Digital Bank</option>
@@ -1503,17 +1569,21 @@
                                             <option value="Raven Bank">Raven Bank</option>
                                             <option value="Renmoney">Renmoney</option>
                                             <option value="Rubies Bank">Rubies Bank</option>
-                                            <option value="Safe Haven Microfinance Bank">Safe Haven Microfinance Bank</option>
+                                            <option value="Safe Haven Microfinance Bank">Safe Haven Microfinance Bank
+                                            </option>
                                             <option value="Smartcash PSB (Airtel)">Smartcash PSB (Airtel)</option>
                                             <option value="Sparkle Microfinance Bank">Sparkle Microfinance Bank</option>
-                                            <option value="VFD Microfinance Bank (VBank)">VFD Microfinance Bank (VBank)</option>
+                                            <option value="VFD Microfinance Bank (VBank)">VFD Microfinance Bank (VBank)
+                                            </option>
                                         </optgroup>
                                         <optgroup label="Major Microfinance Banks">
                                             <option value="Accion Microfinance Bank">Accion Microfinance Bank</option>
                                             <option value="Hasal Microfinance Bank">Hasal Microfinance Bank</option>
                                             <option value="LAPO Microfinance Bank">LAPO Microfinance Bank</option>
-                                            <option value="Mainstreet Microfinance Bank">Mainstreet Microfinance Bank</option>
-                                            <option value="Mutual Trust Microfinance Bank">Mutual Trust Microfinance Bank</option>
+                                            <option value="Mainstreet Microfinance Bank">Mainstreet Microfinance Bank
+                                            </option>
+                                            <option value="Mutual Trust Microfinance Bank">Mutual Trust Microfinance
+                                                Bank</option>
                                             <option value="NPF Microfinance Bank">NPF Microfinance Bank</option>
                                         </optgroup>
                                     </select>
@@ -1549,16 +1619,25 @@
                     </div>
                 </div>
 
-                <!-- STEP 2: Upload -->
+                <!-- STEP 2: Upload or Manual -->
                 <div id="panel-2" style="display:none">
                     <div class="card">
                         <div class="card-header">
-                            <div class="card-icon"><i class="fa-solid fa-file-excel"></i></div>
+                            <div class="card-icon"><i class="fa-solid fa-file-invoice"></i></div>
                             <div>
-                                <div class="card-title">Quotation File Upload</div>
-                                <div class="card-sub">Upload your Excel or CSV quotation — we'll parse the line items
-                                    automatically</div>
+                                <div class="card-title">Quotation Details</div>
+                                <div class="card-sub">Upload your quotation file or enter items manually</div>
                             </div>
+                        </div>
+
+                        <!-- Mode Toggle -->
+                        <div class="mode-toggle">
+                            <button class="mode-btn active" id="mode-btn-upload" onclick="setPortalMode('upload')">
+                                <i class="fa-solid fa-file-excel"></i> Upload File
+                            </button>
+                            <button class="mode-btn" id="mode-btn-manual" onclick="setPortalMode('manual')">
+                                <i class="fa-solid fa-keyboard"></i> Manual Entry
+                            </button>
                         </div>
 
                         <div class="form-grid" style="margin-bottom:20px">
@@ -1596,43 +1675,61 @@
                             </div>
                         </div>
 
-                        <div class="upload-zone" id="upload-zone" ondragover="handleDrag(event,true)"
-                            ondragleave="handleDrag(event,false)" ondrop="handleDrop(event)">
-                            <input type="file" id="file-input" accept=".xlsx,.xls,.csv"
-                                onchange="handleFileSelect(event)">
-                            <div class="upload-icon"><i class="fa-solid fa-file-excel"></i></div>
-                            <div class="upload-title">Drop your quotation file (Excel/CSV)</div>
-                            <div class="upload-sub">or click to browse</div>
-                        </div>
-
-                        <div class="file-attached" id="file-attached">
-                            <i class="fa-solid fa-file-circle-check"></i>
-                            <div class="file-attached-info">
-                                <div class="file-name" id="file-name-display">—</div>
-                                <div class="file-size" id="file-size-display">—</div>
+                        <!-- Upload Mode UI -->
+                        <div id="upload-mode-ui">
+                            <div class="upload-zone" id="upload-zone" ondragover="handleDrag(event,true)"
+                                ondragleave="handleDrag(event,false)" ondrop="handleDrop(event)">
+                                <input type="file" id="file-input" accept=".xlsx,.xls,.csv"
+                                    onchange="handleFileSelect(event)">
+                                <div class="upload-icon"><i class="fa-solid fa-file-excel"></i></div>
+                                <div class="upload-title">Drop your quotation file (Excel/CSV)</div>
+                                <div class="upload-sub">or click to browse</div>
                             </div>
-                            <button class="file-remove" onclick="removeFile()"><i
-                                    class="fa-solid fa-xmark"></i></button>
-                        </div>
 
-                        <div style="margin-top:24px">
-                            <label class="form-label" style="display:block;margin-bottom:8px">Supporting Documents (Tax, RC, Specs)</label>
-                            <div class="upload-zone" style="padding:20px; min-height:100px; background:rgba(255,255,255,0.02)">
-                                <input type="file" id="attachment-input" multiple onchange="handleAttachmentSelect(event)">
-                                <div class="upload-icon" style="font-size:24px"><i class="fa-solid fa-paperclip"></i></div>
-                                <div class="upload-title" style="font-size:13px">Attach multiple files</div>
-                                <div class="upload-sub" style="font-size:11px">PDF, Images, or Word docs</div>
+                            <div class="file-attached" id="file-attached">
+                                <i class="fa-solid fa-file-circle-check"></i>
+                                <div class="file-attached-info">
+                                    <div class="file-name" id="file-name-display">—</div>
+                                    <div class="file-size" id="file-size-display">—</div>
+                                </div>
+                                <button class="file-remove" onclick="removeFile()"><i
+                                        class="fa-solid fa-xmark"></i></button>
                             </div>
-                            <div id="attachments-list" style="margin-top:12px; display:flex; flex-direction:column; gap:8px"></div>
+
+                            <div style="margin-top:24px">
+                                <label class="form-label" style="display:block;margin-bottom:8px">Supporting Documents
+                                    (Tax, RC, Specs)</label>
+                                <div class="upload-zone"
+                                    style="padding:20px; min-height:100px; background:rgba(255,255,255,0.02)">
+                                    <input type="file" id="attachment-input" multiple
+                                        onchange="handleAttachmentSelect(event)">
+                                    <div class="upload-icon" style="font-size:24px"><i
+                                            class="fa-solid fa-paperclip"></i></div>
+                                    <div class="upload-title" style="font-size:13px">Attach multiple files</div>
+                                    <div class="upload-sub" style="font-size:11px">PDF, Images, or Word docs</div>
+                                </div>
+                                <div id="attachments-list"
+                                    style="margin-top:12px; display:flex; flex-direction:column; gap:8px"></div>
+                            </div>
+
+                            <div
+                                style="margin-top:16px; padding:12px 16px; background:var(--elevated); border-radius:var(--radius-sm); font-size:12px; color:var(--muted); border:1px solid var(--border);">
+                                <i class="fa-solid fa-circle-info" style="color:var(--brand);margin-right:6px"></i>
+                                Your file should have columns for: <strong style="color:var(--text)">Description,
+                                    Quantity,
+                                    Unit, Unit Price, Amount</strong>. We'll auto-detect and let you fix anything before
+                                submitting.
+                            </div>
                         </div>
 
-
-                        <div
-                            style="margin-top:16px; padding:12px 16px; background:var(--elevated); border-radius:var(--radius-sm); font-size:12px; color:var(--muted); border:1px solid var(--border);">
-                            <i class="fa-solid fa-circle-info" style="color:var(--brand);margin-right:6px"></i>
-                            Your file should have columns for: <strong style="color:var(--text)">Description, Quantity,
-                                Unit, Unit Price, Amount</strong>. We'll auto-detect and let you fix anything before
-                            submitting.
+                        <!-- Manual Mode UI -->
+                        <div id="manual-mode-ui" style="display:none">
+                            <div class="manual-hint">
+                                <i class="fa-solid fa-circle-info"></i>
+                                <div>You don't need a quotation file. Click <strong style="color:var(--brand)">Continue
+                                        to Items</strong> below and you'll be able to add each line item manually —
+                                    description, quantity, unit price, and amount.</div>
+                            </div>
                         </div>
                     </div>
 
@@ -1903,9 +2000,11 @@
                                             <option value="Ecobank Nigeria">Ecobank Nigeria</option>
                                             <option value="Fidelity Bank">Fidelity Bank</option>
                                             <option value="First Bank of Nigeria">First Bank of Nigeria</option>
-                                            <option value="First City Monument Bank (FCMB)">First City Monument Bank (FCMB)</option>
+                                            <option value="First City Monument Bank (FCMB)">First City Monument Bank
+                                                (FCMB)</option>
                                             <option value="Globus Bank">Globus Bank</option>
-                                            <option value="Guaranty Trust Bank (GTBank)">Guaranty Trust Bank (GTBank)</option>
+                                            <option value="Guaranty Trust Bank (GTBank)">Guaranty Trust Bank (GTBank)
+                                            </option>
                                             <option value="Heritage Bank">Heritage Bank</option>
                                             <option value="Keystone Bank">Keystone Bank</option>
                                             <option value="Nova Bank">Nova Bank</option>
@@ -1921,7 +2020,8 @@
                                             <option value="SunTrust Bank">SunTrust Bank</option>
                                             <option value="Titan Trust Bank">Titan Trust Bank</option>
                                             <option value="Union Bank of Nigeria">Union Bank of Nigeria</option>
-                                            <option value="United Bank for Africa (UBA)">United Bank for Africa (UBA)</option>
+                                            <option value="United Bank for Africa (UBA)">United Bank for Africa (UBA)
+                                            </option>
                                             <option value="Unity Bank">Unity Bank</option>
                                             <option value="Wema Bank">Wema Bank</option>
                                             <option value="Zenith Bank">Zenith Bank</option>
@@ -1941,7 +2041,8 @@
                                             <option value="Branch">Branch</option>
                                             <option value="Carbon (OneFi)">Carbon (OneFi)</option>
                                             <option value="Eyowo">Eyowo</option>
-                                            <option value="FairMoney Microfinance Bank">FairMoney Microfinance Bank</option>
+                                            <option value="FairMoney Microfinance Bank">FairMoney Microfinance Bank
+                                            </option>
                                             <option value="Gomoney">Gomoney</option>
                                             <option value="Kuda Bank">Kuda Bank</option>
                                             <option value="Mint Digital Bank">Mint Digital Bank</option>
@@ -1954,17 +2055,21 @@
                                             <option value="Raven Bank">Raven Bank</option>
                                             <option value="Renmoney">Renmoney</option>
                                             <option value="Rubies Bank">Rubies Bank</option>
-                                            <option value="Safe Haven Microfinance Bank">Safe Haven Microfinance Bank</option>
+                                            <option value="Safe Haven Microfinance Bank">Safe Haven Microfinance Bank
+                                            </option>
                                             <option value="Smartcash PSB (Airtel)">Smartcash PSB (Airtel)</option>
                                             <option value="Sparkle Microfinance Bank">Sparkle Microfinance Bank</option>
-                                            <option value="VFD Microfinance Bank (VBank)">VFD Microfinance Bank (VBank)</option>
+                                            <option value="VFD Microfinance Bank (VBank)">VFD Microfinance Bank (VBank)
+                                            </option>
                                         </optgroup>
                                         <optgroup label="Major Microfinance Banks">
                                             <option value="Accion Microfinance Bank">Accion Microfinance Bank</option>
                                             <option value="Hasal Microfinance Bank">Hasal Microfinance Bank</option>
                                             <option value="LAPO Microfinance Bank">LAPO Microfinance Bank</option>
-                                            <option value="Mainstreet Microfinance Bank">Mainstreet Microfinance Bank</option>
-                                            <option value="Mutual Trust Microfinance Bank">Mutual Trust Microfinance Bank</option>
+                                            <option value="Mainstreet Microfinance Bank">Mainstreet Microfinance Bank
+                                            </option>
+                                            <option value="Mutual Trust Microfinance Bank">Mutual Trust Microfinance
+                                                Bank</option>
                                             <option value="NPF Microfinance Bank">NPF Microfinance Bank</option>
                                         </optgroup>
                                     </select>
@@ -2079,7 +2184,7 @@
                 } else {
                     toast('error', 'This invitation link is invalid or has expired.');
                 }
-            } catch(e) {
+            } catch (e) {
                 // Offline/dev — just continue normally
                 if (state.profile) prefillFromProfile();
             } finally {
@@ -2116,7 +2221,7 @@
                 } else {
                     if (btn) { btn.disabled = false; btn.innerHTML = 'Lookup'; }
                 }
-            } catch(e) {
+            } catch (e) {
                 if (btn) { btn.disabled = false; btn.innerHTML = 'Lookup'; }
             }
         }
@@ -2371,6 +2476,25 @@
             state.attachments = state.attachments.filter(p => p !== path);
         }
 
+        // ── UPLOAD MODE TOGGLE ────────────────────────────────────────
+        let portalMode = 'upload'; // 'upload' | 'manual'
+
+        function setPortalMode(mode) {
+            portalMode = mode;
+            document.getElementById('mode-btn-upload').classList.toggle('active', mode === 'upload');
+            document.getElementById('mode-btn-manual').classList.toggle('active', mode === 'manual');
+            document.getElementById('upload-mode-ui').style.display = mode === 'upload' ? '' : 'none';
+            document.getElementById('manual-mode-ui').style.display = mode === 'manual' ? '' : 'none';
+            const btn = document.getElementById('btn-parse');
+            if (mode === 'manual') {
+                btn.disabled = false;
+                btn.innerHTML = 'Continue to Items <i class="fa-solid fa-arrow-right"></i>';
+            } else {
+                btn.disabled = !state.file;
+                btn.innerHTML = 'Parse & Review <i class="fa-solid fa-arrow-right"></i>';
+            }
+        }
+
         function validateStep2() {
             const proj = document.getElementById('v-project');
             const fg = document.getElementById('fg-proj');
@@ -2382,7 +2506,27 @@
         // ── PARSE FILE ────────────────────────────────────────────────
         function parseAndGoToStep3() {
             if (!validateStep2()) return;
+
+            // Manual mode — skip parsing, go straight to editable table
+            if (portalMode === 'manual') {
+                if (state.items.length === 0) {
+                    state.items = [makeItem('', 1, 'Pcs', 0, 0)];
+                }
+                renderTable();
+                setStep(3);
+                setTimeout(() => {
+                    const first = document.querySelector('#items-tbody td input[type="text"]');
+                    if (first) first.focus();
+                }, 100);
+                return;
+            }
+
+            // Upload mode — must have a file
             if (!state.file) { toast('error', 'No file selected'); return; }
+
+            const btn = document.getElementById('btn-parse');
+            btn.disabled = true;
+            btn.innerHTML = '<i class="fa-solid fa-circle-notch fa-spin"></i> Parsing…';
 
             const ext = state.file.name.split('.').pop().toLowerCase();
             const reader = new FileReader();
@@ -2391,20 +2535,35 @@
                 try {
                     let rows = [];
                     if (ext === 'csv') {
-                        const text = e.target.result;
-                        rows = parseCSV(text);
+                        rows = parseCSV(e.target.result);
                     } else {
                         const data = new Uint8Array(e.target.result);
                         const wb = XLSX.read(data, { type: 'array' });
                         const ws = wb.Sheets[wb.SheetNames[0]];
                         rows = XLSX.utils.sheet_to_json(ws, { header: 1, defval: '' });
                     }
-                    state.items = detectAndParse(rows);
+                    const parsed = detectAndParse(rows);
+                    if (parsed.length === 0) {
+                        toast('warning', 'No items auto-detected. Add them manually in the table below.');
+                        state.items = [makeItem('', 1, 'Pcs', 0, 0)];
+                    } else {
+                        state.items = parsed;
+                        toast('success', `Parsed ${parsed.length} item${parsed.length !== 1 ? 's' : ''} — review and confirm`);
+                    }
                     renderTable();
                     setStep(3);
                 } catch (err) {
                     toast('error', 'Could not parse file: ' + err.message);
+                } finally {
+                    btn.disabled = false;
+                    btn.innerHTML = 'Parse & Review <i class="fa-solid fa-arrow-right"></i>';
                 }
+            };
+
+            reader.onerror = function () {
+                toast('error', 'Failed to read file. Please try again.');
+                btn.disabled = false;
+                btn.innerHTML = 'Parse & Review <i class="fa-solid fa-arrow-right"></i>';
             };
 
             if (ext === 'csv') reader.readAsText(state.file);
@@ -2412,45 +2571,59 @@
         }
 
         function parseCSV(text) {
-            return text.trim().split('\n').map(line =>
-                line.split(',').map(c => c.trim().replace(/^"|"$/g, ''))
-            );
+            const lines = text.trim().split(/\r?\n/);
+            return lines.map(line => {
+                const cells = [];
+                let cur = '', inQ = false;
+                for (let i = 0; i < line.length; i++) {
+                    if (line[i] === '"') { inQ = !inQ; continue; }
+                    if (line[i] === ',' && !inQ) { cells.push(cur.trim()); cur = ''; }
+                    else cur += line[i];
+                }
+                cells.push(cur.trim());
+                return cells;
+            });
         }
 
         function detectAndParse(rows) {
-            // Find header row (look for keywords)
-            const headerKw = ['description', 'item', 'qty', 'quantity', 'unit', 'price', 'amount', 'rate'];
+            // Find header row — search up to row 25, need ≥2 keyword hits
+            const headerKw = ['description', 'item', 'material', 'name', 'work', 'service', 'particulars',
+                'qty', 'quantity', 'unit', 'uom', 'price', 'rate', 'amount', 'total', 'sum', 'value'];
             let headerIdx = -1;
-            for (let i = 0; i < Math.min(rows.length, 15); i++) {
-                const row = rows[i].map(c => String(c).toLowerCase());
+            for (let i = 0; i < Math.min(rows.length, 25); i++) {
+                const row = rows[i].map(c => String(c).toLowerCase().trim());
                 const matches = headerKw.filter(k => row.some(c => c.includes(k)));
                 if (matches.length >= 2) { headerIdx = i; break; }
             }
 
             const items = [];
             if (headerIdx < 0) {
-                // No header detected — treat all rows as data (skip obvious non-data)
+                // No header detected — treat non-empty rows with ≥2 cells as data
                 for (let i = 0; i < rows.length; i++) {
                     const r = rows[i];
-                    if (!r || r.every(c => !c)) continue;
-                    if (r.length < 3) continue;
-                    items.push(makeItem(r[0], r[1], r[2], r[3], r[4], r[5]));
+                    if (!r || r.every(c => !String(c).trim())) continue;
+                    const nonEmpty = r.filter(c => String(c).trim());
+                    if (nonEmpty.length < 2) continue;
+                    const item = makeItem(r[0], r[1], r[2], r[3], r[4]);
+                    if (item.description) items.push(item);
                 }
             } else {
-                // Map columns
-                const header = rows[headerIdx].map(c => String(c).toLowerCase());
+                // Map columns by keyword matching
+                const header = rows[headerIdx].map(c => String(c).toLowerCase().trim());
                 const col = (kws) => header.findIndex(h => kws.some(k => h.includes(k)));
-                const cDesc = col(['description', 'item', 'material', 'name', 'work', 'service']);
-                const cQty = col(['qty', 'quantity']);
-                const cUnit = col(['unit', 'uom', 'measure']);
-                const cUp = col(['unit price', 'price', 'rate', 'unit cost']);
-                const cAmt = col(['amount', 'total', 'sum']);
+                const cDesc = col(['description', 'item', 'material', 'name', 'work', 'service', 'particulars', 'goods', 'supply']);
+                const cQty = col(['qty', 'quantity', 'no.', 'nos', 'units']);
+                const cUnit = col(['unit', 'uom', 'measure', 'm2', 'm3']);
+                const cUp = col(['unit price', 'unit cost', 'rate', 'price/unit', 'uprice', 'u/price', 'unit_price']);
+                const cAmt = col(['amount', 'total', 'sum', 'value', 'subtotal', 'sub-total', 'sub total']);
 
                 for (let i = headerIdx + 1; i < rows.length; i++) {
                     const r = rows[i];
-                    if (!r || r.every(c => !c)) continue;
-                    const desc = r[cDesc >= 0 ? cDesc : 0];
-                    if (!desc || String(desc).trim() === '') continue;
+                    if (!r || r.every(c => !String(c).trim())) continue;
+                    const desc = String(cDesc >= 0 ? r[cDesc] : r[0] || '').trim();
+                    if (!desc) continue;
+                    // Skip footer/summary rows
+                    if (/^(total|subtotal|grand total|vat|tax|note|remark|prepared by|approved|signature)/i.test(desc)) continue;
                     const qty = cQty >= 0 ? r[cQty] : '';
                     const unit = cUnit >= 0 ? r[cUnit] : '';
                     const up = cUp >= 0 ? r[cUp] : '';
@@ -2682,6 +2855,7 @@
             state.items = [];
             state.file = null;
             state.step = 1;
+            setPortalMode('upload');
             document.getElementById('success-screen').classList.remove('show');
             // clear form fields
             ['v-company', 'v-contact', 'v-phone', 'v-email', 'v-rc', 'v-tin', 'v-address',
