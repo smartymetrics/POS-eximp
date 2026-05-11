@@ -2915,10 +2915,10 @@
       <div class="sub-info">
         <div class="sub-ref">${s.ref}</div>
         <div class="sub-title">${s.title}</div>
-        <div class="sub-meta">${s.projectName} · ${new Date(s.date).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
+        <div class="sub-meta">${s.projectName || 'Procurement Project'} · ${new Date(s.submitted_at || s.date).toLocaleDateString('en-NG', { day: 'numeric', month: 'short', year: 'numeric' })}</div>
       </div>
       <div class="sub-amount">
-        <div class="sub-amount-val">${fmt(s.total)}</div>
+        <div class="sub-amount-val">${fmt(s.total_amount || s.total || 0)}</div>
         <span class="sub-status-badge badge-${s.status}">${s.status}</span>
       </div>
     </div>

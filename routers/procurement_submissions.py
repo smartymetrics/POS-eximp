@@ -106,7 +106,7 @@ async def resolve_project(project_key: Optional[str], db) -> dict:
     # 1. Try estate_drafts first (pre-launch)
     try:
         drafts = await db_execute(
-            lambda: db.table("estate_drafts")
+            lambda: get_db().table("estate_drafts")
             .select("id, name")
             .ilike("name", f"%{project_key.replace('-', ' ')}%")
             .limit(1)
@@ -121,7 +121,7 @@ async def resolve_project(project_key: Optional[str], db) -> dict:
     # 2. Try properties (live estates)
     try:
         props = await db_execute(
-            lambda: db.table("properties")
+            lambda: get_db().table("properties")
             .select("id, name")
             .ilike("name", f"%{project_key.replace('-', ' ')}%")
             .limit(1)
@@ -147,7 +147,7 @@ async def get_or_create_vendor(data: ProcurementSubmissionCreate, db) -> Optiona
 
     try:
         existing = await db_execute(
-            lambda: db.table("vendors")
+            lambda: get_db().table("vendors")
             .select("id")
             .ilike("name", data.vendor_name.strip())
             .limit(1)
@@ -169,7 +169,7 @@ async def get_or_create_vendor(data: ProcurementSubmissionCreate, db) -> Optiona
             "account_name": data.account_name or None,
         }
         created = await db_execute(
-            lambda: db.table("vendors").insert(vendor_payload).execute()
+            lambda: get_db().table("vendors").insert(vendor_payload).execute()
         )
         if created.data:
             return created.data[0]["id"]
@@ -224,7 +224,7 @@ async def fan_out_to_expenses(submission: dict, admin_id: str, db):
     if records:
         try:
             await db_execute(
-                lambda: db.table("procurement_expenses").insert(records).execute()
+                lambda: get_db().table("procurement_expenses").insert(records).execute()
             )
             logger.info(f"Fanned out {len(records)} expense records for submission {submission.get('ref')}")
         except Exception as e:
@@ -247,7 +247,7 @@ async def create_procurement_submission(data: ProcurementSubmissionCreate):
 
     # Check ref uniqueness
     existing = await db_execute(
-        lambda: db.table("procurement_submissions")
+        lambda: get_db().table("procurement_submissions")
         .select("id")
         .eq("ref", data.ref)
         .limit(1)
@@ -284,7 +284,7 @@ async def create_procurement_submission(data: ProcurementSubmissionCreate):
     }
 
     res = await db_execute(
-        lambda: db.table("procurement_submissions").insert(payload).execute()
+        lambda: get_db().table("procurement_submissions").insert(payload).execute()
     )
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to save submission.")
@@ -313,10 +313,14 @@ async def list_procurement_submissions(
     current_admin=Depends(require_roles(["admin", "super_admin"]))
 ):
     db = get_db()
-    query = db.table("procurement_submissions").select("*")
-    if status:
-        query = query.eq("status", status)
-    res = await db_execute(lambda: query.order("submitted_at", desc=True).execute())
+    
+    def fetch_data():
+        q = get_db().table("procurement_submissions").select("*")
+        if status:
+            q = q.eq("status", status)
+        return q.order("submitted_at", desc=True).execute()
+
+    res = await db_execute(fetch_data)
     return res.data
 
 
@@ -334,7 +338,7 @@ async def get_procurement_submission(
     else:
         query = query.eq("ref", submission_id)
         
-    res = await db_execute(lambda: query.single().execute())
+    res = await db_execute(lambda: get_db().table("procurement_submissions").select("*").eq("id" if is_valid_uuid(submission_id) else "ref", submission_id).single().execute())
     if not res.data:
         raise HTTPException(status_code=404, detail="Submission not found.")
     return res.data
@@ -360,7 +364,7 @@ async def update_procurement_submission(
     else:
         query = query.eq("ref", submission_id)
 
-    existing_res = await db_execute(lambda: query.single().execute())
+    existing_res = await db_execute(lambda: get_db().table("procurement_submissions").select("*").eq("id" if is_valid_uuid(submission_id) else "ref", submission_id).single().execute())
     if not existing_res.data:
         raise HTTPException(status_code=404, detail="Submission not found.")
 
@@ -382,7 +386,7 @@ async def update_procurement_submission(
     else:
         update_query = update_query.eq("ref", submission_id)
 
-    res = await db_execute(lambda: update_query.execute())
+    res = await db_execute(lambda: get_db().table("procurement_submissions").update(update_payload).eq("id" if is_valid_uuid(submission_id) else "ref", submission_id).execute())
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to update submission.")
 
@@ -647,7 +651,7 @@ async def list_vendor_submissions(email: str = Query(...)):
     
     try:
         res = await db_execute(
-            lambda: db.table("procurement_submissions")
+            lambda: get_db().table("procurement_submissions")
             .select("*")
             .ilike("email", email)
             .order("submitted_at", desc=True)
@@ -669,13 +673,13 @@ async def get_procurement_projects():
     db = get_db()
     try:
         # 1. Fetch properties
-        props_res = await db_execute(lambda: db.table("properties")
+        props_res = await db_execute(lambda: get_db().table("properties")
             .select("id, name, estate_name, is_archived")
             .order("name")
             .execute())
         
         # 2. Fetch estate drafts (only unpublished)
-        drafts_res = await db_execute(lambda: db.table("estate_drafts")
+        drafts_res = await db_execute(lambda: get_db().table("estate_drafts")
             .select("id, name")
             .eq("is_public", False)
             .order("name")
