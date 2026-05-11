@@ -82,6 +82,14 @@ class SubmissionStatusUpdate(BaseModel):
     pay_reference: Optional[str] = None
 
 
+def is_valid_uuid(val: str) -> bool:
+    try:
+        uuid.UUID(str(val))
+        return True
+    except (ValueError, TypeError, AttributeError):
+        return False
+
+
 # ── Helper: resolve project linkage ──────────────────────────────────────
 
 async def resolve_project(project_key: Optional[str], db) -> dict:
@@ -319,13 +327,14 @@ async def get_procurement_submission(
     current_admin=Depends(require_roles(["admin", "super_admin"]))
 ):
     db = get_db()
-    res = await db_execute(
-        lambda: db.table("procurement_submissions")
-        .select("*")
-        .eq("id", submission_id)
-        .single()
-        .execute()
-    )
+    query = db.table("procurement_submissions").select("*")
+    
+    if is_valid_uuid(submission_id):
+        query = query.eq("id", submission_id)
+    else:
+        query = query.eq("ref", submission_id)
+        
+    res = await db_execute(lambda: query.single().execute())
     if not res.data:
         raise HTTPException(status_code=404, detail="Submission not found.")
     return res.data
@@ -345,13 +354,13 @@ async def update_procurement_submission(
         raise HTTPException(status_code=400, detail=f"Invalid status. Must be one of: {allowed}")
 
     # Fetch current submission
-    existing_res = await db_execute(
-        lambda: db.table("procurement_submissions")
-        .select("*")
-        .eq("id", submission_id)
-        .single()
-        .execute()
-    )
+    query = db.table("procurement_submissions").select("*")
+    if is_valid_uuid(submission_id):
+        query = query.eq("id", submission_id)
+    else:
+        query = query.eq("ref", submission_id)
+
+    existing_res = await db_execute(lambda: query.single().execute())
     if not existing_res.data:
         raise HTTPException(status_code=404, detail="Submission not found.")
 
@@ -367,12 +376,13 @@ async def update_procurement_submission(
     if data.pay_reference:
         update_payload["pay_reference"] = data.pay_reference
 
-    res = await db_execute(
-        lambda: db.table("procurement_submissions")
-        .update(update_payload)
-        .eq("id", submission_id)
-        .execute()
-    )
+    update_query = db.table("procurement_submissions").update(update_payload)
+    if is_valid_uuid(submission_id):
+        update_query = update_query.eq("id", submission_id)
+    else:
+        update_query = update_query.eq("ref", submission_id)
+
+    res = await db_execute(lambda: update_query.execute())
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to update submission.")
 
@@ -622,6 +632,31 @@ async def fetch_vendor_by_email(email: str = Query(...)):
     except Exception as e:
         logger.error(f"Error fetching vendor: {e}")
         raise HTTPException(status_code=500, detail="Error looking up vendor")
+
+
+# ── GET /procurement-portal/submissions  (public → list submissions for vendor) ─
+@router.get("/procurement-portal/submissions")
+async def list_vendor_submissions(email: str = Query(...)):
+    """
+    Public endpoint for the Procurement Portal to fetch submissions for a vendor email.
+    """
+    db = get_db()
+    email = email.lower().strip()
+    if not email or "@" not in email:
+        raise HTTPException(status_code=400, detail="Invalid email format")
+    
+    try:
+        res = await db_execute(
+            lambda: db.table("procurement_submissions")
+            .select("*")
+            .ilike("email", email)
+            .order("submitted_at", desc=True)
+            .execute()
+        )
+        return res.data or []
+    except Exception as e:
+        logger.error(f"Error fetching vendor submissions: {e}")
+        raise HTTPException(status_code=500, detail="Error loading submissions")
 
 
 # ── GET /procurement-portal/projects (public → list projects) ────────────

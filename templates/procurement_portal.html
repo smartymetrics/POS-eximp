@@ -2128,6 +2128,7 @@
             renderSubmissions();
             renderProfilePage();
             loadProjects();
+            syncSubmissionsWithServer();
         });
 
         // ── INVITATION TOKEN CHECK ──────────────────────────────────────
@@ -2876,6 +2877,29 @@
             set('v-rc', p.rc); set('v-tin', p.tin);
             set('v-type', p.type); set('v-address', p.address);
             set('v-bank', p.bank); set('v-accnum', p.accnum); set('v-accname', p.accname);
+        }
+
+        // ── SYNC WITH SERVER ──────────────────────────────────────────
+        async function syncSubmissionsWithServer() {
+            const emailInput = document.getElementById('v-email');
+            const email = (emailInput ? emailInput.value : '') || (state.profile ? state.profile.email : '');
+            if (!email) return;
+
+            try {
+                const res = await fetch(`/api/payouts/procurement-portal/submissions?email=${encodeURIComponent(email)}`);
+                if (res.ok) {
+                    const serverSubs = await res.json();
+                    if (serverSubs && Array.isArray(serverSubs)) {
+                        // Merge or replace local state
+                        // We'll replace for now to ensure status accuracy
+                        state.submissions = serverSubs;
+                        localStorage.setItem('ec_proc_submissions', JSON.stringify(state.submissions));
+                        renderSubmissions();
+                    }
+                }
+            } catch (err) {
+                console.warn('Failed to sync submissions with server:', err);
+            }
         }
 
         // ── SUBMISSIONS LIST ──────────────────────────────────────────
