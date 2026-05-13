@@ -193,6 +193,7 @@ class LeaveRequestCreate(BaseModel):
     end_date: date
     days_count: int
     reason: Optional[str] = None
+    proof_url: Optional[str] = None
 
 class MigrationResponse(BaseModel):
     message: str
@@ -440,12 +441,43 @@ async def update_staff_profile(staff_id: str, update: StaffProfileUpdate, curren
 
         profile_updates = {k: v for k, v in profile_updates.items() if v is not None}
         if profile_updates:
+            # Check if base_salary is being updated to log salary history
+            old_salary = None
+            if "base_salary" in profile_updates:
+                profile_res = await db_execute(lambda: db.table("staff_profiles").select("base_salary").eq("admin_id", staff_id).execute())
+                if profile_res.data:
+                    old_salary = profile_res.data[0].get("base_salary")
+            
             profile_exists = await db_execute(lambda: db.table("staff_profiles").select("id").eq("admin_id", staff_id).execute())
             if profile_exists.data:
                 await db_execute(lambda: db.table("staff_profiles").update(profile_updates).eq("admin_id", staff_id).execute())
             else:
                 profile_updates["admin_id"] = staff_id
                 await db_execute(lambda: db.table("staff_profiles").insert(profile_updates).execute())
+            
+            # Log salary change to history
+            if "base_salary" in profile_updates and is_hr:
+                new_salary = profile_updates.get("base_salary")
+                if old_salary != new_salary:
+                    try:
+                        await db_execute(lambda: db.table("salary_history").insert({
+                            "staff_id": staff_id,
+                            "old_salary": old_salary,
+                            "new_salary": new_salary,
+                            "effective_date": date.today().isoformat(),
+                            "changed_by": current_admin["sub"],
+                            "reason": "Salary adjustment via profile update",
+                            "created_at": datetime.utcnow().isoformat()
+                        }).execute())
+                        
+                        # Notify payroll admins
+                        await notify_hr_admins(
+                            "Salary Update",
+                            f"Salary for staff member {staff_id} has been updated from {old_salary} to {new_salary}. Payroll has been notified.",
+                            "salary_update"
+                        )
+                    except Exception as e:
+                        logger.warning(f"Could not log salary change to history: {e}")
 
     return {"message": "Profile updated successfully"}
 
@@ -1173,6 +1205,88 @@ async def update_leave_status(leave_id: str, update: LeaveStatusUpdate, current_
         raise HTTPException(status_code=404, detail="Leave request not found or update failed")
     return {"message": f"Leave {status} successfully"}
 
+@router.get("/leave/{leave_id}/proof")
+async def get_leave_proof(leave_id: str, current_admin: dict = Depends(verify_token)):
+    """Get leave request details including proof. HR or requesting staff only."""
+    db = get_db()
+    user_roles = current_admin.get("role", "").split(",")
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
+    
+    # Fetch leave request
+    leave_res = await db_execute(lambda: db.table("leave_requests").select("*, admins!leave_requests_staff_id_fkey(full_name, department)").eq("id", leave_id).execute())
+    
+    if not leave_res.data:
+        raise HTTPException(status_code=404, detail="Leave request not found")
+    
+    leave_req = leave_res.data[0]
+    
+    # Authorization: HR or the staff member who requested it
+    if not is_hr and leave_req["staff_id"] != current_admin["sub"]:
+        raise HTTPException(status_code=403, detail="Not authorized to view this leave proof")
+    
+    # If proof_url exists, generate signed URL if it's a storage path
+    if leave_req.get("proof_url"):
+        try:
+            # If it looks like a storage path (not a full URL), create signed URL
+            if not leave_req["proof_url"].startswith("http"):
+                HR_BIODATA_BUCKET = "hr-documents"
+                url_res = db.storage.from_(HR_BIODATA_BUCKET).create_signed_url(leave_req["proof_url"], 3600)
+                if isinstance(url_res, dict):
+                    leave_req["proof_signed_url"] = url_res.get("signedURL") or url_res.get("signed_url")
+            else:
+                leave_req["proof_signed_url"] = leave_req["proof_url"]
+        except Exception as e:
+            logger.warning(f"Could not generate signed URL for leave proof: {e}")
+    
+    return leave_req
+
+@router.post("/leave/{leave_id}/upload-proof")
+async def upload_leave_proof(leave_id: str, file: UploadFile = File(...), current_admin: dict = Depends(verify_token)):
+    """Upload proof for a leave request (staff can upload, HR can also upload on behalf)."""
+    db = get_db()
+    
+    # Fetch leave request
+    leave_res = await db_execute(lambda: db.table("leave_requests").select("staff_id, status").eq("id", leave_id).execute())
+    
+    if not leave_res.data:
+        raise HTTPException(status_code=404, detail="Leave request not found")
+    
+    leave_req = leave_res.data[0]
+    staff_id = leave_req["staff_id"]
+    
+    # Authorization: staff member or HR
+    user_roles = current_admin.get("role", "").split(",")
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
+    
+    if current_admin["sub"] != staff_id and not is_hr:
+        raise HTTPException(status_code=403, detail="Can only upload proof for your own leave request")
+    
+    # Upload file to storage
+    try:
+        file_bytes = await file.read()
+        file_ext = file.filename.split(".")[-1] if "." in file.filename else "pdf"
+        file_name = f"leave_proof_{leave_id}_{uuid.uuid4().hex}.{file_ext}"
+        
+        HR_BIODATA_BUCKET = "hr-documents"
+        db.storage.from_(HR_BIODATA_BUCKET).upload(file_name, file_bytes, {"content-type": file.content_type})
+        
+        # Update leave request with proof URL
+        await db_execute(lambda: db.table("leave_requests").update({
+            "proof_url": file_name,
+            "proof_uploaded_at": datetime.utcnow().isoformat()
+        }).eq("id", leave_id).execute())
+        
+        # Notify HR admins that proof was uploaded
+        await notify_hr_admins(
+            "Leave Proof Uploaded",
+            f"Staff member {staff_id} has uploaded proof for leave request {leave_id}",
+            "leave_proof_uploaded"
+        )
+        
+        return {"message": "Proof uploaded successfully", "file_name": file_name}
+    except Exception as e:
+        logger.error(f"Error uploading leave proof: {e}")
+        raise HTTPException(status_code=500, detail=f"Failed to upload proof: {str(e)}")
 
 @router.post("/performance/review", status_code=status.HTTP_201_CREATED)
 async def submit_performance_review(review: PerformanceReviewCreate, current_admin: dict = Depends(verify_token)):
@@ -1534,6 +1648,72 @@ async def delete_payroll_record(record_id: str, current_admin: dict = Depends(ve
         raise HTTPException(status_code=400, detail="Cannot delete a record with status 'paid'. Change the status first.")
 
     await db_execute(lambda: db.table("payroll_records").delete().eq("id", record_id).execute())
+
+@router.get("/salary-history/{staff_id}")
+async def get_salary_history(staff_id: str, current_admin: dict = Depends(verify_token)):
+    """Fetch salary change history for a staff member. HR or the staff member themselves."""
+    db = get_db()
+    user_roles = current_admin.get("role", "").split(",")
+    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
+    
+    # Authorization: HR or self
+    if current_admin["sub"] != staff_id and not is_hr:
+        raise HTTPException(status_code=403, detail="Not authorized to view this salary history")
+    
+    try:
+        res = await db_execute(lambda: db.table("salary_history")
+            .select("*, changed_by:admins!salary_history_changed_by_fkey(full_name)")
+            .eq("staff_id", staff_id)
+            .order("effective_date", desc=True)
+            .execute())
+        return res.data or []
+    except Exception as e:
+        # Table might not exist yet, return empty
+        logger.warning(f"Salary history table not available: {e}")
+        return []
+
+@router.post("/salary-history", status_code=status.HTTP_201_CREATED)
+async def create_salary_history(staff_id: str, new_salary: float, reason: Optional[str] = None, current_admin: dict = Depends(verify_token)):
+    """Manually log a salary change. HR only."""
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+    
+    db = get_db()
+    
+    # Fetch current salary
+    profile_res = await db_execute(lambda: db.table("staff_profiles").select("base_salary").eq("admin_id", staff_id).execute())
+    old_salary = profile_res.data[0].get("base_salary") if profile_res.data else None
+    
+    # Update staff profile with new salary
+    await db_execute(lambda: db.table("staff_profiles").update({
+        "base_salary": new_salary,
+        "updated_at": datetime.utcnow().isoformat()
+    }).eq("admin_id", staff_id).execute())
+    
+    # Log to salary history
+    try:
+        res = await db_execute(lambda: db.table("salary_history").insert({
+            "staff_id": staff_id,
+            "old_salary": old_salary,
+            "new_salary": new_salary,
+            "effective_date": date.today().isoformat(),
+            "changed_by": current_admin["sub"],
+            "reason": reason or "Salary adjustment by HR",
+            "created_at": datetime.utcnow().isoformat()
+        }).execute())
+        
+        # Notify payroll
+        await notify_hr_admins(
+            "Salary Update",
+            f"Salary for staff member {staff_id} has been updated to {new_salary}. Effective date: {date.today().isoformat()}",
+            "salary_update"
+        )
+        
+        return res.data[0] if res.data else {"message": "Salary updated successfully"}
+    except Exception as e:
+        logger.warning(f"Could not log salary to history table: {e}")
+        return {"message": "Salary updated successfully (history logging not available)"}
 
 @router.get("/dashboard/stats")
 async def get_dashboard_stats(current_admin: dict = Depends(verify_token)):
@@ -3009,6 +3189,34 @@ async def create_leave_policy(p: LeavePolicyCreate, current_admin: dict = Depend
     db = get_db()
     res = await db_execute(lambda: db.table("leave_policies").insert(serialize_dates(p.dict())).execute())
     return res.data[0]
+
+@router.patch("/leave-policies/{policy_id}")
+async def update_leave_policy(policy_id: str, p: LeavePolicyCreate, current_admin: dict = Depends(verify_token)):
+    """HR only: update an existing leave policy."""
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+    db = get_db()
+    res = await db_execute(lambda: db.table("leave_policies").update({
+        "leave_type": p.leave_type,
+        "days_per_year": p.days_per_year,
+        "carry_over": p.carry_over,
+        "requires_proof": p.requires_proof,
+        "description": p.description
+    }).eq("id", policy_id).execute())
+    if not res.data:
+        raise HTTPException(status_code=404, detail="Policy not found")
+    return res.data[0]
+
+@router.delete("/leave-policies/{policy_id}", status_code=204)
+async def delete_leave_policy(policy_id: str, current_admin: dict = Depends(verify_token)):
+    """HR only: delete a leave policy."""
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "super_admin", "hr_admin"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+    db = get_db()
+    await db_execute(lambda: db.table("leave_policies").delete().eq("id", policy_id).execute())
+    return
 
 @router.get("/leave-balances")
 async def get_leave_balances(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):

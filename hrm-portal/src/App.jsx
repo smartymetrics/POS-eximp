@@ -1549,22 +1549,37 @@ function Presence({ currentUserId, currentUser }) {
                   const u = l.admins || {};
                   const sc = { approved: "#4ADE80", rejected: "#F87171", pending: "#FBB040" }[l.status];
                   return (
-                    <div key={l.id} style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 16px", background: `${T.orange}08`, border: `1px solid ${T.orange}22`, borderRadius: 12 }}>
-                      <Av av={u.full_name?.split(" ").map(n => n[0]).join("") || "??"} sz={38} />
-                      <div style={{ flex: 1 }}>
-                        <div style={{ fontWeight: 800, color: C.text, fontSize: 14 }}>{u.full_name}</div>
-                        <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>{l.leave_type} · {new Date(l.start_date).toLocaleDateString()} → {new Date(l.end_date).toLocaleDateString()} · <span style={{ color: T.orange, fontWeight: 800 }}>{l.days_count} days</span></div>
-                        {l.reason && <div style={{ fontSize: 12, color: C.muted, marginTop: 2, fontStyle: "italic" }}>"{l.reason}"</div>}
+                    <div key={l.id} style={{ background: `${T.orange}08`, border: `1px solid ${T.orange}22`, borderRadius: 12, overflow: "hidden" }}>
+                      <div style={{ display: "flex", alignItems: "center", gap: 16, padding: "14px 16px" }}>
+                        <Av av={u.full_name?.split(" ").map(n => n[0]).join("") || "??"} sz={38} />
+                        <div style={{ flex: 1 }}>
+                          <div style={{ fontWeight: 800, color: C.text, fontSize: 14 }}>{u.full_name}</div>
+                          <div style={{ fontSize: 12, color: C.sub, marginTop: 2 }}>{l.leave_type} · {new Date(l.start_date).toLocaleDateString()} → {new Date(l.end_date).toLocaleDateString()} · <span style={{ color: T.orange, fontWeight: 800 }}>{l.days_count} days</span></div>
+                          {l.reason && <div style={{ fontSize: 12, color: C.muted, marginTop: 2, fontStyle: "italic" }}>"{l.reason}"</div>}
+                        </div>
+                        <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
+                          <span className="tg" style={{ background: `${sc}22`, color: sc, border: `1px solid ${sc}33`, textTransform: "capitalize" }}>{l.status}</span>
+                          {l.status === "pending" && !currentUserId && (
+                            <>
+                              <button className="bp" style={{ fontSize: 11, padding: "5px 12px" }} onClick={() => updateLeave(l.id, "approved")}>Approve</button>
+                              <button className="bd" style={{ fontSize: 11 }} onClick={() => updateLeave(l.id, "rejected")}>Reject</button>
+                            </>
+                          )}
+                        </div>
                       </div>
-                      <div style={{ display: "flex", gap: 8, alignItems: "center", flexShrink: 0 }}>
-                        <span className="tg" style={{ background: `${sc}22`, color: sc, border: `1px solid ${sc}33`, textTransform: "capitalize" }}>{l.status}</span>
-                        {l.status === "pending" && !currentUserId && (
-                          <>
-                            <button className="bp" style={{ fontSize: 11, padding: "5px 12px" }} onClick={() => updateLeave(l.id, "approved")}>Approve</button>
-                            <button className="bd" style={{ fontSize: 11 }} onClick={() => updateLeave(l.id, "rejected")}>Reject</button>
-                          </>
-                        )}
-                      </div>
+                      {/* Proof document row — visible to HR only (no currentUserId means HR view) */}
+                      {!currentUserId && (
+                        <div style={{ borderTop: `1px solid ${T.orange}22`, padding: "8px 16px", display: "flex", alignItems: "center", gap: 8 }}>
+                          <span style={{ fontSize: 11, color: C.muted, fontWeight: 700, textTransform: "uppercase", letterSpacing: 0.5 }}>Supporting Proof:</span>
+                          {l.proof_url ? (
+                            <a href={l.proof_url} target="_blank" rel="noreferrer" style={{ display: "inline-flex", alignItems: "center", gap: 5, fontSize: 11, padding: "4px 12px", borderRadius: 6, background: `${T.orange}18`, color: T.orange, border: `1px solid ${T.orange}44`, textDecoration: "none", fontWeight: 700 }}>
+                              📎 View Proof Document
+                            </a>
+                          ) : (
+                            <span style={{ fontSize: 11, color: C.muted, fontStyle: "italic" }}>No proof uploaded</span>
+                          )}
+                        </div>
+                      )}
                     </div>
                   );
                 })}
@@ -5790,24 +5805,69 @@ function StaffDirectory({ authRole }) {
           {dtTab === "quals" && <QualificationsManager staffId={view.id} isHR={authRole === "hr"} />}
 
           {dtTab === "bank" && (
-            <div className="g1 fade" style={{ gap: 10, marginBottom: 18 }}>
-              {editMode ? (
-                <>
-                  <div><Lbl>Bank Name</Lbl><input className="inp" value={draftView.bank_name || ""} onChange={e => setDraftView(d => ({ ...d, bank_name: e.target.value }))} /></div>
-                  <div><Lbl>Account Number</Lbl><input className="inp" value={draftView.account_number || ""} onChange={e => setDraftView(d => ({ ...d, account_number: e.target.value }))} /></div>
-                  <div><Lbl>Account Name</Lbl><input className="inp" value={draftView.account_name || ""} onChange={e => setDraftView(d => ({ ...d, account_name: e.target.value }))} /></div>
-                  <div><Lbl>Monthly Base Salary (₦)</Lbl><input type="number" className="inp" value={draftView.base_salary || ""} onChange={e => setDraftView(d => ({ ...d, base_salary: e.target.value }))} /></div>
-                </>
-              ) : (
-                <>
-                  <Field label="Bank Name" value={view.staff_profiles?.[0]?.bank_name} />
-                  <Field label="Account Number" value={view.staff_profiles?.[0]?.account_number} />
-                  <Field label="Account Name" value={view.staff_profiles?.[0]?.account_name} />
-                  <Field label="Monthly Base Salary" value={view.staff_profiles?.[0]?.base_salary ? `₦${Number(view.staff_profiles[0].base_salary).toLocaleString()}` : "Not Set"} />
-                </>
-              )}
+            <div className="g1 fade" style={{ gap: 16, marginBottom: 18 }}>
+              {/* ── Salary / Payroll Section ── */}
+              <div style={{ padding: 18, background: `${T.orange}09`, border: `1px solid ${T.orange}33`, borderRadius: 14 }}>
+                <div style={{ display: "flex", alignItems: "center", gap: 8, marginBottom: 14 }}>
+                  <span style={{ fontSize: 20 }}>💰</span>
+                  <div>
+                    <div style={{ fontSize: 13, fontWeight: 900, color: T.orange, textTransform: "uppercase", letterSpacing: 0.5 }}>Salary & Payroll</div>
+                    <div style={{ fontSize: 11, color: (dark ? DARK : LIGHT).muted }}>Set by HR · Accessed by Payroll</div>
+                  </div>
+                </div>
+                {editMode ? (
+                  <div>
+                    <Lbl>Monthly Base Salary (₦) *</Lbl>
+                    <input
+                      type="number"
+                      className="inp"
+                      placeholder="e.g. 250000"
+                      value={draftView.base_salary || ""}
+                      onChange={e => setDraftView(d => ({ ...d, base_salary: e.target.value }))}
+                      style={{ fontSize: 16, fontWeight: 700 }}
+                    />
+                    <div style={{ fontSize: 11, color: (dark ? DARK : LIGHT).muted, marginTop: 6 }}>
+                      This value is used by Payroll when running monthly payslips. Only HR managers can edit this field.
+                    </div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    <div>
+                      <div style={{ fontSize: 11, color: (dark ? DARK : LIGHT).muted, marginBottom: 4, textTransform: "uppercase", fontWeight: 700 }}>Monthly Base Salary</div>
+                      <div style={{ fontSize: 24, fontWeight: 900, color: view.staff_profiles?.[0]?.base_salary ? "#4ADE80" : (dark ? DARK : LIGHT).muted }}>
+                        {view.staff_profiles?.[0]?.base_salary ? `₦${Number(view.staff_profiles[0].base_salary).toLocaleString()}` : "Not Set"}
+                      </div>
+                    </div>
+                    {view.staff_profiles?.[0]?.base_salary && (
+                      <div style={{ textAlign: "right" }}>
+                        <div style={{ fontSize: 11, color: (dark ? DARK : LIGHT).muted, marginBottom: 4, textTransform: "uppercase", fontWeight: 700 }}>Annual</div>
+                        <div style={{ fontSize: 16, fontWeight: 800, color: T.gold }}>₦{(Number(view.staff_profiles[0].base_salary) * 12).toLocaleString()}</div>
+                      </div>
+                    )}
+                  </div>
+                )}
+              </div>
+
+              {/* ── Bank Details Section ── */}
+              <div style={{ padding: 18, background: (dark ? DARK : LIGHT).surface, border: `1px solid ${(dark ? DARK : LIGHT).border}`, borderRadius: 14 }}>
+                <div style={{ fontSize: 12, fontWeight: 800, color: (dark ? DARK : LIGHT).sub, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 14 }}>🏦 Bank Details</div>
+                {editMode ? (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 12 }}>
+                    <div><Lbl>Bank Name</Lbl><input className="inp" value={draftView.bank_name || ""} onChange={e => setDraftView(d => ({ ...d, bank_name: e.target.value }))} /></div>
+                    <div><Lbl>Account Number</Lbl><input className="inp" value={draftView.account_number || ""} onChange={e => setDraftView(d => ({ ...d, account_number: e.target.value }))} /></div>
+                    <div><Lbl>Account Name</Lbl><input className="inp" value={draftView.account_name || ""} onChange={e => setDraftView(d => ({ ...d, account_name: e.target.value }))} /></div>
+                  </div>
+                ) : (
+                  <div style={{ display: "flex", flexDirection: "column", gap: 10 }}>
+                    <Field label="Bank Name" value={view.staff_profiles?.[0]?.bank_name} />
+                    <Field label="Account Number" value={view.staff_profiles?.[0]?.account_number} />
+                    <Field label="Account Name" value={view.staff_profiles?.[0]?.account_name} />
+                  </div>
+                )}
+              </div>
+
               <div style={{ padding: 12, background: `${T.orange}0D`, border: `1px solid ${T.orange}22`, borderRadius: 8, fontSize: 12, color: (dark ? DARK : LIGHT).muted }}>
-                Payment info is only visible to HR and Finance teams.
+                💼 Financial information is visible to HR and Finance teams only. Salary data flows directly into payroll processing.
               </div>
             </div>
           )}
@@ -7089,17 +7149,35 @@ function LeavePolicies({ isHR }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [policies, setPolicies] = useState([]); const [loading, setLoading] = useState(true);
   const [showNew, setShowNew] = useState(false);
-  const [form, setForm] = useState({ leave_type: "Annual", days_per_year: 20, carry_over: false, requires_proof: false, description: "" });
+  const [editingPolicy, setEditingPolicy] = useState(null);
+  const emptyForm = { leave_type: "", days_per_year: 20, carry_over: false, requires_proof: false, description: "" };
+  const [form, setForm] = useState(emptyForm);
 
-  useEffect(() => {
-    apiFetch(`${API_BASE}/hr/leave-policies`).then(d => setPolicies(d || [])).catch(() => setPolicies([])).finally(() => setLoading(false));
-  }, []);
+  const reload = () => apiFetch(`${API_BASE}/hr/leave-policies`).then(d => setPolicies(d || [])).catch(() => setPolicies([])).finally(() => setLoading(false));
 
-  const add = async () => {
+  useEffect(() => { reload(); }, []);
+
+  const openAdd = () => { setEditingPolicy(null); setForm(emptyForm); setShowNew(true); };
+  const openEdit = (p) => { setEditingPolicy(p); setForm({ leave_type: p.leave_type, days_per_year: p.days_per_year, carry_over: !!p.carry_over, requires_proof: !!p.requires_proof, description: p.description || "" }); setShowNew(true); };
+
+  const save = async () => {
+    if (!form.leave_type.trim()) return alert("Leave type is required.");
     try {
-      await apiFetch(`${API_BASE}/hr/leave-policies`, { method: "POST", body: JSON.stringify({ leave_type: form.leave_type, days_per_year: form.days_per_year, carry_over: form.carry_over, requires_proof: form.requires_proof, description: form.description }) });
-      setShowNew(false);
-      apiFetch(`${API_BASE}/hr/leave-policies`).then(d => setPolicies(d || []));
+      if (editingPolicy?.id) {
+        await apiFetch(`${API_BASE}/hr/leave-policies/${editingPolicy.id}`, { method: "PATCH", body: JSON.stringify({ leave_type: form.leave_type, days_per_year: form.days_per_year, carry_over: form.carry_over, requires_proof: form.requires_proof, description: form.description }) });
+      } else {
+        await apiFetch(`${API_BASE}/hr/leave-policies`, { method: "POST", body: JSON.stringify({ leave_type: form.leave_type, days_per_year: form.days_per_year, carry_over: form.carry_over, requires_proof: form.requires_proof, description: form.description }) });
+      }
+      setShowNew(false); setEditingPolicy(null); reload();
+    } catch (e) { alert(e.message); }
+  };
+
+  const deletePolicy = async (p) => {
+    if (!p.id) return alert("Cannot delete default policies.");
+    if (!confirm(`Delete the "${p.leave_type}" policy? This cannot be undone.`)) return;
+    try {
+      await apiFetch(`${API_BASE}/hr/leave-policies/${p.id}`, { method: "DELETE" });
+      reload();
     } catch (e) { alert(e.message); }
   };
 
@@ -7112,43 +7190,57 @@ function LeavePolicies({ isHR }) {
     { leave_type: "Compassionate Leave", days_per_year: 3, carry_over: false, description: "Bereavement and family emergency" },
   ];
 
+  const displayPolicies = policies.length > 0 ? policies : defaults;
+
   return (
     <div className="fade">
       <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 22 }}>
         <div><div className="ho" style={{ fontSize: 22 }}>Leave Policies</div><div style={{ fontSize: 13, color: C.sub }}>Configure leave types, entitlements and carry-over rules.</div></div>
-        {isHR && <button className="bp" onClick={() => setShowNew(true)}>+ Add Policy</button>}
+        {isHR && <button className="bp" onClick={openAdd}>+ Add Policy</button>}
       </div>
-      <div className="g2" style={{ gap: 16, marginBottom: 22 }}>
-        {(policies.length > 0 ? policies : defaults).map((p, i) => (
-          <div key={i} className="gc" style={{ padding: 20 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12 }}>
-              <div className="ho" style={{ fontSize: 15 }}>{p.leave_type}</div>
-              <span className="tg to" style={{ fontSize: 12 }}>{p.days_per_year} days/yr</span>
+      {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading policies…</div> : (
+        <div className="g2" style={{ gap: 16, marginBottom: 22 }}>
+          {displayPolicies.map((p, i) => (
+            <div key={p.id || i} className="gc" style={{ padding: 20, position: "relative" }}>
+              <div style={{ display: "flex", justifyContent: "space-between", marginBottom: 12, alignItems: "flex-start" }}>
+                <div className="ho" style={{ fontSize: 15 }}>{p.leave_type}</div>
+                <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
+                  <span className="tg to" style={{ fontSize: 12 }}>{p.days_per_year} days/yr</span>
+                  {isHR && p.id && (
+                    <>
+                      <button onClick={() => openEdit(p)} style={{ background: "transparent", border: `1px solid ${C.border}`, borderRadius: 6, padding: "3px 10px", fontSize: 11, color: C.sub, cursor: "pointer" }}>Edit</button>
+                      <button onClick={() => deletePolicy(p)} style={{ background: "transparent", border: "1px solid #F8717133", borderRadius: 6, padding: "3px 10px", fontSize: 11, color: "#F87171", cursor: "pointer" }}>Delete</button>
+                    </>
+                  )}
+                </div>
+              </div>
+              <div style={{ fontSize: 12, color: C.sub, marginBottom: 10, lineHeight: 1.5 }}>{p.description || "—"}</div>
+              <div style={{ display: "flex", gap: 8 }}>
+                {p.carry_over && <span className="tg tg2" style={{ fontSize: 10 }}>Carry Over</span>}
+                {p.requires_proof && <span className="tg tb" style={{ fontSize: 10 }}>Proof Required</span>}
+              </div>
             </div>
-            <div style={{ fontSize: 12, color: C.sub, marginBottom: 10, lineHeight: 1.5 }}>{p.description || "—"}</div>
-            <div style={{ display: "flex", gap: 8 }}>
-              {p.carry_over && <span className="tg tg2" style={{ fontSize: 10 }}>Carry Over</span>}
-              {p.requires_proof && <span className="tg tb" style={{ fontSize: 10 }}>Proof Required</span>}
-            </div>
-          </div>
-        ))}
-      </div>
-      {showNew && <Modal onClose={() => setShowNew(false)} title="Add Leave Policy">
-        <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
-          <div><Lbl>Leave Type *</Lbl><input className="inp" value={form.leave_type} onChange={e => setForm(f => ({ ...f, leave_type: e.target.value }))} /></div>
-          <div><Lbl>Days Per Year</Lbl><input type="number" className="inp" value={form.days_per_year} onChange={e => setForm(f => ({ ...f, days_per_year: +e.target.value }))} /></div>
-          <div><Lbl>Description</Lbl><textarea className="inp" value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} /></div>
-          <div style={{ display: "flex", gap: 16 }}>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, color: C.sub, fontSize: 13 }}>
-              <input type="checkbox" checked={form.carry_over} onChange={e => setForm(f => ({ ...f, carry_over: e.target.checked }))} /> Allow Carry Over
-            </label>
-            <label style={{ display: "flex", alignItems: "center", gap: 8, color: C.sub, fontSize: 13 }}>
-              <input type="checkbox" checked={form.requires_proof} onChange={e => setForm(f => ({ ...f, requires_proof: e.target.checked }))} /> Requires Proof
-            </label>
-          </div>
-          <button className="bp" onClick={add}>Save Policy</button>
+          ))}
         </div>
-      </Modal>}
+      )}
+      {showNew && (
+        <Modal onClose={() => { setShowNew(false); setEditingPolicy(null); }} title={editingPolicy ? `Edit — ${editingPolicy.leave_type}` : "Add Leave Policy"}>
+          <div style={{ display: "flex", flexDirection: "column", gap: 14 }}>
+            <div><Lbl>Leave Type *</Lbl><input className="inp" value={form.leave_type} onChange={e => setForm(f => ({ ...f, leave_type: e.target.value }))} placeholder="e.g. Sick Leave" /></div>
+            <div><Lbl>Days Per Year</Lbl><input type="number" className="inp" value={form.days_per_year} onChange={e => setForm(f => ({ ...f, days_per_year: +e.target.value }))} /></div>
+            <div><Lbl>Description</Lbl><textarea className="inp" rows={3} value={form.description} onChange={e => setForm(f => ({ ...f, description: e.target.value }))} placeholder="Brief policy description…" /></div>
+            <div style={{ display: "flex", gap: 16 }}>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, color: C.sub, fontSize: 13 }}>
+                <input type="checkbox" checked={form.carry_over} onChange={e => setForm(f => ({ ...f, carry_over: e.target.checked }))} /> Allow Carry Over
+              </label>
+              <label style={{ display: "flex", alignItems: "center", gap: 8, color: C.sub, fontSize: 13 }}>
+                <input type="checkbox" checked={form.requires_proof} onChange={e => setForm(f => ({ ...f, requires_proof: e.target.checked }))} /> Requires Proof
+              </label>
+            </div>
+            <button className="bp" onClick={save}>{editingPolicy ? "Save Changes" : "Add Policy"}</button>
+          </div>
+        </Modal>
+      )}
     </div>
   );
 }
