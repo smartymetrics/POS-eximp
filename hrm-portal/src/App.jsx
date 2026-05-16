@@ -3778,7 +3778,7 @@ function LeaveManagement({ user }) {
         <div className="gc tw">
           <table className="ht">
             <thead>
-              <tr>{["Staff", "Type", "Period", "Days", "Status", ""].map(h => <th key={h}>{h}</th>)}</tr>
+              <tr>{["Staff", "Type", "Period", "Days", "Reason", "Status", ""].map(h => <th key={h}>{h}</th>)}</tr>
             </thead>
             <tbody>
               {requests.map(r => (
@@ -3787,6 +3787,9 @@ function LeaveManagement({ user }) {
                   <td>{r.leave_type}</td>
                   <td style={{ fontSize: 12, color: C.sub }}>{new Date(r.start_date).toLocaleDateString()} — {new Date(r.end_date).toLocaleDateString()}</td>
                   <td style={{ fontWeight: 800, color: T.orange }}>{r.days_count}d</td>
+                  <td style={{ fontSize: 12, color: C.sub, fontStyle: "italic", maxWidth: 180 }}>
+                    {r.reason ? `"${r.reason}"` : <span style={{ color: C.muted }}>—</span>}
+                  </td>
                   <td>
                     <span className={`tg ${r.status === "approved" ? "tg2" : r.status === "pending" ? "ty" : "tr"}`}>{r.status}</span>
                   </td>
