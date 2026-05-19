@@ -49,7 +49,7 @@ class ReportService:
 
         elif report_type == "collection_report":
             # Optimization: Only fetch non-paid and non-voided invoices
-            res = supabase.table("invoices").select("invoice_number, invoice_date, due_date, property_name, amount, amount_paid, balance_due, status, clients(full_name, email, phone)").neq("status", "paid").neq("status", "voided").execute()
+            res = supabase.table("invoices").select("invoice_number, invoice_date, due_date, property_name, amount, amount_paid, balance_due, status, sales_rep_name, sales_reps(name), clients(full_name, email, phone)").neq("status", "paid").neq("status", "voided").execute()
             data = res.data or []
 
             today = datetime.now().date()
@@ -68,10 +68,18 @@ class ReportService:
                         days_overdue = (today - due_date).days
                     except: pass
                 
+                # Resolve Sales Rep name
+                rep_name = inv.get("sales_rep_name")
+                if not rep_name and inv.get("sales_reps"):
+                    rep_name = inv["sales_reps"].get("name")
+                if not rep_name:
+                    rep_name = "—"
+
                 rows.append({
                     "Invoice #": inv.get("invoice_number", ""),
                     "Client": inv.get("clients", {}).get("full_name", "") if inv.get("clients") else "",
                     "Phone": inv.get("clients", {}).get("phone", "") if inv.get("clients") else "",
+                    "Sales Rep": rep_name,
                     "Property": inv.get("property_name", ""),
                     "Total (NGN)": f"NGN {amount:,.2f}",
                     "Paid (NGN)": f"NGN {paid:,.2f}",
