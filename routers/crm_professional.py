@@ -888,25 +888,63 @@ async def get_team_performance(current_admin=Depends(verify_token)):
     # Count assigned leads per admin (by admin id)
     clients = (await db_execute(lambda: db.table("clients").select("id, assigned_rep_id").execute())).data or []
     assigned_counts = {}
-    admin_ids = list({c.get("assigned_rep_id") for c in clients if c.get("assigned_rep_id")})
+    client_assignments = {}
+    invoice_rep_ids = {inv.get("sales_rep_id") for inv in invoices if inv.get("sales_rep_id")}
+    commission_rep_ids = {comm.get("sales_rep_id") for comm in commissions if comm.get("sales_rep_id")}
+    admin_ids = list({c.get("assigned_rep_id") for c in clients if c.get("assigned_rep_id")} | {rid for rid in invoice_rep_ids if rid} | {rid for rid in commission_rep_ids if rid})
     admins = []
     id_to_name = {}
+    for c in clients:
+        client_id = c.get("id")
+        assigned_rep_id = c.get("assigned_rep_id")
+        if client_id:
+            client_assignments[client_id] = assigned_rep_id
+        if assigned_rep_id:
+            assigned_counts[assigned_rep_id] = assigned_counts.get(assigned_rep_id, 0) + 1
+
     if admin_ids:
         admins = (await db_execute(lambda: db.table("admins").select("id, full_name").in_("id", admin_ids).execute())).data or []
         id_to_name = {a["id"]: a["full_name"] for a in admins}
-        for c in clients:
-            aid = c.get("assigned_rep_id")
-            if not aid: continue
-            assigned_counts[aid] = assigned_counts.get(aid, 0) + 1
+        name_to_admin_id = {a["full_name"].strip().lower(): a["id"] for a in admins}
+    else:
+        name_to_admin_id = {}
 
-    # Aggregate invoice stats keyed by rep id when available; fallback to name-keyed string
+    def normalize_rep_name(raw_name):
+        name = (raw_name or "").strip()
+        return name if name else "Unassigned"
+
+    def is_unknown_rep_name(name):
+        return not name or name.lower() in {"unassigned", "unknown", "none"}
+
+    def canonical_rep_key(client_assigned_rep, rep_id, rep_name):
+        rep_name = normalize_rep_name(rep_name)
+        if client_assigned_rep:
+            return client_assigned_rep
+        if rep_id and rep_id in id_to_name:
+            return rep_id
+        admin_id_match = name_to_admin_id.get(rep_name.lower())
+        if admin_id_match:
+            return admin_id_match
+        if not is_unknown_rep_name(rep_name):
+            return f"name:{rep_name}"
+        return "name:Unassigned"
+
+    invoice_map = {inv.get("id"): inv for inv in invoices if inv.get("id")}
+
+    # Initialize team rows for all assigned reps so we can show zero-activity reps too
     team_stats = {}
     paid_clients_by_rep = {}
+    for aid in assigned_counts:
+        team_stats[aid] = {"total_deals": 0, "total_revenue": 0.0, "total_collected": 0.0, "actual_commissions": 0.0, "display_name": id_to_name.get(aid, "Unknown")}
+        paid_clients_by_rep[aid] = set()
+
+    # Aggregate invoice stats keyed by assigned rep id when possible; fallback to sales rep id or name
     for inv in invoices:
+        client_id = inv.get("client_id")
+        client_assigned_rep = client_assignments.get(client_id)
         rep_id = inv.get("sales_rep_id")
-        rep_name_fallback = inv.get("sales_rep_name") or "Unassigned"
-        # choose a stable key
-        key = rep_id if rep_id else f"name:{rep_name_fallback}"
+        rep_name_fallback = normalize_rep_name(inv.get("sales_rep_name"))
+        key = canonical_rep_key(client_assigned_rep, rep_id, rep_name_fallback)
 
         if key not in team_stats:
             team_stats[key] = {"total_deals": 0, "total_revenue": 0.0, "total_collected": 0.0, "actual_commissions": 0.0, "display_name": rep_name_fallback}
@@ -916,24 +954,34 @@ async def get_team_performance(current_admin=Depends(verify_token)):
         team_stats[key]["total_revenue"] += float(inv.get("amount") or 0)
         team_stats[key]["total_collected"] += float(inv.get("amount_paid") or 0)
 
-        # Count unique clients that paid (closed) — include partial payments
+        # Count unique assigned clients that paid — include partial payments
         try:
             amount_paid = float(inv.get("amount_paid") or 0)
         except Exception:
             amount_paid = 0.0
 
-        if amount_paid > 0 and inv.get("client_id"):
-            paid_clients_by_rep[key].add(inv.get("client_id"))
+        if amount_paid > 0 and client_id and client_assigned_rep == key:
+            paid_clients_by_rep[key].add(client_id)
 
-    # Aggregate commissions by rep id if available, else by name fallback key
+    # Aggregate commissions by rep id if available; otherwise infer from invoice or rep name
     for comm in commissions:
-        rep_id = comm.get("sales_rep_id")
-        rep_name_fallback = comm.get("sales_rep_name") or "Unassigned"
-        key = rep_id if rep_id else f"name:{rep_name_fallback}"
+        invoice_id = comm.get("invoice_id")
+        invoice = invoice_map.get(invoice_id, {})
+        rep_id = comm.get("sales_rep_id") or invoice.get("sales_rep_id")
+        rep_name_fallback = normalize_rep_name(comm.get("sales_rep_name") or invoice.get("sales_rep_name"))
+        key = canonical_rep_key(None, rep_id, rep_name_fallback)
+
         if key not in team_stats:
             team_stats[key] = {"total_deals": 0, "total_revenue": 0.0, "total_collected": 0.0, "actual_commissions": 0.0, "display_name": rep_name_fallback}
             paid_clients_by_rep[key] = set()
-        team_stats[key]["actual_commissions"] += float(comm.get("commission_amount", 0) or 0)
+
+        commission_amount = float(
+            comm.get("adjusted_amount") if comm.get("adjusted_amount") is not None else
+            comm.get("final_amount") if comm.get("final_amount") is not None else
+            comm.get("net_commission") if comm.get("net_commission") is not None else
+            comm.get("commission_amount") or 0
+        )
+        team_stats[key]["actual_commissions"] += commission_amount
 
     # Build leaderboard entries
     leaderboard = []
@@ -1130,7 +1178,13 @@ async def get_assignable_team(current_admin=Depends(verify_token)):
     for admin in res.data:
         roles = [r.strip().lower() for r in (admin.get("role") or "").split(",")]
         if any(r in ["sales", "sales_manager", "operations", "customer_support"] for r in roles):
-            assignable.append({"id": admin["id"], "full_name": admin["full_name"], "email": admin["email"]})
+            current_role = next((r for r in roles if r in ["sales", "sales_manager", "staff", "customer_support", "marketing", "operations"]), "")
+            assignable.append({
+                "id": admin["id"],
+                "full_name": admin["full_name"],
+                "email": admin["email"],
+                "role": current_role
+            })
     return assignable
 
 @router.patch("/clients/{client_id}/assign")

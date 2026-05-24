@@ -3085,6 +3085,10 @@
                  const res = await fetch("/api/notifications/", {
                      headers: { "Authorization": `Bearer ${token}` }
                  });
+                 if (!res.ok) {
+                     const text = await res.text();
+                     throw new Error(`Notifications fetch failed (${res.status}): ${text}`);
+                 }
                  const notifications = await res.json();
                  
                  const unreadCount = notifications.filter(n => !n.is_read).length;
@@ -4288,13 +4292,19 @@
                             <td style="padding:12px; color:#fff; font-weight:600;">${r.full_name}</td>
                             <td style="padding:12px; color:#aaa;">${r.email}</td>
                             <td style="padding:12px;">
-                                <select id="roleSelect-${r.id}" style="background:#111; border:1px solid #333; border-radius:6px; padding:6px 10px; color:#fff; font-size:12px; outline:none;">
-                                    <option value="sales">sales</option>
-                                    <option value="sales_manager">sales_manager</option>
-                                    <option value="staff">staff</option>
-                                    <option value="customer_support">customer_support</option>
-                                    <option value="marketing">marketing</option>
-                                </select>
+                                ${(() => {
+                                    const currentRole = (r.role || '').toLowerCase().trim();
+                                    return `
+                                        <select id="roleSelect-${r.id}" style="background:#111; border:1px solid #333; border-radius:6px; padding:6px 10px; color:#fff; font-size:12px; outline:none;">
+                                            <option value="sales" ${currentRole === 'sales' ? 'selected' : ''}>sales</option>
+                                            <option value="sales_manager" ${currentRole === 'sales_manager' ? 'selected' : ''}>sales_manager</option>
+                                            <option value="staff" ${currentRole === 'staff' ? 'selected' : ''}>staff</option>
+                                            <option value="customer_support" ${currentRole === 'customer_support' ? 'selected' : ''}>customer_support</option>
+                                            <option value="marketing" ${currentRole === 'marketing' ? 'selected' : ''}>marketing</option>
+                                            <option value="operations" ${currentRole === 'operations' ? 'selected' : ''}>operations</option>
+                                        </select>
+                                    `;
+                                })()}
                             </td>
                             <td style="padding:12px;">
                                 <button onclick="saveRepRole('${r.id}')" style="background:var(--gold); border:none; border-radius:6px; padding:6px 14px; color:#000; font-weight:700; font-size:12px; cursor:pointer;">Save</button>
