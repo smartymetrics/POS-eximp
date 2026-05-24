@@ -1,692 +1,360 @@
-# Eximp & Cloves — Full Fix Specification
-### 502 Remediation + Group Chat Architecture
-_Prepared for handoff to implementation AI_
+# Eximps & Cloves CRM — Phase 2 Fix Spec
+**Priority:** Fix all broken functionality before any new features  
+**Files to edit:** `routers/crm_professional.py`, `routers/crm.py`, `templates/professional_crm.html`  
+**Do not touch:** Any other router, schema.sql, rbac_migration.sql
 
 ---
 
-## Part 1 — 502 Bad Gateway: Root Cause Analysis
-
-The app process never crashes (no restart events in Render). UptimeRobot keeps it warm. The 502s are **request-level timeouts** — Render's reverse proxy kills individual requests that hang past its 30-second threshold and returns a 502 to the browser. The app stays alive. This is why you see no event in the Render events tab.
-
-The core problem is architectural: **the Supabase Python client (`supabase-py`) is entirely synchronous, but every route is declared `async def`**. When a synchronous Supabase call runs inside an async route, it occupies the event loop thread for the full duration of the network round trip to Supabase. During that time, FastAPI cannot process any other request. If two or more requests arrive concurrently (extremely common when the CRM dashboard loads — it fires multiple API calls simultaneously on page open), they queue behind each other. If the first one is slow (Supabase latency, London → wherever your Supabase instance lives), the queued requests accumulate wait time. Any request that accumulates enough wait to breach Render's 30-second timeout returns a 502.
-
-**This is not a Supabase problem. It is not a Render problem. It is a Python async/sync boundary problem.**
+## BUG FIXES (Must fix first, in order)
 
 ---
 
-### 502 Culprit Inventory
+### FIX 1 — Hot Leads "Access Denied" for Sales Rep
+**File:** `routers/crm_professional.py`  
+**Function:** `score_all_leads` (~line 80)  
+**Root cause:** Line 89 filters `client_type = "lead"` but most clients in the system have `client_type = "client"` or `"subscriber"`. Sales reps have assigned clients but zero match this filter, so the endpoint returns an empty object. The frontend reads `data.detail` on this and shows "Access denied" even though the server returned 200.
 
-The following are every location in the codebase where synchronous blocking calls are made inside async context, ranked by severity.
-
----
-
-#### Culprit 1 — `routers/analytics.py` → `get_kpis()` ⚠️ CRITICAL
-
-This is the single most dangerous route in the codebase. Every time the main dashboard loads, this endpoint fires. It makes **8–10 sequential synchronous Supabase calls** in a single request, one after another, all blocking the event loop:
-
-1. Invoices query (date-filtered)
-2. Payments query (date-filtered)
-3. Clients count query
-4. Pending verifications count
-5. All invoices query (unbounded — fetches entire table to resolve dynamic statuses in Python)
-6. Previous period invoices query (for delta calculation)
-7. Previous period payments query
-8. Previous period refunds query
-9. Previous period clients count
-
-Each call is a separate network round trip to Supabase. If Supabase averages 150ms per query, this route takes over 1 second minimum — all of it blocking the event loop. On a slow Supabase day (400ms per query), it can hit 4 seconds, stalling every other concurrent request behind it.
-
-The unbounded `all_inv_data` fetch (step 5) is especially dangerous — it fetches every invoice in the database into Python memory to iterate and resolve statuses. As the invoice table grows, this gets progressively worse.
-
-**Fix required:** Wrap every `.execute()` call in `run_in_executor`. Move the dynamic status resolution to a Supabase RPC (SQL function) so it happens server-side. Add a `limit` and never fetch unbounded table scans into Python.
-
----
-
-#### Culprit 2 — `scheduler.py` — All scheduled jobs ⚠️ CRITICAL
-
-The scheduler runs inside the same FastAPI process on the same event loop. Every scheduled job calls synchronous Supabase operations directly:
-
-- `sync_schedules_from_db()` runs every 10 minutes — synchronous DB call
-- `process_appointment_reminders()` runs every 30 minutes — synchronous DB calls in a loop per appointment
-- `process_support_nudges()` runs every 30 minutes — synchronous DB calls in a loop per ticket
-- `run_scheduled_report()` — synchronous DB calls + PDF generation + Resend email send (all blocking)
-
-**The collision scenario:** A user opens the CRM dashboard at exactly the moment `process_appointment_reminders` fires. The scheduler's synchronous Supabase calls block the event loop. The dashboard's `get_kpis()` call stacks behind it. Both are now waiting. The dashboard request hits 30 seconds and returns a 502, even though the scheduler job completes fine a second later.
-
-**Fix required:** Every Supabase call inside a scheduler job must be wrapped with `run_in_executor`. Alternatively, use `asyncio.get_event_loop().run_in_executor(None, lambda: ...)` pattern throughout the scheduler, or migrate the scheduler jobs to use `asyncpg` / the async Supabase client.
-
----
-
-#### Culprit 3 — `marketing_sequencer_engine.py` → `process_active_sequences()` ⚠️ HIGH
-
-This runs every hour. It:
-1. Fetches all active enrollments due today (potentially hundreds of rows)
-2. For each enrollment, loops and makes multiple synchronous DB calls:
-   - Fetch step details
-   - Fetch previous step (for behavioral branching)
-   - Check campaign_recipients interaction
-   - Update enrollment status
-   - Move to next step (another DB write)
-3. Calls `send_marketing_email()` for each enrollment — which calls `resend.Emails.send()` synchronously (see Culprit 6)
-
-If there are 50 active enrollments, this job makes 200–300 synchronous calls in a tight loop, potentially holding the event loop for 30+ seconds continuously.
-
-`process_segment_triggers()` (also hourly) iterates all segment members with the same per-contact DB query pattern.
-
-**Fix required:** All Supabase calls in these engines need `run_in_executor`. The per-contact inner loop is the worst offender — batch the DB reads before the loop, process in memory, batch-write updates after.
-
----
-
-#### Culprit 4 — `marketing_scheduler.py` → `run_engagement_decay()` ⚠️ HIGH
-
-The 90-day decay job fetches every contact with low engagement into Python (potentially thousands of rows), then updates each one individually in a loop:
-
+**Fix — remove the `client_type` filter entirely:**
 ```python
-for contact in dormantres.data:
-    new_score = contact["engagement_score"] // 2
-    db.table("marketing_contacts").update({"engagement_score": new_score}).eq("id", contact["id"]).execute()
+# BEFORE (line 89):
+query = db.table("clients").select("id, full_name, email, assigned_rep_id").eq("client_type", "lead")
+
+# AFTER:
+query = db.table("clients").select("id, full_name, email, assigned_rep_id")
 ```
 
-This is an N+1 update pattern. With 1,000 contacts, it fires 1,000 individual UPDATE statements, each blocking the event loop. This job runs at 2 AM but still occupies the process.
-
-**Fix required:** Replace the Python loop with a single Supabase RPC call that does the halving in SQL. The 30-day and 180-day decay cases can similarly be collapsed into bulk SQL updates. This eliminates the loop entirely.
-
----
-
-#### Culprit 5 — `routers/crm.py` → `get_contact_details()` ⚠️ HIGH
-
-This endpoint fires whenever a rep opens a contact in the CRM. It makes **6 sequential synchronous Supabase calls** per open:
-
-1. Client record
-2. Invoices with joins
-3. Payments with joins
-4. Activity log (last 50)
-5. Email logs (last 20)
-6. Score calculation (in `score_lead()` which adds 4 more calls)
-
-`score_all_leads()` is even worse — it fetches all clients, then for each client makes 4 more DB calls to compute scores. This is an O(N × 4) query pattern.
-
-**Fix required:** `run_in_executor` on all calls. The score calculation should be pre-computed and stored, not recalculated live on every contact open.
-
----
-
-#### Culprit 6 — `email_service.py` — All `resend.Emails.send()` calls ⚠️ HIGH
-
-`resend.Emails.send()` is a **synchronous HTTP call** to the Resend API. It is called directly (without `await`, without `run_in_executor`) inside `async def` functions throughout `email_service.py`. There are approximately 20+ call sites. Each one blocks the event loop for the full duration of the Resend API round trip (typically 200–800ms, but can spike).
-
-The pattern `await send_invoice_email(...)` gives the false appearance of async — the function is `async def` but internally calls `resend.Emails.send()` synchronously. Awaiting it does not make the Resend call non-blocking.
-
-When a payment is recorded and triggers `send_receipt_email`, `send_commission_earned_email`, and `send_admin_alert_email` in sequence, that's 3 synchronous HTTP calls to Resend, all blocking the loop, before the payment endpoint returns.
-
-**Fix required:** Every `resend.Emails.send(...)` call must be wrapped:
-```python
-loop = asyncio.get_event_loop()
-res = await loop.run_in_executor(None, lambda: resend.Emails.send({...}))
-```
-Or migrate to `httpx.AsyncClient` with the Resend REST API directly.
-
----
-
-#### Culprit 7 — `routers/support.py` → `get_ticket()` ⚠️ MEDIUM
-
-This fires every time a rep opens a ticket. It makes 3 sequential synchronous calls:
-1. Ticket + client + responses join
-2. Admin names lookup for responses
-3. Invoices for financial intelligence
-
-Additionally, `create_notification()` (imported utility) is called synchronously inside `resolve_ticket()` — a synchronous DB write inside an async route.
-
-**Fix required:** `run_in_executor` on all three queries. `create_notification` needs an async version.
-
----
-
-#### Culprit 8 — `routers/crm_professional.py` → `list_all_documents()` ⚠️ MEDIUM
-
-This endpoint makes sequential queries for invoices, then for each invoice loops to fetch additional data. Another N+1 pattern blocking the event loop.
-
----
-
-#### Culprit 9 — `ws_support.py` — No keepalive ping ⚠️ MEDIUM
-
-Render terminates idle WebSocket connections at ~55 seconds of no traffic. The current WS handler has no ping/pong mechanism. An admin who opens a ticket and reads it for 60 seconds without typing will have their WebSocket silently killed by Render's proxy. The frontend has no reconnect logic either — the socket object becomes dead and the admin gets no typing indicators or live refresh until they click away and back.
-
-This doesn't cause a 502 directly but causes phantom disconnects and broken live-chat experience.
-
-**Fix required:** Add a server-side ping loop that sends `{"type": "ping"}` every 30 seconds to all active connections. Add client-side `pong` response handling and auto-reconnect on close.
-
----
-
-#### Culprit 10 — `routers/analytics.py` — Unbounded list fetches ⚠️ MEDIUM
-
-`list_invoices()` in `routers/invoices.py` and `list_clients()` in `routers/clients.py` both fetch the entire table with no pagination limit. As data grows, these queries will return more rows and take longer, progressively worsening the blocking time per request.
-
-**Fix required:** Add `limit` (default 50) and `offset` parameters to all list endpoints. The frontend should implement cursor-based or page-number pagination.
-
----
-
-### The Universal Fix Pattern
-
-Every `.execute()` call in every `async def` route and every scheduler job must be changed from:
-
-```python
-# BLOCKING — holds the event loop
-res = db.table("support_tickets").select("*").execute()
-```
-
-To:
-
-```python
-# NON-BLOCKING — releases the event loop while waiting for DB
-import asyncio
-loop = asyncio.get_event_loop()
-res = await loop.run_in_executor(
-    None,
-    lambda: db.table("support_tickets").select("*").execute()
-)
-```
-
-A helper utility should be added to `database.py` to avoid repeating this pattern:
-
-```python
-# In database.py
-import asyncio
-from functools import partial
-
-async def db_execute(query_fn):
-    """
-    Wraps a synchronous Supabase query in a thread executor so it 
-    doesn't block FastAPI's async event loop.
-    
-    Usage:
-        res = await db_execute(lambda: db.table("clients").select("*").execute())
-    """
-    loop = asyncio.get_event_loop()
-    return await loop.run_in_executor(None, query_fn)
-```
-
-Then every call site becomes:
-```python
-res = await db_execute(lambda: db.table("support_tickets").select("*").execute())
-```
-
-This single change, applied consistently, will eliminate the 502s.
-
----
-
-### Priority Order for Fixes
-
-1. `database.py` — add `db_execute` helper
-2. `routers/analytics.py` — `get_kpis()` has the most sequential blocking calls and fires on every dashboard load
-3. `scheduler.py` + `marketing_sequencer_engine.py` — scheduler collision is the hardest-to-reproduce 502 cause
-4. `email_service.py` — wrap all `resend.Emails.send()` calls
-5. `marketing_scheduler.py` — replace `run_engagement_decay` loop with SQL RPC
-6. `routers/support.py`, `routers/crm.py`, `routers/crm_professional.py` — remaining heavy routes
-7. `ws_support.py` — add keepalive ping
-
----
-
-## Part 2 — Group Chat Architecture
-
-### Overview
-
-A sales rep can open a collaborative chat room on any support ticket. They can invite internal staff (other admins/reps already in the system) and external parties (lawyers, consultants, vendors — anyone with just an email address). External parties get a unique invitation link, do not need an account, and identify themselves by name. All parties must accept the invitation before entering. The client on the public support portal does **not** see the group chat — it is a private back-channel for the team and invited guests. Messages live in a dedicated table, separate from the existing `ticket_responses` thread.
-
----
-
-### Database Schema
-
-#### `chat_rooms` table
-One room per ticket. A ticket can only have one active room at a time.
-
-```sql
-CREATE TABLE chat_rooms (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    ticket_id UUID NOT NULL REFERENCES support_tickets(id) ON DELETE CASCADE,
-    created_by_admin_id UUID NOT NULL REFERENCES admins(id),
-    status TEXT DEFAULT 'active' CHECK (status IN ('active', 'closed')),
-    created_at TIMESTAMPTZ DEFAULT NOW(),
-    UNIQUE(ticket_id) -- one room per ticket
-);
-```
-
-#### `chat_participants` table
-Tracks every person invited, their identity, their type, and their acceptance state. This is the core of the group chat feature.
-
-```sql
-CREATE TABLE chat_participants (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    room_id UUID NOT NULL REFERENCES chat_rooms(id) ON DELETE CASCADE,
-    
-    -- Type of participant
-    participant_type TEXT NOT NULL CHECK (participant_type IN ('internal', 'external')),
-    
-    -- For internal (admin/rep in the system)
-    admin_id UUID REFERENCES admins(id),
-    
-    -- For external (invited by email, no account)
-    external_name TEXT,
-    external_email TEXT,
-    
-    -- Invite token — used to generate the join URL for external parties
-    -- Also used as the short-lived session credential after acceptance
-    invite_token UUID DEFAULT uuid_generate_v4() UNIQUE NOT NULL,
-    
-    -- Invite lifecycle
-    status TEXT DEFAULT 'invited' CHECK (status IN ('invited', 'accepted', 'declined', 'removed')),
-    invited_by_admin_id UUID NOT NULL REFERENCES admins(id),
-    invited_at TIMESTAMPTZ DEFAULT NOW(),
-    responded_at TIMESTAMPTZ,
-    
-    -- Constraint: internal participants must have admin_id; external must have email
-    CONSTRAINT internal_needs_admin CHECK (
-        (participant_type = 'internal' AND admin_id IS NOT NULL) OR
-        (participant_type = 'external' AND external_email IS NOT NULL AND external_name IS NOT NULL)
-    )
-);
-
-CREATE INDEX idx_chat_participants_room ON chat_participants(room_id);
-CREATE INDEX idx_chat_participants_token ON chat_participants(invite_token);
-CREATE INDEX idx_chat_participants_admin ON chat_participants(admin_id);
-```
-
-#### `chat_messages` table
-All messages in the room. Sender is identified by either their `admin_id` (internal) or `participant_id` (external). System-generated event messages use `message_type = 'system'`.
-
-```sql
-CREATE TABLE chat_messages (
-    id UUID PRIMARY KEY DEFAULT uuid_generate_v4(),
-    room_id UUID NOT NULL REFERENCES chat_rooms(id) ON DELETE CASCADE,
-    
-    -- One of these will be set, the other null, depending on who sent it
-    sender_admin_id UUID REFERENCES admins(id),
-    sender_participant_id UUID REFERENCES chat_participants(id),
-    
-    message TEXT NOT NULL,
-    message_type TEXT DEFAULT 'text' CHECK (message_type IN ('text', 'file', 'system')),
-    file_url TEXT, -- populated if message_type = 'file'
-    
-    created_at TIMESTAMPTZ DEFAULT NOW()
-);
-
-CREATE INDEX idx_chat_messages_room ON chat_messages(room_id, created_at);
-```
-
-**System messages** are auto-inserted by the backend (never by the user) for events like:
-- "Emeka invited John Doe (external) to this room"
-- "Sarah accepted the invitation"
-- "Marcus declined the invitation"  
-- "John Doe was removed from this room"
-- "Chat room was closed"
-
-They render in the UI as neutral, italicised timeline markers between regular messages.
-
----
-
-### API Endpoints
-
-All endpoints must use `db_execute` (the async wrapper) on every DB call.
-
----
-
-#### `POST /api/support/tickets/{ticket_id}/chat/create`
-**Auth:** Admin JWT required.  
-**Action:** Creates a `chat_rooms` record for the ticket. Inserts the creating rep as the first `chat_participants` record with `status = 'accepted'` and `participant_type = 'internal'`. Inserts a system message: "Rep Name opened this chat room."  
-**Error:** Returns 409 if a room already exists for this ticket.  
-**Returns:** `{ room_id, created_at }`
-
----
-
-#### `POST /api/support/chat/{room_id}/invite`
-**Auth:** Admin JWT required. Only participants with `status = 'accepted'` can invite others.  
-**Body:**
-```json
-// Internal invite
-{ "type": "internal", "admin_id": "uuid" }
-
-// External invite  
-{ "type": "external", "name": "John Doe", "email": "john@lawfirm.com" }
-```
-**Action (internal):**
-- Creates `chat_participants` record with `participant_type = 'internal'`, `status = 'invited'`
-- Calls `create_notification(admin_id, title="Chat Invitation", n_type="chat_invite", ref_id=room_id)` — the frontend handles this via `handleNotificationClick`
-- Inserts system message: "Rep Name invited [Admin Full Name] to this room"
-
-**Action (external):**
-- Creates `chat_participants` record with `participant_type = 'external'`, `status = 'invited'`
-- Generates join URL: `https://app.eximps-cloves.com/support/chat/join/{invite_token}`
-- Sends invitation email via `email_service` with the join link, room context (ticket subject), and inviter's name
-- Inserts system message: "Rep Name invited John Doe (external) to this room"
-
-**Returns:** `{ participant_id, invite_token (for external only), status: "invited" }`
-
----
-
-#### `POST /api/support/chat/join/{invite_token}`
-**Auth:** None — public endpoint.  
-**Action:**
-- Validates `invite_token` exists and `status = 'invited'`
-- Returns 410 Gone if token is for a `declined` or `removed` participant
-- Returns 409 if already `accepted`
-- Sets `status = 'accepted'`, sets `responded_at = NOW()`
-- Inserts system message: "[Name] accepted the invitation"
-- Notifies the inviting rep via `create_notification`
-
-**Returns:** 
-```json
-{ 
-  "room_id": "uuid",
-  "ticket_id": "uuid", 
-  "ticket_subject": "Help with contract",
-  "participant_id": "uuid",
-  "display_name": "John Doe",
-  "session_token": "...",   // short-lived JWT scoped only to this room, used for WS auth and message POST
-  "participants": [...],    // list of all accepted participants
-  "messages": [...]         // last 50 messages
-}
-```
-
-The `session_token` is a JWT with payload `{ sub: participant_id, room_id, type: "external_chat", exp: 24h }`. It is signed with the app's secret key and validated on the WS connect and `POST /message` endpoints.
-
----
-
-#### `POST /api/support/chat/decline/{invite_token}`
-**Auth:** None — public endpoint.  
-**Action:** Sets `status = 'declined'`, sets `responded_at`. Inserts system message: "[Name] declined the invitation."  
-**Returns:** `{ status: "declined" }`
-
----
-
-#### `GET /api/support/chat/{room_id}`
-**Auth:** Admin JWT **OR** valid `session_token` (external participant).  
-**Action:** Validates the caller is an accepted participant of this room.  
-**Returns:**
-```json
-{
-  "room": { "id", "ticket_id", "ticket_subject", "status", "created_at" },
-  "participants": [
-    {
-      "id", "participant_type", "display_name", "status", 
-      "is_online": true/false   // based on active WS connections
-    }
-  ],
-  "messages": [...]  // last 100, ordered ascending by created_at
-}
-```
-
----
-
-#### `POST /api/support/chat/{room_id}/message`
-**Auth:** Admin JWT **OR** valid `session_token`.  
-**Body:** `{ "message": "text", "message_type": "text" }`  
-**Action:**
-- Validates sender is an accepted participant
-- Inserts into `chat_messages` with the correct `sender_admin_id` or `sender_participant_id`
-- Broadcasts via WebSocket (see WebSocket section below)
-- Notifies all accepted participants who are **not currently connected** to the WS room via `create_notification` (internal) or does nothing (external — they have no notification inbox)
-
-**Returns:** `{ message_id, created_at }`
-
----
-
-#### `POST /api/support/chat/{room_id}/message/file`
-**Auth:** Admin JWT **OR** valid `session_token`.  
-**Body:** Multipart form — file upload.  
-**Action:** Uploads file to `chat-media` Supabase Storage bucket, inserts message with `message_type = 'file'`, `file_url` set to the storage URL.  
-**Returns:** `{ message_id, file_url, created_at }`
-
----
-
-#### `DELETE /api/support/chat/{room_id}/participants/{participant_id}`
-**Auth:** Admin JWT only. Only the room creator or a super_admin can remove participants.  
-**Action:** Sets `status = 'removed'`. Inserts system message: "Rep Name removed [Name] from the room." If the removed participant has an active WS connection, sends them a `{"type": "removed"}` message over the socket before closing it.  
-**Returns:** `{ status: "removed" }`
-
----
-
-#### `POST /api/support/chat/{room_id}/close`
-**Auth:** Admin JWT only. Room creator or super_admin.  
-**Action:** Sets `chat_rooms.status = 'closed'`. Broadcasts `{"type": "room_closed"}` to all WS connections. Inserts system message: "Rep Name closed this chat room."  
-**Returns:** `{ status: "closed" }`
-
----
-
-### WebSocket Changes (`ws_support.py`)
-
-The existing `ConnectionManager` and `/api/ws/support/{ticket_id}` endpoint should remain unchanged (it handles the public client-side ticket chat). A new manager and endpoint are added for the group chat.
-
-#### New WS endpoint
-```
-wss://host/api/ws/chat/{room_id}?token={jwt_or_session_token}
-```
-
-The `token` query parameter is mandatory. On connect:
-1. Validate the token (admin JWT or external session_token)
-2. Confirm the resolved participant is `accepted` in this `room_id`
-3. If valid: accept the connection, store it in the connection map with identity metadata
-4. If invalid: close with code 4001
-
-#### Connection map structure
-The existing map `Dict[str, List[WebSocket]]` must become `Dict[str, List[ConnectionInfo]]` where:
-```python
-@dataclass
-class ConnectionInfo:
-    websocket: WebSocket
-    participant_id: str        # chat_participants.id
-    display_name: str          # for broadcast payloads
-    participant_type: str      # 'internal' or 'external'
-    admin_id: Optional[str]    # set if internal
-```
-
-#### Broadcast payload schema
-All message broadcasts must include full sender context so the frontend renders without a round-trip:
-```json
-{
-  "type": "message",
-  "message_id": "uuid",
-  "room_id": "uuid",
-  "sender_name": "Emeka Okafor",
-  "sender_type": "internal",
-  "message": "I've reviewed the contract",
-  "message_type": "text",
-  "file_url": null,
-  "created_at": "2026-04-10T10:30:00Z"
-}
-```
-
-System events broadcast as:
-```json
-{ "type": "system", "message": "John Doe accepted the invitation", "created_at": "..." }
-```
-
-Presence events broadcast as:
-```json
-{ "type": "presence", "event": "joined", "participant_id": "uuid", "display_name": "John Doe" }
-{ "type": "presence", "event": "left", "participant_id": "uuid", "display_name": "John Doe" }
-```
-
-#### Keepalive ping (fixes Culprit 9)
-The new chat WS handler must include a ping loop:
-```python
-async def support_chat_websocket(websocket: WebSocket, room_id: str, token: str):
-    # ... validate and connect ...
-    
-    ping_task = asyncio.create_task(ping_loop(websocket))
-    try:
-        while True:
-            data = await websocket.receive_text()
-            msg = json.loads(data)
-            if msg.get("type") == "pong":
-                continue  # keepalive acknowledged, do nothing
-            # handle other message types...
-    except WebSocketDisconnect:
-        ping_task.cancel()
-        manager.disconnect(websocket, room_id)
-        await manager.broadcast({"type": "presence", "event": "left", ...}, room_id)
-
-async def ping_loop(websocket: WebSocket):
-    while True:
-        await asyncio.sleep(30)
-        try:
-            await websocket.send_json({"type": "ping"})
-        except Exception:
-            break
-```
-
-Apply the same ping loop to the existing `/api/ws/support/{ticket_id}` endpoint.
-
----
-
-### Notification Changes
-
-#### New notification type: `chat_invite`
-Internal participants receive a notification when invited:
-```python
-create_notification(
-    admin_id=invited_admin_id,
-    title="You've been invited to a chat",
-    message=f"{inviter_name} invited you to the room for: {ticket_subject}",
-    n_type="chat_invite",
-    ref_id=room_id
-)
-```
-
-#### `handleNotificationClick` in `professional_crm.html`
-A new `chat_invite` case needs to be added alongside the existing `support` case:
+**Also fix the frontend check in `loadLeads()` in `professional_crm.html`:**
 ```javascript
-async function handleNotificationClick(id, type, refId) {
-    await fetch(`/api/notifications/${id}/read`, { method: 'PATCH', headers: ... });
-    
-    if (type === 'support' && refId) {
-        switchView('support-desk');
-        viewTicket(refId);  // existing behaviour
-    } else if (type === 'chat_invite' && refId) {
-        // refId is room_id here
-        switchView('support-desk');
-        openChatRoomById(refId);  // new function — fetches room, finds ticket, opens chat panel
-    }
-    
-    document.getElementById('notif-dropdown').classList.remove('active');
+// BEFORE:
+if (data.detail) {
+    document.getElementById("hotLeadsTable").innerHTML = `<tr>...<td>${data.detail}</td>...</tr>`;
+    return;
+}
+
+// AFTER — only show error if HTTP response was not ok:
+// Remove the data.detail check entirely. The endpoint now always returns a valid object.
+// If prioritized_leads is empty, show a friendly empty state instead:
+if (!prioritized.length) {
+    document.getElementById("hotLeadsTable").innerHTML = `
+        <tr><td colspan="6" style="text-align:center; padding:40px; color:#666;">
+            No leads assigned to you yet.
+        </td></tr>`;
+    hidePageLoader();
+    return;
 }
 ```
 
-#### New message notifications
-When a message is posted, notify all accepted participants who are NOT currently in the WS room:
+---
 
+### FIX 2 — Outstanding Panel Crashes (SyntaxError: JSON.parse)
+**File:** `routers/crm_professional.py`  
+**Function:** `get_outstanding_payments` (~line 1184)  
+**Root cause:** The nested Supabase join `clients(admins(id, full_name))` via `assigned_rep_id` is ambiguous — Supabase cannot resolve which FK relationship to use between `clients.assigned_rep_id` and `admins.id`. It returns an HTML error page instead of JSON, which breaks `JSON.parse` in the frontend.
+
+**Fix — split into two queries:**
 ```python
-# In POST /chat/{room_id}/message handler
-connected_participant_ids = chat_manager.get_connected_participant_ids(room_id)
-for participant in accepted_participants:
-    if participant["id"] not in connected_participant_ids:
-        if participant["participant_type"] == "internal" and participant["admin_id"]:
-            create_notification(
-                admin_id=participant["admin_id"],
-                title="New message in chat",
-                message=f"{sender_name}: {message[:80]}",
-                n_type="chat_invite",  # reuse type — same navigation handler
-                ref_id=room_id
-            )
-        # External participants have no in-app inbox — email notification is optional
+@router.get("/manager/outstanding")
+async def get_outstanding_payments(current_admin=Depends(verify_token)):
+    roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
+    if not any(r in ["admin", "operations", "super_admin", "sales_manager"] for r in roles):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    db = get_db()
+    
+    # Query 1: Get all non-voided invoices with client info only (no nested admin join)
+    invoices = (await db_execute(lambda: db.table("invoices")
+        .select("client_id, amount, amount_paid, clients(id, full_name, pipeline_stage, last_contacted_at, assigned_rep_id)")
+        .neq("status", "voided")
+        .execute())).data or []
+    
+    # Aggregate by client
+    client_map = {}
+    rep_ids = set()
+    for inv in invoices:
+        client = inv.get("clients") or {}
+        cid = inv.get("client_id")
+        if not cid:
+            continue
+        if cid not in client_map:
+            assigned_rep_id = client.get("assigned_rep_id")
+            client_map[cid] = {
+                "client_id": cid,
+                "client_name": client.get("full_name"),
+                "pipeline_stage": client.get("pipeline_stage"),
+                "last_contacted_at": client.get("last_contacted_at"),
+                "assigned_rep_id": assigned_rep_id,
+                "assigned_rep_name": "Unassigned",
+                "total_amount": 0,
+                "total_paid": 0,
+            }
+            if assigned_rep_id:
+                rep_ids.add(assigned_rep_id)
+        client_map[cid]["total_amount"] += float(inv.get("amount") or 0)
+        client_map[cid]["total_paid"] += float(inv.get("amount_paid") or 0)
+    
+    # Query 2: Fetch rep names separately using collected rep_ids
+    rep_name_map = {}
+    if rep_ids:
+        reps = (await db_execute(lambda: db.table("admins")
+            .select("id, full_name")
+            .in_("id", list(rep_ids))
+            .execute())).data or []
+        rep_name_map = {r["id"]: r["full_name"] for r in reps}
+    
+    # Enrich with rep names and filter to outstanding only
+    outstanding = []
+    for c in client_map.values():
+        balance = c["total_amount"] - c["total_paid"]
+        if balance > 0:
+            c["outstanding"] = balance
+            c["assigned_rep_name"] = rep_name_map.get(c["assigned_rep_id"], "Unassigned")
+            del c["assigned_rep_id"]  # clean up internal field
+            outstanding.append(c)
+    
+    outstanding.sort(key=lambda x: x["outstanding"], reverse=True)
+    return outstanding
 ```
 
 ---
 
-### Frontend Changes (`professional_crm.html`)
+### FIX 3 — `showNotification` is Undefined
+**File:** `templates/professional_crm.html`  
+**Root cause:** `showNotification()` is called in three places inside the support desk section but only `showToast()` is defined. This silently breaks ticket resolution, group chat invitations, and task creation success messages.
 
-#### In the ticket detail panel
-Add a **"Group Chat"** tab alongside the existing ticket thread. The tab should show:
-
-**When no room exists for this ticket:**
-- A "Start Group Chat" button
-- On click: calls `POST /api/support/tickets/{ticket_id}/chat/create`, then renders the chat panel
-
-**When a room exists:**
-- Participant list on the right side with status badges: `accepted` (green), `invited` (amber), `declined` (red), `removed` (grey)
-- An "Invite" button that opens a modal with:
-  - Radio toggle: "Internal Staff" / "External Party"
-  - If internal: searchable dropdown of admins/reps
-  - If external: name field + email field
-  - "Send Invitation" button
-- Message thread area:
-  - System messages rendered as centred, italicised, grey text (e.g. `— Emeka invited John Doe —`)
-  - Internal messages aligned right with sender name above
-  - External messages aligned left with sender name above, a small "External" badge
-  - File messages show a download link
-- Input area with send button and file attach button
-- "Close Chat Room" button (visible to room creator and super_admin only)
-
-#### External join page (new template)
-New route in `main.py`: `GET /support/chat/join/{invite_token}` → renders new template `templates/chat_join.html`
-
-This page:
-1. Calls `GET /api/support/chat/join-info/{invite_token}` (public endpoint, returns inviter name, ticket subject, status — but NOT the session token yet)
-2. Displays: "Emeka Okafor has invited you to a support chat about: [ticket subject]"
-3. Shows the external party's pre-filled name (from invite record)
-4. Two buttons: "Accept & Join" and "Decline"
-5. On "Accept & Join": calls `POST /api/support/chat/join/{invite_token}`, receives session_token, then renders the chat interface in the same page using the session_token for WS auth and message POSTs
-6. On "Decline": calls `POST /api/support/chat/decline/{invite_token}`, shows a simple "You have declined the invitation" confirmation
-
-The chat interface on this page is a standalone implementation (no CRM dashboard wrapper) — just the message thread, participant list, and input box.
+**Fix — add one line immediately after the `showToast` function definition:**
+```javascript
+// Add this line right after the closing brace of showToast():
+const showNotification = (msg, type) => showToast(msg, type);
+```
 
 ---
 
-### What the Previous AI's Plan Already Covers (and What Changes)
+### FIX 4 — Lead Detail Modal Stage Dropdown Has Wrong Stages
+**File:** `templates/professional_crm.html`  
+**Element:** `<select id="detail-lead-stage">`  
+**Root cause:** The dropdown options are `lead, offer, contract, closed (Won)` — the old stage names. The actual pipeline uses `lead, nurturing, interest, paid, closed`. Saving from this modal writes the wrong stage value to the database and breaks Kanban grouping.
 
-The previous session planned:
-- `notify_privileged_admins()` utility — **still needed, build as planned**
-- `BackgroundTasks` for `create_ticket` notifications — **still needed, build as planned**
-- `create_ticket` never fires notification — **still the bug, fix as planned**
-- `client-reply` broken fallback — **still the bug, fix as planned**
-- `chat_sessions` + `chat_messages` tables — **replace `chat_sessions` with `chat_rooms` + `chat_participants` as defined above; `chat_messages` schema is compatible**
-- `initiate-chat` endpoint (dead call in frontend at line 1819) — **replace with `POST /chat/create` + `POST /chat/invite` flow; remove the dead frontend reference**
-- `chat-media` Supabase Storage bucket — **still needed; create with authenticated access, not fully public**
-- `handleNotificationClick` `"chat"` case — **implement as `"chat_invite"` case as defined above**
-
----
-
-### Deployment Checklist (Before Going Live)
-
-1. Run the new migration SQL (`chat_rooms`, `chat_participants`, `chat_messages` tables)
-2. Create `chat-media` bucket in Supabase Storage — set to **authenticated access only**, not public. Use signed URLs for file retrieval.
-3. Add `chat_rooms`, `chat_participants`, `chat_messages` RLS policies — service role key bypasses RLS so backend is fine, but ensure no public read access
-4. Deploy `db_execute` helper to `database.py` first, before any route changes
-5. Apply `run_in_executor` to analytics and scheduler — these are the 502-causing changes
-6. Wrap all `resend.Emails.send()` calls in `email_service.py`
-7. Replace engagement decay loop in `marketing_scheduler.py` with SQL RPC
-8. Add WS keepalive to both the existing `ws_support.py` and the new chat WS handler
-9. Update `handleNotificationClick` in `professional_crm.html` before deploying notification changes
-10. Test the external join flow end-to-end before releasing
+**Fix — replace the select options:**
+```html
+<!-- FIND this select element (id="detail-lead-stage") and replace its options: -->
+<select id="detail-lead-stage" onchange="saveLeadStage()" style="...existing styles...">
+    <option value="lead">1. Lead</option>
+    <option value="nurturing">2. Nurturing</option>
+    <option value="interest">3. Interest</option>
+    <option value="paid">4. Paid</option>
+    <option value="closed">5. Closed</option>
+</select>
+```
 
 ---
 
-## Part 3 — Legal Document Hub & High-Fidelity Word Studio
+### FIX 5 — Manager Feed Nested Join May Also Fail
+**File:** `routers/crm_professional.py`  
+**Function:** `get_manager_feed` (~line 1137)  
+**Root cause:** The select includes `admins(id, full_name)` joined from `activity_log.performed_by → admins.id`. This join should work since `performed_by` is a direct FK to `admins`, but verify it uses the correct Supabase join syntax.
 
-As part of the May 2026 expansion, the legal drafting environment was upgraded from a static editor to a dynamic "Personnel Word Studio" integrated with a centralized Document Hub.
+**Fix — ensure the select string is explicit:**
+```python
+# FIND in get_manager_feed:
+query = db.table("activity_log")\
+    .select("id, event_type, description, created_at, metadata, clients(id, full_name, pipeline_stage), admins(id, full_name)")\
 
-### 1. Document Processing Architecture
-To maintain the **502 Prevention Strategy**, all document processing (conversion and scraping) is handled at the edge (browser) or via non-blocking backend calls:
-
-- **Word (.docx) to HTML**: Handled by `mammoth.js` in the frontend. This preserves document structure (headers, tables, lists) without hitting the Python event loop.
-- **PDF Scraping**: Handled by `pdf.js`. Text extraction is performed asynchronously in the browser, and the resulting text is "Appended" or "Scraped" into the Tiptap editor canvas.
-- **Backend Vaulting**: File uploads to the `legal-vault` bucket are processed via the `upload_matter_attachment` endpoint. Every DB call is wrapped in `db_execute` to ensure the storage operation doesn't block the FastAPI process.
-
-### 2. Multi-File Versioning Strategy
-To support complex legal matters (multiple IDs, contracts, evidence), the system implements a **Filename-Specific Versioning** logic:
-- **Identifier**: `matter_id` + `original_filename`.
-- **Promotion**: When a file with an existing name is uploaded, the previous version is marked as `Superseded` (status) and `is_latest = False`. The new file is promoted to `Active`.
-- **N+1 Avoidance**: Listing attachments for a matter is a single SELECT query filtered by `status = 'Active'`. Signed URLs are generated in a single loop with a 1-hour expiry to minimize storage latency.
-
-### 3. Forensic History (Audit Trail)
-Every action in the Hub (Upload, Scrape, Delete, Add Collaborator) is logged to `legal_matter_history`. 
-- **Column Fix**: The `performed_by_name` column must be present to avoid 500 errors during audit logging.
-- **Naming Context**: The `current_admin` context (from JWT) is used to capture the actor's name at the time of the event, ensuring the audit trail remains readable even if the admin's profile changes later.
+# REPLACE WITH (explicit FK hint for performed_by):
+query = db.table("activity_log")\
+    .select("id, event_type, description, created_at, metadata, performed_by, client_id, clients(id, full_name, pipeline_stage), admins!activity_log_performed_by_fkey(id, full_name)")\
+```
 
 ---
 
-### Updated Deployment Checklist (Legal Additions)
+## UX IMPROVEMENTS
 
-1. **SQL Migration 033**: Create the `legal_matter_attachments` table for the Document Hub.
-2. **SQL Migration 035**: Add the `performed_by_name` column to `legal_matter_history` (CRITICAL for audit logging).
-3. **Storage Bucket**: Create a private bucket named `legal-vault` in Supabase.
-4. **CORS Policy**: Ensure the Supabase Storage bucket allows requests from the app domain for direct uploads.
-5. **PDF generation Cleanup**: Apply the trailing-whitespace removal logic in `hr_legal.py` to prevent blank final pages in exported PDFs.
-6. **Frontend Libs**: Ensure `mammoth.min.js` and `pdf.min.js` are correctly sourced in `personnel_editor.html`.
+---
+
+### UX 1 — Sales Rep Needs a Persistent Task Indicator
+**Problem:** Tasks are loaded and shown only inside the `leads` view. If a rep navigates away, they lose sight of tasks. There is no badge or indicator telling them tasks exist.
+
+**File:** `templates/professional_crm.html`
+
+**Fix A — Add a task badge on the sidebar "Hot Leads" nav link:**
+
+Find the Hot Leads nav link in the sidebar and add a badge span:
+```html
+<!-- FIND: -->
+<div class="nav-link active" onclick="switchView('leads')">
+    <i class="fas fa-fire"></i> Hot Leads
+</div>
+
+<!-- REPLACE WITH: -->
+<div class="nav-link active" onclick="switchView('leads')">
+    <i class="fas fa-fire"></i> Hot Leads
+    <span id="tasksBadge" style="display:none; background:#ef4444; color:#fff; border-radius:10px; font-size:10px; font-weight:700; padding:1px 7px; margin-left:auto;"></span>
+</div>
+```
+
+**Fix B — Update `loadMyTasks()` to show/hide the badge:**
+```javascript
+// At the end of loadMyTasks(), after rendering tasks, add:
+const badge = document.getElementById('tasksBadge');
+if (badge) {
+    if (tasks.length > 0) {
+        badge.textContent = tasks.length;
+        badge.style.display = 'inline-block';
+    } else {
+        badge.style.display = 'none';
+    }
+}
+```
+
+**Fix C — Call `loadMyTasks()` on every page load (not just when switching to leads view):**
+```javascript
+// In the DOMContentLoaded block at the bottom of the script, add:
+loadMyTasks(); // load tasks on initial page open so badge shows immediately
+```
+
+---
+
+### UX 2 — Manager Needs a Standalone "Assign Task" Button
+**Problem:** The only way a manager can assign a task is through the Activity Feed or Outstanding Panel. Both have issues (Feed requires scrolling to find a client row, Outstanding was broken). There is no proactive "I want to assign a task to a rep for a specific client" flow.
+
+**File:** `templates/professional_crm.html`
+
+**Fix — Add an "Assign Task" button to the Manager Feed header:**
+```html
+<!-- FIND the manager-feed header-section div and add a button: -->
+<div class="header-section">
+    <div>
+        <h1 class="page-title">Activity Feed</h1>
+        <p style="color:#888; margin-top:4px;">All rep activity — calls, notes, stage moves, in real time</p>
+    </div>
+    <!-- ADD THIS: -->
+    <button onclick="openAssignTaskModal('', '')" class="btn btn-primary">
+        <i class="fas fa-plus mr-2"></i> Assign Task
+    </button>
+</div>
+```
+
+When `openAssignTaskModal('', '')` is called with empty strings, the modal opens with no client pre-selected. The manager can then pick a rep and type in the task without needing to start from a specific client row. The `assignTaskClientLabel` will show "General Task" which is already handled in the existing `openAssignTaskModal()` function.
+
+---
+
+### UX 3 — Rep Name on Kanban Card
+**Problem:** You can't see who a lead is assigned to without opening the detail modal. Managers reviewing the pipeline are blind to assignment at a glance.
+
+**File:** `templates/professional_crm.html`  
+**Function:** `loadPipeline()` card render
+
+**Fix — add assigned rep name below the client name on each card:**
+
+Find where `lead.full_name` is rendered in the card HTML and add a rep line below it:
+```javascript
+// FIND in the card HTML template inside loadPipeline():
+<div style="font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 4px;">${lead.full_name || 'Unknown Client'}</div>
+
+// ADD immediately after it:
+${lead.assigned_rep_name ? 
+    `<div style="font-size:10px; color:#888; margin-bottom:4px;">
+        <i class="fas fa-user" style="font-size:9px; color:#555;"></i> ${lead.assigned_rep_name}
+    </div>` 
+    : ''}
+```
+
+This works because `GET /api/crm/pipeline` in `crm.py` already returns `assigned_rep_id` per lead. You need to also add `assigned_rep_name` to the pipeline endpoint response. Update `get_sales_pipeline` in `crm.py`:
+
+```python
+# After the existing section that builds fin_map, add a rep_name lookup:
+
+# Collect all assigned_rep_ids
+rep_ids = list(set(l["assigned_rep_id"] for l in all_leads if l.get("assigned_rep_id")))
+rep_name_map = {}
+if rep_ids:
+    reps = (await db_execute(lambda: db.table("admins")
+        .select("id, full_name")
+        .in_("id", rep_ids)
+        .execute())).data or []
+    rep_name_map = {r["id"]: r["full_name"] for r in reps}
+
+# Then in the loop where you build each lead dict, add:
+lead["assigned_rep_name"] = rep_name_map.get(lead.get("assigned_rep_id"), "")
+```
+
+---
+
+### UX 4 — Hot Leads Auto-Loads on Page Open
+**Problem:** The Hot Leads page shows zero data until the user clicks "Analyze All Leads". First impression is a broken page.
+
+**File:** `templates/professional_crm.html`  
+**Function:** `DOMContentLoaded` block
+
+**Fix — `loadLeads()` is already called in DOMContentLoaded. The issue is that it returns early when `prioritized_leads` is empty.** After Fix 1 above removes the `client_type` filter, this will start working automatically. No additional change needed here beyond Fix 1.
+
+---
+
+### UX 5 — `team/assignable` Endpoint Excludes `sales_manager` Role
+**File:** `routers/crm_professional.py`  
+**Function:** `get_assignable_team` (~line 1057)  
+**Problem:** The endpoint only returns admins with roles `sales`, `operations`, or `customer_support`. A `sales_manager` cannot be assigned leads or tasks because they don't appear in the dropdown.
+
+**Fix:**
+```python
+# BEFORE:
+if any(r in ["sales", "operations", "customer_support"] for r in roles):
+
+# AFTER:
+if any(r in ["sales", "sales_manager", "operations", "customer_support"] for r in roles):
+```
+
+---
+
+### UX 6 — Activity Logs Rep Filter Excludes `sales_manager`
+**File:** `templates/professional_crm.html`  
+**Function:** `loadActivityLogs()`
+
+The rep filter dropdown is currently only shown when `role === "admin"` or `role === "legal"`. Operations and sales_manager are excluded.
+
+**Fix — update the role check:**
+```javascript
+// FIND in loadActivityLogs():
+if (role === "admin" || role === "legal") {
+
+// REPLACE WITH:
+const logsRoles = role ? role.split(',').map(r => r.trim().toLowerCase()) : [];
+if (logsRoles.some(r => ['admin', 'super_admin', 'operations', 'sales_manager'].includes(r))) {
+```
+
+---
+
+## IMPLEMENTATION ORDER
+
+1. **Fix 1** — Remove `client_type` filter + fix frontend empty state check
+2. **Fix 2** — Split outstanding query into two separate queries
+3. **Fix 3** — Add `showNotification` alias
+4. **Fix 4** — Correct stage dropdown options in lead detail modal
+5. **Fix 5** — Explicit FK hint in manager feed query
+6. **UX 5** — Add `sales_manager` to assignable team endpoint
+7. **UX 6** — Fix activity log rep filter role check
+8. **UX 1** — Task badge on sidebar nav link
+9. **UX 2** — Standalone Assign Task button in manager feed header
+10. **UX 3** — Rep name on Kanban card (requires pipeline endpoint update in crm.py)
+11. **UX 4** — Auto-resolves after Fix 1, no extra work needed
+
+---
+
+## WHAT IS WORKING CORRECTLY (Do not change)
+
+- Pipeline lock toggle — working
+- Call `tel:` button on Kanban and Contacts list — working
+- WhatsApp button — working
+- Pre-call modal with localStorage pending — working
+- Call outcome logging endpoint — working
+- `last_contacted_at` update on call and note — working
+- Contacts list view with search and stage filter — working
+- Task creation endpoint (`POST /tasks`) — working
+- Task status update endpoint (`PATCH /tasks/{id}`) — working
+- Role upgrade endpoint (`PATCH /team/{admin_id}/role`) — working
+- Role manager UI in Team view — working
+- Migration SQL (already run or ready to run) — correct
+- `sanitizePhoneForWhatsApp()` — working
+- `formatTimeAgo()` — working
+- `showToast()` — working
+- Pipeline RBAC (rep sees only assigned leads) — working
+- `sales_manager` RBAC across most endpoints — working

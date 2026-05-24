@@ -1,6 +1,6 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, UploadFile, File
 from database import get_db, db_execute
-from routers.auth import verify_token, require_roles
+from routers.auth import verify_token, require_roles, has_any_role
 from datetime import datetime, timedelta
 import json
 import csv
@@ -17,10 +17,18 @@ router = APIRouter()
 async def get_all_contacts(current_admin=Depends(verify_token)):
     """Get all clients with their invoice & payment summary (BULK OPTIMIZED)"""
     db = get_db()
-    
-    contacts = (await db_execute(lambda: db.table("clients").select("""
-        id, full_name, email, phone, city, state, occupation, client_type, created_at, updated_at
-    """).order("created_at", desc=True).execute())).data or []
+    # Privileged roles that are allowed to view all contacts
+    privileged = ["sales_manager", "operations", "admin", "super_admin"]
+
+    # Non-privileged users should only see contacts assigned to them
+    if has_any_role(current_admin, privileged):
+        contacts = (await db_execute(lambda: db.table("clients").select("""
+            id, full_name, email, phone, city, state, occupation, client_type, pipeline_stage, assigned_rep_id, last_contacted_at, created_at, updated_at
+        """).order("created_at", desc=True).execute())).data or []
+    else:
+        contacts = (await db_execute(lambda: db.table("clients").select("""
+            id, full_name, email, phone, city, state, occupation, client_type, pipeline_stage, assigned_rep_id, last_contacted_at, created_at, updated_at
+        """).eq("assigned_rep_id", current_admin.get("sub")).order("created_at", desc=True).execute())).data or []
     
     if not contacts:
         return []
@@ -149,7 +157,7 @@ async def get_sales_pipeline(current_admin=Depends(verify_token)):
     role = current_admin.get("role", "")
     admin_id = current_admin.get("sub")
     
-    is_privileged = any(r in role.lower() for r in ["admin", "operations", "customer_support"])
+    is_privileged = any(r in role.lower() for r in ["admin", "operations", "customer_support", "sales_manager"])
 
     # 1. Base Query
     query = db.table("clients").select("""
@@ -185,6 +193,19 @@ async def get_sales_pipeline(current_admin=Depends(verify_token)):
         if cid not in fin_map: fin_map[cid] = {"total_amount": 0, "total_paid": 0}
         fin_map[cid]["total_amount"] += float(inv["amount"] or 0)
         fin_map[cid]["total_paid"] += float(inv["amount_paid"] or 0)
+
+    # Enrich leads with assigned rep names for pipeline cards
+    rep_ids = list({lead.get("assigned_rep_id") for lead in all_leads if lead.get("assigned_rep_id")})
+    rep_name_map = {}
+    if rep_ids:
+        reps = (await db_execute(lambda: db.table("admins")
+            .select("id, full_name")
+            .in_("id", rep_ids)
+            .execute())).data or []
+        rep_name_map = {r["id"]: r["full_name"] for r in reps}
+
+    for lead in all_leads:
+        lead["assigned_rep_name"] = rep_name_map.get(lead.get("assigned_rep_id"), "")
 
     # 4. Group by stage in-memory
     stages = ["lead", "nurturing", "interest", "paid", "closed"]
@@ -418,6 +439,11 @@ async def add_client_note(
         "metadata": {"note_type": "manual"}
     }).execute())
     
+    # Section 7b: update last_contacted_at on note log
+    await db_execute(lambda: db.table("clients").update({
+        "last_contacted_at": datetime.utcnow().isoformat()
+    }).eq("id", client_id).execute())
+    
     return {"status": "note_added"}
 
 
@@ -427,22 +453,43 @@ async def log_call(
     request: Request,
     current_admin=Depends(verify_token)
 ):
-    """Log a call with a client"""
+    """Log a call with a client — supports outcome and follow_up_date (Section 5e)"""
     db = get_db()
     body = await request.json()
     
     duration = body.get("duration", 0)  # in minutes
     notes = body.get("notes", "")
+    outcome = body.get("outcome", "initiated")  # initiated | answered | no_answer | callback | not_interested
+    follow_up_date = body.get("follow_up_date", None)
+    
+    description_map = {
+        "initiated": "Call initiated",
+        "answered": f"Call answered — {notes}" if notes else "Call answered",
+        "no_answer": "Call made — no answer",
+        "callback": f"Call made — callback requested. {notes}" if notes else "Call made — callback requested",
+        "not_interested": "Call made — client not interested"
+    }
     
     await db_execute(lambda: db.table("activity_log").insert({
         "event_type": "call",
-        "description": f"Call logged: {notes}",
+        "description": description_map.get(outcome, f"Call logged: {notes}"),
         "client_id": client_id,
         "performed_by": current_admin["sub"],
-        "metadata": {"duration_minutes": duration, "notes": notes}
+        "metadata": {
+            "duration_minutes": duration,
+            "notes": notes,
+            "outcome": outcome,
+            "follow_up_date": follow_up_date
+        }
     }).execute())
     
-    return {"status": "call_logged"}
+    # Update last_contacted_at only when outcome is confirmed (not just "initiated")
+    if outcome != "initiated":
+        await db_execute(lambda: db.table("clients").update({
+            "last_contacted_at": datetime.utcnow().isoformat()
+        }).eq("id", client_id).execute())
+    
+    return {"status": "call_logged", "outcome": outcome}
 
 
 @router.post("/contacts/{client_id}/send-email")
@@ -486,7 +533,7 @@ async def get_pipeline_health(current_admin=Depends(verify_token)):
     role = current_admin.get("role", "")
     admin_id = current_admin["sub"]
     
-    is_privileged = any(r in role.lower() for r in ["admin", "operations", "customer_support"])
+    is_privileged = any(r in role.lower() for r in ["admin", "operations", "customer_support", "sales_manager"])
     
     # 1. Base Query
     query = db.table("invoices").select("""
@@ -536,7 +583,7 @@ async def get_sales_rep_performance(current_admin=Depends(verify_token)):
     role = current_admin.get("role", "")
     admin_id = current_admin["sub"]
     
-    is_privileged = any(r in role.lower() for r in ["admin", "operations", "customer_support"])
+    is_privileged = any(r in role.lower() for r in ["admin", "operations", "customer_support", "sales_manager"])
     
     query = db.table("invoices").select("""
         id, sales_rep_name, amount, amount_paid, status, created_at, clients(assigned_rep_id)

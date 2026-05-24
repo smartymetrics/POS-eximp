@@ -519,8 +519,15 @@
                 <div class="nav-link active" onclick="switchView('leads')">
                     <i class="fas fa-fire"></i> Hot Leads
                 </div>
+                <div class="nav-link" onclick="switchView('my-tasks')">
+                    <i class="fas fa-tasks"></i> My Tasks
+                    <span id="tasksBadge" style="display:none; background:#ef4444; color:#fff; border-radius:10px; font-size:10px; font-weight:700; padding:1px 7px; margin-left:auto;"></span>
+                </div>
                 <div class="nav-link" onclick="switchView('pipeline')">
                     <i class="fas fa-grip-vertical"></i> Sales Pipeline
+                </div>
+                <div class="nav-link" onclick="switchView('contacts-list')">
+                    <i class="fas fa-address-book"></i> Contacts
                 </div>
                 <div class="nav-link" onclick="switchView('lead-scoring')">
                     <i class="fas fa-chart-pie"></i> Lead Scoring
@@ -577,6 +584,10 @@
                 </div>
                 <div class="nav-link" onclick="switchView('team')">
                     <i class="fas fa-medal"></i> Team Leaderboard
+                </div>
+                <div class="nav-link" id="nav-manager-feed" onclick="switchView('manager-feed')" style="display:none;">
+                    <i class="fas fa-stream"></i> Activity Feed
+                    <span id="manager-feed-badge" style="display:none; background:#ef4444; color:#fff; border-radius:10px; font-size:10px; padding:1px 6px; margin-left:auto;"></span>
                 </div>
                 <div class="nav-link" onclick="switchView('reports')">
                     <i class="fas fa-file-pdf"></i> Reports
@@ -697,6 +708,17 @@
                     </table>
                 </div>
             </div>
+        </div>
+
+        <!-- MY TASKS VIEW -->
+        <div id="my-tasks" class="view-section">
+            <div class="header-section">
+                <div>
+                    <h1 class="page-title">My Tasks</h1>
+                    <p style="color: #888; margin-top: 8px;">Pending CRM work assigned to you.</p>
+                </div>
+            </div>
+            <div id="myTasksContainer"></div>
         </div>
 
         <!-- LEAD SCORING DETAILS -->
@@ -850,7 +872,15 @@
                      <h1 class="page-title" style="color: #fff;">Sales Pipeline</h1>
                      <p style="color: #888; font-size: 14px; margin-top: 4px;">Track and manage your leads and their daily activities.</p>
                  </div>
-                 <div style="display: flex; gap: 12px;">
+                 <div style="display: flex; gap: 12px; align-items: center;">
+                     <div style="display: flex; align-items: center; gap: 10px;">
+                         <span style="font-size: 12px; color: #888;">Drag &amp; Drop</span>
+                         <button id="pipelineLockToggle" onclick="togglePipelineLock()" 
+                             style="width: 44px; height: 24px; border-radius: 12px; border: none; cursor: pointer; position: relative; transition: background 0.2s;">
+                             <span id="pipelineLockThumb" style="position: absolute; top: 2px; width: 20px; height: 20px; border-radius: 50%; background: #fff; transition: left 0.2s;"></span>
+                         </button>
+                         <span id="pipelineLockLabel" style="font-size: 12px; color: #888;">Locked</span>
+                     </div>
                      <button class="btn btn-secondary" onclick="openImportModal()" style="background: rgba(255,255,255,0.05); color: #fff; border: 1px solid #333;">
                          <i class="fas fa-file-import mr-2"></i> Import CSV
                      </button>
@@ -951,7 +981,7 @@
                 <div style="overflow-x: auto;">
                     <table style="width: 100%; font-size: 13px;">
                         <thead>
-                            <tr style="border-bottom: 2px solid #e5e7eb; background: #f9fafb;">
+                                <tr style="border-bottom: 2px solid #e5e7eb; background: #f9fafb; color: #111;">
                                 <th style="text-align: left; padding: 12px; font-weight: 600;">🏆 Sales Rep</th>
                                 <th style="text-align: right; padding: 12px; font-weight: 600;">Deals</th>
                                 <th style="text-align: right; padding: 12px; font-weight: 600;">Revenue</th>
@@ -962,6 +992,129 @@
                         </thead>
                         <tbody id="teamLeaderboard"></tbody>
                     </table>
+                </div>
+            </div>
+
+            <!-- Section 2c: Manage Roles — only visible to admin/operations -->
+            <div id="roleManagerSection" style="display:none; margin-top:24px;">
+                <div class="card">
+                    <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                        <h3 style="font-weight:800; font-size:15px; color:#fff;">Manage Team Roles</h3>
+                        <button onclick="loadRoleManager()" style="font-size:11px; color:#888; background:none; border:none; cursor:pointer;">Refresh</button>
+                    </div>
+                    <div id="roleManagerBody">
+                        <div style="text-align:center; padding:30px; color:#444;">Loading team members...</div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- CONTACTS LIST VIEW (Section 6b) -->
+        <div id="contacts-list" class="view-section">
+            <div class="header-section">
+                <div>
+                    <h1 class="page-title">Contacts</h1>
+                    <p style="color:#888; margin-top:4px;">All assigned clients — call, WhatsApp, log activity</p>
+                </div>
+                <div style="display:flex; gap:10px; align-items:center;">
+                    <input type="text" id="contactsSearch" placeholder="Search by name or phone..." 
+                        onkeyup="filterContactsList()"
+                        style="background:#111; border:1px solid #333; border-radius:8px; padding:10px 14px; color:#fff; outline:none; font-size:13px; width:220px;">
+                    <select id="contactsStageFilter" onchange="filterContactsList()" style="background:#111; border:1px solid #333; border-radius:8px; padding:10px; color:#fff; outline:none; font-size:13px;">
+                        <option value="">All Stages</option>
+                        <option value="lead">Lead</option>
+                        <option value="nurturing">Nurturing</option>
+                        <option value="interest">Interest</option>
+                        <option value="paid">Paid</option>
+                        <option value="closed">Closed</option>
+                    </select>
+                </div>
+            </div>
+            <div class="card" style="overflow-x:auto;">
+                <table style="width:100%; font-size:13px; border-collapse:collapse;">
+                    <thead>
+                        <tr style="border-bottom:2px solid #333;">
+                            <th style="text-align:left; padding:12px; color:#888; font-size:11px; text-transform:uppercase; font-weight:700;">Client</th>
+                            <th style="text-align:left; padding:12px; color:#888; font-size:11px; text-transform:uppercase; font-weight:700;">Phone</th>
+                            <th style="text-align:left; padding:12px; color:#888; font-size:11px; text-transform:uppercase; font-weight:700;">Stage</th>
+                            <th style="text-align:right; padding:12px; color:#888; font-size:11px; text-transform:uppercase; font-weight:700;">Outstanding</th>
+                            <th style="text-align:left; padding:12px; color:#888; font-size:11px; text-transform:uppercase; font-weight:700;">Last Contacted</th>
+                            <th style="text-align:center; padding:12px; color:#888; font-size:11px; text-transform:uppercase; font-weight:700;">Actions</th>
+                        </tr>
+                    </thead>
+                    <tbody id="contactsListBody">
+                        <tr><td colspan="6" style="text-align:center; padding:40px; color:#444;">Loading...</td></tr>
+                    </tbody>
+                </table>
+            </div>
+        </div>
+
+        <!-- MANAGER ACTIVITY FEED (Section 9b) -->
+        <div id="manager-feed" class="view-section">
+            <div class="header-section">
+                <div>
+                    <h1 class="page-title">Activity Feed</h1>
+                    <p style="color:#888; margin-top:4px;">All rep activity — calls, notes, stage moves, in real time</p>
+                </div>
+                <button onclick="openAssignTaskModal('', '')" class="btn btn-primary" style="height:38px; align-self:center;">
+                    <i class="fas fa-plus mr-2"></i> Assign Task
+                </button>
+            </div>
+            
+            <!-- Filters -->
+            <div class="card" style="margin-bottom:20px; padding:16px;">
+                <div style="display:flex; gap:12px; flex-wrap:wrap; align-items:center;">
+                    <select id="feedRepFilter" onchange="loadManagerFeed()" style="background:#111; border:1px solid #333; border-radius:8px; padding:10px; color:#fff; outline:none; font-size:13px;">
+                        <option value="">All Reps</option>
+                    </select>
+                    <select id="feedDateFilter" onchange="loadManagerFeed()" style="background:#111; border:1px solid #333; border-radius:8px; padding:10px; color:#fff; outline:none; font-size:13px;">
+                        <option value="today">Today</option>
+                        <option value="week">This Week</option>
+                        <option value="month">This Month</option>
+                        <option value="">All Time</option>
+                    </select>
+                    <select id="feedTypeFilter" onchange="loadManagerFeed()" style="background:#111; border:1px solid #333; border-radius:8px; padding:10px; color:#fff; outline:none; font-size:13px;">
+                        <option value="">All Activity</option>
+                        <option value="call">Calls Only</option>
+                        <option value="manual_note">Notes Only</option>
+                        <option value="pipeline_move">Stage Moves Only</option>
+                        <option value="lead_assigned">Assignments Only</option>
+                    </select>
+                </div>
+            </div>
+            
+            <!-- Outstanding Payments Summary -->
+            <div id="outstandingPanel" class="card" style="margin-bottom:20px;">
+                <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:16px;">
+                    <h3 style="font-weight:700; font-size:15px; color:#fff;">Outstanding Payments</h3>
+                    <button onclick="loadOutstandingPanel()" style="font-size:11px; color:#888; background:none; border:none; cursor:pointer;">Refresh</button>
+                </div>
+                <div style="overflow-x:auto;">
+                    <table style="width:100%; font-size:13px; border-collapse:collapse;">
+                        <thead>
+                            <tr style="border-bottom:1px solid #333;">
+                                <th style="text-align:left; padding:10px; color:#888; font-size:11px; text-transform:uppercase;">Client</th>
+                                <th style="text-align:left; padding:10px; color:#888; font-size:11px; text-transform:uppercase;">Assigned Rep</th>
+                                <th style="text-align:right; padding:10px; color:#888; font-size:11px; text-transform:uppercase;">Outstanding</th>
+                                <th style="text-align:left; padding:10px; color:#888; font-size:11px; text-transform:uppercase;">Last Contacted</th>
+                                <th style="text-align:left; padding:10px; color:#888; font-size:11px; text-transform:uppercase;">Stage</th>
+                                <th style="text-align:left; padding:10px; color:#888; font-size:11px; text-transform:uppercase;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="outstandingTableBody">
+                            <tr><td colspan="5" style="text-align:center; padding:30px; color:#444;">Loading...</td></tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+            
+            <!-- Activity Log Feed -->
+            <div class="card">
+                <div id="managerFeedList" style="min-height:200px;">
+                    <div style="text-align:center; padding:40px; color:#444;">Loading feed...</div>
+                </div>
+                <div style="text-align:center; margin-top:16px; display:none;" id="loadMoreFeedBtn">
+                    <button onclick="loadManagerFeed(true)" style="background:#222; border:1px solid #333; border-radius:8px; padding:10px 24px; color:#fff; cursor:pointer;">Load More</button>
                 </div>
             </div>
         </div>
@@ -980,6 +1133,14 @@
                     <div id="adminRepFilterContainer" style="flex: 1; min-width: 200px; display: none;">
                         <select id="logRepFilter" style="width: 100%; background: #111; border: 1px solid #333; color: #fff; border-radius: 8px; padding: 10px; font-size: 13px; outline: none;" onchange="loadActivityLogs()">
                             <option value="">Loading Sales Reps...</option>
+                        </select>
+                    </div>
+                    <div>
+                        <select id="logDateFilter" onchange="loadActivityLogs()" style="background:#111; border:1px solid #333; color:#fff; border-radius:8px; padding:10px; font-size:13px; outline:none;">
+                            <option value="today">Today</option>
+                            <option value="week">This Week</option>
+                            <option value="month">This Month</option>
+                            <option value="">All Time</option>
                         </select>
                     </div>
                     <div>
@@ -1137,10 +1298,11 @@
                      <div style="margin-bottom: 24px;">
                          <label style="font-size: 10px; font-weight: 800; color: #555; text-transform: uppercase; margin-bottom: 4px; display: block;">Pipeline Stage (Mobile quick-move)</label>
                          <select id="detail-lead-stage" onchange="saveLeadStage()" style="width: 100%; background: #1A1A1A; border: 1px solid #333; color: #fff; border-radius: 8px; padding: 10px; font-size: 13px; outline: none;">
-                             <option value="lead">Lead</option>
-                             <option value="offer">Offer</option>
-                             <option value="contract">Contract</option>
-                             <option value="closed">Closed (Won)</option>
+                             <option value="lead">1. Lead</option>
+                             <option value="nurturing">2. Nurturing</option>
+                             <option value="interest">3. Interest</option>
+                             <option value="paid">4. Paid</option>
+                             <option value="closed">5. Closed</option>
                          </select>
                      </div>
 
@@ -1467,7 +1629,7 @@
             const roleStr = (admin.role || 'staff').toLowerCase();
             const roles = roleStr.split(',').map(r => r.trim());
             
-            const isPrivileged = roles.some(r => ['admin', 'operations', 'super_admin', 'customer_support'].includes(r));
+            const isPrivileged = roles.some(r => ['admin', 'operations', 'super_admin', 'customer_support', 'sales_manager'].includes(r));
             const isRestricted = roles.some(r => ['sales', 'staff'].includes(r)) && !isPrivileged;
             
             // Sales Reps & Staff are restricted
@@ -1549,6 +1711,7 @@
             
             // Load specific data
             if (viewName === "leads") loadLeads();
+            else if (viewName === "my-tasks") loadMyTasks();
             else if (viewName === "team") loadTeamPerformance();
             else if (viewName === "support-desk") loadSupportTickets();
             else if (viewName === "revenue-intel") loadRevenueIntelligence();
@@ -1805,10 +1968,20 @@
                     headers: { "Authorization": `Bearer ${token}` }
                 });
                 const data = await res.json();
+                if (!res.ok) {
+                    document.getElementById("hotLeadsTable").innerHTML = `<tr><td colspan="6" style="padding: 40px; text-align: center; color: #EF4444;">${data.detail || 'Failed to load leads'}</td></tr>`;
+                    hidePageLoader();
+                    return;
+                }
                 
-                if (data.detail) {
-                    console.warn("Access denied or API error:", data.detail);
-                    document.getElementById("hotLeadsTable").innerHTML = `<tr><td colspan="6" style="padding: 40px; text-align: center; color: #EF4444;">${data.detail}</td></tr>`;
+                if (!Array.isArray(data.prioritized_leads) || !data.prioritized_leads.length) {
+                    document.getElementById("hotLeadsTable").innerHTML = `
+                        <tr><td colspan="6" style="text-align:center; padding:40px; color:#666;">
+                            No leads assigned to you yet.
+                        </td></tr>`;
+                    document.getElementById("hot-leads").textContent = data.hot_leads || 0;
+                    document.getElementById("warm-leads").textContent = data.warm_leads || 0;
+                    document.getElementById("cold-leads").textContent = (data.total_leads || 0) - (data.hot_leads || 0) - (data.warm_leads || 0);
                     hidePageLoader();
                     return;
                 }
@@ -1858,17 +2031,39 @@
                     headers: { "Authorization": `Bearer ${token}` }
                 });
                 const data = await res.json();
-                
-                const html = data.team_leaderboard.map((rep, idx) => `
+                if (!res.ok) {
+                    console.error("Team performance request failed:", data);
+                    document.getElementById("teamLeaderboard").innerHTML = `<tr><td colspan="6" style="text-align:center; padding:24px; color:#ef4444;">Unable to load team leaderboard.</td></tr>`;
+                    return;
+                }
+
+                const leaderboard = Array.isArray(data)
+                    ? data
+                    : Array.isArray(data?.team_leaderboard)
+                        ? data.team_leaderboard
+                        : [];
+
+                if (!leaderboard.length) {
+                    document.getElementById("teamLeaderboard").innerHTML = `<tr><td colspan="6" style="text-align:center; padding:24px; color:#aaa;">No team leaderboard data available.</td></tr>`;
+                    return;
+                }
+
+                const html = leaderboard.map((rep, idx) => {
+                    const assigned = rep.assigned_leads || 0;
+                    const closed = rep.closed_deals || 0;
+                    const winRate = assigned ? ((closed / assigned) * 100) : (rep.conversion_rate || 0);
+                    const winRateDisplay = isFinite(winRate) ? winRate.toFixed(1) + '%' : '0%';
+
+                    return `
                     <tr class="animate-fade-in stagger-${(idx % 5) + 1}">
                         <td style="padding: 12px;"><strong>${idx + 1}. ${rep.sales_rep}</strong></td>
                         <td style="text-align: right; padding: 12px;">${rep.total_deals}</td>
                         <td style="text-align: right; padding: 12px; color: var(--gold); font-weight: 600;">₦${(rep.total_revenue / 1000000).toFixed(1)}M</td>
                         <td style="text-align: right; padding: 12px;">${rep.closed_deals}</td>
-                        <td style="text-align: right; padding: 12px; font-weight: 600;">${rep.conversion_rate}%</td>
-                        <td style="text-align: right; padding: 12px;">₦${(rep.estimated_commission / 1000000).toFixed(1)}M</td>
+                        <td style="text-align: right; padding: 12px; font-weight: 600;">${winRateDisplay}</td>
+                        <td style="text-align: right; padding: 12px;">₦${((rep.actual_commissions_earned || rep.estimated_commission || 0) / 1000000).toFixed(1)}M</td>
                     </tr>
-                `).join("");
+                `}).join("");
                 
                 document.getElementById("teamLeaderboard").innerHTML = html;
             } catch (err) {
@@ -2013,6 +2208,21 @@
                         const weightedVal = (parseFloat(lead.estimated_value || 0) * (probability / 100)).toLocaleString();
                         const isProtected = ['paid', 'closed'].includes(stage);
 
+                        // Section 8: outstanding balance
+                        const outstanding = (parseFloat(lead.actual_amount || 0) - parseFloat(lead.actual_paid || 0));
+                        const outstandingHtml = outstanding > 0
+                            ? `<div style="font-size:10px; color:#ef4444; margin-top:2px;">Owes: ₦${outstanding.toLocaleString()}</div>`
+                            : '';
+
+                        // Section 7c: last contacted
+                        const lastContacted = lead.last_contacted_at 
+                            ? `<div style="font-size:9px; color:#666; margin-top:4px;">Last contact: ${formatTimeAgo(lead.last_contacted_at)}</div>`
+                            : `<div style="font-size:9px; color:#555; margin-top:4px;">Never contacted</div>`;
+
+                        // Section 4: phone sanitized for WhatsApp
+                        const waPhone = sanitizePhoneForWhatsApp(lead.phone);
+                        const safeName = (lead.full_name || '').replace(/'/g, "\\'");
+
                         return `
                         <div class="deal-card ${isProtected ? 'protected-col' : ''} animate-fade-in stagger-${(index % 5) + 1}" 
                              draggable="${!isProtected}" 
@@ -2024,7 +2234,9 @@
                                 <div style="font-size: 10px; color: #555;">${new Date(lead.created_at).toLocaleDateString()}</div>
                             </div>
                             <div style="font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 4px;">${lead.full_name || 'Unknown Client'}</div>
+                            ${lead.assigned_rep_name ? `<div style="font-size:10px; color:#888; margin-bottom:4px;"><i class="fas fa-user" style="font-size:9px; color:#555;"></i> ${lead.assigned_rep_name}</div>` : ''}
                             <div style="font-size: 16px; font-weight: 800; color: var(--gold);">₦${parseFloat(lead.amount || 0).toLocaleString()}</div>
+                            ${outstandingHtml}
                             
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 4px;">
                                 ${lead.actual_paid > 0 ? `<div style="font-size: 10px; color: #3498db;">Paid: ₦${parseFloat(lead.actual_paid).toLocaleString()}</div>` : '<div></div>'}
@@ -2032,6 +2244,7 @@
                             </div>
                             
                             <div style="font-size: 10px; color: #22c55e; margin-top: 4px;">Forecast: ₦${weightedVal} <span style="color: #666;">(${probability}%)</span></div>
+                            ${lastContacted}
                             
                             <div style="display: flex; justify-content: space-between; align-items: center; margin-top: 12px; padding-top: 8px; border-top: 1px solid #333;">
                                 <div style="display: flex; gap: 6px;">
@@ -2045,12 +2258,25 @@
                                             <i class="fas fa-arrow-right"></i>
                                         </button>
                                     ` : ''}
-                                    <button onclick="event.stopPropagation(); initiateLeadChat('${lead.id}', '${lead.full_name}')" title="Start Chat" style="color: var(--gold); background: rgba(196,125,10,0.1); width: 28px; height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; border:0;">
+                                    <button onclick="event.stopPropagation(); initiateLeadChat('${lead.id}', '${safeName}')" title="Start Chat" style="color: var(--gold); background: rgba(196,125,10,0.1); width: 28px; height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; border:0;">
                                         <i class="fas fa-comment-dots" style="font-size:10px;"></i>
                                     </button>
                                     <button onclick="event.stopPropagation(); logDailyActivity('${lead.id}')" title="Log Activity" style="color: #fff; background: rgba(255,255,255,0.05); width: 28px; height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; border: 1px solid #333;">
                                         <i class="fas fa-pen" style="font-size:10px;"></i>
                                     </button>
+                                    <a href="tel:${lead.phone || ''}" 
+                                       onclick="event.stopPropagation(); handleCallInitiated('${lead.id}', '${safeName}', '${lead.phone || ''}')" 
+                                       style="color: #22c55e; background: rgba(34,197,94,0.1); width: 28px; height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; border:0; text-decoration: none;"
+                                       title="Call Client">
+                                        <i class="fas fa-phone" style="font-size:10px;"></i>
+                                    </a>
+                                    <a href="https://wa.me/${waPhone}" 
+                                       target="_blank"
+                                       onclick="event.stopPropagation();"
+                                       style="color: #25D366; background: rgba(37,211,102,0.1); width: 28px; height: 28px; border-radius: 4px; display: flex; align-items: center; justify-content: center; border:0; text-decoration: none;"
+                                       title="WhatsApp Client">
+                                        <i class="fab fa-whatsapp" style="font-size:10px;"></i>
+                                    </a>
                                 </div>
                                 <div style="font-size: 9px; color: #444; font-weight: 700; text-transform: uppercase;">ID: ${lead.id.split('-')[0]}</div>
                             </div>
@@ -2058,6 +2284,8 @@
                     `}).join("");
                     document.getElementById(`col-${stage}`).innerHTML = html || '<div style="text-align: center; color: #444; font-size: 11px; padding: 20px;">No leads</div>';
                 });
+                // Section 3b: apply lock state after cards are rendered
+                applyPipelineLock();
             } catch (err) {
                  console.error("Pipeline Error:", err);
             }
@@ -2172,10 +2400,12 @@
                 
                 const searchTxt = document.getElementById("logSearchInput")?.value || "";
                 const repId = document.getElementById("logRepFilter")?.value || "";
+                const dateRange = document.getElementById("logDateFilter")?.value || "";
                 
                 let url = "/api/crm/pro/activity-logs?";
                 if(searchTxt) url += `search_text=${encodeURIComponent(searchTxt)}&`;
                 if(repId) url += `rep_id=${repId}&`;
+                if(dateRange) url += `date_range=${dateRange}&`;
                 
                 renderSkeletons("activityLogsFeed", "table-row", 8);
                 const res = await fetch(url, {
@@ -2185,7 +2415,8 @@
                 
                 // Show/hide rep filter
                 const filterContainer = document.getElementById("adminRepFilterContainer");
-                if (role === "admin" || role === "legal") {
+                const logsRoles = role ? role.split(',').map(r => r.trim().toLowerCase()) : [];
+                if (logsRoles.some(r => ['admin', 'super_admin', 'operations', 'sales_manager'].includes(r))) {
                     if (filterContainer) filterContainer.style.display = "block";
                     if (filterContainer && !filterContainer.dataset.loaded) {
                         // Load reps into dropdown
@@ -2905,13 +3136,17 @@
                 switchView('support-desk');
                 viewTicket(refId);
                 document.getElementById("notif-dropdown").classList.remove("active");
-             } else if (type === 'chat_invite' && refId) {
+            } else if (type === 'chat_invite' && refId) {
                 // refId is room_id
                 switchView('support-desk');
                 openChatRoomById(refId);
                 document.getElementById("notif-dropdown").classList.remove("active");
-             }
-             fetchNotifications();
+            } else if (type === 'task_assigned' && refId) {
+                switchView('leads');
+                loadMyTasks();
+                document.getElementById("notif-dropdown").classList.remove("active");
+            }
+            fetchNotifications();
          }
 
          // Start Polling
@@ -3026,7 +3261,11 @@
                 }
                 // Customer Support does NOT get extra nav buttons (CRM only)
 
-                const isRestricted = (hasRole('sales') || hasRole('marketing')) && !hasRole('admin') && !hasRole('operations') && !hasRole('customer_support');
+                const isRestricted = (hasRole('sales') || hasRole('marketing')) 
+                    && !hasRole('admin') 
+                    && !hasRole('operations') 
+                    && !hasRole('customer_support')
+                    && !hasRole('sales_manager');
 
                 if (isRestricted) {
                     // Hide forbidden sections in sidebar
@@ -3039,7 +3278,7 @@
                     // Hide lead assignment tool in modal
                     const assignSection = document.getElementById('section-lead-assignment');
                     if (assignSection) assignSection.style.display = 'none';
-                } else if (hasRole('admin') || hasRole('operations') || hasRole('legal') || hasRole('customer_support')) {
+                } else if (hasRole('admin') || hasRole('operations') || hasRole('legal') || hasRole('customer_support') || hasRole('sales_manager')) {
 
                     // Show lead assignment tool
                     const assignSection = document.getElementById('section-lead-assignment');
@@ -3478,6 +3717,668 @@
                  originalSubmitResponse();
              }
          }
+
+        // ============================================================
+        // SECTION 11: TOAST NOTIFICATION SYSTEM
+        // ============================================================
+        function showToast(message, type = 'success') {
+            const existing = document.getElementById('crmToast');
+            if (existing) existing.remove();
+            const toast = document.createElement('div');
+            toast.id = 'crmToast';
+            const bg = type === 'success' ? '#22c55e' : type === 'error' ? '#ef4444' : '#f59e0b';
+            toast.style.cssText = `position:fixed; bottom:24px; right:24px; background:${bg}; color:#fff; padding:12px 20px; border-radius:10px; font-size:13px; font-weight:700; z-index:9999; box-shadow:0 4px 20px rgba(0,0,0,0.4); transition:opacity 0.3s;`;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+            setTimeout(() => { toast.style.opacity = '0'; setTimeout(() => toast.remove(), 300); }, 3000);
+        }
+        const showNotification = (msg, type) => showToast(msg, type);
+
+        // ============================================================
+        // SECTION 7d: formatTimeAgo HELPER
+        // ============================================================
+        function formatTimeAgo(dateStr) {
+            if (!dateStr) return 'Never';
+            const diff = Math.floor((Date.now() - new Date(dateStr).getTime()) / 1000);
+            if (diff < 60) return 'Just now';
+            if (diff < 3600) return `${Math.floor(diff/60)}m ago`;
+            if (diff < 86400) return `${Math.floor(diff/3600)}h ago`;
+            if (diff < 604800) return `${Math.floor(diff/86400)}d ago`;
+            return new Date(dateStr).toLocaleDateString('en-NG', { day:'numeric', month:'short' });
+        }
+
+        // ============================================================
+        // SECTION 4: PHONE SANITIZER FOR WHATSAPP
+        // ============================================================
+        function sanitizePhoneForWhatsApp(phone) {
+            if (!phone) return '';
+            let cleaned = phone.replace(/[^0-9]/g, '');
+            if (cleaned.startsWith('0')) cleaned = '234' + cleaned.slice(1);
+            if (!cleaned.startsWith('234') && cleaned.length === 10) cleaned = '234' + cleaned;
+            return cleaned;
+        }
+
+        // ============================================================
+        // SECTION 3b: PIPELINE LOCK TOGGLE
+        // ============================================================
+        let pipelineLocked = localStorage.getItem('pipelineLocked') !== 'false'; // default true
+
+        function applyPipelineLock() {
+            const toggle = document.getElementById('pipelineLockToggle');
+            const thumb = document.getElementById('pipelineLockThumb');
+            const label = document.getElementById('pipelineLockLabel');
+            const cols = document.querySelectorAll('.kanban-col');
+            if (!toggle) return;
+
+            if (pipelineLocked) {
+                toggle.style.background = '#333';
+                thumb.style.left = '2px';
+                label.textContent = 'Locked';
+                cols.forEach(col => {
+                    col.removeAttribute('ondragover');
+                    col.removeAttribute('ondrop');
+                });
+                document.querySelectorAll('.kanban-card, .deal-card').forEach(card => {
+                    card.removeAttribute('draggable');
+                });
+            } else {
+                toggle.style.background = 'var(--gold)';
+                thumb.style.left = '22px';
+                label.textContent = 'Drag On';
+                const stageMap = { 'col-lead': 'lead', 'col-nurturing': 'nurturing', 'col-interest': 'interest', 'col-paid': 'paid', 'col-closed': 'closed' };
+                cols.forEach(col => {
+                    col.setAttribute('ondragover', 'allowDrop(event)');
+                    const stage = stageMap[col.id] || '';
+                    if (stage) col.setAttribute('ondrop', `drop(event, '${stage}')`);
+                });
+                document.querySelectorAll('.deal-card:not(.protected-col)').forEach(card => {
+                    card.setAttribute('draggable', 'true');
+                });
+            }
+        }
+
+        function togglePipelineLock() {
+            pipelineLocked = !pipelineLocked;
+            localStorage.setItem('pipelineLocked', pipelineLocked);
+            applyPipelineLock();
+        }
+
+        // Apply lock on page init
+        document.addEventListener('DOMContentLoaded', () => { applyPipelineLock(); });
+
+        // ============================================================
+        // SECTION 5: CALL INITIATION + OUTCOME MODAL
+        // ============================================================
+        let activeCallClientId = null;
+
+        function handleCallInitiated(clientId, clientName, phone) {
+            if (!phone) {
+                showToast('No phone number for this client', 'error');
+                return;
+            }
+            // 1. Save pending call to localStorage immediately
+            const pendingCall = {
+                clientId,
+                clientName,
+                phone,
+                initiatedAt: new Date().toISOString(),
+                status: 'pending'
+            };
+            localStorage.setItem('pendingCallLog', JSON.stringify(pendingCall));
+
+            // 2. Log "call initiated" to backend immediately
+            fetch(`/api/crm/contacts/${clientId}/call`, {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ notes: 'Call initiated', outcome: 'initiated', duration: 0 })
+            });
+
+            // 3. Show outcome modal after short delay (gives tel: time to fire)
+            setTimeout(() => showCallOutcomeModal(clientId, clientName), 1500);
+        }
+
+        function checkPendingCallLog() {
+            const pending = localStorage.getItem('pendingCallLog');
+            if (!pending) return;
+            try {
+                const call = JSON.parse(pending);
+                const age = (Date.now() - new Date(call.initiatedAt).getTime()) / 1000 / 60;
+                if (age < 120) {
+                    showCallOutcomeModal(call.clientId, call.clientName, true);
+                } else {
+                    localStorage.removeItem('pendingCallLog');
+                }
+            } catch(e) {
+                localStorage.removeItem('pendingCallLog');
+            }
+        }
+
+        function showCallOutcomeModal(clientId, clientName, fromRefresh = false) {
+            activeCallClientId = clientId;
+            document.getElementById('callOutcomeClientName').textContent = clientName;
+            document.getElementById('callOutcomeFromRefresh').textContent = fromRefresh ? '(recovered after refresh)' : '';
+            document.getElementById('callOutcomeModal').style.display = 'flex';
+            document.getElementById('selectedOutcome').value = '';
+            document.getElementById('callOutcomeNotes').value = '';
+            document.getElementById('callFollowUpDate').value = '';
+            document.querySelectorAll('.outcome-btn').forEach(btn => {
+                btn.style.opacity = '1';
+                btn.style.border = '1px solid #333';
+            });
+        }
+
+        function selectOutcome(outcome) {
+            document.getElementById('selectedOutcome').value = outcome;
+            document.querySelectorAll('.outcome-btn').forEach(btn => {
+                btn.style.opacity = btn.dataset.outcome === outcome ? '1' : '0.4';
+                btn.style.border = btn.dataset.outcome === outcome ? '2px solid var(--gold)' : '1px solid #333';
+            });
+        }
+
+        async function submitCallOutcome() {
+            const outcome = document.getElementById('selectedOutcome').value;
+            if (!outcome) { showToast('Please select a call outcome', 'error'); return; }
+            const notes = document.getElementById('callOutcomeNotes').value;
+            const followUpDate = document.getElementById('callFollowUpDate').value;
+            try {
+                await fetch(`/api/crm/contacts/${activeCallClientId}/call`, {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ outcome, notes, follow_up_date: followUpDate, duration: 0 })
+                });
+                localStorage.removeItem('pendingCallLog');
+                document.getElementById('callOutcomeModal').style.display = 'none';
+                showToast('Call outcome saved ✓', 'success');
+                // Refresh current active view
+                if (document.getElementById('pipeline')?.classList.contains('active')) loadPipeline();
+                if (document.getElementById('contacts-list')?.classList.contains('active')) loadContactsList();
+            } catch(err) {
+                showToast('Failed to save outcome', 'error');
+            }
+        }
+
+        // Run pending check on page load
+        document.addEventListener('DOMContentLoaded', checkPendingCallLog);
+
+        // ============================================================
+        // SECTION 6c: CONTACTS LIST VIEW
+        // ============================================================
+        let allContactsData = [];
+
+        async function loadContactsList() {
+            try {
+                const res = await fetch('/api/crm/contacts', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                allContactsData = await res.json();
+                renderContactsList(allContactsData);
+            } catch(e) {
+                document.getElementById('contactsListBody').innerHTML =
+                    '<tr><td colspan="6" style="text-align:center; padding:40px; color:#ef4444;">Failed to load contacts</td></tr>';
+            }
+        }
+
+        function renderContactsList(contacts) {
+            const tbody = document.getElementById('contactsListBody');
+            if (!contacts.length) {
+                tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:40px; color:#444;">No contacts found</td></tr>';
+                return;
+            }
+            tbody.innerHTML = contacts.map(c => {
+                const outstanding = (c.balance || 0);
+                const outstandingHtml = outstanding > 0
+                    ? `<span style="color:#ef4444; font-weight:700;">₦${outstanding.toLocaleString()}</span>`
+                    : `<span style="color:#22c55e;">₦0</span>`;
+                const lastContacted = c.last_contacted_at
+                    ? formatTimeAgo(c.last_contacted_at)
+                    : '<span style="color:#666;">Never</span>';
+                const stageBadgeColor = {
+                    lead: '#6b7280', nurturing: '#f59e0b', interest: '#3b82f6',
+                    paid: '#22c55e', closed: '#8b5cf6'
+                }[c.pipeline_stage] || '#6b7280';
+                const waPhone = sanitizePhoneForWhatsApp(c.phone);
+                const safeName = (c.full_name || '').replace(/'/g, "\\'");
+                return `<tr style="border-bottom:1px solid #222; cursor:pointer;" onclick="openLeadDetails('${c.id}')">
+                    <td style="padding:14px 12px;">
+                        <div style="font-weight:700; color:#fff;">${c.full_name || '—'}</div>
+                        <div style="font-size:11px; color:#666;">${c.email || '—'}</div>
+                    </td>
+                    <td style="padding:14px 12px; color:#aaa;">${c.phone || '—'}</td>
+                    <td style="padding:14px 12px;">
+                        <span style="background:${stageBadgeColor}22; color:${stageBadgeColor}; border:1px solid ${stageBadgeColor}44; border-radius:4px; padding:3px 8px; font-size:10px; font-weight:700; text-transform:uppercase;">${c.pipeline_stage || '—'}</span>
+                    </td>
+                    <td style="padding:14px 12px; text-align:right;">${outstandingHtml}</td>
+                    <td style="padding:14px 12px; font-size:12px; color:#888;">${lastContacted}</td>
+                    <td style="padding:14px 12px;" onclick="event.stopPropagation()">
+                        <div style="display:flex; gap:6px; justify-content:center;">
+                            <a href="tel:${c.phone || ''}"
+                               onclick="handleCallInitiated('${c.id}', '${safeName}', '${c.phone || ''}')"
+                               style="color:#22c55e; background:rgba(34,197,94,0.1); width:32px; height:32px; border-radius:6px; display:flex; align-items:center; justify-content:center; text-decoration:none;" title="Call">
+                                <i class="fas fa-phone" style="font-size:12px;"></i>
+                            </a>
+                            <a href="https://wa.me/${waPhone}" target="_blank"
+                               style="color:#25D366; background:rgba(37,211,102,0.1); width:32px; height:32px; border-radius:6px; display:flex; align-items:center; justify-content:center; text-decoration:none;" title="WhatsApp">
+                                <i class="fab fa-whatsapp" style="font-size:12px;"></i>
+                            </a>
+                            <button onclick="logDailyActivity('${c.id}')"
+                               style="color:#fff; background:rgba(255,255,255,0.05); width:32px; height:32px; border-radius:6px; display:flex; align-items:center; justify-content:center; border:1px solid #333; cursor:pointer;" title="Log Activity">
+                                <i class="fas fa-pen" style="font-size:12px;"></i>
+                            </button>
+                        </div>
+                    </td>
+                </tr>`;
+            }).join('');
+        }
+
+        function filterContactsList() {
+            const search = document.getElementById('contactsSearch').value.toLowerCase();
+            const stage = document.getElementById('contactsStageFilter').value;
+            const filtered = allContactsData.filter(c => {
+                const matchesSearch = !search ||
+                    (c.full_name || '').toLowerCase().includes(search) ||
+                    (c.phone || '').includes(search);
+                const matchesStage = !stage || c.pipeline_stage === stage;
+                return matchesSearch && matchesStage;
+            });
+            renderContactsList(filtered);
+        }
+
+        // ============================================================
+        // SECTION 9d: MANAGER FEED
+        // ============================================================
+        async function loadManagerFeed(append = false) {
+            const repId = document.getElementById('feedRepFilter')?.value || '';
+            const dateRange = document.getElementById('feedDateFilter')?.value || '';
+            const eventType = document.getElementById('feedTypeFilter')?.value || '';
+            const params = new URLSearchParams();
+            if (repId) params.append('rep_id', repId);
+            if (dateRange) params.append('date_range', dateRange);
+            if (eventType) params.append('event_type', eventType);
+
+            try {
+                const res = await fetch(`/api/crm/pro/manager/feed?${params}`, {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const logs = await res.json();
+                const feed = document.getElementById('managerFeedList');
+                const eventIcons = {
+                    call: { icon: 'fa-phone', color: '#22c55e' },
+                    manual_note: { icon: 'fa-pen', color: '#f59e0b' },
+                    client_note: { icon: 'fa-pen', color: '#f59e0b' },
+                    pipeline_move: { icon: 'fa-arrow-right', color: '#3b82f6' },
+                    lead_assigned: { icon: 'fa-user-check', color: '#8b5cf6' },
+                    lead_created: { icon: 'fa-plus', color: '#06b6d4' },
+                    default: { icon: 'fa-circle', color: '#6b7280' }
+                };
+                if (!logs.length) {
+                    feed.innerHTML = '<div style="text-align:center; padding:40px; color:#444;">No activity found for this filter</div>';
+                    return;
+                }
+                feed.innerHTML = logs.map(log => {
+                    const rep = log.admins || {};
+                    const client = log.clients || {};
+                    const meta = log.metadata || {};
+                    const ev = eventIcons[log.event_type] || eventIcons.default;
+                    const outcome = meta.outcome ? ` — <strong style="color:#fff;">${meta.outcome.replace('_', ' ')}</strong>` : '';
+                    const safeClientName = (client.full_name || '').replace(/'/g, "\\'");
+                    const assignBtn = client.id
+                        ? `<button onclick="openAssignTaskModal('${client.id}', '${safeClientName}')" style="background:none; border:none; color:#555; font-size:10px; cursor:pointer; margin-left:10px; padding:0;">+ task</button>`
+                        : '';
+                    return `<div style="display:flex; gap:14px; padding:14px 0; border-bottom:1px solid #1a1a1a; align-items:flex-start;">
+                        <div style="width:32px; height:32px; border-radius:50%; background:${ev.color}22; display:flex; align-items:center; justify-content:center; flex-shrink:0;">
+                            <i class="fas ${ev.icon}" style="color:${ev.color}; font-size:12px;"></i>
+                        </div>
+                        <div style="flex:1;">
+                            <div style="font-size:13px; color:#ccc;">${log.description}${outcome}</div>
+                            <div style="font-size:11px; color:#555; margin-top:4px;">
+                                <strong style="color:#888;">${rep.full_name || 'Unknown Rep'}</strong>
+                                ${client.full_name ? ` → ${client.full_name}` : ''}
+                                <span style="margin-left:8px;">${formatTimeAgo(log.created_at)}</span>
+                                ${assignBtn}
+                            </div>
+                        </div>
+                    </div>`;
+                }).join('');
+            } catch(e) {
+                document.getElementById('managerFeedList').innerHTML = '<div style="text-align:center; padding:40px; color:#ef4444;">Failed to load feed</div>';
+            }
+        }
+
+        async function loadOutstandingPanel() {
+            try {
+                const res = await fetch('/api/crm/pro/manager/outstanding', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const data = await res.json();
+                const tbody = document.getElementById('outstandingTableBody');
+                if (!data.length) {
+                    tbody.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:#22c55e;">No outstanding balances 🎉</td></tr>';
+                    return;
+                }
+                tbody.innerHTML = data.map(c => `
+                    <tr style="border-bottom:1px solid #1a1a1a;">
+                        <td style="padding:12px; color:#fff; font-weight:600;">${c.client_name || '—'}</td>
+                        <td style="padding:12px; color:#aaa;">${c.assigned_rep_name}</td>
+                        <td style="padding:12px; text-align:right; color:#ef4444; font-weight:700;">₦${c.outstanding.toLocaleString()}</td>
+                        <td style="padding:12px; color:#888; font-size:12px;">${c.last_contacted_at ? formatTimeAgo(c.last_contacted_at) : '<span style="color:#ef4444;">Never</span>'}</td>
+                        <td style="padding:12px;"><span style="font-size:10px; text-transform:uppercase; font-weight:700; color:#888;">${c.pipeline_stage || '—'}</span></td>
+                        <td style="padding:12px;">
+                            <button onclick="openAssignTaskModal('${c.client_id}', '${(c.client_name||'').replace(/'/g,"\\'")}')"
+                                style="background:rgba(196,125,10,0.15); color:var(--gold); border:1px solid rgba(196,125,10,0.3); border-radius:6px; padding:4px 10px; font-size:11px; font-weight:700; cursor:pointer;">
+                                + Assign Task
+                            </button>
+                        </td>
+                    </tr>
+                `).join('');
+            } catch(e) {
+                console.error('Failed to load outstanding panel', e);
+            }
+        }
+
+        async function populateManagerFeedRepFilter() {
+            try {
+                const res = await fetch('/api/crm/pro/team/assignable', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const reps = await res.json();
+                const select = document.getElementById('feedRepFilter');
+                if (!select) return;
+                // Clear existing options except "All Reps"
+                select.innerHTML = '<option value="">All Reps</option>';
+                reps.forEach(r => {
+                    const opt = document.createElement('option');
+                    opt.value = r.id;
+                    opt.textContent = r.full_name;
+                    select.appendChild(opt);
+                });
+            } catch(e) { console.error('Failed to load reps for feed filter', e); }
+        }
+
+        // ============================================================
+        // SECTION 10c: TASKS PANEL
+        // ============================================================
+        async function loadMyTasks() {
+            try {
+                const res = await fetch('/api/crm/pro/tasks/mine', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const tasks = await res.json();
+                const container = document.getElementById('myTasksContainer');
+                if (!container) return;
+                const badge = document.getElementById('tasksBadge');
+                if (badge) {
+                    if (tasks.length > 0) {
+                        badge.textContent = tasks.length;
+                        badge.style.display = 'inline-block';
+                    } else {
+                        badge.style.display = 'none';
+                    }
+                }
+                if (!tasks.length) {
+                    if (badge) {
+                        badge.style.display = 'none';
+                    }
+                    container.style.display = 'block';
+                    container.innerHTML = `
+                        <div class="card" style="margin-bottom:24px; border-left:3px solid var(--gold); padding:18px; background:#111;">
+                            <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                                <h3 style="font-weight:800; font-size:15px; color:#fff;">📋 My Tasks (0)</h3>
+                            </div>
+                            <div style="color:#aaa; font-size:13px; line-height:1.6;">You have no pending tasks at the moment. Tasks assigned to you will appear here and in your notification bell.</div>
+                        </div>`;
+                    return;
+                }
+                container.style.display = 'block';
+                container.innerHTML = `
+                    <div class="card" style="margin-bottom:24px; border-left:3px solid var(--gold);">
+                        <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:14px;">
+                            <h3 style="font-weight:800; font-size:15px; color:#fff;">📋 My Tasks (${tasks.length})</h3>
+                        </div>
+                        ${tasks.map(t => {
+                            const client = t.clients || {};
+                            const manager = t.admins || {};
+                            const isOverdue = t.due_date && new Date(t.due_date) < new Date();
+                            const safeCName = (client.full_name || '').replace(/'/g, "\\'");
+                            return `<div style="background:#111; border-radius:8px; padding:14px; margin-bottom:10px; border:1px solid ${isOverdue ? '#ef4444' : '#333'};">
+                                <div style="display:flex; justify-content:space-between; align-items:start;">
+                                    <div style="flex:1;">
+                                        <div style="font-weight:700; color:#fff; font-size:13px;">${t.title}</div>
+                                        ${t.notes ? `<div style="font-size:12px; color:#888; margin-top:4px;">${t.notes}</div>` : ''}
+                                        <div style="font-size:11px; color:#666; margin-top:6px;">
+                                            ${client.full_name ? `Client: <strong style="color:#aaa;">${client.full_name}</strong> · ` : ''}
+                                            ${t.due_date ? `Due: <strong style="color:${isOverdue ? '#ef4444' : '#aaa'};">${new Date(t.due_date).toLocaleDateString('en-NG', {day:'numeric', month:'short'})}</strong> · ` : ''}
+                                            From: <strong style="color:#aaa;">${manager.full_name || 'Manager'}</strong>
+                                        </div>
+                                    </div>
+                                    <div style="display:flex; gap:6px; margin-left:12px;">
+                                        ${client.phone ? `
+                                        <a href="tel:${client.phone}"
+                                           onclick="handleCallInitiated('${client.id}', '${safeCName}', '${client.phone}')"
+                                           style="color:#22c55e; background:rgba(34,197,94,0.1); width:30px; height:30px; border-radius:6px; display:flex; align-items:center; justify-content:center; text-decoration:none;" title="Call">
+                                            <i class="fas fa-phone" style="font-size:11px;"></i>
+                                        </a>` : ''}
+                                        <button onclick="completeTask('${t.id}')"
+                                            style="color:#22c55e; background:rgba(34,197,94,0.1); border:1px solid #22c55e44; width:30px; height:30px; border-radius:6px; cursor:pointer;" title="Mark Done">
+                                            <i class="fas fa-check" style="font-size:11px;"></i>
+                                        </button>
+                                        <button onclick="dismissTask('${t.id}')"
+                                            style="color:#6b7280; background:rgba(107,114,128,0.1); border:1px solid #33333344; width:30px; height:30px; border-radius:6px; cursor:pointer;" title="Dismiss">
+                                            <i class="fas fa-times" style="font-size:11px;"></i>
+                                        </button>
+                                    </div>
+                                </div>
+                            </div>`;
+                        }).join('')}
+                    </div>`;
+            } catch(e) {
+                console.error('Failed to load tasks', e);
+            }
+        }
+
+        async function completeTask(taskId) {
+            await fetch(`/api/crm/pro/tasks/${taskId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ status: 'done' })
+            });
+            showToast('Task marked as done ✓', 'success');
+            loadMyTasks();
+        }
+
+        async function dismissTask(taskId) {
+            await fetch(`/api/crm/pro/tasks/${taskId}`, {
+                method: 'PATCH',
+                headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                body: JSON.stringify({ status: 'dismissed' })
+            });
+            loadMyTasks();
+        }
+
+        // ============================================================
+        // SECTION 10c (cont.): TASK ASSIGNMENT MODAL — Manager UI
+        // ============================================================
+        async function openAssignTaskModal(clientId, clientName) {
+            document.getElementById('assignTaskClientId').value = clientId || '';
+            document.getElementById('assignTaskClientLabel').textContent = clientName ? `For: ${clientName}` : 'General Task';
+            document.getElementById('assignTaskTitle').value = '';
+            document.getElementById('assignTaskNotes').value = '';
+            document.getElementById('assignTaskDueDate').value = '';
+
+            // Populate rep dropdown
+            const repSelect = document.getElementById('assignTaskRep');
+            repSelect.innerHTML = '<option value="">Loading reps...</option>';
+            try {
+                const res = await fetch('/api/crm/pro/team/assignable', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const reps = await res.json();
+                repSelect.innerHTML = '<option value="">Select a rep...</option>';
+                reps.forEach(r => {
+                    const opt = document.createElement('option');
+                    opt.value = r.id;
+                    opt.textContent = r.full_name;
+                    repSelect.appendChild(opt);
+                });
+            } catch(e) {
+                repSelect.innerHTML = '<option value="">Failed to load reps</option>';
+            }
+
+            document.getElementById('assignTaskModal').style.display = 'flex';
+        }
+
+        async function submitAssignTask() {
+            const title = document.getElementById('assignTaskTitle').value.trim();
+            const assignedTo = document.getElementById('assignTaskRep').value;
+            const clientId = document.getElementById('assignTaskClientId').value;
+            const notes = document.getElementById('assignTaskNotes').value.trim();
+            const dueDate = document.getElementById('assignTaskDueDate').value;
+
+            if (!title) { showToast('Task title is required', 'error'); return; }
+            if (!assignedTo) { showToast('Please select a rep to assign to', 'error'); return; }
+
+            try {
+                const res = await fetch('/api/crm/pro/tasks', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({
+                        title,
+                        assigned_to: assignedTo,
+                        client_id: clientId || null,
+                        notes,
+                        due_date: dueDate || null
+                    })
+                });
+                if (res.ok) {
+                    document.getElementById('assignTaskModal').style.display = 'none';
+                    showToast('Task assigned successfully ✓', 'success');
+                } else {
+                    const err = await res.json();
+                    showToast(err.detail || 'Failed to assign task', 'error');
+                }
+            } catch(e) {
+                showToast('Network error — task not assigned', 'error');
+            }
+        }
+
+        // ============================================================
+        // SECTION 2c: ROLE MANAGER (in Team view)
+        // ============================================================
+        async function loadRoleManager() {
+            const body = document.getElementById('roleManagerBody');
+            if (!body) return;
+            body.innerHTML = '<div style="text-align:center; padding:20px; color:#444;">Loading...</div>';
+            try {
+                const res = await fetch('/api/crm/pro/team/assignable', {
+                    headers: { 'Authorization': `Bearer ${token}` }
+                });
+                const reps = await res.json();
+                if (!reps.length) {
+                    body.innerHTML = '<div style="text-align:center; padding:20px; color:#444;">No team members found</div>';
+                    return;
+                }
+                body.innerHTML = `<table style="width:100%; font-size:13px; border-collapse:collapse;">
+                    <thead><tr style="border-bottom:1px solid #333;">
+                        <th style="text-align:left; padding:10px; color:#888; font-size:11px; text-transform:uppercase;">Name</th>
+                        <th style="text-align:left; padding:10px; color:#888; font-size:11px; text-transform:uppercase;">Email</th>
+                        <th style="text-align:left; padding:10px; color:#888; font-size:11px; text-transform:uppercase;">Role</th>
+                        <th style="text-align:left; padding:10px; color:#888; font-size:11px; text-transform:uppercase;">Action</th>
+                    </tr></thead>
+                    <tbody>${reps.map(r => `
+                        <tr style="border-bottom:1px solid #1a1a1a;" id="reprow-${r.id}">
+                            <td style="padding:12px; color:#fff; font-weight:600;">${r.full_name}</td>
+                            <td style="padding:12px; color:#aaa;">${r.email}</td>
+                            <td style="padding:12px;">
+                                <select id="roleSelect-${r.id}" style="background:#111; border:1px solid #333; border-radius:6px; padding:6px 10px; color:#fff; font-size:12px; outline:none;">
+                                    <option value="sales">sales</option>
+                                    <option value="sales_manager">sales_manager</option>
+                                    <option value="staff">staff</option>
+                                    <option value="customer_support">customer_support</option>
+                                    <option value="marketing">marketing</option>
+                                </select>
+                            </td>
+                            <td style="padding:12px;">
+                                <button onclick="saveRepRole('${r.id}')" style="background:var(--gold); border:none; border-radius:6px; padding:6px 14px; color:#000; font-weight:700; font-size:12px; cursor:pointer;">Save</button>
+                            </td>
+                        </tr>`).join('')}
+                    </tbody>
+                </table>`;
+            } catch(e) {
+                body.innerHTML = '<div style="text-align:center; padding:20px; color:#ef4444;">Failed to load team members</div>';
+            }
+        }
+
+        async function saveRepRole(adminId) {
+            const select = document.getElementById(`roleSelect-${adminId}`);
+            if (!select) return;
+            const newRole = select.value;
+            try {
+                const res = await fetch(`/api/crm/pro/team/${adminId}/role`, {
+                    method: 'PATCH',
+                    headers: { 'Content-Type': 'application/json', 'Authorization': `Bearer ${token}` },
+                    body: JSON.stringify({ role: newRole })
+                });
+                if (res.ok) {
+                    showToast(`Role updated to ${newRole} ✓`, 'success');
+                } else {
+                    const err = await res.json();
+                    showToast(err.detail || 'Failed to update role', 'error');
+                }
+            } catch(e) {
+                showToast('Network error', 'error');
+            }
+        }
+
+        // ============================================================
+        // SWITCHVIEW EXTENSION — wire all new views
+        // ============================================================
+        const _origSwitchViewCRM = switchView;  // captures the already-once-overridden switchView
+        switchView = function(viewName) {
+            _origSwitchViewCRM(viewName);  // → calls first override → calls originalSwitchView
+            if (viewName === 'contacts-list') loadContactsList();
+            if (viewName === 'manager-feed') {
+                loadManagerFeed();
+                loadOutstandingPanel();
+                populateManagerFeedRepFilter();
+            }
+            if (viewName === 'leads') loadMyTasks();
+            if (viewName === 'team') {
+                // Show role manager only for admin/operations
+                try {
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    const roles = (payload.role || '').split(',').map(r => r.trim().toLowerCase());
+                    const canManageRoles = roles.some(r => ['admin', 'operations', 'super_admin'].includes(r));
+                    const roleSection = document.getElementById('roleManagerSection');
+                    if (roleSection) {
+                        roleSection.style.display = canManageRoles ? 'block' : 'none';
+                        if (canManageRoles) loadRoleManager();
+                    }
+                } catch(e) {}
+            }
+        };
+
+        // Check pending call on every DOMContentLoaded is already handled above.
+        // Also load tasks on initial leads view load.
+        document.addEventListener('DOMContentLoaded', () => {
+            // Inject myTasksContainer before the leads view content if not already present
+            const leadsSection = document.getElementById('leads');
+            if (leadsSection && !document.getElementById('myTasksContainer')) {
+                const taskDiv = document.createElement('div');
+                taskDiv.id = 'myTasksContainer';
+                taskDiv.style.display = 'none';
+                leadsSection.insertBefore(taskDiv, leadsSection.firstChild);
+            }
+            loadMyTasks();
+            // Show/hide manager-feed nav based on role
+            try {
+                if (token) {
+                    const payload = JSON.parse(atob(token.split('.')[1]));
+                    const roles = (payload.role || '').split(',').map(r => r.trim().toLowerCase());
+                    const isManager = roles.some(r => ['admin', 'operations', 'super_admin', 'sales_manager'].includes(r));
+                    const feedNav = document.getElementById('nav-manager-feed');
+                    if (feedNav) feedNav.style.display = isManager ? 'flex' : 'none';
+                }
+            } catch(e) {}
+        });
     </script>
 
     <!-- ADD PROPERTY MODAL -->
@@ -3630,6 +4531,69 @@
                 <button class="btn btn-primary w-full py-4" onclick="submitInvitation()">
                     <i class="fas fa-paper-plane mr-2"></i> Send Invitation
                 </button>
+            </div>
+        </div>
+    </div>
+    <!-- TASK ASSIGNMENT MODAL (Section 10c — Manager UI) -->
+    <div id="assignTaskModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:2100; align-items:center; justify-content:center;">
+        <div style="background:#1A1A1A; width:460px; border-radius:16px; border:1px solid #333; overflow:hidden;">
+            <div style="padding:20px 24px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="font-size:11px; color:#888; text-transform:uppercase; font-weight:700; letter-spacing:1px;">Assign Task</div>
+                    <div id="assignTaskClientLabel" style="font-size:15px; font-weight:800; color:#fff; margin-top:4px;"></div>
+                </div>
+                <button onclick="document.getElementById('assignTaskModal').style.display='none'" style="background:none; border:none; color:#666; cursor:pointer; font-size:18px;">✕</button>
+            </div>
+            <div style="padding:24px;">
+                <input type="hidden" id="assignTaskClientId">
+                <div style="margin-bottom:16px;">
+                    <label style="font-size:11px; color:#888; text-transform:uppercase; font-weight:700; display:block; margin-bottom:8px;">Task Title *</label>
+                    <input type="text" id="assignTaskTitle" placeholder="e.g. Follow up on payment" style="width:100%; background:#111; border:1px solid #333; border-radius:8px; padding:10px 14px; color:#fff; outline:none; font-size:13px; box-sizing:border-box;">
+                </div>
+                <div style="margin-bottom:16px;">
+                    <label style="font-size:11px; color:#888; text-transform:uppercase; font-weight:700; display:block; margin-bottom:8px;">Assign To *</label>
+                    <select id="assignTaskRep" style="width:100%; background:#111; border:1px solid #333; border-radius:8px; padding:10px; color:#fff; outline:none; font-size:13px;">
+                        <option value="">Select a rep...</option>
+                    </select>
+                </div>
+                <div style="margin-bottom:16px;">
+                    <label style="font-size:11px; color:#888; text-transform:uppercase; font-weight:700; display:block; margin-bottom:8px;">Notes (optional)</label>
+                    <textarea id="assignTaskNotes" placeholder="Additional context for the rep..." style="width:100%; height:70px; background:#111; border:1px solid #333; border-radius:8px; padding:12px; color:#fff; outline:none; resize:none; font-size:13px; box-sizing:border-box;"></textarea>
+                </div>
+                <div style="margin-bottom:20px;">
+                    <label style="font-size:11px; color:#888; text-transform:uppercase; font-weight:700; display:block; margin-bottom:8px;">Due Date (optional)</label>
+                    <input type="date" id="assignTaskDueDate" style="width:100%; background:#111; border:1px solid #333; border-radius:8px; padding:10px; color:#fff; outline:none; font-size:13px; box-sizing:border-box;">
+                </div>
+                <button onclick="submitAssignTask()" style="width:100%; padding:14px; background:var(--gold); border:none; border-radius:8px; color:#000; font-weight:800; cursor:pointer; font-size:14px;">Assign Task</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- CALL OUTCOME MODAL (Section 5c) -->
+    <div id="callOutcomeModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:2000; align-items:center; justify-content:center;">
+        <div style="background:#1A1A1A; width:420px; border-radius:16px; border:1px solid #333; overflow:hidden;">
+            <div style="padding:20px 24px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center;">
+                <div>
+                    <div style="font-size:11px; color:#888; text-transform:uppercase; font-weight:700;">Log Call Outcome</div>
+                    <div id="callOutcomeClientName" style="font-size:16px; font-weight:800; color:#fff; margin-top:4px;"></div>
+                </div>
+                <div style="font-size:11px; color:#666;" id="callOutcomeFromRefresh"></div>
+            </div>
+            <div style="padding:24px;">
+                <div style="font-size:11px; color:#888; text-transform:uppercase; font-weight:700; margin-bottom:12px;">How did the call go?</div>
+                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px;">
+                    <button onclick="selectOutcome('answered')" class="outcome-btn" data-outcome="answered" style="padding:12px; border-radius:8px; border:1px solid #333; background:#111; color:#22c55e; font-weight:700; cursor:pointer;">✅ Answered</button>
+                    <button onclick="selectOutcome('no_answer')" class="outcome-btn" data-outcome="no_answer" style="padding:12px; border-radius:8px; border:1px solid #333; background:#111; color:#ef4444; font-weight:700; cursor:pointer;">📵 No Answer</button>
+                    <button onclick="selectOutcome('callback')" class="outcome-btn" data-outcome="callback" style="padding:12px; border-radius:8px; border:1px solid #333; background:#111; color:#f59e0b; font-weight:700; cursor:pointer;">🔁 Callback</button>
+                    <button onclick="selectOutcome('not_interested')" class="outcome-btn" data-outcome="not_interested" style="padding:12px; border-radius:8px; border:1px solid #333; background:#111; color:#6b7280; font-weight:700; cursor:pointer;">❌ Not Interested</button>
+                </div>
+                <input type="hidden" id="selectedOutcome" value="">
+                <textarea id="callOutcomeNotes" placeholder="Add notes (optional)..." style="width:100%; height:80px; background:#111; border:1px solid #333; border-radius:8px; padding:12px; color:#fff; outline:none; resize:none; font-size:13px; margin-bottom:16px; box-sizing:border-box;"></textarea>
+                <div style="margin-bottom:16px;">
+                    <label style="font-size:11px; color:#888; text-transform:uppercase; font-weight:700; display:block; margin-bottom:8px;">Follow-up Date (optional)</label>
+                    <input type="date" id="callFollowUpDate" style="width:100%; background:#111; border:1px solid #333; border-radius:8px; padding:10px; color:#fff; outline:none; font-size:13px; box-sizing:border-box;">
+                </div>
+                <button onclick="submitCallOutcome()" style="width:100%; padding:14px; background:var(--gold); border:none; border-radius:8px; color:#000; font-weight:800; cursor:pointer; font-size:14px;">Save Outcome</button>
             </div>
         </div>
     </div>

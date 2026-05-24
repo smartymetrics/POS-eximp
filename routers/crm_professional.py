@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, Query
 from database import get_db, db_execute
 from routers.auth import verify_token, require_roles
+from routers.notifications import create_notification
 from datetime import datetime, timedelta
 import json
 from typing import Optional
@@ -85,12 +86,12 @@ async def score_all_leads(current_admin=Depends(verify_token)):
     """
     db = get_db()
     
-    # 1. Fetch only actual Leads (prospects) for scoring
-    query = db.table("clients").select("id, full_name, email, assigned_rep_id").eq("client_type", "lead")
+    # 1. Fetch clients for scoring without filtering by outdated client_type
+    query = db.table("clients").select("id, full_name, email, assigned_rep_id")
     
     # ROLE-BASED FILTERING ✅
     roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
-    is_privileged = any(r in ["admin", "operations", "super_admin", "customer_support"] for r in roles)
+    is_privileged = any(r in ["admin", "operations", "super_admin", "customer_support", "sales_manager"] for r in roles)
     is_restricted = any(r in ["sales", "staff"] for r in roles) and not is_privileged
     
     admin_id = current_admin.get("sub")
@@ -645,7 +646,7 @@ async def get_lead_details(
     
     # ROLE-BASED ACCESS CHECK ✅
     roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
-    is_privileged = any(r in ["admin", "operations", "super_admin", "customer_support"] for r in roles)
+    is_privileged = any(r in ["admin", "operations", "super_admin", "customer_support", "sales_manager"] for r in roles)
     is_restricted = any(r in ["sales", "staff"] for r in roles) and not is_privileged
     
     admin_id = current_admin.get("sub")
@@ -779,7 +780,7 @@ async def get_client_ltv_analysis(current_admin=Depends(verify_token)):
     
     # ROLE-BASED FILTERING ✅
     roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
-    is_privileged = any(r in ["admin", "operations", "super_admin", "customer_support"] for r in roles)
+    is_privileged = any(r in ["admin", "operations", "super_admin", "customer_support", "sales_manager"] for r in roles)
     is_restricted = any(r in ["sales", "staff"] for r in roles) and not is_privileged
     
     admin_id = current_admin.get("sub")
@@ -873,7 +874,8 @@ async def list_documents_pipeline(
 async def get_team_performance(current_admin=Depends(verify_token)):
     """Comprehensive team leaderboard"""
     # ROLE-BASED ACCESS RESTRICTION ✅
-    is_privileged = any(r in ["admin", "operations", "super_admin", "customer_support"] for r in roles)
+    roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
+    is_privileged = any(r in ["admin", "operations", "super_admin", "customer_support", "sales_manager"] for r in roles)
     
     if not is_privileged:
         # Reps shouldn't see full team intelligence
@@ -882,33 +884,82 @@ async def get_team_performance(current_admin=Depends(verify_token)):
     db = get_db()
     invoices = (await db_execute(lambda: db.table("invoices").select("*").neq("status", "voided").execute())).data or []
     commissions = (await db_execute(lambda: db.table("commission_earnings").select("*").eq("is_voided", False).execute())).data or []
-    
+
+    # Count assigned leads per admin (by admin id)
+    clients = (await db_execute(lambda: db.table("clients").select("id, assigned_rep_id").execute())).data or []
+    assigned_counts = {}
+    admin_ids = list({c.get("assigned_rep_id") for c in clients if c.get("assigned_rep_id")})
+    admins = []
+    id_to_name = {}
+    if admin_ids:
+        admins = (await db_execute(lambda: db.table("admins").select("id, full_name").in_("id", admin_ids).execute())).data or []
+        id_to_name = {a["id"]: a["full_name"] for a in admins}
+        for c in clients:
+            aid = c.get("assigned_rep_id")
+            if not aid: continue
+            assigned_counts[aid] = assigned_counts.get(aid, 0) + 1
+
+    # Aggregate invoice stats keyed by rep id when available; fallback to name-keyed string
     team_stats = {}
+    paid_clients_by_rep = {}
     for inv in invoices:
-        rep = inv.get("sales_rep_name") or "Unassigned"
-        if rep not in team_stats:
-            team_stats[rep] = {"total_deals": 0, "total_revenue": 0, "total_collected": 0, "closed_deals": 0, "actual_commissions": 0}
-        
-        team_stats[rep]["total_deals"] += 1
-        team_stats[rep]["total_revenue"] += float(inv["amount"])
-        team_stats[rep]["total_collected"] += float(inv["amount_paid"])
-        if inv["status"] == "paid": team_stats[rep]["closed_deals"] += 1
-    
+        rep_id = inv.get("sales_rep_id")
+        rep_name_fallback = inv.get("sales_rep_name") or "Unassigned"
+        # choose a stable key
+        key = rep_id if rep_id else f"name:{rep_name_fallback}"
+
+        if key not in team_stats:
+            team_stats[key] = {"total_deals": 0, "total_revenue": 0.0, "total_collected": 0.0, "actual_commissions": 0.0}
+            paid_clients_by_rep[key] = set()
+
+        team_stats[key]["total_deals"] += 1
+        team_stats[key]["total_revenue"] += float(inv.get("amount") or 0)
+        team_stats[key]["total_collected"] += float(inv.get("amount_paid") or 0)
+
+        # Count unique clients that paid (closed) — this avoids counting multiple invoices for same client
+        if inv.get("status") == "paid" and inv.get("client_id"):
+            paid_clients_by_rep[key].add(inv.get("client_id"))
+
+    # Aggregate commissions by rep id if available, else by name fallback key
     for comm in commissions:
-        rep = comm.get("sales_rep_name") or "Unassigned"
-        if rep in team_stats:
-            team_stats[rep]["actual_commissions"] += float(comm.get("commission_amount", 0))
-    
+        rep_id = comm.get("sales_rep_id")
+        rep_name_fallback = comm.get("sales_rep_name") or "Unassigned"
+        key = rep_id if rep_id else f"name:{rep_name_fallback}"
+        if key not in team_stats:
+            team_stats[key] = {"total_deals": 0, "total_revenue": 0.0, "total_collected": 0.0, "actual_commissions": 0.0}
+            paid_clients_by_rep[key] = set()
+        team_stats[key]["actual_commissions"] += float(comm.get("commission_amount", 0) or 0)
+
+    # Build leaderboard entries
     leaderboard = []
-    for rep_name, stats in team_stats.items():
+    for key, stats in team_stats.items():
+        # Determine display name and assigned leads count
+        if isinstance(key, str) and key.startswith("name:"):
+            display_name = key.split("name:", 1)[1]
+            assigned = 0
+        else:
+            display_name = id_to_name.get(key, "Unknown")
+            assigned = assigned_counts.get(key, 0)
+
+        closed_clients_count = len(paid_clients_by_rep.get(key, set()))
+
+        conversion_rate = 0
+        try:
+            conversion_rate = round((closed_clients_count / assigned) * 100, 1) if assigned else 0
+        except Exception:
+            conversion_rate = 0
+
         leaderboard.append({
-            "sales_rep": rep_name,
-            "total_deals": stats["total_deals"],
-            "closed_deals": stats["closed_deals"],
-            "total_revenue": round(stats["total_revenue"]),
-            "total_collected": round(stats["total_collected"]),
-            "actual_commissions_earned": round(stats["actual_commissions"])
+            "sales_rep": display_name,
+            "total_deals": stats.get("total_deals", 0),
+            "assigned_leads": assigned,
+            "closed_deals": closed_clients_count,
+            "conversion_rate": conversion_rate,
+            "total_revenue": round(stats.get("total_revenue", 0)),
+            "total_collected": round(stats.get("total_collected", 0)),
+            "actual_commissions_earned": round(stats.get("actual_commissions", 0))
         })
+
     leaderboard.sort(key=lambda x: x["total_revenue"], reverse=True)
     return leaderboard
 
@@ -951,8 +1002,9 @@ async def generate_report(request: Request, current_admin=Depends(verify_token))
     if report_type == "sales":
         query = db.table("invoices").select("*").neq("status", "voided")
         
+        roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
         # ROLE-BASED FILTERING ✅
-        is_privileged = any(r in ["admin", "operations", "super_admin", "customer_support"] for r in roles)
+        is_privileged = any(r in ["admin", "operations", "super_admin", "customer_support", "sales_manager"] for r in roles)
         is_restricted = any(r in ["sales", "staff"] for r in roles) and not is_privileged
         
         admin_id = current_admin.get("sub")
@@ -980,6 +1032,7 @@ async def generate_report(request: Request, current_admin=Depends(verify_token))
 async def get_activity_logs(
     rep_id: Optional[str] = Query(None),
     search_text: Optional[str] = Query(None),
+    date_range: Optional[str] = Query(None),  # today | week | month (Section 12)
     current_admin=Depends(verify_token)
 ):
     db = get_db()
@@ -1001,6 +1054,20 @@ async def get_activity_logs(
         
     if search_text:
         query = query.ilike("description", f"%{search_text}%")
+    
+    # Section 12: date_range filter
+    if date_range:
+        now = datetime.utcnow()
+        if date_range == "today":
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif date_range == "week":
+            start = now - timedelta(days=7)
+        elif date_range == "month":
+            start = now - timedelta(days=30)
+        else:
+            start = None
+        if start:
+            query = query.gte("created_at", start.isoformat())
         
     res = await db_execute(lambda: query.execute())
     return res.data or []
@@ -1045,7 +1112,7 @@ async def get_assignable_team(current_admin=Depends(verify_token)):
     assignable = []
     for admin in res.data:
         roles = [r.strip().lower() for r in (admin.get("role") or "").split(",")]
-        if any(r in ["sales", "operations", "customer_support"] for r in roles):
+        if any(r in ["sales", "sales_manager", "operations", "customer_support"] for r in roles):
             assignable.append({"id": admin["id"], "full_name": admin["full_name"], "email": admin["email"]})
     return assignable
 
@@ -1066,3 +1133,237 @@ async def assign_client(client_id: str, request: Request, background_tasks: Back
     }).execute()))
     
     return {"message": "Assigned successfully"}
+
+
+# ============================================================
+# NEW: ROLE MANAGEMENT (Section 2b)
+# ============================================================
+
+@router.patch("/team/{admin_id}/role")
+async def update_team_member_role(
+    admin_id: str,
+    request: Request,
+    current_admin=Depends(verify_token)
+):
+    """
+    Allows admin/operations/super_admin to update a team member's role.
+    Supports promoting sales → sales_manager and demoting back.
+    """
+    roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
+    if not any(r in ["admin", "operations", "super_admin"] for r in roles):
+        raise HTTPException(status_code=403, detail="Only admin or operations can change roles")
+    
+    db = get_db()
+    body = await request.json()
+    new_role = body.get("role", "").strip().lower()
+    
+    allowed_roles = ["sales", "sales_manager", "staff", "customer_support", "marketing"]
+    if new_role not in allowed_roles:
+        raise HTTPException(status_code=400, detail=f"Invalid role. Allowed: {allowed_roles}")
+    
+    # Prevent self-role-change
+    if admin_id == current_admin.get("sub"):
+        raise HTTPException(status_code=400, detail="Cannot change your own role")
+    
+    await db_execute(lambda: db.table("admins").update({
+        "role": new_role,
+        "updated_at": datetime.utcnow().isoformat()
+    }).eq("id", admin_id).execute())
+    
+    # Log the role change
+    await db_execute(lambda: db.table("activity_log").insert({
+        "event_type": "role_changed",
+        "description": f"Role updated to {new_role}",
+        "performed_by": current_admin["sub"],
+        "metadata": {"target_admin_id": admin_id, "new_role": new_role}
+    }).execute())
+    
+    return {"message": f"Role updated to {new_role}"}
+
+
+# ============================================================
+# NEW: MANAGER FEED (Section 9c)
+# ============================================================
+
+@router.get("/manager/feed")
+async def get_manager_feed(
+    rep_id: Optional[str] = Query(None),
+    event_type: Optional[str] = Query(None),
+    date_range: Optional[str] = Query(None),  # today | week | month
+    offset: int = Query(0),
+    limit: int = Query(50),
+    current_admin=Depends(verify_token)
+):
+    """
+    Manager activity feed. Only accessible by admin, operations, sales_manager.
+    Returns all rep activity with rep name, client name, event type, outcome.
+    """
+    roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
+    if not any(r in ["admin", "operations", "super_admin", "sales_manager"] for r in roles):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    db = get_db()
+    
+    query = db.table("activity_log")\
+        .select("id, event_type, description, created_at, metadata, performed_by, client_id, clients(id, full_name, pipeline_stage), admins!activity_log_performed_by_fkey(id, full_name)")\
+        .order("created_at", desc=True)\
+        .range(offset, offset + limit - 1)
+    
+    if rep_id:
+        query = query.eq("performed_by", rep_id)
+    
+    if event_type:
+        query = query.eq("event_type", event_type)
+    
+    if date_range:
+        now = datetime.utcnow()
+        if date_range == "today":
+            start = now.replace(hour=0, minute=0, second=0, microsecond=0)
+        elif date_range == "week":
+            start = now - timedelta(days=7)
+        elif date_range == "month":
+            start = now - timedelta(days=30)
+        else:
+            start = None
+        if start:
+            query = query.gte("created_at", start.isoformat())
+    
+    res = await db_execute(lambda: query.execute())
+    return res.data or []
+
+
+@router.get("/manager/outstanding")
+async def get_outstanding_payments(current_admin=Depends(verify_token)):
+    """
+    Returns all clients with outstanding balances, with assigned rep info.
+    Only for admin, operations, sales_manager.
+    """
+    roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
+    if not any(r in ["admin", "operations", "super_admin", "sales_manager"] for r in roles):
+        raise HTTPException(status_code=403, detail="Access denied")
+    
+    db = get_db()
+    
+    invoices = (await db_execute(lambda: db.table("invoices")\
+        .select("client_id, amount, amount_paid, clients(id, full_name, pipeline_stage, last_contacted_at, assigned_rep_id)")\
+        .neq("status", "voided")\
+        .execute())).data or []
+    
+    client_map = {}
+    rep_ids = set()
+    for inv in invoices:
+        client = inv.get("clients") or {}
+        cid = inv.get("client_id")
+        if not cid:
+            continue
+        if cid not in client_map:
+            assigned_rep_id = client.get("assigned_rep_id")
+            client_map[cid] = {
+                "client_id": cid,
+                "client_name": client.get("full_name"),
+                "pipeline_stage": client.get("pipeline_stage"),
+                "last_contacted_at": client.get("last_contacted_at"),
+                "assigned_rep_id": assigned_rep_id,
+                "assigned_rep_name": "Unassigned",
+                "total_amount": 0,
+                "total_paid": 0,
+            }
+            if assigned_rep_id:
+                rep_ids.add(assigned_rep_id)
+        client_map[cid]["total_amount"] += float(inv.get("amount") or 0)
+        client_map[cid]["total_paid"] += float(inv.get("amount_paid") or 0)
+    
+    rep_name_map = {}
+    if rep_ids:
+        reps = (await db_execute(lambda: db.table("admins")\
+            .select("id, full_name")\
+            .in_("id", list(rep_ids))\
+            .execute())).data or []
+        rep_name_map = {r["id"]: r["full_name"] for r in reps}
+    
+    outstanding = []
+    for c in client_map.values():
+        balance = c["total_amount"] - c["total_paid"]
+        if balance > 0:
+            c["outstanding"] = balance
+            c["assigned_rep_name"] = rep_name_map.get(c["assigned_rep_id"], "Unassigned")
+            del c["assigned_rep_id"]
+            outstanding.append(c)
+    
+    outstanding.sort(key=lambda x: x["outstanding"], reverse=True)
+    return outstanding
+
+
+# ============================================================
+# NEW: TASK ASSIGNMENT (Section 10b)
+# ============================================================
+
+@router.post("/tasks")
+async def create_task(request: Request, current_admin=Depends(verify_token)):
+    """Manager assigns a task to a rep"""
+    roles = [r.strip().lower() for r in (current_admin.get("role") or "").split(",")]
+    if not any(r in ["admin", "operations", "super_admin", "sales_manager"] for r in roles):
+        raise HTTPException(status_code=403, detail="Only managers can assign tasks")
+    
+    db = get_db()
+    body = await request.json()
+    
+    task = {
+        "assigned_to": body.get("assigned_to"),
+        "assigned_by": current_admin["sub"],
+        "client_id": body.get("client_id"),
+        "title": body.get("title"),
+        "notes": body.get("notes", ""),
+        "due_date": body.get("due_date"),
+        "status": "pending"
+    }
+    
+    if not task["assigned_to"] or not task["title"]:
+        raise HTTPException(status_code=400, detail="assigned_to and title are required")
+    
+    res = await db_execute(lambda: db.table("crm_tasks").insert(task).execute())
+    task_data = res.data[0] if res.data else {}
+
+    if task_data and task_data.get("id"):
+        await create_notification(
+            task_data["assigned_to"],
+            "New Task Assigned",
+            f"You have been assigned a new CRM task: {task_data.get('title')}",
+            "task_assigned",
+            task_data["id"]
+        )
+
+    return {"message": "Task created", "task": task_data}
+
+
+@router.get("/tasks/mine")
+async def get_my_tasks(current_admin=Depends(verify_token)):
+    """Rep sees their own pending tasks"""
+    db = get_db()
+    admin_id = current_admin.get("sub")
+    
+    res = await db_execute(lambda: db.table("crm_tasks")\
+        .select("id, title, notes, due_date, status, created_at, clients(id, full_name, phone, pipeline_stage), admins!crm_tasks_assigned_by_fkey(full_name)")\
+        .eq("assigned_to", admin_id)\
+        .eq("status", "pending")\
+        .order("due_date", desc=False)\
+        .execute())
+    return res.data or []
+
+
+@router.patch("/tasks/{task_id}")
+async def update_task_status(task_id: str, request: Request, current_admin=Depends(verify_token)):
+    """Rep marks task as done or dismissed"""
+    db = get_db()
+    body = await request.json()
+    new_status = body.get("status")
+    
+    if new_status not in ["done", "dismissed"]:
+        raise HTTPException(status_code=400, detail="Status must be done or dismissed")
+    
+    await db_execute(lambda: db.table("crm_tasks").update({
+        "status": new_status,
+        "updated_at": datetime.utcnow().isoformat()
+    }).eq("id", task_id).execute())
+    
+    return {"message": "Task updated"}
