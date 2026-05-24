@@ -909,15 +909,20 @@ async def get_team_performance(current_admin=Depends(verify_token)):
         key = rep_id if rep_id else f"name:{rep_name_fallback}"
 
         if key not in team_stats:
-            team_stats[key] = {"total_deals": 0, "total_revenue": 0.0, "total_collected": 0.0, "actual_commissions": 0.0}
+            team_stats[key] = {"total_deals": 0, "total_revenue": 0.0, "total_collected": 0.0, "actual_commissions": 0.0, "display_name": rep_name_fallback}
             paid_clients_by_rep[key] = set()
 
         team_stats[key]["total_deals"] += 1
         team_stats[key]["total_revenue"] += float(inv.get("amount") or 0)
         team_stats[key]["total_collected"] += float(inv.get("amount_paid") or 0)
 
-        # Count unique clients that paid (closed) — this avoids counting multiple invoices for same client
-        if inv.get("status") == "paid" and inv.get("client_id"):
+        # Count unique clients that paid (closed) — include partial payments
+        try:
+            amount_paid = float(inv.get("amount_paid") or 0)
+        except Exception:
+            amount_paid = 0.0
+
+        if amount_paid > 0 and inv.get("client_id"):
             paid_clients_by_rep[key].add(inv.get("client_id"))
 
     # Aggregate commissions by rep id if available, else by name fallback key
@@ -926,7 +931,7 @@ async def get_team_performance(current_admin=Depends(verify_token)):
         rep_name_fallback = comm.get("sales_rep_name") or "Unassigned"
         key = rep_id if rep_id else f"name:{rep_name_fallback}"
         if key not in team_stats:
-            team_stats[key] = {"total_deals": 0, "total_revenue": 0.0, "total_collected": 0.0, "actual_commissions": 0.0}
+            team_stats[key] = {"total_deals": 0, "total_revenue": 0.0, "total_collected": 0.0, "actual_commissions": 0.0, "display_name": rep_name_fallback}
             paid_clients_by_rep[key] = set()
         team_stats[key]["actual_commissions"] += float(comm.get("commission_amount", 0) or 0)
 
@@ -936,10 +941,22 @@ async def get_team_performance(current_admin=Depends(verify_token)):
         # Determine display name and assigned leads count
         if isinstance(key, str) and key.startswith("name:"):
             display_name = key.split("name:", 1)[1]
+            # Try to compute assigned leads by matching admin full_name -> clients.assigned_rep_id
             assigned = 0
+            try:
+                assigned = sum(1 for c in clients if id_to_name.get(c.get("assigned_rep_id")) == display_name)
+            except Exception:
+                assigned = 0
         else:
-            display_name = id_to_name.get(key, "Unknown")
+            # Prefer admin table lookup, fall back to stored invoice-name when admin record missing
+            display_name = id_to_name.get(key) or stats.get("display_name") or "Unknown"
             assigned = assigned_counts.get(key, 0)
+            # Fallback: if assigned is zero try matching by admin full_name in clients data
+            if not assigned and display_name:
+                try:
+                    assigned = sum(1 for c in clients if id_to_name.get(c.get("assigned_rep_id")) == display_name)
+                except Exception:
+                    assigned = assigned_counts.get(key, 0)
 
         closed_clients_count = len(paid_clients_by_rep.get(key, set()))
 
