@@ -2,6 +2,7 @@ import math
 import os
 import logging
 import uuid
+import calendar
 from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
 from typing import List, Optional
 from pydantic import BaseModel
@@ -62,6 +63,267 @@ async def notify_hr_admins(title: str, message: str, notification_type: str = "h
         print(f"HR NOTIFICATION ERROR: {e}")
 
 
+async def _load_kpi_template_metadata(template_id: Optional[str]):
+    if not template_id:
+        return {}
+    db = get_db()
+    res = await db_execute(lambda: db.table("kpi_templates").select("measurement_source, default_unit").eq("id", template_id).execute())
+    return res.data[0] if res.data else {}
+
+
+def _month_start(month_value: Optional[str]):
+    if not month_value:
+        return None
+    if isinstance(month_value, date):
+        month_date = month_value
+    else:
+        month_date = date.fromisoformat(str(month_value))
+    return date(month_date.year, month_date.month, 1).isoformat()
+
+
+def _bounds_for_goal(goal: dict):
+    period_start = None
+    period_end = None
+
+    if goal.get("period_start") and goal.get("period_end"):
+        period_start = goal["period_start"]
+        period_end = goal["period_end"]
+        if isinstance(period_start, str):
+            period_start = date.fromisoformat(period_start)
+        if isinstance(period_end, str):
+            period_end = date.fromisoformat(period_end)
+    else:
+        month_value = goal.get("month")
+        if isinstance(month_value, str):
+            month_value = date.fromisoformat(month_value)
+        elif month_value is None:
+            month_value = date.today()
+        period_start = date(month_value.year, month_value.month, 1)
+        period_end = (period_start + timedelta(days=32)).replace(day=1) - timedelta(days=1)
+
+    return {
+        "start": period_start.isoformat(),
+        "end": period_end.isoformat(),
+        "month": period_start.isoformat(),
+    }
+
+
+def _achievement_status_from_pct(achievement_pct: float) -> str:
+    if achievement_pct >= 100:
+        return "Achieved"
+    if achievement_pct >= 80:
+        return "On Track"
+    if achievement_pct >= 50:
+        return "Fair"
+    return "Behind"
+
+
+async def _count_marketing_leads_added(staff_id: Optional[str], period: dict) -> float:
+    if not staff_id:
+        return 0
+    db = get_db()
+    mc = await db_execute(lambda: db.table("marketing_contacts")
+        .select("id", count="exact")
+        .eq("created_by", staff_id)
+        .gte("created_at", period["start"])
+        .lte("created_at", period["end"])
+        .execute())
+    clients = await db_execute(lambda: db.table("clients")
+        .select("id", count="exact")
+        .eq("added_by", staff_id)
+        .gte("created_at", period["start"])
+        .lte("created_at", period["end"])
+        .execute())
+    return float((mc.count or 0) + (clients.count or 0))
+
+
+async def _sales_revenue(staff_id: Optional[str], period: dict) -> float:
+    if not staff_id:
+        return 0
+    db = get_db()
+    q = f"SELECT COALESCE(sum(amount), 0) as total FROM payments WHERE recorded_by = '{staff_id}' AND is_voided = false AND payment_date >= '{period['start']}' AND payment_date <= '{period['end']}'"
+    res = await db_execute(lambda: db.rpc("exec_sql", {"sql_body": q}).execute())
+    return float(res.data[0].get("total") or 0) if res.data else 0
+
+
+async def _sales_deals_closed(staff_id: Optional[str], period: dict) -> float:
+    if not staff_id:
+        return 0
+    db = get_db()
+    res = await db_execute(lambda: db.table("invoices")
+        .select("id", count="exact")
+        .eq("created_by", staff_id)
+        .eq("pipeline_stage", "closed")
+        .gte("invoice_date", period["start"])
+        .lte("invoice_date", period["end"])
+        .execute())
+    return float(res.count or 0)
+
+
+async def _sales_collection_rate(staff_id: Optional[str], period: dict) -> float:
+    if not staff_id:
+        return 0
+    db = get_db()
+    q = f"WITH invs AS (SELECT sum(amount) as total_inv FROM invoices WHERE created_by = '{staff_id}' AND invoice_date >= '{period['start']}' AND invoice_date <= '{period['end']}'), pays AS (SELECT sum(amount) as total_pay FROM payments WHERE recorded_by = '{staff_id}' AND is_voided = false AND payment_date >= '{period['start']}' AND payment_date <= '{period['end']}') SELECT COALESCE((COALESCE(pays.total_pay,0) * 100.0 / NULLIF(invs.total_inv,0)), 0) as rate FROM invs, pays"
+    res = await db_execute(lambda: db.rpc("exec_sql", {"sql_body": q}).execute())
+    return float(res.data[0].get("rate") or 0) if res.data else 0
+
+
+async def _marketing_lead_conversion(staff_id: Optional[str], period: dict) -> float:
+    if not staff_id:
+        return 0
+    db = get_db()
+    q = f"SELECT COALESCE((count(case when contact_type = 'client' then 1 end) * 100.0 / NULLIF(count(*), 0)), 0) as rate FROM marketing_contacts WHERE created_by = '{staff_id}' AND created_at >= '{period['start']}' AND created_at <= '{period['end']}'"
+    res = await db_execute(lambda: db.rpc("exec_sql", {"sql_body": q}).execute())
+    return float(res.data[0].get("rate") or 0) if res.data else 0
+
+
+async def _marketing_campaigns_sent(staff_id: Optional[str], period: dict) -> float:
+    if not staff_id:
+        return 0
+    db = get_db()
+    res = await db_execute(lambda: db.table("email_campaigns")
+        .select("id", count="exact")
+        .eq("created_by", staff_id)
+        .eq("status", "sent")
+        .gte("sent_at", period["start"])
+        .lte("sent_at", period["end"])
+        .execute())
+    return float(res.count or 0)
+
+
+async def _marketing_open_rate(staff_id: Optional[str], period: dict) -> float:
+    if not staff_id:
+        return 0
+    db = get_db()
+    q = f"SELECT COALESCE((count(case when opened_at is not null then 1 end) * 100.0 / NULLIF(count(*),0)), 0) as rate FROM campaign_recipients cr JOIN email_campaigns ec ON cr.campaign_id = ec.id WHERE ec.created_by = '{staff_id}' AND ec.sent_at >= '{period['start']}' AND ec.sent_at <= '{period['end']}'"
+    res = await db_execute(lambda: db.rpc("exec_sql", {"sql_body": q}).execute())
+    return float(res.data[0].get("rate") or 0) if res.data else 0
+
+
+async def _ops_appointments(staff_id: Optional[str], period: dict) -> float:
+    if not staff_id:
+        return 0
+    db = get_db()
+    res = await db_execute(lambda: db.table("appointments")
+        .select("id", count="exact")
+        .eq("created_by", staff_id)
+        .eq("status", "completed")
+        .gte("scheduled_at", period["start"])
+        .lte("scheduled_at", period["end"])
+        .execute())
+    return float(res.count or 0)
+
+
+async def _admin_ticket_esc(staff_id: Optional[str], period: dict) -> float:
+    if not staff_id:
+        return 0
+    db = get_db()
+    res = await db_execute(lambda: db.table("support_tickets")
+        .select("id", count="exact")
+        .eq("assigned_admin_id", staff_id)
+        .eq("status", "pending")
+        .gte("created_at", period["start"])
+        .lte("created_at", period["end"])
+        .execute())
+    return float(res.count or 0)
+
+
+async def _admin_verify_time(staff_id: Optional[str], period: dict) -> float:
+    if not staff_id:
+        return 0
+    db = get_db()
+    q = f"SELECT COALESCE(EXTRACT(EPOCH FROM AVG(reviewed_at - created_at)) / 3600, 0) as avg_hrs FROM pending_verifications WHERE reviewed_by = '{staff_id}' AND status = 'confirmed' AND reviewed_at >= '{period['start']}' AND reviewed_at <= '{period['end']}'"
+    res = await db_execute(lambda: db.rpc("exec_sql", {"sql_body": q}).execute())
+    return float(res.data[0].get("avg_hrs") or 0) if res.data else 0
+
+
+async def _team_achievement(staff_id: Optional[str], period: dict) -> float:
+    if not staff_id:
+        return 0
+    db = get_db()
+    q = f"WITH team_avg AS (SELECT staff_id, AVG((actual_value / NULLIF(target_value,0)) * 100) as ach FROM staff_goals WHERE month = '{period['month']}' GROUP BY staff_id) SELECT COALESCE((COUNT(CASE WHEN ach >= 100 THEN 1 END) * 100.0 / NULLIF(COUNT(*),0)), 0) as rate FROM admins a JOIN team_avg t ON t.staff_id = a.id WHERE a.line_manager_id = '{staff_id}' AND a.is_active = true"
+    res = await db_execute(lambda: db.rpc("exec_sql", {"sql_body": q}).execute())
+    return float(res.data[0].get("rate") or 0) if res.data else 0
+
+
+MEASUREMENT_SOURCE_CALCULATORS = {
+    "mkt_leads_added": _count_marketing_leads_added,
+    "mkt_lead_conversion": _marketing_lead_conversion,
+    "mkt_campaigns_sent": _marketing_campaigns_sent,
+    "mkt_open_rate": _marketing_open_rate,
+    "sales_deals_closed": _sales_deals_closed,
+    "sales_revenue": _sales_revenue,
+    "sales_collection_rate": _sales_collection_rate,
+    "ops_appointments": _ops_appointments,
+    "admin_ticket_esc": _admin_ticket_esc,
+    "admin_verify_time": _admin_verify_time,
+    "team_achievement": _team_achievement,
+}
+
+
+async def sync_goal_actuals(staff_id: Optional[str] = None, goal_id: Optional[str] = None, month: Optional[str] = None):
+    db = get_db()
+    query = db.table("staff_goals").select("*, kpi_templates(measurement_source)")
+    if staff_id:
+        query = query.eq("staff_id", staff_id)
+    if goal_id:
+        query = query.eq("id", goal_id)
+    if month:
+        query = query.eq("month", _month_start(month))
+    query = query.neq("measurement_source", "manual")
+
+    res = await db_execute(lambda: query.execute())
+    goals = res.data or []
+    logger.info(f"Syncing {len(goals)} automated goals for month={month or 'all'}")
+
+    synced = 0
+    errors = []
+    for goal in goals:
+        source = goal.get("measurement_source") or (goal.get("kpi_templates") or {}).get("measurement_source")
+        if not source or source == "manual":
+            continue
+
+        calculator = MEASUREMENT_SOURCE_CALCULATORS.get(source)
+        if not calculator:
+            errors.append({"goal_id": goal.get("id"), "source": source, "error": "Unknown measurement source"})
+            continue
+
+        period = _bounds_for_goal(goal)
+        try:
+            actual_value = await calculator(goal.get("staff_id"), period)
+        except Exception as exc:
+            errors.append({"goal_id": goal.get("id"), "error": str(exc)})
+            continue
+
+        target_value = float(goal.get("target_value") or 0)
+        achievement_pct = 0.0
+        if target_value <= 0:
+            achievement_pct = 100.0 if actual_value > 0 else 0.0
+        else:
+            achievement_pct = round((actual_value / target_value) * 100, 2)
+
+        achievement_status = _achievement_status_from_pct(achievement_pct)
+        if goal.get("achievement_status") == "Achieved" and achievement_pct < 100:
+            achievement_status = "Achieved"
+
+        update_payload = {
+            "actual_value": round(actual_value, 2),
+            "achievement_pct": round(min(achievement_pct, 120), 2),
+            "achievement_status": achievement_status,
+            "last_synced_at": datetime.utcnow().isoformat(),
+        }
+
+        await db_execute(lambda: db.table("staff_goals").update(update_payload).eq("id", goal["id"]).execute())
+        synced += 1
+
+    return {
+        "synced": synced,
+        "errors": errors,
+        "timestamp": datetime.utcnow().isoformat(),
+    }
+
+
 # ─── MODELS ───────────────────────────────────────────────────────────────────
 
 # ─── MODELS ───────────────────────────────────────────────────────────────────
@@ -111,6 +373,8 @@ class KPITemplateBase(BaseModel):
     department: str
     category: Optional[str] = None
     description: Optional[str] = None
+    measurement_source: Optional[str] = "manual"
+    default_unit: Optional[str] = None
     is_active: Optional[bool] = True
 
 class KPITemplateCreate(KPITemplateBase):
@@ -121,6 +385,8 @@ class KPITemplateUpdate(BaseModel):
     department: Optional[str] = None
     category: Optional[str] = None
     description: Optional[str] = None
+    measurement_source: Optional[str] = None
+    default_unit: Optional[str] = None
     is_active: Optional[bool] = None
 
 class PerformanceReviewBase(BaseModel):
@@ -593,12 +859,20 @@ async def set_staff_goal(goal: GoalCreate, current_admin: dict = Depends(verify_
         "kpi_name": goal.kpi_name,
         "target_value": goal.target_value,
         "unit": goal.unit,
-        "weight": goal.weight,        "status": goal.status,        "month": goal.month.isoformat(),
+        "weight": goal.weight,
+        "status": goal.status,
+        "month": goal.month.isoformat(),
         "department": goal.department or None,
         "staff_id": goal.staff_id or None
     }
+
     if getattr(goal, "template_id", None):
         goal_data["kpi_template_id"] = goal.template_id
+        metadata = await _load_kpi_template_metadata(goal.template_id)
+        if metadata.get("measurement_source"):
+            goal_data["measurement_source"] = metadata["measurement_source"]
+        if metadata.get("default_unit") and not goal_data.get("unit"):
+            goal_data["unit"] = metadata["default_unit"]
 
     res = await db_execute(lambda: db.table("staff_goals").insert(goal_data).execute())
     
@@ -649,6 +923,11 @@ async def update_goal(goal_id: str, update: GoalUpdate, current_admin: dict = De
 
     if "template_id" in update_data:
         update_data["kpi_template_id"] = update_data.pop("template_id")
+        metadata = await _load_kpi_template_metadata(update_data["kpi_template_id"])
+        if metadata.get("measurement_source"):
+            update_data["measurement_source"] = metadata["measurement_source"]
+        if metadata.get("default_unit") and not update_data.get("unit"):
+            update_data["unit"] = metadata["default_unit"]
 
     if update_data.get("staff_id") and update_data.get("department"):
         raise HTTPException(status_code=400, detail="Provide either staff_id or department, not both")
@@ -674,10 +953,8 @@ async def trigger_goal_sync(month: Optional[str] = None, current_admin: dict = D
     if "admin" not in user_roles and "hr_admin" not in user_roles:
          raise HTTPException(status_code=403, detail="HR Admin only")
          
-    from scheduler import sync_goal_actuals
-    # Run as a background task to avoid timeout
     import asyncio
-    asyncio.create_task(sync_goal_actuals(month))
+    asyncio.create_task(sync_goal_actuals(month=month))
     
     return {"message": "Goal sync triggered successfully"}
 
@@ -1042,7 +1319,7 @@ async def run_payroll(current_admin: dict = Depends(verify_token)):
     records_created = 0
     now = datetime.now()
     month_start = date(now.year, now.month, 1).isoformat()
-    month_end = date(now.year, now.month, 28).isoformat() # Simplified month end
+    month_end = date(now.year, now.month, calendar.monthrange(now.year, now.month)[1]).isoformat()
     
     # 2. Fetch existing payroll records for this month in one go
     existing = await db_execute(lambda: db.table("payroll_records")
@@ -1057,10 +1334,20 @@ async def run_payroll(current_admin: dict = Depends(verify_token)):
         "paye_enabled": True,
         "pension_employee_rate": 8.0,
         "pension_employer_rate": 10.0,
-        "nhf_rate": 2.5
+        "nhf_rate": 2.5,
+        "wht_default_rate": 5.0,
+        "wht_contractor_rate": 10.0
     }
 
+    paye_enabled = bool(tax_config.get("paye_enabled", True))
+    p_rate = float(tax_config.get("pension_employee_rate") or 8.0) / 100.0
+    er_p_rate = float(tax_config.get("pension_employer_rate") or 10.0) / 100.0
+    nhf_rate = float(tax_config.get("nhf_rate") or 2.5) / 100.0
+    wht_default_rate = float(tax_config.get("wht_default_rate") or 5.0)
+    wht_contractor_rate = float(tax_config.get("wht_contractor_rate") or 10.0)
+
     payroll_inserts = []
+    warnings = []
     
     for s in staff_list:
         if s["id"] in existing_staff_ids:
@@ -1068,29 +1355,28 @@ async def run_payroll(current_admin: dict = Depends(verify_token)):
 
         p = s.get("staff_profiles", [{}])[0] if s.get("staff_profiles") else {}
         base = float(p.get("base_salary") or 0)
-        
-        # Nigerian Tax Engine (PAYE / Pension / NHF)
-        p_rate = (tax_config.get("pension_employee_rate") or 8.0) / 100.0
-        er_p_rate = (tax_config.get("pension_employer_rate") or 10.0) / 100.0
-        nhf_rate = (tax_config.get("nhf_rate") or 0.0) / 100.0
-        
-        monthly_tax = 0.0
-        monthly_pension = 0.0
-        monthly_nhf = 0.0
-        monthly_cra = 0.0
-        monthly_er_pension = 0.0
-        
-        if base > 30000 and tax_config.get("paye_enabled", True): # Minimum wage exemption
-            annual_gross = base * 12
-            annual_pension = annual_gross * p_rate
-            annual_nhf = annual_gross * nhf_rate
-            annual_er_pension = annual_gross * er_p_rate
-            
-            # CRA: 20% of Gross + (Higher of 1% of Gross or 200,000)
-            annual_cra = (0.2 * annual_gross) + max(200000.0, 0.01 * annual_gross)
+
+        if base <= 0:
+            warnings.append({
+                "staff_id": s["id"],
+                "staff_name": s.get("full_name"),
+                "reason": "Missing or zero base_salary"
+            })
+            continue
+
+        annual_gross = base * 12
+        annual_pension = annual_gross * p_rate
+        annual_nhf = annual_gross * nhf_rate
+        annual_er_pension = annual_gross * er_p_rate
+
+        annual_cra = 0.0
+        annual_tax = 0.0
+        taxable_income = 0.0
+
+        if paye_enabled and base > 30000:  # Minimum wage exemption for PAYE calculations
+            annual_cra = max(0.2 * annual_gross, 200000.0 + 0.01 * annual_gross)
             taxable_income = max(0.0, annual_gross - annual_pension - annual_nhf - annual_cra)
-            
-            annual_tax = 0.0
+
             brackets = [
                 (300000, 0.07),
                 (300000, 0.11),
@@ -1099,7 +1385,7 @@ async def run_payroll(current_admin: dict = Depends(verify_token)):
                 (1600000, 0.21),
                 (float('inf'), 0.24)
             ]
-            
+
             rem_income = taxable_income
             for limit, rate in brackets:
                 if rem_income <= 0:
@@ -1107,18 +1393,18 @@ async def run_payroll(current_admin: dict = Depends(verify_token)):
                 taxable_amount = min(rem_income, limit)
                 annual_tax += taxable_amount * rate
                 rem_income -= taxable_amount
-                
+
             if annual_tax == 0 and taxable_income <= 0:
-                 annual_tax = annual_gross * 0.01 # Minimum tax 1%
-                 
-            monthly_tax = round(annual_tax / 12, 2)
-            monthly_pension = round(annual_pension / 12, 2)
-            monthly_nhf = round(annual_nhf / 12, 2)
-            monthly_cra = round(annual_cra / 12, 2)
-            monthly_er_pension = round(annual_er_pension / 12, 2)
-            
-        net = round(base - monthly_tax - monthly_pension - monthly_nhf, 2)
-        
+                annual_tax = annual_gross * 0.01  # Minimum tax 1%
+
+        monthly_tax = round(annual_tax / 12, 2)
+        monthly_pension = round(annual_pension / 12, 2)
+        monthly_nhf = round(annual_nhf / 12, 2)
+        monthly_er_pension = round(annual_er_pension / 12, 2)
+        monthly_cra = round(annual_cra / 12, 2)
+        deductions = round(monthly_tax + monthly_pension + monthly_nhf, 2)
+        net = round(base - deductions, 2)
+
         payroll_inserts.append({
             "staff_id": s["id"],
             "period_start": month_start,
@@ -1129,17 +1415,24 @@ async def run_payroll(current_admin: dict = Depends(verify_token)):
             "nhf": monthly_nhf,
             "employer_pension": monthly_er_pension,
             "cra": monthly_cra,
+            "deductions": deductions,
             "net_pay": net,
             "status": "pending",
             "processed_by": current_admin["sub"],
             "net_pay_breakdown": {
                 "base_salary": base,
-                "gross_annual": base * 12,
+                "gross_annual": annual_gross,
                 "monthly_tax": monthly_tax,
                 "monthly_pension": monthly_pension,
                 "monthly_nhf": monthly_nhf,
                 "monthly_cra": monthly_cra,
-                "annual_taxable": taxable_income if base > 30000 else 0
+                "annual_taxable": taxable_income,
+                "paye_enabled": paye_enabled,
+                "pension_employee_rate": p_rate * 100,
+                "pension_employer_rate": er_p_rate * 100,
+                "nhf_rate": nhf_rate * 100,
+                "wht_default_rate": wht_default_rate,
+                "wht_contractor_rate": wht_contractor_rate
             }
         })
 
@@ -1151,7 +1444,7 @@ async def run_payroll(current_admin: dict = Depends(verify_token)):
         for rec in payroll_inserts:
             await send_notification(rec["staff_id"], "Payslip Ready", f"Your payslip for {month_start[:7]} has been generated. Check your payroll tab.", "payroll_run")
             
-    return {"message": f"Payroll generation complete. {records_created} records created.", "count": records_created}
+    return {"message": f"Payroll generation complete. {records_created} records created.", "count": records_created, "warnings": warnings}
 
 @router.post("/payroll/manual", status_code=status.HTTP_201_CREATED)
 async def create_manual_payroll(nf: ManualPayrollCreate, current_admin: dict = Depends(verify_token)):
@@ -1414,18 +1707,6 @@ async def update_staff_goal(goal_id: str, goal: GoalUpdate, current_admin: dict 
     if not res.data:
         raise HTTPException(status_code=404, detail="Goal not found")
     return res.data[0]
-
-@router.get("/goals")
-async def get_hr_goals(staff_id: Optional[str] = None, current_admin: dict = Depends(verify_token)):
-    """Fetch goals/KPIs for HR (all) or Staff (own)."""
-    # This was a duplicate of get_all_goals, we just alias to keep it compiling if anything points here
-    return await get_all_goals(staff_id, current_admin)
-
-@router.post("/goals", status_code=status.HTTP_201_CREATED)
-async def create_hr_goal(goal: GoalCreate, current_admin: dict = Depends(verify_token)):
-    """Set a KPI goal for a staff member. HR or Manager only."""
-    # This was a duplicate of set_staff_goal
-    return await set_staff_goal(goal, current_admin)
 
 @router.get("/kpi-templates")
 async def list_kpi_templates(department: Optional[str] = None, active: Optional[bool] = True, current_admin: dict = Depends(verify_token)):
