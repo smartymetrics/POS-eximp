@@ -4121,7 +4121,7 @@ function LegalManager({ staffId: initialStaffId, staffName: initialStaffName, is
                   </a>
                 )}
                 {m.status === "Executed" ? (
-                  <a href={`/api/hr-legal/matters/${m.id}/export`} className="bg" style={{ fontSize: 10, padding: "5px 12px", textDecoration: "none", width: '100%', textAlign: 'center', boxSizing: 'border-box' }}>Download Contract</a>
+                  <a href={getMatterExportUrl(m.id)} className="bg" style={{ fontSize: 10, padding: "5px 12px", textDecoration: "none", width: '100%', textAlign: 'center', boxSizing: 'border-box' }}>Download Contract</a>
                 ) : m.status !== "Legal Signing" ? (
                   <>
                     <div style={{ fontSize: 10, color: C.muted, fontStyle: "italic" }}>{m.status === "Review" ? "Awaiting Legal Review" : "In Progress"}</div>
@@ -4371,6 +4371,12 @@ function ContractKitchen({ user }) {
     finally { setLoadingCollabs(false); }
   };
 
+  const getMatterExportUrl = (matterId) => {
+    const token = localStorage.getItem("ec_token");
+    const baseUrl = `${API_BASE}/hr-legal/matters/${matterId}/export`;
+    return token ? `${baseUrl}?token=${encodeURIComponent(token)}` : baseUrl;
+  };
+
   const createContract = async () => {
     if (!newForm.title.trim()) return alert("Contract title is required.");
     if (!newForm.isExternal && !newForm.staff_id) return alert("Please select a staff member.");
@@ -4564,7 +4570,7 @@ function ContractKitchen({ user }) {
               onDetail={() => setShowDetailModal(m)}
               onDispatch={() => dispatchSign(m.id)}
               onResend={() => resendSign(m.id)}
-              onDownload={() => window.open(`/api/hr-legal/matters/${m.id}/export`, "_blank")}
+              onDownload={() => window.open(getMatterExportUrl(m.id), "_blank")}
               C={C} dark={dark} />
           ))}
         </div>
@@ -4797,7 +4803,7 @@ function ContractKitchen({ user }) {
             <div style={{ display: "flex", gap: 8, marginTop: 6 }}>
               <button onClick={() => { setShowDetailModal(null); openEditor(showDetailModal); }} className="bp" style={{ flex: 1, padding: 11, fontSize: 12 }}>✏️ Open Editor</button>
               {showDetailModal.status === "Executed" && (
-                <button onClick={() => window.open(`/api/hr-legal/matters/${showDetailModal.id}/export`, "_blank")} style={{ flex: 1, padding: 11, background: "#10B98115", border: "1px solid #10B98130", color: "#10B981", borderRadius: 9, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>📥 Download</button>
+                <button onClick={() => window.open(getMatterExportUrl(showDetailModal.id), "_blank")} style={{ flex: 1, padding: 11, background: "#10B98115", border: "1px solid #10B98130", color: "#10B981", borderRadius: 9, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>📥 Download</button>
               )}
               {(showDetailModal.status === "Draft" || showDetailModal.status === "Review") && (
                 <button onClick={() => { setShowDetailModal(null); dispatchSign(showDetailModal.id); }} style={{ flex: 1, padding: 11, background: "#8B5CF615", border: "1px solid #8B5CF630", color: "#8B5CF6", borderRadius: 9, cursor: "pointer", fontWeight: 700, fontSize: 12 }}>✈️ Send for Signing</button>
