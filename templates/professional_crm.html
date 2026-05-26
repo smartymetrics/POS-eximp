@@ -1405,6 +1405,9 @@
                      <button class="btn btn-secondary" style="width: 100%; margin-top: 20px; border-color: #333; color: #fff;" onclick="openEditLeadForm()">
                          Edit Details
                      </button>
+                     <button id="detail-delete-btn" class="btn text-red-500 hover:bg-red-500/10 border border-red-500/20" style="width: 100%; margin-top: 10px; display: none;" onclick="deleteLead()">
+                         <i class="fas fa-trash mr-1"></i> Delete Contact
+                     </button>
                  </div>
  
                  <!-- Main: Activity Log -->
@@ -2587,6 +2590,21 @@
                 document.getElementById("leadDetailModal").style.display = "flex";
                 document.getElementById("leadDetailModal").dataset.id = id;
 
+                // Show/hide Delete button based strictly on super_admin role
+                const deleteBtn = document.getElementById("detail-delete-btn");
+                if (deleteBtn) {
+                    if (adminData && adminData.role) {
+                        const roles = adminData.role.toLowerCase().split(',').map(r => r.trim());
+                        if (roles.includes("super_admin")) {
+                            deleteBtn.style.display = "block";
+                        } else {
+                            deleteBtn.style.display = "none";
+                        }
+                    } else {
+                        deleteBtn.style.display = "none";
+                    }
+                }
+
                 // Set current assignee if dropdown exists
                 const assigneeSelect = document.getElementById("detail-assignee-select");
                 if (assigneeSelect) {
@@ -2732,7 +2750,43 @@
               }
           }
  
-         async function saveLeadDetails(id, data) {
+         async function deleteLead() {
+                         const id = document.getElementById("leadDetailModal").dataset.id;
+                         const name = document.getElementById("detail-lead-name").textContent;
+                         
+                         if (!confirm(`Are you sure you want to permanently delete lead/contact "${name}"?\n\nThis will clean up their logs and outreach records. This action cannot be undone.`)) {
+                             return;
+                         }
+                         
+                         try {
+                             showPageLoader("Deleting lead...");
+                             const res = await fetch(`/api/clients/${id}`, {
+                                 method: "DELETE",
+                                 headers: { "Authorization": `Bearer ${token}` }
+                             });
+                             hidePageLoader();
+                             
+                             if (res.ok) {
+                                 alert("Lead deleted successfully.");
+                                 closeLeadDetailModal();
+                                 // Reload appropriate views
+                                 loadPipeline();
+                                 loadLeads();
+                                 if (document.getElementById("contacts-list").classList.contains("active")) {
+                                     loadContactsList();
+                                 }
+                             } else {
+                                 const data = await res.json();
+                                 alert("Failed to delete lead: " + (data.detail || "Unknown error"));
+                             }
+                         } catch (err) {
+                             hidePageLoader();
+                             console.error("Delete Error:", err);
+                             alert("Failed to delete lead due to network error.");
+                         }
+                     }
+
+                     async function saveLeadDetails(id, data) {
              try {
                  const res = await fetch(`/api/crm/clients/${id}`, {
                      method: "PATCH",

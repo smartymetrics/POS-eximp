@@ -138,3 +138,65 @@ async def update_client(client_id: str, data: ClientUpdate, current_admin=Depend
     await sync_client_to_marketing(result.data[0])
 
     return {"message": "Client updated", "client": result.data[0]}
+
+
+@router.delete("/{client_id}")
+async def delete_client(
+    client_id: str,
+    background_tasks: BackgroundTasks,
+    current_admin=Depends(verify_token)
+):
+    db = get_db()
+    role = current_admin.get("role", "")
+    roles = [r.strip().lower() for r in (role or "").split(",")]
+
+    # 1. Enforce super_admin role
+    if "super_admin" not in roles:
+        raise HTTPException(
+            status_code=403,
+            detail="Permission denied. Only super_admin can delete contacts."
+        )
+
+    # 2. Check if client exists
+    client_res = await db_execute(lambda: db.table("clients").select("*").eq("id", client_id).execute())
+    if not client_res.data:
+        raise HTTPException(status_code=404, detail="Client not found")
+    client = client_res.data[0]
+
+    # 3. Check if the client has any invoices attached (even voided ones, for database referential integrity)
+    invoices_res = await db_execute(lambda: db.table("invoices").select("id").eq("client_id", client_id).execute())
+    if invoices_res.data:
+        raise HTTPException(
+            status_code=400,
+            detail="Cannot delete contact because they have invoices attached. Deletion is only allowed for contacts without invoices."
+        )
+
+    # 4. Perform safety cleanup of foreign key references in other tables
+    # 4a. Delete activity log entries referencing this client
+    await db_execute(lambda: db.table("activity_log").delete().eq("client_id", client_id).execute())
+
+    # 4b. Delete email logs referencing this client
+    await db_execute(lambda: db.table("email_logs").delete().eq("client_id", client_id).execute())
+
+    # 4c. Set client_id to None in support_tickets (preserving support history)
+    await db_execute(lambda: db.table("support_tickets").update({"client_id": None}).eq("client_id", client_id).execute())
+
+    # 4d. Set client_id to None in appointments (preserving calendar history)
+    await db_execute(lambda: db.table("appointments").update({"client_id": None}).eq("client_id", client_id).execute())
+
+    # 4e. Set client_id to None in marketing_contacts (preserving lead/subscriber marketing data)
+    await db_execute(lambda: db.table("marketing_contacts").update({"client_id": None}).eq("client_id", client_id).execute())
+
+    # 5. Delete the client record
+    await db_execute(lambda: db.table("clients").delete().eq("id", client_id).execute())
+
+    # 6. Log the deletion to global activity logs (with client_id=None so it is persistent)
+    background_tasks.add_task(
+        log_activity,
+        "client_deleted",
+        f"Client {client['full_name']} ({client['email']}) was permanently deleted by super_admin.",
+        current_admin["sub"],
+        client_id=None
+    )
+
+    return {"status": "success", "message": f"Client '{client['full_name']}' was successfully deleted."}
