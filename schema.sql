@@ -48,6 +48,7 @@ CREATE TABLE IF NOT EXISTS clients (
     nok_address TEXT,
     source_of_income VARCHAR(100),
     referral_source VARCHAR(100),
+    lead_source VARCHAR(100),
 
     created_at TIMESTAMPTZ DEFAULT NOW(),
     updated_at TIMESTAMPTZ DEFAULT NOW()

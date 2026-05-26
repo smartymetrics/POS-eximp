@@ -42,7 +42,8 @@ from routers import (
     ws_support,
     hrm_talent_chat,
     biodata,
-    guarantor
+    guarantor,
+    kyc_links
 )
 from routers.auth import require_roles, resolve_admin_token
 from database import init_db
@@ -144,9 +145,9 @@ app.include_router(ws_support.router, prefix="/api", tags=["live-chat"])
 app.include_router(subscriptions.router, tags=["subscriptions"])
 app.include_router(hr.router, prefix="/api/hr", tags=["hr"])
 app.include_router(hr_legal.router, prefix="/api/hr-legal", tags=["hr-legal"])
-app.include_router(hrm_talent_chat.router, prefix="/api", tags=["talent-chat"])
-app.include_router(biodata.router, prefix="/api/biodata", tags=["biodata"])
-app.include_router(guarantor.router, prefix="/api/guarantor", tags=["guarantor"])
+
+# KYC Links API
+app.include_router(kyc_links.router, tags=["kyc-links"])
 
 
 

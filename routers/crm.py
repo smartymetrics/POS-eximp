@@ -23,11 +23,11 @@ async def get_all_contacts(current_admin=Depends(verify_token)):
     # Non-privileged users should only see contacts assigned to them
     if has_any_role(current_admin, privileged):
         contacts = (await db_execute(lambda: db.table("clients").select("""
-            id, full_name, email, phone, city, state, occupation, client_type, pipeline_stage, assigned_rep_id, last_contacted_at, created_at, updated_at
+            id, full_name, email, phone, city, state, address, occupation, lead_source, client_type, pipeline_stage, assigned_rep_id, last_contacted_at, created_at, updated_at
         """).order("created_at", desc=True).execute())).data or []
     else:
         contacts = (await db_execute(lambda: db.table("clients").select("""
-            id, full_name, email, phone, city, state, occupation, client_type, pipeline_stage, assigned_rep_id, last_contacted_at, created_at, updated_at
+            id, full_name, email, phone, city, state, address, occupation, lead_source, client_type, pipeline_stage, assigned_rep_id, last_contacted_at, created_at, updated_at
         """).eq("assigned_rep_id", current_admin.get("sub")).order("created_at", desc=True).execute())).data or []
     
     if not contacts:
@@ -165,6 +165,11 @@ async def get_sales_pipeline(current_admin=Depends(verify_token)):
         full_name,
         email,
         phone,
+        city,
+        state,
+        address,
+        occupation,
+        lead_source,
         pipeline_stage,
         client_type,
         estimated_value,

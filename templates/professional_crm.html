@@ -566,7 +566,71 @@
                 <div class="nav-link" onclick="openPortalLinkModal()">
                     <i class="fas fa-users"></i> Client Portal
                 </div>
+                <div class="nav-link" onclick="openKycLinkModal()">
+                    <i class="fas fa-id-card"></i> My KYC Link
+                </div>
             </div>
+    <!-- MODAL: KYC LINK -->
+    <div id="kycLinkModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 1000; align-items: center; justify-content: center;">
+        <div class="modal-content" style="background: #1A1A1A; width: 450px; border-radius: 16px; border: 1px solid #333; overflow: hidden;">
+            <div style="padding: 24px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center;">
+                <h2 style="font-size: 18px; font-weight: 800; color: var(--gold);">Your Unique KYC Link</h2>
+                <button onclick="document.getElementById('kycLinkModal').style.display='none'" style="color: #666;"><i class="fas fa-times"></i></button>
+            </div>
+            <div style="padding: 24px;">
+                <p style="font-size: 13px; color: #aaa; margin-bottom: 16px;">Share this link with prospects. All KYC leads submitted here will be attributed to you.</p>
+                <div style="background: #000; border: 1px solid #333; padding: 16px; border-radius: 8px; margin-bottom: 24px;">
+                    <code id="sales-rep-kyc-url" style="color: var(--gold); word-break: break-all; font-size: 12px;">Loading...</code>
+                </div>
+                <button onclick="copyKycLink(event)" class="btn btn-primary" style="width: 100%; padding: 14px;">
+                    <i class="fas fa-copy"></i> Copy KYC Link
+                </button>
+            </div>
+        </div>
+    </div>
+    <script>
+        // --- KYC LINK GENERATION ---
+        function openKycLinkModal() {
+            document.getElementById('kycLinkModal').style.display = 'flex';
+            const codeEl = document.getElementById('sales-rep-kyc-url');
+            codeEl.textContent = 'Loading...';
+            fetch('/api/kyc-links/my', {
+                headers: { 'Authorization': `Bearer ${token}` }
+            })
+            .then(r => r.json())
+            .then(j => {
+                if (j.status === 'success' && j.url) {
+                    codeEl.textContent = window.location.origin + j.url;
+                } else {
+                    // If no link, auto-generate
+                    fetch('/api/kyc-links/generate', {
+                        method: 'POST',
+                        headers: { 'Authorization': `Bearer ${token}`, 'Content-Type': 'application/json' },
+                        body: JSON.stringify({ label: 'Default' })
+                    })
+                    .then(r2 => r2.json())
+                    .then(j2 => {
+                        if (j2.status === 'success' && j2.url) {
+                            codeEl.textContent = window.location.origin + j2.url;
+                        } else {
+                            codeEl.textContent = 'Error generating link';
+                        }
+                    });
+                }
+            })
+            .catch(() => { codeEl.textContent = 'Error loading link'; });
+        }
+
+        function copyKycLink(e) {
+            const codeEl = document.getElementById('sales-rep-kyc-url');
+            if (!codeEl) return;
+            const text = codeEl.textContent;
+            navigator.clipboard.writeText(text).then(() => {
+                e.target.textContent = 'Copied!';
+                setTimeout(() => { e.target.innerHTML = '<i class="fas fa-copy"></i> Copy KYC Link'; }, 1200);
+            });
+        }
+    </script>
 
             <!-- Service Hub (NEW) -->
             <div class="nav-section" id="section-servicehub">
@@ -1318,6 +1382,26 @@
                          </div>
                      </div>
  
+                     <div style="background: rgba(255,255,255,0.03); border: 1px solid #222; border-radius: 12px; padding: 16px; margin-top: 16px;">
+                         <h4 style="font-size: 11px; font-weight: 800; color: #888; margin-bottom: 16px;">KYC DETAILS</h4>
+                         <div style="margin-bottom: 12px;">
+                             <label style="font-size: 10px; color: #555;">OCCUPATION</label>
+                             <div id="detail-lead-occupation" style="font-size: 13px; color: #fff; margin-top: 2px;">-</div>
+                         </div>
+                         <div style="margin-bottom: 12px;">
+                             <label style="font-size: 10px; color: #555;">ADDRESS</label>
+                             <div id="detail-lead-address" style="font-size: 13px; color: #fff; margin-top: 2px;">-</div>
+                         </div>
+                         <div style="margin-bottom: 12px;">
+                             <label style="font-size: 10px; color: #555;">CITY, STATE</label>
+                             <div id="detail-lead-location" style="font-size: 13px; color: #fff; margin-top: 2px;">-</div>
+                         </div>
+                         <div style="margin-bottom: 12px;">
+                             <label style="font-size: 10px; color: #555;">SOURCE</label>
+                             <div id="detail-lead-source" style="font-size: 13px; color: #fff; margin-top: 2px;">-</div>
+                         </div>
+                     </div>
+
                      <button class="btn btn-secondary" style="width: 100%; margin-top: 20px; border-color: #333; color: #fff;" onclick="openEditLeadForm()">
                          Edit Details
                      </button>
@@ -2462,9 +2546,18 @@
                 });
                 const lead = await res.json();
                 
-                document.getElementById("detail-lead-name").textContent = lead.full_name;
-                document.getElementById("detail-lead-email").textContent = lead.email;
-                document.getElementById("detail-lead-phone").textContent = lead.phone;
+                document.getElementById("detail-lead-name").textContent = lead.full_name || "-";
+                document.getElementById("detail-lead-email").textContent = lead.email || "-";
+                document.getElementById("detail-lead-phone").textContent = lead.phone || "-";
+                document.getElementById("detail-lead-occupation").textContent = lead.occupation || "-";
+                document.getElementById("detail-lead-address").textContent = lead.address || "-";
+                  
+                let location = [];
+                if (lead.city) location.push(lead.city);
+                if (lead.state) location.push(lead.state);
+                document.getElementById("detail-lead-location").textContent = location.length > 0 ? location.join(', ') : "-";
+                
+                document.getElementById("detail-lead-source").textContent = lead.lead_source || "-";
                 
                 // --- MARKETING SAFETY INDICATOR ---
                 const suppressedDomains = ["temp-eximps.com", "placeholder.com"];
@@ -3234,7 +3327,11 @@
                                 <select id="detail-assignee-select" onchange="updateLeadAssignee()" style="width: 100%; background: #1A1A1A; border: 1px solid var(--gold); color: #fff; border-radius: 8px; padding: 10px; font-size: 13px; outline: none;">
                                     <option value="">Unassigned</option>
                                 </select>
-                                <p style="font-size: 9px; color: #666; margin-top: 4px;">Changes are logged automatically.</p>
+                                        <div style="display:flex;gap:8px;align-items:center;margin-top:8px">
+                                            <button class="btn" style="background:transparent;color:var(--gold);border:1px solid rgba(196,125,10,0.15);padding:8px 10px;border-radius:6px;font-size:12px" onclick="generateKycLinkForSelect()">Generate KYC Link</button>
+                                            <small style="font-size:11px;color:#9ca3af">Copies a rep-specific link to clipboard</small>
+                                        </div>
+                                        <p style="font-size: 9px; color: #666; margin-top: 4px;">Changes are logged automatically.</p>
                             </div>
                         `;
                         container.insertAdjacentHTML('afterend', assignmentHtml);
@@ -3282,7 +3379,7 @@
                     // Hide lead assignment tool in modal
                     const assignSection = document.getElementById('section-lead-assignment');
                     if (assignSection) assignSection.style.display = 'none';
-                } else if (hasRole('admin') || hasRole('operations') || hasRole('legal') || hasRole('customer_support') || hasRole('sales_manager')) {
+                } else if (hasRole('admin') || hasRole('super_admin') || hasRole('operations') || hasRole('legal') || hasRole('customer_support') || hasRole('sales_manager')) {
 
                     // Show lead assignment tool
                     const assignSection = document.getElementById('section-lead-assignment');
@@ -3336,6 +3433,32 @@
             } catch (err) {
                 hidePageLoader();
                 alert("Network error during assignment.");
+            }
+        }
+
+        function generateKycLinkForSelect() {
+            const select = document.getElementById('detail-assignee-select');
+            const repId = select ? select.value : null;
+            generateKycLink(repId);
+        }
+
+        function generateKycLink(repId) {
+            try {
+                // If no repId provided, derive from token payload (current user)
+                let id = repId;
+                if (!id && token) {
+                    try { const p = JSON.parse(atob(token.split('.')[1])); id = p.sub || p.sub; } catch(e) { }
+                }
+                if (!id) { alert('Please select a rep to generate a link for.'); return; }
+                const link = `${window.location.origin}/kyc?rep=${encodeURIComponent(id)}`;
+                navigator.clipboard.writeText(link).then(()=>{
+                    alert('KYC link copied to clipboard:\n' + link);
+                }).catch(err=>{
+                    prompt('Copy the KYC link:', link);
+                });
+            } catch (err) {
+                console.error('Generate link error', err);
+                alert('Could not generate link');
             }
         }
 
