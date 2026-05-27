@@ -61,7 +61,17 @@ def personalize_content(html: str, contact: Dict[str, Any]) -> str:
         "unsubscribe_url": unsub_url
     }
 
-    # Financial Tags (Conditional)
+    # Financial Tags — always pre-populate with safe fallbacks so they never render blank.
+    # If we have a real client_id, try to override with live data.
+    vars.update({
+        "outstanding": "N/A",
+        "amount_paid": "N/A",
+        "total_invoiced": "N/A",
+        "property_name": "Your Property",
+        "due_date": "N/A",
+        "invoice_number": "N/A"
+    })
+
     client_id = contact.get("client_id")
     if client_id:
         try:
@@ -90,11 +100,11 @@ def personalize_content(html: str, contact: Dict[str, Any]) -> str:
         except Exception as e:
             logger.error(f"Financial personalization error for {client_id}: {e}")
 
-    # Apply replacements
+    # Apply replacements for all known tags
     for key, val in vars.items():
         html = html.replace(f"{{{{{key}}}}}", str(val))
     
-    # Clean up any unreplaced variables or placeholders like [BALANCE]
+    # Clean up any remaining unresolved {{tags}} — render as empty string
     html = re.sub(r"\{\{.*?\}\}", "", html)
     return html
 

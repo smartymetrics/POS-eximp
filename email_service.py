@@ -27,6 +27,9 @@ CC_CEO = os.getenv("CC_CEO")
 CC_OPERATIONS = os.getenv("CC_OPERATIONS")
 CLIENT_CC_RECIPIENTS = [email for email in [CC_LEGAL, CC_CEO, CC_OPERATIONS] if email]
 
+# HR CC — copied on all HRM portal emails and contracts
+HR_CC = ["hr@eximps-cloves.com"]
+
 def _b64(pdf_bytes: bytes) -> str:
     return base64.b64encode(pdf_bytes).decode()
 
@@ -872,7 +875,7 @@ async def send_interview_invitation_email(
             "from": "Eximp & Cloves HR <hr@mail.eximps-cloves.com>",
             "to": [candidate_email],
             "reply_to": "hr@eximps-cloves.com",
-            # "cc": ["operations@eximps-cloves.com"],
+            "cc": HR_CC,
             "subject": f"Interview Invitation — {job_title} | Eximp & Cloves",
             "html": _interview_invite_html(candidate_name, job_title, interview_type, scheduled_at_str, location, interviewer_name, notes)
         })
@@ -912,7 +915,7 @@ async def send_interview_cancellation_email(candidate_email: str, candidate_name
             "from": "Eximp & Cloves HR <hr@mail.eximps-cloves.com>",
             "to": [candidate_email],
             "reply_to": "hr@eximps-cloves.com",
-            # "cc": ["operations@eximps-cloves.com"],
+            "cc": HR_CC,
             "subject": f"Interview Cancellation — {job_title} | Eximp & Cloves",
             "html": _interview_cancellation_html(candidate_name, job_title)
         })
@@ -971,6 +974,7 @@ async def send_interview_reschedule_email(
             "from": "Eximp & Cloves HR <hr@mail.eximps-cloves.com>",
             "to": [candidate_email],
             "reply_to": "hr@eximps-cloves.com",
+            "cc": HR_CC,
             "subject": f"Interview Rescheduled — {job_title} | Eximp & Cloves",
             "html": _interview_reschedule_html(candidate_name, job_title, interview_type, scheduled_at_str, location, interviewer_name, notes)
         })
@@ -1034,6 +1038,7 @@ async def send_employment_offer_email(
             "from": "Eximp & Cloves HR <hr@mail.eximps-cloves.com>",
             "to": [candidate_email],
             "reply_to": "hr@eximps-cloves.com",
+            "cc": HR_CC,
             "subject": f"Job Offer — {job_title} | Eximp & Cloves",
             "html": _offer_email_html(candidate_name, job_title, salary, start_date, notes, app_id)
         })
@@ -1092,6 +1097,7 @@ async def send_staff_onboarding_email(
             "from": "Eximp & Cloves HR <hr@mail.eximps-cloves.com>",
             "to": [email],
             "reply_to": "hr@eximps-cloves.com",
+            "cc": HR_CC,
             "subject": f"Welcome to Eximp & Cloves — Your Portal Access",
             "html": _staff_onboarding_html(name, email, password, job_title, department)
         })
@@ -1286,7 +1292,7 @@ async def send_signing_link_email(invoice, client, token, expires_at):
         res = await async_resend({
             "from": "Eximp & Cloves Legal <" + str(sender) + ">",
             "to": email_addr,
-            "cc": ["legal@eximps-cloves.com"],
+            "cc": ["legal@eximps-cloves.com"] + HR_CC,
             "reply_to": "admin@eximps-cloves.com",
             "subject": "Your Contract of Sale is Ready — Eximp & Cloves",
             "html": html
@@ -1328,6 +1334,7 @@ async def send_admin_signing_alert(invoice, client, witnesses):
         await async_resend({
             "from": "System Alert <" + str(sender) + ">",
             "to": admin_email,
+            "cc": HR_CC,
             "subject": "Contract Ready: " + str(client.get("full_name")) + " (" + str(invoice.get("invoice_number")) + ")",
             "html": html
         })
@@ -1386,7 +1393,7 @@ async def send_executed_contract_email(invoice, client, pdf_content, certificate
         res = await async_resend({
             "from": f"Eximp & Cloves Legal <{sender}>",
             "to": [email_addr],
-            "cc": ["legal@eximps-cloves.com"],
+            "cc": ["legal@eximps-cloves.com"] + HR_CC,
             "reply_to": "admin@eximps-cloves.com",
             "subject": f"Your Fully Executed Contract of Sale — {invoice.get('invoice_number')}",
             "html": html,
@@ -1900,7 +1907,7 @@ async def send_ready_for_execution_email(invoice, client):
     from routers.analytics import log_activity
     legal_email = os.getenv("LEGAL_EMAIL", "legal@eximps-cloves.com")
     admin_email = os.getenv("ADMIN_ALERT_EMAIL", "admin@eximps-cloves.com")
-    recipients = list(dict.fromkeys([legal_email, admin_email]))
+    recipients = list(dict.fromkeys([legal_email, admin_email] + HR_CC))
 
     html = f"""
     <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #C47D0A; border-radius: 10px;">
@@ -2390,6 +2397,7 @@ async def send_talent_chat_followup_email(email_addr: str, name: str, chat_url: 
             "from": f"Eximp & Cloves HR <{FROM_EMAIL}>",
             "to": [email_addr],
             "reply_to": "hr@eximps-cloves.com",
+            "cc": HR_CC,
             "subject": "💬 You have an unread message from Eximp & Cloves HR",
             "html": _talent_chat_followup_html(name, chat_url),
         })
@@ -2438,6 +2446,7 @@ async def send_talent_chat_invite_email(email_addr: str, name: str, chat_url: st
             "from": f"Eximp & Cloves HR <{FROM_EMAIL}>",
             "to": [email_addr],
             "reply_to": "hr@eximps-cloves.com",
+            "cc": HR_CC,
             "subject": f"💬 {hr_name} has started a chat with you — Eximp & Cloves",
             "html": html,
         })
@@ -2622,4 +2631,4 @@ async def send_procurement_rejection_email(email_addr: str, vendor_name: str, su
             "html": _procurement_rejection_html(vendor_name, submission_ref, project_name, reason),
         })
     except Exception as e:
-        logger.error(f"Failed to send procurement rejection to {email_addr}: {e}")
+        logger.error(f"Failed to send procurement rejection to {email_addr}: {e}")

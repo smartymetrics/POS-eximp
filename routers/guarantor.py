@@ -196,6 +196,13 @@ async def review_submission(id: str, data: dict, current_admin=Depends(verify_to
                     await _send_guarantor_rejection_email(
                         emp_email, sec_label, reason, form_link
                     )
+
+            # Send approval email
+            if status == "approved":
+                labels_full = {"a": "Section A — Employee Details", "b": "Section B — Guarantor 1", "c": "Section C — Guarantor 2", "overall": "All Sections"}
+                sec_label = labels_full.get(section, "Your submission")
+                emp_name = sub_res.data[0].get("employee_name") or emp_email
+                await _send_guarantor_approval_email(emp_email, emp_name, sec_label)
     except Exception:
         pass  # Notification failure should not block the review
 
@@ -277,6 +284,11 @@ async def bulk_review_submission(id: str, data: dict, current_admin=Depends(veri
                     await _send_guarantor_rejection_email(
                         emp_email, "All Sections", reason, form_link
                     )
+
+            # Send approval email
+            if status == "approved":
+                emp_name = sub_res.data[0].get("employee_name") or emp_email
+                await _send_guarantor_approval_email(emp_email, emp_name, "All Sections")
     except Exception:
         pass
 
@@ -621,6 +633,163 @@ async def update_settings(data: dict, current_admin=Depends(verify_token)):
     return res.data[0]
 
 
+async def _send_guarantor_submission_email(email_addr: str, name: str, role_label: str):
+    """Sent immediately to the submitter (employee or guarantor) on successful form submission."""
+    import resend
+    resend.api_key = os.getenv("RESEND_API_KEY")
+    from_email = os.getenv("FROM_EMAIL", "hr@eximps-cloves.com")
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+    <body style="margin:0;padding:0;background:#F5F0E8;font-family:'Segoe UI',Arial,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0E8;padding:40px 20px;">
+        <tr><td align="center">
+          <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:4px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+            <!-- Header -->
+            <tr>
+              <td style="background:#0D1B2A;padding:0;border-left:6px solid #10B981;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="padding:28px 36px;">
+                      <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Eximp &amp; Cloves Infrastructure Limited</div>
+                      <div style="font-size:10px;color:#10B981;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-top:4px;">Human Resources Division</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <!-- Body -->
+            <tr>
+              <td style="padding:40px 36px;">
+                <div style="width:64px;height:64px;background:#ECFDF5;border-radius:50%;text-align:center;line-height:64px;font-size:30px;margin-bottom:20px;">✓</div>
+                <p style="font-size:13px;color:#10B981;margin:0 0 8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;">Submission Confirmed</p>
+                <h1 style="font-size:22px;font-weight:800;color:#0D1B2A;margin:0 0 20px;line-height:1.3;">Guarantor Form Received</h1>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">Dear <strong>{name}</strong>,</p>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">
+                  We confirm that your <strong>{role_label}</strong> section of the Employee Guarantor Form has been successfully received by the HR team at Eximp &amp; Cloves Infrastructure Limited.
+                </p>
+                <div style="background:#ECFDF5;border:1px solid #10B98140;border-radius:3px;padding:16px 20px;margin:20px 0;">
+                  <p style="font-size:13px;font-weight:700;color:#065F46;margin:0 0 6px;">What happens next?</p>
+                  <ul style="font-size:13px;color:#374151;line-height:1.9;margin:0;padding-left:18px;">
+                    <li>HR and Admin will review your submitted details.</li>
+                    <li>You will receive an email notification once verification is complete.</li>
+                    <li>If any revision is required, you will be contacted with clear instructions.</li>
+                  </ul>
+                </div>
+                <p style="font-size:13px;color:#9CA3AF;line-height:1.7;margin:0;">
+                  If you have any questions, contact HR at
+                  <a href="mailto:hr@eximps-cloves.com" style="color:#B8860B;">hr@eximps-cloves.com</a>.
+                </p>
+              </td>
+            </tr>
+            <!-- Footer -->
+            <tr>
+              <td style="background:#F8F9FB;border-top:1px solid #E8E2D9;padding:20px 36px;">
+                <p style="font-size:11px;color:#9CA3AF;margin:0;line-height:1.6;">
+                  <strong style="color:#6B7280;">Eximp &amp; Cloves Infrastructure Limited</strong><br>
+                  RC 8311800 &nbsp;|&nbsp; 57B, Isaac John Street, Yaba, Lagos &nbsp;|&nbsp; +234 912 686 4383<br>
+                  This is an automated HR system notification.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+    """
+
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, lambda: resend.Emails.send({
+        "from":     f"Eximp & Cloves HR <{from_email}>",
+        "to":       [email_addr],
+        "cc":       ["hr@eximps-cloves.com"],
+        "subject":  "Guarantor Form Submission Received — Eximp & Cloves",
+        "html":     html,
+        "reply_to": "hr@eximps-cloves.com",
+    }))
+
+
+async def _send_guarantor_approval_email(email_addr: str, name: str, section_label: str):
+    """Sent to the employee when HR approves their guarantor form (section or overall)."""
+    import resend
+    resend.api_key = os.getenv("RESEND_API_KEY")
+    from_email = os.getenv("FROM_EMAIL", "hr@eximps-cloves.com")
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+    <body style="margin:0;padding:0;background:#F5F0E8;font-family:'Segoe UI',Arial,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0E8;padding:40px 20px;">
+        <tr><td align="center">
+          <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:4px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+            <!-- Header -->
+            <tr>
+              <td style="background:#0D1B2A;padding:0;border-left:6px solid #B8860B;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="padding:28px 36px;">
+                      <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Eximp &amp; Cloves Infrastructure Limited</div>
+                      <div style="font-size:10px;color:#B8860B;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-top:4px;">Human Resources Division</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <!-- Body -->
+            <tr>
+              <td style="padding:40px 36px;">
+                <div style="width:64px;height:64px;background:#FEF9EC;border-radius:50%;text-align:center;line-height:64px;font-size:30px;margin-bottom:20px;">✅</div>
+                <p style="font-size:13px;color:#B8860B;margin:0 0 8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;">Verification Complete</p>
+                <h1 style="font-size:22px;font-weight:800;color:#0D1B2A;margin:0 0 20px;line-height:1.3;">Guarantor Form Approved</h1>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">Dear <strong>{name}</strong>,</p>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">
+                  We are pleased to inform you that <strong>{section_label}</strong> of your Employee Guarantor Form has been reviewed and <strong style="color:#059669;">approved</strong> by HR.
+                </p>
+                <div style="background:#FEF9EC;border:1px solid #B8860B40;border-radius:3px;padding:16px 20px;margin:20px 0;">
+                  <p style="font-size:13px;color:#78510A;line-height:1.7;margin:0;">
+                    This section is now on file with the HR department as part of your official employment documentation. No further action is required from you at this time.
+                  </p>
+                </div>
+                <p style="font-size:13px;color:#9CA3AF;line-height:1.7;margin:0;">
+                  For any queries, contact HR at
+                  <a href="mailto:hr@eximps-cloves.com" style="color:#B8860B;">hr@eximps-cloves.com</a>.
+                </p>
+              </td>
+            </tr>
+            <!-- Footer -->
+            <tr>
+              <td style="background:#F8F9FB;border-top:1px solid #E8E2D9;padding:20px 36px;">
+                <p style="font-size:11px;color:#9CA3AF;margin:0;line-height:1.6;">
+                  <strong style="color:#6B7280;">Eximp &amp; Cloves Infrastructure Limited</strong><br>
+                  RC 8311800 &nbsp;|&nbsp; 57B, Isaac John Street, Yaba, Lagos &nbsp;|&nbsp; +234 912 686 4383<br>
+                  This is an automated HR system notification.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+    """
+
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, lambda: resend.Emails.send({
+        "from":     f"Eximp & Cloves HR <{from_email}>",
+        "to":       [email_addr],
+        "cc":       ["hr@eximps-cloves.com"],
+        "subject":  f"Guarantor Form Approved — {section_label}",
+        "html":     html,
+        "reply_to": "hr@eximps-cloves.com",
+    }))
+
+
 # ── Public Endpoints ──────────────────────────────────────────────────────────
 
 @router.get("/public/check")
@@ -797,6 +966,13 @@ async def save_partial_submission(
             lambda: db.table("guarantor_submissions").upsert(payload).execute()
         )
 
+        # Confirm receipt to the employee
+        try:
+            emp_name = fields.get("full_name") or email
+            await _send_guarantor_submission_email(email, emp_name, "Section A (Employee Details)")
+        except Exception:
+            pass
+
     # ── GUARANTOR SECTIONS ────────────────────────────────────────────────
     elif section in ("g1", "g2"):
         slot    = 1 if section == "g1" else 2
@@ -850,7 +1026,7 @@ async def save_partial_submission(
             .execute()
         )
 
-        # Notify employee
+        # Notify employee (in-app) + send confirmation email to the guarantor
         try:
             admin_res = await db_execute(
                 lambda: db.table("admins").select("id").eq("email", email).execute()
@@ -864,6 +1040,12 @@ async def save_partial_submission(
                         "message":  f"{g_name} has completed their part of your Guarantor Form.",
                     }).execute()
                 )
+            # Email the guarantor themselves
+            g_email = fields.get("email")
+            g_name  = fields.get("full_name") or f"Guarantor {slot}"
+            sec_label = "Section B (Guarantor 1)" if slot == 1 else "Section C (Guarantor 2)"
+            if g_email:
+                await _send_guarantor_submission_email(g_email, g_name, sec_label)
         except Exception:
             pass
 

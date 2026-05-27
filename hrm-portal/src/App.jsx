@@ -13531,9 +13531,9 @@ function PublicGuarantorForm() {
       <div style={css.wrap}><Progress />
         <div style={{ ...css.card, textAlign: "center", padding: "64px 48px", background: "linear-gradient(135deg, #ECFDF5 0%, #F0FDF4 100%)", borderColor: "#10B981" }}>
           <div style={{ width: 80, height: 80, borderRadius: "50%", background: "#10B981", display: "flex", alignItems: "center", justifyContent: "center", margin: "0 auto 28px", fontSize: 40, color: "#fff", boxShadow: "0 8px 24px rgba(16, 185, 129, 0.3)" }}>✓</div>
-          <div style={{ fontSize: 32, fontWeight: 900, color: "#065F46", marginBottom: 16, letterSpacing: -0.5 }}>Form Submitted Successfully</div>
+          <div style={{ fontSize: 32, fontWeight: 900, color: "#065F46", marginBottom: 16, letterSpacing: -0.5 }}>Form Submitted Successfully and under review by HR and admin</div>
           <div style={{ fontSize: 15, color: "#047857", lineHeight: 1.9, maxWidth: 480, margin: "0 auto 28px", fontWeight: 500 }}>
-            Your guarantor form has been received and is currently under review by HR. You will be notified by email once verification is complete.
+            Your form has been received. HR and Admin will review your submission and you will be notified by email once a decision has been made.
           </div>
           <div style={{ background: "#fff", border: "1px solid #10B98140", borderRadius: 8, padding: "16px 20px", margin: "0 auto 24px", maxWidth: 380, textAlign: "left" }}>
             <div style={{ fontSize: 11, fontWeight: 700, color: "#10B981", letterSpacing: 1.2, textTransform: "uppercase", marginBottom: 8 }}>📋 Submission Details</div>

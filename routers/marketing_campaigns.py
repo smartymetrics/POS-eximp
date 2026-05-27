@@ -158,17 +158,32 @@ async def send_test_email(id: str, data: CampaignTest, current_admin=Depends(ver
         if data.subject_a: campaign["subject_a"] = data.subject_a
         if data.html_body_a: campaign["html_body_a"] = data.html_body_a
     
-    # Dummy contact for testing
-    contact = {
-        "id": "test-id",
-        "first_name": "Test",
-        "last_name": "User",
-        "email": data.email
-    }
+    # Look up the real contact by email so all tags (first_name, financial, etc.) resolve
+    # exactly as they would in a real campaign send.
+    contact_res = await db_execute(lambda: db.table("marketing_contacts").select("*").eq("email", data.email.strip().lower()).limit(1).execute())
     
+    if contact_res.data:
+        # Real contact found — use their full record so every tag personalises correctly
+        contact = contact_res.data[0]
+        # Force the send through even if they are unsubscribed (it's a test, not a broadcast)
+        contact = {**contact, "is_subscribed": True}
+        preview_note = "with real contact data"
+    else:
+        # No contact found for this email — fall back to a clearly-labelled placeholder
+        # so the tester knows tags won't be fully resolved
+        contact = {
+            "id": "test-id",
+            "first_name": "[First Name]",
+            "last_name": "[Last Name]",
+            "email": data.email,
+            "phone": "[Phone]",
+            "is_subscribed": True,
+        }
+        preview_note = "no contact found for this email — tag values are placeholders"
+
     res = await send_marketing_email(campaign, contact)
     if res:
-        return {"message": f"Test email (Variant {data.variant}) sent to {data.email}"}
+        return {"message": f"Test email (Variant {data.variant}) sent to {data.email} ({preview_note})"}
     raise HTTPException(status_code=500, detail="Failed to send test email")
 
 @router.post("/{id}/send")
