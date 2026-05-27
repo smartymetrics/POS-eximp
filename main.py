@@ -145,6 +145,8 @@ app.include_router(ws_support.router, prefix="/api", tags=["live-chat"])
 app.include_router(subscriptions.router, tags=["subscriptions"])
 app.include_router(hr.router, prefix="/api/hr", tags=["hr"])
 app.include_router(hr_legal.router, prefix="/api/hr-legal", tags=["hr-legal"])
+app.include_router(biodata.router, prefix="/api/biodata", tags=["biodata"])
+app.include_router(guarantor.router, prefix="/api/guarantor", tags=["guarantor"])
 
 # KYC Links API
 app.include_router(kyc_links.router, tags=["kyc-links"])
