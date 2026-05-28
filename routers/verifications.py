@@ -158,6 +158,13 @@ async def confirm_verification(
     invoice = inv_res.data[0]
     client = invoice["clients"]
 
+    # If the client email is a placeholder and the invoice has a real email, update the client record
+    invoice_email = invoice.get("email")
+    client_email = client.get("email")
+    if client_email and client_email.startswith("lead_") and invoice_email and not invoice_email.startswith("lead_"):
+        await db_execute(lambda: db.table("clients").update({"email": invoice_email}).eq("id", client["id"]).execute())
+        client["email"] = invoice_email
+
     # 3a. Sync pipeline_stage on invoice + client now that payment is confirmed.
     # Mirrors the same logic in routers/payments.py (lines 124-127).
     # Wrapped in try/except so it never prevents the confirmation from completing.

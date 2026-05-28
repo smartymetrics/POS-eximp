@@ -66,6 +66,12 @@ class SubscriptionService:
             match_res = await db_execute(lambda: match_query.or_(",".join(match_filters)).execute())
             if match_res.data:
                 client_id = match_res.data[0]["id"]
+                existing_email = match_res.data[0].get("email", "")
+                # If the existing email is a placeholder and a real email is now provided, update it
+                if existing_email and existing_email.startswith("lead_") and not email.startswith("lead_") and email:
+                    client_data["email"] = email
+                elif not email and existing_email:
+                    client_data["email"] = existing_email
 
         if client_id:
             await db_execute(lambda: db.table("clients").update(jsonable_encoder(client_data)).eq("id", client_id).execute())

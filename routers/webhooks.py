@@ -204,7 +204,7 @@ async def form_submission(
 
         # 3b. Enhanced Matching (Email or Phone)
         client_id = None
-        match_query = db.table("clients").select("id")
+        match_query = db.table("clients").select("id, email")
         match_filters = []
         if payload.email: match_filters.append(f"email.eq.{payload.email}")
         if payload.phone: match_filters.append(f"phone.eq.{payload.phone}")
@@ -213,6 +213,12 @@ async def form_submission(
             match_res = await db_execute(lambda: match_query.or_(",".join(match_filters)).execute())
             if match_res.data:
                 client_id = match_res.data[0]["id"]
+                existing_email = match_res.data[0].get("email", "")
+                # If the existing email is a placeholder and a real email is now provided, update it
+                if existing_email and existing_email.startswith("lead_") and payload.email and not payload.email.startswith("lead_"):
+                    client_data["email"] = payload.email
+                elif not payload.email and existing_email:
+                    client_data["email"] = existing_email
 
         if client_id:
             await db_execute(lambda: db.table("clients").update(jsonable_encoder(client_data)).eq("id", client_id).execute())

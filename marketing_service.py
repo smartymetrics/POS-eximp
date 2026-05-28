@@ -7,6 +7,7 @@ import asyncio
 from datetime import datetime, timedelta
 from typing import List, Dict, Any
 from database import get_db
+from premailer import transform as inline_css
 
 logger = logging.getLogger(__name__)
 
@@ -169,11 +170,19 @@ async def send_marketing_email(campaign: Dict[str, Any], contact: Dict[str, Any]
         return None
 
 
-    # 1. Personalize & Sanitize
-    html = personalize_content(campaign["html_body_a"], contact)
+    # 1. Inline CSS — converts <style> block rules into inline style="" attributes
+    # so Outlook, Gmail, and all email clients render correctly.
+    raw_html = campaign["html_body_a"]
+    try:
+        raw_html = inline_css(raw_html, remove_classes=False, strip_important=False)
+    except Exception as e:
+        logger.warning(f"CSS inlining failed, sending as-is: {e}")
+
+    # 2. Personalize & Sanitize
+    html = personalize_content(raw_html, contact)
     html = sanitize_urls(html)
     
-    # 2. Tracking (only for real campaigns, not tests)
+    # 3. Tracking (only for real campaigns, not tests)
     if campaign.get("status") != "test":
         html = wrap_links(html, campaign_id, contact_id)
         html = inject_tracking_pixel(html, campaign_id, contact_id)
