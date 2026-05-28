@@ -57,7 +57,9 @@ class SubscriptionService:
 
         # 1b. Enhanced Matching (Email or Phone)
         client_id = None
-        match_query = db.table("clients").select("id")
+        # FIX: fetch email and assigned_rep_id so we can (a) correctly handle placeholder
+        # emails and (b) preserve the rep assignment on update (prevents nulling it out).
+        match_query = db.table("clients").select("id, email, assigned_rep_id")
         match_filters = []
         if email: match_filters.append(f"email.eq.{email}")
         if phone: match_filters.append(f"phone.eq.{phone}")
@@ -65,13 +67,26 @@ class SubscriptionService:
         if match_filters:
             match_res = await db_execute(lambda: match_query.or_(",".join(match_filters)).execute())
             if match_res.data:
-                client_id = match_res.data[0]["id"]
-                existing_email = match_res.data[0].get("email", "")
-                # If the existing email is a placeholder and a real email is now provided, update it
-                if existing_email and existing_email.startswith("lead_") and not email.startswith("lead_") and email:
-                    client_data["email"] = email
-                elif not email and existing_email:
-                    client_data["email"] = existing_email
+                existing_row = match_res.data[0]
+                client_id = existing_row["id"]
+                existing_email = existing_row.get("email") or ""
+                existing_rep_id = existing_row.get("assigned_rep_id")
+
+                # FIX: Resolve which email to use:
+                # - If existing email is a lead_ placeholder and the form provides a real one, use the real one.
+                # - If form email is blank but existing real email is on file, keep the existing one.
+                # - Otherwise the form email (already in client_data) is authoritative.
+                is_placeholder = existing_email.startswith("lead_") or existing_email.endswith("@temp-eximps.com")
+                if is_placeholder and email and not email.startswith("lead_"):
+                    client_data["email"] = email  # upgrade placeholder → real
+                elif not email and existing_email and not is_placeholder:
+                    client_data["email"] = existing_email  # keep real email if form left it blank
+
+                # FIX: Preserve the assigned_rep_id from the existing lead record so the
+                # sales rep's client view still shows this record after conversion.
+                # Only override if the subscription form explicitly carries a rep id.
+                if not client_data.get("assigned_rep_id") and existing_rep_id:
+                    client_data["assigned_rep_id"] = existing_rep_id
 
         if client_id:
             await db_execute(lambda: db.table("clients").update(jsonable_encoder(client_data)).eq("id", client_id).execute())

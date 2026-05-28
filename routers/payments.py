@@ -137,8 +137,10 @@ async def record_payment(
         new_status = fresh_inv.data[0]["status"]
         if new_status == "paid":
             await db_execute(lambda: db.table("clients").update({"pipeline_stage": "closed"}).eq("id", data.client_id).execute())
-        elif new_status in ["partial", "unpaid"]:
+        elif new_status == "partial":
+            # Has paid something but balance remains — move to "paid" (partial-paid) stage
             await db_execute(lambda: db.table("clients").update({"pipeline_stage": "paid"}).eq("id", data.client_id).execute())
+        # "unpaid" — payment voided/reversed — do not advance the pipeline stage
 
     inv_num = inv.data[0].get('invoice_number', 'N/A')
     return {"message": "Payment recorded", "payment": result.data[0], "invoice_number": inv_num}

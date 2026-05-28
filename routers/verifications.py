@@ -158,12 +158,32 @@ async def confirm_verification(
     invoice = inv_res.data[0]
     client = invoice["clients"]
 
-    # If the client email is a placeholder and the invoice has a real email, update the client record
-    invoice_email = invoice.get("email")
-    client_email = client.get("email")
-    if client_email and client_email.startswith("lead_") and invoice_email and not invoice_email.startswith("lead_"):
-        await db_execute(lambda: db.table("clients").update({"email": invoice_email}).eq("id", client["id"]).execute())
-        client["email"] = invoice_email
+    # FIX: invoices have no "email" column — the correct source of truth for the real
+    # email at verification time is the property_subscriptions table (the client filled
+    # it themselves on the subscription form).  Fall back to the subscription record
+    # linked via this verification so placeholder emails get upgraded before any
+    # receipt/statement emails are sent.
+    client_email = client.get("email") or ""
+    is_placeholder = client_email.startswith("lead_") or client_email.endswith("@temp-eximps.com")
+    if is_placeholder and verify_rec.get("subscription_id"):
+        try:
+            sub_res = await db_execute(
+                lambda: db.table("property_subscriptions")
+                .select("email")
+                .eq("id", verify_rec["subscription_id"])
+                .execute()
+            )
+            sub_email = (sub_res.data[0].get("email") or "").strip().lower() if sub_res.data else ""
+            if sub_email and not sub_email.startswith("lead_") and "@" in sub_email:
+                await db_execute(
+                    lambda: db.table("clients")
+                    .update({"email": sub_email})
+                    .eq("id", client["id"])
+                    .execute()
+                )
+                client["email"] = sub_email
+        except Exception as email_fix_err:
+            print(f"[WARN] Could not upgrade placeholder email at verification: {email_fix_err}")
 
     # 3a. Sync pipeline_stage on invoice + client now that payment is confirmed.
     # Mirrors the same logic in routers/payments.py (lines 124-127).
