@@ -1117,17 +1117,28 @@
                         const canvas = document.getElementById('signature-pad');
                         const ctx = canvas.getContext('2d');
 
+                        // FIX: The canvas context has already been scaled by devicePixelRatio
+                        // in initSignaturePad (via ctx.scale(ratio, ratio)). All drawing
+                        // operations must therefore use LOGICAL (CSS) pixel dimensions —
+                        // i.e. canvas.width / dpr — not the raw physical pixel dimensions.
+                        // Using raw dimensions here caused uploaded signatures to render
+                        // far outside the visible canvas area on high-DPI (Retina) screens,
+                        // producing a blank/corrupted snapshot when toDataURL() was called.
+                        const dpr = Math.max(window.devicePixelRatio || 1, 1);
+                        const logicalWidth = canvas.width / dpr;
+                        const logicalHeight = canvas.height / dpr;
+
                         // Clear previous signature
                         clearSignature();
 
-                        // Calculate aspect ratio to fit image beautifully
-                        const hRatio = canvas.width / img.width;
-                        const vRatio = canvas.height / img.height;
+                        // Calculate aspect ratio to fit image within logical canvas dimensions
+                        const hRatio = logicalWidth / img.width;
+                        const vRatio = logicalHeight / img.height;
                         const ratio = Math.min(hRatio, vRatio);
-                        const centerShift_x = (canvas.width - img.width * ratio) / 2;
-                        const centerShift_y = (canvas.height - img.height * ratio) / 2;
+                        const centerShift_x = (logicalWidth - img.width * ratio) / 2;
+                        const centerShift_y = (logicalHeight - img.height * ratio) / 2;
 
-                        ctx.clearRect(0, 0, canvas.width, canvas.height); // Extra clear
+                        ctx.clearRect(0, 0, logicalWidth, logicalHeight);
                         ctx.drawImage(img, 0, 0, img.width, img.height,
                             centerShift_x, centerShift_y, img.width * ratio, img.height * ratio);
 
