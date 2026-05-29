@@ -4012,12 +4012,13 @@ async def send_candidate_email(request: Request, current_admin: dict = Depends(v
     </div>"""
 
     # Send via Resend
-    from email_service import async_resend
+    from email_service import async_resend, HR_CC
     try:
         await async_resend({
             "from": "Eximp & Cloves HR <hr@mail.eximps-cloves.com>",
             "to": [candidate_email],
             "reply_to": "hr@eximps-cloves.com",
+            "cc": HR_CC,
             "subject": subject,
             "html": html_body
         })

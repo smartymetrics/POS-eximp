@@ -2216,11 +2216,12 @@ def _staff_signing_html(staff_name: str, doc_title: str, signing_url: str, custo
 async def send_staff_signing_request_email(staff_name: str, email_addr: str, doc_title: str, signing_url: str, custom_message: str = None):
     logger.info(f"Attempting to send signing request to {email_addr} for '{doc_title}'")
     try:
+        cc_recipients = ["legal@eximps-cloves.com"] + HR_CC
         res = await async_resend({
             "from": f"Eximp & Cloves Personnel <{FROM_EMAIL}>",
             "to": [email_addr],
             "reply_to": "admin@eximps-cloves.com",
-            "cc": ["legal@eximps-cloves.com"],
+            "cc": cc_recipients,
             "subject": f"Action Required: Signature Requested - {doc_title}",
             "html": _staff_signing_html(staff_name, doc_title, signing_url, custom_message)
         })
@@ -2338,11 +2339,12 @@ async def send_personnel_executed_email(
                 "content": base64.b64encode(pdf_bytes).decode(),
                 "filename": f"Executed_{doc_title.replace(' ', '_')}.pdf"
             })
+        cc_recipients = ["legal@eximps-cloves.com"] + HR_CC
         await async_resend({
             "from": f"Eximp & Cloves Legal <{FROM_EMAIL}>",
             "to": [signer_email],
             "reply_to": "admin@eximps-cloves.com",
-            "cc": ["legal@eximps-cloves.com"],
+            "cc": cc_recipients,
             "subject": f"✅ Your Signed Document: {doc_title}",
             "html": html,
             "attachments": attachments
