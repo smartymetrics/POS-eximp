@@ -1916,7 +1916,11 @@ async def export_matter_pdf(matter_id: str, token: str = None, request: Request 
     if current_admin:
         admin_id = current_admin.get("sub")
         roles = current_admin.get("role", "").lower().split(",")
-        is_privileged = any(r.strip() in ["hr", "lawyer", "legal", "admin", "super_admin"] for r in roles)
+        primary_role = current_admin.get("primary_role", "").lower()
+        is_privileged = (
+            any(r.strip() in ["hr", "hr_admin", "lawyer", "legal", "admin", "super_admin"] for r in roles)
+            or primary_role in ["hr", "legal", "admin"]
+        )
         query = matter_query.eq("id", matter_id)
         if not is_privileged:
             query = query.eq("staff_id", admin_id).eq("staff_visible", True)
