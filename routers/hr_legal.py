@@ -492,12 +492,18 @@ async def add_collaborator(matter_id: str, data: dict, current_admin=Depends(ver
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to add collaborator")
 
-    # Fetch matter title for notification
-    matter_info = await db_execute(lambda: db.table("legal_matters").select("title, category").eq("id", matter_id).execute())
+    # Fetch matter title/category and collaborator's name+email in parallel
+    matter_info, collab_info = await asyncio.gather(
+        db_execute(lambda: db.table("legal_matters").select("title, category").eq("id", matter_id).execute()),
+        db_execute(lambda: db.table("admins").select("full_name, email").eq("id", collab_data["admin_id"]).execute()),
+    )
     matter_title = matter_info.data[0]["title"] if matter_info.data else "a legal matter"
     matter_cat = matter_info.data[0]["category"] if matter_info.data else "Contract"
     inviter_name = current_admin.get("full_name", "HR")
     invitation_note = data.get("invitation_note", "")
+
+    collab_name = collab_info.data[0]["full_name"] if collab_info.data else "Collaborator"
+    collab_email = collab_info.data[0]["email"] if collab_info.data else None
 
     # Audit
     await db_execute(lambda: db.table("legal_matter_history").insert({
@@ -505,10 +511,10 @@ async def add_collaborator(matter_id: str, data: dict, current_admin=Depends(ver
         "action": "Lawyer Invited",
         "performed_by": admin_id,
         "performed_by_name": inviter_name,
-        "description": f"Granted {collab_data['permission_level']} access. Invitation note: {invitation_note or 'None'}"
+        "description": f"Granted {collab_data['permission_level']} access to {collab_name}. Invitation note: {invitation_note or 'None'}"
     }).execute())
 
-    # Fire notification to invited collaborator
+    # Bell notification
     notif_msg = (
         f"{inviter_name} has invited you to collaborate on a {matter_cat}: \"{matter_title}\". "
         f"Permission: {collab_data['permission_level']}."
@@ -524,6 +530,22 @@ async def add_collaborator(matter_id: str, data: dict, current_admin=Depends(ver
         message=notif_msg,
         matter_id=matter_id,
     )
+
+    # Email notification — non-blocking, never raises
+    try:
+        from email_service import send_collaborator_invite_email
+        await send_collaborator_invite_email(
+            recipient_name=collab_name,
+            recipient_email=collab_email,
+            inviter_name=inviter_name,
+            matter_title=matter_title,
+            matter_category=matter_cat,
+            permission_level=collab_data["permission_level"],
+            matter_id=matter_id,
+            invitation_note=invitation_note,
+        )
+    except Exception as _email_err:
+        print(f"[CollabInvite] Email failed (non-fatal): {_email_err}")
 
     return res.data[0]
 

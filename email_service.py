@@ -2632,3 +2632,139 @@ async def send_procurement_rejection_email(email_addr: str, vendor_name: str, su
         })
     except Exception as e:
         logger.error(f"Failed to send procurement rejection to {email_addr}: {e}")
+
+# ── COLLABORATOR INVITE EMAIL ─────────────────────────────────────────────────
+
+def _collaborator_invite_html(
+    recipient_name: str,
+    inviter_name: str,
+    matter_title: str,
+    matter_category: str,
+    permission_level: str,
+    invitation_note: str,
+    matter_url: str,
+) -> str:
+    note_block = ""
+    if invitation_note:
+        note_block = f"""
+        <div style="background:#fffbeb;border-left:4px solid #C47D0A;border-radius:0 8px 8px 0;padding:14px 18px;margin:20px 0;">
+          <p style="margin:0;font-size:12px;font-weight:700;color:#92400e;text-transform:uppercase;letter-spacing:0.05em;">Note from {inviter_name}</p>
+          <p style="margin:8px 0 0;font-size:13px;color:#78350f;line-height:1.6;">{invitation_note}</p>
+        </div>"""
+
+    return f"""
+    <div style="font-family:'Helvetica Neue',Arial,sans-serif;max-width:640px;margin:auto;background:#fff;border:1px solid #e5e7eb;border-radius:12px;overflow:hidden;">
+      <!-- Header -->
+      <div style="background:#0F1115;padding:28px 36px;text-align:center;">
+        <img src="https://app.eximps-cloves.com/static/img/logo_dark.svg" alt="Eximp &amp; Cloves" style="height:36px;">
+        <p style="color:#C47D0A;font-size:11px;font-weight:700;letter-spacing:0.2em;text-transform:uppercase;margin:10px 0 0;">Legal Department</p>
+      </div>
+
+      <!-- Body -->
+      <div style="padding:36px;">
+        <div style="text-align:center;margin-bottom:28px;">
+          <div style="font-size:48px;">⚖️</div>
+          <h2 style="color:#1f2937;font-size:20px;font-weight:800;margin:8px 0;">You've Been Invited to Collaborate</h2>
+          <p style="color:#6b7280;font-size:13px;margin:0;">{inviter_name} has added you to a legal matter</p>
+        </div>
+
+        <p style="color:#374151;font-size:14px;line-height:1.7;">Dear <strong>{recipient_name}</strong>,</p>
+        <p style="color:#374151;font-size:14px;line-height:1.7;">
+          You have been granted <strong>{permission_level}</strong> access to the following legal matter on the Eximp &amp; Cloves HRM Portal:
+        </p>
+
+        <div style="background:#f9fafb;border:1px solid #e5e7eb;border-radius:8px;padding:18px 22px;margin:20px 0;">
+          <table style="width:100%;border-collapse:collapse;">
+            <tr>
+              <td style="font-size:11px;color:#9ca3af;text-transform:uppercase;letter-spacing:0.05em;padding-bottom:6px;">Document</td>
+            </tr>
+            <tr>
+              <td style="font-size:15px;font-weight:800;color:#111827;padding-bottom:14px;">📄 {matter_title}</td>
+            </tr>
+            <tr>
+              <td style="border-top:1px solid #e5e7eb;padding-top:14px;">
+                <table style="width:100%;border-collapse:collapse;">
+                  <tr>
+                    <td style="font-size:12px;color:#6b7280;width:50%;">Category</td>
+                    <td style="font-size:12px;font-weight:600;color:#374151;text-align:right;">{matter_category}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:12px;color:#6b7280;padding-top:8px;">Your Access Level</td>
+                    <td style="font-size:12px;font-weight:700;color:#C47D0A;text-align:right;padding-top:8px;">{permission_level}</td>
+                  </tr>
+                  <tr>
+                    <td style="font-size:12px;color:#6b7280;padding-top:8px;">Invited By</td>
+                    <td style="font-size:12px;font-weight:600;color:#374151;text-align:right;padding-top:8px;">{inviter_name}</td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+          </table>
+        </div>
+
+        {note_block}
+
+        <div style="text-align:center;margin:30px 0;">
+          <a href="{matter_url}" style="display:inline-block;background:#C47D0A;color:#fff;text-decoration:none;font-size:14px;font-weight:700;padding:14px 32px;border-radius:8px;letter-spacing:0.02em;">
+            Open Legal Portal →
+          </a>
+        </div>
+
+        <p style="color:#6b7280;font-size:13px;line-height:1.7;">
+          You can review and work on this matter at any time by logging into the HRM portal and navigating to the Legal section.
+          If you believe this invitation was sent in error, please contact HR.
+        </p>
+      </div>
+
+      <!-- Footer -->
+      <div style="background:#f9fafb;border-top:1px solid #e5e7eb;padding:20px 36px;text-align:center;">
+        <p style="color:#9ca3af;font-size:11px;margin:0;line-height:1.8;">
+          Eximp &amp; Cloves Infrastructure Limited · RC 8311800<br>
+          57B, Isaac John Street, Yaba, Lagos · +234 912 686 4383<br>
+          <a href="https://www.eximps-cloves.com" style="color:#C47D0A;text-decoration:none;">www.eximps-cloves.com</a>
+        </p>
+      </div>
+    </div>"""
+
+
+async def send_collaborator_invite_email(
+    recipient_name: str,
+    recipient_email: str,
+    inviter_name: str,
+    matter_title: str,
+    matter_category: str,
+    permission_level: str,
+    matter_id: str,
+    invitation_note: str = "",
+):
+    """
+    Sent to a collaborator immediately when they are added to a legal matter.
+    Non-fatal — logs errors but never raises.
+    """
+    if not recipient_email:
+        logger.warning(f"[CollabInvite] No email address for recipient '{recipient_name}', skipping.")
+        return
+
+    matter_url = f"{APP_BASE_URL}/hr#contracts"
+    try:
+        res = await async_resend({
+            "from": f"Eximp & Cloves Legal <{FROM_EMAIL}>",
+            "to": [recipient_email],
+            "reply_to": "hr@eximps-cloves.com",
+            "cc": ["hr@eximps-cloves.com"],
+            "subject": f"You've been invited to collaborate — {matter_title}",
+            "html": _collaborator_invite_html(
+                recipient_name=recipient_name,
+                inviter_name=inviter_name,
+                matter_title=matter_title,
+                matter_category=matter_category,
+                permission_level=permission_level,
+                invitation_note=invitation_note,
+                matter_url=matter_url,
+            ),
+        })
+        logger.info(f"[CollabInvite] Email sent to {recipient_email} for matter '{matter_title}': {res}")
+        return res
+    except Exception as e:
+        logger.error(f"[CollabInvite] Failed to send invite email to {recipient_email}: {e}")
+        return None
