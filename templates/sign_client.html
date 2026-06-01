@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Contract Signing | Eximp & Cloves</title>
+<title>Contract of Sale Signing | Eximp & Cloves</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
 <style>
@@ -63,18 +63,18 @@
 <div class="container">
   <div class="header">
     <img src="/static/logo.png" alt="Eximp & Cloves" class="logo" onerror="this.src='https://www.eximps-cloves.com/logo.svg'">
-    <h1 class="title">Client Contract Signing</h1>
+    <h1 class="title">Client Contract of Sale Signing</h1>
     <p class="subtitle">Please review and sign the Contract of Sale for your purchase.</p>
   </div>
 
   <div class="card" id="form-card">
     <div class="summary">
-      <h3>Contract Summary</h3>
+      <h3>Contract of Sale Summary</h3>
       <p>Purchaser: <strong id="client-name">Loading...</strong></p>
       <p>Property: <strong id="property-desc">Loading...</strong></p>
       <p>Date: <strong id="contract-date">Loading...</strong></p>
-      <button id="view-contract-btn" class="btn-view-contract" onclick="viewContract()">📄 View Full Contract Document</button>
-      <p class="note">Open the contract, review the terms, then sign below.</p>
+      <button id="view-contract-btn" class="btn-view-contract" onclick="viewContract()">📄 View Full Contract of Sale Document</button>
+      <p class="note">Open the Contract of Sale, review the terms, then sign below. Your signature will also be used for the associated Deed of Assignment document.</p>
     </div>
 
     <div class="sig-tabs">
@@ -110,7 +110,7 @@
     </div>
 
     <button class="btn-submit" id="submit-btn" disabled>Submit Contract Signature</button>
-    <p class="notice">By signing, you confirm that this is your authorized signature for the Contract of Sale.</p>
+    <p class="notice">By signing, you confirm that this is your authorized signature for the client's Contract of Sale and that it will also be used for the associated Deed of Assignment document.</p>
     <p class="notice" style="font-size: 11px; margin-top: 12px; line-height: 1.4;">
       <strong>Security Notice:</strong> For compliance and audit purposes, your IP address, device type, user agent, and signing time are recorded as part of the digital signature certificate for this transaction.
     </p>
@@ -119,7 +119,7 @@
   <div class="card success-overlay" id="success-card">
     <div class="success-icon">✓</div>
     <h2 class="title">Contract Signed</h2>
-    <p class="subtitle">Thank you. Your signature has been securely recorded.</p>
+    <p class="subtitle">Thank you. Your signature has been securely recorded and will also be used for the associated Deed of Assignment document.</p>
     <p style="margin-top:24px; font-size:13px; color:var(--gray);">You may now close this window.</p>
   </div>
 </div>

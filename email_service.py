@@ -1387,10 +1387,12 @@ async def send_signing_link_email(invoice, client, token, expires_at):
         <h2 style="color: #F5A623;">Action Required: Contract of Sale Execution</h2>
         <p>Dear {CLIENT_NAME},</p>
         <p>Your Contract of Sale for <strong>{ESTATE_NAME}</strong> is ready for execution.</p>
+        <p>Both your client signature and your witness signature are required to complete this Contract of Sale.</p>
+        <p>Note: your signatures will also be used for the associated Deed of Assignment document.</p>
         <p>There are two separate steps:</p>
         <ol>
-            <li>Review and sign the contract yourself using the Client Signing Link below.</li>
-            <li>Forward the Witness Signing Link to <strong>your witness</strong>. The witness must open the link and sign as a witness.</li>
+            <li>Review and sign the Contract of Sale document yourself using the Client Signing Link below.</li>
+            <li>Forward the Witness Signing Link to <strong>your witness</strong>. The witness must open the link and sign as a witness to the same Contract of Sale document, with the signature also applied to the associated Deed of Assignment.</li>
         </ol>
 
         <div style="background: #f9f9f9; padding: 15px; border-radius: 8px; margin: 20px 0;">
@@ -1407,8 +1409,8 @@ async def send_signing_link_email(invoice, client, token, expires_at):
         <p><strong>Instructions for Client:</strong></p>
         <ul>
             <li>Open the Client Signing Link.</li>
-            <li>Read the complete contract document.</li>
-            <li>Sign and submit your contract signature.</li>
+            <li>Read the full Contract of Sale carefully.</li>
+            <li>Sign and submit your contract signature. This signature will also be used for the associated Deed of Assignment.</li>
         </ul>
         
         <div style="background-color: #f9f9f9; border-left: 4px solid #F5A623; padding: 15px; margin-top: 30px; font-size: 13px; color: #666;">
@@ -1419,12 +1421,13 @@ async def send_signing_link_email(invoice, client, token, expires_at):
         <p><strong>Instructions for Witness:</strong></p>
         <ol>
             <li>Open the witness link on a phone or computer.</li>
-            <li>Review the contract document.</li>
-            <li>Enter name, address, occupation, and sign.</li>
+            <li>Review the Contract of Sale document.</li>
+            <li>Enter your name, address, occupation, and sign as a witness.</li>
             <li>Click "Submit Witness Signature".</li>
         </ol>
 
-        <p>Once your witness has signed, the system will notify our legal department to generate your final executed contract.</p>
+        <p>Once your witness has signed, the system will finalize the client Contract of Sale and notify our legal team.</p>
+        <p>Note: Your witness signature will also be applied to the associated Deed of Assignment document.</p>
         <p>Best regards,<br>Legal Department<br>Eximp & Cloves Infrastructure Limited</p>
     </div>
     """
@@ -1519,7 +1522,8 @@ async def send_executed_contract_email(invoice, client, pdf_content, certificate
         <h2 style="color: #2e7d32; text-align: center;">Execution Complete</h2>
         <p>Dear {client.get('full_name', 'Valued Client')},</p>
         <p>Congratulations! Your Contract of Sale for <strong>{invoice.get('property_name')}</strong> has been fully executed by all parties.</p>
-        <p>Please find the final signed document attached to this email. This is a legally binding document; please keep it in a safe place.</p>
+        <p>This final executed document also incorporates the associated Deed of Assignment for this transaction.</p>
+        <p>Please find the signed document attached to this email. This is a legally binding document; please keep it in a safe place.</p>
         
         {cert_note}
 
@@ -1560,6 +1564,7 @@ def _witness_confirmation_html(witness_name, estate_name, client_name):
         <p>Dear {witness_name},</p>
         <p>Thank you for acting as a witness for the Contract of Sale between <strong>Eximp & Cloves Infrastructure Limited</strong> and <strong>{client_name}</strong> regarding the property: <strong>{estate_name}</strong>.</p>
         <p>Your signature has been securely recorded and linked to the official document. No further action is required from your side.</p>
+        <p>This witness signature is also associated with the related Deed of Assignment document.</p>
         
         <p>For security reasons, please note that you will not receive a copy of the full contract. Only the contracting parties receive the executed document.</p>
         

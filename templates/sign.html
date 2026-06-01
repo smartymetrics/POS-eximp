@@ -3,7 +3,7 @@
 <head>
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0">
-<title>Contract Witness Signing | Eximp & Cloves</title>
+<title>Contract of Sale Witness Signing | Eximp & Cloves</title>
 <link href="https://fonts.googleapis.com/css2?family=DM+Sans:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
 <script src="https://cdn.jsdelivr.net/npm/signature_pad@4.1.7/dist/signature_pad.umd.min.js"></script>
 <style>
@@ -88,22 +88,22 @@
 <div class="container">
   <div class="header">
     <img src="/static/logo.png" alt="Eximp & Cloves" class="logo" onerror="this.src='https://www.eximps-cloves.com/logo.svg'">
-    <h1 class="title">Witness Execution</h1>
-    <p class="subtitle">Contract of Sale — <span id="estate-name">Loading...</span></p>
+    <h1 class="title">Witness Signing for Contract of Sale</h1>
+    <p class="subtitle">Witness signature for the client's Contract of Sale — <span id="estate-name">Loading...</span></p>
   </div>
   
   <div class="card" id="form-card">
     <div class="summary">
-      <h3>Transaction Summary</h3>
+      <h3>Contract of Sale Summary</h3>
       <p>Purchaser: <span id="purchaser-name">...</span></p>
       <p>Property: <span id="property-desc">...</span></p>
       <p>Date: <span id="contract-date">...</span></p>
       <div style="margin-top: 16px; text-align: center;">
         <button id="view-contract-btn" class="btn-view-contract" onclick="viewContract()">
-          📄 View Full Contract Document
+          📄 View Full Contract of Sale Document
         </button>
         <p style="font-size: 12px; color: var(--gray); margin-top: 8px;">
-          Please review the complete contract before signing as a witness
+          Please review the complete Contract of Sale before signing as a witness. Your witness signature will also be applied to the associated Deed of Assignment document.
         </p>
       </div>
     </div>
@@ -173,7 +173,7 @@
       <label style="display: flex; align-items: flex-start; gap: 8px; cursor: pointer;">
         <input type="checkbox" id="acknowledgement" style="margin-top: 2px; flex-shrink: 0;">
         <span style="font-size: 14px; line-height: 1.4; color: var(--dark2);">
-          I have reviewed the Contract of Sale document above and acknowledge that I have read, understood, and agree to act as a witness to this transaction.
+          I have reviewed the Contract of Sale document above and acknowledge that I have read, understood, and agree to act as a witness to this transaction. This signature will also be used for the associated Deed of Assignment.
         </span>
       </label>
     </div>
@@ -181,7 +181,7 @@
     <button class="btn-submit" id="submit-btn" disabled>Submit Witness Signature</button>
     
     <p class="notice">
-      By signing, you confirm that you have reviewed the Contract of Sale document and personally witnessed the execution of this transaction.
+      By signing, you confirm that you have reviewed the client's Contract of Sale document and personally witnessed this execution. Your signature will also be applied to the associated Deed of Assignment document.
     </p>
     <p class="notice" style="font-size: 11px; margin-top: 12px; line-height: 1.4;">
       <strong>Security Notice:</strong> For compliance and audit purposes, your IP address, device type, user agent, and signing time are recorded as part of the digital signature certificate for this transaction.
@@ -191,7 +191,7 @@
   <div class="card success-overlay" id="success-card">
     <div class="success-icon">✓</div>
     <h2 class="title">Successfully Signed</h2>
-    <p class="subtitle">Thank you. Your witness signature has been securely recorded and linked to the contract.</p>
+    <p class="subtitle">Thank you. Your witness signature has been securely recorded and will also be applied to the associated Deed of Assignment document.</p>
     <p style="margin-top:24px; font-size:13px; color:var(--gray);">You may now close this window.</p>
   </div>
 </div>
