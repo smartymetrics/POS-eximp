@@ -33,6 +33,17 @@ HR_CC = ["hr@eximps-cloves.com"]
 def _b64(pdf_bytes: bytes) -> str:
     return base64.b64encode(pdf_bytes).decode()
 
+
+def _company_footer() -> str:
+  return '''
+    <hr style="border-color: #eee; margin-top:18px;">
+    <p style="color: #999; font-size: 12px; margin: 0;">
+      Eximp & Cloves Infrastructure Limited | RC 8311800<br>
+      57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383<br>
+      <a href="https://www.eximps-cloves.com" style="color: #999; text-decoration: none;">www.eximps-cloves.com</a>
+    </p>
+  '''
+
 def _welcome_html(client: dict, property_name: str) -> str:
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -51,8 +62,8 @@ def _welcome_html(client: dict, property_name: str) -> str:
         <p style="color: #555; margin-top: 30px;">Warm regards,<br>The Eximp & Cloves Team</p>
         <hr style="border-color: #eee;">
         <p style="color: #999; font-size: 12px; margin: 0;">
-          Eximp & Cloves Infrastructure Limited | RC 8311800<br>
-          57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383<br>
+          Eximp & Cloves Infrastructure Limited | RC 831180057B<br>
+          Isaac John Street, Yaba, Lagos | +234 912 686 4383<br>
           <a href="https://www.eximps-cloves.com" style="color: #999; text-decoration: none;">www.eximps-cloves.com</a>
         </p>
         <p style="color: #888; font-size: 11px; text-align: center; margin-top: 16px;">
@@ -1130,6 +1141,143 @@ def _refund_receipt_html(invoice: dict, payment: dict, client: dict) -> str:
         Eximp & Cloves Infrastructure Limited | RC 8311800
       </div>
     </div>"""
+
+
+def _refund_request_admin_html(payload: dict, file_links: list) -> str:
+    name = payload.get('name')
+    email = payload.get('email')
+    phone = payload.get('phone')
+    estate = payload.get('estate_bought')
+    invoice = payload.get('invoice_number') or '—'
+    comment = payload.get('comment') or '—'
+    req_id = payload.get('id') or ''
+    files_block = ''
+    if file_links:
+        files_block = '<ul>' + ''.join(f"<li><a href=\"{u}\" target=\"_blank\">{u}</a></li>" for u in file_links) + '</ul>'
+
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 700px; margin: 0 auto;">
+      <div style="background: #1A1A1A; padding: 24px; text-align: center;">
+        <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">
+      </div>
+      <div style="background: #F5A623; padding: 12px 24px;">
+        <h2 style="color: #1A1A1A; margin: 0; font-size: 16px;">New Refund Request — {name}</h2>
+      </div>
+      <div style="padding: 20px 24px; background: #fff; border: 1px solid #eee;">
+        <p style="color:#333;">A new refund request has been submitted.</p>
+        <table style="width:100%; font-size:13px; border-collapse:collapse; margin-top:12px;">
+          <tr><td style="color:#888;padding:8px;width:160px;">Request ID</td><td style="padding:8px;">{req_id}</td></tr>
+          <tr><td style="color:#888;padding:8px;">Name</td><td style="padding:8px;">{name}</td></tr>
+          <tr><td style="color:#888;padding:8px;">Email</td><td style="padding:8px;">{email}</td></tr>
+          <tr><td style="color:#888;padding:8px;">Phone</td><td style="padding:8px;">{phone}</td></tr>
+          <tr><td style="color:#888;padding:8px;">Estate</td><td style="padding:8px;">{estate}</td></tr>
+          <tr><td style="color:#888;padding:8px;">Invoice</td><td style="padding:8px;">{invoice}</td></tr>
+          <tr><td style="color:#888;padding:8px;">Comment</td><td style="padding:8px;">{comment}</td></tr>
+        </table>
+        <div style="margin-top:16px;">{files_block}</div>
+        <div style="text-align:center;margin-top:18px;">
+          <a href="https://app.eximps-cloves.com/refunds/{req_id}" style="background:#1A1A1A;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none;">Open in Dashboard</a>
+        </div>
+        <p style="color:#999;font-size:12px;margin-top:18px;">This message was sent to the Refunds inbox. Reply to this email to follow up.</p>
+        """ + _company_footer()
+
+
+def _refund_request_user_html(payload: dict) -> str:
+    name = payload.get('name')
+    req_id = payload.get('id') or ''
+    estate = payload.get('estate_bought')
+    invoice = payload.get('invoice_number') or '—'
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <div style="background: #1A1A1A; padding: 24px; text-align: center;">
+        <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">
+      </div>
+      <div style="background: #F5A623; padding: 12px 24px;">
+        <h2 style="color: #1A1A1A; margin: 0; font-size: 16px;">Refund Request Received</h2>
+      </div>
+      <div style="padding: 24px; background: #fff; border: 1px solid #eee;">
+        <p style="color:#333;">Hi <strong>{name}</strong>,</p>
+        <p style="color:#555;">Thanks — we've received your refund request (ID: <strong>{req_id}</strong>) for <strong>{estate}</strong> (Invoice: {invoice}). Our team will review and contact you if more information is required.</p>
+        <div style="text-align:center;margin-top:18px;">
+          <a href="https://www.eximps-cloves.com/refund" target="_blank" style="background:#1A1A1A;color:#fff;padding:10px 16px;border-radius:6px;text-decoration:none;">View Refund Policy</a>
+        </div>
+        <p style="color:#999;font-size:12px;margin-top:18px;">If you need urgent assistance, reply to this email or contact support.</p>
+        """ + _company_footer()
+
+
+async def send_refund_request_admin_email(payload: dict, file_links: list):
+    from routers.analytics import log_activity
+    admin_email = os.getenv('ADMIN_ALERT_EMAIL', 'admin@eximps-cloves.com')
+    try:
+        html = _refund_request_admin_html(payload, file_links)
+        res = await async_resend({
+            'from': f'Eximp & Cloves <{FROM_EMAIL}>',
+            'to': [admin_email],
+            'subject': f"New Refund Request — {payload.get('name')}",
+            'html': html
+        })
+        await log_activity('email_sent', f"Refund notification sent for {payload.get('name')}", 'system', metadata={'request_id': payload.get('id')})
+        return res
+    except Exception as e:
+        logger.error(f"Failed to send refund admin email: {e}")
+        await log_activity('email_failed', f"Refund admin email failed: {str(e)}", 'system', metadata={'request_id': payload.get('id'), 'error': str(e)})
+        return None
+
+
+async def send_refund_request_confirmation_email(payload: dict):
+    from routers.analytics import log_activity
+    try:
+        html = _refund_request_user_html(payload)
+        admin_email = os.getenv('ADMIN_ALERT_EMAIL', 'admin@eximps-cloves.com')
+        res = await async_resend({
+            'from': f'Eximp & Cloves <{FROM_EMAIL}>',
+            'to': [payload.get('email')],
+            'cc': [os.getenv('CC_LEGAL')] if os.getenv('CC_LEGAL') else [],
+            'reply_to': admin_email,
+            'subject': f"Refund request received — {payload.get('id')}",
+            'html': html
+        })
+        await log_activity('email_sent', f"Refund confirmation sent to {payload.get('email')}", 'system', metadata={'request_id': payload.get('id')})
+        return res
+    except Exception as e:
+        logger.error(f"Failed to send refund confirmation email: {e}")
+        await log_activity('email_failed', f"Refund confirmation failed: {str(e)}", 'system', metadata={'request_id': payload.get('id'), 'error': str(e)})
+        return None
+
+
+async def send_refund_status_update_email(payload: dict, status: str, reason: str = None):
+    """Notify requester when refund is approved/rejected."""
+    from routers.analytics import log_activity
+    try:
+        name = payload.get('name')
+        req_id = payload.get('id')
+        if status == 'approved':
+            subj = f"Refund Request Approved — {req_id}"
+            html = f"""
+            <div style=\"font-family:Arial,sans-serif;max-width:600px;margin:0 auto;\">\n              <div style=\"background:#1A1A1A;padding:24px;text-align:center;\">\n                <img src=\"https://www.eximps-cloves.com/logo.svg\" alt=\"Eximp & Cloves\" style=\"max-height:48px;display:block;margin:0 auto;\">\n              </div>\n              <div style=\"background:#27ae60;padding:12px 24px;\"><h2 style=\"color:#fff;margin:0;font-size:16px;\">Refund Approved</h2></div>\n              <div style=\"padding:24px;background:#fff;border:1px solid #eee;\">\n                <p>Hi <strong>{name}</strong>,</p>\n                <p>Your refund request (ID: <strong>{req_id}</strong>) has been <strong>approved</strong>. Our finance team will process the refund shortly.</p>\n                <p style=\"color:#999;font-size:12px;\">If you have questions, reply to this email.</p>\n              </div>\n            </div>"""
+            html += _company_footer()
+        else:
+            subj = f"Refund Request Update — {req_id}"
+            reason_block = f"<p style=\"color:#e74c3c;font-weight:bold;\">Reason: {reason}</p>" if reason else ''
+            html = f"""
+            <div style=\"font-family:Arial,sans-serif;max-width:600px;margin:0 auto;\">\n              <div style=\"background:#1A1A1A;padding:24px;text-align:center;\">\n                <img src=\"https://www.eximps-cloves.com/logo.svg\" alt=\"Eximp & Cloves\" style=\"max-height:48px;display:block;margin:0 auto;\">\n              </div>\n              <div style=\"background:#F5A623;padding:12px 24px;\"><h2 style=\"color:#1A1A1A;margin:0;font-size:16px;\">Refund Request Update</h2></div>\n              <div style=\"padding:24px;background:#fff;border:1px solid #eee;\">\n                <p>Hi <strong>{name}</strong>,</p>\n                <p>Your refund request (ID: <strong>{req_id}</strong>) has been <strong>{status}</strong>. {reason_block}</p>\n                <p style=\"color:#999;font-size:12px;\">If you need to appeal this decision, reply to this email or contact support.</p>\n              </div>\n            </div>"""
+            html += _company_footer()
+
+        admin_email = os.getenv('ADMIN_ALERT_EMAIL', 'admin@eximps-cloves.com')
+        res = await async_resend({
+          'from': f'Eximp & Cloves <{FROM_EMAIL}>',
+          'to': [payload.get('email')],
+          'cc': [os.getenv('CC_LEGAL')] if os.getenv('CC_LEGAL') else [],
+          'reply_to': admin_email,
+          'subject': subj,
+          'html': html
+        })
+        await log_activity('email_sent', f"Refund status '{status}' email sent for {req_id}", 'system', metadata={'request_id': req_id, 'status': status})
+        return res
+    except Exception as e:
+        logger.error(f"Failed to send refund status update email: {e}")
+        await log_activity('email_failed', f"Refund status email failed: {str(e)}", 'system', metadata={'request_id': payload.get('id'), 'error': str(e)})
+        return None
 
 def _commission_paid_html(rep: dict, batch: dict) -> str:
     amount_val = float(batch.get("total_amount", 0))

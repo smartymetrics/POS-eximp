@@ -45,6 +45,7 @@ from routers import (
     guarantor,
     kyc_links
 )
+from routers import refunds
 from routers.auth import require_roles, resolve_admin_token
 from database import init_db
 from scheduler import start_scheduler, stop_scheduler
@@ -70,6 +71,8 @@ app.add_middleware(
 
 from fastapi.exceptions import RequestValidationError
 from fastapi.responses import JSONResponse
+from fastapi import Request as FastAPIRequest
+import json
 
 @app.exception_handler(RequestValidationError)
 async def validation_exception_handler(request: Request, exc: RequestValidationError):
@@ -78,9 +81,32 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     This helps us see if it's a bad email format or missing field.
     """
     print(f"[ERROR] VALIDATION ERROR at {request.url.path}: {exc.errors()}")
+    # Sanitize the body to avoid non-serializable objects (UploadFile etc.)
+    def _sanitize(obj):
+        try:
+            json.dumps(obj)
+            return obj
+        except Exception:
+            # handle common containers
+            if isinstance(obj, dict):
+                return {k: _sanitize(v) for k, v in obj.items()}
+            if isinstance(obj, (list, tuple)):
+                return [_sanitize(v) for v in obj]
+            try:
+                # Fall back to a simple repr for unknown types
+                return repr(obj)
+            except Exception:
+                return str(type(obj))
+
+    safe_body = None
+    try:
+        safe_body = _sanitize(exc.body)
+    except Exception:
+        safe_body = repr(exc.body)
+
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={"detail": exc.errors(), "body": exc.body},
+        content={"detail": exc.errors(), "body": safe_body},
     )
 
 @app.exception_handler(HTTPException)
@@ -150,6 +176,8 @@ app.include_router(guarantor.router, prefix="/api/guarantor", tags=["guarantor"]
 
 # KYC Links API
 app.include_router(kyc_links.router, tags=["kyc-links"])
+
+app.include_router(refunds.router, prefix="/api/refunds", tags=["refunds"])
 
 
 

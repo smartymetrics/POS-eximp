@@ -1339,6 +1339,14 @@
         </svg>
         Finance & Assets
       </a>
+      <a class="nav-item admin-only" href="#" id="nav-refunds" onclick="showSection('refunds')">
+        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+          <path d="M21 12v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V12" />
+          <polyline points="7 10 12 5 17 10" />
+          <line x1="12" y1="5" x2="12" y2="21" />
+        </svg>
+        Refunds
+      </a>
       <a class="nav-item super-admin-only" href="/finance/procurement" id="nav-procurement">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           style="margin-right: 12px; opacity: 0.7;">
@@ -1612,6 +1620,28 @@
         </div>
         <div id="verificationsTable">
           <div class="loading"><span class="spinner"></span>Loading pending submissions...</div>
+        </div>
+      </div>
+    </div>
+
+    <!-- REFUNDS SECTION -->
+    <div class="content" id="section-refunds" style="display:none;">
+      <div class="card">
+        <div class="card-header">
+          <span class="card-title">Refund Requests</span>
+          <div style="display:flex;gap:12px;align-items:center;">
+            <button class="btn btn-ghost" onclick="loadRefunds()">Refresh</button>
+          </div>
+        </div>
+        <div class="card-body">
+          <table class="data-table" id="refundsTable">
+            <thead>
+              <tr><th>Submitted</th><th>Name</th><th>Email</th><th>Phone</th><th>Estate</th><th>Invoice</th><th>Status</th><th>Actions</th></tr>
+            </thead>
+            <tbody>
+              <tr><td colspan="8"><div class="loading"><span class="spinner"></span>Loading refunds...</div></td></tr>
+            </tbody>
+          </table>
         </div>
       </div>
     </div>
@@ -3912,10 +3942,9 @@
     }
 
     async function apiFetch(path, options = {}) {
-      return fetch(API + path, {
-        ...options,
-        headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + TOKEN, ...options.headers }
-      });
+      const headers = { 'Content-Type': 'application/json', ...options.headers };
+      if (TOKEN) headers['Authorization'] = 'Bearer ' + TOKEN;
+      return fetch(API + path, { ...options, headers });
     }
 
     // ── NAVIGATION ────────────────────────────
@@ -3924,7 +3953,7 @@
       const hasRole = (r) => roles.includes(r);
       const isAdmin = hasRole('admin') || hasRole('super_admin');
 
-      if (['team', 'analytics-revenue', 'reports', 'sales-reps', 'commissions'].includes(name) && !isAdmin) {
+      if (['team', 'analytics-revenue', 'reports', 'sales-reps', 'commissions', 'refunds'].includes(name) && !isAdmin) {
         toast('Access restricted to administrators', 'error'); return;
       }
       if (name === 'signatures' && !isAdmin && !hasRole('lawyer')) {
@@ -3933,7 +3962,7 @@
       if (name === 'marketing' && !isAdmin && !hasRole('marketing')) {
         toast('Access restricted to marketing staff', 'error'); return;
       }
-      ['dashboard', 'invoices', 'clients', 'properties', 'team', 'profile', 'verifications', 'analytics-revenue', 'reports', 'sales-reps', 'signatures', 'marketing'].forEach(s => {
+      ['dashboard', 'invoices', 'clients', 'properties', 'team', 'profile', 'verifications', 'analytics-revenue', 'reports', 'sales-reps', 'signatures', 'marketing', 'refunds'].forEach(s => {
         const el = document.getElementById(s === 'marketing' ? 'marketingSection' : 'section-' + s);
         if (el) el.style.display = s === name ? '' : 'none';
       });
@@ -3953,6 +3982,8 @@
         'sales-reps': 'Sales Representatives',
         'signatures': 'Company Signatures & Seal',
         'marketing': 'Email Marketing'
+        ,
+        'refunds': 'Refund Requests'
       };
       document.getElementById('pageTitle').textContent = titles[name] || name;
 
@@ -3972,6 +4003,7 @@
       if (name === 'analytics-revenue') loadAnalyticsRevenue();
       if (name === 'marketing') loadCampaigns();
       if (name === 'reports') { loadSchedules(); setReportDates('this_month'); }
+      if (name === 'refunds') loadRefunds();
     }
     let currentUserRole = 'staff';
     let currentTimeframe = '30d';
@@ -6324,6 +6356,191 @@
     `;
         updateVerificationsBadge();
       } catch (e) { container.innerHTML = '<div class="empty-state"><p>Error loading data.</p></div>'; }
+    }
+
+    async function loadRefunds() {
+      const tbody = document.querySelector('#refundsTable tbody');
+      tbody.innerHTML = '<tr><td colspan="8"><div class="loading"><span class="spinner"></span>Loading refunds...</div></td></tr>';
+      try {
+        const res = await apiFetch('/api/refunds/');
+        if (res.status === 401) {
+          tbody.innerHTML = '<tr><td colspan="8">Unauthorized — please sign in again</td></tr>';
+          return;
+        }
+        if (res.status === 403) {
+          tbody.innerHTML = '<tr><td colspan="8">Access denied — administrators only</td></tr>';
+          return;
+        }
+        if (!res.ok) {
+          tbody.innerHTML = '<tr><td colspan="8">Failed to load refunds</td></tr>';
+          return;
+        }
+        let data;
+        try {
+          data = await res.json();
+        } catch (err) {
+          console.error('Invalid JSON from /api/refunds:', err);
+          tbody.innerHTML = '<tr><td colspan="8">Invalid server response</td></tr>';
+          return;
+        }
+        if (!data || !data.length) {
+          tbody.innerHTML = '<tr><td colspan="8"><div class="empty-state"><p>No refund requests yet.</p></div></td></tr>';
+          return;
+        }
+        tbody.innerHTML = data.map(r => {
+          const status = (r.status || 'submitted').toLowerCase();
+          const badgeColor = status === 'approved' ? 'background: #27ae60; color: #fff; padding:4px 8px; border-radius:6px; font-weight:600;' : status === 'rejected' ? 'background:#e74c3c;color:#fff;padding:4px 8px;border-radius:6px;font-weight:600;' : status === 'processing' ? 'background:#F5A623;color:#1A1A1A;padding:4px 8px;border-radius:6px;font-weight:600;' : 'background:#f0f0f0;color:#333;padding:4px 8px;border-radius:6px;font-weight:600;';
+          const isAdminRole = (currentUserRole || '').includes('admin') || (currentUserRole || '').includes('super_admin');
+          const actions = isAdminRole ? `
+            <button class="action-btn" onclick="openRefund('${r.id}')">View</button>
+            ${status !== 'approved' ? `<button class="action-btn" style="margin-left:6px;background:#27ae60;color:#fff;" onclick="approveRefund('${r.id}')">Approve</button>` : ''}
+            ${status !== 'rejected' ? `<button class="action-btn" style="margin-left:6px;background:#e74c3c;color:#fff;" onclick="rejectRefund('${r.id}')">Reject</button>` : ''}
+          ` : `<button class="action-btn" onclick="openRefund('${r.id}')">View</button>`;
+
+          return `
+          <tr>
+            <td>${new Date(r.created_at).toLocaleString()}</td>
+            <td class="client-name">${r.name}</td>
+            <td class="client-email">${r.email}</td>
+            <td>${r.phone}</td>
+            <td>${r.estate_bought}</td>
+            <td>${r.invoice_number || '—'}</td>
+            <td><span style="${badgeColor}">${r.status || 'submitted'}</span></td>
+            <td>${actions}</td>
+          </tr>
+        `;
+        }).join('');
+      } catch (e) {
+        console.error(e);
+        tbody.innerHTML = '<tr><td colspan="8">Error loading refunds</td></tr>';
+      }
+    }
+
+    async function openRefund(id) {
+      try {
+        const res = await apiFetch(`/api/refunds/${id}`);
+        if (!res.ok) { return toast('Failed to load refund', 'error'); }
+        const r = await res.json();
+        const filesRes = await apiFetch(`/api/refunds/${id}/files`);
+        let fileUrls = [];
+        if (filesRes.ok) {
+          const jr = await filesRes.json();
+          fileUrls = jr.files || [];
+        } else {
+          fileUrls = r.files || [];
+        }
+
+        // Ensure modal container exists (reuse if already present)
+        let container = document.getElementById('viewRefundModal');
+        if (!container) {
+          container = document.createElement('div');
+          container.className = 'modal-overlay';
+          container.id = 'viewRefundModal';
+          container.innerHTML = `
+            <div class="modal">
+              <div class="modal-header">
+                <div class="modal-title" id="viewRefundTitle">Refund Request</div>
+                <button class="modal-close" onclick="closeModal('viewRefundModal')">×</button>
+              </div>
+              <div class="modal-body" id="viewRefundBody"></div>
+              <div class="modal-footer" id="viewRefundFooter" style="display:flex;justify-content:flex-end;gap:8px;padding-top:12px;">
+                <button class="btn btn-ghost" onclick="closeModal('viewRefundModal')">Close</button>
+              </div>
+            </div>
+          `;
+          document.body.appendChild(container);
+        }
+
+        // Populate content
+        document.getElementById('viewRefundTitle').textContent = `Refund Request — ${r.id}`;
+        const bodyEl = document.getElementById('viewRefundBody');
+        const footerEl = document.getElementById('viewRefundFooter');
+        bodyEl.innerHTML = `
+          <div style="padding:8px 0;">
+            <p><strong>Name:</strong> ${r.name}</p>
+            <p><strong>Email:</strong> ${r.email}</p>
+            <p><strong>Phone:</strong> ${r.phone}</p>
+            <p><strong>Estate:</strong> ${r.estate_bought}</p>
+            <p><strong>Invoice:</strong> ${r.invoice_number || '—'}</p>
+            <p><strong>Comment:</strong> ${r.comment || '—'}</p>
+          </div>
+          <div style="margin-top:12px;">
+            <strong>Attachments</strong>
+            <div style="display:flex;flex-direction:column;gap:8px;margin-top:8px;">${fileUrls.length ? fileUrls.map(u => `<button class=\"btn btn-ghost\" data-url=\"${u}\">View attachment</button>`).join('') : '<div style="color:#777;">No files</div>'}</div>
+          </div>
+        `;
+
+        // Footer actions (Approve/Reject for admins)
+        footerEl.innerHTML = '';
+        if (['admin','super_admin'].includes(currentUserRole)) {
+          const approveBtn = document.createElement('button');
+          approveBtn.className = 'btn btn-primary';
+          approveBtn.textContent = 'Approve';
+          approveBtn.onclick = () => { approveRefund(id); };
+          const rejectBtn = document.createElement('button');
+          rejectBtn.className = 'btn btn-danger';
+          rejectBtn.textContent = 'Reject';
+          rejectBtn.onclick = () => { rejectRefund(id).then(() => closeModal('viewRefundModal')).catch(() => {}); };
+          const closeBtn = document.createElement('button');
+          closeBtn.className = 'btn btn-ghost';
+          closeBtn.textContent = 'Close';
+          closeBtn.onclick = () => closeModal('viewRefundModal');
+          footerEl.appendChild(rejectBtn);
+          footerEl.appendChild(approveBtn);
+          footerEl.appendChild(closeBtn);
+        } else {
+          footerEl.innerHTML = '<button class="btn btn-ghost" onclick="closeModal(\'viewRefundModal\')">Close</button>';
+        }
+
+        // Wire up attachment buttons
+        container.querySelectorAll('button[data-url]').forEach(b => b.addEventListener('click', (ev) => {
+          const u = ev.currentTarget.getAttribute('data-url');
+          if (u) window.open(u, '_blank');
+        }));
+
+        openModal('viewRefundModal');
+      } catch (e) { console.error(e); toast('Error loading refund', 'error'); }
+    }
+
+    async function approveRefund(id) {
+      if (!confirm('Approve this refund request?')) return;
+      try {
+        const res = await apiFetch(`/api/refunds/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'approved' }), headers: { 'Content-Type': 'application/json' } });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          let msg = 'Failed to update status';
+          if (err) {
+            if (Array.isArray(err.detail)) msg = err.detail.join('; ');
+            else if (typeof err.detail === 'string') msg = err.detail;
+            else if (err.detail && typeof err.detail === 'object') msg = JSON.stringify(err.detail);
+            else if (err.message) msg = err.message;
+          }
+          throw new Error(msg);
+        }
+        toast('Refund approved', 'success');
+        loadRefunds();
+      } catch (e) { toast(e.message || String(e), 'error'); }
+    }
+
+    async function rejectRefund(id) {
+      const reason = prompt('Provide a short reason for rejection:');
+      if (reason === null) return; // cancelled
+      try {
+        const res = await apiFetch(`/api/refunds/${id}/status`, { method: 'PATCH', body: JSON.stringify({ status: 'rejected', reason }), headers: { 'Content-Type': 'application/json' } });
+        if (!res.ok) {
+          const err = await res.json().catch(() => ({}));
+          let msg = 'Failed to update status';
+          if (err) {
+            if (Array.isArray(err.detail)) msg = err.detail.join('; ');
+            else if (typeof err.detail === 'string') msg = err.detail;
+            else if (err.detail && typeof err.detail === 'object') msg = JSON.stringify(err.detail);
+            else if (err.message) msg = err.message;
+          }
+          throw new Error(msg);
+        }
+        toast('Refund rejected', 'info');
+        loadRefunds();
+      } catch (e) { toast(e.message || String(e), 'error'); }
     }
 
     async function openEditVerification(id) {
