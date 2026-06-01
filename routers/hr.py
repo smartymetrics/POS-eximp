@@ -686,14 +686,34 @@ async def update_staff_profile(staff_id: str, update: StaffProfileUpdate, curren
 
         profile_updates = update.dict(exclude={"full_name", "email", "department", "line_manager_id"}, exclude_unset=True)
     else:
-        # Staff members may update only personal profile fields.
+        # Staff members may update personal profile fields and bank details — but
+        # bank details (bank_name, account_number, account_name) may only be set
+        # when they are currently empty. Once populated, only HR can change them.
+        bank_fields = {"bank_name", "account_number", "account_name"}
         allowed_self_fields = {"phone_number", "emergency_contact", "address", "bio"}
-        invalid_fields = set(update_data.keys()) - allowed_self_fields
-        if invalid_fields:
+        bank_fields_requested = set(update_data.keys()) & bank_fields
+        other_fields_requested = set(update_data.keys()) - allowed_self_fields - bank_fields
+
+        if other_fields_requested:
             raise HTTPException(
                 status_code=403,
-                detail=f"Cannot edit administrative fields: {', '.join(sorted(invalid_fields))}"
+                detail=f"Cannot edit administrative fields: {', '.join(sorted(other_fields_requested))}"
             )
+
+        if bank_fields_requested:
+            # Fetch current bank values; block update if any target field already has a value
+            profile_res = await db_execute(lambda: db.table("staff_profiles").select("bank_name, account_number, account_name").eq("admin_id", staff_id).execute())
+            current_profile = profile_res.data[0] if profile_res.data else {}
+            locked_fields = {
+                f for f in bank_fields_requested
+                if current_profile.get(f)  # already populated — locked
+            }
+            if locked_fields:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Bank detail(s) already on file: {', '.join(sorted(locked_fields))}. Contact HR to update."
+                )
+
         profile_updates = update_data
 
     if admin_updates:

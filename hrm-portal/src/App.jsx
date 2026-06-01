@@ -6223,6 +6223,7 @@ function HRDashboard() {
 // ─── MY PROFILE PAGE (shared component for any user) ─────────────────────────
 function MyProfile({ user }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
+  const G = T.gold;
   const [prof, setProf] = useState(null);
   const [draft, setDraft] = useState({});
   const [loading, setLoading] = useState(true);
@@ -6268,6 +6269,11 @@ function MyProfile({ user }) {
       }
 
       // 2. Update Detailed Profile (HR API)
+      // Only include bank fields if they were previously empty (employee self-fill)
+      const bankPayload = {};
+      if (!p.bank_name && draft.bank_name) bankPayload.bank_name = draft.bank_name;
+      if (!p.account_number && draft.account_number) bankPayload.account_number = draft.account_number;
+      if (!p.account_name && draft.account_name) bankPayload.account_name = draft.account_name;
       await apiFetch(`${API_BASE}/hr/profile/${user.id}`, {
         method: "PATCH",
         body: JSON.stringify({
@@ -6278,7 +6284,8 @@ function MyProfile({ user }) {
           dob: draft.dob || null,
           gender: draft.gender,
           nationality: draft.nationality,
-          marital_status: draft.marital_status
+          marital_status: draft.marital_status,
+          ...bankPayload
         })
       });
       setProf(prev => ({
@@ -6293,7 +6300,8 @@ function MyProfile({ user }) {
           dob: draft.dob,
           gender: draft.gender,
           nationality: draft.nationality,
-          marital_status: draft.marital_status
+          marital_status: draft.marital_status,
+          ...bankPayload
         }]
       }));
       setEditMode(false);
@@ -6465,12 +6473,31 @@ function MyProfile({ user }) {
 
         {tab === "bank" && (
           <div className="g1 fade" style={{ gap: 12 }}>
-            <Field label="Bank Name" value={p.bank_name} />
-            <Field label="Account Number" value={p.account_number} />
-            <Field label="Account Name" value={p.account_name} />
-            <div style={{ padding: 14, background: `${T.orange}0D`, border: `1px solid ${T.orange}22`, borderRadius: 10, fontSize: 13, color: C.sub, lineHeight: 1.5 }}>
-              <b>Note:</b> These details are used for payroll processing. If you need to update them, please contact the HR department with valid proof.
-            </div>
+            {/* Bank fields: editable in editMode only when the existing value is empty */}
+            {editMode && !p.bank_name ? (
+              <div><Lbl>Bank Name</Lbl><input className="inp" placeholder="e.g. Zenith Bank" value={draft.bank_name || ""} onChange={e => setDraft(d => ({ ...d, bank_name: e.target.value }))} /></div>
+            ) : (
+              <Field label="Bank Name" value={p.bank_name} />
+            )}
+            {editMode && !p.account_number ? (
+              <div><Lbl>Account Number</Lbl><input className="inp" placeholder="10-digit account number" maxLength={10} value={draft.account_number || ""} onChange={e => setDraft(d => ({ ...d, account_number: e.target.value }))} /></div>
+            ) : (
+              <Field label="Account Number" value={p.account_number} />
+            )}
+            {editMode && !p.account_name ? (
+              <div><Lbl>Account Name</Lbl><input className="inp" placeholder="Name as it appears on the account" value={draft.account_name || ""} onChange={e => setDraft(d => ({ ...d, account_name: e.target.value }))} /></div>
+            ) : (
+              <Field label="Account Name" value={p.account_name} />
+            )}
+            {editMode && (!p.bank_name || !p.account_number || !p.account_name) ? (
+              <div style={{ padding: 14, background: `${G}0D`, border: `1px solid ${G}33`, borderRadius: 10, fontSize: 13, color: C.sub, lineHeight: 1.5 }}>
+                ℹ️ You can fill in your empty bank details now. Once saved, only HR can modify them.
+              </div>
+            ) : (
+              <div style={{ padding: 14, background: `${T.orange}0D`, border: `1px solid ${T.orange}22`, borderRadius: 10, fontSize: 13, color: C.sub, lineHeight: 1.5 }}>
+                <b>Note:</b> These details are used for payroll processing. To update existing bank details, contact HR with valid proof.
+              </div>
+            )}
           </div>
         )}
 
@@ -9089,6 +9116,7 @@ function HRLetters({ isHR }) {
   const [showNew, setShowNew] = useState(false);
   const [viewLetter, setViewLetter] = useState(null);
   const [form, setForm] = useState({ staff_id: "", letter_type: "Employment Confirmation", content: "", date_issued: new Date().toISOString().split("T")[0] });
+  const [customLetterType, setCustomLetterType] = useState("");
   const [saving, setSaving] = useState(false);
 
   const refresh = () => apiFetch(`${API_BASE}/hr/hr-letters`).catch(() => []).then(d => setLetters(d || []));
@@ -9101,11 +9129,13 @@ function HRLetters({ isHR }) {
   }, [isHR]);
 
   const save = async () => {
+    const effectiveLetterType = form.letter_type === "Custom…" ? customLetterType.trim() : form.letter_type;
     if (!form.staff_id || !form.content) return alert("Staff and letter content required.");
+    if (form.letter_type === "Custom…" && !customLetterType.trim()) return alert("Please enter a custom letter type.");
     setSaving(true);
     try {
       // 1. Issue the letter
-      await apiFetch(`${API_BASE}/hr/hr-letters`, { method: "POST", body: JSON.stringify({ staff_id: form.staff_id, letter_type: form.letter_type, content: form.content, date_issued: form.date_issued }) });
+      await apiFetch(`${API_BASE}/hr/hr-letters`, { method: "POST", body: JSON.stringify({ staff_id: form.staff_id, letter_type: effectiveLetterType, content: form.content, date_issued: form.date_issued }) });
       // 2. Send notification to the staff member
       const recipient = staff.find(s => s.id === form.staff_id);
       await apiFetch(`${API_BASE}/hr/notifications`, {
@@ -9113,18 +9143,19 @@ function HRLetters({ isHR }) {
         body: JSON.stringify({
           staff_id: form.staff_id,
           type: "letter_issued",
-          message: `📄 HR has issued you a "${form.letter_type}" letter. Log in to view it in HR Letters.`
+          message: `📄 HR has issued you a "${effectiveLetterType}" letter. Log in to view it in HR Letters.`
         })
       }).catch(() => { }); // non-blocking — notification failure should not block letter issue
       setShowNew(false);
+      setCustomLetterType("");
       setForm({ staff_id: "", letter_type: "Employment Confirmation", content: "", date_issued: new Date().toISOString().split("T")[0] });
       refresh();
       alert(`Letter issued to ${recipient?.full_name || "staff member"}. They have been notified.`);
     } catch (e) { alert(e.message); } finally { setSaving(false); }
   };
 
-  const LETTER_TYPES = ["Employment Confirmation", "Salary Confirmation", "Experience Letter", "Reference Letter", "Warning Letter", "Promotion Letter", "Contract Renewal"];
-  const typeColor = { "Warning Letter": "#F87171", "Employment Confirmation": "#4ADE80", "Salary Confirmation": T.gold, "Promotion Letter": "#A78BFA" };
+  const LETTER_TYPES = ["Employment Confirmation", "Salary Confirmation", "Experience Letter", "Reference Letter", "Warning Letter", "Promotion Letter", "Contract Renewal", "Custom…"];
+  const typeColor = { "Warning Letter": "#F87171", "Employment Confirmation": "#4ADE80", "Salary Confirmation": T.gold, "Promotion Letter": "#A78BFA", "Experience Letter": "#60A5FA", "Reference Letter": "#34D399", "Contract Renewal": "#FB923C" };
 
   return (
     <div className="fade">
@@ -9209,9 +9240,12 @@ function HRLetters({ isHR }) {
                 </select>
               </div>
               <div><Lbl>Letter Type</Lbl>
-                <select className="inp" value={form.letter_type} onChange={e => setForm(f => ({ ...f, letter_type: e.target.value }))}>
+                <select className="inp" value={form.letter_type} onChange={e => { setForm(f => ({ ...f, letter_type: e.target.value })); if (e.target.value !== "Custom…") setCustomLetterType(""); }}>
                   {LETTER_TYPES.map(t => <option key={t}>{t}</option>)}
                 </select>
+                {form.letter_type === "Custom…" && (
+                  <input className="inp" style={{ marginTop: 8 }} placeholder="Enter custom letter type…" value={customLetterType} onChange={e => setCustomLetterType(e.target.value)} />
+                )}
               </div>
             </div>
             <div><Lbl>Letter Content *</Lbl>

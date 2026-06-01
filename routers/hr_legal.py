@@ -1,6 +1,7 @@
 from fastapi import APIRouter, Depends, HTTPException, Request, BackgroundTasks, UploadFile, File
 from fastapi.responses import Response
 import os
+import asyncio
 from database import get_db, db_execute, SUPABASE_URL
 import os
 from routers.auth import verify_token, verify_token_optional, resolve_admin_token
@@ -466,7 +467,7 @@ async def delete_matter(matter_id: str, current_admin=Depends(verify_token)):
     # Cascade-delete all related records first
     await db_execute(lambda: db.table("legal_matter_collaborators").delete().eq("matter_id", matter_id).execute())
     await db_execute(lambda: db.table("legal_matter_history").delete().eq("matter_id", matter_id).execute())
-    await db_execute(lambda: db.table("legal_matter_memos").delete().eq("matter_id", matter_id).execute())
+    await db_execute(lambda: db.table("hr_matter_memos").delete().eq("matter_id", matter_id).execute())
     await db_execute(lambda: db.table("legal_signing_requests").delete().eq("matter_id", matter_id).execute())
 
     # Delete the matter itself
