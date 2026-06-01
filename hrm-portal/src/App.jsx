@@ -9105,7 +9105,7 @@ function HRLetters({ isHR }) {
     setSaving(true);
     try {
       // 1. Issue the letter
-      await apiFetch(`${API_BASE}/hr/hr-letters`, { method: "POST", body: JSON.stringify({ staff_id: form.staff_id, exit_date: form.exit_date, reason: form.reason, overall_satisfaction: form.overall_satisfaction, highlights: form.highlights, concerns: form.concerns, would_recommend: form.would_recommend, notes: form.notes }) });
+      await apiFetch(`${API_BASE}/hr/hr-letters`, { method: "POST", body: JSON.stringify({ staff_id: form.staff_id, letter_type: form.letter_type, content: form.content, date_issued: form.date_issued }) });
       // 2. Send notification to the staff member
       const recipient = staff.find(s => s.id === form.staff_id);
       await apiFetch(`${API_BASE}/hr/notifications`, {
