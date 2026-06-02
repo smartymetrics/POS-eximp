@@ -688,6 +688,10 @@
                         <i class="fas fa-save"></i>
                         <span id="saveLabel" class="hidden sm:inline">Save Draft</span>
                     </button>
+                    <button id="resetBtn" onclick="resetContractWordings()"
+                        class="bg-brand-gold text-black border border-brand-gold/20 px-3 md:px-5 py-2 rounded-lg font-bold hover:bg-yellow-300 transition uppercase tracking-wider text-[10px] shadow-lg shadow-brand-gold/20">
+                        Reset to Invoice Defaults
+                    </button>
                     <button id="executeBtn" onclick="openExecutionModal()"
                         class="bg-brand-gold/10 text-brand-gold border border-brand-gold/20 px-3 md:px-5 py-2 rounded-lg font-bold hover:bg-brand-gold hover:text-white transition uppercase tracking-wider text-[10px] hidden">Seal
                         &amp; Execute</button>
@@ -704,6 +708,10 @@
                 <div class="toolbar-divider"></div>
                 <button class="toolbar-btn" onclick="exec('insertOrderedList')" title="Numbered List"><i
                         class="fas fa-list-ol"></i></button>
+                <button class="toolbar-btn" onclick="setListStyle('upper-alpha')" title="Alpha List (A, B, C)"><i
+                        class="fas fa-sort-alpha-down"></i></button>
+                <button class="toolbar-btn" onclick="setListStyle('lower-roman')" title="Roman List (i, ii, iii)"><i
+                        class="fas fa-sort-numeric-down"></i></button>
                 <button class="toolbar-btn" onclick="exec('insertUnorderedList')" title="Bullet List"><i
                         class="fas fa-list-ul"></i></button>
                 <div class="toolbar-divider"></div>
@@ -1099,6 +1107,46 @@
             autoSaveToBuffer();
         }
 
+        function setListStyle(style) {
+            exec('insertOrderedList');
+            const sel = window.getSelection();
+            if (!sel || !sel.rangeCount) return;
+            let node = sel.anchorNode;
+            while (node && node.nodeType !== Node.ELEMENT_NODE) {
+                node = node.parentElement;
+            }
+            if (!node) return;
+            const list = node.closest('ol');
+            if (!list) return;
+            list.style.listStyleType = style;
+            switch (style) {
+                case 'upper-alpha':
+                    list.setAttribute('type', 'A');
+                    break;
+                case 'lower-alpha':
+                    list.setAttribute('type', 'a');
+                    break;
+                case 'upper-roman':
+                    list.setAttribute('type', 'I');
+                    break;
+                case 'lower-roman':
+                    list.setAttribute('type', 'i');
+                    break;
+                default:
+                    list.removeAttribute('type');
+                    break;
+            }
+            autoSaveToBuffer();
+        }
+
+        function resetContractWordings() {
+            if (!invoiceId) return;
+            if (!confirm('Reset this contract wording to a fresh default generated from the attached invoice? This will reload the editor and will not save until you click Save.')) return;
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.set('reset', '1');
+            window.location.href = currentUrl.toString();
+        }
+
         function openMobileNav() {
             const drawer = document.getElementById('mobileNavDrawer');
             if (drawer) drawer.classList.add('active');
@@ -1139,9 +1187,12 @@
             try {
                 // Parallel fetch for invoice and contract content
                 const cacheBuster = `?_=${Date.now()}`;
+                const resetMode = new URLSearchParams(window.location.search).get('reset') === '1';
+                const contractEndpoint = `/api/contracts/${invoiceId}/${resetMode ? 'reset-html' : 'default-html'}${cacheBuster}`;
+
                 const [invRes, contractRes] = await Promise.all([
                     fetch(`/api/invoices/${invoiceId}${cacheBuster}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` } }),
-                    fetch(`/api/contracts/${invoiceId}/default-html${cacheBuster}`, { headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` } })
+                    fetch(contractEndpoint, { headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` } })
                 ]);
 
                 if (invRes.status === 401 && typeof logout === 'function') return logout();
@@ -1172,6 +1223,10 @@
                 // Initial render
                 document.getElementById('editor').innerHTML = contractBuffer.html_content;
                 document.getElementById('editorLoading').classList.add('hidden');
+
+                if (resetMode) {
+                    showToast('Loaded fresh contract wording generated from the attached invoice. Click Save to replace the stored draft.', 'success');
+                }
 
                 // Orchestration Sync
                 await syncOrchestration();

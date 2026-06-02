@@ -127,6 +127,7 @@ CREATE TABLE IF NOT EXISTS invoices (
     custom_lawfirm_name VARCHAR(255), -- Editable lawyer firm name
     custom_lawfirm_address TEXT, -- Editable lawyer firm address
     custom_execution_html TEXT, -- Editable execution page HTML
+    contract_closed BOOLEAN DEFAULT FALSE, -- Legal contract closure marker, separate from sales pipeline stage
 
     created_by UUID REFERENCES admins(id),
     created_at TIMESTAMPTZ DEFAULT NOW(),

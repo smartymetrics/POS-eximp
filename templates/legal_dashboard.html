@@ -2364,11 +2364,19 @@
                     // Filter out voided if toggle changed while rendering (safety)
                     if (!document.getElementById('showVoidedToggle').checked) return '';
                 }
-                const statusClass = `status-${c.signing_status}`;
+                const isClosed = c.contract_closed || c.pipeline_stage === 'closed';
+                const statusClass = isClosed ? 'status-completed' : `status-${c.signing_status}`;
+                const statusLabel = isVoided ? 'VOIDED' : (isClosed ? 'CLOSED' : c.signing_status);
                 const progressWidth = (c.signatures_collected / 3) * 100;
-                const execBtn = (c.signing_status === 'completed')
-                    ? '<span class="text-xs text-gray-600 uppercase font-bold">Executed</span>'
-                    : `<button onclick="openStatusModal('${c.id}')" class="bg-brand-gold/10 text-brand-gold px-3 py-1 rounded-lg text-[10px] font-bold hover:bg-brand-gold hover:text-white transition uppercase pulse-gold">Manage Execution</button>`;
+                let actionHtml = '';
+
+                if (isClosed) {
+                    actionHtml = '<span class="text-xs text-emerald-400 uppercase font-bold">Closed</span>';
+                } else if (c.signing_status === 'completed') {
+                    actionHtml = `<button onclick="markContractClosed('${c.id}')" class="bg-emerald-500/10 text-emerald-300 px-3 py-1 rounded-lg text-[10px] font-bold hover:bg-emerald-500 hover:text-white transition uppercase">Mark Closed</button>`;
+                } else {
+                    actionHtml = `<button onclick="openStatusModal('${c.id}')" class="bg-brand-gold/10 text-brand-gold px-3 py-1 rounded-lg text-[10px] font-bold hover:bg-brand-gold hover:text-white transition uppercase pulse-gold">Manage Execution</button>`;
+                }
 
                 return `
                     <tr class="border-b border-[#2D2F36] hover:bg-white/5 transition ${isVoided ? 'opacity-40 grayscale' : ''}" 
@@ -2386,7 +2394,7 @@
                             <p class="text-[10px] text-gray-500 uppercase">${c.property_location}</p>
                         </td>
                         <td class="px-6 py-4">
-                            <span class="status-badge ${isVoided ? 'bg-gray-800 text-gray-500' : statusClass}">${isVoided ? 'VOIDED' : c.signing_status}</span>
+                            <span class="status-badge ${isVoided ? 'bg-gray-800 text-gray-500' : statusClass}">${statusLabel}</span>
                         </td>
                         <td class="px-6 py-4">
                             <div class="w-full bg-gray-800 rounded-full h-1.5 mb-1">
@@ -2398,7 +2406,7 @@
                             ${c.expires_at ? new Date(c.expires_at).toLocaleDateString() : 'N/A'}
                         </td>
                         <td class="px-6 py-4">
-                            ${isVoided ? '<span class="text-[10px] text-gray-600 font-bold uppercase italic">No Action</span>' : execBtn}
+                            ${isVoided ? '<span class="text-[10px] text-gray-600 font-bold uppercase italic">No Action</span>' : actionHtml}
                         </td>
                     </tr>
                 `;
@@ -2711,6 +2719,11 @@
             `;
             if (hasWitness && hasClient) {
                 actionsHtml += `<button onclick="openExecutionModal('${activeInvoiceId}')" class="px-6 py-2 bg-brand-gold text-white rounded-xl text-xs font-bold shadow-lg hover:brightness-110 transition pulse-gold">Final Execution</button>`;
+                if (!(data.contract_closed || data.pipeline_stage === 'closed')) {
+                    actionsHtml += `<button onclick="markContractClosed('${activeInvoiceId}')" class="px-6 py-2 bg-emerald-500 text-white rounded-xl text-xs font-bold shadow-lg hover:brightness-110 transition ml-2">Mark Closed</button>`;
+                } else {
+                    actionsHtml += `<span class="inline-flex items-center px-4 py-2 bg-emerald-700/10 text-emerald-200 rounded-xl text-xs font-bold uppercase tracking-wider">Closed</span>`;
+                }
             } else {
                 if (!hasWitness) actionsHtml += `<button onclick="initiateWalkIn('witness')" class="px-4 py-2 bg-white/5 rounded-xl text-[10px] font-bold hover:bg-white/10 transition uppercase tracking-widest whitespace-nowrap">Walk-in Witness</button>`;
                 if (!hasClient) actionsHtml += `<button onclick="initiateWalkIn('client')" class="px-4 py-2 bg-white/5 rounded-xl text-[10px] font-bold hover:bg-white/10 transition uppercase tracking-widest whitespace-nowrap">Walk-in Client</button>`;
@@ -2766,6 +2779,28 @@
             if (navigator.clipboard) {
                 navigator.clipboard.writeText(url).then(() => alert('Signing link copied to clipboard')).catch(() => alert('Link: ' + url));
             } else { alert('Link: ' + url); }
+        }
+
+        async function markContractClosed(id) {
+            if (!confirm('Mark this Contract of Sale as legally closed for the lawyer team? This will not change the sales pipeline stage.')) return;
+
+            try {
+                const res = await fetch(`${API_BASE}/${id}/mark-closed`, {
+                    method: 'POST',
+                    headers: { 'Authorization': `Bearer ${localStorage.getItem('ec_token')}` }
+                });
+                const data = await res.json();
+                if (res.ok) {
+                    alert(data.message || 'Contract marked closed');
+                    fetchContracts();
+                    if (id === activeInvoiceId) openStatusModal(id);
+                } else {
+                    alert(data.detail || 'Unable to mark contract closed');
+                }
+            } catch (err) {
+                console.error(err);
+                alert('Action failed due to connection error.');
+            }
         }
 
         function viewDraft(id) {
