@@ -141,7 +141,9 @@ def main():
                 invoice_updates[db_col] = val
 
         if not invoice_updates:
-            continue
+            # still continue only if there is no deposit/payment info either
+            # but we'll still allow processing to check for payments below
+            pass
 
         # 6. Match Invoice
         # Since property names in forms (e.g., "Prime Circle Estate Phase 1") might not perfectly 
@@ -275,6 +277,62 @@ def main():
                 print(f"-> Failed to update invoice: {e}")
         else:
             print("-> No missing invoice fields to update.")
+
+        # --- Ensure deposit/payment and pending verification exist for this invoice ---
+        # Parse deposit amount and payment date from CSV row
+        import re
+        from datetime import date
+
+        def parse_numeric(val_str):
+            cleaned = re.sub(r'[^\d.]+', '', val_str or '')
+            if cleaned:
+                try:
+                    return float(cleaned)
+                except:
+                    pass
+            return 0.0
+
+        dep_amt = parse_numeric(get_val(row, ["Deposit Made (In Naira)"]))
+        pay_date = get_val(row, ["Date of Payment/Deposit ", "Payment Date"]) or str(date.today())
+
+        try:
+            payments_res = db.table("payments").select("*").eq("invoice_id", invoice_record["id"]).execute()
+            existing_payments = payments_res.data or []
+        except Exception:
+            existing_payments = []
+
+        if dep_amt > 0:
+            # If no payments exist or no payment with similar amount, create one
+            has_similar = any(abs(float(p.get("amount", 0)) - dep_amt) < 1 for p in existing_payments)
+            if not has_similar:
+                try:
+                    pay_data = {
+                        "invoice_id": invoice_record["id"],
+                        "client_id": client_record["id"],
+                        "reference": f"{pay_date}_form_deposit",
+                        "amount": dep_amt,
+                        "payment_method": "Bank Transfer",
+                        "payment_date": pay_date,
+                        "notes": "Backfilled deposit from form"
+                    }
+                    db.table("payments").insert(pay_data).execute()
+                    print(f"-> Created backfilled payment for invoice {invoice_record.get('invoice_number')} amount {dep_amt}")
+                    invoices_updated += 1
+
+                    # Also create pending verification row
+                    verify_data = {
+                        "invoice_id": invoice_record["id"],
+                        "client_id": client_record["id"],
+                        "payment_proof_url": invoice_updates.get("payment_proof_url") or get_val(row, ["Upload receipt of payment/deposit"]),
+                        "deposit_amount": dep_amt,
+                        "payment_date": pay_date,
+                        "sales_rep_name": invoice_updates.get("sales_rep_name"),
+                        "status": "pending"
+                    }
+                    db.table("pending_verifications").insert(verify_data).execute()
+                    print("-> Created pending_verification entry.")
+                except Exception as e:
+                    print(f"-> Failed to create backfilled payment/verification: {e}")
 
     print("\n--- BACKFILL COMPLETE ---")
     print(f"Clients Updated: {clients_updated}")
