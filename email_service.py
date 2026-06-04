@@ -2923,3 +2923,206 @@ async def send_collaborator_invite_email(
     except Exception as e:
         logger.error(f"[CollabInvite] Failed to send invite email to {recipient_email}: {e}")
         return None
+
+# ─────────────────────────────────────────────────────────────────────────────
+# PAYSLIP EMAIL
+# ─────────────────────────────────────────────────────────────────────────────
+
+def _payslip_html(staff: dict, payroll: dict, commissions: list, bonuses: list) -> str:
+    """Inline HTML summary shown in the email body (not the PDF)."""
+    fmt = lambda n: f"NGN {float(n or 0):,.2f}"
+
+    period_raw = payroll.get("period_start", "")
+    try:
+        period_label = __import__("datetime").datetime.strptime(period_raw[:7], "%Y-%m").strftime("%B %Y")
+    except Exception:
+        period_label = period_raw[:7] or "—"
+
+    gross       = float(payroll.get("gross_pay") or 0)
+    paye        = float(payroll.get("tax") or 0)
+    pension     = float(payroll.get("pension") or 0)
+    nhf         = float(payroll.get("nhf") or 0)
+    net_salary  = float(payroll.get("net_pay") or 0)
+
+    total_gross_comm = sum(float(c.get("gross_commission") or 0) for c in commissions)
+    total_wht        = sum(float(c.get("wht_amount") or 0) for c in commissions)
+    total_net_comm   = sum(float(c.get("net_commission") or 0) for c in commissions)
+    total_bonus      = sum(float(b.get("amount") or 0) for b in bonuses)
+    grand_net        = net_salary + total_net_comm + total_bonus
+
+    # Commission detail rows for email body
+    comm_rows = ""
+    if commissions:
+        for c in commissions:
+            client_name = (c.get("clients") or {}).get("full_name") if isinstance(c.get("clients"), dict) else (c.get("client_name") or "—")
+            comm_rows += f"""
+              <tr>
+                <td style="padding:7px 10px; border-bottom:1px solid #eee; color:#555">{client_name}</td>
+                <td style="padding:7px 10px; border-bottom:1px solid #eee; text-align:right">{fmt(c.get("gross_commission"))}</td>
+                <td style="padding:7px 10px; border-bottom:1px solid #eee; text-align:right; color:#e74c3c">({fmt(c.get("wht_amount"))})</td>
+                <td style="padding:7px 10px; border-bottom:1px solid #eee; text-align:right; color:#27ae60; font-weight:700">{fmt(c.get("net_commission"))}</td>
+              </tr>"""
+        comm_rows += f"""
+              <tr style="background:#f0fdf4">
+                <td style="padding:8px 10px; font-weight:800">TOTAL</td>
+                <td style="padding:8px 10px; text-align:right; font-weight:800">{fmt(total_gross_comm)}</td>
+                <td style="padding:8px 10px; text-align:right; color:#e74c3c; font-weight:800">({fmt(total_wht)})</td>
+                <td style="padding:8px 10px; text-align:right; color:#27ae60; font-weight:800">{fmt(total_net_comm)}</td>
+              </tr>"""
+    else:
+        comm_rows = "<tr><td colspan='4' style='padding:10px; text-align:center; color:#aaa'>No commission this period</td></tr>"
+
+    bonus_note = f"<p style='margin:4px 0; font-size:13px; color:#555'>Bonus: <strong style='color:#F5A623'>{fmt(total_bonus)}</strong></p>" if total_bonus > 0 else ""
+
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 620px; margin: 0 auto; background:#fff;">
+
+      <!-- Header -->
+      <div style="background:#1A1A1A; padding:22px 28px; border-radius:10px 10px 0 0; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style="max-height:38px; display:block; margin-bottom:8px;">
+          <span style="color:#9CA3AF; font-size:12px;">Eximp & Cloves Infrastructure Limited</span>
+        </div>
+        <div style="text-align:right">
+          <div style="background:#F5A623; color:#1A1A1A; font-size:10px; font-weight:800; padding:4px 14px; border-radius:99px; letter-spacing:1px; text-transform:uppercase; display:inline-block;">Payslip</div>
+          <div style="color:#9CA3AF; font-size:11px; margin-top:6px;">{period_label}</div>
+        </div>
+      </div>
+
+      <!-- Greeting -->
+      <div style="padding:28px 28px 0;">
+        <p style="color:#333; font-size:14px; margin:0 0 6px">Dear <strong>{staff.get("full_name","")}</strong>,</p>
+        <p style="color:#555; font-size:13px; margin:0">
+          Please find your payslip for <strong>{period_label}</strong> below. A detailed PDF is attached for your records.
+        </p>
+      </div>
+
+      <!-- Net take-home hero -->
+      <div style="margin:24px 28px; background:#1A1A1A; border-radius:10px; padding:20px 24px; display:flex; justify-content:space-between; align-items:center;">
+        <div>
+          <div style="color:#9CA3AF; font-size:11px; text-transform:uppercase; letter-spacing:1px; font-weight:700;">Total Take-Home</div>
+          <div style="color:#6B7280; font-size:11px; margin-top:3px;">Net Salary + Commission + Bonus</div>
+        </div>
+        <div style="color:#F5A623; font-size:26px; font-weight:900;">{fmt(grand_net)}</div>
+      </div>
+
+      <!-- Salary summary -->
+      <div style="padding:0 28px;">
+        <div style="border:1px solid #eee; border-radius:8px; overflow:hidden; margin-bottom:20px;">
+          <div style="background:#F9FAFB; padding:10px 16px; font-size:11px; font-weight:800; color:#6B7280; text-transform:uppercase; letter-spacing:0.5px;">Salary Summary</div>
+          <table style="width:100%; border-collapse:collapse;">
+            <tr>
+              <td style="padding:8px 16px; border-bottom:1px solid #eee; color:#555;">Gross Salary</td>
+              <td style="padding:8px 16px; border-bottom:1px solid #eee; text-align:right; font-weight:700;">{fmt(gross)}</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 16px; border-bottom:1px solid #eee; color:#555;">PAYE Tax (NTA 2025)</td>
+              <td style="padding:8px 16px; border-bottom:1px solid #eee; text-align:right; color:#e74c3c; font-weight:700;">({fmt(paye)})</td>
+            </tr>
+            <tr>
+              <td style="padding:8px 16px; border-bottom:1px solid #eee; color:#555;">Pension — Employee (8%)</td>
+              <td style="padding:8px 16px; border-bottom:1px solid #eee; text-align:right; color:#e74c3c; font-weight:700;">({fmt(pension)})</td>
+            </tr>
+            {"" if nhf == 0 else f'<tr><td style="padding:8px 16px; border-bottom:1px solid #eee; color:#555;">National Housing Fund (NHF)</td><td style="padding:8px 16px; border-bottom:1px solid #eee; text-align:right; color:#e74c3c; font-weight:700;">({fmt(nhf)})</td></tr>'}
+            <tr style="background:#f0f9ff;">
+              <td style="padding:10px 16px; font-weight:800;">Net Salary</td>
+              <td style="padding:10px 16px; text-align:right; font-weight:800; color:#3B82F6; font-size:15px;">{fmt(net_salary)}</td>
+            </tr>
+          </table>
+        </div>
+
+        <!-- Commission breakdown -->
+        <div style="border:1px solid #eee; border-radius:8px; overflow:hidden; margin-bottom:20px;">
+          <div style="background:#F9FAFB; padding:10px 16px; font-size:11px; font-weight:800; color:#6B7280; text-transform:uppercase; letter-spacing:0.5px;">
+            Commission &amp; WHT Breakdown
+          </div>
+          <table style="width:100%; border-collapse:collapse;">
+            <thead>
+              <tr style="background:#f3f4f6;">
+                <th style="padding:7px 10px; text-align:left; font-size:11px; color:#6B7280; font-weight:700;">Client</th>
+                <th style="padding:7px 10px; text-align:right; font-size:11px; color:#6B7280; font-weight:700;">Gross Comm</th>
+                <th style="padding:7px 10px; text-align:right; font-size:11px; color:#6B7280; font-weight:700;">WHT (5%)</th>
+                <th style="padding:7px 10px; text-align:right; font-size:11px; color:#6B7280; font-weight:700;">Net Comm</th>
+              </tr>
+            </thead>
+            <tbody>{comm_rows}</tbody>
+          </table>
+        </div>
+
+        <!-- Bonus note if any -->
+        {bonus_note}
+
+        <hr style="border:none; border-top:1px solid #eee; margin:20px 0;">
+        <p style="color:#999; font-size:11px; line-height:1.7; margin:0;">
+          Taxes are deducted at source and remitted to the Federal Inland Revenue Service (FIRS) in compliance with the
+          <strong>Nigeria Tax Act (NTA) 2025</strong>, effective January 2026. WHT on commission is 5% per FIRS regulations.<br>
+          For queries, contact <a href="mailto:{os.getenv('HR_EMAIL', 'hr@eximps-cloves.com')}" style="color:#C47D0A">hr@eximps-cloves.com</a>
+        </p>
+        <p style="color:#999; font-size:10px; text-align:center; margin-top:16px;">
+          Eximp & Cloves Infrastructure Limited | RC 8311800<br>
+          57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383
+        </p>
+      </div>
+    </div>"""
+
+
+async def send_payslip_email(
+    staff: dict,
+    payroll: dict,
+    commissions: list,
+    bonuses: list,
+    sent_by: str,
+) -> dict | None:
+    """
+    Send a payslip email to the staff member with a PDF attachment.
+
+    Args:
+        staff:       admins row — must include 'email', 'full_name', 'staff_profiles'
+        payroll:     payroll_records row
+        commissions: commission_earnings rows for this period
+        bonuses:     bonus rows for this period
+        sent_by:     admin id/name triggering the send (for logging)
+    """
+    from pdf_service import generate_payslip_pdf
+
+    email_addr = staff.get("email")
+    if not email_addr:
+        logger.warning(f"[Payslip] No email for staff {staff.get('full_name')} — skipped")
+        return None
+
+    period_raw = payroll.get("period_start", "")
+    try:
+        period_label = __import__("datetime").datetime.strptime(period_raw[:7], "%Y-%m").strftime("%B %Y")
+    except Exception:
+        period_label = period_raw[:7] or "—"
+
+    staff_name = staff.get("full_name", "Staff Member")
+
+    try:
+        pdf_bytes = await db_execute(
+            lambda: generate_payslip_pdf(payroll, staff, commissions, bonuses)
+        )
+
+        filename = f"Payslip_{staff_name.replace(' ', '_')}_{period_raw[:7]}.pdf"
+        pdf_b64  = base64.b64encode(pdf_bytes).decode("utf-8")
+
+        res = await async_resend({
+            "from":    f"Eximp & Cloves HR <{FROM_EMAIL}>",
+            "to":      [email_addr],
+            "cc":      HR_CC,
+            "subject": f"Your Payslip for {period_label} — Eximp & Cloves",
+            "html":    _payslip_html(staff, payroll, commissions, bonuses),
+            "attachments": [
+                {
+                    "filename":    filename,
+                    "content":     pdf_b64,
+                    "content_type": "application/pdf",
+                }
+            ],
+        })
+        logger.info(f"[Payslip] Sent to {email_addr} for {period_label} by {sent_by}: {res}")
+        return res
+
+    except Exception as e:
+        logger.error(f"[Payslip] Failed to send to {email_addr}: {e}")
+        return None

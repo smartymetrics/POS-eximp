@@ -296,35 +296,66 @@ async def confirm_verification(
                 ref = f"{verify_rec['payment_date']}_portal_reported"
             else:
                 ref = f"{verify_rec['payment_date']}_form_deposit"
-            
-            pay_res = await db_execute(lambda: db.table("payments").select("id").eq("invoice_id", invoice["id"]).eq("reference", ref).execute())
-            if not pay_res.data:
-                 # Fallback: find any payment on this invoice matching the source pattern
-                 ref_pattern = "%portal_reported" if is_portal_source else "%form_deposit"
-                 pay_res = await db_execute(lambda: db.table("payments")\
-                    .select("id")\
-                    .eq("invoice_id", invoice["id"])\
-                    .ilike("reference", ref_pattern)\
-                    .execute())
 
+            # Step 1: Find any existing placeholder payments for this invoice
+            # (portal_reported, form_deposit, or CLAIM- references) and void them all.
+            # This prevents them surviving alongside the authoritative Finance-confirmed
+            # record, which is what caused duplicate rows on the client receipt.
+            placeholder_res = await db_execute(lambda: db.table("payments")\
+                .select("id")\
+                .eq("invoice_id", invoice["id"])\
+                .eq("is_voided", False)\
+                .execute())
+
+            if placeholder_res.data:
+                placeholder_ids = [
+                    p["id"] for p in placeholder_res.data
+                    if (
+                        str(p.get("id", "")).startswith("CLAIM-") or
+                        "_portal_reported" in str(p.get("reference", "")) or
+                        "_form_deposit" in str(p.get("reference", "")) or
+                        p.get("payment_method") == "portal_reported"
+                    )
+                ]
+                # Re-fetch with reference field so the filter above can actually read it
+                if placeholder_res.data and "reference" not in placeholder_res.data[0]:
+                    full_placeholder_res = await db_execute(lambda: db.table("payments")\
+                        .select("id, reference, payment_method")\
+                        .eq("invoice_id", invoice["id"])\
+                        .eq("is_voided", False)\
+                        .execute())
+                    placeholder_ids = [
+                        p["id"] for p in (full_placeholder_res.data or [])
+                        if (
+                            "_portal_reported" in str(p.get("reference", "")) or
+                            "_form_deposit" in str(p.get("reference", "")) or
+                            str(p.get("reference", "")).startswith("CLAIM-") or
+                            p.get("payment_method") == "portal_reported"
+                        )
+                    ]
+
+                if placeholder_ids:
+                    await db_execute(lambda: db.table("payments").update({
+                        "is_voided": True,
+                        "notes": "Auto-voided at verification: superseded by Finance-confirmed payment"
+                    }).in_("id", placeholder_ids).execute())
+
+            # Step 2: Always create the single authoritative payment record with the
+            # Finance-verified details. We no longer reuse a placeholder — we void it
+            # above and create fresh so the reference, date, and method are always clean.
             payment_id = None
-            if pay_res.data:
-                payment_id = pay_res.data[0]["id"]
-            else:
-                # If no payment record exists (common for Portal submissions), create one now
-                # using the verified deposit details.
-                payment_payload = {
-                    "invoice_id": invoice["id"],
-                    "client_id": client["id"],
-                    "amount": deposit,
-                    "reference": ref,
-                    "payment_date": verify_rec.get("payment_date") or str(date.today()),
-                    "payment_method": "Bank Transfer", # Verified manually
-                    "notes": "Verified portal-reported payment" if is_portal_source else "Verified deposit from subscription portal"
-                }
-                new_pay = await db_execute(lambda: db.table("payments").insert(jsonable_encoder(payment_payload)).execute())
-                if new_pay.data:
-                    payment_id = new_pay.data[0]["id"]
+            payment_payload = {
+                "invoice_id": invoice["id"],
+                "client_id": client["id"],
+                "amount": deposit,
+                "reference": ref,
+                "payment_date": verify_rec.get("payment_date") or str(date.today()),
+                "payment_method": "Bank Transfer",
+                "notes": "Verified portal-reported payment" if is_portal_source else "Verified deposit from subscription portal"
+            }
+            new_pay = await db_execute(lambda: db.table("payments").insert(jsonable_encoder(payment_payload)).execute())
+            if new_pay.data:
+                payment_id = new_pay.data[0]["id"]
             
             if payment_id:
                 # commission_rate stored as percentage (e.g. 10.0), not decimal

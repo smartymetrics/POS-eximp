@@ -25,7 +25,24 @@ async def record_payment(
     inv = await db_execute(lambda: db.table("invoices").select("*").eq("id", data.invoice_id).execute())
     if not inv.data:
         raise HTTPException(status_code=404, detail="Invoice not found")
-    
+
+    # Guard: block duplicate reference on the same invoice to prevent double-logging
+    # when Finance manually records a payment that the portal already created.
+    if data.reference:
+        dup_check = await db_execute(lambda: db.table("payments")
+            .select("id")
+            .eq("invoice_id", data.invoice_id)
+            .eq("reference", data.reference)
+            .eq("is_voided", False)
+            .execute()
+        )
+        if dup_check.data:
+            raise HTTPException(
+                status_code=409,
+                detail=f"A payment with reference '{data.reference}' already exists for this invoice. "
+                       "If this is a legitimate new payment, use a unique reference."
+            )
+
     payment_data = {
         "invoice_id": data.invoice_id,
         "client_id": data.client_id,

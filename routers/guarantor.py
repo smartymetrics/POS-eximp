@@ -608,6 +608,51 @@ async def get_general_link(request: Request):
     }
 
 
+@router.get("/my-submission")
+async def get_my_submission(current_admin=Depends(verify_token)):
+    """
+    Staff-scoped endpoint. Returns the logged-in employee's own guarantor
+    submission (including both guarantor slots) without exposing any other
+    employee's data. Any authenticated user can call this — no HR role required.
+    """
+    db = get_db()
+    email = current_admin.get("email")
+    if not email:
+        raise HTTPException(status_code=400, detail="Could not resolve your email from the session.")
+
+    sub_res = await db_execute(
+        lambda: db.table("guarantor_submissions")
+        .select("*")
+        .eq("employee_email", email)
+        .order("submitted_at", desc=True)
+        .limit(1)
+        .execute()
+    )
+
+    if not sub_res.data:
+        return {"submission": None}
+
+    sub = sub_res.data[0]
+    _sign_sub(sub)
+
+    g_res = await db_execute(
+        lambda: db.table("guarantors")
+        .select("*")
+        .eq("submission_id", sub["id"])
+        .order("slot_number")
+        .execute()
+    )
+
+    sub["guarantor1"] = None
+    sub["guarantor2"] = None
+    for g in g_res.data:
+        _sign_guarantor(g)
+        slot = g.get("slot_number", 1)
+        sub[f"guarantor{slot}"] = g
+
+    return {"submission": sub}
+
+
 @router.patch("/settings")
 async def update_settings(data: dict, current_admin=Depends(verify_token)):
     if not has_any_role(current_admin, "admin", "super_admin", "hr_admin"):

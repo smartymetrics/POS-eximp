@@ -2664,13 +2664,40 @@ const PayrollRunsHistory = ({ payroll }) => {
 function Payroll({ initialTab = "payslips" }) {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
   const [tab, setTab] = useState(initialTab);
-  const [payroll, setPayroll] = useState([]);
+  const [allPayroll, setAllPayroll] = useState([]);   // full unfiltered list
   const [loading, setLoading] = useState(true);
   const [showAdd, setShowAdd] = useState(false);
   const [staff, setStaff] = useState([]);
   const [nf, setNf] = useState({ id: null, uid: "", gross: "", tax: "0", notes: "" });
   const [selectedPayslip, setSelectedPayslip] = useState(null);
+  const [sendingPayslipId, setSendingPayslipId] = useState(null);
+
+  // Period filter
+  const [filterPeriod, setFilterPeriod] = useState(""); // "YYYY-MM" or ""
+
+  // Bulk select
+  const [selected, setSelected] = useState(new Set());
+
   const fmt = n => n != null ? `₦${Number(n).toLocaleString()}` : "—";
+
+  // Derived: unique periods for filter dropdown
+  const periods = [...new Set(allPayroll.map(p => (p.period_start || "").slice(0, 7)).filter(Boolean))]
+    .sort().reverse();
+
+  // Filtered list
+  const payroll = filterPeriod
+    ? allPayroll.filter(p => (p.period_start || "").startsWith(filterPeriod))
+    : allPayroll;
+
+  // Stats for current view
+  const stats = payroll.reduce((acc, p) => ({
+    gross:      acc.gross      + (p.gross_pay || 0),
+    net:        acc.net        + (p.net_pay   || 0),
+    tax:        acc.tax        + (p.tax        || 0),
+    pension:    acc.pension    + (p.pension    || 0),
+    headcount:  acc.headcount  + 1,
+    paid:       acc.paid       + (p.status === "paid" ? 1 : 0),
+  }), { gross: 0, net: 0, tax: 0, pension: 0, headcount: 0, paid: 0 });
 
   const handleRunPayroll = async () => {
     if (!confirm("Are you sure you want to run payroll for the current month? This will generate records for all active staff.")) return;
@@ -2679,12 +2706,9 @@ function Payroll({ initialTab = "payslips" }) {
       const res = await apiFetch(`${API_BASE}/hr/payroll/run`, { method: "POST" });
       alert(res.message);
       const updated = await apiFetch(`${API_BASE}/hr/payroll/payslips`);
-      setPayroll(updated);
-    } catch (e) {
-      alert("Payroll error: " + e.message);
-    } finally {
-      setLoading(false);
-    }
+      setAllPayroll(updated);
+    } catch (e) { alert("Payroll error: " + e.message); }
+    finally { setLoading(false); }
   };
 
   useEffect(() => {
@@ -2692,10 +2716,8 @@ function Payroll({ initialTab = "payslips" }) {
     Promise.all([
       apiFetch(`${API_BASE}/hr/payroll/payslips`),
       apiFetch(`${API_BASE}/hr/staff`)
-    ]).then(([p, s]) => {
-      setPayroll(p);
-      setStaff(s);
-    }).catch(() => setPayroll([]))
+    ]).then(([p, s]) => { setAllPayroll(p); setStaff(s); })
+      .catch(() => setAllPayroll([]))
       .finally(() => setLoading(false));
   }, []);
 
@@ -2711,42 +2733,32 @@ function Payroll({ initialTab = "payslips" }) {
           tax: parseFloat(nf.tax),
           net_pay: parseFloat(nf.gross) - parseFloat(nf.tax),
           notes: nf.notes,
-          period_start: new Date().toISOString().split('T')[0]
+          period_start: new Date().toISOString().split("T")[0]
         })
       });
       setShowAdd(false);
       setNf({ id: null, uid: "", gross: "", tax: "0", notes: "" });
       const updated = await apiFetch(`${API_BASE}/hr/payroll/payslips`);
-      setPayroll(updated);
-    } catch (e) {
-      alert("Error: " + e.message);
-    } finally {
-      setLoading(false);
-    }
+      setAllPayroll(updated);
+    } catch (e) { alert("Error: " + e.message); }
+    finally { setLoading(false); }
   };
 
-  // ── Edit state ──
+  // Edit state
   const [editRecord, setEditRecord] = useState(null);
   const [ef, setEf] = useState({ gross: "", tax: "0", pension: "0", nhf: "0", status: "pending" });
   const [editBusy, setEditBusy] = useState(false);
 
-  const openEdit = (p) => {
+  const openEdit = p => {
     setEditRecord(p);
-    setEf({
-      gross: String(p.gross_pay ?? ""),
-      tax: String(p.tax ?? "0"),
-      pension: String(p.pension ?? "0"),
-      nhf: String(p.nhf ?? "0"),
-      status: p.status ?? "pending"
-    });
+    setEf({ gross: String(p.gross_pay ?? ""), tax: String(p.tax ?? "0"),
+      pension: String(p.pension ?? "0"), nhf: String(p.nhf ?? "0"), status: p.status ?? "pending" });
   };
 
   const computeNet = () => {
-    const gross = parseFloat(ef.gross) || 0;
-    const tax = parseFloat(ef.tax) || 0;
-    const pension = parseFloat(ef.pension) || 0;
-    const nhf = parseFloat(ef.nhf) || 0;
-    return Math.max(0, gross - tax - pension - nhf);
+    const g = parseFloat(ef.gross) || 0, t = parseFloat(ef.tax) || 0,
+          pe = parseFloat(ef.pension) || 0, n = parseFloat(ef.nhf) || 0;
+    return Math.max(0, g - t - pe - n);
   };
 
   const saveEdit = async () => {
@@ -2766,28 +2778,73 @@ function Payroll({ initialTab = "payslips" }) {
       });
       setEditRecord(null);
       const updated = await apiFetch(`${API_BASE}/hr/payroll/payslips`);
-      setPayroll(updated);
-    } catch (e) {
-      alert("Update failed: " + e.message);
-    } finally {
-      setEditBusy(false);
-    }
+      setAllPayroll(updated);
+    } catch (e) { alert("Update failed: " + e.message); }
+    finally { setEditBusy(false); }
   };
 
-  const deleteRecord = async (p) => {
-    if (p.status === "paid") {
-      alert("Cannot delete a paid payroll record. Change the status to 'pending' first.");
-      return;
-    }
-    const name = p.admins?.full_name || "this staff member";
-    if (!confirm(`Delete payroll record for ${name}? This action cannot be undone.`)) return;
+  const deleteRecord = async p => {
+    if (p.status === "paid") { alert("Cannot delete a paid payroll record. Change the status to 'pending' first."); return; }
+    if (!confirm(`Delete payroll record for ${p.admins?.full_name || "this staff member"}?`)) return;
     try {
       await apiFetch(`${API_BASE}/hr/payroll/${p.id}`, { method: "DELETE" });
-      setPayroll(prev => prev.filter(r => r.id !== p.id));
-    } catch (e) {
-      alert("Delete failed: " + e.message);
-    }
+      setAllPayroll(prev => prev.filter(r => r.id !== p.id));
+      setSelected(prev => { const n = new Set(prev); n.delete(p.id); return n; });
+    } catch (e) { alert("Delete failed: " + e.message); }
   };
+
+  const sendPayslip = async p => {
+    const name   = p.admins?.full_name || "this staff member";
+    const period = p.period_start ? new Date(p.period_start).toLocaleDateString(undefined, { month: "long", year: "numeric" }) : "this period";
+    if (!confirm(`Email payslip to ${name} for ${period}?`)) return;
+    setSendingPayslipId(p.id);
+    try {
+      const res = await apiFetch(`${API_BASE}/hr/payroll/${p.id}/send-payslip`, { method: "POST" });
+      alert(`✅ Payslip sent to ${res.email}`);
+      // Update local record to show sent_at
+      setAllPayroll(prev => prev.map(r => r.id === p.id ? { ...r, payslip_sent_at: res.sent_at } : r));
+    } catch (e) { alert("Failed to send payslip: " + e.message); }
+    finally { setSendingPayslipId(null); }
+  };
+
+  // Bulk actions
+  const allVisibleIds = payroll.map(p => p.id);
+  const allSelected   = allVisibleIds.length > 0 && allVisibleIds.every(id => selected.has(id));
+  const someSelected  = selected.size > 0;
+
+  const toggleAll = () => {
+    if (allSelected) setSelected(new Set());
+    else setSelected(new Set(allVisibleIds));
+  };
+  const toggleOne = id => setSelected(prev => {
+    const n = new Set(prev);
+    n.has(id) ? n.delete(id) : n.add(id);
+    return n;
+  });
+
+  const [bulkBusy, setBulkBusy] = useState(false);
+  const bulkSetStatus = async newStatus => {
+    if (!confirm(`Mark ${selected.size} record(s) as "${newStatus}"?`)) return;
+    setBulkBusy(true);
+    try {
+      await apiFetch(`${API_BASE}/hr/payroll/bulk-status`, {
+        method: "POST",
+        body: JSON.stringify({ ids: [...selected], status: newStatus })
+      });
+      const updated = await apiFetch(`${API_BASE}/hr/payroll/payslips`);
+      setAllPayroll(updated);
+      setSelected(new Set());
+    } catch (e) { alert("Bulk update failed: " + e.message); }
+    finally { setBulkBusy(false); }
+  };
+
+  const StatCard = ({ label, value, color = C.text, sub }) => (
+    <div className="gc" style={{ padding: "14px 18px", flex: 1, minWidth: 120 }}>
+      <div style={{ fontSize: 10, fontWeight: 700, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5, marginBottom: 4 }}>{label}</div>
+      <div style={{ fontSize: 18, fontWeight: 900, color }}>{value}</div>
+      {sub && <div style={{ fontSize: 10, color: C.muted, marginTop: 2 }}>{sub}</div>}
+    </div>
+  );
 
   return (
     <div className="fade">
@@ -2820,63 +2877,100 @@ function Payroll({ initialTab = "payslips" }) {
       </div>
 
       {tab === "runs" ? (
-        <PayrollRunsHistory payroll={payroll} />
+        <PayrollRunsHistory payroll={allPayroll} />
       ) : tab === "commissions" ? (
         <AgentCommissions />
       ) : (
         <>
+          {/* ── Stats bar ── */}
+          {!loading && payroll.length > 0 && (
+            <div style={{ display: "flex", gap: 10, marginBottom: 18, flexWrap: "wrap" }}>
+              <StatCard label="Headcount" value={stats.headcount} sub={`${stats.paid} paid`} />
+              <StatCard label="Total Gross" value={`₦${(stats.gross / 1000).toFixed(0)}k`} color={T.gold} />
+              <StatCard label="Total Net" value={`₦${(stats.net / 1000).toFixed(0)}k`} color="#10B981" />
+              <StatCard label="PAYE Remittable" value={`₦${(stats.tax / 1000).toFixed(0)}k`} color="#F87171" />
+              <StatCard label="Pension (Emp)" value={`₦${(stats.pension / 1000).toFixed(0)}k`} color="#60A5FA" />
+            </div>
+          )}
+
+          {/* ── Filter + bulk toolbar ── */}
+          <div style={{ display: "flex", gap: 10, alignItems: "center", marginBottom: 14, flexWrap: "wrap" }}>
+            <select className="inp" style={{ width: "auto", minWidth: 180, fontSize: 13 }}
+              value={filterPeriod} onChange={e => { setFilterPeriod(e.target.value); setSelected(new Set()); }}>
+              <option value="">All Periods</option>
+              {periods.map(p => (
+                <option key={p} value={p}>
+                  {new Date(p + "-01").toLocaleDateString(undefined, { month: "long", year: "numeric" })}
+                </option>
+              ))}
+            </select>
+
+            {someSelected && (
+              <div style={{ display: "flex", gap: 8, alignItems: "center",
+                background: dark ? "#1e3a2f" : "#ECFDF5", border: "1px solid #10B98133",
+                borderRadius: 8, padding: "6px 14px" }}>
+                <span style={{ fontSize: 12, fontWeight: 700, color: "#10B981" }}>{selected.size} selected</span>
+                <button className="bg" style={{ fontSize: 11, padding: "4px 12px", borderColor: "#10B981", color: "#10B981" }}
+                  onClick={() => bulkSetStatus("paid")} disabled={bulkBusy}>
+                  {bulkBusy ? "Updating…" : "✓ Mark Paid"}
+                </button>
+                <button className="bg" style={{ fontSize: 11, padding: "4px 12px" }}
+                  onClick={() => bulkSetStatus("pending")} disabled={bulkBusy}>Mark Pending</button>
+                <button style={{ background: "none", border: "none", cursor: "pointer", color: C.muted, fontSize: 14, lineHeight: 1 }}
+                  onClick={() => setSelected(new Set())}>✕</button>
+              </div>
+            )}
+          </div>
+
+          {/* ── Modals ── */}
           {showAdd && (
-            <Modal onClose={() => setShowAdd(false)} title={nf.id ? "Edit Payroll Entry" : "Manual Payroll Entry"}>
+            <Modal onClose={() => setShowAdd(false)} title="Manual Payroll Entry">
               <div style={{ display: "flex", flexDirection: "column", gap: 22 }}>
-                <div><Lbl>Personnel Identification *</Lbl>
+                <div><Lbl>Personnel *</Lbl>
                   <select className="inp" value={nf.uid} onChange={e => setNf(x => ({ ...x, uid: e.target.value }))}>
                     <option value="">— Select Staff Member —</option>
                     {staff.map(u => <option key={u.id} value={u.id}>{u.full_name} ({u.department})</option>)}
                   </select>
                 </div>
                 <div className="g2" style={{ gap: 16 }}>
-                  <div><Lbl>Gross Component (₦) *</Lbl><input type="number" className="inp" placeholder="0.00" value={nf.gross} onChange={e => setNf(x => ({ ...x, gross: e.target.value }))} /></div>
-                  <div><Lbl>Tax / Reductions (₦)</Lbl><input type="number" className="inp" placeholder="0.00" value={nf.tax} onChange={e => setNf(x => ({ ...x, tax: e.target.value }))} /></div>
+                  <div><Lbl>Gross Pay (₦) *</Lbl><input type="number" className="inp" placeholder="0.00" value={nf.gross} onChange={e => setNf(x => ({ ...x, gross: e.target.value }))} /></div>
+                  <div><Lbl>Tax / Deductions (₦)</Lbl><input type="number" className="inp" placeholder="0.00" value={nf.tax} onChange={e => setNf(x => ({ ...x, tax: e.target.value }))} /></div>
                 </div>
-                <div><Lbl>Transaction Justification / Notes</Lbl><textarea className="inp" placeholder="E.g. Performance Bonus for Q1, Contractor retainer, Reimbursement of expenses..." value={nf.notes} onChange={e => setNf(x => ({ ...x, notes: e.target.value }))} /></div>
-                <button className="bp" onClick={addManual} style={{ padding: 16, fontSize: 15 }}>Submit Payroll Record</button>
+                <div><Lbl>Notes</Lbl><textarea className="inp" placeholder="E.g. Contractor retainer, Q1 performance bonus…" value={nf.notes} onChange={e => setNf(x => ({ ...x, notes: e.target.value }))} /></div>
+                <button className="bp" onClick={addManual} style={{ padding: 16, fontSize: 15 }}>Submit Record</button>
               </div>
             </Modal>
           )}
 
-          {/* ── Edit Payroll Modal ── */}
           {editRecord && (
             <Modal onClose={() => setEditRecord(null)} title="Edit Payroll Record" width={520}>
               <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
-                <div style={{ background: dark ? "rgba(251,176,64,0.08)" : "#FFF8EC", border: "1px solid #FBB04022", borderRadius: 10, padding: "12px 16px" }}>
-                  <div style={{ fontSize: 13, fontWeight: 800, color: dark ? "#F9FAFB" : "#111" }}>{editRecord.admins?.full_name}</div>
-                  <div style={{ fontSize: 11, color: dark ? "#9CA3AF" : "#6B7280" }}>Period: {editRecord.period_start ? new Date(editRecord.period_start).toLocaleDateString(undefined, { month: "long", year: "numeric" }) : "—"}</div>
+                <div style={{ background: dark ? "rgba(251,176,64,0.08)" : "#FFF8EC",
+                  border: "1px solid #FBB04022", borderRadius: 10, padding: "12px 16px" }}>
+                  <div style={{ fontSize: 13, fontWeight: 800 }}>{editRecord.admins?.full_name}</div>
+                  <div style={{ fontSize: 11, color: C.muted }}>Period: {editRecord.period_start ? new Date(editRecord.period_start).toLocaleDateString(undefined, { month: "long", year: "numeric" }) : "—"}</div>
                 </div>
-
                 <div className="g2" style={{ gap: 14 }}>
                   <div><Lbl>Gross Pay (₦)</Lbl><input type="number" className="inp" value={ef.gross} onChange={e => setEf(x => ({ ...x, gross: e.target.value }))} /></div>
                   <div><Lbl>PAYE Tax (₦)</Lbl><input type="number" className="inp" value={ef.tax} onChange={e => setEf(x => ({ ...x, tax: e.target.value }))} /></div>
                 </div>
-
                 <div className="g2" style={{ gap: 14 }}>
                   <div><Lbl>Pension (₦)</Lbl><input type="number" className="inp" value={ef.pension} onChange={e => setEf(x => ({ ...x, pension: e.target.value }))} /></div>
                   <div><Lbl>NHF (₦)</Lbl><input type="number" className="inp" value={ef.nhf} onChange={e => setEf(x => ({ ...x, nhf: e.target.value }))} /></div>
                 </div>
-
-                <div>
-                  <Lbl>Status</Lbl>
+                <div><Lbl>Status</Lbl>
                   <select className="inp" value={ef.status} onChange={e => setEf(x => ({ ...x, status: e.target.value }))}>
                     <option value="pending">Pending</option>
                     <option value="paid">Paid</option>
                     <option value="cancelled">Cancelled</option>
                   </select>
                 </div>
-
-                <div style={{ background: dark ? "rgba(74,222,128,0.07)" : "#F0FDF4", border: "1px solid #4ADE8022", borderRadius: 10, padding: "12px 16px", display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                <div style={{ background: dark ? "rgba(74,222,128,0.07)" : "#F0FDF4",
+                  border: "1px solid #4ADE8022", borderRadius: 10, padding: "12px 16px",
+                  display: "flex", justifyContent: "space-between", alignItems: "center" }}>
                   <div style={{ fontSize: 12, color: C.sub }}>Computed Net Pay</div>
                   <div style={{ fontSize: 18, fontWeight: 800, color: "#4ADE80" }}>₦{computeNet().toLocaleString()}</div>
                 </div>
-
                 <div style={{ display: "flex", gap: 10 }}>
                   <button className="bp" style={{ flex: 1, padding: 13 }} onClick={saveEdit} disabled={editBusy}>{editBusy ? "Saving…" : "Save Changes"}</button>
                   <button className="bg" style={{ flex: 1, padding: 13 }} onClick={() => setEditRecord(null)}>Cancel</button>
@@ -2885,45 +2979,111 @@ function Payroll({ initialTab = "payslips" }) {
             </Modal>
           )}
 
+          {/* ── Table ── */}
           {loading ? (
             <div style={{ padding: 40, textAlign: "center", color: C.muted }}>Loading payroll records…</div>
           ) : payroll.length === 0 ? (
             <div className="gc" style={{ padding: 48, textAlign: "center" }}>
               <div style={{ fontSize: 32, marginBottom: 12 }}>💳</div>
-              <div className="ho" style={{ fontSize: 16, marginBottom: 8 }}>No Payroll Records Yet</div>
-              <div style={{ fontSize: 13, color: C.muted }}>Run payroll to generate payslips for your team.</div>
+              <div className="ho" style={{ fontSize: 16, marginBottom: 8 }}>
+                {filterPeriod ? "No records for this period" : "No Payroll Records Yet"}
+              </div>
+              <div style={{ fontSize: 13, color: C.muted }}>
+                {filterPeriod ? "Try selecting a different period or clear the filter." : "Run payroll to generate payslips for your team."}
+              </div>
             </div>
           ) : (
             <div className="gc" style={{ overflow: "hidden" }}>
-              <div style={{ padding: "14px 20px", borderBottom: `1px solid ${C.border}` }}>
-                <div className="ho" style={{ fontSize: 14 }}>Payroll Records</div>
-              </div>
               <div className="tw">
                 <table className="ht">
-                  <thead><tr>{["Staff Member", "Period", "Gross Pay", "Net Pay", "Status", "Actions"].map(h => <th key={h}>{h}</th>)}</tr></thead>
+                  <thead>
+                    <tr>
+                      <th style={{ width: 36 }}>
+                        <input type="checkbox" checked={allSelected} onChange={toggleAll}
+                          style={{ cursor: "pointer", accentColor: T.gold }} />
+                      </th>
+                      <th>Staff Member</th>
+                      <th>Period</th>
+                      <th>Gross</th>
+                      <th>PAYE</th>
+                      <th>Net Salary</th>
+                      <th>Status</th>
+                      <th>Payslip</th>
+                      <th>Actions</th>
+                    </tr>
+                  </thead>
                   <tbody>
-                    {payroll.map(p => (
-                      <tr key={p.id}>
-                        <td><div style={{ display: "flex", alignItems: "center", gap: 10 }}><Av av={p.admins?.full_name?.split(" ").map(n => n[0]).join("") || "??"} sz={26} /><span style={{ fontWeight: 800 }}>{p.admins?.full_name}</span></div></td>
-                        <td style={{ color: C.sub }}>{p.period_start ? new Date(p.period_start).toLocaleDateString(undefined, { month: 'long', year: 'numeric' }) : "—"}</td>
-                        <td style={{ fontWeight: 700 }}>{fmt(p.gross_pay)}</td>
-                        <td style={{ color: T.orange, fontWeight: 800, fontSize: 14 }}>{fmt(p.net_pay)}</td>
-                        <td><span className={`tg ${p.status === "paid" ? "tg2" : "ty"}`}>{p.status}</span></td>
-                        <td>
-                          <div style={{ display: "flex", gap: 6, alignItems: "center" }}>
-                            <button className="bg" style={{ fontSize: 11, padding: "5px 12px" }} onClick={() => setSelectedPayslip(p)}>Payslip</button>
-                            <button className="bg" style={{ fontSize: 11, padding: "5px 12px", borderColor: T.orange, color: T.orange }} onClick={() => openEdit(p)}>Edit</button>
-                            <button className="bg" style={{ fontSize: 11, padding: "5px 10px", borderColor: "#F87171", color: "#F87171" }}
-                              onClick={() => deleteRecord(p)} title={p.status === "paid" ? "Cannot delete paid records" : "Delete record"}>✕</button>
-                          </div>
-                        </td>
-                      </tr>
-                    ))}
+                    {payroll.map(p => {
+                      const isSent = !!p.payslip_sent_at;
+                      const sending = sendingPayslipId === p.id;
+                      return (
+                        <tr key={p.id} style={{ background: selected.has(p.id) ? (dark ? "#1e3a2f" : "#F0FDF4") : undefined }}>
+                          <td>
+                            <input type="checkbox" checked={selected.has(p.id)} onChange={() => toggleOne(p.id)}
+                              style={{ cursor: "pointer", accentColor: T.gold }} />
+                          </td>
+                          <td>
+                            <div style={{ display: "flex", alignItems: "center", gap: 10 }}>
+                              <Av av={p.admins?.full_name?.split(" ").map(n => n[0]).join("") || "??"} sz={26} />
+                              <div>
+                                <div style={{ fontWeight: 800 }}>{p.admins?.full_name}</div>
+                                <div style={{ fontSize: 11, color: C.muted }}>{p.admins?.department}</div>
+                              </div>
+                            </div>
+                          </td>
+                          <td style={{ color: C.sub }}>
+                            {p.period_start ? new Date(p.period_start).toLocaleDateString(undefined, { month: "short", year: "numeric" }) : "—"}
+                          </td>
+                          <td style={{ fontWeight: 700 }}>{fmt(p.gross_pay)}</td>
+                          <td style={{ color: "#F87171", fontWeight: 700, fontSize: 12 }}>({fmt(p.tax)})</td>
+                          <td style={{ color: "#10B981", fontWeight: 800, fontSize: 14 }}>{fmt(p.net_pay)}</td>
+                          <td>
+                            <span className={`tg ${p.status === "paid" ? "tg2" : p.status === "cancelled" ? "tr" : "ty"}`}>
+                              {p.status}
+                            </span>
+                          </td>
+                          <td>
+                            {isSent ? (
+                              <div style={{ display: "flex", flexDirection: "column", gap: 2 }}>
+                                <span style={{ fontSize: 10, color: "#10B981", fontWeight: 700 }}>✓ Sent</span>
+                                <span style={{ fontSize: 10, color: C.muted }}>
+                                  {new Date(p.payslip_sent_at).toLocaleDateString(undefined, { day: "2-digit", month: "short" })}
+                                </span>
+                              </div>
+                            ) : (
+                              <span style={{ fontSize: 10, color: C.muted }}>Not sent</span>
+                            )}
+                          </td>
+                          <td>
+                            <div style={{ display: "flex", gap: 5, alignItems: "center" }}>
+                              <button className="bg" style={{ fontSize: 11, padding: "5px 10px" }}
+                                onClick={() => setSelectedPayslip(p)}>View</button>
+                              <button className="bg"
+                                style={{ fontSize: 11, padding: "5px 10px",
+                                  borderColor: "#10B981", color: "#10B981",
+                                  opacity: sending ? 0.6 : 1 }}
+                                onClick={() => sendPayslip(p)} disabled={sending}
+                                title={isSent ? `Resend (last sent ${new Date(p.payslip_sent_at).toLocaleDateString()})` : "Email payslip to staff"}>
+                                {sending ? "…" : isSent ? "Resend" : "📧"}
+                              </button>
+                              <button className="bg"
+                                style={{ fontSize: 11, padding: "5px 10px", borderColor: T.orange, color: T.orange }}
+                                onClick={() => openEdit(p)}>Edit</button>
+                              <button className="bg"
+                                style={{ fontSize: 11, padding: "5px 8px", borderColor: "#F87171", color: "#F87171" }}
+                                onClick={() => deleteRecord(p)}
+                                title={p.status === "paid" ? "Cannot delete paid records" : "Delete"}>✕</button>
+                            </div>
+                          </td>
+                        </tr>
+                      );
+                    })}
                   </tbody>
                 </table>
               </div>
             </div>
           )}
+
           {selectedPayslip && <PayslipBreakdown p={selectedPayslip} onClose={() => setSelectedPayslip(null)} dark={dark} />}
         </>
       )}
@@ -2971,9 +3131,11 @@ function PayslipBreakdown({ p, onClose, dark }) {
 
         {breakdown.annual_taxable > 0 && (
           <div style={{ background: C.surface, padding: 16, borderRadius: 12, border: `1px dashed ${C.border}` }}>
-            <div className="fl" style={{ marginBottom: 8 }}>Tax Engine Intelligence</div>
+            <div className="fl" style={{ marginBottom: 8 }}>Tax Computation (NTA 2025)</div>
             <div style={{ fontSize: 13, color: C.sub, lineHeight: 1.5 }}>
-              Calculated on an annual taxable income of <strong>{fmt(breakdown.annual_taxable)}</strong> after applying a Consolidated Relief Allowance (CRA) of <strong>{fmt(breakdown.monthly_cra * 12)}</strong>.
+              Annual taxable income: <strong>{fmt(breakdown.annual_taxable)}</strong>.
+              {" "}Progressive rates 0%–25% per Nigeria Tax Act 2025 (effective Jan 2026).
+              Monthly PAYE: <strong>{fmt(breakdown.monthly_tax)}</strong>.
             </div>
           </div>
         )}
@@ -7992,58 +8154,122 @@ function BonusManager({ isHR }) {
 // ─── HUB: TAX CONFIGURATION ──────────────────────────────────────────────────
 function TaxConfig() {
   const { dark } = useTheme(); const C = dark ? DARK : LIGHT;
-  const [config, setConfig] = useState({ paye_enabled: true, pension_employee_rate: 8, pension_employer_rate: 10, nhf_rate: 2.5, wht_default_rate: 5, wht_contractor_rate: 10 });
-  const [loading, setLoading] = useState(true); const [saving, setSaving] = useState(false);
+  const [config, setConfig] = useState({
+    paye_enabled: true,
+    pension_employee_rate: 8, pension_employer_rate: 10,
+    nhf_rate: 2.5,
+    wht_default_rate: 5, wht_contractor_rate: 10,
+  });
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
 
   useEffect(() => {
-    apiFetch(`${API_BASE}/hr/tax-config`).then(d => { if (d) setConfig(c => ({ ...c, ...d })); }).catch(() => { }).finally(() => setLoading(false));
+    apiFetch(`${API_BASE}/hr/tax-config`)
+      .then(d => { if (d) setConfig(c => ({ ...c, ...d })); })
+      .catch(() => {})
+      .finally(() => setLoading(false));
   }, []);
 
   const save = async () => {
     setSaving(true);
     try {
-      await apiFetch(`${API_BASE}/hr/tax-config`, { method: "POST", body: JSON.stringify(config) });
+      await apiFetch(`${API_BASE}/hr/tax-config`, { method: "PATCH", body: JSON.stringify(config) });
       alert("Tax configuration saved successfully.");
     } catch (e) { alert("Error: " + e.message); } finally { setSaving(false); }
   };
 
-  const Field = ({ label, field, suffix = "%", step = "0.5", min = "0", max = "100" }) => (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", padding: "12px 0", borderBottom: `1px solid ${C.border}` }}>
-      <span style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>{label}</span>
+  const Field = ({ label, hint, field, suffix = "%", step = "0.5", min = "0", max = "100" }) => (
+    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+      padding: "12px 0", borderBottom: `1px solid ${C.border}` }}>
+      <div>
+        <div style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>{label}</div>
+        {hint && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{hint}</div>}
+      </div>
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
-        <input type="number" step={step} min={min} max={max} value={config[field]} onChange={e => setConfig(c => ({ ...c, [field]: parseFloat(e.target.value) }))}
-          style={{ width: 80, padding: "6px 10px", borderRadius: 8, border: `1px solid ${C.border}`, background: dark ? "#1a1a2e" : "#f8f8f8", color: C.text, fontSize: 14, fontWeight: 800, textAlign: "right" }} />
-        <span style={{ fontSize: 12, color: C.muted, width: 20 }}>{suffix}</span>
+        <input type="number" step={step} min={min} max={max} value={config[field]}
+          onChange={e => setConfig(c => ({ ...c, [field]: parseFloat(e.target.value) }))}
+          style={{ width: 80, padding: "6px 10px", borderRadius: 8,
+            border: `1px solid ${C.border}`, background: dark ? "#1a1a2e" : "#f8f8f8",
+            color: C.text, fontSize: 14, fontWeight: 800, textAlign: "right" }} />
+        <span style={{ fontSize: 12, color: C.muted, width: 28 }}>{suffix}</span>
       </div>
     </div>
   );
+
+  const BANDS_2026 = [
+    ["₦0 – ₦800,000",         "0%",  "Exempt"],
+    ["₦800,001 – ₦3,000,000", "15%", ""],
+    ["₦3,000,001 – ₦12,000,000","18%",""],
+    ["₦12,000,001 – ₦25,000,000","21%",""],
+    ["₦25,000,001 – ₦50,000,000","23%",""],
+    ["Above ₦50,000,000",      "25%", "Top rate"],
+  ];
 
   return (
     <div className="fade">
       <div style={{ marginBottom: 22 }}>
         <div className="ho" style={{ fontSize: 22 }}>Tax Configuration</div>
-        <div style={{ fontSize: 13, color: C.sub }}>Nigerian PAYE, Pension, NHF and WHT rates and settings.</div>
+        <div style={{ fontSize: 13, color: C.sub }}>
+          Nigerian PAYE, Pension, NHF and WHT rates — updated for <strong>Nigeria Tax Act (NTA) 2025</strong>, effective Jan 1 2026.
+        </div>
+      </div>
+
+      {/* NTA 2025 notice banner */}
+      <div style={{ background: "#FEF3C7", border: "1px solid #FDE68A", borderRadius: 10,
+        padding: "12px 18px", marginBottom: 22, display: "flex", gap: 12, alignItems: "flex-start" }}>
+        <span style={{ fontSize: 18 }}>⚖️</span>
+        <div>
+          <div style={{ fontSize: 13, fontWeight: 800, color: "#92400E" }}>Nigeria Tax Act 2025 — Now in Effect</div>
+          <div style={{ fontSize: 12, color: "#78350F", marginTop: 3, lineHeight: 1.6 }}>
+            The Consolidated Relief Allowance (CRA) has been <strong>abolished</strong>. PAYE now uses updated progressive bands (0%–25%).
+            The employer's obligation is to deduct PAYE on gross income minus pension minus NHF — nothing more.
+            Employees may claim personal deductions (e.g. rent relief) directly with FIRS on their own annual return.
+          </div>
+        </div>
       </div>
 
       {loading ? <div style={{ textAlign: "center", padding: 40, color: C.muted }}>Loading…</div> : (
         <div className="g2">
+
           {/* PAYE */}
           <div className="gc" style={{ padding: 24 }}>
-            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 18 }}>
+            <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center", marginBottom: 14 }}>
               <div style={{ fontWeight: 800, color: "#F87171", fontSize: 15 }}>PAYE (Pay As You Earn)</div>
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                 <span style={{ fontSize: 12, color: C.muted }}>Enabled</span>
-                <div onClick={() => setConfig(c => ({ ...c, paye_enabled: !c.paye_enabled }))} style={{ width: 40, height: 22, borderRadius: 11, background: config.paye_enabled ? "#4ADE80" : C.border, position: "relative", cursor: "pointer", transition: "background 0.2s" }}>
-                  <div style={{ position: "absolute", top: 3, left: config.paye_enabled ? 21 : 3, width: 16, height: 16, borderRadius: "50%", background: "#fff", transition: "left 0.2s" }} />
+                <div onClick={() => setConfig(c => ({ ...c, paye_enabled: !c.paye_enabled }))}
+                  style={{ width: 40, height: 22, borderRadius: 11,
+                    background: config.paye_enabled ? "#4ADE80" : C.border,
+                    position: "relative", cursor: "pointer", transition: "background 0.2s" }}>
+                  <div style={{ position: "absolute", top: 3,
+                    left: config.paye_enabled ? 21 : 3,
+                    width: 16, height: 16, borderRadius: "50%",
+                    background: "#fff", transition: "left 0.2s" }} />
                 </div>
               </label>
             </div>
-            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 16 }}>Progressive rate: 7–24% based on income band per FIRS guidelines. Remitted monthly to FIRS.</div>
-            <div style={{ padding: 12, background: "#F8717111", borderRadius: 8, fontSize: 12 }}>
-              <div style={{ fontWeight: 800, color: "#F87171", marginBottom: 6 }}>PAYE Bands (Fixed — FIRS)</div>
-              {[["First ₦300,000", "7%"], ["Next ₦300,000", "11%"], ["Next ₦500,000", "15%"], ["Next ₦500,000", "19%"], ["Next ₦1,600,000", "21%"], ["Above ₦3,200,000", "24%"]].map(([band, rate]) => (
-                <div key={band} style={{ display: "flex", justifyContent: "space-between", color: C.sub, marginBottom: 3 }}>
-                  <span>{band}</span><span style={{ fontWeight: 700, color: "#F87171" }}>{rate}</span>
+            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 14 }}>
+              Progressive rate: 0–25% per NTA 2025. Remitted to FIRS by the 10th of the following month.
+              Employees earning ≤ ₦800,000/year are fully exempt.
+            </div>
+
+            {/* 2026 Bands table */}
+            <div style={{ background: dark ? "#1a1a2e" : "#FEF2F2", borderRadius: 8,
+              border: `1px solid ${dark ? "#3f3f5a" : "#FECACA"}`, overflow: "hidden" }}>
+              <div style={{ padding: "8px 12px", background: "#F87171", fontSize: 10,
+                fontWeight: 800, color: "#fff", textTransform: "uppercase", letterSpacing: 1 }}>
+                NTA 2025 PAYE Bands (Fixed by FIRS — not editable)
+              </div>
+              {BANDS_2026.map(([band, rate, note]) => (
+                <div key={band} style={{ display: "flex", justifyContent: "space-between",
+                  alignItems: "center", padding: "7px 12px",
+                  borderBottom: `1px solid ${dark ? "#2d2d4a" : "#FEE2E2"}`,
+                  fontSize: 12 }}>
+                  <span style={{ color: C.sub }}>{band}</span>
+                  <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
+                    {note && <span style={{ fontSize: 10, color: "#F87171", fontStyle: "italic" }}>{note}</span>}
+                    <span style={{ fontWeight: 800, color: "#F87171", minWidth: 32, textAlign: "right" }}>{rate}</span>
+                  </div>
                 </div>
               ))}
             </div>
@@ -8051,31 +8277,41 @@ function TaxConfig() {
 
           {/* Pension */}
           <div className="gc" style={{ padding: 24 }}>
-            <div style={{ fontWeight: 800, color: "#60A5FA", fontSize: 15, marginBottom: 6 }}>Pension Contribution (PRA 2014)</div>
-            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 18 }}>Mandatory for all staff on payroll. Remitted to approved PFAs by the 7th of each month.</div>
-            <Field label="Employee Contribution" field="pension_employee_rate" />
-            <Field label="Employer Contribution" field="pension_employer_rate" />
+            <div style={{ fontWeight: 800, color: "#60A5FA", fontSize: 15, marginBottom: 4 }}>Pension (PRA 2014)</div>
+            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 14 }}>
+              Mandatory for all staff. Computed on pensionable emoluments (Basic + Housing + Transport only).
+              Remitted to the employee's PFA by the 7th of each month.
+            </div>
+            <Field label="Employee Contribution" hint="Statutory minimum is 8%" field="pension_employee_rate" />
+            <Field label="Employer Contribution" hint="Statutory minimum is 10%" field="pension_employer_rate" />
           </div>
 
           {/* NHF */}
           <div className="gc" style={{ padding: 24 }}>
-            <div style={{ fontWeight: 800, color: T.gold, fontSize: 15, marginBottom: 6 }}>NHF (National Housing Fund)</div>
-            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 18 }}>Applies to Nigerians earning ₦3,000/month or more. Remitted to FMBN.</div>
+            <div style={{ fontWeight: 800, color: T.gold, fontSize: 15, marginBottom: 4 }}>NHF (National Housing Fund)</div>
+            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 14 }}>
+              Applies to Nigerians earning ₦3,000/month or more. Remitted to FMBN. Computed on basic salary only.
+            </div>
             <Field label="NHF Rate (of basic salary)" field="nhf_rate" step="0.5" />
           </div>
 
           {/* WHT */}
           <div className="gc" style={{ padding: 24 }}>
-            <div style={{ fontWeight: 800, color: "#4ADE80", fontSize: 15, marginBottom: 6 }}>WHT (Withholding Tax)</div>
-            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 18 }}>Deducted at source before contractor and professional fee payments.</div>
-            <Field label="Default WHT Rate" field="wht_default_rate" />
+            <div style={{ fontWeight: 800, color: "#4ADE80", fontSize: 15, marginBottom: 4 }}>WHT (Withholding Tax)</div>
+            <div style={{ fontSize: 12, color: C.sub, lineHeight: 1.6, marginBottom: 14 }}>
+              Deducted at source before commission and professional fee payments. Remitted to FIRS by the 21st.
+            </div>
+            <Field label="Default WHT Rate (e.g. commission)" field="wht_default_rate" />
             <Field label="Contractor WHT Rate" field="wht_contractor_rate" />
           </div>
+
         </div>
       )}
 
       <div style={{ marginTop: 24, display: "flex", justifyContent: "flex-end" }}>
-        <button className="bp" onClick={save} disabled={saving} style={{ padding: "12px 32px" }}>{saving ? "Saving…" : "Save Configuration"}</button>
+        <button className="bp" onClick={save} disabled={saving} style={{ padding: "12px 32px" }}>
+          {saving ? "Saving…" : "Save Configuration"}
+        </button>
       </div>
     </div>
   );
@@ -14378,7 +14614,7 @@ function StaffPortal({ user, onLogout }) {
       if (pg === "policy_library") return <PolicyLibrary isHR={false} />;
       if (pg === "internal_job_board") return <InternalJobBoard isHR={false} user={user} />;
       if (pg === "training" || pg === "compliance_training") return <LearningHub isHR={false} defaultTab={pg === "compliance_training" ? "compliance" : "trainings"} />;
-      if (pg === "guarantors") return <MyGuarantors />;
+      if (pg === "guarantors") return <MyGuarantorStatus user={user} />;
 
       return (
         <div className="fade">

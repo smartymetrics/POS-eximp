@@ -1389,70 +1389,71 @@ async def run_payroll(current_admin: dict = Depends(verify_token)):
         annual_nhf = annual_gross * nhf_rate
         annual_er_pension = annual_gross * er_p_rate
 
-        annual_cra = 0.0
-        annual_tax = 0.0
+        annual_tax     = 0.0
         taxable_income = 0.0
 
-        if paye_enabled and base > 30000:  # Minimum wage exemption for PAYE calculations
-            annual_cra = max(0.2 * annual_gross, 200000.0 + 0.01 * annual_gross)
-            taxable_income = max(0.0, annual_gross - annual_pension - annual_nhf - annual_cra)
+        if paye_enabled and base > 66667:  # ₦800k/year threshold (NTA 2025)
+            # Employer PAYE obligation: tax on gross minus pension minus NHF.
+            # Rent relief is a personal claim the employee makes directly with
+            # FIRS/SIRS on their annual return — it is NOT the employer's
+            # responsibility to deduct it through payroll.
+            taxable_income = max(0.0, annual_gross - annual_pension - annual_nhf)
 
-            brackets = [
-                (300000, 0.07),
-                (300000, 0.11),
-                (500000, 0.15),
-                (500000, 0.19),
-                (1600000, 0.21),
-                (float('inf'), 0.24)
+            # NTA 2025 progressive bands (effective Jan 1 2026)
+            bands_2026 = [
+                (800_000,      0.00),
+                (2_200_000,    0.15),   # ₦800k – ₦3m
+                (9_000_000,    0.18),   # ₦3m   – ₦12m
+                (13_000_000,   0.21),   # ₦12m  – ₦25m
+                (25_000_000,   0.23),   # ₦25m  – ₦50m
+                (float("inf"), 0.25),   # above  ₦50m
             ]
 
             rem_income = taxable_income
-            for limit, rate in brackets:
+            for limit, rate in bands_2026:
                 if rem_income <= 0:
                     break
-                taxable_amount = min(rem_income, limit)
-                annual_tax += taxable_amount * rate
-                rem_income -= taxable_amount
+                annual_tax += min(rem_income, limit) * rate
+                rem_income -= min(rem_income, limit)
 
-            if annual_tax == 0 and taxable_income <= 0:
-                annual_tax = annual_gross * 0.01  # Minimum tax 1%
+            if annual_tax == 0 and taxable_income > 0:
+                annual_tax = annual_gross * 0.01  # Minimum tax 1% fallback (NTA 2025)
 
-        monthly_tax = round(annual_tax / 12, 2)
-        monthly_pension = round(annual_pension / 12, 2)
-        monthly_nhf = round(annual_nhf / 12, 2)
+        monthly_tax        = round(annual_tax / 12, 2)
+        monthly_pension    = round(annual_pension / 12, 2)
+        monthly_nhf        = round(annual_nhf / 12, 2)
         monthly_er_pension = round(annual_er_pension / 12, 2)
-        monthly_cra = round(annual_cra / 12, 2)
-        deductions = round(monthly_tax + monthly_pension + monthly_nhf, 2)
-        net = round(base - deductions, 2)
+        deductions         = round(monthly_tax + monthly_pension + monthly_nhf, 2)
+        net                = round(base - deductions, 2)
 
         payroll_inserts.append({
-            "staff_id": s["id"],
-            "period_start": month_start,
-            "period_end": month_end,
-            "gross_pay": base,
-            "tax": monthly_tax,
-            "pension": monthly_pension,
-            "nhf": monthly_nhf,
+            "staff_id":        s["id"],
+            "period_start":    month_start,
+            "period_end":      month_end,
+            "gross_pay":       base,
+            "tax":             monthly_tax,
+            "pension":         monthly_pension,
+            "nhf":             monthly_nhf,
             "employer_pension": monthly_er_pension,
-            "cra": monthly_cra,
-            "deductions": deductions,
-            "net_pay": net,
-            "status": "pending",
-            "processed_by": current_admin["sub"],
+            "cra":             0,           # column kept for schema compat; CRA abolished NTA 2025
+            "deductions":      deductions,
+            "net_pay":         net,
+            "status":          "pending",
+            "processed_by":    current_admin["sub"],
             "net_pay_breakdown": {
-                "base_salary": base,
-                "gross_annual": annual_gross,
-                "monthly_tax": monthly_tax,
-                "monthly_pension": monthly_pension,
-                "monthly_nhf": monthly_nhf,
-                "monthly_cra": monthly_cra,
-                "annual_taxable": taxable_income,
-                "paye_enabled": paye_enabled,
+                "base_salary":          base,
+                "gross_annual":         annual_gross,
+                "monthly_tax":          monthly_tax,
+                "monthly_pension":      monthly_pension,
+                "monthly_nhf":          monthly_nhf,
+                "annual_taxable":       taxable_income,
+                "paye_enabled":         paye_enabled,
                 "pension_employee_rate": p_rate * 100,
                 "pension_employer_rate": er_p_rate * 100,
-                "nhf_rate": nhf_rate * 100,
-                "wht_default_rate": wht_default_rate,
-                "wht_contractor_rate": wht_contractor_rate
+                "nhf_rate":             nhf_rate * 100,
+                "wht_default_rate":     wht_default_rate,
+                "wht_contractor_rate":  wht_contractor_rate,
+                "tax_regime":           "NTA_2025",
             }
         })
 
@@ -1886,7 +1887,7 @@ async def get_payslips(staff_id: Optional[str] = None, current_admin: dict = Dep
     user_roles = current_admin.get("role", "").split(",")
     is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
-    query = db.table("payroll_records").select("*, admins!payroll_records_staff_id_fkey(full_name, department)")
+    query = db.table("payroll_records").select("*, admins!payroll_records_staff_id_fkey(full_name, department, email)")
     if staff_id:
         query = query.eq("staff_id", staff_id)
     elif not is_hr:
@@ -1949,6 +1950,104 @@ async def delete_payroll_record(record_id: str, current_admin: dict = Depends(ve
         raise HTTPException(status_code=400, detail="Cannot delete a record with status 'paid'. Change the status first.")
 
     await db_execute(lambda: db.table("payroll_records").delete().eq("id", record_id).execute())
+
+
+@router.post("/payroll/{record_id}/send-payslip", status_code=200)
+async def send_payslip(record_id: str, current_admin: dict = Depends(verify_token)):
+    """Email a payslip PDF to the staff member. HR admin only."""
+    from email_service import send_payslip_email
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+
+    db = get_db()
+    pr = await db_execute(lambda: db.table("payroll_records")
+        .select("*, admins!payroll_records_staff_id_fkey(*, staff_profiles(*))")
+        .eq("id", record_id).single().execute())
+    if not pr.data:
+        raise HTTPException(status_code=404, detail="Payroll record not found")
+
+    payroll  = pr.data
+    staff    = payroll.pop("admins", {}) or {}
+    staff_id = payroll.get("staff_id")
+
+    if not staff.get("email"):
+        raise HTTPException(status_code=422, detail="Staff member has no email address on record.")
+
+    period_start = payroll.get("period_start", "")
+    period_end   = payroll.get("period_end", period_start)
+
+    # Fetch commissions for this staff/period
+    commissions = []
+    try:
+        rep_res = await db_execute(lambda: db.table("sales_reps").select("id")
+            .eq("email", staff.get("email", "")).limit(1).execute())
+        if rep_res.data:
+            rep_id   = rep_res.data[0]["id"]
+            comm_res = await db_execute(lambda: db.table("commission_earnings")
+                .select("*, clients(full_name)").eq("rep_id", rep_id).eq("is_voided", False)
+                .gte("created_at", period_start).lte("created_at", period_end + "T23:59:59").execute())
+            commissions = comm_res.data or []
+    except Exception as e:
+        print(f"[send-payslip] Commission fetch error (non-critical): {e}")
+
+    # Fetch bonuses for this staff/period
+    bonuses = []
+    try:
+        bonus_res = await db_execute(lambda: db.table("bonuses").select("*")
+            .eq("staff_id", staff_id)
+            .gte("created_at", period_start).lte("created_at", period_end + "T23:59:59").execute())
+        bonuses = bonus_res.data or []
+    except Exception as e:
+        print(f"[send-payslip] Bonus fetch error (non-critical): {e}")
+
+    result = await send_payslip_email(
+        staff=staff, payroll=payroll, commissions=commissions,
+        bonuses=bonuses, sent_by=current_admin.get("sub", "hr"),
+    )
+    if result is None:
+        raise HTTPException(status_code=500, detail="Failed to send payslip email. Check server logs.")
+
+    # Stamp the record so HR can see it was sent
+    try:
+        await db_execute(lambda: db.table("payroll_records")
+            .update({"payslip_sent_at": datetime.utcnow().isoformat()})
+            .eq("id", record_id).execute())
+    except Exception:
+        pass  # Non-critical — email already sent
+
+    return {
+        "message":  f"Payslip emailed to {staff['email']} for period {period_start[:7]}.",
+        "period":   period_start[:7],
+        "staff":    staff.get("full_name"),
+        "email":    staff.get("email"),
+        "sent_at":  datetime.utcnow().isoformat(),
+    }
+
+
+@router.post("/payroll/bulk-status", status_code=200)
+async def bulk_update_payroll_status(
+    body: dict,
+    current_admin: dict = Depends(verify_token)
+):
+    """Mark multiple payroll records as paid/pending at once. HR only."""
+    user_roles = current_admin.get("role", "").split(",")
+    if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+
+    ids    = body.get("ids", [])
+    new_status = body.get("status", "paid")
+    if not ids:
+        raise HTTPException(status_code=400, detail="No record IDs provided.")
+    if new_status not in ("paid", "pending", "cancelled"):
+        raise HTTPException(status_code=400, detail="Invalid status value.")
+
+    db  = get_db()
+    res = await db_execute(lambda: db.table("payroll_records")
+        .update({"status": new_status, "updated_at": datetime.utcnow().isoformat()})
+        .in_("id", ids).execute())
+    return {"updated": len(res.data or []), "status": new_status}
+
 
 @router.get("/salary-history/{staff_id}")
 async def get_salary_history(staff_id: str, current_admin: dict = Depends(verify_token)):
