@@ -4,3 +4,4 @@ __pycache__
 pos-eximp/Lib/site-packages
 .aider*
 .gemini
+*.pdf
