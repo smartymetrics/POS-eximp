@@ -813,6 +813,8 @@ async def portal_lookup_invoice(invoice_number: str, claimant_email: Optional[st
 
     def _pct(val, fallback):
         try:
+            if isinstance(val, str):
+                val = val.strip().rstrip('%').strip()
             v = float(val)
             return v / 100 if v > 1 else v
         except Exception:
@@ -1182,8 +1184,10 @@ async def submit_payout_claim_from_portal(
         _sys = {s["key"]: s["value"] for s in (_sys_res.data or [])}
 
         def _to_dec(pct_str, fallback):
-            """Convert a stored percentage string e.g. '15' or '0.15' to a Decimal fraction."""
+            """Convert a stored percentage string e.g. '15', '10%', or '0.15' to a Decimal fraction."""
             try:
+                if isinstance(pct_str, str):
+                    pct_str = pct_str.strip().rstrip('%').strip()
                 v = Decimal(str(pct_str))
                 return v / 100 if v > 1 else v
             except Exception:
@@ -1511,6 +1515,8 @@ async def submit_payout_claims_bulk(
 
     def _to_dec(pct_str, fallback):
         try:
+            if isinstance(pct_str, str):
+                pct_str = pct_str.strip().rstrip('%').strip()
             v = Decimal(str(pct_str))
             return v / 100 if v > 1 else v
         except Exception:
@@ -3337,6 +3343,8 @@ async def portal_lookup_invoice(invoice_number: str, claimant_email: Optional[st
 
     def _pct(val, fallback):
         try:
+            if isinstance(val, str):
+                val = val.strip().rstrip('%').strip()
             v = float(val)
             return v / 100 if v > 1 else v
         except Exception:
@@ -3706,8 +3714,10 @@ async def submit_payout_claim_from_portal(
         _sys = {s["key"]: s["value"] for s in (_sys_res.data or [])}
 
         def _to_dec(pct_str, fallback):
-            """Convert a stored percentage string e.g. '15' or '0.15' to a Decimal fraction."""
+            """Convert a stored percentage string e.g. '15', '10%', or '0.15' to a Decimal fraction."""
             try:
+                if isinstance(pct_str, str):
+                    pct_str = pct_str.strip().rstrip('%').strip()
                 v = Decimal(str(pct_str))
                 return v / 100 if v > 1 else v
             except Exception:
@@ -4724,6 +4734,8 @@ async def portal_get_global_rates():
  
     def _pct(val, fallback):
         try:
+            if isinstance(val, str):
+                val = val.strip().rstrip('%').strip()
             v = float(val)
             return round(v / 100 if v > 1 else v, 4)
         except Exception:
