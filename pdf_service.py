@@ -956,6 +956,9 @@ def generate_payslip_pdf(
     fmt   = lambda n: f"₦{float(n or 0):,.2f}"
     bd    = payroll.get("net_pay_breakdown") or {}
     prof  = (staff.get("staff_profiles") or [{}])[0]
+    bank_name      = prof.get("bank_name")      or staff.get("bank_name")      or "—"
+    account_number = prof.get("account_number") or staff.get("account_number") or "—"
+    account_name   = prof.get("account_name")   or staff.get("account_name")   or "—"
     comp  = get_company_context()
 
     period_raw  = payroll.get("period_start", "")
@@ -1101,13 +1104,16 @@ def generate_payslip_pdf(
   .hdr-badge {{ background: #F5A623; color: #1A1A1A; font-size: 10px; font-weight: 800;
                 padding: 4px 12px; border-radius: 99px; letter-spacing: 1px; text-transform: uppercase; }}
 
-  /* Employee info band */
-  .emp-band {{ background: #F9FAFB; border: 1px solid #E5E7EB; border-top: none;
-               padding: 16px 28px; display: flex; gap: 40px; flex-wrap: wrap; }}
-  .emp-item {{ font-size: 11px; }}
-  .emp-lbl {{ color: #6B7280; font-weight: 600; text-transform: uppercase;
-              letter-spacing: 0.5px; margin-bottom: 3px; }}
-  .emp-val {{ color: #111; font-weight: 700; font-size: 12px; }}
+  /* Employee info band — 4-column table grid */
+  .emp-band {{ background: #F9FAFB; border: 1px solid #E5E7EB; border-top: none; }}
+  .emp-grid {{ width: 100%; border-collapse: collapse; }}
+  .emp-grid td {{ padding: 10px 20px; vertical-align: top; width: 25%;
+                  border-right: 1px solid #E5E7EB; border-bottom: 1px solid #E5E7EB; }}
+  .emp-grid td:last-child {{ border-right: none; }}
+  .emp-grid tr:last-child td {{ border-bottom: none; }}
+  .emp-lbl {{ color: #6B7280; font-weight: 700; text-transform: uppercase;
+              letter-spacing: 0.6px; font-size: 9px; margin-bottom: 4px; }}
+  .emp-val {{ color: #111; font-weight: 700; font-size: 12px; line-height: 1.4; }}
 
   /* Section title */
   .sec-title {{ font-size: 11px; font-weight: 800; color: #6B7280; text-transform: uppercase;
@@ -1123,12 +1129,18 @@ def generate_payslip_pdf(
   tr:nth-child(even) {{ background: #FAFAFA; }}
 
   /* Summary box */
-  .summary {{ display: flex; gap: 12px; margin-top: 20px; flex-wrap: wrap; }}
-  .sum-card {{ flex: 1; min-width: 130px; border-radius: 8px; padding: 14px 16px;
-               border: 1px solid #E5E7EB; }}
-  .sum-lbl {{ font-size: 10px; font-weight: 700; color: #6B7280; text-transform: uppercase;
-              letter-spacing: 0.5px; margin-bottom: 6px; }}
-  .sum-val {{ font-size: 18px; font-weight: 800; }}
+  .summary {{ margin-top: 22px; border: 1px solid #E5E7EB; border-radius: 10px;
+              overflow: hidden; }}
+  .sum-row {{ display: flex; border-bottom: 1px solid #E5E7EB; }}
+  .sum-row:last-child {{ border-bottom: none; }}
+  .sum-card {{ flex: 1; padding: 16px 20px; border-right: 1px solid #E5E7EB;
+               background: #fff; }}
+  .sum-card:last-child {{ border-right: none; }}
+  .sum-card.debit {{ background: #FEF2F2; }}
+  .sum-lbl {{ font-size: 9px; font-weight: 800; color: #6B7280; text-transform: uppercase;
+              letter-spacing: 0.7px; margin-bottom: 8px; }}
+  .sum-val {{ font-size: 16px; font-weight: 900; line-height: 1.2; }}
+  .sum-note {{ font-size: 9px; color: #9CA3AF; margin-top: 4px; }}
 
   /* Net take-home hero */
   .net-hero {{ background: #1A1A1A; border-radius: 10px; padding: 20px 28px; margin-top: 20px;
@@ -1162,16 +1174,36 @@ def generate_payslip_pdf(
     </div>
   </div>
 
-  <!-- Employee band -->
+  <!-- Employee band — 4 col × 3 row grid -->
   <div class="emp-band">
-    <div class="emp-item"><div class="emp-lbl">Employee</div><div class="emp-val">{staff.get("full_name","—")}</div></div>
-    <div class="emp-item"><div class="emp-lbl">Staff ID</div><div class="emp-val">{staff.get("staff_id") or staff.get("id","—")[:8].upper()}</div></div>
-    <div class="emp-item"><div class="emp-lbl">Department</div><div class="emp-val">{staff.get("department","—")}</div></div>
-    <div class="emp-item"><div class="emp-lbl">Job Title</div><div class="emp-val">{prof.get("job_title","—")}</div></div>
-    <div class="emp-item"><div class="emp-lbl">Employment Type</div><div class="emp-val">{(prof.get("staff_type","Full-time") or "Full-time").replace("_"," ").title()}</div></div>
-    <div class="emp-item"><div class="emp-lbl">TIN</div><div class="emp-val">{prof.get("tin","—") or "—"}</div></div>
-    <div class="emp-item"><div class="emp-lbl">Pension PIN</div><div class="emp-val">{prof.get("pension_pin","—") or "—"}</div></div>
-    <div class="emp-item"><div class="emp-lbl">Pay Period</div><div class="emp-val">{period_label}</div></div>
+    <table class="emp-grid">
+      <tr>
+        <td><div class="emp-lbl">Employee</div><div class="emp-val">{staff.get("full_name","—")}</div></td>
+        <td><div class="emp-lbl">Staff ID</div><div class="emp-val">{staff.get("staff_id") or staff.get("id","—")[:8].upper()}</div></td>
+        <td><div class="emp-lbl">Department</div><div class="emp-val">{staff.get("department","—")}</div></td>
+        <td><div class="emp-lbl">Job Title</div><div class="emp-val">{prof.get("job_title","—")}</div></td>
+      </tr>
+      <tr>
+        <td><div class="emp-lbl">Employment Type</div><div class="emp-val">{(prof.get("staff_type","Full-time") or "Full-time").replace("_"," ").title()}</div></td>
+        <td><div class="emp-lbl">TIN</div><div class="emp-val">{prof.get("tin","—") or "—"}</div></td>
+        <td><div class="emp-lbl">Pension PIN</div><div class="emp-val">{prof.get("pension_pin","—") or "—"}</div></td>
+        <td><div class="emp-lbl">Pay Period</div><div class="emp-val">{period_label}</div></td>
+      </tr>
+      <tr style="background:#F0FDF4">
+        <td colspan="2" style="border-right:1px solid #E5E7EB">
+          <div class="emp-lbl" style="color:#059669">Bank Name</div>
+          <div class="emp-val" style="color:#065F46">{bank_name}</div>
+        </td>
+        <td>
+          <div class="emp-lbl" style="color:#059669">Account Number</div>
+          <div class="emp-val" style="color:#065F46; letter-spacing:1px">{account_number}</div>
+        </td>
+        <td>
+          <div class="emp-lbl" style="color:#059669">Account Name</div>
+          <div class="emp-val" style="color:#065F46">{account_name}</div>
+        </td>
+      </tr>
+    </table>
   </div>
 
   <!-- ── EARNINGS ── -->
@@ -1256,11 +1288,52 @@ def generate_payslip_pdf(
 
   <!-- ── NET TAKE-HOME SUMMARY ── -->
   <div class="summary">
-    <div class="sum-card"><div class="sum-lbl">Net Salary</div><div class="sum-val" style="color:#3B82F6">{fmt(net_salary)}</div></div>
-    <div class="sum-card"><div class="sum-lbl">Net Commission</div><div class="sum-val" style="color:#10B981">{fmt(total_net_comm)}</div></div>
-    <div class="sum-card"><div class="sum-lbl">Bonus</div><div class="sum-val" style="color:#F5A623">{fmt(total_bonus)}</div></div>
-    <div class="sum-card"><div class="sum-lbl">Total PAYE</div><div class="sum-val" style="color:#EF4444">{fmt(paye)}</div></div>
-    <div class="sum-card"><div class="sum-lbl">Total WHT</div><div class="sum-val" style="color:#EF4444">{fmt(total_wht)}</div></div>
+    <!-- Row 1: earnings -->
+    <div class="sum-row">
+      <div class="sum-card">
+        <div class="sum-lbl">Gross Salary</div>
+        <div class="sum-val" style="color:#1A1A1A">{fmt(gross)}</div>
+        <div class="sum-note">Before deductions</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-lbl">Net Salary</div>
+        <div class="sum-val" style="color:#3B82F6">{fmt(net_salary)}</div>
+        <div class="sum-note">After PAYE &amp; pension</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-lbl">Net Commission</div>
+        <div class="sum-val" style="color:#10B981">{fmt(total_net_comm)}</div>
+        <div class="sum-note">After 5% WHT</div>
+      </div>
+      <div class="sum-card">
+        <div class="sum-lbl">Bonus</div>
+        <div class="sum-val" style="color:#F5A623">{fmt(total_bonus)}</div>
+        <div class="sum-note">Incentive payments</div>
+      </div>
+    </div>
+    <!-- Row 2: deductions -->
+    <div class="sum-row">
+      <div class="sum-card debit">
+        <div class="sum-lbl">PAYE Tax</div>
+        <div class="sum-val" style="color:#EF4444">({fmt(paye)})</div>
+        <div class="sum-note">NTA 2025 · remitted to FIRS</div>
+      </div>
+      <div class="sum-card debit">
+        <div class="sum-lbl">Pension (Employee 8%)</div>
+        <div class="sum-val" style="color:#EF4444">({fmt(pension_emp)})</div>
+        <div class="sum-note">Remitted to PFA</div>
+      </div>
+      <div class="sum-card debit">
+        <div class="sum-lbl">NHF</div>
+        <div class="sum-val" style="color:#EF4444">({fmt(nhf)})</div>
+        <div class="sum-note">2.5% of basic · FMBN</div>
+      </div>
+      <div class="sum-card debit">
+        <div class="sum-lbl">WHT on Commission</div>
+        <div class="sum-val" style="color:#EF4444">({fmt(total_wht)})</div>
+        <div class="sum-note">5% · remitted to FIRS</div>
+      </div>
+    </div>
   </div>
 
   <div class="net-hero">

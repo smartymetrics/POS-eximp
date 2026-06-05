@@ -3,7 +3,7 @@ import os
 import logging
 import uuid
 import calendar
-from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File
+from fastapi import APIRouter, Depends, HTTPException, status, UploadFile, File, BackgroundTasks
 from typing import List, Optional
 from pydantic import BaseModel
 from datetime import date, datetime, timedelta, timezone
@@ -61,6 +61,112 @@ async def notify_hr_admins(title: str, message: str, notification_type: str = "h
                 await send_notification(admin["id"], title, message, notification_type)
     except Exception as e:
         print(f"HR NOTIFICATION ERROR: {e}")
+
+
+def _is_hr(current_admin: dict) -> bool:
+    return any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in current_admin.get("role", "").split(","))
+
+
+async def _resolve_payroll_record_ids(body: dict, db) -> list:
+    ids = body.get("ids") or []
+    department = body.get("department")
+    all_records = bool(body.get("all"))
+    period_start = body.get("period_start")
+
+    if ids:
+        if not isinstance(ids, list) or len(ids) == 0:
+            raise HTTPException(status_code=400, detail="'ids' must be a non-empty list of payroll record IDs.")
+        return ids
+
+    if department:
+        staff_res = await db_execute(lambda: db.table("admins").select("id").eq("department", department).execute())
+        staff_ids = [s["id"] for s in (staff_res.data or [])]
+        if not staff_ids:
+            return []
+
+        query = db.table("payroll_records").select("id").in_("staff_id", staff_ids)
+        if period_start:
+            query = query.eq("period_start", period_start)
+        res = await db_execute(lambda: query.execute())
+        return [r["id"] for r in (res.data or [])]
+
+    if all_records:
+        query = db.table("payroll_records").select("id")
+        if period_start:
+            query = query.eq("period_start", period_start)
+        res = await db_execute(lambda: query.execute())
+        return [r["id"] for r in (res.data or [])]
+
+    raise HTTPException(status_code=400, detail="Specify 'ids', 'department', or 'all': true to target payroll records.")
+
+
+async def _send_bulk_payslips_task(current_admin: dict, record_ids: list):
+    db = get_db()
+    for record_id in record_ids:
+        try:
+            pr = await db_execute(lambda: db.table("payroll_records")
+                .select("*, admins!payroll_records_staff_id_fkey(*, staff_profiles(*))")
+                .eq("id", record_id).single().execute())
+            if not pr.data:
+                continue
+
+            payroll = pr.data
+            staff = payroll.pop("admins", {}) or {}
+            if not staff.get("email"):
+                continue
+
+            period_start = payroll.get("period_start", "")
+            period_end = payroll.get("period_end", period_start)
+
+            commissions = []
+            try:
+                rep_res = await db_execute(lambda: db.table("sales_reps").select("id")
+                    .eq("email", staff.get("email", "")).limit(1).execute())
+                if rep_res.data:
+                    rep_id = rep_res.data[0]["id"]
+                    comm_res = await db_execute(lambda: db.table("commission_earnings")
+                        .select("*, clients(full_name)")
+                        .eq("rep_id", rep_id)
+                        .eq("is_voided", False)
+                        .gte("created_at", period_start)
+                        .lte("created_at", period_end + "T23:59:59").execute())
+                    commissions = comm_res.data or []
+            except Exception:
+                pass
+
+            bonuses = []
+            try:
+                bonus_res = await db_execute(lambda: db.table("bonuses").select("*")
+                    .eq("staff_id", staff.get("id"))
+                    .gte("created_at", period_start)
+                    .lte("created_at", period_end + "T23:59:59").execute())
+                bonuses = bonus_res.data or []
+            except Exception:
+                pass
+
+            from email_service import send_payslip_email
+            result = await send_payslip_email(
+                staff=staff,
+                payroll=payroll,
+                commissions=commissions,
+                bonuses=bonuses,
+                sent_by=current_admin.get("sub", "hr"),
+            )
+            if result is None:
+                continue
+
+            await db_execute(lambda: db.table("payroll_records")
+                .update({"payslip_sent_at": datetime.utcnow().isoformat()})
+                .eq("id", record_id).execute())
+
+            await send_notification(
+                staff["id"],
+                "Payslip Emailed",
+                f"Your payslip for {period_start[:7]} has been emailed to {staff['email']}.",
+                "payroll_run"
+            )
+        except Exception as e:
+            logger.warning(f"[bulk-send-payslips] record {record_id} failed: {e}")
 
 
 async def _load_kpi_template_metadata(template_id: Optional[str]):
@@ -419,6 +525,7 @@ class StaffProfileUpdate(BaseModel):
     account_name: Optional[str] = None
     cv_url: Optional[str] = None
     base_salary: Optional[float] = None
+    pension_pin: Optional[str] = None
     leave_quota: Optional[int] = None
     exit_date: Optional[date] = None
     exit_reason: Optional[str] = None
@@ -690,7 +797,7 @@ async def update_staff_profile(staff_id: str, update: StaffProfileUpdate, curren
         # bank details (bank_name, account_number, account_name) may only be set
         # when they are currently empty. Once populated, only HR can change them.
         bank_fields = {"bank_name", "account_number", "account_name"}
-        allowed_self_fields = {"phone_number", "emergency_contact", "address", "bio"}
+        allowed_self_fields = {"phone_number", "emergency_contact", "address", "bio", "pension_pin"}
         bank_fields_requested = set(update_data.keys()) & bank_fields
         other_fields_requested = set(update_data.keys()) - allowed_self_fields - bank_fields
 
@@ -1324,18 +1431,33 @@ async def get_global_absences(
     return sorted(absences, key=lambda x: (x["date"], x["staff_name"]), reverse=True)
 
 @router.post("/payroll/run")
-async def run_payroll(current_admin: dict = Depends(verify_token)):
-    """Generate payroll records for all active staff for the current month."""
+async def run_payroll(
+    body: dict = {},
+    current_admin: dict = Depends(verify_token)
+):
+    """
+    Generate payroll records for the current month.
+    Pass {} or omit body to run for ALL active staff.
+    Pass {"staff_ids": ["uuid1", "uuid2"]} to run for specific staff only.
+    """
     user_roles = current_admin.get("role", "").split(",")
     if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
-         raise HTTPException(status_code=403, detail="HR Admin only")
-         
+        raise HTTPException(status_code=403, detail="HR Admin only")
+
     db = get_db()
-    
-    # 1. Fetch all active staff with their profiles
-    staff_res = await db_execute(lambda: db.table("admins").select("*, staff_profiles(*)").eq("is_active", True).execute())
+    selected_ids = (body or {}).get("staff_ids") or None  # None = run all
+
+    # 1. Fetch active staff with their profiles
+    staff_res = await db_execute(lambda: db.table("admins")
+        .select("*, staff_profiles(*)")
+        .eq("is_active", True)
+        .execute())
     staff_list = staff_res.data
-    
+
+    # Filter to selected staff if caller provided specific IDs
+    if selected_ids:
+        staff_list = [s for s in staff_list if s["id"] in selected_ids]
+
     records_created = 0
     now = datetime.now()
     month_start = date(now.year, now.month, 1).isoformat()
@@ -1435,7 +1557,6 @@ async def run_payroll(current_admin: dict = Depends(verify_token)):
             "pension":         monthly_pension,
             "nhf":             monthly_nhf,
             "employer_pension": monthly_er_pension,
-            "cra":             0,           # column kept for schema compat; CRA abolished NTA 2025
             "deductions":      deductions,
             "net_pay":         net,
             "status":          "pending",
@@ -1465,7 +1586,8 @@ async def run_payroll(current_admin: dict = Depends(verify_token)):
         for rec in payroll_inserts:
             await send_notification(rec["staff_id"], "Payslip Ready", f"Your payslip for {month_start[:7]} has been generated. Check your payroll tab.", "payroll_run")
             
-    return {"message": f"Payroll generation complete. {records_created} records created.", "count": records_created, "warnings": warnings}
+    scope = f"{len(selected_ids)} selected staff" if selected_ids else "all active staff"
+    return {"message": f"Payroll run complete for {scope}. {records_created} record(s) created.", "count": records_created, "warnings": warnings}
 
 @router.post("/payroll/manual", status_code=status.HTTP_201_CREATED)
 async def create_manual_payroll(nf: ManualPayrollCreate, current_admin: dict = Depends(verify_token)):
@@ -1887,7 +2009,7 @@ async def get_payslips(staff_id: Optional[str] = None, current_admin: dict = Dep
     user_roles = current_admin.get("role", "").split(",")
     is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
     
-    query = db.table("payroll_records").select("*, admins!payroll_records_staff_id_fkey(full_name, department, email)")
+    query = db.table("payroll_records").select("*, admins!payroll_records_staff_id_fkey(full_name, department, email, staff_profiles(bank_name, account_number, account_name, job_title, staff_type, tin, pension_pin))")
     if staff_id:
         query = query.eq("staff_id", staff_id)
     elif not is_hr:
@@ -2025,28 +2147,104 @@ async def send_payslip(record_id: str, current_admin: dict = Depends(verify_toke
     }
 
 
-@router.post("/payroll/bulk-status", status_code=200)
-async def bulk_update_payroll_status(
+@router.post("/payroll/send-payslips", status_code=status.HTTP_202_ACCEPTED)
+async def send_payslips(
+    body: dict,
+    background_tasks: BackgroundTasks,
+    current_admin: dict = Depends(verify_token)
+):
+    """Bulk email payslips to selected, department, or all staff."""
+    if not _is_hr(current_admin):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+
+    db = get_db()
+    record_ids = await _resolve_payroll_record_ids(body, db)
+    if not record_ids:
+        raise HTTPException(status_code=404, detail="No payroll records found for the selected scope.")
+
+    background_tasks.add_task(_send_bulk_payslips_task, current_admin, record_ids)
+    return {
+        "message": f"Queued {len(record_ids)} payslip(s) for email delivery.",
+        "count": len(record_ids),
+        "scope": {
+            "ids": bool(body.get("ids")),
+            "department": body.get("department"),
+            "all": bool(body.get("all")),
+            "period_start": body.get("period_start")
+        }
+    }
+
+
+@router.patch("/payroll/{record_id}/bank-details", status_code=200)
+async def update_payroll_bank_details(
+    record_id: str,
     body: dict,
     current_admin: dict = Depends(verify_token)
 ):
-    """Mark multiple payroll records as paid/pending at once. HR only."""
+    """
+    Update bank details for the staff member linked to a payroll record.
+    HR can correct bank info directly from the payroll edit modal without
+    navigating to the staff profile page.
+    """
     user_roles = current_admin.get("role", "").split(",")
     if not any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles):
         raise HTTPException(status_code=403, detail="HR Admin only")
 
-    ids    = body.get("ids", [])
+    db = get_db()
+
+    # Resolve staff_id from the payroll record
+    pr = await db_execute(lambda: db.table("payroll_records")
+        .select("staff_id")
+        .eq("id", record_id)
+        .single()
+        .execute())
+    if not pr.data:
+        raise HTTPException(status_code=404, detail="Payroll record not found")
+
+    staff_id = pr.data["staff_id"]
+
+    allowed = {"bank_name", "account_number", "account_name"}
+    update_data = {k: v for k, v in body.items() if k in allowed and v is not None}
+    if not update_data:
+        raise HTTPException(status_code=400, detail="No valid bank detail fields provided")
+
+    update_data["updated_at"] = datetime.utcnow().isoformat()
+
+    res = await db_execute(lambda: db.table("staff_profiles")
+        .update(update_data)
+        .eq("admin_id", staff_id)
+        .execute())
+
+    return {"message": "Bank details updated successfully", "updated": update_data}
+
+
+@router.post("/payroll/bulk-status", status_code=200)
+async def bulk_update_payroll_status(
+    body: dict,
+    background_tasks: BackgroundTasks,
+    current_admin: dict = Depends(verify_token)
+):
+    """Mark multiple payroll records as paid/pending at once. HR only."""
+    if not _is_hr(current_admin):
+        raise HTTPException(status_code=403, detail="HR Admin only")
+
     new_status = body.get("status", "paid")
-    if not ids:
-        raise HTTPException(status_code=400, detail="No record IDs provided.")
     if new_status not in ("paid", "pending", "cancelled"):
         raise HTTPException(status_code=400, detail="Invalid status value.")
 
-    db  = get_db()
+    db = get_db()
+    record_ids = await _resolve_payroll_record_ids(body, db)
+    if not record_ids:
+        raise HTTPException(status_code=404, detail="No payroll records found for the selected scope.")
+
     res = await db_execute(lambda: db.table("payroll_records")
         .update({"status": new_status, "updated_at": datetime.utcnow().isoformat()})
-        .in_("id", ids).execute())
-    return {"updated": len(res.data or []), "status": new_status}
+        .in_("id", record_ids).execute())
+
+    if new_status == "paid" and body.get("send_email"):
+        background_tasks.add_task(_send_bulk_payslips_task, current_admin, record_ids)
+
+    return {"updated": len(res.data or []), "status": new_status, "ids": len(record_ids)}
 
 
 @router.get("/salary-history/{staff_id}")
