@@ -2450,46 +2450,80 @@
             <div class="modal-header">
                 <div>
                     <h2 style="font-size:18px;">Commission & Tax Configuration</h2>
-                    <p style="color:var(--gray); font-size:12px;">Manage global defaults and partner-specific overrides.
-                    </p>
+                    <p style="color:var(--gray); font-size:12px;">Manage global defaults and partner-specific overrides.</p>
                 </div>
                 <button class="close-btn" onclick="closeModal('commissionSettingsModal')">&times;</button>
             </div>
 
-            <div
-                style="display:grid; grid-template-columns: 1fr 1fr; gap:20px; margin-bottom:30px; padding:20px; background:rgba(196,125,10,0.05); border-radius:12px; border:1px solid rgba(196,125,10,0.1);">
-                <div>
-                    <label class="form-label">Global Default Commission (%)</label>
-                    <input type="number" id="default-comm-rate" class="form-input" step="0.01" placeholder="e.g. 10.00">
-                </div>
-                <div>
-                    <label class="form-label">Global Default WHT (%)</label>
-                    <input type="number" id="default-wht-rate" class="form-input" step="0.01" placeholder="e.g. 5.00">
-                </div>
-                <div style="grid-column: span 2; display:flex; justify-content:space-between; align-items:center;">
-                    <button class="btn" onclick="triggerTaxSync()"
-                        style="padding:8px 16px; font-size:11px; border-color:var(--gray); color:var(--gray);">
-                        <i class="fas fa-history"></i> SYNC HISTORICAL TAX (9.5% → 10%)
-                    </button>
-                    <button class="btn btn-gold" onclick="updateDefaultRates()"
-                        style="padding:8px 20px; font-size:12px;">UPDATE DEFAULTS</button>
+            <!-- Global Defaults Grid -->
+            <div style="margin-bottom:10px;">
+                <p style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--gray); margin-bottom:12px;">
+                    <i class="fas fa-globe" style="margin-right:6px; color:var(--gold);"></i>Global System Defaults
+                </p>
+                <div style="display:grid; grid-template-columns: 1fr 1fr 1fr; gap:16px; padding:20px; background:rgba(196,125,10,0.05); border-radius:12px; border:1px solid rgba(196,125,10,0.12);">
+                    <div>
+                        <label class="form-label" style="display:flex; align-items:center; gap:6px;">
+                            <i class="fas fa-users" style="color:var(--gold); font-size:10px;"></i>
+                            Staff Commission (%)
+                        </label>
+                        <input type="number" id="default-comm-rate" class="form-input" step="0.01" min="0" max="100" placeholder="e.g. 10.00">
+                        <p style="font-size:10px; color:var(--gray); margin-top:4px;">Applied to internal sales reps</p>
+                    </div>
+                    <div>
+                        <label class="form-label" style="display:flex; align-items:center; gap:6px;">
+                            <i class="fas fa-handshake" style="color:var(--gold); font-size:10px;"></i>
+                            Partner Commission (%)
+                        </label>
+                        <input type="number" id="default-partner-rate" class="form-input" step="0.01" min="0" max="100" placeholder="e.g. 15.00">
+                        <p style="font-size:10px; color:var(--gray); margin-top:4px;">Applied to vendor/external partners</p>
+                    </div>
+                    <div>
+                        <label class="form-label" style="display:flex; align-items:center; gap:6px;">
+                            <i class="fas fa-receipt" style="color:var(--gray); font-size:10px;"></i>
+                            WHT Rate (%)
+                        </label>
+                        <input type="number" id="default-wht-rate" class="form-input" step="0.01" min="0" max="100" placeholder="e.g. 5.00">
+                        <p style="font-size:10px; color:var(--gray); margin-top:4px;">Withholding tax on all commissions</p>
+                    </div>
+                    <div style="grid-column: span 3; display:flex; justify-content:space-between; align-items:center; padding-top:4px;">
+                        <button class="btn" onclick="triggerTaxSync()"
+                            style="padding:8px 16px; font-size:11px; border-color:var(--gray); color:var(--gray);">
+                            <i class="fas fa-history"></i> SYNC HISTORICAL (9.5% → 10%)
+                        </button>
+                        <button class="btn btn-gold" onclick="updateDefaultRates()" style="padding:8px 20px; font-size:12px;">
+                            <i class="fas fa-save" style="margin-right:6px;"></i>SAVE DEFAULTS
+                        </button>
+                    </div>
                 </div>
             </div>
 
-            <div class="table-responsive" style="max-height: 400px; overflow-y: auto;">
+            <!-- Live preview -->
+            <div id="rate-preview-bar" style="display:none; margin-bottom:20px; padding:10px 16px; background:rgba(16,185,129,0.05); border:1px solid rgba(16,185,129,0.15); border-radius:10px; font-size:11px; color:var(--gray); display:flex; gap:20px; flex-wrap:wrap; align-items:center;">
+                <span><i class="fas fa-check-circle" style="color:#10B981; margin-right:5px;"></i>Rates saved successfully</span>
+                <span>Staff: <strong id="preview-staff" style="color:var(--gold);">—</strong></span>
+                <span>Partner: <strong id="preview-partner" style="color:var(--gold);">—</strong></span>
+                <span>WHT: <strong id="preview-wht" style="color:var(--gray);">—</strong></span>
+            </div>
+
+            <!-- Per-rep overrides table -->
+            <p style="font-size:10px; font-weight:700; text-transform:uppercase; letter-spacing:0.08em; color:var(--gray); margin-bottom:10px;">
+                <i class="fas fa-sliders-h" style="margin-right:6px; color:var(--gold);"></i>Individual Overrides
+                <span style="font-weight:400; text-transform:none; letter-spacing:0; font-size:10px;">&nbsp;— override global defaults for specific reps or partners</span>
+            </p>
+            <div class="table-responsive" style="max-height: 340px; overflow-y: auto;">
                 <table class="data-table" style="font-size:13px;">
                     <thead>
                         <tr>
                             <th>Sales Representative / Partner</th>
+                            <th>Type</th>
                             <th>Comm %</th>
-                            <th>Tax (WHT) %</th>
+                            <th>WHT %</th>
                             <th>Action</th>
                         </tr>
                     </thead>
                     <tbody id="repRatesBody">
                         <tr>
-                            <td colspan="4" style="text-align:center; padding:20px; color:var(--gray);">Loading partner
-                                rates...</td>
+                            <td colspan="5" style="text-align:center; padding:20px; color:var(--gray);">Loading rates…</td>
                         </tr>
                     </tbody>
                 </table>
@@ -2877,22 +2911,44 @@
 
         async function fetchDefaultRates() {
             try {
-                const res = await apiFetch('/api/commission/default-rate');
+                const res  = await apiFetch('/api/commission/default-rate');
                 const data = await res.json();
-                document.getElementById('default-comm-rate').value = data.rate;
-                document.getElementById('default-wht-rate').value = data.wht_rate;
+                document.getElementById('default-comm-rate').value    = data.rate         || '';
+                document.getElementById('default-partner-rate').value = data.partner_rate || '';
+                document.getElementById('default-wht-rate').value     = data.wht_rate     || '';
             } catch (e) { toast("Failed to load defaults", "error"); }
         }
 
         async function updateDefaultRates() {
-            const rate = document.getElementById('default-comm-rate').value;
-            const wht = document.getElementById('default-wht-rate').value;
+            const rate        = document.getElementById('default-comm-rate').value;
+            const partnerRate = document.getElementById('default-partner-rate').value;
+            const wht         = document.getElementById('default-wht-rate').value;
+
+            if (!rate || !wht) { toast("Staff commission and WHT rates are required", "error"); return; }
+
             try {
+                const body = { rate: parseFloat(rate), wht_rate: parseFloat(wht) };
+                if (partnerRate !== '') body.partner_rate = parseFloat(partnerRate);
+
                 const res = await apiFetch('/api/commission/default-rate', {
                     method: 'PATCH',
-                    body: JSON.stringify({ rate, wht_rate: wht })
+                    body: JSON.stringify(body)
                 });
-                if (res.ok) toast("Default rates updated globally", "success");
+                if (res.ok) {
+                    toast("Default rates saved", "success");
+                    // Show inline confirmation bar
+                    const bar = document.getElementById('rate-preview-bar');
+                    if (bar) {
+                        bar.style.display = 'flex';
+                        document.getElementById('preview-staff').innerText   = rate + '%';
+                        document.getElementById('preview-partner').innerText = partnerRate ? partnerRate + '%' : '—';
+                        document.getElementById('preview-wht').innerText     = wht + '%';
+                        setTimeout(() => { bar.style.display = 'none'; }, 5000);
+                    }
+                } else {
+                    const err = await res.json().catch(() => ({}));
+                    toast(err.detail || "Update failed", "error");
+                }
             } catch (e) { toast("Update failed", "error"); }
         }
 
@@ -2900,21 +2956,26 @@
             const body = document.getElementById('repRatesBody');
             if (!body) return;
             try {
-                const res = await apiFetch('/api/commission/sales-reps');
+                const res  = await apiFetch('/api/commission/sales-reps');
                 const reps = await res.json();
+                if (!reps.length) {
+                    body.innerHTML = '<tr><td colspan="5" style="text-align:center; padding:20px; color:var(--gray);">No individual overrides set — global defaults apply to all.</td></tr>';
+                    return;
+                }
                 body.innerHTML = reps.map(r => `
                     <tr>
                         <td><strong>${r.name}</strong></td>
-                        <td>${r.gross_commission_rate || 'Inherited'}%</td>
-                        <td>${r.wht_rate || 'Inherited'}%</td>
+                        <td><span style="font-size:10px; padding:2px 8px; border-radius:8px; background:rgba(196,125,10,0.1); color:var(--gold);">Staff</span></td>
+                        <td>${r.gross_commission_rate != null ? r.gross_commission_rate + '%' : '<span style="color:var(--gray);">Global</span>'}</td>
+                        <td>${r.wht_rate != null ? r.wht_rate + '%' : '<span style="color:var(--gray);">Global</span>'}</td>
                         <td>
-                            <button class="btn" onclick="openEditRepRate('${r.id}', '${r.name}', ${r.gross_commission_rate}, ${r.wht_rate})" style="padding:4px 8px; font-size:11px;">
+                            <button class="btn" onclick="openEditRepRate('${r.id}', '${r.name}', ${r.gross_commission_rate ?? 'null'}, ${r.wht_rate ?? 'null'})" style="padding:4px 10px; font-size:11px;">
                                 EDIT
                             </button>
                         </td>
                     </tr>
                 `).join('');
-            } catch (e) { body.innerHTML = '<tr><td colspan="4" style="color:var(--error)">Error loading rates</td></tr>'; }
+            } catch (e) { body.innerHTML = '<tr><td colspan="5" style="color:var(--error); padding:12px;">Error loading rates</td></tr>'; }
         }
 
         let pendingCommWht = [];

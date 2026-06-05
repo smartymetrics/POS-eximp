@@ -64,7 +64,11 @@ async def notify_hr_admins(title: str, message: str, notification_type: str = "h
 
 
 def _is_hr(current_admin: dict) -> bool:
-    return any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in current_admin.get("role", "").split(","))
+    role_str = current_admin.get("role", "") or ""
+    primary_role_str = current_admin.get("primary_role", "") or ""
+    all_roles = f"{role_str},{primary_role_str}"
+    user_roles = {r.strip().lower().replace(" ", "_") for r in all_roles.split(",") if r.strip()}
+    return bool(user_roles & {"admin", "super_admin", "hr", "hr_admin", "operations"})
 
 
 async def _resolve_payroll_record_ids(body: dict, db) -> list:
@@ -711,8 +715,7 @@ async def get_staff_list(current_admin: dict = Depends(verify_token)):
 async def get_staff_profile(staff_id: str, current_admin: dict = Depends(verify_token)):
     """Fetch full personnel data for a staff member. Accessible by HR, Manager, or Self."""
     user_email = current_admin["email"]
-    user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = _is_hr(current_admin)
     
     db = get_db()
     
@@ -764,8 +767,7 @@ async def get_staff_profile(staff_id: str, current_admin: dict = Depends(verify_
 async def update_staff_profile(staff_id: str, update: StaffProfileUpdate, current_admin: dict = Depends(verify_token)):
     """Update detailed staff profile. HR admins may edit all fields; line managers and staff may self-edit a restricted set."""
     db = get_db()
-    user_roles = current_admin.get("role", "").split(",")
-    is_hr = any(r in ["admin", "super_admin", "hr_admin", "operations"] for r in user_roles)
+    is_hr = _is_hr(current_admin)
     is_self = current_admin.get("sub") == staff_id
 
     # Check if the caller is the direct line manager of this staff member

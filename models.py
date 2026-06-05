@@ -398,11 +398,12 @@ class CommissionPayout(BaseModel):
     notes: Optional[str] = None
     total_amount: Optional[Decimal] = None  # If set, distribute as partial payment; else pay all in full
 
-class DefaultRateUpdate(BaseModel):
-    rate: Decimal
-    wht_rate: Optional[Decimal] = Decimal("5.0")
-    reason: Optional[str] = None
 
+class DefaultRateUpdate(BaseModel):
+    rate: Decimal                                    # Staff / sales-rep default commission %
+    partner_rate: Optional[Decimal] = None           # Partner (vendor) default commission %  ← NEW
+    wht_rate: Optional[Decimal] = Decimal("5.0")    # Withholding Tax % (applies to both)
+    reason: Optional[str] = None
 
 class CommissionVoidRequest(BaseModel):
     reason: str

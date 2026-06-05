@@ -4706,3 +4706,31 @@ async def publish_estate(draft_id: str, current_admin=Depends(require_roles(["su
         await db_execute(lambda: db.table("procurement_expenses").update({"property_id": created_prop_ids[0]}).eq("estate_draft_id", draft_id).execute())
 
     return {"status": "success", "properties_created": len(created_prop_ids)}
+
+
+@router.get("/portal/global-rates")
+async def portal_get_global_rates():
+    """
+    Public (no auth) endpoint — returns the system-wide commission defaults
+    so the payout portal can display real rates before an invoice is looked up.
+    """
+    db = get_db()
+    res = await db_execute(lambda: db.table("system_settings")
+        .select("key, value")
+        .in_("key", ["default_commission_rate", "default_partner_commission_rate", "default_wht_rate"])
+        .execute()
+    )
+    s = {row["key"]: row["value"] for row in (res.data or [])}
+ 
+    def _pct(val, fallback):
+        try:
+            v = float(val)
+            return round(v / 100 if v > 1 else v, 4)
+        except Exception:
+            return fallback
+ 
+    return {
+        "staff_gross_rate":   _pct(s.get("default_commission_rate"),         0.10),
+        "partner_gross_rate": _pct(s.get("default_partner_commission_rate"), 0.15),
+        "wht_rate":           _pct(s.get("default_wht_rate"),                0.05),
+    }

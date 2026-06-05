@@ -6,34 +6,28 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Claims & Payouts | Eximp & Cloves</title>
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
-    <link
-        href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap"
-        rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;500;600;700&family=Playfair+Display:wght@700&display=swap" rel="stylesheet">
     <style>
         :root {
-            --bg: #09090B;
-            --card: #121214;
-            --brand: #C47D0A;
-            --accent: #FFC107;
-            --text: #F8FAFC;
-            --muted: #94A3B8;
-            --border: rgba(255, 255, 255, 0.08);
-            --glass: rgba(18, 18, 20, 0.7);
+            --bg:      #09090B;
+            --card:    #121214;
+            --brand:   #C47D0A;
+            --accent:  #FFC107;
+            --text:    #F8FAFC;
+            --muted:   #94A3B8;
+            --border:  rgba(255, 255, 255, 0.08);
+            --glass:   rgba(18, 18, 20, 0.7);
             --success: #10B981;
-            --error: #EF4444;
+            --error:   #EF4444;
+            --indigo:  #818cf8;
         }
-
-        * {
-            margin: 0;
-            padding: 0;
-            box-sizing: border-box;
-        }
+        * { margin: 0; padding: 0; box-sizing: border-box; }
 
         body {
             background-color: var(--bg);
             background-image:
-                radial-gradient(circle at 0% 0%, rgba(196, 125, 10, 0.05) 0%, transparent 50%),
-                radial-gradient(circle at 100% 100%, rgba(196, 125, 10, 0.03) 0%, transparent 50%);
+                radial-gradient(circle at 0% 0%,   rgba(196,125,10,0.05) 0%, transparent 50%),
+                radial-gradient(circle at 100% 100%, rgba(196,125,10,0.03) 0%, transparent 50%);
             color: var(--text);
             font-family: 'Outfit', sans-serif;
             min-height: 100vh;
@@ -51,1334 +45,1262 @@
             border-radius: 32px;
             padding: 40px;
             border: 1px solid var(--border);
-            box-shadow: 0 40px 100px -20px rgba(0, 0, 0, 0.8);
-            animation: slideUp 0.8s cubic-bezier(0.2, 0.8, 0.2, 1);
+            box-shadow: 0 40px 100px -20px rgba(0,0,0,0.8);
+            animation: slideUp 0.8s cubic-bezier(0.2,0.8,0.2,1);
         }
-
         @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(30px) scale(0.95);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0) scale(1);
-            }
+            from { opacity:0; transform:translateY(30px) scale(0.95); }
+            to   { opacity:1; transform:translateY(0)    scale(1);    }
         }
 
-        .logo-area {
-            text-align: center;
-            margin-bottom: 32px;
-        }
-
-        .logo-area img {
-            height: 50px;
-            margin-bottom: 16px;
-            filter: brightness(1.2);
-        }
-
+        /* ─── Logo ────────────────────────────────────────────────── */
+        .logo-area { text-align:center; margin-bottom:32px; }
+        .logo-area img { height:50px; margin-bottom:16px; filter:brightness(1.2); }
         .logo-area h1 {
-            font-family: 'Playfair Display', serif;
-            font-size: 28px;
-            background: linear-gradient(135deg, #FFF 0%, var(--brand) 100%);
-            -webkit-background-clip: text;
-            background-clip: text;
-            -webkit-text-fill-color: transparent;
-            margin-bottom: 4px;
+            font-family:'Playfair Display', serif;
+            font-size:28px;
+            background:linear-gradient(135deg,#FFF 0%, var(--brand) 100%);
+            -webkit-background-clip:text; background-clip:text;
+            -webkit-text-fill-color:transparent;
+            margin-bottom:4px;
         }
 
+        /* ─── Global rate banner ──────────────────────────────────── */
+        .rate-banner {
+            display:flex; align-items:center; justify-content:center; gap:20px; flex-wrap:wrap;
+            background:rgba(196,125,10,0.05);
+            border:1px solid rgba(196,125,10,0.15);
+            border-radius:14px; padding:10px 20px; margin-bottom:24px;
+            font-size:11px; font-weight:700; letter-spacing:0.04em;
+            text-transform:uppercase; color:var(--muted);
+        }
+        .rate-banner .rate-chip {
+            display:flex; align-items:center; gap:7px;
+        }
+        .rate-banner .rate-val { color:var(--brand); font-size:13px; }
+        .rate-banner .rate-loading { color:var(--muted); font-size:11px; }
+
+        /* ─── Nav ─────────────────────────────────────────────────── */
         .main-nav {
-            display: grid;
-            grid-template-columns: repeat(4, 1fr);
-            background: rgba(255, 255, 255, 0.03);
-            padding: 6px;
-            border-radius: 16px;
-            margin-bottom: 24px;
-            border: 1px solid var(--border);
-            gap: 4px;
+            display:grid; grid-template-columns:repeat(4,1fr);
+            background:rgba(255,255,255,0.03); padding:6px;
+            border-radius:16px; margin-bottom:24px;
+            border:1px solid var(--border); gap:4px;
         }
-
         .nav-btn {
-            padding: 14px 8px;
-            border: none;
-            background: none;
-            color: var(--muted);
-            font-family: inherit;
-            font-weight: 600;
-            font-size: 11px;
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-            border-radius: 12px;
-            cursor: pointer;
-            transition: all 0.3s;
-            display: flex;
-            flex-direction: column;
-            align-items: center;
-            justify-content: center;
-            gap: 6px;
+            padding:14px 8px; border:none; background:none;
+            color:var(--muted); font-family:inherit; font-weight:600;
+            font-size:11px; text-transform:uppercase; letter-spacing:0.5px;
+            border-radius:12px; cursor:pointer; transition:all 0.3s;
+            display:flex; flex-direction:column; align-items:center; justify-content:center; gap:6px;
         }
+        .nav-btn i { font-size:16px; }
+        .nav-btn.active { background:var(--brand); color:#000; box-shadow:0 4px 12px rgba(196,125,10,0.2); }
 
-        .nav-btn i {
-            font-size: 16px;
-        }
-
-        .nav-btn.active {
-            background: var(--brand);
-            color: #000;
-            box-shadow: 0 4px 12px rgba(196, 125, 10, 0.2);
-        }
-
+        /* ─── Sub nav ─────────────────────────────────────────────── */
         .sub-nav {
-            display: flex;
-            gap: 16px;
-            margin-bottom: 24px;
-            padding: 0 8px 12px;
-            border-bottom: 1px solid var(--border);
-            justify-content: center;
+            display:flex; gap:16px; margin-bottom:24px;
+            padding:0 8px 12px; border-bottom:1px solid var(--border); justify-content:center;
         }
+        .sub-btn { font-size:13px; font-weight:600; color:var(--muted); cursor:pointer; padding:4px 0; position:relative; transition:0.3s; }
+        .sub-btn.active { color:var(--brand); }
+        .sub-btn.active::after { content:''; position:absolute; bottom:-1px; left:0; width:100%; height:2px; background:var(--brand); border-radius:2px; }
 
-        .sub-btn {
-            font-size: 13px;
-            font-weight: 600;
-            color: var(--muted);
-            cursor: pointer;
-            padding: 4px 0;
-            position: relative;
-            transition: 0.3s;
-        }
-
-        .sub-btn.active {
-            color: var(--brand);
-        }
-
-        .sub-btn.active::after {
-            content: '';
-            position: absolute;
-            bottom: -1px;
-            left: 0;
-            width: 100%;
-            height: 2px;
-            background: var(--brand);
-            border-radius: 2px;
-        }
-
-        .form-section {
-            margin-bottom: 32px;
-            animation: fadeIn 0.5s ease-out;
-        }
-
+        /* ─── Form sections ───────────────────────────────────────── */
+        .form-section { margin-bottom:32px; animation:fadeIn 0.5s ease-out; }
         @keyframes fadeIn {
-            from {
-                opacity: 0;
-                transform: translateY(10px);
-            }
-
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
+            from { opacity:0; transform:translateY(10px); }
+            to   { opacity:1; transform:translateY(0); }
         }
+        .form-group { margin-bottom:20px; }
+        label { display:block; margin-bottom:8px; font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:1px; }
 
-        .form-group {
-            margin-bottom: 20px;
+        .input-wrapper { position:relative; display:flex; align-items:center; }
+        .input-wrapper i { position:absolute; left:16px; color:var(--brand); font-size:18px; z-index:2; }
+        input, select, textarea {
+            width:100%; background:rgba(255,255,255,0.02); border:1px solid var(--border);
+            padding:12px 16px 12px 44px; border-radius:12px; color:#fff;
+            font-size:14px; font-family:inherit; outline:none; transition:all 0.3s;
         }
-
-        label {
-            display: block;
-            margin-bottom: 8px;
-            font-size: 11px;
-            font-weight: 700;
-            color: var(--muted);
-            text-transform: uppercase;
-            letter-spacing: 1px;
-        }
-
-        .input-wrapper {
-            position: relative;
-            display: flex;
-            align-items: center;
-        }
-
-        .input-wrapper i {
-            position: absolute;
-            left: 16px;
-            color: var(--brand);
-            font-size: 18px;
-            z-index: 2;
-        }
-
-        input,
-        select,
-        textarea {
-            width: 100%;
-            background: rgba(255, 255, 255, 0.02);
-            border: 1px solid var(--border);
-            padding: 12px 16px 12px 44px;
-            border-radius: 12px;
-            color: #fff;
-            font-size: 14px;
-            font-family: inherit;
-            outline: none;
-            transition: all 0.3s;
-        }
-
         select {
-            appearance: none;
-            cursor: pointer;
-            background-image: url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%23C47D0A' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
-            background-repeat: no-repeat;
-            background-position: right 16px center;
-            background-size: 18px;
+            appearance:none; cursor:pointer;
+            background-image:url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' fill='none' stroke='%23C47D0A' stroke-width='2.5' stroke-linecap='round' stroke-linejoin='round' viewBox='0 0 24 24'%3E%3Cpath d='m6 9 6 6 6-6'/%3E%3C/svg%3E");
+            background-repeat:no-repeat; background-position:right 16px center; background-size:18px;
         }
+        select option { background:#1A1C24; color:#fff; padding:12px; }
+        select optgroup { background:#111317; color:var(--brand); font-weight:800; font-size:10px; text-transform:uppercase; letter-spacing:1.5px; }
+        input:focus, select:focus, textarea:focus {
+            border-color:var(--brand); background:rgba(255,255,255,0.05);
+            box-shadow:0 0 0 4px rgba(196,125,10,0.1);
+        }
+        .input-row { display:grid; grid-template-columns:1fr 1fr; gap:16px; }
 
-        select option {
-            background: #1A1C24;
-            color: #fff;
-            padding: 12px;
+        .btn-identify, .btn-lookup {
+            height:48px; padding:0 24px; background:var(--brand); color:#000;
+            border:none; border-radius:12px; font-weight:700; font-size:13px;
+            cursor:pointer; font-family:inherit; transition:0.3s; white-space:nowrap;
         }
-
-        select optgroup {
-            background: #111317;
-            color: var(--brand);
-            font-weight: 800;
-            font-size: 10px;
-            text-transform: uppercase;
-            letter-spacing: 1.5px;
-        }
-
-        input:focus,
-        select:focus,
-        textarea:focus {
-            border-color: var(--brand);
-            background: rgba(255, 255, 255, 0.05);
-            box-shadow: 0 0 0 4px rgba(196, 125, 10, 0.1);
-        }
-
-        .input-row {
-            display: grid;
-            grid-template-columns: 1fr 1fr;
-            gap: 16px;
-        }
-
-        .btn-identify,
-        .btn-lookup {
-            height: 48px;
-            padding: 0 24px;
-            background: var(--brand);
-            color: #000;
-            border: none;
-            border-radius: 12px;
-            font-weight: 700;
-            font-size: 13px;
-            cursor: pointer;
-            font-family: inherit;
-            transition: 0.3s;
-            white-space: nowrap;
-        }
-
-        .btn-identify:hover,
-        .btn-lookup:hover {
-            filter: brightness(1.1);
-            transform: translateY(-1px);
-        }
-
-        .btn-identify:disabled,
-        .btn-lookup:disabled {
-            opacity: 0.4;
-            cursor: not-allowed;
-            transform: none;
-        }
+        .btn-identify:hover, .btn-lookup:hover { filter:brightness(1.1); transform:translateY(-1px); }
+        .btn-identify:disabled, .btn-lookup:disabled { opacity:0.4; cursor:not-allowed; transform:none; }
 
         .upload-area {
-            border: 2px dashed var(--border);
-            padding: 24px;
-            border-radius: 16px;
-            text-align: center;
-            cursor: pointer;
-            transition: 0.3s;
-            background: rgba(255, 255, 255, 0.01);
+            border:2px dashed var(--border); padding:24px; border-radius:16px;
+            text-align:center; cursor:pointer; transition:0.3s; background:rgba(255,255,255,0.01);
         }
-
-        .upload-area:hover {
-            border-color: var(--brand);
-            background: rgba(196, 125, 10, 0.03);
-        }
+        .upload-area:hover { border-color:var(--brand); background:rgba(196,125,10,0.03); }
 
         .submit-btn {
-            width: 100%;
-            background: linear-gradient(135deg, var(--brand) 0%, var(--accent) 100%);
-            color: #000;
-            border: none;
-            padding: 18px;
-            border-radius: 16px;
-            font-weight: 800;
-            font-size: 15px;
-            text-transform: uppercase;
-            letter-spacing: 2px;
-            cursor: pointer;
-            margin-top: 24px;
-            transition: all 0.4s;
-            box-shadow: 0 20px 40px -10px rgba(196, 125, 10, 0.3);
+            width:100%; background:linear-gradient(135deg, var(--brand) 0%, var(--accent) 100%);
+            color:#000; border:none; padding:18px; border-radius:16px;
+            font-weight:800; font-size:15px; text-transform:uppercase; letter-spacing:2px;
+            cursor:pointer; margin-top:24px; transition:all 0.4s;
+            box-shadow:0 20px 40px -10px rgba(196,125,10,0.3);
+        }
+        .submit-btn:hover { filter:brightness(1.07); transform:translateY(-2px); box-shadow:0 24px 48px -10px rgba(196,125,10,0.4); }
+        .submit-btn:disabled { opacity:0.4; cursor:not-allowed; transform:none; }
+
+        .badge { display:inline-flex; align-items:center; gap:6px; padding:6px 14px; border-radius:20px; font-size:11px; font-weight:800; text-transform:uppercase; }
+        .hidden { display:none !important; }
+        .form-hint { font-size:11px; color:var(--muted); margin-top:6px; display:block; }
+        .checkbox-row { display:flex; align-items:center; gap:10px; margin-top:8px; cursor:pointer; }
+        .checkbox-row input { width:18px; height:18px; accent-color:var(--brand); }
+
+        /* ─── Commission table ────────────────────────────────────── */
+        .commission-table-header {
+            display:grid; grid-template-columns:36px 48px 1fr 110px 120px;
+            background:rgba(255,255,255,0.03); border-bottom:1px solid var(--border);
+            padding:10px 16px; font-size:10px; font-weight:700; color:var(--muted);
+            text-transform:uppercase; letter-spacing:0.06em;
         }
 
-        .badge {
-            display: inline-flex;
-            align-items: center;
-            gap: 6px;
-            padding: 6px 14px;
-            border-radius: 20px;
-            font-size: 11px;
-            font-weight: 800;
-            text-transform: uppercase;
+        /* ─── SUCCESS SCREEN ──────────────────────────────────────── */
+        #success-overlay {
+            position:fixed; inset:0; z-index:1000;
+            background:rgba(9,9,11,0.96);
+            backdrop-filter:blur(16px);
+            display:flex; align-items:center; justify-content:center; padding:24px;
+        }
+        #success-overlay.hidden { display:none !important; }
+
+        .success-card {
+            width:100%; max-width:560px;
+            background:linear-gradient(160deg, rgba(16,185,129,0.08) 0%, rgba(18,18,20,0.9) 60%);
+            border:1px solid rgba(16,185,129,0.25);
+            border-radius:32px; padding:48px 40px;
+            text-align:center;
+            box-shadow:0 0 80px -20px rgba(16,185,129,0.2);
+            animation:successPop 0.6s cubic-bezier(0.2,0.8,0.2,1);
+        }
+        @keyframes successPop {
+            0%   { opacity:0; transform:scale(0.85) translateY(20px); }
+            60%  { transform:scale(1.02) translateY(-4px); }
+            100% { opacity:1; transform:scale(1) translateY(0); }
         }
 
-        .hidden {
-            display: none;
+        .success-icon-wrap {
+            width:88px; height:88px; margin:0 auto 28px;
+            background:rgba(16,185,129,0.12);
+            border:2px solid rgba(16,185,129,0.3);
+            border-radius:50%; display:flex; align-items:center; justify-content:center;
+            animation:iconPulse 2s ease-in-out infinite;
         }
-
-        .form-hint {
-            font-size: 11px;
-            color: var(--muted);
-            margin-top: 6px;
-            display: block;
+        @keyframes iconPulse {
+            0%,100% { box-shadow:0 0 0 0 rgba(16,185,129,0.3); }
+            50%      { box-shadow:0 0 0 14px rgba(16,185,129,0); }
         }
+        .success-icon-wrap i { font-size:40px; color:var(--success); }
 
-        .checkbox-row {
-            display: flex;
-            align-items: center;
-            gap: 10px;
-            margin-top: 8px;
-            cursor: pointer;
+        .success-title {
+            font-family:'Playfair Display', serif;
+            font-size:30px;
+            background:linear-gradient(135deg, #fff 0%, var(--success) 100%);
+            -webkit-background-clip:text; background-clip:text;
+            -webkit-text-fill-color:transparent;
+            margin-bottom:10px;
         }
+        .success-subtitle { font-size:14px; color:var(--muted); line-height:1.6; margin-bottom:32px; }
 
-        .checkbox-row input {
-            width: 18px;
-            height: 18px;
-            accent-color: var(--brand);
+        .success-meta {
+            background:rgba(255,255,255,0.03);
+            border:1px solid var(--border);
+            border-radius:16px; padding:20px 24px;
+            margin-bottom:28px; text-align:left;
         }
+        .success-meta-row {
+            display:flex; justify-content:space-between; align-items:center;
+            padding:8px 0;
+        }
+        .success-meta-row:not(:last-child) { border-bottom:1px solid var(--border); }
+        .success-meta-label { font-size:11px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:0.05em; }
+        .success-meta-value { font-size:13px; font-weight:700; color:var(--text); }
+        .success-meta-value.highlight { color:var(--success); font-size:16px; }
+        .success-meta-value.ref { font-family:monospace; color:var(--brand); letter-spacing:0.08em; font-size:12px; }
 
-        @media (max-width: 600px) {
-            .main-nav {
-                grid-template-columns: 1fr 1fr;
-            }
+        .success-actions { display:flex; gap:12px; }
+        .success-btn-primary {
+            flex:1; padding:14px; background:var(--success); color:#fff;
+            border:none; border-radius:14px; font-family:inherit; font-weight:700;
+            font-size:13px; text-transform:uppercase; letter-spacing:1px;
+            cursor:pointer; transition:all 0.3s;
+        }
+        .success-btn-primary:hover { filter:brightness(1.1); transform:translateY(-1px); }
+        .success-btn-secondary {
+            flex:1; padding:14px; background:rgba(255,255,255,0.04);
+            color:var(--muted); border:1px solid var(--border);
+            border-radius:14px; font-family:inherit; font-weight:700;
+            font-size:13px; text-transform:uppercase; letter-spacing:1px;
+            cursor:pointer; transition:all 0.3s;
+        }
+        .success-btn-secondary:hover { background:rgba(255,255,255,0.07); color:var(--text); }
 
-            .input-row {
-                grid-template-columns: 1fr;
-                gap: 0;
-            }
+        .confetti-bar {
+            height:4px; border-radius:2px;
+            background:linear-gradient(90deg, var(--brand), var(--success), var(--indigo), var(--brand));
+            background-size:200%;
+            animation:shimmer 2s linear infinite;
+            margin-bottom:32px;
+        }
+        @keyframes shimmer { 0%{background-position:0%} 100%{background-position:200%} }
+
+        /* ─── Responsive ──────────────────────────────────────────── */
+        @media (max-width:600px) {
+            .main-nav { grid-template-columns:1fr 1fr; }
+            .input-row { grid-template-columns:1fr; gap:0; }
+            .commission-table-header { grid-template-columns:28px 36px 1fr 90px 100px; }
+            .success-actions { flex-direction:column; }
+            .portal-container { padding:24px 20px; }
         }
     </style>
 </head>
 
 <body>
 
-    <div class="portal-container">
-        <div class="logo-area">
-            <img src="/static/img/logo.svg" onerror="this.src='https://www.eximps-cloves.com/logo.svg'"
-                alt="Eximp & Cloves">
-            <h1>Claims & Payouts</h1>
-            <p style="font-size:13px; color:var(--muted);">Secure Unified Financial Portal</p>
+<!-- ═══════════════════════════════════════════════════════════════
+     SUCCESS OVERLAY  (hidden by default, shown after submit)
+═══════════════════════════════════════════════════════════════════ -->
+<div id="success-overlay" class="hidden" role="dialog" aria-modal="true" aria-label="Submission successful">
+    <div class="success-card">
+        <div class="confetti-bar"></div>
+
+        <div class="success-icon-wrap">
+            <i class="fas fa-check"></i>
         </div>
 
-        <!-- MAIN TABS -->
-        <div class="main-nav">
-            <button class="nav-btn active" onclick="setMainTab('company')">
-                <i class="fas fa-building"></i> Company
-            </button>
-            <button class="nav-btn" onclick="setMainTab('contractor')">
-                <i class="fas fa-user-tie"></i> Contractor
-            </button>
-            <button class="nav-btn" onclick="setMainTab('disbursement')">
-                <i class="fas fa-wallet"></i> Disbursement
-            </button>
-            <button class="nav-btn" onclick="setMainTab('partner')">
-                <i class="fas fa-handshake"></i> Partner
-            </button>
+        <h2 class="success-title" id="success-title">Submission Received</h2>
+        <p class="success-subtitle" id="success-subtitle">
+            Your claim has been logged and will be reviewed by the Finance team.
+            You'll receive a notification once it's processed.
+        </p>
+
+        <div class="success-meta">
+            <div class="success-meta-row">
+                <span class="success-meta-label">Reference</span>
+                <span class="success-meta-value ref" id="sc-ref">—</span>
+            </div>
+            <div class="success-meta-row">
+                <span class="success-meta-label">Payee</span>
+                <span class="success-meta-value" id="sc-name">—</span>
+            </div>
+            <div class="success-meta-row">
+                <span class="success-meta-label">Type</span>
+                <span class="success-meta-value" id="sc-type">—</span>
+            </div>
+            <div class="success-meta-row">
+                <span class="success-meta-label">Net Amount</span>
+                <span class="success-meta-value highlight" id="sc-amount">—</span>
+            </div>
+            <div class="success-meta-row">
+                <span class="success-meta-label">Status</span>
+                <span class="success-meta-value" style="color:#EAB308;">⏳ Pending Review</span>
+            </div>
         </div>
 
-        <!-- SUB TABS (Disbursement Only) -->
-        <div class="sub-nav hidden" id="disbursement-subnav">
-            <div class="sub-btn active" id="sub-office" onclick="setSubTab('office')">Office Disbursement</div>
-            <div class="sub-btn" id="sub-staff" onclick="setSubTab('staff_commission')">Staff Commission</div>
+        <div class="success-actions">
+            <button class="success-btn-primary" onclick="handleSuccessNew()">
+                <i class="fas fa-plus" style="margin-right:8px;"></i>New Claim
+            </button>
+            <button class="success-btn-secondary" onclick="window.print()">
+                <i class="fas fa-print" style="margin-right:8px;"></i>Print Receipt
+            </button>
         </div>
+    </div>
+</div>
 
-        <form id="payoutForm">
-            <!-- STEP 1: IDENTITY -->
-            <div class="form-section"
-                style="background: rgba(255,255,255,0.02); border: 1px solid var(--border); padding: 24px; border-radius: 20px;">
-                <div class="form-group" style="margin-bottom:0;">
-                    <label style="color:var(--brand);">1. Identify Yourself <span
-                            style="color:var(--error)">*</span></label>
-                    <div style="display:flex; gap:12px;">
-                        <div class="input-wrapper" style="flex:1;">
-                            <i class="fas fa-envelope"></i>
-                            <input type="email" id="payee_email" required placeholder="Enter your business email"
-                                oninput="validateLookupState()">
-                        </div>
-                        <button type="button" class="btn-identify" id="btn-identify" onclick="fetchVendorDetails()">
-                            <i class="fas fa-id-card"></i> Identify
-                        </button>
-                    </div>
-                    <span class="form-hint">Enter your email and click Identify to auto-fill your profile.</span>
-                </div>
-            </div>
-
-            <!-- STEP 2: INVOICE CONTEXT -->
-            <div id="invoice-section" class="hidden form-section">
-                <div class="form-group">
-                    <label>2. Input Invoice Number <span style="color:var(--error)">*</span></label>
-                    <div style="display:flex; gap:12px;">
-                        <div class="input-wrapper" style="flex:1;">
-                            <i class="fas fa-file-invoice-dollar"></i>
-                            <input type="text" id="invoice_number" placeholder="e.g. EC-001234"
-                                oninput="clearInvoiceResult()">
-                        </div>
-                        <button type="button" class="btn-lookup" id="lookup-btn" onclick="lookupInvoice()">
-                            <i class="fas fa-search"></i> Check
-                        </button>
-                    </div>
-                </div>
-
-                <div id="inv-loading" class="hidden" style="text-align:center; padding:20px; color:var(--muted);">
-                    <i class="fas fa-circle-notch fa-spin" style="color:var(--brand); font-size:20px;"></i>
-                    <p style="font-size:12px; margin-top:8px;">Validating records...</p>
-                </div>
-
-                <div id="inv-error" class="hidden"
-                    style="padding:14px; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.2); border-radius:12px; color:#F87171; font-size:13px; margin-top:12px;">
-                    <i class="fas fa-times-circle"></i> <span id="inv-error-text"></span>
-                </div>
-
-                <!-- ═══════════════════════════════════════════════════
-                     INVOICE COMMISSION PANEL  v2
-                     ═══════════════════════════════════════════════════ -->
-                <div id="inv-result" class="hidden" style="margin-top:20px;">
-
-                    <!-- Invoice summary card -->
-                    <div
-                        style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:14px;">
-                        <div
-                            style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-                            <div>
-                                <div
-                                    style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">
-                                    Property</div>
-                                <div id="inv-property" style="font-size:15px;font-weight:700;"></div>
-                            </div>
-                            <div id="inv-rep-badge"
-                                style="font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px;"></div>
-                        </div>
-                        <div style="display:grid;grid-template-columns:1fr 1fr 1fr;">
-                            <div style="padding:14px 18px;border-right:1px solid var(--border);">
-                                <div style="font-size:10px;color:var(--muted);margin-bottom:3px;">Total Price</div>
-                                <div id="inv-total" style="font-size:15px;font-weight:800;color:var(--brand);"></div>
-                            </div>
-                            <div style="padding:14px 18px;border-right:1px solid var(--border);">
-                                <div style="font-size:10px;color:var(--muted);margin-bottom:3px;">Amount Paid</div>
-                                <div id="inv-paid" style="font-size:15px;font-weight:800;color:var(--success);"></div>
-                            </div>
-                            <div style="padding:14px 18px;">
-                                <div style="font-size:10px;color:var(--muted);margin-bottom:3px;">Balance</div>
-                                <div id="inv-balance" style="font-size:15px;font-weight:800;"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Ownership conflict -->
-                    <div id="rep-conflict" class="hidden"
-                        style="background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.25);border-radius:14px;padding:18px;margin-bottom:14px;">
-                        <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;">
-                            <i class="fas fa-exclamation-triangle"
-                                style="color:#F87171;font-size:18px;margin-top:2px;flex-shrink:0;"></i>
-                            <div>
-                                <div style="font-size:13px;font-weight:700;color:#F87171;margin-bottom:3px;">Ownership
-                                    Conflict Detected</div>
-                                <div style="font-size:12px;color:var(--muted);line-height:1.5;">
-                                    This invoice is assigned to <strong id="conflict-rep-name"
-                                        style="color:var(--text);"></strong>.
-                                    If you believe this is an error, state your reason below.
-                                </div>
-                            </div>
-                        </div>
-                        <textarea id="dispute_reason" rows="2" placeholder="Explain why you should be credited..."
-                            style="width:100%;background:rgba(255,255,255,0.03);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px;color:var(--text);font-size:13px;font-family:inherit;outline:none;resize:none;margin-bottom:10px;"></textarea>
-                        <label class="checkbox-row" style="justify-content:flex-start;margin-top:0;">
-                            <input type="checkbox" id="confirm-dispute"
-                                style="width:16px;height:16px;accent-color:#F87171;">
-                            <span
-                                style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">Raise
-                                Official Dispute Claim</span>
-                        </label>
-                    </div>
-
-                    <!-- Payment History & Commission Selection Table -->
-                    <div id="commission-table-wrap" class="hidden">
-                        <div
-                            style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;">
-                            <i class="fas fa-table-list" style="color:var(--brand);margin-right:6px;"></i>Payment
-                            History &amp; Commission Status
-                        </div>
-                        <div style="border:1px solid var(--border);border-radius:14px;overflow:hidden;">
-                            <div
-                                style="display:grid;grid-template-columns:36px 48px 1fr 110px 120px;background:rgba(255,255,255,0.03);border-bottom:1px solid var(--border);padding:10px 16px;font-size:10px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;">
-                                <div></div>
-                                <div>#</div>
-                                <div>Date &amp; Method</div>
-                                <div style="text-align:right;">Amount</div>
-                                <div style="text-align:center;">Commission</div>
-                            </div>
-                            <div id="commission-table-body"></div>
-                        </div>
-
-                        <!-- Selection summary -->
-                        <div id="selection-summary" class="hidden"
-                            style="margin-top:10px;padding:14px 18px;background:rgba(196,125,10,0.07);border:1px solid rgba(196,125,10,0.25);border-radius:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
-                            <div>
-                                <div style="font-size:10px;color:var(--muted);margin-bottom:2px;">Selected Claims</div>
-                                <div id="summary-count" style="font-size:13px;font-weight:700;color:var(--brand);">
-                                </div>
-                            </div>
-                            <div style="text-align:right;">
-                                <div style="font-size:10px;color:var(--muted);margin-bottom:2px;">Total Net Commission
-                                </div>
-                                <div id="summary-net" style="font-size:18px;font-weight:800;color:var(--success);">
-                                </div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Log New Payment Section -->
-                    <div id="new-payment-section" class="hidden" style="margin-top:14px;">
-                        <button type="button" id="new-payment-toggle" onclick="toggleNewPayment()"
-                            style="width:100%;padding:13px 18px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:13px;color:#818cf8;font-family:inherit;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;display:flex;align-items:center;justify-content:space-between;transition:.3s;">
-                            <span><i class="fas fa-plus-circle" style="margin-right:8px;"></i>Log a New Client Payment
-                                Not Yet in System</span>
-                            <i class="fas fa-chevron-down" id="new-payment-chevron" style="transition:.3s;"></i>
-                        </button>
-                        <div id="new-payment-body" class="hidden"
-                            style="margin-top:8px;padding:18px;background:rgba(99,102,241,0.04);border:1px solid rgba(99,102,241,0.15);border-radius:13px;">
-                            <p style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:14px;">
-                                Use this <strong style="color:var(--text);">only</strong> if the client made a payment
-                                that is <strong style="color:var(--text);">not yet recorded</strong> in our system.
-                                Finance will verify the proof before it is confirmed. You may also claim commission on
-                                this payment immediately — it will be held pending confirmation.
-                            </p>
-                            <div class="form-group" style="margin-bottom:12px;">
-                                <label style="color:#818cf8;">Amount Paid by Client (NGN)</label>
-                                <div class="input-wrapper">
-                                    <i class="fas fa-naira-sign" style="color:#818cf8;"></i>
-                                    <input type="number" id="new_payment_amount" min="0" step="0.01"
-                                        placeholder="e.g. 500000" oninput="updateNewPaymentPreview()"
-                                        style="border-color:rgba(99,102,241,0.3);">
-                                </div>
-                            </div>
-                            <div id="new-payment-preview" class="hidden"
-                                style="margin-bottom:12px;padding:12px 14px;background:rgba(196,125,10,0.05);border:1px solid rgba(196,125,10,0.2);border-radius:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;">
-                                <div>
-                                    <div style="color:var(--muted);font-size:10px;margin-bottom:3px;">Gross Commission
-                                    </div>
-                                    <div id="npp-gross" style="font-weight:700;color:var(--brand);"></div>
-                                </div>
-                                <div>
-                                    <div style="color:var(--muted);font-size:10px;margin-bottom:3px;">Net After WHT
-                                    </div>
-                                    <div id="npp-net" style="font-weight:700;color:var(--success);"></div>
-                                </div>
-                            </div>
-                            <label class="checkbox-row" style="margin-bottom:0;">
-                                <input type="checkbox" id="claim_on_new_payment" style="accent-color:#818cf8;"
-                                    onchange="updateSelectionSummary()">
-                                <span style="font-size:12px;color:var(--text);">Also claim my commission on this payment
-                                    now <span style="color:var(--muted);">(held pending Finance
-                                        confirmation)</span></span>
-                            </label>
-                        </div>
-                    </div>
-
-                </div>
-
-                <input type="hidden" id="hid_payment_type"><input type="hidden" id="hid_property_price"><input
-                    type="hidden" id="hid_is_dispute" value="false"><input type="hidden" id="hid_invoice_id">
-            </div>
-
-            <!-- STEP 3: PAYEE DETAILS -->
-            <div class="form-section">
-                <label>3. Confirm Your Details</label>
-                <div class="form-group">
-                    <div class="input-wrapper">
-                        <i class="fas fa-id-badge" id="name-icon"></i>
-                        <input type="text" id="payee_name" required placeholder="Legal Name">
-                    </div>
-                </div>
-
-                <div class="input-row">
-                    <div class="form-group">
-                        <div class="input-wrapper">
-                            <i class="fas fa-hashtag"></i>
-                            <input type="text" id="payee_id" placeholder="RC / ID Number">
-                        </div>
-                    </div>
-                    <div class="form-group">
-                        <div class="input-wrapper">
-                            <i class="fas fa-phone"></i>
-                            <input type="tel" id="payee_phone" placeholder="Phone Number">
-                        </div>
-                    </div>
-                </div>
-                <div class="form-group">
-                    <div class="input-wrapper">
-                        <i class="fas fa-stamp"></i>
-                        <input type="text" id="payee_tin" placeholder="Tax ID (TIN)">
-                    </div>
-                </div>
-            </div>
-
-            <!-- STEP 4: PAYMENT DETAILS -->
-            <div class="form-section">
-                <label>4. Payout Information</label>
-                <div class="form-group"
-                    style="padding: 20px; background: rgba(196,125,10,0.03); border: 1px solid var(--border); border-radius: 16px;">
-                    <label style="color:var(--brand);" id="amount-label">Claim Amount (NGN)</label>
-
-                    <!-- Shown for office/contractor tabs — free entry -->
-                    <div class="input-wrapper" id="claim-amount-wrap">
-                        <i class="fas fa-coins"></i>
-                        <input type="number" id="claim_amount" required step="0.01" placeholder="0.00">
-                    </div>
-
-                    <!-- Shown for staff/partner after invoice verified — readonly summary -->
-                    <div id="claim-amount-readonly" class="hidden"
-                        style="padding:14px 16px; background:rgba(196,125,10,0.06); border:1px solid rgba(196,125,10,0.2); border-radius:12px;">
-                        <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; font-size:12px;">
-                            <div>
-                                <div
-                                    style="color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:0.05em;">
-                                    Commission Base</div>
-                                <div id="ro-base" style="font-weight:700; color:var(--text); margin-top:3px;">—</div>
-                            </div>
-                            <div>
-                                <div
-                                    style="color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:0.05em;">
-                                    Gross Commission</div>
-                                <div id="ro-gross" style="font-weight:700; color:var(--brand); margin-top:3px;">—</div>
-                            </div>
-                            <div>
-                                <div
-                                    style="color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:0.05em;">
-                                    Net After WHT</div>
-                                <div id="ro-net" style="font-weight:700; color:var(--success); margin-top:3px;">—</div>
-                            </div>
-                        </div>
-                        <div style="margin-top:8px; font-size:10px; color:var(--muted);">
-                            <i class="fas fa-lock" style="margin-right:4px;"></i>Commission calculated automatically
-                            from invoice data. No manual entry needed.
-                        </div>
-                    </div>
-                    <div id="already-paid-wrap" class="checkbox-row">
-                        <input type="checkbox" id="already_paid" onchange="toggleAlreadyPaid()">
-                        <span style="font-size:11px; color:var(--muted);">Already paid directly by Company? (Audit
-                            only)</span>
-                    </div>
-                </div>
-
-                <div id="bank-section">
-                    <div class="form-group">
-                        <div class="input-wrapper">
-                            <i class="fas fa-university"></i>
-                            <input type="text" id="bank_name" list="nigerian-banks" placeholder="Bank Name">
-                            <datalist id="nigerian-banks">
-                                <!-- Commercial Banks -->
-                                <option value="Access Bank">
-                                <option value="Zenith Bank">
-                                <option value="Guaranty Trust Bank (GTBank)">
-                                <option value="United Bank for Africa (UBA)">
-                                <option value="First Bank of Nigeria">
-                                <option value="Fidelity Bank">
-                                <option value="Union Bank of Nigeria">
-                                <option value="Stanbic IBTC Bank">
-                                <option value="Sterling Bank">
-                                <option value="First City Monument Bank (FCMB)">
-                                <option value="Polaris Bank">
-                                <option value="Keystone Bank">
-                                <option value="Wema Bank">
-                                <option value="Heritage Bank">
-                                <option value="Ecobank Nigeria">
-                                <option value="Standard Chartered Bank">
-                                <option value="Unity Bank">
-                                <option value="Providus Bank">
-                                <option value="SunTrust Bank">
-                                <option value="Titan Trust Bank">
-                                <option value="Globus Bank">
-                                <option value="Parallex Bank">
-                                <option value="PremiumTrust Bank">
-                                <option value="Optimus Bank">
-                                <option value="Signature Bank">
-                                <option value="Nova Bank">
-
-                                    <!-- Non-Interest Banks -->
-                                <option value="Jaiz Bank">
-                                <option value="Taj Bank">
-                                <option value="Lotus Bank">
-
-                                    <!-- Merchant Banks -->
-                                <option value="Coronation Merchant Bank">
-                                <option value="FBNQuest Merchant Bank">
-                                <option value="Rand Merchant Bank">
-
-                                    <!-- Fintechs & Payment Platforms -->
-                                <option value="Moniepoint (TeamApt)">
-                                <option value="Opay">
-                                <option value="Kuda Bank">
-                                <option value="Palmpay">
-                                <option value="FairMoney Microfinance Bank">
-                                <option value="VFD Microfinance Bank (VBank)">
-                                <option value="Carbon (OneFi)">
-                                <option value="Sparkle Microfinance Bank">
-                                <option value="Gomoney">
-                                <option value="Raven Bank">
-                                <option value="Mint Digital Bank">
-                                <option value="Paga">
-                                <option value="Branch">
-                                <option value="Renmoney">
-                                <option value="9PSB">
-                                <option value="MoMo PSB (MTN)">
-                                <option value="Smartcash PSB (Airtel)">
-                                <option value="Moneyie">
-                                <option value="Eyowo">
-                                <option value="Rubies Bank">
-                                <option value="Safe Haven Microfinance Bank">
-
-                                    <!-- Major Microfinance Banks -->
-                                <option value="LAPO Microfinance Bank">
-                                <option value="Accion Microfinance Bank">
-                                <option value="NPF Microfinance Bank">
-                                <option value="Mainstreet Microfinance Bank">
-                                <option value="Hasal Microfinance Bank">
-                                <option value="Mutual Trust Microfinance Bank">
-                            </datalist>
-                        </div>
-                    </div>
-                    <div class="input-row">
-                        <input type="text" id="acc_number" placeholder="Account Number" maxlength="10"
-                            style="padding-left:16px;">
-                        <input type="text" id="acc_name" placeholder="Account Name" style="padding-left:16px;">
-                    </div>
-                </div>
-
-                <div class="input-row" style="margin-top:20px;">
-                    <div class="upload-area" onclick="document.getElementById('fileInput').click()" id="uploadArea">
-                        <i class="fas fa-cloud-upload-alt" id="uploadIcon"></i>
-                        <p style="font-size:11px;" id="fileName">Click to upload Proof(s)</p>
-                        <p style="font-size:10px; color:var(--muted); margin-top:4px;">You may select multiple files</p>
-                        <input type="file" id="fileInput" class="hidden" multiple onchange="handleFile(this)">
-                        <div id="fileList" style="margin-top:10px; text-align:left; display:none;"></div>
-                    </div>
-                    <textarea id="remarks" placeholder="Remarks..." style="height:86px; padding:12px;"></textarea>
-
-                    <!-- Structured Dropdown for Office Disbursements -->
-                    <div class="input-wrapper">
-                        <i class="fas fa-tags"></i>
-                        <select id="office_expense_type" class="hidden"
-                            style="width:100%; background:rgba(255,255,255,0.03); border:1px solid var(--border); border-radius:10px; color:var(--text); outline:none; font-family:inherit;">
-                            <option value="" disabled selected>— Select Expense Type —</option>
-                            <optgroup label="🏡 Real Estate Operations">
-                                <option value="Site Inspection - Transport/Logistics">Site Inspection -
-                                    Transport/Logistics</option>
-                                <option value="Site Inspection - Feeding/Refreshments">Site Inspection -
-                                    Feeding/Refreshments</option>
-                                <option value="Allocation - Surveying & Pegging">Allocation - Surveying & Pegging
-                                </option>
-                                <option value="Allocation - Logistics/Documentation">Allocation -
-                                    Logistics/Documentation</option>
-                                <option value="Site Clearing & Maintenance">Site Clearing & Maintenance</option>
-                            </optgroup>
-                            <optgroup label="🔌 Office Utilities & Maintenance">
-                                <option value="Fuel - Generator">Fuel - Generator</option>
-                                <option value="Fuel - Office Vehicle">Fuel - Office Vehicle</option>
-                                <option value="Electricity Bill">Electricity Bill</option>
-                                <option value="Water Bill">Water Bill</option>
-                                <option value="Repairs (AC/Plumbing/Electrical)">Repairs (AC/Plumbing/Electrical)
-                                </option>
-                            </optgroup>
-                            <optgroup label="🧹 Cleaning & Janitorial">
-                                <option value="Toiletries & Cleaning Supplies">Toiletries & Cleaning Supplies</option>
-                                <option value="Janitorial / Cleaning Services">Janitorial / Cleaning Services</option>
-                            </optgroup>
-                            <optgroup label="💻 Tech & Infrastructure">
-                                <option value="Database & API Costs">Database & API Costs</option>
-                                <option value="Domain & Hosting Renewals">Domain & Hosting Renewals</option>
-                                <option value="Internet & Data Subscriptions">Internet & Data Subscriptions</option>
-                                <option value="Software Licenses">Software Licenses</option>
-                            </optgroup>
-                            <optgroup label="📋 Administration & Branding">
-                                <option value="Office Supplies & Stationery">Office Supplies & Stationery</option>
-                                <option value="Printing & Branding Materials">Printing & Branding Materials</option>
-                                <option value="Courier & General Logistics">Courier & General Logistics</option>
-                            </optgroup>
-                            <optgroup label="☕ Welfare & Meetings">
-                                <option value="Client Welfare">Client Welfare</option>
-                                <option value="Staff Welfare (Lunch/Tea/Water)">Staff Welfare (Lunch/Tea/Water)</option>
-                            </optgroup>
-                        </select>
-                    </div>
-                </div>
-            </div>
-
-            <p style="font-size:10px; color:var(--muted); text-align:center; padding: 0 10px;">
-                Tax Notice: Tax would be deducted by the company and be paid to the Government.
-            </p>
-
-            <button type="submit" class="submit-btn" id="submitBtn">Submit Record</button>
-        </form>
+<!-- ═══════════════════════════════════════════════════════════════
+     MAIN PORTAL
+═══════════════════════════════════════════════════════════════════ -->
+<div class="portal-container">
+    <div class="logo-area">
+        <img src="/static/img/logo.svg" onerror="this.src='https://www.eximps-cloves.com/logo.svg'" alt="Eximp & Cloves">
+        <h1>Claims &amp; Payouts</h1>
+        <p style="font-size:13px; color:var(--muted);">Secure Unified Financial Portal</p>
     </div>
 
-    <script>
-        let currentTab = 'company';
-        let subTab = 'office';
-        let invoiceData = null;
+    <!-- Global rate banner -->
+    <div class="rate-banner" id="rate-banner">
+        <span class="rate-loading"><i class="fas fa-circle-notch fa-spin" style="margin-right:6px;"></i>Loading rates…</span>
+    </div>
 
-        function setMainTab(tab) {
-            currentTab = tab;
-            document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
-            const idxMap = { 'company': 0, 'contractor': 1, 'disbursement': 2, 'partner': 3 };
-            document.querySelectorAll('.nav-btn')[idxMap[tab]].classList.add('active');
+    <!-- MAIN TABS -->
+    <div class="main-nav">
+        <button class="nav-btn active" onclick="setMainTab('company')">
+            <i class="fas fa-building"></i> Company
+        </button>
+        <button class="nav-btn" onclick="setMainTab('contractor')">
+            <i class="fas fa-user-tie"></i> Contractor
+        </button>
+        <button class="nav-btn" onclick="setMainTab('disbursement')">
+            <i class="fas fa-wallet"></i> Disbursement
+        </button>
+        <button class="nav-btn" onclick="setMainTab('partner')">
+            <i class="fas fa-handshake"></i> Partner
+        </button>
+    </div>
 
-            const subNav = document.getElementById('disbursement-subnav');
-            const invSection = document.getElementById('invoice-section');
-            subNav.classList.add('hidden');
-            invSection.classList.add('hidden');
+    <!-- SUB TABS (Disbursement only) -->
+    <div class="sub-nav hidden" id="disbursement-subnav">
+        <div class="sub-btn active" id="sub-office" onclick="setSubTab('office')">Office Disbursement</div>
+        <div class="sub-btn" id="sub-staff" onclick="setSubTab('staff_commission')">Staff Commission</div>
+    </div>
 
-            if (tab === 'disbursement') {
-                subNav.classList.remove('hidden');
-                setSubTab(subTab);
-            } else if (tab === 'partner') {
-                // Show invoice section directly — do NOT call setSubTab() here because
-                // setSubTab() only understands 'office' / 'staff_commission' and will
-                // immediately re-hide the invoice section when passed 'partner'.
-                invSection.classList.remove('hidden');
-                const labelEl = document.getElementById('amount-label');
-                if (labelEl) labelEl.innerText = 'Commission Summary';
-                // Reset to editable until invoice is verified
-                showAmountField(true);
-            }
-            validateLookupState();
+    <form id="payoutForm">
+        <!-- STEP 1: IDENTITY -->
+        <div class="form-section" style="background:rgba(255,255,255,0.02); border:1px solid var(--border); padding:24px; border-radius:20px;">
+            <div class="form-group" style="margin-bottom:0;">
+                <label style="color:var(--brand);">1. Identify Yourself <span style="color:var(--error)">*</span></label>
+                <div style="display:flex; gap:12px;">
+                    <div class="input-wrapper" style="flex:1;">
+                        <i class="fas fa-envelope"></i>
+                        <input type="email" id="payee_email" required placeholder="Enter your business email" oninput="validateLookupState()">
+                    </div>
+                    <button type="button" class="btn-identify" id="btn-identify" onclick="fetchVendorDetails()" disabled>
+                        <i class="fas fa-id-card"></i> Identify
+                    </button>
+                </div>
+                <span class="form-hint">Enter your email and click Identify to auto-fill your profile.</span>
+            </div>
+        </div>
+
+        <!-- STEP 2: INVOICE CONTEXT -->
+        <div id="invoice-section" class="hidden form-section">
+            <div class="form-group">
+                <label>2. Input Invoice Number <span style="color:var(--error)">*</span></label>
+                <div style="display:flex; gap:12px;">
+                    <div class="input-wrapper" style="flex:1;">
+                        <i class="fas fa-file-invoice-dollar"></i>
+                        <input type="text" id="invoice_number" placeholder="e.g. EC-001234" oninput="clearInvoiceResult()">
+                    </div>
+                    <button type="button" class="btn-lookup" id="lookup-btn" onclick="lookupInvoice()" disabled>
+                        <i class="fas fa-search"></i> Check
+                    </button>
+                </div>
+            </div>
+
+            <div id="inv-loading" class="hidden" style="text-align:center; padding:20px; color:var(--muted);">
+                <i class="fas fa-circle-notch fa-spin" style="color:var(--brand); font-size:20px;"></i>
+                <p style="font-size:12px; margin-top:8px;">Validating records…</p>
+            </div>
+
+            <div id="inv-error" class="hidden" style="padding:14px; background:rgba(239,68,68,0.06); border:1px solid rgba(239,68,68,0.2); border-radius:12px; color:#F87171; font-size:13px; margin-top:12px;">
+                <i class="fas fa-times-circle"></i> <span id="inv-error-text"></span>
+            </div>
+
+            <!-- Invoice result panel -->
+            <div id="inv-result" class="hidden" style="margin-top:20px;">
+
+                <!-- Invoice summary card -->
+                <div style="background:rgba(255,255,255,0.02);border:1px solid var(--border);border-radius:16px;overflow:hidden;margin-bottom:14px;">
+                    <div style="padding:14px 18px;border-bottom:1px solid var(--border);display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+                        <div>
+                            <div style="font-size:10px;color:var(--muted);text-transform:uppercase;letter-spacing:.06em;margin-bottom:2px;">Property</div>
+                            <div id="inv-property" style="font-size:15px;font-weight:700;"></div>
+                        </div>
+                        <div id="inv-rep-badge" style="font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px;"></div>
+                    </div>
+                    <div style="display:grid;grid-template-columns:1fr 1fr 1fr;">
+                        <div style="padding:14px 18px;border-right:1px solid var(--border);">
+                            <div style="font-size:10px;color:var(--muted);margin-bottom:3px;">Total Price</div>
+                            <div id="inv-total" style="font-size:15px;font-weight:800;color:var(--brand);"></div>
+                        </div>
+                        <div style="padding:14px 18px;border-right:1px solid var(--border);">
+                            <div style="font-size:10px;color:var(--muted);margin-bottom:3px;">Amount Paid</div>
+                            <div id="inv-paid" style="font-size:15px;font-weight:800;color:var(--success);"></div>
+                        </div>
+                        <div style="padding:14px 18px;">
+                            <div style="font-size:10px;color:var(--muted);margin-bottom:3px;">Balance</div>
+                            <div id="inv-balance" style="font-size:15px;font-weight:800;"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Ownership conflict -->
+                <div id="rep-conflict" class="hidden" style="background:rgba(239,68,68,0.04);border:1px solid rgba(239,68,68,0.25);border-radius:14px;padding:18px;margin-bottom:14px;">
+                    <div style="display:flex;align-items:flex-start;gap:12px;margin-bottom:12px;">
+                        <i class="fas fa-exclamation-triangle" style="color:#F87171;font-size:18px;margin-top:2px;flex-shrink:0;"></i>
+                        <div>
+                            <div style="font-size:13px;font-weight:700;color:#F87171;margin-bottom:3px;">Ownership Conflict Detected</div>
+                            <div style="font-size:12px;color:var(--muted);line-height:1.5;">
+                                This invoice is assigned to <strong id="conflict-rep-name" style="color:var(--text);"></strong>.
+                                If you believe this is an error, state your reason below.
+                            </div>
+                        </div>
+                    </div>
+                    <textarea id="dispute_reason" rows="2" placeholder="Explain why you should be credited…" style="width:100%;background:rgba(255,255,255,0.03);border:1px solid rgba(239,68,68,0.3);border-radius:10px;padding:12px;color:var(--text);font-size:13px;font-family:inherit;outline:none;resize:none;margin-bottom:10px;"></textarea>
+                    <label class="checkbox-row" style="justify-content:flex-start;margin-top:0;">
+                        <input type="checkbox" id="confirm-dispute" style="width:16px;height:16px;accent-color:#F87171;">
+                        <span style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.05em;">Raise Official Dispute Claim</span>
+                    </label>
+                </div>
+
+                <!-- Payment History & Commission Table -->
+                <div id="commission-table-wrap" class="hidden">
+                    <div style="font-size:11px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.07em;margin-bottom:8px;">
+                        <i class="fas fa-table-list" style="color:var(--brand);margin-right:6px;"></i>Payment History &amp; Commission Status
+                    </div>
+                    <div style="border:1px solid var(--border);border-radius:14px;overflow:hidden;">
+                        <div class="commission-table-header">
+                            <div></div><div>#</div><div>Date &amp; Method</div>
+                            <div style="text-align:right;">Amount</div><div style="text-align:center;">Commission</div>
+                        </div>
+                        <div id="commission-table-body"></div>
+                    </div>
+
+                    <!-- Selection summary -->
+                    <div id="selection-summary" class="hidden" style="margin-top:10px;padding:14px 18px;background:rgba(196,125,10,0.07);border:1px solid rgba(196,125,10,0.25);border-radius:12px;display:flex;align-items:center;justify-content:space-between;flex-wrap:wrap;gap:10px;">
+                        <div>
+                            <div style="font-size:10px;color:var(--muted);margin-bottom:2px;">Selected Claims</div>
+                            <div id="summary-count" style="font-size:13px;font-weight:700;color:var(--brand);"></div>
+                        </div>
+                        <div style="text-align:right;">
+                            <div style="font-size:10px;color:var(--muted);margin-bottom:2px;">Total Net Commission</div>
+                            <div id="summary-net" style="font-size:18px;font-weight:800;color:var(--success);"></div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Log New Payment -->
+                <div id="new-payment-section" class="hidden" style="margin-top:14px;">
+                    <button type="button" id="new-payment-toggle" onclick="toggleNewPayment()" style="width:100%;padding:13px 18px;background:rgba(99,102,241,0.06);border:1px solid rgba(99,102,241,0.2);border-radius:13px;color:#818cf8;font-family:inherit;font-size:12px;font-weight:700;text-transform:uppercase;letter-spacing:.06em;cursor:pointer;display:flex;align-items:center;justify-content:space-between;transition:.3s;">
+                        <span><i class="fas fa-plus-circle" style="margin-right:8px;"></i>Log a New Client Payment Not Yet in System</span>
+                        <i class="fas fa-chevron-down" id="new-payment-chevron" style="transition:.3s;"></i>
+                    </button>
+                    <div id="new-payment-body" class="hidden" style="margin-top:8px;padding:18px;background:rgba(99,102,241,0.04);border:1px solid rgba(99,102,241,0.15);border-radius:13px;">
+                        <p style="font-size:12px;color:var(--muted);line-height:1.6;margin-bottom:14px;">
+                            Use this <strong style="color:var(--text);">only</strong> if the client made a payment that is
+                            <strong style="color:var(--text);">not yet recorded</strong> in our system. Finance will verify before confirming.
+                        </p>
+                        <div class="form-group" style="margin-bottom:12px;">
+                            <label style="color:#818cf8;">Amount Paid by Client (NGN)</label>
+                            <div class="input-wrapper">
+                                <i class="fas fa-naira-sign" style="color:#818cf8;"></i>
+                                <input type="number" id="new_payment_amount" min="0" step="0.01" placeholder="e.g. 500000" oninput="updateNewPaymentPreview()" style="border-color:rgba(99,102,241,0.3);">
+                            </div>
+                        </div>
+                        <div id="new-payment-preview" class="hidden" style="margin-bottom:12px;padding:12px 14px;background:rgba(196,125,10,0.05);border:1px solid rgba(196,125,10,0.2);border-radius:10px;display:grid;grid-template-columns:1fr 1fr;gap:10px;font-size:12px;">
+                            <div>
+                                <div style="color:var(--muted);font-size:10px;margin-bottom:3px;">Gross Commission</div>
+                                <div id="npp-gross" style="font-weight:700;color:var(--brand);"></div>
+                            </div>
+                            <div>
+                                <div style="color:var(--muted);font-size:10px;margin-bottom:3px;">Net After WHT</div>
+                                <div id="npp-net" style="font-weight:700;color:var(--success);"></div>
+                            </div>
+                        </div>
+                        <label class="checkbox-row" style="margin-bottom:0;">
+                            <input type="checkbox" id="claim_on_new_payment" style="accent-color:#818cf8;" onchange="updateSelectionSummary()">
+                            <span style="font-size:12px;color:var(--text);">Also claim my commission on this payment now
+                                <span style="color:var(--muted);">(held pending Finance confirmation)</span></span>
+                        </label>
+                    </div>
+                </div>
+
+            </div><!-- /#inv-result -->
+
+            <input type="hidden" id="hid_payment_type">
+            <input type="hidden" id="hid_property_price">
+            <input type="hidden" id="hid_is_dispute" value="false">
+            <input type="hidden" id="hid_invoice_id">
+        </div><!-- /#invoice-section -->
+
+        <!-- STEP 3: PAYEE DETAILS -->
+        <div class="form-section">
+            <label>3. Confirm Your Details</label>
+            <div class="form-group">
+                <div class="input-wrapper">
+                    <i class="fas fa-id-badge" id="name-icon"></i>
+                    <input type="text" id="payee_name" required placeholder="Legal Name">
+                </div>
+            </div>
+            <div class="input-row">
+                <div class="form-group">
+                    <div class="input-wrapper">
+                        <i class="fas fa-hashtag"></i>
+                        <input type="text" id="payee_id" placeholder="RC / ID Number">
+                    </div>
+                </div>
+                <div class="form-group">
+                    <div class="input-wrapper">
+                        <i class="fas fa-phone"></i>
+                        <input type="tel" id="payee_phone" placeholder="Phone Number">
+                    </div>
+                </div>
+            </div>
+            <div class="form-group">
+                <div class="input-wrapper">
+                    <i class="fas fa-stamp"></i>
+                    <input type="text" id="payee_tin" placeholder="Tax ID (TIN)">
+                </div>
+            </div>
+        </div>
+
+        <!-- STEP 4: PAYMENT DETAILS -->
+        <div class="form-section">
+            <label>4. Payout Information</label>
+            <div class="form-group" style="padding:20px; background:rgba(196,125,10,0.03); border:1px solid var(--border); border-radius:16px;">
+                <label style="color:var(--brand);" id="amount-label">Claim Amount (NGN)</label>
+
+                <div class="input-wrapper" id="claim-amount-wrap">
+                    <i class="fas fa-coins"></i>
+                    <input type="number" id="claim_amount" required step="0.01" placeholder="0.00">
+                </div>
+
+                <div id="claim-amount-readonly" class="hidden" style="padding:14px 16px; background:rgba(196,125,10,0.06); border:1px solid rgba(196,125,10,0.2); border-radius:12px;">
+                    <div style="display:grid; grid-template-columns:1fr 1fr 1fr; gap:12px; font-size:12px;">
+                        <div>
+                            <div style="color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:0.05em;">Commission Base</div>
+                            <div id="ro-base" style="font-weight:700; color:var(--text); margin-top:3px;">—</div>
+                        </div>
+                        <div>
+                            <div style="color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:0.05em;">Gross Commission</div>
+                            <div id="ro-gross" style="font-weight:700; color:var(--brand); margin-top:3px;">—</div>
+                        </div>
+                        <div>
+                            <div style="color:var(--muted); font-size:10px; text-transform:uppercase; letter-spacing:0.05em;">Net After WHT</div>
+                            <div id="ro-net" style="font-weight:700; color:var(--success); margin-top:3px;">—</div>
+                        </div>
+                    </div>
+                    <div style="margin-top:8px; font-size:10px; color:var(--muted);">
+                        <i class="fas fa-lock" style="margin-right:4px;"></i>Commission calculated automatically. No manual entry needed.
+                    </div>
+                </div>
+
+                <div id="already-paid-wrap" class="checkbox-row">
+                    <input type="checkbox" id="already_paid" onchange="toggleAlreadyPaid()">
+                    <span style="font-size:11px; color:var(--muted);">Already paid directly by Company? (Audit only)</span>
+                </div>
+            </div>
+
+            <div id="bank-section">
+                <div class="form-group">
+                    <div class="input-wrapper">
+                        <i class="fas fa-university"></i>
+                        <input type="text" id="bank_name" list="nigerian-banks" placeholder="Bank Name">
+                        <datalist id="nigerian-banks">
+                            <option value="Access Bank"><option value="Zenith Bank"><option value="Guaranty Trust Bank (GTBank)">
+                            <option value="United Bank for Africa (UBA)"><option value="First Bank of Nigeria"><option value="Fidelity Bank">
+                            <option value="Union Bank of Nigeria"><option value="Stanbic IBTC Bank"><option value="Sterling Bank">
+                            <option value="First City Monument Bank (FCMB)"><option value="Polaris Bank"><option value="Keystone Bank">
+                            <option value="Wema Bank"><option value="Ecobank Nigeria"><option value="Standard Chartered Bank">
+                            <option value="Unity Bank"><option value="Providus Bank"><option value="Titan Trust Bank">
+                            <option value="Globus Bank"><option value="Parallex Bank"><option value="PremiumTrust Bank">
+                            <option value="Optimus Bank"><option value="Jaiz Bank"><option value="Taj Bank"><option value="Lotus Bank">
+                            <option value="Coronation Merchant Bank"><option value="FBNQuest Merchant Bank">
+                            <option value="Moniepoint (TeamApt)"><option value="Opay"><option value="Kuda Bank">
+                            <option value="Palmpay"><option value="FairMoney Microfinance Bank"><option value="VFD Microfinance Bank (VBank)">
+                            <option value="Carbon (OneFi)"><option value="Sparkle Microfinance Bank"><option value="Raven Bank">
+                            <option value="9PSB"><option value="MoMo PSB (MTN)"><option value="Smartcash PSB (Airtel)">
+                            <option value="Rubies Bank"><option value="Safe Haven Microfinance Bank">
+                            <option value="LAPO Microfinance Bank"><option value="Accion Microfinance Bank">
+                        </datalist>
+                    </div>
+                </div>
+                <div class="input-row">
+                    <input type="text" id="acc_number" placeholder="Account Number" maxlength="10" style="padding-left:16px;">
+                    <input type="text" id="acc_name" placeholder="Account Name" style="padding-left:16px;">
+                </div>
+            </div>
+
+            <div class="input-row" style="margin-top:20px;">
+                <div class="upload-area" onclick="document.getElementById('fileInput').click()" id="uploadArea">
+                    <i class="fas fa-cloud-upload-alt" id="uploadIcon"></i>
+                    <p style="font-size:11px;" id="fileName">Click to upload Proof(s)</p>
+                    <p style="font-size:10px; color:var(--muted); margin-top:4px;">You may select multiple files</p>
+                    <input type="file" id="fileInput" class="hidden" multiple onchange="handleFile(this)">
+                    <div id="fileList" style="margin-top:10px; text-align:left; display:none;"></div>
+                </div>
+                <textarea id="remarks" placeholder="Remarks…" style="height:86px; padding:12px;"></textarea>
+
+                <div class="input-wrapper">
+                    <i class="fas fa-tags"></i>
+                    <select id="office_expense_type" class="hidden" style="width:100%;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;color:var(--text);outline:none;font-family:inherit;">
+                        <option value="" disabled selected>— Select Expense Type —</option>
+                        <optgroup label="🏡 Real Estate Operations">
+                            <option value="Site Inspection - Transport/Logistics">Site Inspection - Transport/Logistics</option>
+                            <option value="Site Inspection - Feeding/Refreshments">Site Inspection - Feeding/Refreshments</option>
+                            <option value="Allocation - Surveying &amp; Pegging">Allocation - Surveying &amp; Pegging</option>
+                            <option value="Allocation - Logistics/Documentation">Allocation - Logistics/Documentation</option>
+                            <option value="Site Clearing &amp; Maintenance">Site Clearing &amp; Maintenance</option>
+                        </optgroup>
+                        <optgroup label="🔌 Office Utilities &amp; Maintenance">
+                            <option value="Fuel - Generator">Fuel - Generator</option>
+                            <option value="Fuel - Office Vehicle">Fuel - Office Vehicle</option>
+                            <option value="Electricity Bill">Electricity Bill</option>
+                            <option value="Water Bill">Water Bill</option>
+                            <option value="Repairs (AC/Plumbing/Electrical)">Repairs (AC/Plumbing/Electrical)</option>
+                        </optgroup>
+                        <optgroup label="🧹 Cleaning &amp; Janitorial">
+                            <option value="Toiletries &amp; Cleaning Supplies">Toiletries &amp; Cleaning Supplies</option>
+                            <option value="Janitorial / Cleaning Services">Janitorial / Cleaning Services</option>
+                        </optgroup>
+                        <optgroup label="💻 Tech &amp; Infrastructure">
+                            <option value="Database &amp; API Costs">Database &amp; API Costs</option>
+                            <option value="Domain &amp; Hosting Renewals">Domain &amp; Hosting Renewals</option>
+                            <option value="Internet &amp; Data Subscriptions">Internet &amp; Data Subscriptions</option>
+                            <option value="Software Licenses">Software Licenses</option>
+                        </optgroup>
+                        <optgroup label="📋 Administration &amp; Branding">
+                            <option value="Office Supplies &amp; Stationery">Office Supplies &amp; Stationery</option>
+                            <option value="Printing &amp; Branding Materials">Printing &amp; Branding Materials</option>
+                            <option value="Courier &amp; General Logistics">Courier &amp; General Logistics</option>
+                        </optgroup>
+                        <optgroup label="☕ Welfare &amp; Meetings">
+                            <option value="Client Welfare">Client Welfare</option>
+                            <option value="Staff Welfare (Lunch/Tea/Water)">Staff Welfare (Lunch/Tea/Water)</option>
+                        </optgroup>
+                    </select>
+                </div>
+            </div>
+        </div>
+
+        <p style="font-size:10px; color:var(--muted); text-align:center; padding:0 10px;">
+            Tax Notice: Tax will be deducted by the company and remitted to the relevant government authority.
+        </p>
+
+        <button type="submit" class="submit-btn" id="submitBtn">Submit Record</button>
+    </form>
+</div>
+
+<script>
+    /* ══════════════════════════════════════════════════════════════
+       STATE
+    ══════════════════════════════════════════════════════════════ */
+    let currentTab    = 'company';
+    let subTab        = 'office';
+    let invoiceData   = null;
+    let selectedClaims = [];
+
+    // Global commission rates (loaded from /api/payouts/portal/global-rates on boot)
+    let globalRates = {
+        staff_gross_rate:   0.10,
+        partner_gross_rate: 0.10,
+        wht_rate:           0.05,
+    };
+    let globalRatesLoaded = false;
+
+    /* ══════════════════════════════════════════════════════════════
+       BOOT — load global rates
+    ══════════════════════════════════════════════════════════════ */
+    async function loadGlobalRates() {
+        try {
+            const res  = await fetch('/api/payouts/portal/global-rates');
+            if (!res.ok) throw new Error('rate endpoint unavailable');
+            const data = await res.json();
+            globalRates.staff_gross_rate   = parseFloat(data.staff_gross_rate)   || 0.10;
+            globalRates.partner_gross_rate = parseFloat(data.partner_gross_rate) || 0.10;
+            globalRates.wht_rate           = parseFloat(data.wht_rate)           || 0.05;
+            globalRatesLoaded = true;
+        } catch {
+            // silent fallback — defaults are already set above
+            globalRatesLoaded = true;
         }
+        renderRateBanner();
+    }
 
-        function setSubTab(tab) {
-            subTab = tab;
-            document.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
-            const idx = tab === 'office' ? 0 : 1;
-            document.querySelectorAll('.sub-btn')[idx].classList.add('active');
-            const invSection = document.getElementById('invoice-section');
-            invSection.classList.toggle('hidden', tab !== 'staff_commission');
+    function renderRateBanner() {
+        const pct = v => (v * 100).toFixed(1).replace('.0', '') + '%';
+        const banner = document.getElementById('rate-banner');
+        banner.innerHTML = `
+            <span class="rate-chip">
+                <i class="fas fa-users" style="color:var(--brand);"></i>
+                Staff Commission&nbsp;<span class="rate-val">${pct(globalRates.staff_gross_rate)}</span>
+            </span>
+            <span style="color:var(--border);">|</span>
+            <span class="rate-chip">
+                <i class="fas fa-handshake" style="color:var(--brand);"></i>
+                Partner Commission&nbsp;<span class="rate-val">${pct(globalRates.partner_gross_rate)}</span>
+            </span>
+            <span style="color:var(--border);">|</span>
+            <span class="rate-chip">
+                <i class="fas fa-receipt" style="color:var(--muted);"></i>
+                WHT&nbsp;<span class="rate-val" style="color:var(--muted);">${pct(globalRates.wht_rate)}</span>
+            </span>`;
+    }
 
-            // Handle Remarks vs Dropdown toggle
-            const remarksEl = document.getElementById('remarks');
-            const officeSelectEl = document.getElementById('office_expense_type');
-            if (remarksEl && officeSelectEl) {
-                const isOffice = (currentTab === 'disbursement' && tab === 'office');
-                remarksEl.classList.toggle('hidden', isOffice);
-                officeSelectEl.classList.toggle('hidden', !isOffice);
-                if (isOffice) remarksEl.value = ""; // Clear textarea if switching to office
-            }
+    /* ══════════════════════════════════════════════════════════════
+       HELPERS
+    ══════════════════════════════════════════════════════════════ */
+    function resolveRates(invoicePayload) {
+        // Priority: invoice-level rates (per-vendor) → global defaults
+        const isPartner = currentTab === 'partner';
+        const grossFallback = isPartner ? globalRates.partner_gross_rate : globalRates.staff_gross_rate;
+        const gross = invoicePayload?.commission_rate  || grossFallback;
+        const wht   = invoicePayload?.commission_wht   || globalRates.wht_rate;
+        const net   = invoicePayload?.commission_net_rate || (gross * (1 - wht));
+        return { gross, wht, net };
+    }
 
-            // Toggle Label Text based on context
+    /* ══════════════════════════════════════════════════════════════
+       NAV
+    ══════════════════════════════════════════════════════════════ */
+    function setMainTab(tab) {
+        currentTab = tab;
+        document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
+        const idxMap = { company:0, contractor:1, disbursement:2, partner:3 };
+        document.querySelectorAll('.nav-btn')[idxMap[tab]].classList.add('active');
+
+        const subNav    = document.getElementById('disbursement-subnav');
+        const invSection = document.getElementById('invoice-section');
+        subNav.classList.add('hidden');
+        invSection.classList.add('hidden');
+
+        if (tab === 'disbursement') {
+            subNav.classList.remove('hidden');
+            setSubTab(subTab);
+        } else if (tab === 'partner') {
+            invSection.classList.remove('hidden');
             const labelEl = document.getElementById('amount-label');
-            if (labelEl) {
-                const isCommission = (currentTab === 'partner' || (currentTab === 'disbursement' && subTab === 'staff_commission'));
-                labelEl.innerText = isCommission ? 'Commission Summary' : 'Claim Amount (NGN)';
-            }
-            // Reset to editable input when switching sub-tabs — invoice not yet verified
+            if (labelEl) labelEl.innerText = 'Commission Summary';
             showAmountField(true);
         }
+        validateLookupState();
+    }
 
-        function validateLookupState() {
-            const email = document.getElementById('payee_email').value.trim();
-            const btnIdentify = document.getElementById('btn-identify');
-            const btnLookup = document.getElementById('lookup-btn');
-            const isValid = email && email.includes('@');
-            btnIdentify.disabled = !isValid;
-            btnLookup.disabled = !isValid;
+    function setSubTab(tab) {
+        subTab = tab;
+        document.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
+        document.querySelectorAll('.sub-btn')[tab === 'office' ? 0 : 1].classList.add('active');
+
+        const invSection    = document.getElementById('invoice-section');
+        const remarksEl     = document.getElementById('remarks');
+        const officeSelectEl = document.getElementById('office_expense_type');
+        invSection.classList.toggle('hidden', tab !== 'staff_commission');
+
+        if (remarksEl && officeSelectEl) {
+            const isOffice = (currentTab === 'disbursement' && tab === 'office');
+            remarksEl.classList.toggle('hidden', isOffice);
+            officeSelectEl.classList.toggle('hidden', !isOffice);
+            if (isOffice) remarksEl.value = '';
         }
 
-        async function fetchVendorDetails() {
-            const email = document.getElementById('payee_email').value.trim();
-            const btn = document.getElementById('btn-identify');
-            btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking...';
-            try {
-                const res = await fetch(`/api/payouts/portal/fetch-vendor?email=${email}`);
-                const result = await res.json();
-                if (result.status === "success") {
-                    const data = result.data;
-                    document.getElementById('payee_name').value = data.name || '';
-                    document.getElementById('payee_phone').value = data.phone || '';
-                    document.getElementById('payee_id').value = data.rc_number || '';
-                    document.getElementById('payee_tin').value = data.tin || '';
-                    document.getElementById('bank_name').value = data.bank_name || '';
-                    document.getElementById('acc_number').value = data.account_number || '';
-                    document.getElementById('acc_name').value = data.account_name || '';
-                    btn.innerHTML = '<i class="fas fa-check"></i> Found';
-                    btn.style.background = 'var(--success)';
-                } else {
-                    btn.innerHTML = '<i class="fas fa-user-plus"></i> New';
-                }
-            } catch (e) { btn.innerHTML = 'Identify'; }
+        const labelEl = document.getElementById('amount-label');
+        if (labelEl) {
+            const isComm = (currentTab === 'partner' || (currentTab === 'disbursement' && tab === 'staff_commission'));
+            labelEl.innerText = isComm ? 'Commission Summary' : 'Claim Amount (NGN)';
         }
+        showAmountField(true);
+    }
 
-        function clearInvoiceResult() {
-            invoiceData = null;
-            ['inv-result', 'inv-error', 'inv-loading'].forEach(id => document.getElementById(id).classList.add('hidden'));
-            // Reset amount field to editable when invoice is cleared
-            const isCommission = (currentTab === 'partner' || (currentTab === 'disbursement' && subTab === 'staff_commission'));
-            if (isCommission) showAmountField(true);
-        }
+    /* ══════════════════════════════════════════════════════════════
+       LOOKUP HELPERS
+    ══════════════════════════════════════════════════════════════ */
+    function validateLookupState() {
+        const email   = document.getElementById('payee_email').value.trim();
+        const isValid = email && email.includes('@');
+        document.getElementById('btn-identify').disabled = !isValid;
+        document.getElementById('lookup-btn').disabled   = !isValid;
+    }
 
-        function showAmountField(editable) {
-            // editable=true  → show free-entry input (office/contractor or before invoice verified)
-            // editable=false → show readonly commission summary (after invoice verified for staff/partner)
-            const wrap = document.getElementById('claim-amount-wrap');
-            const readonly = document.getElementById('claim-amount-readonly');
-            const input = document.getElementById('claim_amount');
-            if (!wrap || !readonly) return;
-            if (editable) {
-                wrap.classList.remove('hidden');
-                readonly.classList.add('hidden');
-                if (input) input.required = true;
+    async function fetchVendorDetails() {
+        const email = document.getElementById('payee_email').value.trim();
+        const btn   = document.getElementById('btn-identify');
+        btn.innerHTML = '<i class="fas fa-spinner fa-spin"></i> Checking…';
+        btn.disabled = true;
+        try {
+            const res    = await fetch(`/api/payouts/portal/fetch-vendor?email=${encodeURIComponent(email)}`);
+            const result = await res.json();
+            if (result.status === 'success') {
+                const d = result.data;
+                document.getElementById('payee_name').value  = d.name           || '';
+                document.getElementById('payee_phone').value = d.phone          || '';
+                document.getElementById('payee_id').value    = d.rc_number      || '';
+                document.getElementById('payee_tin').value   = d.tin            || '';
+                document.getElementById('bank_name').value   = d.bank_name      || '';
+                document.getElementById('acc_number').value  = d.account_number || '';
+                document.getElementById('acc_name').value    = d.account_name   || '';
+                btn.innerHTML = '<i class="fas fa-check"></i> Found';
+                btn.style.background = 'var(--success)';
             } else {
-                wrap.classList.add('hidden');
-                readonly.classList.remove('hidden');
-                if (input) input.required = false; // not required — backend computes it
+                btn.innerHTML = '<i class="fas fa-user-plus"></i> New';
             }
-        }
+        } catch { btn.innerHTML = 'Identify'; }
+        finally  { btn.disabled = false; }
+    }
 
-        function updateReadonlyAmountDisplay(d) {
-            // Populate the readonly commission summary card with resolved figures.
-            // This is a PREVIEW only — the actual payout amounts are driven by
-            // the per-row checkboxes in the payment history table (selectedClaims).
-            const commRate = d.commission_rate || 0.10;
-            const whtRate = d.commission_wht || 0.05;
-            const netRate = d.commission_net_rate || (commRate * (1 - whtRate));
+    function clearInvoiceResult() {
+        invoiceData = null;
+        selectedClaims = [];
+        ['inv-result','inv-error','inv-loading'].forEach(id => document.getElementById(id)?.classList.add('hidden'));
+        const isComm = (currentTab === 'partner' || (currentTab === 'disbursement' && subTab === 'staff_commission'));
+        if (isComm) showAmountField(true);
+    }
 
-            const nextUnclaimed = (d.unclaimed_payments || [])[0];
-            const base = nextUnclaimed ? nextUnclaimed.commission_base
-                : (d.payment_type === 'initial_deposit' ? d.property_price : null);
+    function showAmountField(editable) {
+        const wrap     = document.getElementById('claim-amount-wrap');
+        const readonly = document.getElementById('claim-amount-readonly');
+        const input    = document.getElementById('claim_amount');
+        if (!wrap || !readonly) return;
+        wrap.classList.toggle('hidden', !editable);
+        readonly.classList.toggle('hidden', editable);
+        if (input) input.required = editable;
+    }
 
-            const isDeposit = nextUnclaimed
-                ? nextUnclaimed.payment_type === 'initial_deposit'
-                : d.payment_type === 'initial_deposit';
+    function updateReadonlyAmountDisplay(d) {
+        const { gross: commRate, wht: whtRate, net: netRate } = resolveRates(d);
+        const nextUnclaimed = (d.unclaimed_payments || [])[0];
+        const base = nextUnclaimed
+            ? nextUnclaimed.commission_base
+            : (d.payment_type === 'initial_deposit' ? d.property_price : null);
+        const isDeposit = nextUnclaimed
+            ? nextUnclaimed.payment_type === 'initial_deposit'
+            : d.payment_type === 'initial_deposit';
+        const gross = base ? Math.round(base * commRate) : null;
+        const net   = base ? Math.round(base * netRate)  : null;
+        const baseLabel = base ? '₦' + base.toLocaleString() + (isDeposit ? ' (full price)' : '') : '—';
+        const roBase  = document.getElementById('ro-base');
+        const roGross = document.getElementById('ro-gross');
+        const roNet   = document.getElementById('ro-net');
+        if (roBase)  roBase.innerText  = baseLabel;
+        if (roGross) roGross.innerText = gross ? '₦' + gross.toLocaleString() : '—';
+        if (roNet)   roNet.innerText   = net   ? '₦' + net.toLocaleString()   : '—';
+        const input = document.getElementById('claim_amount');
+        if (input) input.value = 0;
+    }
 
-            const gross = base ? Math.round(base * commRate) : null;
-            const net = base ? Math.round(base * netRate) : null;
-
-            const roBase = document.getElementById('ro-base');
-            const roGross = document.getElementById('ro-gross');
-            const roNet = document.getElementById('ro-net');
-
-            // For initial deposits, commission is calculated on the FULL property price
-            // (not just the deposit instalment amount). Show this clearly.
-            const baseLabel = base
-                ? '₦' + base.toLocaleString() + (isDeposit ? ' (full price)' : '')
-                : '—';
-            if (roBase) roBase.innerText = baseLabel;
-            if (roGross) roGross.innerText = gross ? '₦' + gross.toLocaleString() : '—';
-            if (roNet) roNet.innerText = net ? '₦' + net.toLocaleString() : '—';
-
-            // For commission tabs the backend recalculates the actual payout from the
-            // payment_id and invoice — do NOT forward the commission_base (property price)
-            // as claim_amount or the backend will use it as the raw claim figure.
-            // Zero it out; the bulk submit path uses the claims[] array instead.
-            const input = document.getElementById('claim_amount');
-            if (input) input.value = 0;
-        }
-
-        async function lookupInvoice() {
-            const email = document.getElementById('payee_email').value.trim();
-            const invNum = document.getElementById('invoice_number').value.trim();
-            const btn = document.getElementById('lookup-btn');
-            clearInvoiceResult();
-            document.getElementById('inv-loading').classList.remove('hidden');
-            btn.disabled = true;
-
-            try {
-                const res = await fetch(`/api/payouts/portal/lookup-invoice?invoice_number=${invNum}&claimant_email=${email}`);
-                const data = await res.json();
-                console.log('lookup-invoice response:', JSON.stringify(data));
-                if (data.status === "success") {
-                    renderInvoiceResult(data);
-                } else {
-                    const errEl = document.getElementById('inv-error-text');
-                    const errBox = document.getElementById('inv-error');
-                    if (errEl) errEl.innerText = data.detail || data.message || JSON.stringify(data);
-                    if (errBox) errBox.classList.remove('hidden');
-                }
-            } catch (e) {
-                document.getElementById('inv-error-text').innerText = 'Something went wrong. Please try again or contact support.';
+    /* ══════════════════════════════════════════════════════════════
+       INVOICE LOOKUP
+    ══════════════════════════════════════════════════════════════ */
+    async function lookupInvoice() {
+        const email  = document.getElementById('payee_email').value.trim();
+        const invNum = document.getElementById('invoice_number').value.trim();
+        const btn    = document.getElementById('lookup-btn');
+        clearInvoiceResult();
+        document.getElementById('inv-loading').classList.remove('hidden');
+        btn.disabled = true;
+        try {
+            const res  = await fetch(`/api/payouts/portal/lookup-invoice?invoice_number=${encodeURIComponent(invNum)}&claimant_email=${encodeURIComponent(email)}`);
+            const data = await res.json();
+            if (data.status === 'success') {
+                renderInvoiceResult(data);
+            } else {
+                document.getElementById('inv-error-text').innerText = data.detail || data.message || JSON.stringify(data);
                 document.getElementById('inv-error').classList.remove('hidden');
-                console.error('Invoice lookup error:', e);
             }
-            finally { document.getElementById('inv-loading').classList.add('hidden'); btn.disabled = false; }
+        } catch {
+            document.getElementById('inv-error-text').innerText = 'Something went wrong. Please try again or contact support.';
+            document.getElementById('inv-error').classList.remove('hidden');
+        } finally {
+            document.getElementById('inv-loading').classList.add('hidden');
+            btn.disabled = false;
+        }
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       RENDER INVOICE RESULT
+    ══════════════════════════════════════════════════════════════ */
+    function renderInvoiceResult(d) {
+        invoiceData    = d;
+        selectedClaims = [];
+
+        document.getElementById('inv-property').innerText = d.property_name || '—';
+        document.getElementById('inv-total').innerText    = '₦' + (d.property_price || 0).toLocaleString();
+        document.getElementById('inv-paid').innerText     = '₦' + (d.amount_paid    || 0).toLocaleString();
+        const balEl = document.getElementById('inv-balance');
+        balEl.innerText    = '₦' + (d.balance || 0).toLocaleString();
+        balEl.style.color  = d.balance > 0 ? 'var(--error)' : 'var(--success)';
+
+        const badge = document.getElementById('inv-rep-badge');
+        if (d.rep_status === 'unassigned') {
+            badge.style.cssText = 'background:rgba(16,185,129,0.12);color:var(--success);font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px;';
+            badge.innerHTML = '<i class="fas fa-user-plus" style="margin-right:5px;"></i>Available';
+        } else if (d.rep_status === 'yours') {
+            badge.style.cssText = 'background:rgba(59,130,246,0.12);color:#60A5FA;font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px;';
+            badge.innerHTML = '<i class="fas fa-check-circle" style="margin-right:5px;"></i>Assigned to You';
+        } else {
+            badge.style.cssText = 'background:rgba(239,68,68,0.1);color:#F87171;font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px;';
+            badge.innerHTML = '<i class="fas fa-exclamation-triangle" style="margin-right:5px;"></i>Conflict';
         }
 
-        // ─── State ────────────────────────────────────────────────
-        // selectedClaims: array of payment row objects the rep has ticked
-        let selectedClaims = [];
+        const conflictEl = document.getElementById('rep-conflict');
+        conflictEl.classList.toggle('hidden', d.rep_status !== 'conflict');
+        const cnEl = document.getElementById('conflict-rep-name');
+        if (cnEl) cnEl.innerText = d.assigned_rep_name || '';
 
-        // ─── renderInvoiceResult ──────────────────────────────────────
-        function renderInvoiceResult(d) {
-            invoiceData = d;
-            selectedClaims = [];
+        // ── Payment History Table ──
+        const isCommissionTab = (currentTab === 'partner' || (currentTab === 'disbursement' && subTab === 'staff_commission'));
+        const tableWrap = document.getElementById('commission-table-wrap');
+        const tbody     = document.getElementById('commission-table-body');
+        const payments  = d.previous_payments || [];
 
-            // Invoice summary card
-            document.getElementById('inv-property').innerText = d.property_name || '—';
-            document.getElementById('inv-total').innerText = '₦' + (d.property_price || 0).toLocaleString();
-            document.getElementById('inv-paid').innerText = '₦' + (d.amount_paid || 0).toLocaleString();
-            const balEl = document.getElementById('inv-balance');
-            balEl.innerText = '₦' + (d.balance || 0).toLocaleString();
-            balEl.style.color = d.balance > 0 ? 'var(--error)' : 'var(--success)';
+        if (isCommissionTab && payments.length > 0) {
+            tableWrap.classList.remove('hidden');
+            tbody.innerHTML = '';
+            const { gross: commRate, net: netRate } = resolveRates(d);
 
-            // Rep badge (top-right of card)
-            const badge = document.getElementById('inv-rep-badge');
-            if (d.rep_status === 'unassigned') {
-                badge.style.cssText = 'background:rgba(16,185,129,0.12);color:var(--success);font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px;';
-                badge.innerHTML = '<i class="fas fa-user-plus" style="margin-right:5px;"></i>Available';
-            } else if (d.rep_status === 'yours') {
-                badge.style.cssText = 'background:rgba(59,130,246,0.12);color:#60A5FA;font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px;';
-                badge.innerHTML = '<i class="fas fa-check-circle" style="margin-right:5px;"></i>Assigned to You';
-            } else {
-                badge.style.cssText = 'background:rgba(239,68,68,0.1);color:#F87171;font-size:11px;font-weight:700;padding:5px 12px;border-radius:20px;';
-                badge.innerHTML = '<i class="fas fa-exclamation-triangle" style="margin-right:5px;"></i>Conflict';
-            }
+            payments.forEach((p, idx) => {
+                const isDeposit = p.payment_type === 'initial_deposit';
+                const commBase  = p.commission_base || (isDeposit ? d.property_price : p.amount);
+                const netComm   = Math.round(commBase * netRate);
+                const status    = p.commission_status;
+                const canSelect = status === 'unclaimed';
 
-            // Rep conflict panel
-            const conflictEl = document.getElementById('rep-conflict');
-            conflictEl.classList.toggle('hidden', d.rep_status !== 'conflict');
-            const cnEl = document.getElementById('conflict-rep-name');
-            if (cnEl) cnEl.innerText = d.assigned_rep_name || '';
-
-            // ── Payment History Table ──
-            const isCommissionTab = (currentTab === 'partner' || (currentTab === 'disbursement' && subTab === 'staff_commission'));
-            const tableWrap = document.getElementById('commission-table-wrap');
-            const tbody = document.getElementById('commission-table-body');
-            const payments = d.previous_payments || [];
-
-            if (isCommissionTab && payments.length > 0) {
-                tableWrap.classList.remove('hidden');
-                tbody.innerHTML = '';
-                const commRate = d.commission_rate || (currentTab === 'partner' ? 0.15 : 0.10);
-                const netRate = d.commission_net_rate || (commRate * 0.95);
-
-                payments.forEach((p, idx) => {
-                    const isDeposit = p.payment_type === 'initial_deposit';
-                    const commBase = p.commission_base || (isDeposit ? d.property_price : p.amount);
-                    const grossComm = Math.round(commBase * commRate);
-                    const netComm = Math.round(commBase * netRate);
-                    const status = p.commission_status; // "paid" | "pending" | "unclaimed"
-                    // Only "unclaimed" payments can be selected — no existing claim at all
-                    const canSelect = status === 'unclaimed';
-
-                    // Status chip
-                    let chipHTML = '';
-                    if (status === 'paid') {
-                        // Commission was confirmed & paid out via the ledger
-                        chipHTML = '<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;background:rgba(16,185,129,0.12);color:var(--success);">✓ Paid</span>';
-                    } else if (status === 'pending') {
-                        // A portal claim already exists for this payment — awaiting approval
-                        chipHTML = '<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;background:rgba(234,179,8,0.12);color:#EAB308;">⏳ In Queue</span>';
-                    } else {
-                        // Unclaimed — show the claimable net commission amount
-                        chipHTML = `<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;background:rgba(196,125,10,0.12);color:var(--brand);">₦${netComm.toLocaleString()} net</span>`;
-                    }
-
-                    const label = isDeposit ? '★ Initial Deposit' : `Instalment #${p.seq}`;
-                    const rowBg = canSelect ? '' : 'background:rgba(255,255,255,0.01);';
-                    const checkboxHTML = canSelect
-                        ? `<input type="checkbox" data-idx="${idx}" style="width:16px;height:16px;accent-color:var(--brand);cursor:pointer;" onchange="toggleClaimRow(this, ${idx})">`
-                        : `<div style="width:16px;height:16px;border:1px solid var(--border);border-radius:4px;background:rgba(255,255,255,0.03);"></div>`;
-
-                    tbody.innerHTML += `
-                        <div id="claim-row-${idx}" style="${rowBg}display:grid;grid-template-columns:36px 48px 1fr 110px 120px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);transition:.2s;">
-                            <div>${checkboxHTML}</div>
-                            <div style="font-size:11px;font-weight:700;color:var(--muted);">#${p.seq}</div>
-                            <div>
-                                <div style="font-size:12px;font-weight:600;">${label}</div>
-                                <div style="font-size:10px;color:var(--muted);margin-top:2px;">${p.date} &bull; ${p.method}</div>
-                            </div>
-                            <div style="text-align:right;font-size:13px;font-weight:700;">₦${p.amount.toLocaleString()}</div>
-                            <div style="text-align:center;">${chipHTML}</div>
-                        </div>`;
-                });
-
-                // Remove last row border
-                const rows = tbody.querySelectorAll('[id^="claim-row-"]');
-                if (rows.length) rows[rows.length - 1].style.borderBottom = 'none';
-
-            } else if (!isCommissionTab) {
-                tableWrap.classList.add('hidden');
-            } else {
-                tableWrap.classList.add('hidden');
-            }
-
-            // New payment section — always show for commission tabs
-            const newPaySection = document.getElementById('new-payment-section');
-            if (newPaySection) newPaySection.classList.toggle('hidden', !isCommissionTab);
-
-            updateSelectionSummary();
-
-            // Fill hidden inputs
-            const hidPt = document.getElementById('hid_payment_type'); if (hidPt) hidPt.value = d.payment_type || '';
-            const hidPp = document.getElementById('hid_property_price'); if (hidPp) hidPp.value = d.property_price || 0;
-            const hidInv = document.getElementById('hid_invoice_id'); if (hidInv) hidInv.value = d.invoice_id || '';
-
-            // For non-commission tabs — keep the free-entry amount field visible
-            if (!isCommissionTab) {
-                showAmountField(true);
-            } else {
-                // Hide free entry; amount is driven by table selection
-                showAmountField(false);
-                // Populate old readonly display too (fallback)
-                updateReadonlyAmountDisplay(d);
-            }
-
-            document.getElementById('inv-result').classList.remove('hidden');
-        }
-
-        function toggleClaimRow(checkbox, idx) {
-            const payments = (invoiceData || {}).previous_payments || [];
-            const p = payments[idx];
-            if (!p) return;
-            const row = document.getElementById(`claim-row-${idx}`);
-
-            if (checkbox.checked) {
-                selectedClaims.push(p);
-                if (row) row.style.background = 'rgba(196,125,10,0.06)';
-            } else {
-                selectedClaims = selectedClaims.filter(c => c.payment_id !== p.payment_id);
-                if (row) row.style.background = '';
-            }
-            updateSelectionSummary();
-        }
-
-        function updateSelectionSummary() {
-            if (!invoiceData) return;
-            const commRate = invoiceData.commission_rate || (currentTab === 'partner' ? 0.15 : 0.10);
-            const netRate = invoiceData.commission_net_rate || (commRate * 0.95);
-
-            const newPayAmt = parseFloat(document.getElementById('new_payment_amount')?.value || 0) || 0;
-            const claimNew = document.getElementById('claim_on_new_payment')?.checked;
-
-            let totalNet = selectedClaims.reduce((sum, p) => {
-                const base = p.commission_base || (p.payment_type === 'initial_deposit' ? invoiceData.property_price : p.amount);
-                return sum + Math.round(base * netRate);
-            }, 0);
-
-            if (claimNew && newPayAmt > 0) totalNet += Math.round(newPayAmt * netRate);
-
-            const count = selectedClaims.length + (claimNew && newPayAmt > 0 ? 1 : 0);
-            const summary = document.getElementById('selection-summary');
-            if (summary) {
-                if (count > 0) {
-                    summary.classList.remove('hidden');
-                    document.getElementById('summary-count').innerText = `${count} payment${count > 1 ? 's' : ''} selected`;
-                    document.getElementById('summary-net').innerText = '₦' + totalNet.toLocaleString();
+                let chipHTML = '';
+                if (status === 'paid') {
+                    chipHTML = '<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;background:rgba(16,185,129,0.12);color:var(--success);">✓ Paid</span>';
+                } else if (status === 'pending') {
+                    chipHTML = '<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;background:rgba(234,179,8,0.12);color:#EAB308;">⏳ In Queue</span>';
                 } else {
-                    summary.classList.add('hidden');
+                    chipHTML = `<span style="font-size:10px;font-weight:700;padding:3px 8px;border-radius:10px;background:rgba(196,125,10,0.12);color:var(--brand);">₦${netComm.toLocaleString()} net</span>`;
                 }
-            }
 
-            // Enable/disable submit button based on selection
-            const submitBtn = document.getElementById('submitBtn');
-            const isCommissionTab = (currentTab === 'partner' || (currentTab === 'disbursement' && subTab === 'staff_commission'));
-            if (submitBtn && isCommissionTab) {
-                submitBtn.disabled = count === 0;
-                submitBtn.style.opacity = count === 0 ? '0.4' : '1';
+                const label        = isDeposit ? '★ Initial Deposit' : `Instalment #${p.seq}`;
+                const rowBg        = canSelect ? '' : 'background:rgba(255,255,255,0.01);';
+                const checkboxHTML = canSelect
+                    ? `<input type="checkbox" data-idx="${idx}" style="width:16px;height:16px;accent-color:var(--brand);cursor:pointer;" onchange="toggleClaimRow(this,${idx})">`
+                    : `<div style="width:16px;height:16px;border:1px solid var(--border);border-radius:4px;background:rgba(255,255,255,0.03);"></div>`;
+
+                tbody.innerHTML += `
+                    <div id="claim-row-${idx}" style="${rowBg}display:grid;grid-template-columns:36px 48px 1fr 110px 120px;align-items:center;padding:12px 16px;border-bottom:1px solid var(--border);transition:.2s;">
+                        <div>${checkboxHTML}</div>
+                        <div style="font-size:11px;font-weight:700;color:var(--muted);">#${p.seq}</div>
+                        <div>
+                            <div style="font-size:12px;font-weight:600;">${label}</div>
+                            <div style="font-size:10px;color:var(--muted);margin-top:2px;">${p.date} &bull; ${p.method}</div>
+                        </div>
+                        <div style="text-align:right;font-size:13px;font-weight:700;">₦${p.amount.toLocaleString()}</div>
+                        <div style="text-align:center;">${chipHTML}</div>
+                    </div>`;
+            });
+
+            const rows = tbody.querySelectorAll('[id^="claim-row-"]');
+            if (rows.length) rows[rows.length - 1].style.borderBottom = 'none';
+        } else {
+            tableWrap.classList.add('hidden');
+        }
+
+        const newPaySection = document.getElementById('new-payment-section');
+        if (newPaySection) newPaySection.classList.toggle('hidden', !isCommissionTab);
+
+        updateSelectionSummary();
+
+        const hidPt  = document.getElementById('hid_payment_type');   if (hidPt)  hidPt.value  = d.payment_type  || '';
+        const hidPp  = document.getElementById('hid_property_price');  if (hidPp)  hidPp.value  = d.property_price || 0;
+        const hidInv = document.getElementById('hid_invoice_id');      if (hidInv) hidInv.value = d.invoice_id     || '';
+
+        if (!isCommissionTab) {
+            showAmountField(true);
+        } else {
+            showAmountField(false);
+            updateReadonlyAmountDisplay(d);
+        }
+
+        document.getElementById('inv-result').classList.remove('hidden');
+    }
+
+    function toggleClaimRow(checkbox, idx) {
+        const p   = ((invoiceData || {}).previous_payments || [])[idx];
+        if (!p) return;
+        const row = document.getElementById(`claim-row-${idx}`);
+        if (checkbox.checked) {
+            selectedClaims.push(p);
+            if (row) row.style.background = 'rgba(196,125,10,0.06)';
+        } else {
+            selectedClaims = selectedClaims.filter(c => c.payment_id !== p.payment_id);
+            if (row) row.style.background = '';
+        }
+        updateSelectionSummary();
+    }
+
+    function updateSelectionSummary() {
+        if (!invoiceData) return;
+        const { net: netRate } = resolveRates(invoiceData);
+        const newPayAmt = parseFloat(document.getElementById('new_payment_amount')?.value || 0) || 0;
+        const claimNew  = document.getElementById('claim_on_new_payment')?.checked;
+
+        let totalNet = selectedClaims.reduce((sum, p) => {
+            const base = p.commission_base || (p.payment_type === 'initial_deposit' ? invoiceData.property_price : p.amount);
+            return sum + Math.round(base * netRate);
+        }, 0);
+        if (claimNew && newPayAmt > 0) totalNet += Math.round(newPayAmt * netRate);
+
+        const count   = selectedClaims.length + (claimNew && newPayAmt > 0 ? 1 : 0);
+        const summary = document.getElementById('selection-summary');
+        if (summary) {
+            if (count > 0) {
+                summary.classList.remove('hidden');
+                document.getElementById('summary-count').innerText = `${count} payment${count > 1 ? 's' : ''} selected`;
+                document.getElementById('summary-net').innerText   = '₦' + totalNet.toLocaleString();
+            } else {
+                summary.classList.add('hidden');
             }
         }
 
-        function toggleNewPayment() {
-            const body = document.getElementById('new-payment-body');
-            const chevron = document.getElementById('new-payment-chevron');
-            const isHidden = body.classList.toggle('hidden');
-            if (chevron) chevron.style.transform = isHidden ? '' : 'rotate(180deg)';
-            // Reset preview if collapsed
-            if (isHidden) {
-                const previewEl = document.getElementById('new-payment-preview');
-                if (previewEl) previewEl.classList.add('hidden');
-            }
+        const submitBtn   = document.getElementById('submitBtn');
+        const isCommission = (currentTab === 'partner' || (currentTab === 'disbursement' && subTab === 'staff_commission'));
+        if (submitBtn && isCommission) {
+            submitBtn.disabled     = count === 0;
+            submitBtn.style.opacity = count === 0 ? '0.4' : '1';
+        }
+    }
+
+    function toggleNewPayment() {
+        const body    = document.getElementById('new-payment-body');
+        const chevron = document.getElementById('new-payment-chevron');
+        const isHidden = body.classList.toggle('hidden');
+        if (chevron) chevron.style.transform = isHidden ? '' : 'rotate(180deg)';
+        if (isHidden) document.getElementById('new-payment-preview')?.classList.add('hidden');
+    }
+
+    function updateNewPaymentPreview() {
+        if (!invoiceData) return;
+        const amt     = parseFloat(document.getElementById('new_payment_amount')?.value || 0) || 0;
+        const preview = document.getElementById('new-payment-preview');
+        if (!amt || amt <= 0) { preview?.classList.add('hidden'); updateSelectionSummary(); return; }
+        const { gross: commRate, net: netRate } = resolveRates(invoiceData);
+        const gross = Math.round(amt * commRate);
+        const net   = Math.round(amt * netRate);
+        document.getElementById('npp-gross').innerText = '₦' + gross.toLocaleString();
+        document.getElementById('npp-net').innerText   = '₦' + net.toLocaleString();
+        preview?.classList.remove('hidden');
+        updateSelectionSummary();
+    }
+
+    function toggleAlreadyPaid() {
+        // intentional no-op — flag is picked up on submit
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       SUCCESS SCREEN
+    ══════════════════════════════════════════════════════════════ */
+    function showSuccessScreen(result, meta = {}) {
+        const overlay = document.getElementById('success-overlay');
+        const isDispute = meta.isDispute || false;
+
+        document.getElementById('success-title').innerText =
+            isDispute ? 'Dispute Raised' : 'Submission Received';
+
+        document.getElementById('success-subtitle').innerText = isDispute
+            ? 'Your dispute has been logged. The Finance team will review and reach out to both parties.'
+            : 'Your claim has been queued for Finance review. You\'ll be notified once it\'s processed.';
+
+        // Reference — use server ref if available, generate fallback
+        const ref = result?.reference || result?.payout_id || result?.id
+            || ('EC-' + Date.now().toString(36).toUpperCase());
+        document.getElementById('sc-ref').innerText = ref;
+
+        // Payee
+        document.getElementById('sc-name').innerText =
+            document.getElementById('payee_name').value || '—';
+
+        // Type
+        const typeMap = {
+            company: 'Company Claim', contractor: 'Contractor Claim',
+            office: 'Office Disbursement', staff_commission: 'Staff Commission',
+            partner: 'Partner Commission',
+        };
+        const typeKey = currentTab === 'disbursement' ? subTab : currentTab;
+        document.getElementById('sc-type').innerText = typeMap[typeKey] || typeKey;
+
+        // Amount — best-effort from result or selection summary
+        const summaryNet = document.getElementById('summary-net').innerText;
+        const claimAmt   = document.getElementById('claim_amount').value;
+        const amountEl   = document.getElementById('sc-amount');
+        if (summaryNet && summaryNet !== '—') {
+            amountEl.innerText = summaryNet;
+        } else if (claimAmt && parseFloat(claimAmt) > 0) {
+            amountEl.innerText = '₦' + parseFloat(claimAmt).toLocaleString();
+        } else if (result?.net_commission || result?.amount) {
+            const v = result.net_commission || result.amount;
+            amountEl.innerText = '₦' + parseFloat(v).toLocaleString();
+        } else {
+            amountEl.innerText = '—';
         }
 
-        function updateNewPaymentPreview() {
-            if (!invoiceData) return;
-            const amt = parseFloat(document.getElementById('new_payment_amount')?.value || 0) || 0;
-            const previewEl = document.getElementById('new-payment-preview');
-            if (!amt || amt <= 0) { if (previewEl) previewEl.classList.add('hidden'); updateSelectionSummary(); return; }
-            const commRate = invoiceData.commission_rate || (currentTab === 'partner' ? 0.15 : 0.10);
-            const whtRate = invoiceData.commission_wht || 0.05;
-            const netRate = invoiceData.commission_net_rate || (commRate * (1 - whtRate));
-            const gross = Math.round(amt * commRate);
-            const net = Math.round(amt * netRate);
-            const grossEl = document.getElementById('npp-gross');
-            const netEl = document.getElementById('npp-net');
-            if (grossEl) grossEl.innerText = '₦' + gross.toLocaleString();
-            if (netEl) netEl.innerText = '₦' + net.toLocaleString();
-            if (previewEl) previewEl.classList.remove('hidden');
-            updateSelectionSummary();
-        }
+        overlay.classList.remove('hidden');
+        // Trap focus inside overlay
+        overlay.focus?.();
+    }
 
-        // ─── Form Submit ──────────────────────────────────────────────
-        document.getElementById('payoutForm').onsubmit = async (e) => {
-            e.preventDefault();
-            const btn = document.getElementById('submitBtn');
-            const isCommissionTab = (currentTab === 'partner' || (currentTab === 'disbursement' && subTab === 'staff_commission'));
+    function handleSuccessNew() {
+        document.getElementById('success-overlay').classList.add('hidden');
+        document.getElementById('payoutForm').reset();
+        // Reset state
+        invoiceData = null; selectedClaims = [];
+        document.getElementById('inv-result')?.classList.add('hidden');
+        document.getElementById('invoice-section')?.classList.add('hidden');
+        // Reset identify button
+        const btnId = document.getElementById('btn-identify');
+        btnId.innerHTML = '<i class="fas fa-id-card"></i> Identify';
+        btnId.style.background = '';
+        setMainTab('company');
+    }
 
-            // ── Commission tabs: use the bulk endpoint ──
-            if (isCommissionTab && invoiceData) {
-                const newPayAmt = parseFloat(document.getElementById('new_payment_amount')?.value || 0) || 0;
-                const claimNew = document.getElementById('claim_on_new_payment')?.checked || false;
-                const totalCount = selectedClaims.length + (claimNew && newPayAmt > 0 ? 1 : 0);
+    /* ══════════════════════════════════════════════════════════════
+       FORM SUBMIT
+    ══════════════════════════════════════════════════════════════ */
+    document.getElementById('payoutForm').onsubmit = async (e) => {
+        e.preventDefault();
+        const btn             = document.getElementById('submitBtn');
+        const isCommissionTab = (currentTab === 'partner' || (currentTab === 'disbursement' && subTab === 'staff_commission'));
 
-                if (totalCount === 0) {
-                    alert('Please select at least one payment to claim, or log a new client payment.');
-                    return;
-                }
+        /* ── Commission tabs: bulk endpoint ── */
+        if (isCommissionTab && invoiceData) {
+            const newPayAmt = parseFloat(document.getElementById('new_payment_amount')?.value || 0) || 0;
+            const claimNew  = document.getElementById('claim_on_new_payment')?.checked || false;
+            const totalCount = selectedClaims.length + (claimNew && newPayAmt > 0 ? 1 : 0);
 
-                btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Submitting...';
-                btn.disabled = true;
-
-                const isDispute = !document.getElementById('rep-conflict').classList.contains('hidden')
-                    && document.getElementById('confirm-dispute').checked;
-
-                // Build multipart FormData so proof files are included with the claims
-                const bulkForm = new FormData();
-                bulkForm.append('type', currentTab === 'disbursement' ? subTab : currentTab);
-                bulkForm.append('payee_name', document.getElementById('payee_name').value);
-                bulkForm.append('payee_email', document.getElementById('payee_email').value);
-                bulkForm.append('payee_phone', document.getElementById('payee_phone').value || '');
-                bulkForm.append('payee_id', document.getElementById('payee_id').value || '');
-                bulkForm.append('payee_tin', document.getElementById('payee_tin').value || '');
-                bulkForm.append('bank_name', document.getElementById('bank_name').value || '');
-                bulkForm.append('acc_number', document.getElementById('acc_number').value || '');
-                bulkForm.append('acc_name', document.getElementById('acc_name').value || '');
-                bulkForm.append('invoice_number', document.getElementById('invoice_number').value);
-                bulkForm.append('invoice_id', document.getElementById('hid_invoice_id').value);
-                bulkForm.append('property_price', invoiceData.property_price || 0);
-                bulkForm.append('is_dispute', isDispute);
-                bulkForm.append('dispute_reason', isDispute ? document.getElementById('dispute_reason').value : '');
-                bulkForm.append('remarks', document.getElementById('remarks').value || '');
-                bulkForm.append('claims_json', JSON.stringify(selectedClaims.map(p => ({
-                    payment_id: p.payment_id,
-                    payment_type: p.payment_type,
-                    amount: p.amount,
-                    commission_base: p.commission_base || (p.payment_type === 'initial_deposit' ? invoiceData.property_price : p.amount),
-                }))));
-                bulkForm.append('new_payment_amount', (newPayAmt > 0) ? newPayAmt : '');
-                bulkForm.append('claim_on_new_payment', claimNew);
-                // Attach proof-of-payment files
-                Array.from(document.getElementById('fileInput').files).forEach(f => bulkForm.append('files', f));
-
-                try {
-                    const res = await fetch('/api/payouts/portal/submit-bulk', {
-                        method: 'POST',
-                        body: bulkForm,
-                    });
-                    const result = await res.json();
-                    if (result.status === 'success') {
-                        alert(`✅ ${result.message}`);
-                        window.location.reload();
-                    } else {
-                        alert(result.detail || 'Submission failed. Please try again.');
-                    }
-                } catch (err) {
-                    alert('Connection error. Please check your internet and try again.');
-                } finally {
-                    btn.innerHTML = 'Submit Record';
-                    btn.disabled = false;
-                }
+            if (totalCount === 0) {
+                alert('Please select at least one payment to claim, or log a new client payment.');
                 return;
             }
 
-            // ── Non-commission tabs: use original single submit endpoint ──
-            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Processing...';
-            btn.disabled = true;
+            btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Submitting…';
+            btn.disabled  = true;
 
             const isDispute = !document.getElementById('rep-conflict').classList.contains('hidden')
                 && document.getElementById('confirm-dispute').checked;
 
-            const formData = new FormData();
-            formData.append('type', currentTab === 'disbursement' ? subTab : currentTab);
-            formData.append('payee_name', document.getElementById('payee_name').value);
-            formData.append('payee_email', document.getElementById('payee_email').value);
-            formData.append('payee_phone', document.getElementById('payee_phone').value || '');
-            formData.append('payee_id', document.getElementById('payee_id').value || '');
-            formData.append('payee_tin', document.getElementById('payee_tin').value || '');
-            formData.append('claim_amount', document.getElementById('claim_amount').value);
-            formData.append('invoice_number', document.getElementById('invoice_number').value || '');
-            formData.append('bank_name', document.getElementById('bank_name').value || '');
-            formData.append('acc_number', document.getElementById('acc_number').value || '');
-            formData.append('acc_name', document.getElementById('acc_name').value || '');
-            formData.append('is_already_paid', document.getElementById('already_paid').checked);
-            formData.append('payment_type', document.getElementById('hid_payment_type').value);
-            formData.append('is_dispute', isDispute);
-            formData.append('dispute_reason', isDispute ? document.getElementById('dispute_reason').value : '');
-
-            const isOffice = (currentTab === 'disbursement' && subTab === 'office');
-            const finalRemarks = isOffice
-                ? document.getElementById('office_expense_type').value
-                : document.getElementById('remarks').value;
-            formData.append('remarks', finalRemarks || '');
-
-            const files = Array.from(document.getElementById('fileInput').files);
-            files.forEach(f => formData.append('files', f));
+            const bulkForm = new FormData();
+            bulkForm.append('type',             currentTab === 'disbursement' ? subTab : currentTab);
+            bulkForm.append('payee_name',        document.getElementById('payee_name').value);
+            bulkForm.append('payee_email',       document.getElementById('payee_email').value);
+            bulkForm.append('payee_phone',       document.getElementById('payee_phone').value    || '');
+            bulkForm.append('payee_id',          document.getElementById('payee_id').value        || '');
+            bulkForm.append('payee_tin',         document.getElementById('payee_tin').value       || '');
+            bulkForm.append('bank_name',         document.getElementById('bank_name').value       || '');
+            bulkForm.append('acc_number',        document.getElementById('acc_number').value      || '');
+            bulkForm.append('acc_name',          document.getElementById('acc_name').value        || '');
+            bulkForm.append('invoice_number',    document.getElementById('invoice_number').value);
+            bulkForm.append('invoice_id',        document.getElementById('hid_invoice_id').value);
+            bulkForm.append('property_price',    invoiceData.property_price || 0);
+            bulkForm.append('is_dispute',        isDispute);
+            bulkForm.append('dispute_reason',    isDispute ? document.getElementById('dispute_reason').value : '');
+            bulkForm.append('remarks',           document.getElementById('remarks').value || '');
+            bulkForm.append('claims_json', JSON.stringify(selectedClaims.map(p => ({
+                payment_id:      p.payment_id,
+                payment_type:    p.payment_type,
+                amount:          p.amount,
+                commission_base: p.commission_base || (p.payment_type === 'initial_deposit' ? invoiceData.property_price : p.amount),
+            }))));
+            bulkForm.append('new_payment_amount', newPayAmt > 0 ? newPayAmt : '');
+            bulkForm.append('claim_on_new_payment', claimNew);
+            Array.from(document.getElementById('fileInput').files).forEach(f => bulkForm.append('files', f));
 
             try {
-                const res = await fetch('/api/payouts/portal/submit', { method: 'POST', body: formData });
+                const res    = await fetch('/api/payouts/portal/submit-bulk', { method:'POST', body:bulkForm });
                 const result = await res.json();
                 if (result.status === 'success') {
-                    alert(result.is_dispute ? '⚠️ Dispute Raised Successfully!' : '✅ Submitted Successfully!');
-                    window.location.reload();
-                } else { alert(result.detail || 'Error'); }
-            } catch (err) { alert('Connection error'); }
-            finally { btn.innerHTML = 'Submit Record'; btn.disabled = false; }
-        };
-
-        function handleFile(input) {
-            const files = input.files;
-            const fileList = document.getElementById('fileList');
-            const fileName = document.getElementById('fileName');
-
-            if (files.length > 0) {
-                fileName.textContent = `${files.length} file(s) selected`;
-                fileList.style.display = 'block';
-                fileList.innerHTML = Array.from(files).map((f, i) =>
-                    `<div style="padding:6px 0; font-size:10px; color:var(--text);">
-                        <i class="fas fa-file"></i> ${f.name} (${(f.size / 1024).toFixed(2)} KB)
-                    </div>`
-                ).join('');
-            } else {
-                fileName.textContent = 'Click to upload Proof(s)';
-                fileList.style.display = 'none';
-                fileList.innerHTML = '';
-            }
-        }
-
-        window.addEventListener('DOMContentLoaded', () => {
-            const token = new URLSearchParams(window.location.search).get('token');
-            if (token) checkInvitation(token); else setMainTab('company');
-        });
-
-        async function checkInvitation(token) {
-            try {
-                const res = await fetch(`/api/payouts/payout/portal/invite/${token}`);
-                const result = await res.json();
-                if (result.email) {
-                    const emailInput = document.getElementById('payee_email');
-                    emailInput.value = result.email; emailInput.readOnly = true;
-                    setMainTab(result.category);
-                    fetchVendorDetails();
+                    showSuccessScreen(result, { isDispute });
+                } else {
+                    alert(result.detail || 'Submission failed. Please try again.');
                 }
-            } catch (e) { setMainTab('company'); }
+            } catch {
+                alert('Connection error. Please check your internet and try again.');
+            } finally {
+                btn.innerHTML = 'Submit Record';
+                btn.disabled  = false;
+            }
+            return;
         }
-    </script>
-</body>
 
+        /* ── Non-commission tabs: single submit endpoint ── */
+        btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Processing…';
+        btn.disabled  = true;
+
+        const isDispute = !document.getElementById('rep-conflict').classList.contains('hidden')
+            && document.getElementById('confirm-dispute').checked;
+
+        const formData = new FormData();
+        formData.append('type',           currentTab === 'disbursement' ? subTab : currentTab);
+        formData.append('payee_name',      document.getElementById('payee_name').value);
+        formData.append('payee_email',     document.getElementById('payee_email').value);
+        formData.append('payee_phone',     document.getElementById('payee_phone').value    || '');
+        formData.append('payee_id',        document.getElementById('payee_id').value        || '');
+        formData.append('payee_tin',       document.getElementById('payee_tin').value       || '');
+        formData.append('claim_amount',    document.getElementById('claim_amount').value);
+        formData.append('invoice_number',  document.getElementById('invoice_number').value  || '');
+        formData.append('bank_name',       document.getElementById('bank_name').value        || '');
+        formData.append('acc_number',      document.getElementById('acc_number').value       || '');
+        formData.append('acc_name',        document.getElementById('acc_name').value         || '');
+        formData.append('is_already_paid', document.getElementById('already_paid').checked);
+        formData.append('payment_type',    document.getElementById('hid_payment_type').value);
+        formData.append('is_dispute',      isDispute);
+        formData.append('dispute_reason',  isDispute ? document.getElementById('dispute_reason').value : '');
+
+        const isOffice     = (currentTab === 'disbursement' && subTab === 'office');
+        const finalRemarks = isOffice
+            ? document.getElementById('office_expense_type').value
+            : document.getElementById('remarks').value;
+        formData.append('remarks', finalRemarks || '');
+
+        Array.from(document.getElementById('fileInput').files).forEach(f => formData.append('files', f));
+
+        try {
+            const res    = await fetch('/api/payouts/portal/submit', { method:'POST', body:formData });
+            const result = await res.json();
+            if (result.status === 'success') {
+                showSuccessScreen(result, { isDispute: result.is_dispute });
+            } else {
+                alert(result.detail || 'Error submitting. Please try again.');
+            }
+        } catch { alert('Connection error.'); }
+        finally  { btn.innerHTML = 'Submit Record'; btn.disabled = false; }
+    };
+
+    /* ══════════════════════════════════════════════════════════════
+       FILE HANDLER
+    ══════════════════════════════════════════════════════════════ */
+    function handleFile(input) {
+        const files    = input.files;
+        const fileList = document.getElementById('fileList');
+        const fileName = document.getElementById('fileName');
+        if (files.length > 0) {
+            fileName.textContent  = `${files.length} file(s) selected`;
+            fileList.style.display = 'block';
+            fileList.innerHTML    = Array.from(files).map(f =>
+                `<div style="padding:6px 0; font-size:10px; color:var(--text);">
+                    <i class="fas fa-file"></i> ${f.name} (${(f.size/1024).toFixed(2)} KB)
+                </div>`
+            ).join('');
+        } else {
+            fileName.textContent  = 'Click to upload Proof(s)';
+            fileList.style.display = 'none';
+            fileList.innerHTML    = '';
+        }
+    }
+
+    /* ══════════════════════════════════════════════════════════════
+       INIT
+    ══════════════════════════════════════════════════════════════ */
+    window.addEventListener('DOMContentLoaded', async () => {
+        await loadGlobalRates();
+        const token = new URLSearchParams(window.location.search).get('token');
+        if (token) checkInvitation(token);
+        else setMainTab('company');
+    });
+
+    async function checkInvitation(token) {
+        try {
+            const res    = await fetch(`/api/payouts/payout/portal/invite/${token}`);
+            const result = await res.json();
+            if (result.email) {
+                const emailInput    = document.getElementById('payee_email');
+                emailInput.value   = result.email;
+                emailInput.readOnly = true;
+                setMainTab(result.category);
+                fetchVendorDetails();
+            }
+        } catch { setMainTab('company'); }
+    }
+</script>
+</body>
 </html>

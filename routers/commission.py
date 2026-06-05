@@ -104,15 +104,67 @@ async def update_rep_commission_config(rep_id: str, payload: SalesRepUpdate, bac
     )
     return res.data[0]
 
+ 
 @router.get("/default-rate")
 async def get_default_rate(current_admin=Depends(verify_token)):
     db = get_db()
-    res = await db_execute(lambda: db.table("system_settings").select("*").in_("key", ["default_commission_rate", "default_wht_rate"]).execute())
-    
+    res = await db_execute(lambda: db.table("system_settings")
+        .select("*")
+        .in_("key", ["default_commission_rate", "default_partner_commission_rate", "default_wht_rate"])
+        .execute()
+    )
     settings = {s["key"]: s["value"] for s in res.data}
     return {
-        "rate": settings.get("default_commission_rate", "5.00"),
-        "wht_rate": settings.get("default_wht_rate", "5.00")
+        "rate":         settings.get("default_commission_rate",         "10.00"),
+        "partner_rate": settings.get("default_partner_commission_rate", "15.00"),
+        "wht_rate":     settings.get("default_wht_rate",               "5.00"),
+    }
+  
+@router.patch("/default-rate")
+async def update_default_rate(payload: DefaultRateUpdate, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+    if current_admin.get("role") not in ["admin", "super_admin", "hr", "operations"] and current_admin.get("primary_role") != "hr":
+        raise HTTPException(status_code=403, detail="Not authorized")
+ 
+    db = get_db()
+    now = datetime.now().isoformat()
+ 
+    # Staff default commission rate
+    await db_execute(lambda: db.table("system_settings").upsert({
+        "key":        "default_commission_rate",
+        "value":      str(payload.rate),
+        "updated_by": current_admin["sub"],
+        "updated_at": now,
+    }, on_conflict="key").execute())
+ 
+    # Partner default commission rate (only update if provided)
+    if payload.partner_rate is not None:
+        await db_execute(lambda: db.table("system_settings").upsert({
+            "key":        "default_partner_commission_rate",
+            "value":      str(payload.partner_rate),
+            "updated_by": current_admin["sub"],
+            "updated_at": now,
+        }, on_conflict="key").execute())
+ 
+    # WHT rate
+    await db_execute(lambda: db.table("system_settings").upsert({
+        "key":        "default_wht_rate",
+        "value":      str(payload.wht_rate),
+        "updated_by": current_admin["sub"],
+        "updated_at": now,
+    }, on_conflict="key").execute())
+ 
+    background_tasks.add_task(
+        log_activity,
+        "commission_default_rate_updated",
+        f"Updated default system rates — Staff: {payload.rate}%, Partner: {payload.partner_rate}%, WHT: {payload.wht_rate}%",
+        performed_by=current_admin["sub"],
+    )
+ 
+    return {
+        "message":      "Default rates updated",
+        "rate":         str(payload.rate),
+        "partner_rate": str(payload.partner_rate) if payload.partner_rate is not None else None,
+        "wht_rate":     str(payload.wht_rate),
     }
 
 @router.patch("/default-rate")
