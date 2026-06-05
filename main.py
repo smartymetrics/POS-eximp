@@ -79,34 +79,38 @@ async def validation_exception_handler(request: Request, exc: RequestValidationE
     """
     Log exactly what failed in the 422 error.
     This helps us see if it's a bad email format or missing field.
+
+    Sanitizes the entire error payload before JSON-serialising it so that
+    non-serialisable values (raw bytes from a multipart body, UploadFile
+    objects, etc.) never crash the error handler itself.
     """
-    print(f"[ERROR] VALIDATION ERROR at {request.url.path}: {exc.errors()}")
-    # Sanitize the body to avoid non-serializable objects (UploadFile etc.)
     def _sanitize(obj):
+        """Recursively make any value safe for json.dumps."""
+        if isinstance(obj, bytes):
+            # Raw request body bytes — show length only, never the content
+            return f"<binary {len(obj)} bytes>"
+        if isinstance(obj, dict):
+            return {k: _sanitize(v) for k, v in obj.items()}
+        if isinstance(obj, (list, tuple)):
+            return [_sanitize(v) for v in obj]
         try:
             json.dumps(obj)
             return obj
         except Exception:
-            # handle common containers
-            if isinstance(obj, dict):
-                return {k: _sanitize(v) for k, v in obj.items()}
-            if isinstance(obj, (list, tuple)):
-                return [_sanitize(v) for v in obj]
             try:
-                # Fall back to a simple repr for unknown types
                 return repr(obj)
             except Exception:
-                return str(type(obj))
+                return str(type(obj).__name__)
 
-    safe_body = None
-    try:
-        safe_body = _sanitize(exc.body)
-    except Exception:
-        safe_body = repr(exc.body)
+    safe_errors = _sanitize(exc.errors())
+    safe_body = _sanitize(exc.body)
+
+    # Log with the sanitized version to avoid flooding logs with binary data
+    print(f"[ERROR] VALIDATION ERROR at {request.url.path}: {safe_errors}")
 
     return JSONResponse(
         status_code=status.HTTP_422_UNPROCESSABLE_ENTITY,
-        content={"detail": exc.errors(), "body": safe_body},
+        content={"detail": safe_errors, "body": safe_body},
     )
 
 @app.exception_handler(HTTPException)
