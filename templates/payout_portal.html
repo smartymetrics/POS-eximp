@@ -337,9 +337,9 @@
     </div>
 
     <!-- Global rate banner -->
-    <div class="rate-banner" id="rate-banner">
+    <!-- <div class="rate-banner" id="rate-banner">
         <span class="rate-loading"><i class="fas fa-circle-notch fa-spin" style="margin-right:6px;"></i>Loading rates…</span>
-    </div>
+    </div> -->
 
     <!-- MAIN TABS -->
     <div class="main-nav">
@@ -632,7 +632,7 @@
 
                 <div class="input-wrapper">
                     <i class="fas fa-tags"></i>
-                    <select id="office_expense_type" class="hidden" style="width:100%;background:rgba(255,255,255,0.03);border:1px solid var(--border);border-radius:10px;color:var(--text);outline:none;font-family:inherit;">
+                    <select id="office_expense_type" class="hidden" style="padding-left:44px;">
                         <option value="" disabled selected>— Select Expense Type —</option>
                         <optgroup label="🏡 Real Estate Operations">
                             <option value="Site Inspection - Transport/Logistics">Site Inspection - Transport/Logistics</option>
@@ -692,7 +692,7 @@
     // Global commission rates (loaded from /api/payouts/portal/global-rates on boot)
     let globalRates = {
         staff_gross_rate:   0.10,
-        partner_gross_rate: 0.10,
+        partner_gross_rate: 0.15,
         wht_rate:           0.05,
     };
     let globalRatesLoaded = false;
@@ -706,14 +706,14 @@
             if (!res.ok) throw new Error('rate endpoint unavailable');
             const data = await res.json();
             globalRates.staff_gross_rate   = parseFloat(data.staff_gross_rate)   || 0.10;
-            globalRates.partner_gross_rate = parseFloat(data.partner_gross_rate) || 0.10;
+            globalRates.partner_gross_rate = parseFloat(data.partner_gross_rate) || 0.15;
             globalRates.wht_rate           = parseFloat(data.wht_rate)           || 0.05;
             globalRatesLoaded = true;
         } catch {
             // silent fallback — defaults are already set above
             globalRatesLoaded = true;
         }
-        renderRateBanner();
+        // renderRateBanner();
     }
 
     function renderRateBanner() {
@@ -754,24 +754,37 @@
     ══════════════════════════════════════════════════════════════ */
     function setMainTab(tab) {
         currentTab = tab;
+
         document.querySelectorAll('.nav-btn').forEach(b => b.classList.remove('active'));
         const idxMap = { company:0, contractor:1, disbursement:2, partner:3 };
         document.querySelectorAll('.nav-btn')[idxMap[tab]].classList.add('active');
 
-        const subNav    = document.getElementById('disbursement-subnav');
-        const invSection = document.getElementById('invoice-section');
-        subNav.classList.add('hidden');
-        invSection.classList.add('hidden');
+        document.getElementById('disbursement-subnav').classList.add('hidden');
+        document.getElementById('invoice-section').classList.add('hidden');
 
-        if (tab === 'disbursement') {
-            subNav.classList.remove('hidden');
+        const submitBtn = document.getElementById('submitBtn');
+        if (submitBtn) { submitBtn.disabled = false; submitBtn.style.opacity = '1'; }
+
+        const labelEl = document.getElementById('amount-label');
+
+        if (tab === 'company' || tab === 'contractor') {
+            document.getElementById('remarks').classList.remove('hidden');
+            document.getElementById('office_expense_type').classList.add('hidden');
+            document.getElementById('office_expense_type').required = false;
+            if (labelEl) labelEl.innerText = 'Claim Amount (NGN)';
+            showAmountField(true);
+        } else if (tab === 'disbursement') {
+            document.getElementById('disbursement-subnav').classList.remove('hidden');
             setSubTab(subTab);
         } else if (tab === 'partner') {
-            invSection.classList.remove('hidden');
-            const labelEl = document.getElementById('amount-label');
+            document.getElementById('invoice-section').classList.remove('hidden');
+            document.getElementById('remarks').classList.remove('hidden');
+            document.getElementById('office_expense_type').classList.add('hidden');
+            document.getElementById('office_expense_type').required = false;
             if (labelEl) labelEl.innerText = 'Commission Summary';
             showAmountField(true);
         }
+
         validateLookupState();
     }
 
@@ -780,23 +793,30 @@
         document.querySelectorAll('.sub-btn').forEach(b => b.classList.remove('active'));
         document.querySelectorAll('.sub-btn')[tab === 'office' ? 0 : 1].classList.add('active');
 
-        const invSection    = document.getElementById('invoice-section');
-        const remarksEl     = document.getElementById('remarks');
+        const invSection     = document.getElementById('invoice-section');
+        const remarksEl      = document.getElementById('remarks');
         const officeSelectEl = document.getElementById('office_expense_type');
+        const labelEl        = document.getElementById('amount-label');
+        const submitBtn      = document.getElementById('submitBtn');
+
         invSection.classList.toggle('hidden', tab !== 'staff_commission');
 
-        if (remarksEl && officeSelectEl) {
-            const isOffice = (currentTab === 'disbursement' && tab === 'office');
-            remarksEl.classList.toggle('hidden', isOffice);
+        const isOffice = (currentTab === 'disbursement' && tab === 'office');
+        if (remarksEl)      { remarksEl.classList.toggle('hidden', isOffice); if (isOffice) remarksEl.value = ''; }
+        if (officeSelectEl) {
             officeSelectEl.classList.toggle('hidden', !isOffice);
-            if (isOffice) remarksEl.value = '';
+            officeSelectEl.required = isOffice;
+            if (!isOffice) officeSelectEl.value = '';
         }
 
-        const labelEl = document.getElementById('amount-label');
         if (labelEl) {
-            const isComm = (currentTab === 'partner' || (currentTab === 'disbursement' && tab === 'staff_commission'));
+            const isComm = (currentTab === 'partner' || tab === 'staff_commission');
             labelEl.innerText = isComm ? 'Commission Summary' : 'Claim Amount (NGN)';
         }
+
+        // Re-enable submit when switching to office (no checkbox requirement)
+        if (isOffice && submitBtn) { submitBtn.disabled = false; submitBtn.style.opacity = '1'; }
+
         showAmountField(true);
     }
 
@@ -851,7 +871,10 @@
         if (!wrap || !readonly) return;
         wrap.classList.toggle('hidden', !editable);
         readonly.classList.toggle('hidden', editable);
-        if (input) input.required = editable;
+        // Only require the field when it's visible and not a commission tab
+        // (commission tabs use selection checkboxes, not manual amount entry)
+        const isCommission = (currentTab === 'partner' || (currentTab === 'disbursement' && subTab === 'staff_commission'));
+        if (input) input.required = editable && !isCommission;
     }
 
     function updateReadonlyAmountDisplay(d) {
@@ -1065,7 +1088,14 @@
         const amt     = parseFloat(document.getElementById('new_payment_amount')?.value || 0) || 0;
         const preview = document.getElementById('new-payment-preview');
         if (!amt || amt <= 0) { preview?.classList.add('hidden'); updateSelectionSummary(); return; }
-        const { gross: commRate, net: netRate } = resolveRates(invoiceData);
+
+        // New payment preview always uses current global rates (not the stale rate
+        // stored on the invoice record, which may predate the latest settings change).
+        const isPartner = currentTab === 'partner';
+        const commRate  = isPartner ? globalRates.partner_gross_rate : globalRates.staff_gross_rate;
+        const whtRate   = globalRates.wht_rate;
+        const netRate   = commRate * (1 - whtRate);
+
         const gross = Math.round(amt * commRate);
         const net   = Math.round(amt * netRate);
         document.getElementById('npp-gross').innerText = '₦' + gross.toLocaleString();
@@ -1166,8 +1196,10 @@
             btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Submitting…';
             btn.disabled  = true;
 
-            const isDispute = !document.getElementById('rep-conflict').classList.contains('hidden')
-                && document.getElementById('confirm-dispute').checked;
+            const conflictEl2   = document.getElementById('rep-conflict');
+            const disputeCheck2 = document.getElementById('confirm-dispute');
+            const isDispute = conflictEl2 && !conflictEl2.classList.contains('hidden')
+                && disputeCheck2 && disputeCheck2.checked;
 
             const bulkForm = new FormData();
             bulkForm.append('type',             currentTab === 'disbursement' ? subTab : currentTab);
@@ -1216,8 +1248,23 @@
         btn.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Processing…';
         btn.disabled  = true;
 
-        const isDispute = !document.getElementById('rep-conflict').classList.contains('hidden')
-            && document.getElementById('confirm-dispute').checked;
+        // Office disbursement: validate expense type selected
+        const isOffice = (currentTab === 'disbursement' && subTab === 'office');
+        if (isOffice) {
+            const expType = document.getElementById('office_expense_type').value;
+            if (!expType) {
+                alert('Please select an expense type.');
+                btn.innerHTML = 'Submit Record';
+                btn.disabled  = false;
+                return;
+            }
+        }
+
+        // rep-conflict section only exists when invoice section is visible — guard it
+        const conflictEl  = document.getElementById('rep-conflict');
+        const disputeCheck = document.getElementById('confirm-dispute');
+        const isDisputeNow = conflictEl && !conflictEl.classList.contains('hidden')
+            && disputeCheck && disputeCheck.checked;
 
         const formData = new FormData();
         formData.append('type',           currentTab === 'disbursement' ? subTab : currentTab);
@@ -1233,10 +1280,9 @@
         formData.append('acc_name',        document.getElementById('acc_name').value         || '');
         formData.append('is_already_paid', document.getElementById('already_paid').checked);
         formData.append('payment_type',    document.getElementById('hid_payment_type').value);
-        formData.append('is_dispute',      isDispute);
-        formData.append('dispute_reason',  isDispute ? document.getElementById('dispute_reason').value : '');
+        formData.append('is_dispute',      isDisputeNow);
+        formData.append('dispute_reason',  isDisputeNow ? document.getElementById('dispute_reason').value : '');
 
-        const isOffice     = (currentTab === 'disbursement' && subTab === 'office');
         const finalRemarks = isOffice
             ? document.getElementById('office_expense_type').value
             : document.getElementById('remarks').value;

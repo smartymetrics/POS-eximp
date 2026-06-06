@@ -1,0 +1,590 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>Portal Submission Test Harness</title>
+<link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.5.1/css/all.min.css">
+<style>
+  :root {
+    --bg: #08080A;
+    --card: #111114;
+    --border: rgba(255,255,255,0.07);
+    --gold: #C47D0A;
+    --gold-dim: rgba(196,125,10,0.12);
+    --green: #10B981;
+    --red: #EF4444;
+    --blue: #60A5FA;
+    --muted: #64748B;
+    --text: #F1F5F9;
+    --mono: 'Courier New', monospace;
+  }
+  * { margin:0; padding:0; box-sizing:border-box; }
+  body { background:var(--bg); color:var(--text); font-family:'Segoe UI',system-ui,sans-serif; min-height:100vh; padding:24px; }
+
+  h1 { font-size:18px; font-weight:700; margin-bottom:4px; }
+  .subtitle { font-size:12px; color:var(--muted); margin-bottom:24px; }
+
+  .config-bar {
+    display:flex; gap:12px; align-items:flex-end; flex-wrap:wrap;
+    background:var(--card); border:1px solid var(--border); border-radius:14px;
+    padding:16px 20px; margin-bottom:20px;
+  }
+  .config-group { display:flex; flex-direction:column; gap:5px; }
+  .config-group label { font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+  .config-group input {
+    background:rgba(255,255,255,0.04); border:1px solid var(--border);
+    border-radius:8px; padding:8px 12px; color:var(--text); font-size:13px;
+    font-family:inherit; outline:none; min-width:220px;
+  }
+  .config-group input:focus { border-color:var(--gold); }
+
+  .run-all-btn {
+    padding:10px 22px; background:var(--gold); color:#000; border:none;
+    border-radius:10px; font-weight:800; font-size:12px; text-transform:uppercase;
+    letter-spacing:.06em; cursor:pointer; transition:.2s; white-space:nowrap;
+    margin-left:auto;
+  }
+  .run-all-btn:hover { filter:brightness(1.1); }
+  .run-all-btn:disabled { opacity:.4; cursor:not-allowed; }
+
+  .grid { display:grid; grid-template-columns:1fr 1fr; gap:14px; }
+  @media(max-width:900px) { .grid { grid-template-columns:1fr; } }
+
+  .test-card {
+    background:var(--card); border:1px solid var(--border); border-radius:16px;
+    overflow:hidden; transition:border-color .3s;
+  }
+  .test-card.running { border-color:rgba(96,165,250,0.4); }
+  .test-card.pass    { border-color:rgba(16,185,129,0.4); }
+  .test-card.fail    { border-color:rgba(239,68,68,0.4); }
+  .test-card.warn    { border-color:rgba(234,179,8,0.4); }
+
+  .card-header {
+    display:flex; align-items:center; justify-content:space-between;
+    padding:14px 18px; border-bottom:1px solid var(--border);
+    cursor:pointer; user-select:none;
+  }
+  .card-header-left { display:flex; align-items:center; gap:10px; }
+  .card-icon { width:32px; height:32px; border-radius:8px; display:flex; align-items:center; justify-content:center; font-size:14px; }
+  .card-title { font-size:13px; font-weight:700; }
+  .card-sub   { font-size:10px; color:var(--muted); margin-top:2px; }
+  .card-status { font-size:11px; font-weight:700; padding:4px 10px; border-radius:20px; white-space:nowrap; }
+
+  .status-idle    { background:rgba(255,255,255,0.05); color:var(--muted); }
+  .status-running { background:rgba(96,165,250,0.12); color:var(--blue); }
+  .status-pass    { background:rgba(16,185,129,0.12); color:var(--green); }
+  .status-fail    { background:rgba(239,68,68,0.12); color:var(--red); }
+  .status-warn    { background:rgba(234,179,8,0.12); color:#EAB308; }
+
+  .card-body { padding:16px 18px; }
+
+  .phase { margin-bottom:12px; }
+  .phase-label {
+    font-size:10px; font-weight:700; color:var(--muted); text-transform:uppercase;
+    letter-spacing:.07em; margin-bottom:6px; display:flex; align-items:center; gap:6px;
+  }
+  .phase-label i { font-size:9px; }
+
+  .log-line {
+    font-family:var(--mono); font-size:11px; padding:4px 10px;
+    border-radius:6px; margin-bottom:3px; line-height:1.5; word-break:break-all;
+  }
+  .log-ok   { background:rgba(16,185,129,0.07);  color:#6EE7B7; }
+  .log-err  { background:rgba(239,68,68,0.07);   color:#FCA5A5; }
+  .log-warn { background:rgba(234,179,8,0.07);   color:#FDE68A; }
+  .log-info { background:rgba(255,255,255,0.03); color:var(--muted); }
+  .log-send { background:rgba(196,125,10,0.07);  color:#FCD34D; }
+
+  .run-btn {
+    width:100%; margin-top:12px; padding:10px; background:rgba(196,125,10,0.08);
+    border:1px solid rgba(196,125,10,0.2); border-radius:10px; color:var(--gold);
+    font-family:inherit; font-size:12px; font-weight:700; text-transform:uppercase;
+    letter-spacing:.06em; cursor:pointer; transition:.2s;
+  }
+  .run-btn:hover { background:rgba(196,125,10,0.14); }
+  .run-btn:disabled { opacity:.4; cursor:not-allowed; }
+
+  .summary-bar {
+    margin-top:20px; padding:16px 20px;
+    background:var(--card); border:1px solid var(--border); border-radius:14px;
+    display:flex; gap:20px; align-items:center; flex-wrap:wrap;
+  }
+  .summary-stat { display:flex; flex-direction:column; gap:2px; }
+  .summary-stat span:first-child { font-size:22px; font-weight:800; }
+  .summary-stat span:last-child  { font-size:10px; color:var(--muted); text-transform:uppercase; letter-spacing:.06em; }
+  .s-pass { color:var(--green); }
+  .s-fail { color:var(--red); }
+  .s-warn { color:#EAB308; }
+  .s-total{ color:var(--text); }
+
+  .payload-toggle { font-size:10px; color:var(--muted); cursor:pointer; text-decoration:underline; margin-top:6px; display:inline-block; }
+  .payload-box {
+    display:none; margin-top:8px; padding:10px; background:rgba(0,0,0,0.3);
+    border-radius:8px; font-family:var(--mono); font-size:10px; color:#94A3B8;
+    white-space:pre-wrap; word-break:break-all; max-height:200px; overflow-y:auto;
+  }
+</style>
+</head>
+<body>
+
+<h1><i class="fas fa-flask" style="color:var(--gold);margin-right:8px;"></i>Portal Submission Test Harness</h1>
+<p class="subtitle">Runs all 5 submission paths against your live API. No manual form filling needed.</p>
+
+<div class="config-bar">
+  <div class="config-group">
+    <label>Base URL</label>
+    <input id="cfg-base" value="" placeholder="https://your-api.railway.app">
+  </div>
+  <div class="config-group">
+    <label>Test Email (known staff in DB)</label>
+    <input id="cfg-email" value="" placeholder="staff@eximps.com">
+  </div>
+  <div class="config-group">
+    <label>Invoice Number (existing)</label>
+    <input id="cfg-invoice" value="" placeholder="EC-001234">
+  </div>
+  <button class="run-all-btn" onclick="runAll()">
+    <i class="fas fa-play" style="margin-right:6px;"></i>Run All Tests
+  </button>
+</div>
+
+<div class="grid" id="test-grid"></div>
+
+<div class="summary-bar" id="summary-bar" style="display:none;">
+  <div class="summary-stat"><span id="s-total" class="s-total">0</span><span>Total</span></div>
+  <div class="summary-stat"><span id="s-pass"  class="s-pass">0</span><span>Passed</span></div>
+  <div class="summary-stat"><span id="s-warn"  class="s-warn">0</span><span>Warnings</span></div>
+  <div class="summary-stat"><span id="s-fail"  class="s-fail">0</span><span>Failed</span></div>
+  <div style="margin-left:auto; font-size:12px; color:var(--muted);" id="summary-note"></div>
+</div>
+
+<script>
+/* ═══════════════════════════════════════════════════════
+   TEST DEFINITIONS
+═══════════════════════════════════════════════════════ */
+const TESTS = [
+  {
+    id: 'global-rates',
+    icon: 'fa-globe', iconBg: 'rgba(99,102,241,0.15)', iconColor: '#818CF8',
+    title: 'Global Rates Endpoint',
+    sub: 'GET /portal/global-rates — public, no auth',
+    run: async (cfg, log) => {
+      log('info', `GET ${cfg.base}/api/payouts/portal/global-rates`);
+      const res  = await fetch(`${cfg.base}/api/payouts/portal/global-rates`);
+      const data = await res.json();
+      log('send', `Response: ${JSON.stringify(data)}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${data.detail || JSON.stringify(data)}`);
+      const keys = ['staff_gross_rate','partner_gross_rate','wht_rate'];
+      keys.forEach(k => {
+        const v = data[k];
+        if (v === undefined) throw new Error(`Missing field: ${k}`);
+        log('ok', `${k} = ${(parseFloat(v)*100).toFixed(1)}%`);
+      });
+      return { status:'pass' };
+    }
+  },
+  {
+    id: 'fetch-vendor',
+    icon: 'fa-id-card', iconBg: 'rgba(16,185,129,0.12)', iconColor: '#10B981',
+    title: 'Fetch Vendor (Identify)',
+    sub: 'GET /portal/fetch-vendor — email lookup',
+    run: async (cfg, log) => {
+      const url = `${cfg.base}/api/payouts/portal/fetch-vendor?email=${encodeURIComponent(cfg.email)}`;
+      log('info', `GET ${url}`);
+      const res  = await fetch(url);
+      const data = await res.json();
+      log('send', `Status: ${data.status}, Name: ${data.data?.name || '(new vendor)'}`);
+      if (!res.ok) throw new Error(`HTTP ${res.status}: ${data.detail || JSON.stringify(data)}`);
+      if (data.status === 'success') {
+        log('ok', `Known vendor found: ${data.data.name}`);
+        if (data.data.bank_name) log('ok', `Bank pre-filled: ${data.data.bank_name}`);
+        else log('warn', 'No bank details on file — user must fill manually');
+      } else {
+        log('warn', 'Email not found — portal will create new vendor on submit (expected for new users)');
+      }
+      return { status: data.status === 'success' ? 'pass' : 'warn' };
+    }
+  },
+  {
+    id: 'lookup-invoice',
+    icon: 'fa-file-invoice-dollar', iconBg: 'rgba(196,125,10,0.12)', iconColor: '#C47D0A',
+    title: 'Invoice Lookup',
+    sub: 'GET /portal/lookup-invoice — validates invoice + claimant',
+    run: async (cfg, log) => {
+      if (!cfg.invoice) { log('warn', 'No invoice number configured — skipping'); return { status:'warn' }; }
+      const url = `${cfg.base}/api/payouts/portal/lookup-invoice?invoice_number=${encodeURIComponent(cfg.invoice)}&claimant_email=${encodeURIComponent(cfg.email)}`;
+      log('info', `GET ${url}`);
+      const res  = await fetch(url);
+      const data = await res.json();
+      log('send', `Status: ${data.status}`);
+      if (!res.ok && res.status !== 200) throw new Error(`HTTP ${res.status}: ${data.detail || JSON.stringify(data)}`);
+      if (data.status === 'success') {
+        log('ok', `Invoice found: ${data.property_name}`);
+        log('ok', `Price: ₦${(data.property_price||0).toLocaleString()}, Paid: ₦${(data.amount_paid||0).toLocaleString()}`);
+        log('ok', `Rep status: ${data.rep_status}`);
+        const payments = data.previous_payments || [];
+        log('ok', `${payments.length} payment record(s) found`);
+        const unclaimed = payments.filter(p => p.commission_status === 'unclaimed');
+        if (unclaimed.length) log('ok', `${unclaimed.length} unclaimed payment(s) available to select`);
+        else log('warn', 'No unclaimed payments — staff would need to log new payment');
+      } else {
+        log('warn', `Lookup returned: ${data.detail || data.message || JSON.stringify(data)}`);
+        return { status:'warn' };
+      }
+      return { status:'pass' };
+    }
+  },
+  {
+    id: 'submit-company',
+    icon: 'fa-building', iconBg: 'rgba(96,165,250,0.12)', iconColor: '#60A5FA',
+    title: 'Company Claim Submit',
+    sub: 'POST /portal/submit — type=company',
+    run: async (cfg, log) => {
+      const fd = new FormData();
+      fd.append('type',           'company');
+      fd.append('payee_name',     'Test Company Ltd');
+      fd.append('payee_email',    cfg.email);
+      fd.append('payee_phone',    '08012345678');
+      fd.append('payee_id',       'RC-TEST-001');
+      fd.append('payee_tin',      '12345678-0001');
+      fd.append('claim_amount',   '150000');
+      fd.append('bank_name',      'Zenith Bank');
+      fd.append('acc_number',     '2012345678');
+      fd.append('acc_name',       'Test Company Ltd');
+      fd.append('remarks',        '[TEST] Company claim - automated harness');
+      fd.append('is_already_paid','false');
+      fd.append('payment_type',   '');
+      fd.append('is_dispute',     'false');
+      fd.append('dispute_reason', '');
+
+      log('send', 'POST /api/payouts/portal/submit');
+      log('info', 'type=company, amount=₦150,000');
+      return await doSubmit(cfg, fd, log, '/api/payouts/portal/submit');
+    }
+  },
+  {
+    id: 'submit-contractor',
+    icon: 'fa-user-tie', iconBg: 'rgba(167,139,250,0.12)', iconColor: '#A78BFA',
+    title: 'Contractor Claim Submit',
+    sub: 'POST /portal/submit — type=contractor',
+    run: async (cfg, log) => {
+      const fd = new FormData();
+      fd.append('type',           'contractor');
+      fd.append('payee_name',     'Chukwuemeka Eze');
+      fd.append('payee_email',    cfg.email);
+      fd.append('payee_phone',    '07011223344');
+      fd.append('payee_id',       'NIN-TEST-9999');
+      fd.append('payee_tin',      '98765432-0002');
+      fd.append('claim_amount',   '85000');
+      fd.append('bank_name',      'Access Bank');
+      fd.append('acc_number',     '0123456789');
+      fd.append('acc_name',       'Chukwuemeka Eze');
+      fd.append('remarks',        '[TEST] Contractor claim - automated harness');
+      fd.append('is_already_paid','false');
+      fd.append('payment_type',   '');
+      fd.append('is_dispute',     'false');
+      fd.append('dispute_reason', '');
+
+      log('send', 'POST /api/payouts/portal/submit');
+      log('info', 'type=contractor, amount=₦85,000');
+      return await doSubmit(cfg, fd, log, '/api/payouts/portal/submit');
+    }
+  },
+  {
+    id: 'submit-office',
+    icon: 'fa-receipt', iconBg: 'rgba(251,146,60,0.12)', iconColor: '#FB923C',
+    title: 'Office Disbursement Submit',
+    sub: 'POST /portal/submit — type=office',
+    run: async (cfg, log) => {
+      const fd = new FormData();
+      fd.append('type',           'office');
+      fd.append('payee_name',     'Amaka Obi');
+      fd.append('payee_email',    cfg.email);
+      fd.append('payee_phone',    '09055667788');
+      fd.append('payee_id',       '');
+      fd.append('payee_tin',      '');
+      fd.append('claim_amount',   '32000');
+      fd.append('bank_name',      'GTBank');
+      fd.append('acc_number',     '0234567891');
+      fd.append('acc_name',       'Amaka Obi');
+      fd.append('remarks',        'Fuel - Generator');   // expense type goes here
+      fd.append('is_already_paid','false');
+      fd.append('payment_type',   '');
+      fd.append('is_dispute',     'false');
+      fd.append('dispute_reason', '');
+
+      log('send', 'POST /api/payouts/portal/submit');
+      log('info', 'type=office, expense=Fuel-Generator, amount=₦32,000');
+      return await doSubmit(cfg, fd, log, '/api/payouts/portal/submit');
+    }
+  },
+  {
+    id: 'submit-staff-commission',
+    icon: 'fa-users', iconBg: 'rgba(16,185,129,0.12)', iconColor: '#10B981',
+    title: 'Staff Commission Submit',
+    sub: 'POST /portal/submit-bulk — type=staff_commission',
+    run: async (cfg, log) => {
+      if (!cfg.invoice) { log('warn', 'No invoice configured — using dummy (expect DB rejection)'); }
+      const fd = new FormData();
+      fd.append('type',              'staff_commission');
+      fd.append('payee_name',        'Ifeoma Nwosu');
+      fd.append('payee_email',       cfg.email);
+      fd.append('payee_phone',       '08133445566');
+      fd.append('payee_id',          '');
+      fd.append('payee_tin',         '');
+      fd.append('bank_name',         'First Bank');
+      fd.append('acc_number',        '3012398765');
+      fd.append('acc_name',          'Ifeoma Nwosu');
+      fd.append('invoice_number',    cfg.invoice || 'EC-TEST-999');
+      fd.append('invoice_id',        '');
+      fd.append('property_price',    '5000000');
+      fd.append('is_dispute',        'false');
+      fd.append('dispute_reason',    '');
+      fd.append('remarks',           '[TEST] Staff commission - automated harness');
+      fd.append('claims_json', JSON.stringify([{
+        payment_id:      'test-payment-id-001',
+        payment_type:    'instalment',
+        amount:          500000,
+        commission_base: 500000,
+      }]));
+      fd.append('new_payment_amount',    '');
+      fd.append('claim_on_new_payment',  'false');
+
+      log('send', 'POST /api/payouts/portal/submit-bulk');
+      log('info', `type=staff_commission, invoice=${cfg.invoice||'EC-TEST-999'}`);
+      return await doSubmit(cfg, fd, log, '/api/payouts/portal/submit-bulk');
+    }
+  },
+  {
+    id: 'submit-partner',
+    icon: 'fa-handshake', iconBg: 'rgba(196,125,10,0.12)', iconColor: '#C47D0A',
+    title: 'Partner Commission Submit',
+    sub: 'POST /portal/submit-bulk — type=partner',
+    run: async (cfg, log) => {
+      if (!cfg.invoice) { log('warn', 'No invoice configured — using dummy (expect DB rejection)'); }
+      const fd = new FormData();
+      fd.append('type',              'partner');
+      fd.append('payee_name',        'Balogun Properties Ltd');
+      fd.append('payee_email',       cfg.email);
+      fd.append('payee_phone',       '08099887766');
+      fd.append('payee_id',          'RC-PARTNER-002');
+      fd.append('payee_tin',         '11223344-0003');
+      fd.append('bank_name',         'UBA');
+      fd.append('acc_number',        '1023456789');
+      fd.append('acc_name',          'Balogun Properties Ltd');
+      fd.append('invoice_number',    cfg.invoice || 'EC-TEST-999');
+      fd.append('invoice_id',        '');
+      fd.append('property_price',    '8000000');
+      fd.append('is_dispute',        'false');
+      fd.append('dispute_reason',    '');
+      fd.append('remarks',           '[TEST] Partner commission - automated harness');
+      fd.append('claims_json', JSON.stringify([{
+        payment_id:      'test-payment-id-002',
+        payment_type:    'initial_deposit',
+        amount:          2000000,
+        commission_base: 8000000,
+      }]));
+      fd.append('new_payment_amount',    '');
+      fd.append('claim_on_new_payment',  'false');
+
+      log('send', 'POST /api/payouts/portal/submit-bulk');
+      log('info', `type=partner, invoice=${cfg.invoice||'EC-TEST-999'}`);
+      return await doSubmit(cfg, fd, log, '/api/payouts/portal/submit-bulk');
+    }
+  },
+];
+
+/* ═══════════════════════════════════════════════════════
+   SHARED SUBMIT HELPER
+═══════════════════════════════════════════════════════ */
+async function doSubmit(cfg, fd, log, path) {
+  const res  = await fetch(`${cfg.base}${path}`, { method:'POST', body:fd });
+  const data = await res.json();
+  log('send', `HTTP ${res.status} → ${JSON.stringify(data).slice(0,300)}`);
+
+  if (res.ok && data.status === 'success') {
+    const ref = data.reference || data.payout_id || data.id || '—';
+    log('ok', `✓ Accepted — ref: ${ref}`);
+    if (data.is_high_risk) log('warn', `Flagged as high-risk: ${data.risk_notes?.[0] || ''}`);
+    return { status: data.is_high_risk ? 'warn' : 'pass', payload: Object.fromEntries(fd) };
+  }
+
+  // Decode meaningful DB/validation errors
+  const detail = data.detail || data.message || JSON.stringify(data);
+
+  // DB constraint errors — decode them clearly
+  if (detail.includes('null value in column')) {
+    const col = detail.match(/column "([^"]+)"/)?.[1] || '?';
+    log('err', `DB rejected: required column "${col}" was null — field missing from FormData`);
+    return { status:'fail', payload: Object.fromEntries(fd) };
+  }
+  if (detail.includes('foreign key')) {
+    log('err', `DB rejected: foreign key violation — linked record does not exist (invoice_id, vendor_id, etc.)`);
+    return { status:'fail', payload: Object.fromEntries(fd) };
+  }
+  if (detail.includes('unique')) {
+    log('warn', `DB: duplicate record — this exact claim already exists (not a bug, just a repeat run)`);
+    return { status:'warn', payload: Object.fromEntries(fd) };
+  }
+  if (res.status === 422) {
+    log('err', `Validation error (422): ${detail}`);
+    return { status:'fail', payload: Object.fromEntries(fd) };
+  }
+
+  log('err', `Rejected: ${detail}`);
+  return { status:'fail', payload: Object.fromEntries(fd) };
+}
+
+/* ═══════════════════════════════════════════════════════
+   RENDER
+═══════════════════════════════════════════════════════ */
+function buildCards() {
+  const grid = document.getElementById('test-grid');
+  grid.innerHTML = '';
+  TESTS.forEach(t => {
+    grid.innerHTML += `
+      <div class="test-card" id="card-${t.id}">
+        <div class="card-header" onclick="toggleBody('${t.id}')">
+          <div class="card-header-left">
+            <div class="card-icon" style="background:${t.iconBg};color:${t.iconColor};">
+              <i class="fas ${t.icon}"></i>
+            </div>
+            <div>
+              <div class="card-title">${t.title}</div>
+              <div class="card-sub">${t.sub}</div>
+            </div>
+          </div>
+          <span class="card-status status-idle" id="status-${t.id}">Idle</span>
+        </div>
+        <div class="card-body" id="body-${t.id}">
+          <div id="log-${t.id}">
+            <div class="log-line log-info">Waiting to run…</div>
+          </div>
+          <button class="run-btn" id="btn-${t.id}" onclick="runTest('${t.id}')">
+            <i class="fas fa-play" style="margin-right:6px;"></i>Run This Test
+          </button>
+        </div>
+      </div>`;
+  });
+}
+
+function toggleBody(id) {
+  const b = document.getElementById(`body-${id}`);
+  b.style.display = b.style.display === 'none' ? '' : 'none';
+}
+
+function getConfig() {
+  return {
+    base:    document.getElementById('cfg-base').value.replace(/\/$/, ''),
+    email:   document.getElementById('cfg-email').value.trim(),
+    invoice: document.getElementById('cfg-invoice').value.trim(),
+  };
+}
+
+function makeLogger(id) {
+  const container = document.getElementById(`log-${id}`);
+  container.innerHTML = '';
+  return (type, msg) => {
+    const div = document.createElement('div');
+    div.className = `log-line log-${type}`;
+    const icons = { ok:'✓', err:'✗', warn:'⚠', info:'·', send:'→' };
+    div.textContent = `${icons[type]||'·'} ${msg}`;
+    container.appendChild(div);
+    container.scrollTop = container.scrollHeight;
+  };
+}
+
+function setCardState(id, state) {
+  const card   = document.getElementById(`card-${id}`);
+  const status = document.getElementById(`status-${id}`);
+  const btn    = document.getElementById(`btn-${id}`);
+  card.className   = `test-card ${state}`;
+  status.className = `card-status status-${state}`;
+  const labels = { idle:'Idle', running:'Running…', pass:'✓ Pass', fail:'✗ Fail', warn:'⚠ Warning' };
+  status.textContent = labels[state] || state;
+  if (btn) btn.disabled = (state === 'running');
+}
+
+async function runTest(id) {
+  const cfg  = getConfig();
+  const test = TESTS.find(t => t.id === id);
+  if (!test) return;
+  if (!cfg.base) { alert('Please enter your Base URL first'); return; }
+  if (!cfg.email && id !== 'global-rates') { alert('Please enter a test email'); return; }
+
+  setCardState(id, 'running');
+  const log = makeLogger(id);
+  try {
+    const result = await test.run(cfg, log);
+    setCardState(id, result.status);
+    if (result.payload) {
+      const logEl = document.getElementById(`log-${id}`);
+      const toggle = document.createElement('span');
+      toggle.className = 'payload-toggle';
+      toggle.textContent = 'Show sent payload ▾';
+      const box = document.createElement('div');
+      box.className = 'payload-box';
+      box.textContent = JSON.stringify(result.payload, null, 2);
+      toggle.onclick = () => {
+        const open = box.style.display === 'block';
+        box.style.display = open ? 'none' : 'block';
+        toggle.textContent = open ? 'Show sent payload ▾' : 'Hide payload ▴';
+      };
+      logEl.appendChild(toggle);
+      logEl.appendChild(box);
+    }
+  } catch(err) {
+    const log2 = makeLogger(id);
+    log2('err', `Unexpected error: ${err.message}`);
+    if (err.message.includes('Failed to fetch') || err.message.includes('NetworkError')) {
+      log2('warn', 'Cannot reach the server — check Base URL or CORS settings');
+    }
+    setCardState(id, 'fail');
+  }
+  updateSummary();
+}
+
+async function runAll() {
+  const cfg = getConfig();
+  if (!cfg.base)  { alert('Please enter your Base URL'); return; }
+  if (!cfg.email) { alert('Please enter a test email'); return; }
+
+  document.querySelector('.run-all-btn').disabled = true;
+  for (const t of TESTS) {
+    await runTest(t.id);
+    await new Promise(r => setTimeout(r, 300)); // slight stagger
+  }
+  document.querySelector('.run-all-btn').disabled = false;
+  updateSummary();
+}
+
+function updateSummary() {
+  let pass=0, fail=0, warn=0, total=0;
+  TESTS.forEach(t => {
+    const s = document.getElementById(`status-${t.id}`)?.textContent || '';
+    if (s.includes('Pass'))    { pass++;  total++; }
+    if (s.includes('Fail'))    { fail++;  total++; }
+    if (s.includes('Warning')) { warn++;  total++; }
+  });
+  if (total === 0) return;
+  document.getElementById('summary-bar').style.display = 'flex';
+  document.getElementById('s-total').textContent = total;
+  document.getElementById('s-pass').textContent  = pass;
+  document.getElementById('s-fail').textContent  = fail;
+  document.getElementById('s-warn').textContent  = warn;
+
+  let note = '';
+  if (fail === 0 && warn === 0) note = '🎉 All paths clean — safe to deploy';
+  else if (fail === 0) note = '⚠ Warnings only — review before going live';
+  else note = `✗ ${fail} path(s) rejected by DB — fix before going live`;
+  document.getElementById('summary-note').textContent = note;
+}
+
+/* ═══════════════════════════════════════════════════════
+   INIT
+═══════════════════════════════════════════════════════ */
+buildCards();
+</script>
+</body>
+</html>
