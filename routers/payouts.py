@@ -234,21 +234,41 @@ async def record_payout_payment(request_id: str, data: PayoutPaymentData, bg_tas
                 .execute())
             
             if ce_res.data:
+                # Match the specific earning to this vendor/rep — prevent cross-crediting
+                # when multiple reps have commission on the same invoice
+                vendor_res = await db_execute(lambda: db.table("vendors")
+                    .select("id")
+                    .eq("email", req["vendors"]["email"] if req.get("vendors") else "")
+                    .execute()
+                )
+                vendor_id  = (vendor_res.data or [{}])[0].get("id") if vendor_res.data else None
+                rep_res    = await db_execute(lambda: db.table("sales_reps")
+                    .select("id")
+                    .eq("email", req["vendors"]["email"] if req.get("vendors") else "")
+                    .execute()
+                )
+                rep_id = (rep_res.data or [{}])[0].get("id") if rep_res.data else None
+
                 for ce in ce_res.data:
+                    # Skip earnings not belonging to this specific payee
+                    if vendor_id and ce.get("vendor_id") and ce["vendor_id"] != vendor_id:
+                        continue
+                    if rep_id and ce.get("sales_rep_id") and ce["sales_rep_id"] != rep_id:
+                        continue
+
                     net = float(ce.get("net_commission") or ce.get("final_amount") or 0)
                     already_paid = float(ce.get("amount_paid") or 0)
                     new_ce_paid = already_paid + amount_to_pay
-                    
+
                     ce_update = {
                         "amount_paid": round(new_ce_paid, 2),
                         "payout_reference": data.reference,
                     }
-                    # If new_paid >= net (within float fuzziness), mark as fully paid
                     if new_ce_paid >= net - 0.05:
                         ce_update["is_paid"] = True
                         ce_update["paid_at"] = datetime.now(timezone.utc).isoformat()
                         ce_update["paid_by"] = current_admin['sub']
-                    
+
                     await db_execute(lambda: db.table("commission_earnings").update(ce_update).eq("id", ce["id"]).execute())
         except Exception as ce_sync_err:
             print(f"[WARN] Failed to sync commission ledger for request {request_id}: {ce_sync_err}")
@@ -318,8 +338,7 @@ async def verify_bill_request(
                     # If parsing fails, use commission_base or fall back to amount_gross
                     client_payment_amount = float(req.get("commission_base", req["amount_gross"]))
                 
-                new_paid = float(invoice.get("amount_paid", 0)) + client_payment_amount
-                await db_execute(lambda: db.table("invoices").update({"amount_paid": new_paid, "status": "paid" if new_paid >= float(invoice["amount"]) else "partial"}).eq("id", inv_id).execute())
+                # Invoice balance updated below after payment insert (prevents double-count)
 
                 # 2. Assign Rep if missing
                 if not invoice.get("sales_rep_id"):
@@ -329,35 +348,47 @@ async def verify_bill_request(
                         if rep_res.data:
                             await db_execute(lambda: db.table("invoices").update({"sales_rep_id": rep_res.data[0]["id"]}).eq("id", inv_id).execute())
 
-                # 3. Log CRM Payment (only for commission claims)
-                # BUG FIX #5: Check if payment already exists before inserting to prevent duplicates
-                # This can happen if bulk_submit already created the payment and then Finance clicks Verify.
+                # 3. Log CRM Payment
+                # Check if a verified payment for this exact claim already exists
                 existing_pmt = await db_execute(lambda: db.table("payments")
                     .select("id")
                     .eq("invoice_id", inv_id)
-                    .eq("amount", client_payment_amount)
-                    .ilike("reference", f"CLAIM-%")
+                    .eq("reference", f"VERIFIED-{req['id'][:8]}")
                     .execute()
                 )
-                
+
                 if not existing_pmt.data:
                     payment_payload = {
                         "client_id": invoice["client_id"],
                         "invoice_id": inv_id,
                         "amount": client_payment_amount,
-                        "payment_method": "portal_reported",
-                        "reference": f"CLAIM-{req['id'][:8]}",
+                        "payment_method": "bank_transfer",  # verified real payment — show on receipt
+                        "payment_type": "payment",           # required so commission sync sees it as active
+                        "reference": f"VERIFIED-{req['id'][:8]}",
                         "payment_date": datetime.now(timezone.utc).isoformat(),
+                        "is_voided": False,
                     }
                     await db_execute(lambda: db.table("payments").insert(payment_payload).execute())
 
-                # 4. Sync Commission Ledger (Option A)
-                # This will create the commission_earnings record for the rep
+                    # Only update invoice balance if we actually inserted (prevent double-count)
+                    new_paid = float(invoice.get("amount_paid", 0)) + client_payment_amount
+                    await db_execute(lambda: db.table("invoices").update({
+                        "amount_paid": new_paid,
+                        "status": "paid" if new_paid >= float(invoice["amount"]) else "partial"
+                    }).eq("id", inv_id).execute())
+
+                # 4. Sync Commission Ledger
                 bg_tasks.add_task(sync_invoice_commissions, inv_id, db, current_admin['sub'])
 
-                # 5. Notify Client (Automated Receipt)
+                # 5. Notify Client — re-fetch invoice WITH the new payment so it appears on receipt
                 if client and client.get("email"):
-                    bg_tasks.add_task(send_receipt_email, invoice, client, current_admin['sub'])
+                    fresh_inv_res = await db_execute(lambda: db.table("invoices")
+                        .select("*, clients(*), payments(*)")
+                        .eq("id", inv_id)
+                        .execute()
+                    )
+                    if fresh_inv_res.data:
+                        bg_tasks.add_task(send_receipt_email, fresh_inv_res.data[0], client, current_admin['sub'])
 
     # Update Expenditure Status
     update_payload = {
@@ -574,16 +605,16 @@ async def view_secure_payout_document(
         except (ValueError, json.JSONDecodeError):
             pass  # Fall through — treat raw_path as a plain string
 
-    # Redirect to external URLs directly
+    # For external URLs return directly
     if path.startswith("http"):
-        return RedirectResponse(url=path)
+        return {"url": path, "path": path}
 
     # Generate signed URL for private Supabase bucket 'Cloud Infrastructure'
     signed_url = generate_signed_url("Cloud Infrastructure", path)
     if not signed_url:
         raise HTTPException(status_code=500, detail="Failed to generate secure access link")
 
-    return RedirectResponse(url=signed_url)
+    return {"url": signed_url, "path": path}
 
 
 @router.get("/requests/{request_id}/proof-files")
@@ -813,15 +844,17 @@ async def portal_lookup_invoice(invoice_number: str, claimant_email: Optional[st
 
     def _pct(val, fallback):
         try:
-            if isinstance(val, str):
-                val = val.strip().rstrip('%').strip()
             v = float(val)
             return v / 100 if v > 1 else v
         except Exception:
             return fallback
 
+    # Rate resolution: tab determines rate source, not person history
+    # Partner tab → vendor rate or global partner default
+    # Staff tab → sales_rep rate or global staff default
     if _prev_vdata.get("gross_commission_rate"):
-        _display_gross_rate = _pct(_prev_vdata["gross_commission_rate"], 0.15 if _is_partner else 0.10)
+        # Explicit per-vendor rate set by Finance
+        _display_gross_rate = _pct(_prev_vdata["gross_commission_rate"], 0.15)
         _display_wht_rate   = _pct(_prev_vdata.get("wht_rate") or 5, 0.05)
     elif _is_partner and _prev_sys.get("default_partner_commission_rate"):
         _display_gross_rate = _pct(_prev_sys["default_partner_commission_rate"], 0.15)
@@ -945,25 +978,58 @@ def _build_previous_payments(all_payments, ledger_claimed_ids, unclaimed_payment
 
 @router.get("/portal/fetch-vendor")
 async def portal_fetch_vendor(email: str):
-    """Fetches existing vendor details to auto-fill the portal for returning users."""
+    """
+    Fetches existing vendor/staff details to auto-fill the portal.
+    Checks vendors table first, then falls back to sales_reps + admins
+    so a staff member identifying on any tab gets their details pre-filled.
+    """
     db = get_db()
+
+    # 1. Check vendors table first
     res = await db_execute(lambda: db.table("vendors").select("*").eq("email", email).execute())
-    if not res.data:
-        raise HTTPException(status_code=404, detail="Vendor not found")
-    # Return non-sensitive contact and bank details for auto-fill
-    v = res.data[0]
-    return {
-        "status": "success", 
-        "data": {
-            "name": v.get("name"),
-            "phone": v.get("phone"),
-            "rc_number": v.get("rc_number"),
-            "tin": v.get("tin"),
-            "bank_name": v.get("bank_name"),
-            "account_number": v.get("account_number"),
-            "account_name": v.get("account_name")
+    if res.data:
+        v = res.data[0]
+        return {
+            "status": "success",
+            "data": {
+                "name":           v.get("name"),
+                "phone":          v.get("phone"),
+                "rc_number":      v.get("rc_number"),
+                "tin":            v.get("tin"),
+                "bank_name":      v.get("bank_name"),
+                "account_number": v.get("account_number"),
+                "account_name":   v.get("account_name"),
+            }
         }
-    }
+
+    # 2. Fall back to admins + sales_reps (staff member on partner tab)
+    admin_res = await db_execute(lambda: db.table("admins")
+        .select("full_name, email, phone")
+        .eq("email", email)
+        .execute()
+    )
+    if admin_res.data:
+        a = admin_res.data[0]
+        rep_res = await db_execute(lambda: db.table("sales_reps")
+            .select("name, phone, bank_name, account_number, account_name")
+            .eq("email", email)
+            .execute()
+        )
+        r = (rep_res.data or [None])[0] or {}
+        return {
+            "status": "success",
+            "data": {
+                "name":           r.get("name") or a.get("full_name"),
+                "phone":          r.get("phone") or a.get("phone"),
+                "rc_number":      None,
+                "tin":            None,
+                "bank_name":      r.get("bank_name"),
+                "account_number": r.get("account_number"),
+                "account_name":   r.get("account_name"),
+            }
+        }
+
+    raise HTTPException(status_code=404, detail="Vendor not found")
 
 
 @router.post("/portal/submit")
@@ -1184,32 +1250,32 @@ async def submit_payout_claim_from_portal(
         _sys = {s["key"]: s["value"] for s in (_sys_res.data or [])}
 
         def _to_dec(pct_str, fallback):
-            """Convert a stored percentage string e.g. '15', '10%', or '0.15' to a Decimal fraction."""
+            """Convert a stored percentage string e.g. '15' or '0.15' to a Decimal fraction."""
             try:
-                if isinstance(pct_str, str):
-                    pct_str = pct_str.strip().rstrip('%').strip()
                 v = Decimal(str(pct_str))
                 return v / 100 if v > 1 else v
             except Exception:
                 return Decimal(str(fallback))
 
         if type == "partner":
-            # Tier 1: vendor's own rate
+            # Tier 1: vendor's own explicit rate
             _vrate_res = await db_execute(lambda: db.table("vendors")
                 .select("gross_commission_rate, wht_rate")
                 .eq("email", payee_email)
                 .execute()
             )
             _vdata = (_vrate_res.data or [None])[0] or {}
+            # Partner tab always uses partner rate — tab determines rate, not person history
             if _vdata.get("gross_commission_rate"):
+                # Explicit per-vendor rate set by Finance
                 COMMISSION_RATE = _to_dec(_vdata["gross_commission_rate"], 0.15)
                 WHT_RATE        = _to_dec(_vdata.get("wht_rate") or 5, 0.05)
             elif _sys.get("default_partner_commission_rate"):
-                # Tier 2: global partner default from system_settings
+                # Global partner default
                 COMMISSION_RATE = _to_dec(_sys["default_partner_commission_rate"], 0.15)
                 WHT_RATE        = _to_dec(_sys.get("default_wht_rate") or 5, 0.05)
             else:
-                # Tier 3: hardcoded
+                # Hardcoded fallback
                 COMMISSION_RATE = Decimal("0.15")
                 WHT_RATE        = Decimal("0.05")
         else:
@@ -1515,8 +1581,6 @@ async def submit_payout_claims_bulk(
 
     def _to_dec(pct_str, fallback):
         try:
-            if isinstance(pct_str, str):
-                pct_str = pct_str.strip().rstrip('%').strip()
             v = Decimal(str(pct_str))
             return v / 100 if v > 1 else v
         except Exception:
@@ -3104,16 +3168,16 @@ async def view_secure_payout_document(
         except (ValueError, json.JSONDecodeError):
             pass  # Fall through — treat raw_path as a plain string
 
-    # Redirect to external URLs directly
+    # For external URLs return directly
     if path.startswith("http"):
-        return RedirectResponse(url=path)
+        return {"url": path, "path": path}
 
     # Generate signed URL for private Supabase bucket 'Cloud Infrastructure'
     signed_url = generate_signed_url("Cloud Infrastructure", path)
     if not signed_url:
         raise HTTPException(status_code=500, detail="Failed to generate secure access link")
 
-    return RedirectResponse(url=signed_url)
+    return {"url": signed_url, "path": path}
 
 
 @router.get("/requests/{request_id}/proof-files")
@@ -3343,8 +3407,6 @@ async def portal_lookup_invoice(invoice_number: str, claimant_email: Optional[st
 
     def _pct(val, fallback):
         try:
-            if isinstance(val, str):
-                val = val.strip().rstrip('%').strip()
             v = float(val)
             return v / 100 if v > 1 else v
         except Exception:
@@ -3714,10 +3776,8 @@ async def submit_payout_claim_from_portal(
         _sys = {s["key"]: s["value"] for s in (_sys_res.data or [])}
 
         def _to_dec(pct_str, fallback):
-            """Convert a stored percentage string e.g. '15', '10%', or '0.15' to a Decimal fraction."""
+            """Convert a stored percentage string e.g. '15' or '0.15' to a Decimal fraction."""
             try:
-                if isinstance(pct_str, str):
-                    pct_str = pct_str.strip().rstrip('%').strip()
                 v = Decimal(str(pct_str))
                 return v / 100 if v > 1 else v
             except Exception:
@@ -4716,33 +4776,3 @@ async def publish_estate(draft_id: str, current_admin=Depends(require_roles(["su
         await db_execute(lambda: db.table("procurement_expenses").update({"property_id": created_prop_ids[0]}).eq("estate_draft_id", draft_id).execute())
 
     return {"status": "success", "properties_created": len(created_prop_ids)}
-
-
-@router.get("/portal/global-rates")
-async def portal_get_global_rates():
-    """
-    Public (no auth) endpoint — returns the system-wide commission defaults
-    so the payout portal can display real rates before an invoice is looked up.
-    """
-    db = get_db()
-    res = await db_execute(lambda: db.table("system_settings")
-        .select("key, value")
-        .in_("key", ["default_commission_rate", "default_partner_commission_rate", "default_wht_rate"])
-        .execute()
-    )
-    s = {row["key"]: row["value"] for row in (res.data or [])}
- 
-    def _pct(val, fallback):
-        try:
-            if isinstance(val, str):
-                val = val.strip().rstrip('%').strip()
-            v = float(val)
-            return round(v / 100 if v > 1 else v, 4)
-        except Exception:
-            return fallback
- 
-    return {
-        "staff_gross_rate":   _pct(s.get("default_commission_rate"),         0.10),
-        "partner_gross_rate": _pct(s.get("default_partner_commission_rate"), 0.15),
-        "wht_rate":           _pct(s.get("default_wht_rate"),                0.05),
-    }

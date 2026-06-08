@@ -3307,6 +3307,7 @@
                     <td><span class="status-pill ${(req.status === 'partially_paid' || req.status === 'paid') ? 'approved' : req.status}">${req.status.replace('_', ' ')}</span></td>
                     <td>
                         ${(req.status === 'paid' || req.status === 'partially_paid') ? `<button onclick="triggerManualReceipt('${req.id}')" class="btn" style="padding: 6px 12px; font-size:11px; margin-bottom: 6px; border-color:var(--gold); color:var(--gold);"><i class="fas fa-paper-plane"></i> EMAIL RCT</button> <button onclick="viewDocument('${req.id}', 'receipt')" class="btn" style="padding: 6px 12px; font-size:11px; margin-bottom: 6px; border-color:var(--success); color:var(--success);"><i class="fas fa-eye"></i> PROOF</button><br>` : ''}
+                        ${(req.receipt_url || req.proforma_url) && req.status !== 'paid' && req.status !== 'partially_paid' ? `<button onclick="viewDocument('${req.id}', '${req.receipt_url ? 'receipt' : 'proforma'}')" class="btn" style="padding: 6px 12px; font-size:11px; margin-bottom: 6px; border-color:#818cf8; color:#818cf8;"><i class="fas fa-paperclip"></i> PROOF</button><br>` : ''}
                         ${req.status === 'pending' ? `<button onclick="openReview('${req.id}')" class="btn" style="padding: 6px 12px; font-size:11px;">REVIEW</button> <button onclick="viewDocument('${req.id}', 'proforma')" class="btn" style="padding: 6px 12px; font-size:11px; border-color:var(--gray); color:var(--gray);">PROFORMA</button>` :
                     req.status === 'voided' ? '<i class="fas fa-ban" style="color:var(--error)"></i>' :
                         `<button onclick="openReview('${req.id}')" class="btn" style="padding: 6px 12px; font-size:11px; border-color:var(--gray); color:var(--gray);">INFO</button>`}
@@ -4568,28 +4569,19 @@
                 const docUrl = `/api/payouts/requests/${requestId}/view-document/${currentDoc.docType}?file_index=${currentDoc.index}`;
                 const isPdf = currentDoc.original.toLowerCase().endsWith('.pdf');
 
-                // Clear previous URL to avoid memory leaks
-                if (activeDocUrl) URL.revokeObjectURL(activeDocUrl);
-
-                // Fetch the file as a blob to include authorization headers
+                // Fetch signed URL from backend (returns JSON {url, path})
                 const fileRes = await apiFetch(docUrl);
                 if (!fileRes.ok) throw new Error("Could not retrieve secure document");
+                const { url: signedUrl } = await fileRes.json();
+                if (!signedUrl) throw new Error("No signed URL returned");
 
-                const blob = await fileRes.blob();
-                activeDocUrl = URL.createObjectURL(blob);
-
+                loader.style.display = 'none';
                 if (isPdf) {
-                    frame.src = activeDocUrl;
-                    frame.onload = () => {
-                        loader.style.display = 'none';
-                        frame.style.display = 'block';
-                    };
+                    frame.src = signedUrl;
+                    frame.style.display = 'block';
                 } else {
-                    img.src = activeDocUrl;
-                    img.onload = () => {
-                        loader.style.display = 'none';
-                        img.style.display = 'block';
-                    };
+                    img.src = signedUrl;
+                    img.style.display = 'block';
                 }
             } catch (e) {
                 console.error(e);
@@ -4602,10 +4594,7 @@
             document.getElementById('docPreviewModal').style.display = 'none';
             document.getElementById('docFrame').src = '';
             document.getElementById('docImg').src = '';
-            if (activeDocUrl) {
-                URL.revokeObjectURL(activeDocUrl);
-                activeDocUrl = null;
-            }
+            activeDocUrl = null;
         }
 
         // --- GLOBAL EXPOSURE & EVENT BINDING ---

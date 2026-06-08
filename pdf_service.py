@@ -314,7 +314,13 @@ def render_receipt_html(invoice: dict) -> str:
     client = sanitize_client_address(invoice.get("clients", {}).copy())
     # Only include standard payments (not refunds) in the payment receipt
     raw_payments = invoice.get("payments", [])
-    payments = [p for p in raw_payments if p.get("payment_type") != "refund"]
+    payments = [
+        p for p in raw_payments
+        if p.get("payment_type") != "refund"
+        and not p.get("is_voided")
+        and not str(p.get("reference", "")).startswith("LEGACY-")
+        and not str(p.get("reference", "")).startswith("CLAIM-")
+    ]
     
     # 1. Prepare all URLs for parallel fetching
     supabase_url = os.getenv("SUPABASE_URL")

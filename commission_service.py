@@ -145,20 +145,27 @@ async def sync_invoice_commissions(invoice_id: str, db, performed_by: str = "sys
         wht_amt = round(gross_comm * config["wht_rate"] / 100, 2)
         net_comm = gross_comm - wht_amt
         
-        earning = db.table("commission_earnings").insert({
-            "sales_rep_id": rep_id,
-            "invoice_id": invoice_id,
-            "payment_id": pay["id"],
-            "client_id": invoice["client_id"],
-            "estate_name": invoice["property_name"],
-            "payment_amount": pay_amt,
-            "commission_rate": config["gross_rate"],
-            "commission_amount": net_comm, # Still keep this for backward compat
+        earning_payload = {
+            "invoice_id":       invoice_id,
+            "payment_id":       pay["id"],
+            "client_id":        invoice["client_id"],
+            "estate_name":      invoice["property_name"],
+            "payment_amount":   pay_amt,
+            "commission_rate":  config["gross_rate"],
+            "commission_amount": net_comm,
             "gross_commission": gross_comm,
-            "wht_amount": wht_amt,
-            "net_commission": net_comm,
-            "created_at": pay["created_at"]
-        }).execute().data[0]
+            "wht_amount":       wht_amt,
+            "net_commission":   net_comm,
+            "created_at":       pay["created_at"],
+        }
+        # Write the correct owner — vendor_id for partners, sales_rep_id for staff
+        # config should include vendor_id if this is a partner commission
+        if config.get("vendor_id"):
+            earning_payload["vendor_id"]    = config["vendor_id"]
+        else:
+            earning_payload["sales_rep_id"] = rep_id
+
+        earning = db.table("commission_earnings").insert(earning_payload).execute().data[0]
         
         synced_count += 1
         

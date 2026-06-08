@@ -300,12 +300,21 @@ async def archive_admin(admin_id: str, current_admin=Depends(verify_token)):
     return {"message": f"{target.data[0]['full_name']} has been archived"}
 
 
-# UPDATE ROLES (admin/super_admin only)
+# UPDATE ROLES (admin/super_admin full access; hr_admin restricted access)
+# HR admins may assign only these roles — they cannot elevate staff to admin-level roles.
+HR_ASSIGNABLE_ROLES = {"sales_rep", "staff", "line_manager", "customer_support"}
+
 @router.patch("/admins/{admin_id}/roles")
 async def update_admin_roles(admin_id: str, data: dict, current_admin=Depends(verify_token)):
     current_roles = (current_admin.get("role") or "").split(",")
-    if not any(r.strip() in ["admin", "super_admin"] for r in current_roles):
-        raise HTTPException(status_code=403, detail="Admins only")
+    caller_role_set = {r.strip().lower() for r in current_roles if r.strip()}
+
+    is_full_admin = bool(caller_role_set & {"admin", "super_admin"})
+    is_hr_admin   = "hr_admin" in caller_role_set
+
+    if not (is_full_admin or is_hr_admin):
+        raise HTTPException(status_code=403, detail="Only admins or HR admins can update roles")
+
     if current_admin.get("sub") == admin_id:
         raise HTTPException(status_code=400, detail="Use 'My Profile' to change your own roles")
 
@@ -316,6 +325,17 @@ async def update_admin_roles(admin_id: str, data: dict, current_admin=Depends(ve
 
     if not role:
         raise HTTPException(status_code=400, detail="At least one role is required")
+
+    # HR admins may only assign roles within the permitted set.
+    if is_hr_admin and not is_full_admin:
+        requested_roles = {r.strip().lower() for r in role.split(",") if r.strip()}
+        forbidden = requested_roles - HR_ASSIGNABLE_ROLES
+        if forbidden:
+            raise HTTPException(
+                status_code=403,
+                detail=f"HR can only assign: {', '.join(sorted(HR_ASSIGNABLE_ROLES))}. "
+                       f"Forbidden role(s): {', '.join(sorted(forbidden))}"
+            )
 
     db = get_db()
     target = await db_execute(lambda: db.table("admins").select("id, full_name").eq("id", admin_id).execute())

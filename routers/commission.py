@@ -104,67 +104,15 @@ async def update_rep_commission_config(rep_id: str, payload: SalesRepUpdate, bac
     )
     return res.data[0]
 
- 
 @router.get("/default-rate")
 async def get_default_rate(current_admin=Depends(verify_token)):
     db = get_db()
-    res = await db_execute(lambda: db.table("system_settings")
-        .select("*")
-        .in_("key", ["default_commission_rate", "default_partner_commission_rate", "default_wht_rate"])
-        .execute()
-    )
+    res = await db_execute(lambda: db.table("system_settings").select("*").in_("key", ["default_commission_rate", "default_wht_rate"]).execute())
+    
     settings = {s["key"]: s["value"] for s in res.data}
     return {
-        "rate":         settings.get("default_commission_rate",         "10.00"),
-        "partner_rate": settings.get("default_partner_commission_rate", "15.00"),
-        "wht_rate":     settings.get("default_wht_rate",               "5.00"),
-    }
-  
-@router.patch("/default-rate")
-async def update_default_rate(payload: DefaultRateUpdate, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
-    if current_admin.get("role") not in ["admin", "super_admin", "hr", "operations"] and current_admin.get("primary_role") != "hr":
-        raise HTTPException(status_code=403, detail="Not authorized")
- 
-    db = get_db()
-    now = datetime.now().isoformat()
- 
-    # Staff default commission rate
-    await db_execute(lambda: db.table("system_settings").upsert({
-        "key":        "default_commission_rate",
-        "value":      str(payload.rate),
-        "updated_by": current_admin["sub"],
-        "updated_at": now,
-    }, on_conflict="key").execute())
- 
-    # Partner default commission rate (only update if provided)
-    if payload.partner_rate is not None:
-        await db_execute(lambda: db.table("system_settings").upsert({
-            "key":        "default_partner_commission_rate",
-            "value":      str(payload.partner_rate),
-            "updated_by": current_admin["sub"],
-            "updated_at": now,
-        }, on_conflict="key").execute())
- 
-    # WHT rate
-    await db_execute(lambda: db.table("system_settings").upsert({
-        "key":        "default_wht_rate",
-        "value":      str(payload.wht_rate),
-        "updated_by": current_admin["sub"],
-        "updated_at": now,
-    }, on_conflict="key").execute())
- 
-    background_tasks.add_task(
-        log_activity,
-        "commission_default_rate_updated",
-        f"Updated default system rates — Staff: {payload.rate}%, Partner: {payload.partner_rate}%, WHT: {payload.wht_rate}%",
-        performed_by=current_admin["sub"],
-    )
- 
-    return {
-        "message":      "Default rates updated",
-        "rate":         str(payload.rate),
-        "partner_rate": str(payload.partner_rate) if payload.partner_rate is not None else None,
-        "wht_rate":     str(payload.wht_rate),
+        "rate": settings.get("default_commission_rate", "5.00"),
+        "wht_rate": settings.get("default_wht_rate", "5.00")
     }
 
 @router.patch("/default-rate")
@@ -347,13 +295,14 @@ async def mark_payout(payload: CommissionPayout, background_tasks: BackgroundTas
         raise HTTPException(status_code=400, detail="No earnings selected")
     
     # Fetch selected unpaid earnings ordered oldest-first for waterfall
-    earnings_query = await db_execute(lambda: db.table("commission_earnings")\
-        .select("id, final_amount, amount_paid, is_paid, invoice_id")\
-        .in_("id", payload.earning_ids)\
-        .eq("sales_rep_id", payload.sales_rep_id)\
-        .order("created_at", desc=False)\
-        .execute())
-    
+    # Support both sales_rep_id (staff) and vendor_id (partner)
+    _wf_query = db.table("commission_earnings")        .select("id, final_amount, amount_paid, is_paid, invoice_id, sales_rep_id, vendor_id")        .in_("id", payload.earning_ids)        .order("created_at", desc=False)
+    if payload.vendor_id:
+        _wf_query = _wf_query.eq("vendor_id", payload.vendor_id)
+    elif payload.sales_rep_id:
+        _wf_query = _wf_query.eq("sales_rep_id", payload.sales_rep_id)
+    earnings_query = await db_execute(lambda: _wf_query.execute())
+
     earnings = [e for e in earnings_query.data if not e["is_paid"]]
     
     if not earnings:
@@ -407,6 +356,40 @@ async def mark_payout(payload: CommissionPayout, background_tasks: BackgroundTas
             update_data["paid_by"] = current_admin["sub"]
         
         await db_execute(lambda: db.table("commission_earnings").update(update_data).eq("id", earning["id"]).execute())
+
+        # Sync expenditure_requests — covers both partial and full waterfall payments
+        if earning.get("invoice_id"):
+            try:
+                er_res = await db_execute(lambda: db.table("expenditure_requests")
+                    .select("id, net_payout_amount, amount_paid")
+                    .eq("invoice_id", earning["invoice_id"])
+                    .in_("category", ["Sales Commission", "Partner Payout"])
+                    .neq("status", "paid")
+                    .execute()
+                )
+                for er in (er_res.data or []):
+                    er_net = float(er.get("net_payout_amount") or 0)
+                    # Match this expenditure_request to this specific earning by amount proximity
+                    if abs(er_net - float(earning["final_amount"])) < 1:
+                        er_already_paid = float(er.get("amount_paid") or 0)
+                        er_new_paid     = round(er_already_paid + to_apply, 2)
+                        er_update = {
+                            "amount_paid":      er_new_paid,
+                            "payout_reference": payload.reference,
+                            # partial → pending_payment, fully cleared → paid
+                            "status": "paid" if is_now_fully_paid else "partially_paid",
+                        }
+                        if is_now_fully_paid:
+                            er_update["paid_at"] = datetime.now().isoformat()
+                        await db_execute(lambda: db.table("expenditure_requests")
+                            .update(er_update)
+                            .eq("id", er["id"])
+                            .execute()
+                        )
+                        break
+            except Exception as er_sync_err:
+                print(f"[WARN] Could not sync expenditure_request: {er_sync_err}")
+
         remaining = round(remaining - to_apply, 2)
     
     # Fetch Recipient Details for Notification (Sales Rep or Vendor)
@@ -564,7 +547,29 @@ async def pay_single_commission(id: str, payload: dict, background_tasks: Backgr
         "payout_reference": payload.get("reference")
     }).eq("id", id).execute())
 
-    # 4. Fetch details for notification
+    # 4b. Sync expenditure_requests so payout dashboard reflects paid status
+    try:
+        er_res = await db_execute(lambda: db.table("expenditure_requests")
+            .select("id, net_payout_amount")
+            .eq("invoice_id", earning["invoice_id"])
+            .in_("category", ["Sales Commission", "Partner Payout"])
+            .neq("status", "paid")
+            .execute()
+        )
+        for er in (er_res.data or []):
+            er_net = float(er.get("net_payout_amount") or 0)
+            if abs(er_net - net_amount) < 1:  # match within ₦1 tolerance
+                await db_execute(lambda: db.table("expenditure_requests").update({
+                    "status":        "paid",
+                    "paid_at":       datetime.now().isoformat(),
+                    "amount_paid":   net_amount,
+                    "payout_reference": payload.get("reference"),
+                }).eq("id", er["id"]).execute())
+                break
+    except Exception as er_sync_err:
+        print(f"[WARN] Could not sync expenditure_request status: {er_sync_err}")
+
+    # 4c. Fetch details for notification
     earning = (await db_execute(lambda: db.table("commission_earnings").select("*, sales_reps(*), vendors(*), invoices(*)").eq("id", id).execute())).data[0]
     
     recipient_obj = earning.get("sales_reps") or earning.get("vendors")
