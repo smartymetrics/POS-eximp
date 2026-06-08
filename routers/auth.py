@@ -302,7 +302,7 @@ async def archive_admin(admin_id: str, current_admin=Depends(verify_token)):
 
 # UPDATE ROLES (admin/super_admin full access; hr_admin restricted access)
 # HR admins may assign only these roles — they cannot elevate staff to admin-level roles.
-HR_ASSIGNABLE_ROLES = {"sales_rep", "staff", "line_manager", "customer_support"}
+HR_ASSIGNABLE_ROLES = {"sales_rep", "staff", "line_manager", "customer_support", "sales"}
 
 @router.patch("/admins/{admin_id}/roles")
 async def update_admin_roles(admin_id: str, data: dict, current_admin=Depends(verify_token)):
