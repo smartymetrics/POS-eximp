@@ -13963,8 +13963,8 @@ function GuarantorReviewModal({ sub, onClose, onRefresh }) {
                 </div>
                 <button onClick={() => setDocViewer(null)} style={{ background: "none", border: "none", color: C.muted, fontSize: 24, cursor: "pointer", lineHeight: 1 }}>✕</button>
               </div>
-              <div style={{ flex: 1, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center", background: C.surface, padding: 20 }}>
-                <img src={docViewer.url} alt={docViewer.type} style={{ maxWidth: "100%", maxHeight: "100%", borderRadius: 6 }} onError={e => {
+              <div style={{ flex: 1, overflow: "auto", display: "flex", alignItems: "center", justifyContent: "center", background: C.surface, padding: 20, minHeight: 0 }}>
+                <img src={docViewer.url} alt={docViewer.type} style={{ maxWidth: "100%", maxHeight: "calc(85vh - 80px)", objectFit: "contain", borderRadius: 6, display: "block" }} onError={e => {
                   e.target.style.display = "none";
                   const msg = document.createElement("div");
                   msg.style.cssText = "color:" + C.muted + ";text-align:center;font-size:13px;padding:20px";
