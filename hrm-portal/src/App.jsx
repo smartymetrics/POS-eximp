@@ -14306,9 +14306,8 @@ function PublicGuarantorForm() {
     clear: () => {
       const canvas = cRef.current;
       if (!canvas) return;
-      const dpr = window.devicePixelRatio || 1;
       const ctx = canvas.getContext("2d");
-      ctx.clearRect(0, 0, canvas.width / dpr, canvas.height / dpr);
+      ctx.clearRect(0, 0, canvas.width, canvas.height);
       setHas(false);
     },
   });

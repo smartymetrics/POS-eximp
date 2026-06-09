@@ -149,62 +149,98 @@ async def review_submission(id: str, data: dict, current_admin=Depends(verify_to
     )
 
     # Notify employee
+    # Fetch submission data needed for all notifications
+    emp_email = None
+    emp_name = None
     try:
         sub_res = await db_execute(
             lambda: db.table("guarantor_submissions")
-            .select("employee_email")
+            .select("employee_email, employee_name")
             .eq("id", id)
             .execute()
         )
         if sub_res.data:
             emp_email = sub_res.data[0]["employee_email"]
+            emp_name = sub_res.data[0].get("employee_name") or emp_email
+    except Exception:
+        pass
+
+    # In-app notification for the employee (isolated — never blocks emails)
+    if emp_email:
+        try:
             admin_res = await db_execute(
                 lambda: db.table("admins").select("id").eq("email", emp_email).execute()
             )
             if admin_res.data:
                 labels = {"a": "Employee Details", "b": "Guarantor 1", "c": "Guarantor 2"}
-                sec_label = labels.get(section, "Submission")
-                msg = f"Your Guarantor Form ({sec_label}) has been {status}."
+                sec_label_notif = labels.get(section, "Submission")
+                title_map = {"rejected": "Guarantor Form Requires Revision", "approved": "Guarantor Form Section Approved"}
+                msg = f"Your Guarantor Form ({sec_label_notif}) has been {status}."
                 if status == "rejected" and reason:
                     msg += f" Reason: {reason}"
                 await db_execute(
                     lambda: db.table("notifications").insert({
-                        "staff_id": admin_res.data[0]["id"],
-                        "type": "guarantor_update",
+                        "admin_id": admin_res.data[0]["id"],
+                        "title": title_map.get(status, "Guarantor Form Update"),
+                        "notification_type": "guarantor_update",
                         "message": msg,
                     }).execute()
                 )
+        except Exception:
+            pass
 
-            # Send rejection email with a direct re-fill link
-            if status == "rejected":
-                inv_res = await db_execute(
-                    lambda: db.table("guarantor_invites")
-                    .select("token")
-                    .eq("email", emp_email)
-                    .order("created_at", desc=True)
-                    .limit(1)
-                    .execute()
-                )
-                if inv_res.data:
-                    invite_token = inv_res.data[0]["token"]
-                    base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
-                    if not base_url.endswith("/hr"):
-                        base_url = f"{base_url}/hr"
-                    form_link = f"{base_url}/?guarantor_token={invite_token}&email={emp_email}"
-                    labels = {"a": "Employee Details (Section A)", "b": "Guarantor 1 (Section B)", "c": "Guarantor 2 (Section C)"}
-                    sec_label = labels.get(section, "a section")
-                    await _send_guarantor_rejection_email(
-                        emp_email, sec_label, reason, form_link
-                    )
+    # Email the employee on rejection
+    if emp_email and status == "rejected":
+        try:
+            inv_res = await db_execute(
+                lambda: db.table("guarantor_invites")
+                .select("token")
+                .eq("email", emp_email)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            invite_token = inv_res.data[0]["token"] if inv_res.data else None
+            base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
+            if not base_url.endswith("/hr"):
+                base_url = f"{base_url}/hr"
+            form_link = f"{base_url}/?guarantor_token={invite_token}&email={emp_email}" if invite_token else ""
+            labels = {"a": "Employee Details (Section A)", "b": "Guarantor 1 (Section B)", "c": "Guarantor 2 (Section C)"}
+            await _send_guarantor_rejection_email(emp_email, labels.get(section, "a section"), reason, form_link)
+        except Exception:
+            pass
 
-            # Send approval email
-            if status == "approved":
-                labels_full = {"a": "Section A — Employee Details", "b": "Section B — Guarantor 1", "c": "Section C — Guarantor 2", "overall": "All Sections"}
-                sec_label = labels_full.get(section, "Your submission")
-                emp_name = sub_res.data[0].get("employee_name") or emp_email
-                await _send_guarantor_approval_email(emp_email, emp_name, sec_label)
-    except Exception:
-        pass  # Notification failure should not block the review
+    # Email the employee on approval
+    if emp_email and status == "approved":
+        try:
+            labels_full = {"a": "Section A — Employee Details", "b": "Section B — Guarantor 1", "c": "Section C — Guarantor 2", "overall": "All Sections"}
+            await _send_guarantor_approval_email(emp_email, emp_name, labels_full.get(section, "Your submission"))
+        except Exception:
+            pass
+
+    # Email the guarantor directly if section b or c
+    if section in ("b", "c"):
+        try:
+            slot_num = 1 if section == "b" else 2
+            g_res = await db_execute(
+                lambda: db.table("guarantors")
+                .select("email, full_name")
+                .eq("submission_id", id)
+                .eq("slot_number", slot_num)
+                .limit(1)
+                .execute()
+            )
+            if g_res.data and g_res.data[0].get("email"):
+                g_email = g_res.data[0]["email"]
+                g_name = g_res.data[0].get("full_name") or "Guarantor"
+                g_labels = {"b": "Section B (Guarantor 1)", "c": "Section C (Guarantor 2)"}
+                sec_label_g = g_labels.get(section, "Your section")
+                if status == "rejected":
+                    await _send_guarantor_own_rejection_email(g_email, g_name, sec_label_g, reason)
+                elif status == "approved":
+                    await _send_guarantor_own_approval_email(g_email, g_name, sec_label_g)
+        except Exception:
+            pass
 
     return res.data[0] if res.data else {"status": "ok"}
 
@@ -241,54 +277,93 @@ async def bulk_review_submission(id: str, data: dict, current_admin=Depends(veri
     )
 
     # Notify employee
+    # Fetch submission data
+    emp_email = None
+    emp_name = None
     try:
         sub_res = await db_execute(
             lambda: db.table("guarantor_submissions")
-            .select("employee_email")
+            .select("employee_email, employee_name")
             .eq("id", id)
             .execute()
         )
         if sub_res.data:
             emp_email = sub_res.data[0]["employee_email"]
+            emp_name = sub_res.data[0].get("employee_name") or emp_email
+    except Exception:
+        pass
+
+    # In-app notification (isolated)
+    if emp_email:
+        try:
             admin_res = await db_execute(
                 lambda: db.table("admins").select("id").eq("email", emp_email).execute()
             )
             if admin_res.data:
+                title_map = {"rejected": "Guarantor Form Requires Revision", "approved": "Guarantor Form Approved"}
                 msg = f"Your Guarantor Form has been {status} by HR."
                 if status == "rejected" and reason:
                     msg += f" Reason: {reason}"
                 await db_execute(
                     lambda: db.table("notifications").insert({
-                        "staff_id": admin_res.data[0]["id"],
-                        "type": "guarantor_update",
+                        "admin_id": admin_res.data[0]["id"],
+                        "title": title_map.get(status, "Guarantor Form Update"),
+                        "notification_type": "guarantor_update",
                         "message": msg,
                     }).execute()
                 )
+        except Exception:
+            pass
 
-            # Send rejection email with a direct re-fill link for all sections
-            if status == "rejected":
-                inv_res = await db_execute(
-                    lambda: db.table("guarantor_invites")
-                    .select("token")
-                    .eq("email", emp_email)
-                    .order("created_at", desc=True)
-                    .limit(1)
-                    .execute()
-                )
-                if inv_res.data:
-                    invite_token = inv_res.data[0]["token"]
-                    base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
-                    if not base_url.endswith("/hr"):
-                        base_url = f"{base_url}/hr"
-                    form_link = f"{base_url}/?guarantor_token={invite_token}&email={emp_email}"
-                    await _send_guarantor_rejection_email(
-                        emp_email, "All Sections", reason, form_link
-                    )
+    # Email employee on rejection
+    if emp_email and status == "rejected":
+        try:
+            inv_res = await db_execute(
+                lambda: db.table("guarantor_invites")
+                .select("token")
+                .eq("email", emp_email)
+                .order("created_at", desc=True)
+                .limit(1)
+                .execute()
+            )
+            invite_token = inv_res.data[0]["token"] if inv_res.data else None
+            base_url = os.getenv("APP_BASE_URL", "").rstrip("/")
+            if not base_url.endswith("/hr"):
+                base_url = f"{base_url}/hr"
+            form_link = f"{base_url}/?guarantor_token={invite_token}&email={emp_email}" if invite_token else ""
+            await _send_guarantor_rejection_email(emp_email, "All Sections", reason, form_link)
+        except Exception:
+            pass
 
-            # Send approval email
-            if status == "approved":
-                emp_name = sub_res.data[0].get("employee_name") or emp_email
-                await _send_guarantor_approval_email(emp_email, emp_name, "All Sections")
+    # Email employee on approval
+    if emp_email and status == "approved":
+        try:
+            await _send_guarantor_approval_email(emp_email, emp_name, "All Sections")
+        except Exception:
+            pass
+
+    # Email both guarantors
+    try:
+        g_all_res = await db_execute(
+            lambda: db.table("guarantors")
+            .select("email, full_name, slot_number")
+            .eq("submission_id", id)
+            .execute()
+        )
+        for g in (g_all_res.data or []):
+            if g.get("email"):
+                slot_label = "Section B (Guarantor 1)" if g["slot_number"] == 1 else "Section C (Guarantor 2)"
+                try:
+                    if status == "rejected":
+                        await _send_guarantor_own_rejection_email(
+                            g["email"], g.get("full_name") or "Guarantor", slot_label, reason
+                        )
+                    elif status == "approved":
+                        await _send_guarantor_own_approval_email(
+                            g["email"], g.get("full_name") or "Guarantor", slot_label
+                        )
+                except Exception:
+                    pass
     except Exception:
         pass
 
@@ -433,13 +508,181 @@ async def _send_guarantor_rejection_email(
 
     import asyncio
     loop = asyncio.get_event_loop()
-    await loop.run_in_executor(None, lambda: resend.Emails.send({{
-        "from":     f"Eximp & Cloves HR <{{from_email}}>",
+    await loop.run_in_executor(None, lambda: resend.Emails.send({
+        "from":     f"Eximp & Cloves HR <{from_email}>",
         "to":       [email_addr],
-        "subject":  f"Action Required: Guarantor Form Revision — {{section_label}}",
+        "subject":  f"Action Required: Guarantor Form Revision — {section_label}",
         "html":     html,
         "reply_to": "hr@eximps-cloves.com",
-    }}))
+    }))
+
+
+async def _send_guarantor_own_rejection_email(
+    email_addr: str, guarantor_name: str, section_label: str, reason: str, emp_name: str = ""
+):
+    """Sent directly to the guarantor when their submitted section is rejected by HR."""
+    import resend
+    resend.api_key = os.getenv("RESEND_API_KEY")
+    from_email = os.getenv("FROM_EMAIL", "hr@eximps-cloves.com")
+
+    reason_block = f"""
+                <div style="background:#FEF2F2;border:1px solid #FECACA;border-radius:3px;padding:16px 20px;margin:20px 0;color:#DC2626;font-size:13px;line-height:1.7;">
+                  <strong>Reason for rejection:</strong> {reason}
+                </div>""" if reason else ""
+
+    staff_ref = f"for <strong>{emp_name}</strong>" if emp_name else ""
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+    <body style="margin:0;padding:0;background:#F5F0E8;font-family:'Segoe UI',Arial,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0E8;padding:40px 20px;">
+        <tr><td align="center">
+          <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:4px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+            <!-- Header -->
+            <tr>
+              <td style="background:#0D1B2A;padding:0;border-left:6px solid #DC2626;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="padding:28px 36px;">
+                      <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Eximp &amp; Cloves Infrastructure Limited</div>
+                      <div style="font-size:10px;color:#DC2626;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-top:4px;">Human Resources Division</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <!-- Body -->
+            <tr>
+              <td style="padding:40px 36px;">
+                <div style="width:56px;height:56px;background:#FEE2E2;border-radius:50%;text-align:center;line-height:56px;font-size:26px;margin-bottom:20px;">✕</div>
+                <p style="font-size:13px;color:#DC2626;margin:0 0 8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;">Submission Not Accepted</p>
+                <h1 style="font-size:22px;font-weight:800;color:#0D1B2A;margin:0 0 20px;line-height:1.3;">Guarantor Form — Revision Required</h1>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">Dear <strong>{guarantor_name}</strong>,</p>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">
+                  Thank you for completing <strong>{section_label}</strong> of the Employee Guarantor Form {staff_ref}.
+                  Unfortunately, HR has reviewed your submission and it could not be accepted at this time.
+                </p>
+                {reason_block}
+                <div style="background:#FEF9EC;border:1px solid #B8860B40;border-radius:3px;padding:16px 20px;margin:20px 0;">
+                  <p style="font-size:13px;font-weight:700;color:#92640A;margin:0 0 6px;">What should you do?</p>
+                  <p style="font-size:13px;color:#78510A;line-height:1.7;margin:0;">
+                    Please contact <strong>{emp_name or "the employee"}</strong> whose form you were filling for. They will receive a new link to share with you so you can re-submit the corrected information.
+                  </p>
+                </div>
+                <p style="font-size:13px;color:#9CA3AF;line-height:1.7;margin:0;">
+                  For any queries, contact HR at
+                  <a href="mailto:hr@eximps-cloves.com" style="color:#B8860B;">hr@eximps-cloves.com</a>.
+                </p>
+              </td>
+            </tr>
+            <!-- Footer -->
+            <tr>
+              <td style="background:#F8F9FB;border-top:1px solid #E8E2D9;padding:20px 36px;">
+                <p style="font-size:11px;color:#9CA3AF;margin:0;line-height:1.6;">
+                  <strong style="color:#6B7280;">Eximp &amp; Cloves Infrastructure Limited</strong><br>
+                  RC 8311800 &nbsp;|&nbsp; 57B, Isaac John Street, Yaba, Lagos &nbsp;|&nbsp; +234 912 686 4383<br>
+                  This is an automated HR system notification.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+    """
+
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, lambda: resend.Emails.send({
+        "from":     f"Eximp & Cloves HR <{from_email}>",
+        "to":       [email_addr],
+        "subject":  f"Guarantor Form Submission Not Accepted — {section_label}",
+        "html":     html,
+        "reply_to": "hr@eximps-cloves.com",
+    }))
+
+
+async def _send_guarantor_own_approval_email(
+    email_addr: str, guarantor_name: str, section_label: str
+):
+    """Sent directly to the guarantor when their submitted section is approved by HR."""
+    import resend
+    resend.api_key = os.getenv("RESEND_API_KEY")
+    from_email = os.getenv("FROM_EMAIL", "hr@eximps-cloves.com")
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+    <body style="margin:0;padding:0;background:#F5F0E8;font-family:'Segoe UI',Arial,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0E8;padding:40px 20px;">
+        <tr><td align="center">
+          <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:4px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+            <!-- Header -->
+            <tr>
+              <td style="background:#0D1B2A;padding:0;border-left:6px solid #10B981;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="padding:28px 36px;">
+                      <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Eximp &amp; Cloves Infrastructure Limited</div>
+                      <div style="font-size:10px;color:#10B981;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-top:4px;">Human Resources Division</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <!-- Body -->
+            <tr>
+              <td style="padding:40px 36px;">
+                <div style="width:64px;height:64px;background:#ECFDF5;border-radius:50%;text-align:center;line-height:64px;font-size:30px;margin-bottom:20px;">✓</div>
+                <p style="font-size:13px;color:#10B981;margin:0 0 8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;">Submission Accepted</p>
+                <h1 style="font-size:22px;font-weight:800;color:#0D1B2A;margin:0 0 20px;line-height:1.3;">Guarantor Form Approved</h1>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">Dear <strong>{guarantor_name}</strong>,</p>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">
+                  We are pleased to inform you that your submission for <strong>{section_label}</strong> of the Employee Guarantor Form
+                  has been reviewed and <strong style="color:#059669;">approved</strong> by HR. No further action is required from you.
+                </p>
+                <div style="background:#ECFDF5;border:1px solid #10B98140;border-radius:3px;padding:16px 20px;margin:20px 0;">
+                  <p style="font-size:13px;color:#065F46;line-height:1.7;margin:0;">
+                    Your details are now on file with the HR department as part of the official employment documentation for the staff member you guaranteed.
+                    We appreciate your time and cooperation.
+                  </p>
+                </div>
+                <p style="font-size:13px;color:#9CA3AF;line-height:1.7;margin:0;">
+                  For any queries, contact HR at
+                  <a href="mailto:hr@eximps-cloves.com" style="color:#B8860B;">hr@eximps-cloves.com</a>.
+                </p>
+              </td>
+            </tr>
+            <!-- Footer -->
+            <tr>
+              <td style="background:#F8F9FB;border-top:1px solid #E8E2D9;padding:20px 36px;">
+                <p style="font-size:11px;color:#9CA3AF;margin:0;line-height:1.6;">
+                  <strong style="color:#6B7280;">Eximp &amp; Cloves Infrastructure Limited</strong><br>
+                  RC 8311800 &nbsp;|&nbsp; 57B, Isaac John Street, Yaba, Lagos &nbsp;|&nbsp; +234 912 686 4383<br>
+                  This is an automated HR system notification.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+    """
+
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, lambda: resend.Emails.send({
+        "from":     f"Eximp & Cloves HR <{from_email}>",
+        "to":       [email_addr],
+        "subject":  f"Guarantor Form Approved — {section_label}",
+        "html":     html,
+        "reply_to": "hr@eximps-cloves.com",
+    }))
 
 
 async def _send_guarantor_invite_email(email_addr: str, inviter_name: str, form_link: str):
@@ -678,11 +921,13 @@ async def update_settings(data: dict, current_admin=Depends(verify_token)):
     return res.data[0]
 
 
-async def _send_guarantor_submission_email(email_addr: str, name: str, role_label: str):
-    """Sent immediately to the submitter (employee or guarantor) on successful form submission."""
+async def _send_guarantor_submission_email(email_addr: str, name: str, role_label: str, emp_name: str = ""):
+    """Sent immediately to the guarantor on successful form submission."""
     import resend
     resend.api_key = os.getenv("RESEND_API_KEY")
     from_email = os.getenv("FROM_EMAIL", "hr@eximps-cloves.com")
+
+    staff_line = f"as a guarantor for <strong>{emp_name}</strong>" if emp_name else "as part of the Employee Guarantor Form"
 
     html = f"""
     <!DOCTYPE html>
@@ -713,7 +958,7 @@ async def _send_guarantor_submission_email(email_addr: str, name: str, role_labe
                 <h1 style="font-size:22px;font-weight:800;color:#0D1B2A;margin:0 0 20px;line-height:1.3;">Guarantor Form Received</h1>
                 <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">Dear <strong>{name}</strong>,</p>
                 <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">
-                  We confirm that your <strong>{role_label}</strong> section of the Employee Guarantor Form has been successfully received by the HR team at Eximp &amp; Cloves Infrastructure Limited.
+                  We confirm that your <strong>{role_label}</strong> submission {staff_line} has been successfully received by the HR &amp; Admin team at Eximp &amp; Cloves Infrastructure Limited.
                 </p>
                 <div style="background:#ECFDF5;border:1px solid #10B98140;border-radius:3px;padding:16px 20px;margin:20px 0;">
                   <p style="font-size:13px;font-weight:700;color:#065F46;margin:0 0 6px;">What happens next?</p>
@@ -753,6 +998,89 @@ async def _send_guarantor_submission_email(email_addr: str, name: str, role_labe
         "to":       [email_addr],
         "cc":       ["hr@eximps-cloves.com"],
         "subject":  "Guarantor Form Submission Received — Eximp & Cloves",
+        "html":     html,
+        "reply_to": "hr@eximps-cloves.com",
+    }))
+
+
+async def _send_staff_guarantor_notification_email(
+    email_addr: str, emp_name: str, guarantor_name: str, section_label: str
+):
+    """Sent to the employee/staff when one of their guarantors successfully submits their section."""
+    import resend
+    resend.api_key = os.getenv("RESEND_API_KEY")
+    from_email = os.getenv("FROM_EMAIL", "hr@eximps-cloves.com")
+
+    html = f"""
+    <!DOCTYPE html>
+    <html>
+    <head><meta charset="utf-8"><meta name="viewport" content="width=device-width, initial-scale=1"></head>
+    <body style="margin:0;padding:0;background:#F5F0E8;font-family:'Segoe UI',Arial,sans-serif;">
+      <table width="100%" cellpadding="0" cellspacing="0" style="background:#F5F0E8;padding:40px 20px;">
+        <tr><td align="center">
+          <table width="600" cellpadding="0" cellspacing="0" style="max-width:600px;width:100%;background:#ffffff;border-radius:4px;overflow:hidden;box-shadow:0 4px 24px rgba(0,0,0,0.08);">
+            <!-- Header -->
+            <tr>
+              <td style="background:#0D1B2A;padding:0;border-left:6px solid #3B82F6;">
+                <table width="100%" cellpadding="0" cellspacing="0">
+                  <tr>
+                    <td style="padding:28px 36px;">
+                      <div style="font-size:18px;font-weight:800;color:#ffffff;letter-spacing:-0.3px;">Eximp &amp; Cloves Infrastructure Limited</div>
+                      <div style="font-size:10px;color:#3B82F6;font-weight:700;letter-spacing:2px;text-transform:uppercase;margin-top:4px;">Human Resources Division</div>
+                    </td>
+                  </tr>
+                </table>
+              </td>
+            </tr>
+            <!-- Body -->
+            <tr>
+              <td style="padding:40px 36px;">
+                <div style="width:64px;height:64px;background:#EFF6FF;border-radius:50%;text-align:center;line-height:64px;font-size:30px;margin-bottom:20px;">📋</div>
+                <p style="font-size:13px;color:#3B82F6;margin:0 0 8px;font-weight:700;letter-spacing:1.5px;text-transform:uppercase;">Guarantor Update</p>
+                <h1 style="font-size:22px;font-weight:800;color:#0D1B2A;margin:0 0 20px;line-height:1.3;">Your Guarantor Has Submitted Their Form</h1>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">Dear <strong>{emp_name}</strong>,</p>
+                <p style="font-size:14px;color:#374151;line-height:1.8;margin:0 0 16px;">
+                  We are writing to inform you that <strong>{guarantor_name}</strong> has successfully completed and submitted
+                  <strong>{section_label}</strong> of your Employee Guarantor Form.
+                </p>
+                <div style="background:#EFF6FF;border:1px solid #BFDBFE;border-radius:3px;padding:16px 20px;margin:20px 0;">
+                  <p style="font-size:13px;font-weight:700;color:#1D4ED8;margin:0 0 6px;">What happens next?</p>
+                  <ul style="font-size:13px;color:#374151;line-height:1.9;margin:0;padding-left:18px;">
+                    <li>HR and Admin will review the submitted guarantor details.</li>
+                    <li>You will receive an email notification once the review is complete.</li>
+                    <li>If any corrections are required, you and/or your guarantor will be contacted.</li>
+                  </ul>
+                </div>
+                <p style="font-size:13px;color:#9CA3AF;line-height:1.7;margin:0;">
+                  If you have any questions, contact HR at
+                  <a href="mailto:hr@eximps-cloves.com" style="color:#B8860B;">hr@eximps-cloves.com</a>.
+                </p>
+              </td>
+            </tr>
+            <!-- Footer -->
+            <tr>
+              <td style="background:#F8F9FB;border-top:1px solid #E8E2D9;padding:20px 36px;">
+                <p style="font-size:11px;color:#9CA3AF;margin:0;line-height:1.6;">
+                  <strong style="color:#6B7280;">Eximp &amp; Cloves Infrastructure Limited</strong><br>
+                  RC 8311800 &nbsp;|&nbsp; 57B, Isaac John Street, Yaba, Lagos &nbsp;|&nbsp; +234 912 686 4383<br>
+                  This is an automated HR system notification.
+                </p>
+              </td>
+            </tr>
+          </table>
+        </td></tr>
+      </table>
+    </body>
+    </html>
+    """
+
+    import asyncio
+    loop = asyncio.get_event_loop()
+    await loop.run_in_executor(None, lambda: resend.Emails.send({
+        "from":     f"Eximp & Cloves HR <{from_email}>",
+        "to":       [email_addr],
+        "cc":       ["hr@eximps-cloves.com"],
+        "subject":  f"Your Guarantor Has Submitted — {section_label}",
         "html":     html,
         "reply_to": "hr@eximps-cloves.com",
     }))
@@ -1088,24 +1416,56 @@ async def save_partial_submission(
 
         # Notify employee (in-app) + send confirmation email to the guarantor
         try:
-            admin_res = await db_execute(
-                lambda: db.table("admins").select("id").eq("email", email).execute()
-            )
-            if admin_res.data:
-                g_name = fields.get("full_name") or f"Guarantor {slot}"
-                await db_execute(
-                    lambda: db.table("notifications").insert({
-                        "staff_id": admin_res.data[0]["id"],
-                        "type":     "guarantor_submission",
-                        "message":  f"{g_name} has completed their part of your Guarantor Form.",
-                    }).execute()
-                )
-            # Email the guarantor themselves
+            # Email the guarantor their own submission confirmation — do this first,
+            # independently, so it always fires regardless of what happens with the
+            # employee lookup below.
             g_email = fields.get("email")
             g_name  = fields.get("full_name") or f"Guarantor {slot}"
             sec_label = "Section B (Guarantor 1)" if slot == 1 else "Section C (Guarantor 2)"
             if g_email:
                 await _send_guarantor_submission_email(g_email, g_name, sec_label)
+        except Exception:
+            pass
+
+        # Notify the employee (in-app + email) that their guarantor has submitted
+        try:
+            sub_res = await db_execute(
+                lambda: db.table("guarantor_submissions")
+                .select("employee_email, employee_name")
+                .eq("id", submission_id)
+                .execute()
+            )
+            emp_email_from_sub = sub_res.data[0]["employee_email"] if sub_res.data else None
+            emp_name_from_sub = (sub_res.data[0].get("employee_name") or emp_email_from_sub) if sub_res.data else None
+
+            if emp_email_from_sub:
+                # In-app notification (isolated so failure never blocks email)
+                try:
+                    admin_res = await db_execute(
+                        lambda: db.table("admins").select("id").eq("email", emp_email_from_sub).execute()
+                    )
+                    if admin_res.data:
+                        g_name_notify = fields.get("full_name") or f"Guarantor {slot}"
+                        await db_execute(
+                            lambda: db.table("notifications").insert({
+                                "admin_id": admin_res.data[0]["id"],
+                                "title": "Your Guarantor Has Submitted",
+                                "notification_type": "guarantor_submission",
+                                "message": f"{g_name_notify} has completed their part of your Guarantor Form.",
+                            }).execute()
+                        )
+                except Exception:
+                    pass
+
+                # Email the staff/employee
+                try:
+                    g_name_notify = fields.get("full_name") or f"Guarantor {slot}"
+                    sec_label_notify = "Section B (Guarantor 1)" if slot == 1 else "Section C (Guarantor 2)"
+                    await _send_staff_guarantor_notification_email(
+                        emp_email_from_sub, emp_name_from_sub, g_name_notify, sec_label_notify
+                    )
+                except Exception:
+                    pass
         except Exception:
             pass
 
