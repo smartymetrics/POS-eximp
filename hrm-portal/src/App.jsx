@@ -2693,34 +2693,34 @@ function Payroll({ initialTab = "payslips" }) {
 
   // Stats for current view
   const stats = payroll.reduce((acc, p) => ({
-    gross:      acc.gross      + (p.gross_pay || 0),
-    net:        acc.net        + (p.net_pay   || 0),
-    tax:        acc.tax        + (p.tax        || 0),
-    pension:    acc.pension    + (p.pension    || 0),
-    headcount:  acc.headcount  + 1,
-    paid:       acc.paid       + (p.status === "paid" ? 1 : 0),
+    gross: acc.gross + (p.gross_pay || 0),
+    net: acc.net + (p.net_pay || 0),
+    tax: acc.tax + (p.tax || 0),
+    pension: acc.pension + (p.pension || 0),
+    headcount: acc.headcount + 1,
+    paid: acc.paid + (p.status === "paid" ? 1 : 0),
   }), { gross: 0, net: 0, tax: 0, pension: 0, headcount: 0, paid: 0 });
 
   // ── Run Payroll modal state ──
-  const [showRunModal, setShowRunModal]   = useState(false);
-  const [runScope, setRunScope]           = useState("all");     // "all" | "select"
-  const [runSelected, setRunSelected]     = useState(new Set());
-  const [runSearch, setRunSearch]         = useState("");
-  const [running, setRunning]             = useState(false);
-  const [runResult, setRunResult]         = useState(null);      // {message, count, warnings}
+  const [showRunModal, setShowRunModal] = useState(false);
+  const [runScope, setRunScope] = useState("all");     // "all" | "select"
+  const [runSelected, setRunSelected] = useState(new Set());
+  const [runSearch, setRunSearch] = useState("");
+  const [running, setRunning] = useState(false);
+  const [runResult, setRunResult] = useState(null);      // {message, count, warnings}
 
-  const [showSendModal, setShowSendModal]         = useState(false);
+  const [showSendModal, setShowSendModal] = useState(false);
   const [showMarkPaidModal, setShowMarkPaidModal] = useState(false);
-  const [sendScope, setSendScope]                 = useState("selected");
-  const [sendDepartment, setSendDepartment]       = useState("");
-  const [sendBusy, setSendBusy]                   = useState(false);
-  const [sendResult, setSendResult]               = useState(null);
+  const [sendScope, setSendScope] = useState("selected");
+  const [sendDepartment, setSendDepartment] = useState("");
+  const [sendBusy, setSendBusy] = useState(false);
+  const [sendResult, setSendResult] = useState(null);
 
-  const [markScope, setMarkScope]                 = useState("selected");
-  const [markDepartment, setMarkDepartment]       = useState("");
-  const [markSendEmail, setMarkSendEmail]         = useState(true);
-  const [markBusy, setMarkBusy]                   = useState(false);
-  const [markResult, setMarkResult]               = useState(null);
+  const [markScope, setMarkScope] = useState("selected");
+  const [markDepartment, setMarkDepartment] = useState("");
+  const [markSendEmail, setMarkSendEmail] = useState(true);
+  const [markBusy, setMarkBusy] = useState(false);
+  const [markResult, setMarkResult] = useState(null);
 
   const toggleRunStaff = id => setRunSelected(prev => {
     const n = new Set(prev); n.has(id) ? n.delete(id) : n.add(id); return n;
@@ -2805,20 +2805,20 @@ function Payroll({ initialTab = "payslips" }) {
     setEditRecord(p);
     const prof = (p.admins?.staff_profiles || [])[0] || {};
     setEf({
-      gross:          String(p.gross_pay ?? ""),
-      tax:            String(p.tax ?? "0"),
-      pension:        String(p.pension ?? "0"),
-      nhf:            String(p.nhf ?? "0"),
-      status:         p.status ?? "pending",
-      bank_name:      prof.bank_name      || "",
+      gross: String(p.gross_pay ?? ""),
+      tax: String(p.tax ?? "0"),
+      pension: String(p.pension ?? "0"),
+      nhf: String(p.nhf ?? "0"),
+      status: p.status ?? "pending",
+      bank_name: prof.bank_name || "",
       account_number: prof.account_number || "",
-      account_name:   prof.account_name   || "",
+      account_name: prof.account_name || "",
     });
   };
 
   const computeNet = () => {
     const g = parseFloat(ef.gross) || 0, t = parseFloat(ef.tax) || 0,
-          pe = parseFloat(ef.pension) || 0, n = parseFloat(ef.nhf) || 0;
+      pe = parseFloat(ef.pension) || 0, n = parseFloat(ef.nhf) || 0;
     return Math.max(0, g - t - pe - n);
   };
 
@@ -2830,18 +2830,18 @@ function Payroll({ initialTab = "payslips" }) {
         method: "PATCH",
         body: JSON.stringify({
           gross_pay: parseFloat(ef.gross) || 0,
-          tax:       parseFloat(ef.tax)   || 0,
-          pension:   parseFloat(ef.pension) || 0,
-          nhf:       parseFloat(ef.nhf)   || 0,
-          net_pay:   computeNet(),
-          status:    ef.status,
+          tax: parseFloat(ef.tax) || 0,
+          pension: parseFloat(ef.pension) || 0,
+          nhf: parseFloat(ef.nhf) || 0,
+          net_pay: computeNet(),
+          status: ef.status,
         })
       });
       // Save bank details separately if any field is filled
       const bankPayload = {
-        bank_name:      ef.bank_name      || null,
+        bank_name: ef.bank_name || null,
         account_number: ef.account_number || null,
-        account_name:   ef.account_name   || null,
+        account_name: ef.account_name || null,
       };
       if (Object.values(bankPayload).some(v => v)) {
         await apiFetch(`${API_BASE}/hr/payroll/${editRecord.id}/bank-details`, {
@@ -2941,7 +2941,7 @@ function Payroll({ initialTab = "payslips" }) {
   };
 
   const sendPayslip = async p => {
-    const name   = p.admins?.full_name || "this staff member";
+    const name = p.admins?.full_name || "this staff member";
     const period = p.period_start ? new Date(p.period_start).toLocaleDateString(undefined, { month: "long", year: "numeric" }) : "this period";
     if (!confirm(`Email payslip to ${name} for ${period}?`)) return;
     setSendingPayslipId(p.id);
@@ -2956,8 +2956,8 @@ function Payroll({ initialTab = "payslips" }) {
 
   // Bulk actions
   const allVisibleIds = payroll.map(p => p.id);
-  const allSelected   = allVisibleIds.length > 0 && allVisibleIds.every(id => selected.has(id));
-  const someSelected  = selected.size > 0;
+  const allSelected = allVisibleIds.length > 0 && allVisibleIds.every(id => selected.has(id));
+  const someSelected = selected.size > 0;
 
   const toggleAll = () => {
     if (allSelected) setSelected(new Set());
@@ -3055,9 +3055,11 @@ function Payroll({ initialTab = "payslips" }) {
             </select>
 
             {someSelected && (
-              <div style={{ display: "flex", gap: 8, alignItems: "center",
+              <div style={{
+                display: "flex", gap: 8, alignItems: "center",
                 background: dark ? "#1e3a2f" : "#ECFDF5", border: "1px solid #10B98133",
-                borderRadius: 8, padding: "6px 14px" }}>
+                borderRadius: 8, padding: "6px 14px"
+              }}>
                 <span style={{ fontSize: 12, fontWeight: 700, color: "#10B981" }}>{selected.size} selected</span>
                 <button className="bg" style={{ fontSize: 11, padding: "4px 12px", borderColor: "#10B981", color: "#10B981" }}
                   onClick={() => bulkSetStatus("paid")} disabled={bulkBusy}>
@@ -3077,16 +3079,22 @@ function Payroll({ initialTab = "payslips" }) {
               {runResult ? (
                 /* ── Success screen ── */
                 <div style={{ display: "flex", flexDirection: "column", alignItems: "center", gap: 20, padding: "12px 0 8px" }}>
-                  <div style={{ width: 64, height: 64, borderRadius: "50%", background: "#10B98118",
+                  <div style={{
+                    width: 64, height: 64, borderRadius: "50%", background: "#10B98118",
                     border: "2px solid #10B981", display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 28 }}>✓</div>
+                    fontSize: 28
+                  }}>✓</div>
                   <div style={{ textAlign: "center" }}>
                     <div style={{ fontSize: 18, fontWeight: 800, color: C.text }}>{runResult.message}</div>
                     {runResult.warnings?.length > 0 && (
-                      <div style={{ marginTop: 14, textAlign: "left", background: dark ? "#2d2000" : "#FFFBEB",
-                        border: "1px solid #FDE68A", borderRadius: 10, padding: "12px 16px" }}>
-                        <div style={{ fontSize: 11, fontWeight: 800, color: "#92400E", textTransform: "uppercase",
-                          letterSpacing: 0.5, marginBottom: 8 }}>⚠ Skipped ({runResult.warnings.length})</div>
+                      <div style={{
+                        marginTop: 14, textAlign: "left", background: dark ? "#2d2000" : "#FFFBEB",
+                        border: "1px solid #FDE68A", borderRadius: 10, padding: "12px 16px"
+                      }}>
+                        <div style={{
+                          fontSize: 11, fontWeight: 800, color: "#92400E", textTransform: "uppercase",
+                          letterSpacing: 0.5, marginBottom: 8
+                        }}>⚠ Skipped ({runResult.warnings.length})</div>
                         {runResult.warnings.map((w, i) => (
                           <div key={i} style={{ fontSize: 12, color: dark ? "#FCD34D" : "#78350F", marginBottom: 4 }}>• {w}</div>
                         ))}
@@ -3100,44 +3108,60 @@ function Payroll({ initialTab = "payslips" }) {
                 <div style={{ display: "flex", flexDirection: "column", gap: 0 }}>
 
                   {/* Period banner */}
-                  <div style={{ background: dark ? "#1a1d24" : "#F8FAFF",
+                  <div style={{
+                    background: dark ? "#1a1d24" : "#F8FAFF",
                     border: `1px solid ${C.border}`, borderRadius: 10,
                     padding: "14px 18px", marginBottom: 20,
-                    display: "flex", justifyContent: "space-between", alignItems: "center" }}>
+                    display: "flex", justifyContent: "space-between", alignItems: "center"
+                  }}>
                     <div>
-                      <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase",
-                        letterSpacing: 0.5 }}>Pay Period</div>
+                      <div style={{
+                        fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase",
+                        letterSpacing: 0.5
+                      }}>Pay Period</div>
                       <div style={{ fontSize: 16, fontWeight: 900, color: T.gold, marginTop: 3 }}>
                         {new Date().toLocaleDateString(undefined, { month: "long", year: "numeric" })}
                       </div>
                     </div>
                     <div style={{ textAlign: "right" }}>
-                      <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase",
-                        letterSpacing: 0.5 }}>Active Staff</div>
+                      <div style={{
+                        fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase",
+                        letterSpacing: 0.5
+                      }}>Active Staff</div>
                       <div style={{ fontSize: 16, fontWeight: 900, color: C.text, marginTop: 3 }}>{staff.length}</div>
                     </div>
                   </div>
 
                   {/* Scope selector */}
-                  <div style={{ fontSize: 12, fontWeight: 800, color: C.muted, textTransform: "uppercase",
-                    letterSpacing: 0.5, marginBottom: 10 }}>Select Scope</div>
+                  <div style={{
+                    fontSize: 12, fontWeight: 800, color: C.muted, textTransform: "uppercase",
+                    letterSpacing: 0.5, marginBottom: 10
+                  }}>Select Scope</div>
                   <div style={{ display: "flex", gap: 12, marginBottom: 22 }}>
                     {[
-                      { key: "all",    icon: "👥", title: "All Active Staff",
-                        sub: `Run for all ${staff.length} active staff members` },
-                      { key: "select", icon: "🎯", title: "Select Specific Staff",
-                        sub: "Choose one or more staff members" },
+                      {
+                        key: "all", icon: "👥", title: "All Active Staff",
+                        sub: `Run for all ${staff.length} active staff members`
+                      },
+                      {
+                        key: "select", icon: "🎯", title: "Select Specific Staff",
+                        sub: "Choose one or more staff members"
+                      },
                     ].map(opt => (
                       <div key={opt.key} onClick={() => { setRunScope(opt.key); setRunSelected(new Set()); }}
-                        style={{ flex: 1, padding: "16px 18px", borderRadius: 12, cursor: "pointer",
+                        style={{
+                          flex: 1, padding: "16px 18px", borderRadius: 12, cursor: "pointer",
                           border: `2px solid ${runScope === opt.key ? T.gold : C.border}`,
                           background: runScope === opt.key
                             ? (dark ? "#2a2000" : "#FFFBEB")
                             : (dark ? C.card : "#FAFAFA"),
-                          transition: "all 0.15s" }}>
+                          transition: "all 0.15s"
+                        }}>
                         <div style={{ fontSize: 22, marginBottom: 8 }}>{opt.icon}</div>
-                        <div style={{ fontSize: 13, fontWeight: 800, color: runScope === opt.key ? T.gold : C.text,
-                          marginBottom: 4 }}>{opt.title}</div>
+                        <div style={{
+                          fontSize: 13, fontWeight: 800, color: runScope === opt.key ? T.gold : C.text,
+                          marginBottom: 4
+                        }}>{opt.title}</div>
                         <div style={{ fontSize: 11, color: C.muted, lineHeight: 1.5 }}>{opt.sub}</div>
                       </div>
                     ))}
@@ -3148,16 +3172,20 @@ function Payroll({ initialTab = "payslips" }) {
                     <div style={{ marginBottom: 22 }}>
                       {/* Search */}
                       <div style={{ position: "relative", marginBottom: 12 }}>
-                        <span style={{ position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)",
-                          color: C.muted, fontSize: 14, pointerEvents: "none" }}>🔍</span>
+                        <span style={{
+                          position: "absolute", left: 12, top: "50%", transform: "translateY(-50%)",
+                          color: C.muted, fontSize: 14, pointerEvents: "none"
+                        }}>🔍</span>
                         <input className="inp" placeholder="Search by name or department…"
                           value={runSearch} onChange={e => setRunSearch(e.target.value)}
                           style={{ paddingLeft: 36, fontSize: 13 }} />
                       </div>
 
                       {/* Select-all bar */}
-                      <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
-                        marginBottom: 8 }}>
+                      <div style={{
+                        display: "flex", justifyContent: "space-between", alignItems: "center",
+                        marginBottom: 8
+                      }}>
                         <div style={{ fontSize: 12, color: C.muted }}>
                           {runSelected.size > 0
                             ? <span style={{ color: T.gold, fontWeight: 700 }}>{runSelected.size} selected</span>
@@ -3178,8 +3206,10 @@ function Payroll({ initialTab = "payslips" }) {
                       </div>
 
                       {/* Staff list */}
-                      <div style={{ height: 320, overflowY: "auto",
-                        border: `1px solid ${C.border}`, borderRadius: 10 }}>
+                      <div style={{
+                        height: 320, overflowY: "auto",
+                        border: `1px solid ${C.border}`, borderRadius: 10
+                      }}>
                         {filteredRunStaff.length === 0 ? (
                           <div style={{ padding: 24, textAlign: "center", color: C.muted, fontSize: 13 }}>
                             No staff match your search.
@@ -3187,36 +3217,44 @@ function Payroll({ initialTab = "payslips" }) {
                         ) : filteredRunStaff.map((s, idx) => {
                           const isChosen = runSelected.has(s.id);
                           const initials = (s.full_name || "??").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase();
-                          const profile  = (s.staff_profiles || [{}])[0] || {};
-                          const salary   = profile.base_salary ? `₦${Number(profile.base_salary).toLocaleString()}/mo` : "No salary set";
+                          const profile = (s.staff_profiles || [{}])[0] || {};
+                          const salary = profile.base_salary ? `₦${Number(profile.base_salary).toLocaleString()}/mo` : "No salary set";
                           return (
                             <div key={s.id} onClick={() => toggleRunStaff(s.id)}
-                              style={{ display: "flex", alignItems: "center", gap: 14,
+                              style={{
+                                display: "flex", alignItems: "center", gap: 14,
                                 padding: "12px 16px", cursor: "pointer",
                                 borderBottom: idx < filteredRunStaff.length - 1 ? `1px solid ${C.border}` : "none",
                                 background: isChosen
                                   ? (dark ? "#1e3a1e" : "#F0FDF4")
                                   : (idx % 2 === 0 ? (dark ? C.card : "#fff") : (dark ? "#13151a" : "#FAFAFA")),
-                                transition: "background 0.1s" }}>
+                                transition: "background 0.1s"
+                              }}>
                               {/* Checkbox */}
-                              <div style={{ width: 20, height: 20, borderRadius: 6, flexShrink: 0,
+                              <div style={{
+                                width: 20, height: 20, borderRadius: 6, flexShrink: 0,
                                 border: `2px solid ${isChosen ? "#10B981" : C.border}`,
                                 background: isChosen ? "#10B981" : "transparent",
                                 display: "flex", alignItems: "center", justifyContent: "center",
-                                transition: "all 0.15s" }}>
+                                transition: "all 0.15s"
+                              }}>
                                 {isChosen && <span style={{ color: "#fff", fontSize: 12, lineHeight: 1 }}>✓</span>}
                               </div>
                               {/* Avatar */}
-                              <div style={{ width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
+                              <div style={{
+                                width: 36, height: 36, borderRadius: "50%", flexShrink: 0,
                                 background: `hsl(${(initials.charCodeAt(0) * 37) % 360}, 55%, ${dark ? "35%" : "70%"})`,
                                 display: "flex", alignItems: "center", justifyContent: "center",
-                                fontSize: 13, fontWeight: 800, color: "#fff" }}>
+                                fontSize: 13, fontWeight: 800, color: "#fff"
+                              }}>
                                 {initials}
                               </div>
                               {/* Info */}
                               <div style={{ flex: 1, minWidth: 0 }}>
-                                <div style={{ fontWeight: 700, fontSize: 13, color: C.text,
-                                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis" }}>
+                                <div style={{
+                                  fontWeight: 700, fontSize: 13, color: C.text,
+                                  whiteSpace: "nowrap", overflow: "hidden", textOverflow: "ellipsis"
+                                }}>
                                   {s.full_name}
                                 </div>
                                 <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>
@@ -3224,8 +3262,10 @@ function Payroll({ initialTab = "payslips" }) {
                                 </div>
                               </div>
                               {/* Salary */}
-                              <div style={{ fontSize: 11, color: profile.base_salary ? T.gold : "#F87171",
-                                fontWeight: 700, textAlign: "right", flexShrink: 0 }}>
+                              <div style={{
+                                fontSize: 11, color: profile.base_salary ? T.gold : "#F87171",
+                                fontWeight: 700, textAlign: "right", flexShrink: 0
+                              }}>
                                 {salary}
                               </div>
                             </div>
@@ -3237,10 +3277,12 @@ function Payroll({ initialTab = "payslips" }) {
 
                   {/* Warning for staff with no salary */}
                   {runScope === "all" && staff.some(s => !(s.staff_profiles?.[0]?.base_salary)) && (
-                    <div style={{ background: dark ? "#2d1a00" : "#FFFBEB",
+                    <div style={{
+                      background: dark ? "#2d1a00" : "#FFFBEB",
                       border: "1px solid #FDE68A", borderRadius: 10,
                       padding: "10px 14px", marginBottom: 18,
-                      fontSize: 12, color: dark ? "#FCD34D" : "#92400E" }}>
+                      fontSize: 12, color: dark ? "#FCD34D" : "#92400E"
+                    }}>
                       ⚠ {staff.filter(s => !(s.staff_profiles?.[0]?.base_salary)).length} staff member(s) have no
                       base salary set and will be skipped. Set their salary in Staff Management first.
                     </div>
@@ -3248,9 +3290,11 @@ function Payroll({ initialTab = "payslips" }) {
 
                   {/* Run button */}
                   <button className="bp"
-                    style={{ padding: "14px 0", fontSize: 15, fontWeight: 800,
+                    style={{
+                      padding: "14px 0", fontSize: 15, fontWeight: 800,
                       opacity: running ? 0.7 : 1,
-                      background: running ? C.border : undefined }}
+                      background: running ? C.border : undefined
+                    }}
                     onClick={executeRunPayroll}
                     disabled={running || (runScope === "select" && runSelected.size === 0)}>
                     {running ? (
@@ -3282,9 +3326,11 @@ function Payroll({ initialTab = "payslips" }) {
                     { key: "all", title: "All Payslips", subtitle: "Send to every payroll record" },
                   ].map(opt => (
                     <div key={opt.key} onClick={() => setSendScope(opt.key)}
-                      style={{ flex: 1, minWidth: 180, padding: 16, borderRadius: 12, cursor: "pointer",
+                      style={{
+                        flex: 1, minWidth: 180, padding: 16, borderRadius: 12, cursor: "pointer",
                         border: `2px solid ${sendScope === opt.key ? T.gold : C.border}`,
-                        background: sendScope === opt.key ? (dark ? "#1f2b22" : "#F0FDF4") : (dark ? C.card : "#fff") }}>
+                        background: sendScope === opt.key ? (dark ? "#1f2b22" : "#F0FDF4") : (dark ? C.card : "#fff")
+                      }}>
                       <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 6 }}>{opt.title}</div>
                       <div style={{ fontSize: 11, color: C.muted }}>{opt.subtitle}</div>
                     </div>
@@ -3328,9 +3374,11 @@ function Payroll({ initialTab = "payslips" }) {
                     { key: "all", title: "All Payslips", subtitle: "Mark every payroll record" },
                   ].map(opt => (
                     <div key={opt.key} onClick={() => setMarkScope(opt.key)}
-                      style={{ flex: 1, minWidth: 180, padding: 16, borderRadius: 12, cursor: "pointer",
+                      style={{
+                        flex: 1, minWidth: 180, padding: 16, borderRadius: 12, cursor: "pointer",
                         border: `2px solid ${markScope === opt.key ? T.gold : C.border}`,
-                        background: markScope === opt.key ? (dark ? "#1f2b22" : "#F0FDF4") : (dark ? C.card : "#fff") }}>
+                        background: markScope === opt.key ? (dark ? "#1f2b22" : "#F0FDF4") : (dark ? C.card : "#fff")
+                      }}>
                       <div style={{ fontSize: 13, fontWeight: 800, marginBottom: 6 }}>{opt.title}</div>
                       <div style={{ fontSize: 11, color: C.muted }}>{opt.subtitle}</div>
                     </div>
@@ -3392,14 +3440,18 @@ function Payroll({ initialTab = "payslips" }) {
               <div style={{ display: "flex", flexDirection: "column", gap: 18 }}>
 
                 {/* Staff identity banner */}
-                <div style={{ display: "flex", alignItems: "center", gap: 14,
+                <div style={{
+                  display: "flex", alignItems: "center", gap: 14,
                   background: dark ? "rgba(251,176,64,0.08)" : "#FFFBEB",
-                  border: "1px solid #FBB04033", borderRadius: 12, padding: "14px 18px" }}>
-                  <div style={{ width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
+                  border: "1px solid #FBB04033", borderRadius: 12, padding: "14px 18px"
+                }}>
+                  <div style={{
+                    width: 44, height: 44, borderRadius: "50%", flexShrink: 0,
                     background: T.gold + "33", border: `2px solid ${T.gold}55`,
                     display: "flex", alignItems: "center", justifyContent: "center",
-                    fontSize: 16, fontWeight: 900, color: T.gold }}>
-                    {(editRecord.admins?.full_name || "?").split(" ").map(n => n[0]).join("").slice(0,2).toUpperCase()}
+                    fontSize: 16, fontWeight: 900, color: T.gold
+                  }}>
+                    {(editRecord.admins?.full_name || "?").split(" ").map(n => n[0]).join("").slice(0, 2).toUpperCase()}
                   </div>
                   <div style={{ flex: 1 }}>
                     <div style={{ fontSize: 15, fontWeight: 800, color: C.text }}>{editRecord.admins?.full_name}</div>
@@ -3413,8 +3465,10 @@ function Payroll({ initialTab = "payslips" }) {
                 </div>
 
                 {/* ── Payroll Figures ── */}
-                <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase",
-                  letterSpacing: 0.6, paddingBottom: 8, borderBottom: `1px solid ${C.border}` }}>
+                <div style={{
+                  fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase",
+                  letterSpacing: 0.6, paddingBottom: 8, borderBottom: `1px solid ${C.border}`
+                }}>
                   Payroll Figures
                 </div>
                 <div className="g2" style={{ gap: 14 }}>
@@ -3427,9 +3481,11 @@ function Payroll({ initialTab = "payslips" }) {
                 </div>
 
                 {/* Net pay display */}
-                <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
+                <div style={{
+                  display: "flex", justifyContent: "space-between", alignItems: "center",
                   background: dark ? "rgba(74,222,128,0.07)" : "#F0FDF4",
-                  border: "1px solid #4ADE8022", borderRadius: 10, padding: "12px 18px" }}>
+                  border: "1px solid #4ADE8022", borderRadius: 10, padding: "12px 18px"
+                }}>
                   <div>
                     <div style={{ fontSize: 10, fontWeight: 800, color: C.muted, textTransform: "uppercase", letterSpacing: 0.5 }}>Net Pay to Transfer</div>
                     <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>Gross − PAYE − Pension − NHF</div>
@@ -3438,34 +3494,44 @@ function Payroll({ initialTab = "payslips" }) {
                 </div>
 
                 {/* ── Bank Details ── */}
-                <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase",
+                <div style={{
+                  fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase",
                   letterSpacing: 0.6, paddingBottom: 8, borderBottom: `1px solid ${C.border}`,
-                  marginTop: 4 }}>
+                  marginTop: 4
+                }}>
                   Bank Details
                   {(!ef.bank_name && !ef.account_number && !ef.account_name) && (
-                    <span style={{ marginLeft: 10, fontWeight: 600, color: "#F87171",
-                      textTransform: "none", fontSize: 10 }}>⚠ Not set — add now to process payment</span>
+                    <span style={{
+                      marginLeft: 10, fontWeight: 600, color: "#F87171",
+                      textTransform: "none", fontSize: 10
+                    }}>⚠ Not set — add now to process payment</span>
                   )}
                 </div>
 
                 {/* Read-only display if all 3 are already set, editable otherwise */}
                 {(ef.bank_name && ef.account_number && ef.account_name) ? (
-                  <div style={{ background: dark ? "#1a2a1a" : "#F0FDF4",
-                    border: "1px solid #10B98133", borderRadius: 10, overflow: "hidden" }}>
+                  <div style={{
+                    background: dark ? "#1a2a1a" : "#F0FDF4",
+                    border: "1px solid #10B98133", borderRadius: 10, overflow: "hidden"
+                  }}>
                     {[
-                      ["Bank Name",       ef.bank_name],
-                      ["Account Number",  ef.account_number],
-                      ["Account Name",    ef.account_name],
+                      ["Bank Name", ef.bank_name],
+                      ["Account Number", ef.account_number],
+                      ["Account Name", ef.account_name],
                     ].map(([label, val]) => (
-                      <div key={label} style={{ display: "flex", justifyContent: "space-between",
-                        padding: "10px 16px", borderBottom: `1px solid ${C.border}`, fontSize: 13 }}>
+                      <div key={label} style={{
+                        display: "flex", justifyContent: "space-between",
+                        padding: "10px 16px", borderBottom: `1px solid ${C.border}`, fontSize: 13
+                      }}>
                         <span style={{ color: C.muted, fontWeight: 600 }}>{label}</span>
                         <span style={{ fontWeight: 800, color: C.text }}>{val}</span>
                       </div>
                     ))}
                     <div style={{ padding: "8px 16px" }}>
-                      <button className="bg" style={{ fontSize: 11, padding: "4px 14px",
-                        borderColor: T.gold, color: T.gold }}
+                      <button className="bg" style={{
+                        fontSize: 11, padding: "4px 14px",
+                        borderColor: T.gold, color: T.gold
+                      }}
                         onClick={() => setEf(x => ({ ...x, _editBank: true }))}>
                         ✏ Edit Bank Details
                       </button>
@@ -3493,9 +3559,11 @@ function Payroll({ initialTab = "payslips" }) {
 
                 {/* Editable bank fields when "Edit Bank Details" was clicked */}
                 {ef._editBank && (
-                  <div style={{ display: "flex", flexDirection: "column", gap: 12,
+                  <div style={{
+                    display: "flex", flexDirection: "column", gap: 12,
                     padding: 14, background: dark ? "#1a1a2e" : "#FFFBEB",
-                    border: `1px solid ${T.gold}33`, borderRadius: 10 }}>
+                    border: `1px solid ${T.gold}33`, borderRadius: 10
+                  }}>
                     <div style={{ fontSize: 11, fontWeight: 800, color: T.gold }}>Editing Bank Details</div>
                     <div><Lbl>Bank Name</Lbl>
                       <input className="inp" value={ef.bank_name}
@@ -3515,9 +3583,11 @@ function Payroll({ initialTab = "payslips" }) {
                 )}
 
                 {/* ── Status ── */}
-                <div style={{ fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase",
+                <div style={{
+                  fontSize: 11, fontWeight: 800, color: C.muted, textTransform: "uppercase",
                   letterSpacing: 0.6, paddingBottom: 8, borderBottom: `1px solid ${C.border}`,
-                  marginTop: 4 }}>
+                  marginTop: 4
+                }}>
                   Payment Status
                 </div>
                 <div><Lbl>Mark this record as</Lbl>
@@ -3620,9 +3690,11 @@ function Payroll({ initialTab = "payslips" }) {
                               <button className="bg" style={{ fontSize: 11, padding: "5px 10px" }}
                                 onClick={() => setSelectedPayslip(p)}>View</button>
                               <button className="bg"
-                                style={{ fontSize: 11, padding: "5px 10px",
+                                style={{
+                                  fontSize: 11, padding: "5px 10px",
                                   borderColor: "#10B981", color: "#10B981",
-                                  opacity: sending ? 0.6 : 1 }}
+                                  opacity: sending ? 0.6 : 1
+                                }}
                                 onClick={() => sendPayslip(p)} disabled={sending}
                                 title={isSent ? `Resend (last sent ${new Date(p.payslip_sent_at).toLocaleDateString()})` : "Email payslip to staff"}>
                                 {sending ? "…" : isSent ? "Resend" : "📧"}
@@ -8732,7 +8804,7 @@ function TaxConfig() {
   useEffect(() => {
     apiFetch(`${API_BASE}/hr/tax-config`)
       .then(d => { if (d) setConfig(c => ({ ...c, ...d })); })
-      .catch(() => {})
+      .catch(() => { })
       .finally(() => setLoading(false));
   }, []);
 
@@ -8745,8 +8817,10 @@ function TaxConfig() {
   };
 
   const Field = ({ label, hint, field, suffix = "%", step = "0.5", min = "0", max = "100" }) => (
-    <div style={{ display: "flex", justifyContent: "space-between", alignItems: "center",
-      padding: "12px 0", borderBottom: `1px solid ${C.border}` }}>
+    <div style={{
+      display: "flex", justifyContent: "space-between", alignItems: "center",
+      padding: "12px 0", borderBottom: `1px solid ${C.border}`
+    }}>
       <div>
         <div style={{ fontSize: 13, color: C.text, fontWeight: 600 }}>{label}</div>
         {hint && <div style={{ fontSize: 11, color: C.muted, marginTop: 2 }}>{hint}</div>}
@@ -8754,21 +8828,23 @@ function TaxConfig() {
       <div style={{ display: "flex", alignItems: "center", gap: 8 }}>
         <input type="number" step={step} min={min} max={max} value={config[field]}
           onChange={e => setConfig(c => ({ ...c, [field]: parseFloat(e.target.value) }))}
-          style={{ width: 80, padding: "6px 10px", borderRadius: 8,
+          style={{
+            width: 80, padding: "6px 10px", borderRadius: 8,
             border: `1px solid ${C.border}`, background: dark ? "#1a1a2e" : "#f8f8f8",
-            color: C.text, fontSize: 14, fontWeight: 800, textAlign: "right" }} />
+            color: C.text, fontSize: 14, fontWeight: 800, textAlign: "right"
+          }} />
         <span style={{ fontSize: 12, color: C.muted, width: 28 }}>{suffix}</span>
       </div>
     </div>
   );
 
   const BANDS_2026 = [
-    ["₦0 – ₦800,000",         "0%",  "Exempt"],
+    ["₦0 – ₦800,000", "0%", "Exempt"],
     ["₦800,001 – ₦3,000,000", "15%", ""],
-    ["₦3,000,001 – ₦12,000,000","18%",""],
-    ["₦12,000,001 – ₦25,000,000","21%",""],
-    ["₦25,000,001 – ₦50,000,000","23%",""],
-    ["Above ₦50,000,000",      "25%", "Top rate"],
+    ["₦3,000,001 – ₦12,000,000", "18%", ""],
+    ["₦12,000,001 – ₦25,000,000", "21%", ""],
+    ["₦25,000,001 – ₦50,000,000", "23%", ""],
+    ["Above ₦50,000,000", "25%", "Top rate"],
   ];
 
   return (
@@ -8781,8 +8857,10 @@ function TaxConfig() {
       </div>
 
       {/* NTA 2025 notice banner */}
-      <div style={{ background: "#FEF3C7", border: "1px solid #FDE68A", borderRadius: 10,
-        padding: "12px 18px", marginBottom: 22, display: "flex", gap: 12, alignItems: "flex-start" }}>
+      <div style={{
+        background: "#FEF3C7", border: "1px solid #FDE68A", borderRadius: 10,
+        padding: "12px 18px", marginBottom: 22, display: "flex", gap: 12, alignItems: "flex-start"
+      }}>
         <span style={{ fontSize: 18 }}>⚖️</span>
         <div>
           <div style={{ fontSize: 13, fontWeight: 800, color: "#92400E" }}>Nigeria Tax Act 2025 — Now in Effect</div>
@@ -8804,13 +8882,17 @@ function TaxConfig() {
               <label style={{ display: "flex", alignItems: "center", gap: 8, cursor: "pointer" }}>
                 <span style={{ fontSize: 12, color: C.muted }}>Enabled</span>
                 <div onClick={() => setConfig(c => ({ ...c, paye_enabled: !c.paye_enabled }))}
-                  style={{ width: 40, height: 22, borderRadius: 11,
+                  style={{
+                    width: 40, height: 22, borderRadius: 11,
                     background: config.paye_enabled ? "#4ADE80" : C.border,
-                    position: "relative", cursor: "pointer", transition: "background 0.2s" }}>
-                  <div style={{ position: "absolute", top: 3,
+                    position: "relative", cursor: "pointer", transition: "background 0.2s"
+                  }}>
+                  <div style={{
+                    position: "absolute", top: 3,
                     left: config.paye_enabled ? 21 : 3,
                     width: 16, height: 16, borderRadius: "50%",
-                    background: "#fff", transition: "left 0.2s" }} />
+                    background: "#fff", transition: "left 0.2s"
+                  }} />
                 </div>
               </label>
             </div>
@@ -8820,17 +8902,23 @@ function TaxConfig() {
             </div>
 
             {/* 2026 Bands table */}
-            <div style={{ background: dark ? "#1a1a2e" : "#FEF2F2", borderRadius: 8,
-              border: `1px solid ${dark ? "#3f3f5a" : "#FECACA"}`, overflow: "hidden" }}>
-              <div style={{ padding: "8px 12px", background: "#F87171", fontSize: 10,
-                fontWeight: 800, color: "#fff", textTransform: "uppercase", letterSpacing: 1 }}>
+            <div style={{
+              background: dark ? "#1a1a2e" : "#FEF2F2", borderRadius: 8,
+              border: `1px solid ${dark ? "#3f3f5a" : "#FECACA"}`, overflow: "hidden"
+            }}>
+              <div style={{
+                padding: "8px 12px", background: "#F87171", fontSize: 10,
+                fontWeight: 800, color: "#fff", textTransform: "uppercase", letterSpacing: 1
+              }}>
                 NTA 2025 PAYE Bands (Fixed by FIRS — not editable)
               </div>
               {BANDS_2026.map(([band, rate, note]) => (
-                <div key={band} style={{ display: "flex", justifyContent: "space-between",
+                <div key={band} style={{
+                  display: "flex", justifyContent: "space-between",
                   alignItems: "center", padding: "7px 12px",
                   borderBottom: `1px solid ${dark ? "#2d2d4a" : "#FEE2E2"}`,
-                  fontSize: 12 }}>
+                  fontSize: 12
+                }}>
                   <span style={{ color: C.sub }}>{band}</span>
                   <div style={{ display: "flex", gap: 8, alignItems: "center" }}>
                     {note && <span style={{ fontSize: 10, color: "#F87171", fontStyle: "italic" }}>{note}</span>}
@@ -14296,11 +14384,39 @@ function PublicGuarantorForm() {
     finally { setChecking(false); }
   };
 
+  // Compress an image file to JPEG before storing it.
+  // Max dimension 1600px, quality 0.75 — keeps file well under 1 MB for typical photos.
+  const compressImage = (file) => new Promise((resolve) => {
+    // PDFs and non-images: pass through untouched
+    if (!file.type.startsWith("image/")) { resolve(file); return; }
+    const img = new Image();
+    const url = URL.createObjectURL(file);
+    img.onload = () => {
+      URL.revokeObjectURL(url);
+      const MAX = 1600;
+      let { width, height } = img;
+      if (width > MAX || height > MAX) {
+        if (width > height) { height = Math.round(height * MAX / width); width = MAX; }
+        else { width = Math.round(width * MAX / height); height = MAX; }
+      }
+      const canvas = document.createElement("canvas");
+      canvas.width = width; canvas.height = height;
+      canvas.getContext("2d").drawImage(img, 0, 0, width, height);
+      canvas.toBlob(blob => {
+        resolve(new File([blob], file.name.replace(/\.[^.]+$/, ".jpg"), { type: "image/jpeg" }));
+      }, "image/jpeg", 0.75);
+    };
+    img.onerror = () => { URL.revokeObjectURL(url); resolve(file); };
+    img.src = url;
+  });
+
   const handleFile = (file, setter, key) => {
     if (!file) return;
-    const r = new FileReader();
-    r.onloadend = () => setter(p => ({ ...p, [`${key}_file`]: file, [`${key}_preview`]: r.result }));
-    r.readAsDataURL(file);
+    compressImage(file).then(compressed => {
+      const r = new FileReader();
+      r.onloadend = () => setter(p => ({ ...p, [`${key}_file`]: compressed, [`${key}_preview`]: r.result }));
+      r.readAsDataURL(compressed);
+    });
   };
 
   // ── Submit Section A ──────────────────────────────────────────────────
@@ -14313,13 +14429,24 @@ function PublicGuarantorForm() {
     try {
       const fd = new FormData();
       fd.append("token", token); fd.append("email", email.trim()); fd.append("section", "employee");
-      fd.append("data", JSON.stringify({ ...empForm, signature: empSigRef.current.toDataURL("image/png"), signed_date: empForm.signed_date || new Date().toISOString().split("T")[0] }));
+      // Send signature as a proper file Blob (JPEG 70%) instead of base64 inside JSON
+      // to avoid hitting the multipart per-part size limit.
+      const empSigBlob = await new Promise(res => empSigRef.current.toBlob(res, "image/jpeg", 0.7));
+      fd.append("signature_file", empSigBlob, "employee_sig.jpg");
+      fd.append("data", JSON.stringify({ ...empForm, signed_date: empForm.signed_date || new Date().toISOString().split("T")[0] }));
       const res = await fetch(`${API_BASE}/guarantor/public/save-partial`, { method: "POST", body: fd });
       if (!res.ok) throw new Error((await res.json()).detail || "Failed to save.");
       const d = await res.json();
       setRelayLink(d.relay_link);
       setPhase("relay_screen");
-    } catch (e) { alert(e.message); }
+    } catch (e) {
+      const msg = e.message || "";
+      if (msg.toLowerCase().includes("part exceeded") || msg.toLowerCase().includes("maximum size") || msg.toLowerCase().includes("413") || msg.toLowerCase().includes("too large")) {
+        alert("The file you uploaded is too large. Please use an image under 10 MB and try again.");
+      } else {
+        alert(msg || "Something went wrong. Please check your connection and try again.");
+      }
+    }
     finally { setSubmitting(false); }
   };
 
@@ -14338,16 +14465,33 @@ function PublicGuarantorForm() {
     try {
       const fd = new FormData();
       fd.append("token", token); fd.append("email", email.trim()); fd.append("section", gNum === 1 ? "g1" : "g2");
-      const payload = { ...g, signature: sigRef.current.toDataURL("image/png"), signed_date: g.signed_date || new Date().toISOString().split("T")[0] };
+      // Send signature as a proper file Blob (JPEG 70%) to avoid per-part size limit
+      const gSigBlob = await new Promise(res => sigRef.current.toBlob(res, "image/jpeg", 0.7));
+      fd.append("signature_file", gSigBlob, `g${gNum}_sig.jpg`);
+      const payload = { ...g, signed_date: g.signed_date || new Date().toISOString().split("T")[0] };
       delete payload.passport_file; delete payload.id_doc_file;
       fd.append("data", JSON.stringify(payload));
       if (g.passport_file) fd.append("passport_photo", g.passport_file);
       if (g.id_doc_file) fd.append("id_document", g.id_doc_file);
       const res = await fetch(`${API_BASE}/guarantor/public/save-partial`, { method: "POST", body: fd });
-      if (!res.ok) throw new Error((await res.json()).detail || "Submission failed.");
+      if (!res.ok) {
+        const errData = await res.json().catch(() => ({}));
+        const detail = errData.detail || "";
+        if (detail.toLowerCase().includes("part exceeded") || detail.toLowerCase().includes("maximum size") || res.status === 413) {
+          throw new Error("One of your uploaded files is too large. Please use images under 10 MB and try again.");
+        }
+        throw new Error(detail || "Submission failed. Please try again.");
+      }
       setSuccessRole("guarantor");
       setPhase("success"); // Always show success — guarantors fill only their slot
-    } catch (e) { alert(e.message); }
+    } catch (e) {
+      const msg = e.message || "";
+      if (msg.toLowerCase().includes("part exceeded") || msg.toLowerCase().includes("maximum size")) {
+        alert("One of your uploaded files is too large. Please use images under 10 MB and try again.");
+      } else {
+        alert(msg || "Something went wrong. Please check your connection and try again.");
+      }
+    }
     finally { setSubmitting(false); }
   };
 
@@ -18220,6 +18364,10 @@ export default function App() {
     const urlParams = new URLSearchParams(window.location.search);
     if (urlParams.get("offer")) return;
     if (urlParams.get("token")) return; // Bio data public form
+    // Guarantor form: only bypass login if this is a guarantor link (slot 1 or 2).
+    // The employee filling Section A must still be logged in as staff.
+    const _gSlot = urlParams.get("guarantor") || urlParams.get("slot");
+    if (urlParams.get("guarantor_token") && _gSlot) return; // Guarantor sections B & C — no login required
 
     const savedToken = localStorage.getItem("ec_token");
     const savedUser = localStorage.getItem("admin"); // Main system stores user info in 'admin' key

@@ -59,6 +59,14 @@ async def lifespan(app: FastAPI):
     # Stop the background scheduler
     await stop_scheduler()
 
+# Raise multipart upload limit to 10 MB (default is 1 MB)
+# This affects file uploads on the guarantor form (passport photo / ID document)
+try:
+    from starlette.formparsers import MultiPartParser
+    MultiPartParser.max_part_size = 10 * 1024 * 1024  # 10 MB
+except Exception:
+    pass  # Non-fatal — falls back to starlette default
+
 app = FastAPI(title="Eximp & Cloves - Finance System", version="1.0.0", lifespan=lifespan)
 
 app.add_middleware(

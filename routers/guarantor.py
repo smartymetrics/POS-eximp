@@ -944,8 +944,9 @@ async def save_partial_submission(
     email:          str           = Form(...),
     section:        str           = Form(...),   # "employee" | "g1" | "g2"
     data:           str           = Form(...),   # JSON string
-    passport_photo: Optional[UploadFile] = File(None),
-    id_document:    Optional[UploadFile] = File(None),
+    passport_photo:  Optional[UploadFile] = File(None),
+    id_document:     Optional[UploadFile] = File(None),
+    signature_file:  Optional[UploadFile] = File(None),  # canvas blob sent as file (avoids base64-in-JSON part-size limit)
 ):
     fields = json.loads(data)
     db     = get_db()
@@ -970,7 +971,21 @@ async def save_partial_submission(
         except Exception:
             return None
 
+    async def _upload_sig_file(file: Optional[UploadFile], name: str) -> Optional[str]:
+        """Upload signature sent as a proper file part (preferred — avoids base64-in-JSON part-size limit)."""
+        if not file:
+            return None
+        try:
+            content = await file.read()
+            ext  = "jpg" if (file.content_type or "").endswith("jpeg") else "png"
+            path = f"guarantors/{submission_id}/{name}.{ext}"
+            upload_portal_file(path, content, file.content_type or "image/png")
+            return path
+        except Exception:
+            return None
+
     def _upload_sig(b64: Optional[str], name: str) -> Optional[str]:
+        """Fallback: upload signature from base64 string embedded in JSON data field."""
         if not b64 or "," not in b64:
             return None
         try:
@@ -983,7 +998,7 @@ async def save_partial_submission(
 
     # ── EMPLOYEE SECTION ──────────────────────────────────────────────────
     if section == "employee":
-        sig_path = _upload_sig(fields.get("signature"), "employee_sig")
+        sig_path = await _upload_sig_file(signature_file, "employee_sig") or _upload_sig(fields.get("signature"), "employee_sig")
 
         meta = _signing_meta(request)
         payload: dict = {
@@ -1023,7 +1038,7 @@ async def save_partial_submission(
         slot    = 1 if section == "g1" else 2
         sig_key = f"g{slot}_sig"
 
-        sig_path      = _upload_sig(fields.get("signature"), sig_key)
+        sig_path      = await _upload_sig_file(signature_file, sig_key) or _upload_sig(fields.get("signature"), sig_key)
         passport_path = await _upload_file(passport_photo, f"g{slot}_passport")
         id_doc_path   = await _upload_file(id_document,    f"g{slot}_id")
 
