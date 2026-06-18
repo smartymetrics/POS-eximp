@@ -15267,8 +15267,12 @@ function StaffPortal({ user, onLogout }) {
   const [showTinModal, setShowTinModal] = useState(false);
 
   useEffect(() => {
-    // Check if TIN is missing for existing staff (silent patch)
-    if (user && !user.tin) {
+    // Check if TIN is missing for existing staff (silent patch).
+    // TIN may live on user.tin (from login/me response) OR on the
+    // nested staff_profiles record that biodata submission populates.
+    const tinFromProfile = user?.staff_profiles?.[0]?.tin;
+    const hasTin = user?.tin || tinFromProfile;
+    if (user && !hasTin) {
       setShowTinModal(true);
     }
   }, [user]);
@@ -15330,9 +15334,8 @@ function StaffPortal({ user, onLogout }) {
           {showTinModal && <TINUpdateModal onClose={(success) => {
             setShowTinModal(false);
             if (success) {
-              // Optionally refresh profile if needed, but closing is enough for the UI to be clean
-              // Update local state to avoid re-prompting in current session
-              user.tin = "UPDATED";
+              // Stamp user.tin so the useEffect guard won't re-fire in the same session
+              user.tin = success;
             }
           }} />}
           <div className="ho" style={{ fontSize: 24, marginBottom: 4 }}>Welcome, {user.full_name?.split(" ")[0]} 👋</div>
@@ -18373,7 +18376,22 @@ export default function App() {
 
     if (savedToken && savedUser) {
       try {
+        // Restore from localStorage immediately so UI shows fast
         setUser(JSON.parse(savedUser));
+        // Then silently refresh from /me to pick up any fields (e.g. tin)
+        // that may have been added/filled after this session was first created
+        fetch("/api/auth/me", {
+          headers: { Authorization: `Bearer ${savedToken}` }
+        })
+          .then(r => r.ok ? r.json() : null)
+          .then(fresh => {
+            if (fresh && fresh.id) {
+              const merged = { ...JSON.parse(savedUser), ...fresh };
+              localStorage.setItem("admin", JSON.stringify(merged));
+              setUser(merged);
+            }
+          })
+          .catch(() => {/* silent - user already set from localStorage */});
       } catch (e) {
         localStorage.removeItem("ec_token");
         localStorage.removeItem("admin");

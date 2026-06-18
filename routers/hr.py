@@ -763,6 +763,30 @@ async def get_staff_profile(staff_id: str, current_admin: dict = Depends(verify_
 
     return profile
 
+@router.patch("/profile/tin")
+async def update_my_tin(body: TINUpdate, current_admin: dict = Depends(verify_token)):
+    """Silent patch: Staff member updates their own TIN without requiring a full profile edit."""
+    db = get_db()
+    staff_id = current_admin["sub"]
+    
+    # Check if TIN is already on file — do not allow overwrite via this endpoint
+    profile_res = await db_execute(lambda: db.table("staff_profiles").select("id, tin").eq("admin_id", staff_id).execute())
+    existing_profile = profile_res.data[0] if profile_res.data else {}
+
+    if existing_profile.get("tin"):
+        raise HTTPException(status_code=400, detail="TIN is already on file. Contact HR to update it.")
+
+    if existing_profile:
+        await db_execute(lambda: db.table("staff_profiles").update({"tin": body.tin, "updated_at": datetime.utcnow().isoformat()}).eq("admin_id", staff_id).execute())
+    else:
+        await db_execute(lambda: db.table("staff_profiles").insert({
+            "admin_id": staff_id,
+            "tin": body.tin,
+            "updated_at": datetime.utcnow().isoformat()
+        }).execute())
+        
+    return {"message": "TIN updated successfully"}
+
 @router.patch("/profile/{staff_id}")
 async def update_staff_profile(staff_id: str, update: StaffProfileUpdate, current_admin: dict = Depends(verify_token)):
     """Update detailed staff profile. HR admins may edit all fields; line managers and staff may self-edit a restricted set."""
@@ -875,25 +899,6 @@ async def update_staff_profile(staff_id: str, update: StaffProfileUpdate, curren
                         logger.warning(f"Could not log salary change to history: {e}")
 
     return {"message": "Profile updated successfully"}
-
-@router.patch("/profile/tin")
-async def update_my_tin(body: TINUpdate, current_admin: dict = Depends(verify_token)):
-    """Silent patch: Staff member updates their own TIN without requiring a full profile edit."""
-    db = get_db()
-    staff_id = current_admin["sub"]
-    
-    # Update staff_profiles
-    profile_exists = await db_execute(lambda: db.table("staff_profiles").select("id").eq("admin_id", staff_id).execute())
-    if profile_exists.data:
-        await db_execute(lambda: db.table("staff_profiles").update({"tin": body.tin, "updated_at": datetime.utcnow().isoformat()}).eq("admin_id", staff_id).execute())
-    else:
-        await db_execute(lambda: db.table("staff_profiles").insert({
-            "admin_id": staff_id,
-            "tin": body.tin,
-            "updated_at": datetime.utcnow().isoformat()
-        }).execute())
-        
-    return {"message": "TIN updated successfully"}
 
 @router.get("/performance/{staff_id}")
 async def get_performance_score(staff_id: str, current_admin: dict = Depends(verify_token)):
