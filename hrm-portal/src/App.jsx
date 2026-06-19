@@ -15180,8 +15180,16 @@ function TINUpdateModal({ onClose }) {
         body: JSON.stringify({ tin: tin.trim() })
       });
       alert("Tax Identification Number (TIN) updated successfully!");
-      onClose(true);
-    } catch (e) { alert(e.message); }
+      onClose(tin.trim());
+    } catch (e) {
+      // If the backend says TIN already exists, treat it as success —
+      // the user's session was stale. Dismiss the modal silently.
+      if (e.message && e.message.toLowerCase().includes("already on file")) {
+        onClose(tin.trim()); // still stamp user.tin so modal won't re-fire
+      } else {
+        alert(e.message);
+      }
+    }
     finally { setLoading(false); }
   };
 
@@ -15218,7 +15226,7 @@ function TINUpdateModal({ onClose }) {
   );
 }
 
-function StaffPortal({ user, onLogout }) {
+function StaffPortal({ user, onLogout, meLoaded = false }) {
   const nav = [
     { isHeader: true, label: "People & Org" },
     { id: "dashboard", icon: "dashboard", label: "My Dashboard" },
@@ -15267,15 +15275,16 @@ function StaffPortal({ user, onLogout }) {
   const [showTinModal, setShowTinModal] = useState(false);
 
   useEffect(() => {
-    // Check if TIN is missing for existing staff (silent patch).
-    // TIN may live on user.tin (from login/me response) OR on the
-    // nested staff_profiles record that biodata submission populates.
+    // Wait for /me refresh to settle before checking TIN.
+    // Without this gate, a stale localStorage session (user.tin = null)
+    // would fire the modal before the fresh /me response arrives.
+    if (!meLoaded) return;
     const tinFromProfile = user?.staff_profiles?.[0]?.tin;
     const hasTin = user?.tin || tinFromProfile;
     if (user && !hasTin) {
       setShowTinModal(true);
     }
-  }, [user]);
+  }, [user, meLoaded]);
 
   useEffect(() => {
     setLoading(true);
@@ -18359,6 +18368,7 @@ function PublicOfferPage({ offerId }) {
 export default function App() {
   const [dark, setDark] = useState(true);
   const [user, setUser] = useState(null);
+  const [meLoaded, setMeLoaded] = useState(false);
   const toggle = useCallback(() => setDark(d => !d), []);
 
   useEffect(() => {
@@ -18391,7 +18401,8 @@ export default function App() {
               setUser(merged);
             }
           })
-          .catch(() => {/* silent - user already set from localStorage */});
+          .catch(() => {/* silent - user already set from localStorage */})
+          .finally(() => setMeLoaded(true));
       } catch (e) {
         localStorage.removeItem("ec_token");
         localStorage.removeItem("admin");
@@ -18399,6 +18410,7 @@ export default function App() {
       }
     } else {
       // Redirect to main login page if not authenticated
+      setMeLoaded(true);
       window.location.href = "/login";
     }
   }, []);
@@ -18451,7 +18463,7 @@ export default function App() {
           <ManagerPortal user={user} onLogout={logout} />
         )}
         {(!isHrAdminUser(user) && !isLineManagerUser(user)) && (
-          <StaffPortal user={user} onLogout={logout} />
+          <StaffPortal user={user} onLogout={logout} meLoaded={meLoaded} />
         )}
       </div>
     </ThemeCtx.Provider>
