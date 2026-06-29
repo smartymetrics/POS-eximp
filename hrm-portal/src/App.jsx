@@ -14428,9 +14428,16 @@ function PublicGuarantorForm() {
     try {
       const fd = new FormData();
       fd.append("token", token); fd.append("email", email.trim()); fd.append("section", "employee");
-      // Send signature as a proper file Blob (JPEG 70%) instead of base64 inside JSON
-      // to avoid hitting the multipart per-part size limit.
-      const empSigBlob = await new Promise(res => empSigRef.current.toBlob(res, "image/jpeg", 0.7));
+      // Paint white background behind ink before exporting — JPEG has no alpha channel
+      // so without this the transparent canvas pixels flatten to black, making the
+      // dark ink invisible when the image is displayed on any dark surface.
+      const empCanvas = empSigRef.current;
+      const empCtx = empCanvas.getContext("2d");
+      empCtx.globalCompositeOperation = "destination-over";
+      empCtx.fillStyle = "#FFFFFF";
+      empCtx.fillRect(0, 0, empCanvas.width, empCanvas.height);
+      empCtx.globalCompositeOperation = "source-over";
+      const empSigBlob = await new Promise(res => empCanvas.toBlob(res, "image/jpeg", 0.9));
       fd.append("signature_file", empSigBlob, "employee_sig.jpg");
       fd.append("data", JSON.stringify({ ...empForm, signed_date: empForm.signed_date || new Date().toISOString().split("T")[0] }));
       const res = await fetch(`${API_BASE}/guarantor/public/save-partial`, { method: "POST", body: fd });
@@ -14464,8 +14471,14 @@ function PublicGuarantorForm() {
     try {
       const fd = new FormData();
       fd.append("token", token); fd.append("email", email.trim()); fd.append("section", gNum === 1 ? "g1" : "g2");
-      // Send signature as a proper file Blob (JPEG 70%) to avoid per-part size limit
-      const gSigBlob = await new Promise(res => sigRef.current.toBlob(res, "image/jpeg", 0.7));
+      // Paint white background behind ink before exporting — same fix as employee sig
+      const gCanvas = sigRef.current;
+      const gCtx = gCanvas.getContext("2d");
+      gCtx.globalCompositeOperation = "destination-over";
+      gCtx.fillStyle = "#FFFFFF";
+      gCtx.fillRect(0, 0, gCanvas.width, gCanvas.height);
+      gCtx.globalCompositeOperation = "source-over";
+      const gSigBlob = await new Promise(res => gCanvas.toBlob(res, "image/jpeg", 0.9));
       fd.append("signature_file", gSigBlob, `g${gNum}_sig.jpg`);
       const payload = { ...g, signed_date: g.signed_date || new Date().toISOString().split("T")[0] };
       delete payload.passport_file; delete payload.id_doc_file;
