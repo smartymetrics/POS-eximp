@@ -1653,10 +1653,10 @@
 
     <!-- Contract Status Modal (ORCHESTRATION TOOL) -->
     <div id="statusModal"
-        class="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md hidden">
-        <div class="card w-full max-w-2xl border-brand-gold/30 !p-0 overflow-hidden shadow-[0_0_80px_rgba(0,0,0,0.5)]">
+        class="fixed inset-0 z-[100] flex items-center justify-center bg-black/90 backdrop-blur-md hidden p-4">
+        <div class="card w-full max-w-2xl border-brand-gold/30 !p-0 overflow-hidden shadow-[0_0_80px_rgba(0,0,0,0.5)] max-h-[90vh] flex flex-col">
             <!-- Modal Header -->
-            <div class="p-6 border-b border-[#2D2F36] flex justify-between items-center bg-[#1A1C20]">
+            <div class="p-6 border-b border-[#2D2F36] flex justify-between items-center bg-[#1A1C20] shrink-0">
                 <div>
                     <h3 class="font-serif text-2xl brand-gold">Contract of Sale Status</h3>
                     <p class="text-[10px] text-gray-500 uppercase tracking-widest font-bold" id="statusModalInvoice">
@@ -1667,18 +1667,26 @@
             </div>
 
             <!-- Modal Content -->
-            <div id="statusModalBody" class="p-8 max-h-[70vh] overflow-y-auto">
+            <div id="statusModalBody" class="p-8 overflow-y-auto flex-1">
                 <!-- Dynamically Populated -->
             </div>
 
             <!-- Modal Footer -->
-            <div class="p-6 bg-[#1A1C20] border-t border-[#2D2F36] flex justify-between items-center">
+            <div class="p-6 bg-[#1A1C20] border-t border-[#2D2F36] flex justify-between items-center shrink-0">
                 <button onclick="closeStatusModal()"
                     class="px-6 py-2 text-xs font-bold text-gray-500 hover:text-white transition">Close</button>
                 <div id="statusModalActions" class="flex gap-3">
                     <!-- Dynamic Buttons -->
                 </div>
             </div>
+    </div>
+
+    <!-- Image Zoom Modal -->
+    <div id="imageZoomModal"
+        class="fixed inset-0 z-[150] flex items-center justify-center bg-black/90 hidden" onclick="closeImageZoom()">
+        <button class="absolute top-6 right-6 text-white text-3xl font-bold hover:text-gray-300 transition">✕</button>
+        <div class="bg-white p-4 rounded-2xl shadow-2xl max-w-[90vw] max-h-[85vh] relative" onclick="event.stopPropagation()">
+            <img id="zoomImage" src="" alt="Signature Zoom" class="max-w-full max-h-[75vh] object-contain block mx-auto bg-white" />
         </div>
     </div>
 
@@ -2665,7 +2673,7 @@
             document.getElementById('statusModalInvoice').innerText = "ACTIVE ORCHESTRATION";
 
             let html = `
-                <div class="bg-brand-gold/5 border border-brand-gold/20 rounded-2xl p-4 mb-8 flex justify-between items-center group relative overflow-hidden">
+                <div class="bg-brand-gold/5 border border-brand-gold/20 rounded-2xl p-4 mb-8 flex justify-between items-center group relative overflow-hidden shrink-0">
                     <div class="relative z-10">
                         <p class="text-[10px] font-bold text-brand-gold uppercase tracking-tighter mb-1">ORCHESTRATION ACTIVE</p>
                         <p class="text-[12px] text-gray-300">External verification link is live. Access expires: <span class="text-white font-bold">${expires}</span></p>
@@ -2685,20 +2693,162 @@
                         <div class="sig-dot ${hasWitness ? 'completed' : 'active'}">
                             ${hasWitness ? '✓' : '1'}
                         </div>
-                        <div>
-                            <p class="text-sm font-bold text-white">${hasWitness ? data.witness_signatures[0].full_name : 'External Witness'}</p>
-                            <p class="text-[10px] ${hasWitness ? 'text-emerald-400' : 'text-gray-500'} font-bold uppercase tracking-widest">${hasWitness ? 'VERIFIED' : 'WAITING FOR SIGNATURE'}</p>
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <p class="text-sm font-bold text-white">${hasWitness ? data.witness_signatures[0].full_name : 'External Witness'}</p>
+                                <p class="text-[10px] ${hasWitness ? 'text-emerald-400' : 'text-gray-500'} font-bold uppercase tracking-widest">${hasWitness ? 'VERIFIED' : 'WAITING FOR SIGNATURE'}</p>
+                            </div>
+                            <div class="flex gap-2">
+                                ${hasWitness ? `
+                                <button onclick="toggleDetails('witness')" class="px-2 py-1 bg-white/5 hover:bg-white/10 text-gray-300 rounded text-[9px] font-bold border border-white/10 transition uppercase tracking-widest">Details</button>
+                                <button onclick="toggleRejectForm('witness', '${data.witness_signatures[0].id}')" class="px-2 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded text-[9px] font-bold border border-red-500/20 transition uppercase tracking-widest">Reject</button>
+                                ` : ''}
+                            </div>
                         </div>
+                        ${hasWitness ? `
+                        <div id="details-witness" class="hidden mt-2 p-4 bg-white/[0.02] border border-white/5 rounded-xl text-xs text-gray-300 space-y-3 ml-2">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <span class="text-gray-500 text-[9px] uppercase font-bold tracking-wider block mb-0.5">Email</span>
+                                    <span class="text-white font-medium">${data.witness_signatures[0].witness_email}</span>
+                                </div>
+                                <div>
+                                    <span class="text-gray-500 text-[9px] uppercase font-bold tracking-wider block mb-0.5">Occupation</span>
+                                    <span class="text-white font-medium">${data.witness_signatures[0].occupation}</span>
+                                </div>
+                                <div>
+                                    <span class="text-gray-500 text-[9px] uppercase font-bold tracking-wider block mb-0.5">Relationship to Parties</span>
+                                    <span class="text-white font-medium">${data.witness_signatures[0].relationship_to_parties || 'N/A'}</span>
+                                </div>
+                                <div>
+                                    <span class="text-gray-500 text-[9px] uppercase font-bold tracking-wider block mb-0.5">IP Address</span>
+                                    <span class="text-white font-medium">${data.witness_signatures[0].ip_address || 'N/A'}</span>
+                                </div>
+                                <div class="col-span-2">
+                                    <span class="text-gray-500 text-[9px] uppercase font-bold tracking-wider block mb-0.5">Address</span>
+                                    <span class="text-white font-medium">${data.witness_signatures[0].address}</span>
+                                </div>
+                                <div class="col-span-2">
+                                    <span class="text-gray-500 text-[9px] uppercase font-bold tracking-wider block mb-0.5">Signed At</span>
+                                    <span class="text-white font-medium">${new Date(data.witness_signatures[0].signed_at).toLocaleString()}</span>
+                                </div>
+                            </div>
+                            <div class="pt-2 border-t border-white/5">
+                                <span class="text-gray-500 text-[9px] uppercase font-bold tracking-wider block mb-1">Witness Signature</span>
+                                <div class="bg-white p-2 rounded-lg border border-white/10 inline-block cursor-zoom-in" onclick="openImageZoom('${data.witness_signatures[0].signature_base64}')">
+                                    <img src="${data.witness_signatures[0].signature_base64}" alt="Witness Signature" class="h-16 max-w-xs object-contain" />
+                                </div>
+                            </div>
+                        </div>
+                        ` : ''}
+                        ${hasWitness ? `
+                        <div id="reject-form-witness-${data.witness_signatures[0].id}" class="hidden mt-2 p-3 bg-red-500/5 border border-red-500/10 rounded-xl space-y-2">
+                            <p class="text-[9px] font-bold text-red-400 uppercase tracking-widest">Reason for Witness Rejection</p>
+                            <textarea id="reject-reason-witness-${data.witness_signatures[0].id}" class="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-red-500/40" rows="2" placeholder="e.g., Signature unclear or details mismatch..."></textarea>
+                            <div class="flex justify-end gap-2">
+                                <button onclick="toggleRejectForm('witness', '${data.witness_signatures[0].id}')" class="px-2 py-1 text-[9px] text-gray-400 font-bold hover:text-white uppercase tracking-widest transition">Cancel</button>
+                                <button onclick="submitWitnessRejection('${data.witness_signatures[0].id}')" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[9px] font-bold uppercase tracking-widest transition">Confirm Rejection</button>
+                            </div>
+                        </div>
+                        ` : ''}
                     </div>
 
                     <div class="sig-track-item">
                         <div class="sig-dot ${hasClient ? 'completed' : (hasWitness ? 'active' : '')}">
                             ${hasClient ? '✓' : '2'}
                         </div>
-                        <div>
-                            <p class="text-sm font-bold text-white">Purchaser (Client)</p>
-                            <p class="text-[10px] ${hasClient ? 'text-emerald-400' : 'text-gray-500'} font-bold uppercase tracking-widest">${hasClient ? 'VERIFIED' : 'WAITING FOR SIGNATURE'}</p>
+                        <div class="flex justify-between items-center">
+                            <div>
+                                <p class="text-sm font-bold text-white">Purchaser (Client)</p>
+                                <p class="text-[10px] ${hasClient ? 'text-emerald-400' : 'text-gray-500'} font-bold uppercase tracking-widest">${hasClient ? 'VERIFIED' : 'WAITING FOR SIGNATURE'}</p>
+                            </div>
+                            <div class="flex gap-2">
+                                ${hasClient ? `
+                                <button onclick="toggleDetails('client')" class="px-2 py-1 bg-white/5 hover:bg-white/10 text-gray-300 rounded text-[9px] font-bold border border-white/10 transition uppercase tracking-widest">Details</button>
+                                <button onclick="toggleRejectForm('client')" class="px-2 py-1 bg-red-500/10 hover:bg-red-500/20 text-red-400 rounded text-[9px] font-bold border border-red-500/20 transition uppercase tracking-widest">Reject</button>
+                                ` : ''}
+                            </div>
                         </div>
+                        ${hasClient ? `
+                        <div id="details-client" class="hidden mt-2 p-4 bg-white/[0.02] border border-white/5 rounded-xl text-xs text-gray-300 space-y-3 ml-2">
+                            <div class="grid grid-cols-2 gap-3">
+                                <div>
+                                    <span class="text-gray-500 text-[9px] uppercase font-bold tracking-wider block mb-0.5">Full Name</span>
+                                    <span class="text-white font-medium">${data.client_details?.full_name || 'N/A'}</span>
+                                </div>
+                                <div>
+                                    <span class="text-gray-500 text-[9px] uppercase font-bold tracking-wider block mb-0.5">Email</span>
+                                    <span class="text-white font-medium">${data.client_details?.email || 'N/A'}</span>
+                                </div>
+                                <div>
+                                    <span class="text-gray-500 text-[9px] uppercase font-bold tracking-wider block mb-0.5">Phone</span>
+                                    <span class="text-white font-medium">${data.client_details?.phone || 'N/A'}</span>
+                                </div>
+                                <div>
+                                    <span class="text-gray-500 text-[9px] uppercase font-bold tracking-wider block mb-0.5">Address</span>
+                                    <span class="text-white font-medium">${data.client_details?.address || 'N/A'}</span>
+                                </div>
+                                <div>
+                                    <span class="text-gray-500 text-[9px] uppercase font-bold tracking-wider block mb-0.5">NIN</span>
+                                    <span class="text-white font-medium">${data.client_details?.nin || 'N/A'}</span>
+                                </div>
+                                <div>
+                                    <span class="text-gray-500 text-[9px] uppercase font-bold tracking-wider block mb-0.5">ID Number</span>
+                                    <span class="text-white font-medium">${data.client_details?.id_number || 'N/A'}</span>
+                                </div>
+                                <div>
+                                    <span class="text-gray-500 text-[9px] uppercase font-bold tracking-wider block mb-0.5">Signing Method</span>
+                                    <span class="text-white font-medium uppercase">${data.client_signature_method || 'drawn'}</span>
+                                </div>
+                                <div>
+                                    <span class="text-gray-500 text-[9px] uppercase font-bold tracking-wider block mb-0.5">IP Address</span>
+                                    <span class="text-white font-medium">${data.client_audit_ip || 'N/A'}</span>
+                                </div>
+                                <div class="col-span-2">
+                                    <span class="text-gray-500 text-[9px] uppercase font-bold tracking-wider block mb-0.5">Signed At</span>
+                                    <span class="text-white font-medium">${data.client_signed_at ? new Date(data.client_signed_at).toLocaleString() : 'N/A'}</span>
+                                </div>
+                            </div>
+                            
+                            ${(data.client_details?.passport_photo_url || data.client_details?.id_document_url) ? `
+                            <div class="pt-3 border-t border-white/5 grid grid-cols-2 gap-3">
+                                ${data.client_details.passport_photo_url ? `
+                                <div>
+                                    <span class="text-gray-500 text-[9px] uppercase font-bold tracking-wider block mb-1">Passport Photo</span>
+                                    <div class="bg-white/5 p-1 rounded-lg border border-white/10 inline-block">
+                                        <img src="${data.client_details.passport_photo_url}" alt="Passport Photo" class="h-16 max-w-full object-contain cursor-zoom-in hover:brightness-110 transition" onclick="openImageZoom(this.src)" />
+                                    </div>
+                                </div>
+                                ` : ''}
+                                ${data.client_details.id_document_url ? `
+                                <div>
+                                    <span class="text-gray-500 text-[9px] uppercase font-bold tracking-wider block mb-1">ID Document</span>
+                                    <div class="bg-white/5 p-1 rounded-lg border border-white/10 inline-block">
+                                        <img src="${data.client_details.id_document_url}" alt="ID Document" class="h-16 max-w-full object-contain cursor-zoom-in hover:brightness-110 transition" onclick="openImageZoom(this.src)" />
+                                    </div>
+                                </div>
+                                ` : ''}
+                            </div>
+                            ` : ''}
+
+                            <div class="pt-3 border-t border-white/5">
+                                <span class="text-gray-500 text-[9px] uppercase font-bold tracking-wider block mb-1">Purchaser Signature</span>
+                                <div class="bg-white p-2 rounded-lg border border-white/10 inline-block cursor-zoom-in" onclick="openImageZoom('${data.client_signature_url}')">
+                                    <img src="${data.client_signature_url}" alt="Client Signature" class="h-16 max-w-xs object-contain" />
+                                </div>
+                            </div>
+                        </div>
+                        ` : ''}
+                        ${hasClient ? `
+                        <div id="reject-form-client" class="hidden mt-2 p-3 bg-red-500/5 border border-red-500/10 rounded-xl space-y-2">
+                            <p class="text-[9px] font-bold text-red-400 uppercase tracking-widest">Reason for Client Rejection</p>
+                            <textarea id="reject-reason-client" class="w-full bg-black/40 border border-white/10 rounded-lg p-2 text-xs text-white focus:outline-none focus:border-red-500/40" rows="2" placeholder="e.g., Signature unclear or incorrect signatory..."></textarea>
+                            <div class="flex justify-end gap-2">
+                                <button onclick="toggleRejectForm('client')" class="px-2 py-1 text-[9px] text-gray-400 font-bold hover:text-white uppercase tracking-widest transition">Cancel</button>
+                                <button onclick="submitClientRejection()" class="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-[9px] font-bold uppercase tracking-widest transition">Confirm Rejection</button>
+                            </div>
+                        </div>
+                        ` : ''}
                     </div>
 
                     <div class="sig-track-item">
@@ -2729,6 +2879,101 @@
                 if (!hasClient) actionsHtml += `<button onclick="initiateWalkIn('client')" class="px-4 py-2 bg-white/5 rounded-xl text-[10px] font-bold hover:bg-white/10 transition uppercase tracking-widest whitespace-nowrap">Walk-in Client</button>`;
             }
             document.getElementById('statusModalActions').innerHTML = actionsHtml;
+        }
+
+        function toggleDetails(type) {
+            const el = document.getElementById(`details-${type}`);
+            if (el) el.classList.toggle('hidden');
+        }
+
+        function openImageZoom(src) {
+            const modal = document.getElementById('imageZoomModal');
+            const img = document.getElementById('zoomImage');
+            if (modal && img) {
+                img.src = src;
+                modal.classList.remove('hidden');
+            }
+        }
+
+        function closeImageZoom() {
+            const modal = document.getElementById('imageZoomModal');
+            if (modal) {
+                modal.classList.add('hidden');
+            }
+        }
+
+        function toggleRejectForm(type, id = '') {
+            const elId = type === 'witness' ? `reject-form-witness-${id}` : 'reject-form-client';
+            const el = document.getElementById(elId);
+            if (el) {
+                el.classList.toggle('hidden');
+            }
+        }
+
+        async function submitClientRejection() {
+            const reasonEl = document.getElementById('reject-reason-client');
+            const reason = reasonEl.value.trim();
+            if (!reason) {
+                alert('Please enter a reason for rejecting the client signature.');
+                return;
+            }
+            
+            if (!confirm('Are you sure you want to reject the client signature? This will clear the signature and notify the client.')) {
+                return;
+            }
+            
+            try {
+                const res = await fetch(`/api/contracts/${activeInvoiceId}/reject-client-signature`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('ec_token')}`
+                    },
+                    body: JSON.stringify({ reason: reason })
+                });
+                const result = await res.json();
+                if (res.ok) {
+                    alert('Client signature rejected successfully.');
+                    openStatusModal(activeInvoiceId);
+                } else {
+                    alert(result.detail || 'Failed to reject client signature.');
+                }
+            } catch (err) {
+                alert('An error occurred while rejecting client signature.');
+            }
+        }
+
+        async function submitWitnessRejection(witnessId) {
+            const reasonEl = document.getElementById(`reject-reason-witness-${witnessId}`);
+            const reason = reasonEl.value.trim();
+            if (!reason) {
+                alert('Please enter a reason for rejecting the witness signature.');
+                return;
+            }
+            
+            if (!confirm('Are you sure you want to reject the witness signature? This will delete the signature and notify the witness and client.')) {
+                return;
+            }
+            
+            try {
+                const res = await fetch(`/api/contracts/${activeInvoiceId}/witness/${witnessId}/reject`, {
+                    method: 'POST',
+                    headers: {
+                        'Content-Type': 'application/json',
+                        'Authorization': `Bearer ${localStorage.getItem('ec_token')}`
+                    },
+                    body: JSON.stringify({ reason: reason })
+                });
+                const result = await res.json();
+                if (res.ok) {
+                    alert('Witness signature rejected successfully.');
+                    openStatusModal(activeInvoiceId);
+                } else {
+                    alert(result.detail || 'Failed to reject witness signature.');
+                }
+            } catch (err) {
+                alert('An error occurred while rejecting witness signature.');
+            }
         }
 
         async function startSigningSession() {

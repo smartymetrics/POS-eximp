@@ -458,6 +458,9 @@ class CompanySignatureUpload(BaseModel):
 class WitnessRemovalRequest(BaseModel):
     note: str
 
+class SignatureReject(BaseModel):
+    reason: str
+
 class ExtendSigningLink(BaseModel):
     days: int = 7
 

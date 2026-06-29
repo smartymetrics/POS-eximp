@@ -638,6 +638,19 @@ def _commission_html(rep: dict, client: dict, invoice: dict, earning: dict) -> s
           <strong>Note:</strong> This client has a remaining balance of NGN {balance:,.2f} due by {invoice.get('due_date', 'N/A')}. 
           Additional commission will be earned when further payments are verified.
         </div>"""
+
+    has_itemization = invoice.get("land_cost") is not None
+    pay_amt = float(earning.get("payment_amount") or 0.0)
+    
+    if has_itemization:
+        commission_base = pay_amt * 0.80
+        payment_row = f"""<tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #777;">Payment Rec'd:</td><td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; color: #333;">NGN {pay_amt:,.2f}</td></tr>"""
+        base_row = f"""<tr><td style="padding: 8px 0; border-bottom: 1px solid #333; color: #777;">Land Cost Portion:</td><td style="padding: 8px 0; border-bottom: 1px solid #333; text-align: right; color: #333;"><strong>NGN {commission_base:,.2f}</strong></td></tr>"""
+        gross_label = f"Gross Commission ({rate}% of Land Cost)"
+    else:
+        payment_row = f"""<tr><td style="padding: 8px 0; border-bottom: 1px solid #333; color: #777;">Payment Rec'd:</td><td style="padding: 8px 0; border-bottom: 1px solid #333; text-align: right; color: #333;"><strong>NGN {pay_amt:,.2f}</strong></td></tr>"""
+        base_row = ""
+        gross_label = f"Gross Commission ({rate}%)"
         
     return f"""
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -652,13 +665,14 @@ def _commission_html(rep: dict, client: dict, invoice: dict, earning: dict) -> s
           <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #777;">Client:</td><td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; color: #333;"><strong>{client.get('full_name')}</strong></td></tr>
           <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #777;">Property:</td><td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; color: #333;">{invoice.get('property_name')}</td></tr>
           <tr><td style="padding: 8px 0; border-bottom: 1px solid #eee; color: #777;">Invoice:</td><td style="padding: 8px 0; border-bottom: 1px solid #eee; text-align: right; color: #333;">{invoice.get('invoice_number')}</td></tr>
-          <tr><td style="padding: 8px 0; border-bottom: 1px solid #333; color: #777;">Payment Rec'd:</td><td style="padding: 8px 0; border-bottom: 1px solid #333; text-align: right; color: #333;"><strong>NGN {float(earning['payment_amount']):,.2f}</strong></td></tr>
+          {payment_row}
+          {base_row}
         </table>
         
         <div style="background: #1A1A1A; padding: 24px; border-radius: 8px; margin: 24px 0;">
           <table style="width: 100%; color: #ccc; font-size: 13px;">
             <tr>
-                <td style="text-align: left; padding: 4px 0;">Gross Commission ({rate}%)</td>
+                <td style="text-align: left; padding: 4px 0;">{gross_label}</td>
                 <td style="text-align: right; color: #fff;">NGN {gross_val:,.2f}</td>
             </tr>
             <tr>
@@ -1565,6 +1579,11 @@ def _witness_confirmation_html(witness_name, estate_name, client_name):
         <p>Thank you for acting as a witness for the Contract of Sale between <strong>Eximp & Cloves Infrastructure Limited</strong> and <strong>{client_name}</strong> regarding the property: <strong>{estate_name}</strong>.</p>
         <p>Your signature has been securely recorded and linked to the official document. No further action is required from your side.</p>
         <p>This witness signature is also associated with the related Deed of Assignment document.</p>
+        
+        <div style="background-color: #f9f9f9; border-left: 4px solid #F5A623; padding: 15px; margin: 20px 0; font-size: 13px; color: #666;">
+            <strong>Important Notice:</strong><br>
+            Please note that you will receive an email notification if there is any issue with the verification of your details or your signature.
+        </div>
         
         <p>For security reasons, please note that you will not receive a copy of the full contract. Only the contracting parties receive the executed document.</p>
         
@@ -3125,4 +3144,213 @@ async def send_payslip_email(
 
     except Exception as e:
         logger.error(f"[Payslip] Failed to send to {email_addr}: {e}")
+        return None
+
+
+# --- SIGNATURE REJECTION & VERIFICATION CONFIRMATION ---
+
+def _client_signature_rejection_html(invoice: dict, client: dict, reason: str, token: str) -> str:
+    client_signing_url = f"https://app.eximps-cloves.com/sign/client/{token}"
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 10px; overflow: hidden;">
+      <div style="background: #1A1A1A; padding: 24px; text-align: center;">
+        <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">
+      </div>
+      <div style="background: #C0392B; padding: 12px 24px; text-align: center;">
+        <h2 style="color: #fff; margin: 0; font-size: 16px;">⚠️ Client Signature Rejected</h2>
+      </div>
+      <div style="padding: 32px 24px; background: #fff;">
+        <p style="color: #333;">Dear <strong>{client['full_name']}</strong>,</p>
+        <p style="color: #555;">We have reviewed your Contract of Sale signature for property <strong>{invoice.get('property_name', 'N/A')}</strong> (Invoice: {invoice.get('invoice_number', 'N/A')}).</p>
+        <p style="color: #e74c3c; font-weight: bold; margin: 20px 0;">Unfortunately, your contract signature has been rejected and needs to be resubmitted.</p>
+        <div style="background: #fff5f5; border-left: 4px solid #e74c3c; padding: 16px; margin: 20px 0; font-size: 14px; color: #c0392b;">
+          <strong>Reason for Rejection:</strong> {reason}
+        </div>
+        <p style="color: #555; font-size: 13px;">Please click the link below to sign and submit a valid signature so we can execute your contract:</p>
+        
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="{client_signing_url}" style="background: #C47D0A; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; display: inline-block;">Resign Contract</a>
+        </div>
+        
+        <p style="color: #555; font-size: 13px;">If you have any questions or require assistance, please reply to this email.</p>
+        <p style="color: #555; margin-top: 30px;">Warm regards,<br>Legal Department<br>Eximp & Cloves Infrastructure Limited</p>
+        <hr style="border-color: #eee;">
+        <p style="color: #999; font-size: 12px; margin: 0;">
+          Eximp & Cloves Infrastructure Limited | RC 8311800<br>
+          57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383
+        </p>
+      </div>
+    </div>"""
+
+async def send_client_signature_rejected_email(invoice: dict, client: dict, token: str, reason: str):
+    from routers.analytics import log_activity
+    email_addr = client.get("email")
+    client_name = client.get("full_name", "Client")
+    invoice_no = invoice.get("invoice_number", "Unknown")
+    
+    try:
+        client_sanitized = sanitize_client_address(client.copy())
+        res = await async_resend({
+            "from": f"Eximp & Cloves Legal <{FROM_EMAIL}>",
+            "to": [email_addr],
+            "cc": ["legal@eximps-cloves.com"] + HR_CC,
+            "reply_to": "admin@eximps-cloves.com",
+            "subject": f"Action Required: Contract Signature Rejected — {invoice_no}",
+            "html": _client_signature_rejection_html(invoice, client_sanitized, reason, token)
+        })
+        
+        await log_activity(
+            "email_sent",
+            f"Client signature rejection email for {invoice_no} sent to {client_name} ({email_addr})",
+            "system",
+            client_id=client.get("id"),
+            invoice_id=invoice.get("id")
+        )
+        return res
+    except Exception as e:
+        logger.error(f"Error sending client signature rejection email for {invoice_no} to {email_addr}: {e}")
+        return None
+
+def _witness_signature_rejection_html(invoice: dict, witness_name: str, client_name: str, token: str, reason: str) -> str:
+    witness_signing_url = f"https://app.eximps-cloves.com/sign/{token}"
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 10px; overflow: hidden;">
+      <div style="background: #1A1A1A; padding: 24px; text-align: center;">
+        <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">
+      </div>
+      <div style="background: #C0392B; padding: 12px 24px; text-align: center;">
+        <h2 style="color: #fff; margin: 0; font-size: 16px;">⚠️ Witness Signature Rejected</h2>
+      </div>
+      <div style="padding: 32px 24px; background: #fff;">
+        <p style="color: #333;">Dear <strong>{witness_name}</strong>,</p>
+        <p style="color: #555;">You recently signed as a witness to the Contract of Sale for <strong>{client_name}</strong> regarding property <strong>{invoice.get('property_name', 'N/A')}</strong>.</p>
+        <p style="color: #e74c3c; font-weight: bold; margin: 20px 0;">Unfortunately, your witness signature has been rejected and needs to be resubmitted.</p>
+        <div style="background: #fff5f5; border-left: 4px solid #e74c3c; padding: 16px; margin: 20px 0; font-size: 14px; color: #c0392b;">
+          <strong>Reason for Rejection:</strong> {reason}
+        </div>
+        <p style="color: #555; font-size: 13px;">Please click the link below to sign and submit a valid witness signature:</p>
+        
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="{witness_signing_url}" style="background: #C47D0A; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; display: inline-block;">Resign as Witness</a>
+        </div>
+        
+        <p style="color: #555; font-size: 13px;">If you have any questions, please contact the purchaser, {client_name}.</p>
+        <p style="color: #555; margin-top: 30px;">Warm regards,<br>Legal Department<br>Eximp & Cloves Infrastructure Limited</p>
+        <hr style="border-color: #eee;">
+        <p style="color: #999; font-size: 12px; margin: 0;">
+          Eximp & Cloves Infrastructure Limited | RC 8311800<br>
+          57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383
+        </p>
+      </div>
+    </div>"""
+
+def _client_witness_rejection_html(invoice: dict, client: dict, witness_name: str, token: str, reason: str) -> str:
+    witness_signing_url = f"https://app.eximps-cloves.com/sign/{token}"
+    return f"""
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto; border: 1px solid #eee; border-radius: 10px; overflow: hidden;">
+      <div style="background: #1A1A1A; padding: 24px; text-align: center;">
+        <img src="https://www.eximps-cloves.com/logo.svg" alt="Eximp & Cloves" style="max-height: 48px; display: block; margin: 0 auto;">
+      </div>
+      <div style="background: #C0392B; padding: 12px 24px; text-align: center;">
+        <h2 style="color: #fff; margin: 0; font-size: 16px;">⚠️ Witness Signature Rejected — Action Required</h2>
+      </div>
+      <div style="padding: 32px 24px; background: #fff;">
+        <p style="color: #333;">Dear <strong>{client['full_name']}</strong>,</p>
+        <p style="color: #555;">This is to inform you that the witness signature submitted by <strong>{witness_name}</strong> for your Contract of Sale (Invoice: {invoice.get('invoice_number', 'N/A')}) has been <strong>rejected</strong> by our legal verification team.</p>
+        <div style="background: #fff5f5; border-left: 4px solid #e74c3c; padding: 16px; margin: 20px 0; font-size: 14px; color: #c0392b;">
+          <strong>Reason for Rejection:</strong> {reason}
+        </div>
+        <p style="color: #555; font-size: 13px;">Please notify your witness to resubmit their signature using the link below, or forward this link to a new witness to sign on your behalf:</p>
+        
+        <div style="text-align: center; margin: 30px 0;">
+          <a href="{witness_signing_url}" style="background: #C47D0A; color: #fff; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold; font-size: 14px; display: inline-block;">Witness Signing Link</a>
+        </div>
+        
+        <p style="color: #555; font-size: 13px;">Your contract cannot be executed until a valid witness signature is received and verified.</p>
+        <p style="color: #555; margin-top: 30px;">Warm regards,<br>Legal Department<br>Eximp & Cloves Infrastructure Limited</p>
+        <hr style="border-color: #eee;">
+        <p style="color: #999; font-size: 12px; margin: 0;">
+          Eximp & Cloves Infrastructure Limited | RC 8311800<br>
+          57B, Isaac John Street, Yaba, Lagos | +234 912 686 4383
+        </p>
+      </div>
+    </div>"""
+
+async def send_witness_signature_rejected_email(invoice: dict, witness_name: str, witness_email: str, client: dict, token: str, reason: str):
+    from routers.analytics import log_activity
+    client_email = client.get("email")
+    client_name = client.get("full_name", "Client")
+    invoice_no = invoice.get("invoice_number", "Unknown")
+    
+    try:
+        client_sanitized = sanitize_client_address(client.copy())
+        
+        # 1. Send email to client (always)
+        if client_email:
+            await async_resend({
+                "from": f"Eximp & Cloves Legal <{FROM_EMAIL}>",
+                "to": [client_email],
+                "cc": ["legal@eximps-cloves.com"] + HR_CC,
+                "reply_to": "admin@eximps-cloves.com",
+                "subject": f"Action Required: Witness Signature Rejected — {invoice_no}",
+                "html": _client_witness_rejection_html(invoice, client_sanitized, witness_name, token, reason)
+            })
+            
+        # 2. Send email to witness (if they have an email address)
+        if witness_email:
+            await async_resend({
+                "from": f"Eximp & Cloves Legal <{FROM_EMAIL}>",
+                "to": [witness_email],
+                "reply_to": "admin@eximps-cloves.com",
+                "subject": f"Action Required: Witness Signature Rejected — Eximp & Cloves",
+                "html": _witness_signature_rejection_html(invoice, witness_name, client_name, token, reason)
+            })
+            
+        await log_activity(
+            "email_sent",
+            f"Witness signature rejection emails for {invoice_no} sent. Witness: {witness_name}",
+            "system",
+            client_id=client.get("id"),
+            invoice_id=invoice.get("id")
+        )
+    except Exception as e:
+        logger.error(f"Error sending witness signature rejection email for {invoice_no}: {e}")
+
+def _client_confirmation_html(client_name: str, property_name: str) -> str:
+    return f"""
+    <div style="font-family: sans-serif; max-width: 600px; margin: auto; padding: 20px; border: 1px solid #eee; border-radius: 10px;">
+        <h2 style="color: #2e7d32;">✓ Contract Signature Recorded</h2>
+        <p>Dear {client_name},</p>
+        <p>Thank you for submitting your signature for the Contract of Sale regarding the property: <strong>{property_name}</strong>.</p>
+        <p>Your signature has been securely recorded and linked to the official document. No further action is required from your side at this time.</p>
+        
+        <div style="background-color: #f9f9f9; border-left: 4px solid #F5A623; padding: 15px; margin: 20px 0; font-size: 13px; color: #666;">
+            <strong>Important Notice:</strong><br>
+            Please note that you will receive an email notification if there is any issue with the verification of your details or your signature.
+        </div>
+        
+        <p>Once all signatures (including your witness and company authorities) are collected, you will receive the fully executed contract.</p>
+        <p>Best regards,<br>Legal Department<br>Eximp & Cloves Infrastructure Limited</p>
+    </div>
+    """
+
+async def send_client_confirmation_email(invoice: dict, client: dict):
+    sender = os.getenv("LEGAL_EMAIL", os.getenv("FROM_EMAIL"))
+    email_addr = client.get("email")
+    if not email_addr: return
+    
+    html = _client_confirmation_html(client.get("full_name", "Valued Client"), invoice.get("property_name", "the property"))
+    
+    try:
+        res = await async_resend({
+            "from": "Eximp & Cloves Legal <" + str(sender) + ">",
+            "to": [email_addr],
+            "cc": ["legal@eximps-cloves.com"] + HR_CC,
+            "reply_to": "admin@eximps-cloves.com",
+            "subject": "Contract Signature Confirmation — Eximp & Cloves",
+            "html": html
+        })
+        return res
+    except Exception as e:
+        logger.error("Error sending client confirmation email: " + str(e))
         return None

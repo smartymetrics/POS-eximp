@@ -98,7 +98,7 @@ async def list_verifications(current_admin=Depends(verify_token)):
     # Fetch pending verifications with client, invoice, and subscription info
     # Use !inner to ensure that the row is completely excluded if the client filter doesn't match
     query = db.table("pending_verifications")\
-        .select("*, clients!inner(full_name, email, assigned_rep_id), invoices(invoice_number, property_name, plot_size_sqm, amount, amount_paid, signature_url), property_subscriptions(passport_photo_url, nin_document_url, international_passport_url, occupation, residential_address)")\
+        .select("*, clients!inner(full_name, email, assigned_rep_id), invoices(invoice_number, property_name, plot_size_sqm, amount, amount_paid, signature_url, discount_code, discount_amount), property_subscriptions(passport_photo_url, nin_document_url, international_passport_url, occupation, residential_address)")\
         .order("created_at", desc=True)
     
     if not is_privileged:

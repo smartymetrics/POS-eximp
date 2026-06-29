@@ -5,7 +5,7 @@ from database import get_db, db_execute, SUPABASE_URL
 from models import (
     CompanySignatureUpload, ExtendSigningLink, WitnessSignatureSubmit, 
     ClientContractSignatureSubmit, WitnessRemovalRequest, CustomContractHTMLUpdate, 
-    ExecuteContractRequest, SendSealedRequest
+    ExecuteContractRequest, SendSealedRequest, SignatureReject
 )
 from routers.auth import verify_token, resolve_admin_token, has_any_role
 from routers.analytics import log_activity
@@ -239,11 +239,34 @@ async def get_contract_status(invoice_id: str, current_admin=Depends(verify_toke
     session = res.data[0]
     
     # Check if client has signed (look at invoice)
-    inv_res = await db_execute(lambda: db.table("invoices").select("contract_signature_url").eq("id", invoice_id).execute())
+    inv_res = await db_execute(lambda: db.table("invoices").select("contract_signature_url, contract_signature_method, contract_signed_at, contract_audit_ip, clients(*)").eq("id", invoice_id).execute())
     client_signed = False
+    client_sig_url = None
+    client_sig_method = None
+    client_sig_at = None
+    client_sig_ip = None
+    client_details = {}
     if inv_res.data:
         inv = inv_res.data[0]
-        client_signed = bool(inv.get("contract_signature_url"))
+        client_sig_url = inv.get("contract_signature_url")
+        client_signed = bool(client_sig_url)
+        client_sig_method = inv.get("contract_signature_method")
+        client_sig_at = inv.get("contract_signed_at")
+        client_sig_ip = inv.get("contract_audit_ip")
+        
+        c_raw = inv.get("clients", {})
+        client_data = c_raw[0] if isinstance(c_raw, list) and c_raw else c_raw
+        if client_data:
+            client_details = {
+                "full_name": client_data.get("full_name"),
+                "email": client_data.get("email"),
+                "phone": client_data.get("phone"),
+                "address": client_data.get("address"),
+                "nin": client_data.get("nin"),
+                "id_number": client_data.get("id_number"),
+                "passport_photo_url": client_data.get("passport_photo_url"),
+                "id_document_url": client_data.get("id_document_url")
+            }
 
     stage_res = await db_execute(lambda: db.table("invoices").select("pipeline_stage").eq("id", invoice_id).execute())
     pipeline_stage = stage_res.data[0].get("pipeline_stage") if stage_res.data else None
@@ -257,6 +280,11 @@ async def get_contract_status(invoice_id: str, current_admin=Depends(verify_toke
         "created_at": session.get("created_at"),
         "witness_signatures": session.get("witness_signatures", []),
         "client_signed": client_signed,
+        "client_signature_url": client_sig_url,
+        "client_signature_method": client_sig_method,
+        "client_signed_at": client_sig_at,
+        "client_audit_ip": client_sig_ip,
+        "client_details": client_details,
         "is_executed": session["status"] == "completed",
         "pipeline_stage": pipeline_stage
     }
@@ -865,6 +893,154 @@ async def remove_witness_signature(invoice_id: str, witness_id: str, data: Witne
     )
 
     return {"message": "Witness removed", "session_status": new_status}
+
+
+@router.post("/{invoice_id}/reject-client-signature")
+async def reject_client_signature(invoice_id: str, payload: SignatureReject, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+    if not has_any_role(current_admin, "admin", "lawyer"):
+        raise HTTPException(status_code=403, detail="Unauthorized")
+    
+    db = get_db()
+    
+    # 1. Fetch Invoice & Client details
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute())
+    if not inv_res.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    invoice = inv_res.data[0]
+    client_raw = invoice.get("clients", {})
+    client = client_raw[0] if isinstance(client_raw, list) and client_raw else client_raw
+    if not client: client = {}
+    
+    # 2. Get active session to get the token
+    session_res = await db_execute(lambda: db.table("contract_signing_sessions")\
+        .select("id, token, status")\
+        .eq("invoice_id", invoice_id)\
+        .neq("status", "expired")\
+        .order("created_at", desc=True)\
+        .limit(1)\
+        .execute())
+    
+    if not session_res.data:
+        raise HTTPException(status_code=400, detail="No active contract signing session found for this invoice.")
+        
+    session = session_res.data[0]
+    
+    # 3. Clear client signature from invoice
+    await db_execute(lambda: db.table("invoices").update({
+        "contract_signature_url": None,
+        "contract_signature_method": None,
+        "contract_signed_at": None,
+        "contract_audit_ip": None,
+        "contract_audit_agent": None
+    }).eq("id", invoice_id).execute())
+    
+    # 4. Revert session status to pending and extend expires_at by 48 hours
+    new_expires_at = datetime.now(timezone.utc) + timedelta(hours=48)
+    await db_execute(lambda: db.table("contract_signing_sessions").update({
+        "status": "pending",
+        "expires_at": new_expires_at.isoformat()
+    }).eq("id", session["id"]).execute())
+    
+    # 5. Send rejection email to client via background tasks
+    from email_service import send_client_signature_rejected_email
+    background_tasks.add_task(
+        send_client_signature_rejected_email,
+        invoice,
+        client,
+        session["token"],
+        payload.reason
+    )
+    
+    # 6. Log the rejection activity
+    await log_activity(
+        "client_signature_rejected",
+        f"Client signature for invoice {invoice.get('invoice_number', invoice_id)} rejected by lawyer/admin. Reason: {payload.reason}",
+        current_admin["sub"],
+        client_id=invoice.get("client_id"),
+        invoice_id=invoice_id
+    )
+    
+    return {"message": "Client signature rejected successfully"}
+
+
+@router.post("/{invoice_id}/witness/{witness_id}/reject")
+async def reject_witness_signature(invoice_id: str, witness_id: str, payload: SignatureReject, background_tasks: BackgroundTasks, current_admin=Depends(verify_token)):
+    if not has_any_role(current_admin, "admin", "lawyer"):
+        raise HTTPException(status_code=403, detail="Unauthorized")
+        
+    db = get_db()
+    
+    # 1. Fetch Invoice & Client details
+    inv_res = await db_execute(lambda: db.table("invoices").select("*, clients(*)").eq("id", invoice_id).execute())
+    if not inv_res.data:
+        raise HTTPException(status_code=404, detail="Invoice not found")
+    invoice = inv_res.data[0]
+    client_raw = invoice.get("clients", {})
+    client = client_raw[0] if isinstance(client_raw, list) and client_raw else client_raw
+    if not client: client = {}
+    
+    # 2. Get active session
+    session_res = await db_execute(lambda: db.table("contract_signing_sessions")\
+        .select("id, token, status")\
+        .eq("invoice_id", invoice_id)\
+        .neq("status", "expired")\
+        .order("created_at", desc=True)\
+        .limit(1)\
+        .execute())
+        
+    if not session_res.data:
+        raise HTTPException(status_code=400, detail="No active signing session found for this invoice.")
+        
+    session = session_res.data[0]
+    
+    # 3. Fetch the witness signature row
+    witness_res = await db_execute(lambda: db.table("witness_signatures")\
+        .select("*")\
+        .eq("id", witness_id)\
+        .eq("session_id", session["id"])\
+        .execute())
+        
+    if not witness_res.data:
+        raise HTTPException(status_code=404, detail="Witness record not found for this signing session.")
+        
+    witness = witness_res.data[0]
+    
+    # 4. Delete witness signature image from storage and row from database
+    _delete_witness_signature_from_storage(db, witness.get("signature_base64", ""))
+    await db_execute(lambda: db.table("witness_signatures").delete().eq("id", witness_id).execute())
+    
+    # 5. Revert session status to pending or partial and extend expires_at by 48 hours
+    remaining_res = await db_execute(lambda: db.table("witness_signatures").select("id").eq("session_id", session["id"]).execute())
+    new_status = "partial" if remaining_res.data else "pending"
+    new_expires_at = datetime.now(timezone.utc) + timedelta(hours=48)
+    await db_execute(lambda: db.table("contract_signing_sessions").update({
+        "status": new_status,
+        "expires_at": new_expires_at.isoformat()
+    }).eq("id", session["id"]).execute())
+    
+    # 6. Send rejection emails to witness and client via background tasks
+    from email_service import send_witness_signature_rejected_email
+    background_tasks.add_task(
+        send_witness_signature_rejected_email,
+        invoice,
+        witness.get("full_name", "Witness"),
+        witness.get("witness_email"),
+        client,
+        session["token"],
+        payload.reason
+    )
+    
+    # 7. Log the rejection activity
+    await log_activity(
+        "witness_signature_rejected",
+        f"Witness signature ({witness.get('full_name')}) for invoice {invoice.get('invoice_number', invoice_id)} rejected by lawyer/admin. Reason: {payload.reason}",
+        current_admin["sub"],
+        client_id=invoice.get("client_id"),
+        invoice_id=invoice_id
+    )
+    
+    return {"message": "Witness signature rejected successfully", "session_status": new_status}
+
 
 @router.get("/signatures")
 async def list_company_signatures(current_admin=Depends(verify_token)):

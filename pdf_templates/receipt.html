@@ -250,13 +250,13 @@
           <div class="detail-row"><strong>Quantity:</strong> {{ invoice.quantity | default(1) }} units</div>
           <div class="detail-row">
             <strong>Unit Price:</strong>
-            {% if invoice.unit_price %}
+            {% if invoice.unit_price and invoice.unit_price > 0 %}
             {{ format_currency(invoice.unit_price) }}
             {% else %}
-            {{ format_currency(invoice.amount / (invoice.quantity or 1)) }}
+            {{ format_currency((invoice.amount + (invoice.discount_amount or 0)) / (invoice.quantity or 1)) }}
             {% endif %}
           </div>
-          <div class="detail-row"><strong>Total Price:</strong> {{ format_currency(invoice.amount) }}</div>
+          <div class="detail-row"><strong>Total Price:</strong> {{ format_currency(invoice.amount + (invoice.discount_amount or 0)) }}</div>
           <div class="detail-row"><strong>Payment Plan:</strong> {{ invoice.payment_terms }}</div>
           <div class="detail-row"><strong>Sales Rep:</strong> {{ invoice.sales_rep_name or 'N/A' }}{% if
             invoice.sales_rep_phone %} | {{ invoice.sales_rep_phone }}{% endif %}</div>

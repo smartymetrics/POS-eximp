@@ -2628,13 +2628,13 @@
           </div>
           <div class="form-group">
             <label class="form-label">Quantity</label>
-            <input type="number" class="form-control" id="edit-inv-qty" min="1">
+            <input type="number" class="form-control" id="edit-inv-qty" min="1" oninput="calculateEditInvoiceAmount()">
             <div class="form-hint edit-inv-admin-lock" style="display:none; color:var(--red);">Only Admins can edit
               Quantity.</div>
           </div>
           <div class="form-group">
             <label class="form-label">Unit Price (NGN)</label>
-            <input type="number" class="form-control" id="edit-inv-price">
+            <input type="number" class="form-control" id="edit-inv-price" oninput="calculateEditInvoiceAmount()">
             <div class="form-hint edit-inv-admin-lock" style="display:none; color:var(--red);">Only Admins can edit Unit
               Price.</div>
           </div>
@@ -4874,7 +4874,10 @@
             <tr>
               <td style="font-weight:700;color:var(--gold-dark);font-size:12px;">${inv.invoice_number}</td>
               <td><div class="client-name">${inv.clients?.full_name || '—'}</div><div class="client-email">${inv.invoice_date}</div></td>
-              <td style="font-size:12px;color:var(--gray);">${inv.property_name || '—'}</td>
+              <td style="font-size:12px;color:var(--gray);">
+                ${inv.property_name || '—'}
+                ${inv.discount_amount ? `<br><span style="color:#e74c3c;font-weight:600;font-size:10px;">Discount: -${fmtNGN(inv.discount_amount)} (${inv.discount_code || 'PROMO'})</span>` : ''}
+              </td>
               <td style="font-weight:600;">${fmtNGN(inv.amount)}</td>
               <td style="color:var(--green);font-weight:600;">${fmtNGN(inv.amount_paid)}</td>
               <td style="font-weight:600;">${fmtNGN(inv.balance_due)}</td>
@@ -4993,13 +4996,49 @@
         } catch (e) { console.error("Failed to load properties for edit modal", e); }
 
         document.getElementById('edit-inv-location').value = inv.property_location || '';
-        document.getElementById('edit-inv-size').value = inv.plot_size_sqm || '';
-        document.getElementById('edit-inv-qty').value = inv.quantity || 1;
-        document.getElementById('edit-inv-price').value = inv.unit_price || '';
+        
+        // Auto-populate size if empty (legacy support)
+        let sqm = inv.plot_size_sqm;
+        if (!sqm && inv.property_id && allProperties) {
+          const prop = allProperties.find(p => p.id === inv.property_id);
+          if (prop) sqm = prop.plot_size_sqm;
+        }
+        document.getElementById('edit-inv-size').value = sqm || '';
+        
+        const qty = inv.quantity || 1;
+        document.getElementById('edit-inv-qty').value = qty;
+        
+        // Auto-calculate unit price if empty/zero (legacy support)
+        let price = inv.unit_price;
+        if ((!price || parseFloat(price) === 0) && inv.amount) {
+          const subtotal = parseFloat(inv.amount || 0) + parseFloat(inv.discount_amount || 0);
+          price = subtotal / qty;
+        }
+        document.getElementById('edit-inv-price').value = price || '';
+        
         document.getElementById('edit-inv-amount').value = inv.amount || '';
         document.getElementById('edit-inv-paid').value = inv.amount_paid || '';
         document.getElementById('edit-inv-date').value = inv.invoice_date || '';
         document.getElementById('edit-inv-notes').value = inv.notes || '';
+
+        // Query active discount details for dynamic calculations in Edit Modal
+        window.currentEditDiscount = null;
+        if (inv.discount_code) {
+          try {
+            const dRes = await apiFetch('/api/discount-codes/validate?code=' + encodeURIComponent(inv.discount_code));
+            if (dRes.ok) {
+              const dData = await dRes.json();
+              if (dData.valid) {
+                window.currentEditDiscount = {
+                  type: dData.discount_type,
+                  value: parseFloat(dData.discount_value)
+                };
+              }
+            }
+          } catch (e) {
+            console.error("Failed to load discount info for edit recalculation", e);
+          }
+        }
 
         originalDueDate = (inv.due_date || '').substring(0, 10);
         document.getElementById('edit-inv-due').value = originalDueDate;
@@ -5524,6 +5563,27 @@
         const currentPrice = parseFloat(priceInput.value) || unitPrice;
         amtInput.value = currentPrice * qty;
       }
+    }
+
+    function calculateEditInvoiceAmount() {
+      const qtyInput = document.getElementById('edit-inv-qty');
+      const priceInput = document.getElementById('edit-inv-price');
+      const amtInput = document.getElementById('edit-inv-amount');
+      
+      const qty = parseInt(qtyInput.value) || 1;
+      const unitPrice = parseFloat(priceInput.value) || 0;
+      const subtotal = unitPrice * qty;
+      
+      let discountAmount = 0;
+      if (window.currentEditDiscount) {
+        if (window.currentEditDiscount.type === 'percentage') {
+          discountAmount = subtotal * window.currentEditDiscount.value / 100;
+        } else {
+          discountAmount = Math.min(window.currentEditDiscount.value, subtotal);
+        }
+      }
+      
+      amtInput.value = Math.max(0, subtotal - discountAmount);
     }
 
     async function submitInvoice() {

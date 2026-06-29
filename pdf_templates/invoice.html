@@ -330,14 +330,14 @@
             </div>
           </td>
           <td class="text-right">
-            {% if invoice.unit_price %}
+            {% if invoice.unit_price and invoice.unit_price > 0 %}
             {{ format_currency(invoice.unit_price) }}
             {% else %}
-            {{ format_currency(invoice.amount / (invoice.quantity or 1)) }}
+            {{ format_currency((invoice.amount + (invoice.discount_amount or 0)) / (invoice.quantity or 1)) }}
             {% endif %}
           </td>
           <td class="text-right">{{ invoice.quantity | default(1) }}</td>
-          <td class="text-right"><strong>{{ format_currency(invoice.amount) }}</strong></td>
+          <td class="text-right"><strong>{{ format_currency(invoice.amount + (invoice.discount_amount or 0)) }}</strong></td>
         </tr>
       </tbody>
     </table>

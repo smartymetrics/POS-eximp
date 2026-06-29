@@ -117,6 +117,8 @@ class SubscriptionService:
         # 4. Property Matching & Numeric Casting
         property_id = None
         property_location = None
+        prop = None
+        target_size = None
         
         # Explicitly cast form strings to numbers
         try:
@@ -224,6 +226,15 @@ class SubscriptionService:
         vat_amount = final_total * 0.075
 
         # 5. Create Invoice record
+        plot_size_sqm = target_size
+        if not plot_size_sqm and prop and prop.get("plot_size_sqm"):
+            try:
+                plot_size_sqm = float(prop["plot_size_sqm"])
+            except (ValueError, TypeError):
+                pass
+
+        calculated_unit_price = total_amount / quantity if quantity > 0 else 0.0
+
         invoice_insert = {
             "invoice_number": invoice_number,
             "client_id": client_id,
@@ -250,7 +261,10 @@ class SubscriptionService:
             "documentation_fee": documentation_fee,
             "vat_amount": vat_amount,
             "discount_code": discount_code if discount_amount > 0 else None,
-            "discount_amount": discount_amount if discount_amount > 0 else None
+            "discount_amount": discount_amount if discount_amount > 0 else None,
+            "plot_size_sqm": plot_size_sqm,
+            "unit_price": calculated_unit_price,
+            "quantity": quantity
         }
         
         inv_res = await db_execute(lambda: db.table("invoices").insert(jsonable_encoder(invoice_insert)).execute())

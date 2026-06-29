@@ -487,6 +487,45 @@ async def edit_invoice(
             "changed_by": current_admin["sub"]
         }).execute())
 
+    # Recalculate price, discount, and splits if changed by admin
+    price_changed = "unit_price" in update_data
+    qty_changed = "quantity" in update_data
+    amount_changed = "amount" in update_data
+
+    if price_changed or qty_changed or amount_changed:
+        up = float(update_data.get("unit_price") if price_changed else (invoice.get("unit_price") or 0.0))
+        qty = int(update_data.get("quantity") if qty_changed else (invoice.get("quantity") or 1))
+        subtotal = up * qty
+        
+        # Recalculate discount if code exists
+        discount_code = invoice.get("discount_code")
+        discount_amount = float(invoice.get("discount_amount") or 0.0)
+        
+        if discount_code:
+            code_res = await db_execute(lambda: db.table("discount_codes").select("*").eq("code", discount_code).execute())
+            if code_res.data:
+                code_rec = code_res.data[0]
+                d_val = float(code_rec.get("discount_value") or 0)
+                d_type = code_rec.get("discount_type", "percentage")
+                if d_type == "percentage":
+                    discount_amount = subtotal * d_val / 100.0
+                else:
+                    discount_amount = min(d_val, subtotal)
+                update_data["discount_amount"] = discount_amount
+        
+        # Compute final invoice amount
+        if not amount_changed:
+            final_amount = max(0.0, subtotal - discount_amount)
+            update_data["amount"] = final_amount
+        else:
+            final_amount = float(update_data["amount"])
+
+        # Update itemized splits based on the final amount
+        update_data["land_cost"] = final_amount * 0.80
+        update_data["allocation_fee"] = final_amount * 0.025
+        update_data["documentation_fee"] = final_amount * 0.10
+        update_data["vat_amount"] = final_amount * 0.075
+
     # Update database
     await db_execute(lambda: db.table("invoices").update(jsonable_encoder(update_data)).eq("id", invoice_id).execute())
     await log_activity(

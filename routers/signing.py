@@ -142,14 +142,14 @@ async def get_client_signing_context(token: str):
     }
 
 @router.post("/api/signing/client/{token}")
-async def submit_client_signature(token: str, data: ClientContractSignatureSubmit, request: Request):
+async def submit_client_signature(token: str, data: ClientContractSignatureSubmit, request: Request, background_tasks: BackgroundTasks):
     db = get_db()
 
     if not data.acknowledgement:
         raise HTTPException(status_code=400, detail="You must acknowledge that you have read and understood the contract to proceed.")
 
     session_res = db.table("contract_signing_sessions")\
-        .select("*, invoices(*)")\
+        .select("*, invoices(*, clients(*))")\
         .eq("token", token)\
         .execute()
     if not session_res.data:
@@ -157,6 +157,10 @@ async def submit_client_signature(token: str, data: ClientContractSignatureSubmi
 
     session = session_res.data[0]
     invoice = session["invoices"]
+    client_raw = invoice.get("clients", {})
+    client = client_raw[0] if isinstance(client_raw, list) and client_raw else client_raw
+    if not client:
+        client = {}
 
     expires_at = datetime.fromisoformat(session["expires_at"].replace('Z', '+00:00'))
     if expires_at < datetime.now(timezone(timedelta(hours=1))):
@@ -190,6 +194,14 @@ async def submit_client_signature(token: str, data: ClientContractSignatureSubmi
             "system",
             client_id=invoice["client_id"],
             invoice_id=invoice["id"]
+        )
+
+        # Send Confirmation Email to Client
+        from email_service import send_client_confirmation_email
+        background_tasks.add_task(
+            send_client_confirmation_email,
+            invoice,
+            client
         )
 
         # ── Legal notification: client has signed ──
