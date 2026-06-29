@@ -43,7 +43,8 @@ from routers import (
     hrm_talent_chat,
     biodata,
     guarantor,
-    kyc_links
+    kyc_links,
+    discount_codes
 )
 from routers import refunds
 from routers.auth import require_roles, resolve_admin_token
@@ -198,6 +199,9 @@ app.include_router(guarantor.router, prefix="/api/guarantor", tags=["guarantor"]
 
 # KYC Links API
 app.include_router(kyc_links.router, tags=["kyc-links"])
+
+# Discount Codes API
+app.include_router(discount_codes.router, prefix="/api/discount-codes", tags=["discount-codes"])
 
 app.include_router(refunds.router, prefix="/api/refunds", tags=["refunds"])
 

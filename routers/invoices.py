@@ -99,6 +99,60 @@ async def create_invoice(
             property_location = property_location or p["location"]
             plot_size = plot_size or p["plot_size_sqm"]
 
+    # 4.5 Discount Code processing
+    discount_code = (data.discount_code or "").strip().upper()
+    discount_amount = 0.0
+    original_amount = float(data.amount)
+    
+    if discount_code:
+        code_res = await db_execute(lambda: db.table("discount_codes").select("*").eq("code", discount_code).execute())
+        if code_res.data:
+            code_rec = code_res.data[0]
+            if code_rec.get("is_active", True):
+                is_expired = False
+                expires_str = code_rec.get("expires_at")
+                if expires_str:
+                    try:
+                        t_str = expires_str.replace("Z", "+00:00")
+                        expires_at = datetime.fromisoformat(t_str)
+                        from datetime import timezone
+                        now = datetime.now(timezone.utc)
+                        if expires_at < now:
+                            is_expired = True
+                    except Exception:
+                        pass
+                
+                max_uses = code_rec.get("max_uses")
+                uses_count = code_rec.get("uses_count", 0)
+                is_exhausted = max_uses is not None and uses_count >= max_uses
+                
+                if not is_expired and not is_exhausted:
+                    d_val = float(code_rec.get("discount_value") or 0)
+                    d_type = code_rec.get("discount_type", "percentage")
+                    if d_type == "percentage":
+                        discount_amount = original_amount * d_val / 100.0
+                    else:
+                        discount_amount = min(d_val, original_amount)
+                    
+                    # Increment uses count
+                    await db_execute(lambda: db.table("discount_codes").update({
+                        "uses_count": uses_count + 1
+                    }).eq("id", code_rec["id"]).execute())
+                else:
+                    discount_code = None
+            else:
+                discount_code = None
+        else:
+            discount_code = None
+            
+    final_total = max(0.0, original_amount - discount_amount)
+    
+    # Calculate split (80 / 2.5 / 10 / 7.5)
+    land_cost = final_total * 0.80
+    allocation_fee = final_total * 0.025
+    documentation_fee = final_total * 0.10
+    vat_amount = final_total * 0.075
+
     invoice_data = {
         "invoice_number": invoice_number,
         "client_id": data.client_id,
@@ -108,7 +162,7 @@ async def create_invoice(
         "plot_size_sqm": plot_size,
         "quantity": data.quantity,
         "unit_price": data.unit_price,
-        "amount": data.amount,
+        "amount": final_total,
         "payment_terms": data.payment_terms,
         "invoice_date": data.invoice_date,
         "due_date": data.due_date,
@@ -117,7 +171,13 @@ async def create_invoice(
         "sales_rep_id": data.sales_rep_id,
         "purchase_purpose": data.purchase_purpose,
         "purchase_for": data.purchase_for,
-        "created_by": current_admin["sub"]
+        "created_by": current_admin["sub"],
+        "land_cost": land_cost,
+        "allocation_fee": allocation_fee,
+        "documentation_fee": documentation_fee,
+        "vat_amount": vat_amount,
+        "discount_code": discount_code if discount_amount > 0 else None,
+        "discount_amount": discount_amount if discount_amount > 0 else None
     }
     
     # 3. REVENUE ATTRIBUTION (HubSpot Standard)

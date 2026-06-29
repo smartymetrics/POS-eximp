@@ -292,6 +292,36 @@
 
     <!-- Balance Summary -->
     <table class="balance-table" border="0" cellspacing="0" cellpadding="0">
+      {% if invoice.discount_amount and invoice.discount_amount > 0 %}
+      <tr class="balance-row" style="font-size: 9pt; color: #aaa;">
+        <td>Subtotal</td>
+        <td align="right">{{ format_currency(invoice.amount + invoice.discount_amount) }}</td>
+      </tr>
+      <tr class="balance-row" style="font-size: 9pt; color: #aaa;">
+        <td>Discount {% if invoice.discount_code %}({{ invoice.discount_code }}){% endif %}</td>
+        <td align="right" style="color: #E74C3C;">-{{ format_currency(invoice.discount_amount) }}</td>
+      </tr>
+      {% endif %}
+
+      {% if invoice.land_cost and invoice.land_cost > 0 %}
+      <tr class="balance-row" style="font-size: 8pt; color: #999;">
+        <td>Land Cost</td>
+        <td align="right">{{ format_currency(invoice.land_cost) }}</td>
+      </tr>
+      <tr class="balance-row" style="font-size: 8pt; color: #999;">
+        <td>Allocation Fee</td>
+        <td align="right">{{ format_currency(invoice.allocation_fee) }}</td>
+      </tr>
+      <tr class="balance-row" style="font-size: 8pt; color: #999;">
+        <td>Documentation Fee</td>
+        <td align="right">{{ format_currency(invoice.documentation_fee) }}</td>
+      </tr>
+      <tr class="balance-row" style="font-size: 8pt; color: #999;">
+        <td>VAT</td>
+        <td align="right">{{ format_currency(invoice.vat_amount) }}</td>
+      </tr>
+      {% endif %}
+
       <tr class="balance-row">
         <td>Invoice Total</td>
         <td align="right">{{ format_currency(invoice.amount) }}</td>

@@ -170,6 +170,59 @@ class SubscriptionService:
                     unit_price = float(prop.get("total_price") or prop.get("starting_price") or prop.get("price_per_sqm") or 0)
                     total_amount = unit_price * quantity
 
+        # 4.5 Discount Code processing
+        discount_code = (data.get("discount_code") or "").strip().upper()
+        discount_amount = 0.0
+        
+        if discount_code:
+            code_res = await db_execute(lambda: db.table("discount_codes").select("*").eq("code", discount_code).execute())
+            if code_res.data:
+                code_rec = code_res.data[0]
+                if code_rec.get("is_active", True):
+                    is_expired = False
+                    expires_str = code_rec.get("expires_at")
+                    if expires_str:
+                        try:
+                            t_str = expires_str.replace("Z", "+00:00")
+                            expires_at = datetime.fromisoformat(t_str)
+                            from datetime import timezone
+                            now = datetime.now(timezone.utc)
+                            if expires_at < now:
+                                is_expired = True
+                        except Exception:
+                            pass
+                    
+                    max_uses = code_rec.get("max_uses")
+                    uses_count = code_rec.get("uses_count", 0)
+                    is_exhausted = max_uses is not None and uses_count >= max_uses
+                    
+                    if not is_expired and not is_exhausted:
+                        d_val = float(code_rec.get("discount_value") or 0)
+                        d_type = code_rec.get("discount_type", "percentage")
+                        if d_type == "percentage":
+                            discount_amount = total_amount * d_val / 100.0
+                        else:
+                            discount_amount = min(d_val, total_amount)
+                        
+                        # Increment uses count
+                        await db_execute(lambda: db.table("discount_codes").update({
+                            "uses_count": uses_count + 1
+                        }).eq("id", code_rec["id"]).execute())
+                    else:
+                        discount_code = None
+                else:
+                    discount_code = None
+            else:
+                discount_code = None
+                
+        final_total = max(0.0, total_amount - discount_amount)
+        
+        # Split calculations (80 / 2.5 / 10 / 7.5)
+        land_cost = final_total * 0.80
+        allocation_fee = final_total * 0.025
+        documentation_fee = final_total * 0.10
+        vat_amount = final_total * 0.075
+
         # 5. Create Invoice record
         invoice_insert = {
             "invoice_number": invoice_number,
@@ -177,7 +230,7 @@ class SubscriptionService:
             "property_id": property_id,
             "property_name": data.get("property_name"),
             "property_location": property_location,
-            "amount": total_amount,
+            "amount": final_total,
             "amount_paid": deposit_amount,
             "payment_terms": data.get("payment_duration", "Outright"),
             "invoice_date": str(date.today()),
@@ -191,7 +244,13 @@ class SubscriptionService:
             "purchase_for": data.get("purchase_for"),
             "purchase_purpose": data.get("purchase_purpose"),
             "source": "custom_portal",
-            "pipeline_stage": "interest"
+            "pipeline_stage": "interest",
+            "land_cost": land_cost,
+            "allocation_fee": allocation_fee,
+            "documentation_fee": documentation_fee,
+            "vat_amount": vat_amount,
+            "discount_code": discount_code if discount_amount > 0 else None,
+            "discount_amount": discount_amount if discount_amount > 0 else None
         }
         
         inv_res = await db_execute(lambda: db.table("invoices").insert(jsonable_encoder(invoice_insert)).execute())
@@ -212,7 +271,7 @@ class SubscriptionService:
             'referral_source', 'signature_url', 'consent_given', 'consented_at', 
             'ip_address', 'user_agent', 'city', 'state', 'phone', 'quantity', 
             'total_amount', 'sales_rep_name', 'utm_source', 'utm_medium', 
-            'utm_campaign', 'utm_content', 'utm_term'
+            'utm_campaign', 'utm_content', 'utm_term', 'discount_code', 'discount_amount'
         }
 
         subscription_record = {
@@ -220,7 +279,9 @@ class SubscriptionService:
             "status": "processed",
             "date_of_birth": data.get("date_of_birth") or data.get("dob"),
             "nin_id_number": data.get("nin_id_number") or data.get("id_number"),
-            "nin_document_url": data.get("nin_document_url") or data.get("id_document_url")
+            "nin_document_url": data.get("nin_document_url") or data.get("id_document_url"),
+            "discount_code": discount_code if discount_amount > 0 else None,
+            "discount_amount": discount_amount if discount_amount > 0 else None
         }
         
         # Add all valid incoming data to the record

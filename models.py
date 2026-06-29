@@ -148,6 +148,7 @@ class InvoiceCreate(BaseModel):
     sales_rep_name: Optional[str] = None
     purchase_purpose: Optional[str] = None
     purchase_for: Optional[str] = None
+    discount_code: Optional[str] = None
 
 class InvoiceUpdate(BaseModel):
     due_date: Optional[date] = None
@@ -164,6 +165,7 @@ class InvoiceUpdate(BaseModel):
     co_owner_email: Optional[str] = None
     purchase_purpose: Optional[str] = None
     purchase_for: Optional[str] = None
+    discount_code: Optional[str] = None
 
 class SendDocumentRequest(BaseModel):
     invoice_id: str
@@ -253,6 +255,7 @@ class WebhookFormPayload(BaseModel):
     utm_campaign: Optional[str] = None
     utm_content: Optional[str] = None
     utm_term: Optional[str] = None
+    discount_code: Optional[str] = None
 
 
 class VerificationConfirm(BaseModel):
@@ -717,3 +720,34 @@ class EstateDraftCreate(BaseModel):
     description: Optional[str] = None
     total_budget: Optional[Decimal] = 0
     variations: List[EstateVariation] = []
+
+
+# ─── DISCOUNT CODES ──────────────────────────────────────────
+class DiscountCodeCreate(BaseModel):
+    code: Optional[str] = None
+    discount_type: str  # 'percentage' or 'flat'
+    discount_value: Decimal
+    is_active: Optional[bool] = True
+    max_uses: Optional[int] = 1
+    expires_at: Optional[datetime] = None
+
+
+class DiscountCodeResponse(BaseModel):
+    id: str
+    code: str
+    discount_type: str
+    discount_value: Decimal
+    is_active: bool
+    max_uses: int
+    uses_count: int
+    expires_at: Optional[datetime] = None
+    created_at: datetime
+    created_by: Optional[str] = None
+
+
+class DiscountCodeValidateResponse(BaseModel):
+    valid: bool
+    message: str
+    discount_type: Optional[str] = None
+    discount_value: Optional[Decimal] = None
+    discount_amount: Optional[Decimal] = None

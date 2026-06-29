@@ -858,6 +858,21 @@
                         </div>
                     </div>
 
+                    <!-- Discount Code Section -->
+                    <div class="mt-6 p-6 bg-amber-50/30 rounded-2xl border border-amber-100/50">
+                        <label class="block text-sm font-bold text-gray-700 mb-2">Discount Code</label>
+                        <div class="flex gap-3">
+                            <input type="text" id="discount_code_input" name="discount_code"
+                                class="flex-1 p-3 rounded-xl border border-gray-300 focus:ring-2 focus:ring-gold outline-none uppercase font-semibold text-gray-800"
+                                placeholder="Enter discount code (e.g. PROMO10)">
+                            <button type="button" onclick="applyDiscountCode()"
+                                class="px-6 py-3 bg-black text-white font-semibold rounded-xl hover:bg-gray-800 transition-colors">
+                                Apply
+                            </button>
+                        </div>
+                        <p id="discount_msg" class="text-xs mt-2 hidden"></p>
+                    </div>
+
                     <div class="mt-6">
                         <label class="block text-sm font-bold text-gray-700 mb-2">
                             Upload Payment Receipt(s) <span class="text-red-500">*</span>
@@ -1899,6 +1914,40 @@
                 });
                 window.scrollTo({ top: 0, behavior: 'smooth' });
             }, 400);
+        }
+        async function applyDiscountCode() {
+            const input = document.getElementById('discount_code_input');
+            const msg = document.getElementById('discount_msg');
+            const code = input.value.trim();
+            
+            if (!code) {
+                msg.className = "text-xs mt-2 text-red-500";
+                msg.textContent = "Please enter a discount code.";
+                msg.classList.remove('hidden');
+                return;
+            }
+            
+            try {
+                const res = await fetch(`/api/discount-codes/validate?code=${encodeURIComponent(code)}`);
+                const data = await res.json();
+                if (data.valid) {
+                    msg.className = "text-xs mt-2 text-green-600 font-medium";
+                    if (data.discount_type === 'percentage') {
+                        msg.textContent = `Promo code successfully applied! (${parseFloat(data.discount_value)}% discount verified)`;
+                    } else {
+                        msg.textContent = `Promo code successfully applied! (₦${parseFloat(data.discount_value).toLocaleString()} discount verified)`;
+                    }
+                } else {
+                    msg.className = "text-xs mt-2 text-red-500";
+                    msg.textContent = data.message || "Invalid discount code.";
+                }
+                msg.classList.remove('hidden');
+            } catch (err) {
+                console.error("Error validating discount code:", err);
+                msg.className = "text-xs mt-2 text-red-500";
+                msg.textContent = "Error validating discount code. Please try again.";
+                msg.classList.remove('hidden');
+            }
         }
     </script>
 </body>

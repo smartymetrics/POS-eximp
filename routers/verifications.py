@@ -276,7 +276,10 @@ async def confirm_verification(
                     gross_rate = _pct("default_commission_rate", 0.10)
                 wht_rate = _pct("default_wht_rate", 0.05)
 
-                gross_comm = round(deposit * gross_rate, 2)
+                # Only apply 80% land cost base for new itemized invoices; old invoices use full deposit
+                has_itemization = invoice.get("land_cost") is not None
+                commission_base = deposit * 0.80 if has_itemization else deposit
+                gross_comm = round(commission_base * gross_rate, 2)
                 wht_amt    = round(gross_comm * wht_rate, 2)
                 net_comm   = gross_comm - wht_amt
             else:
@@ -287,7 +290,10 @@ async def confirm_verification(
                     verification_date=date.today(),
                     db=db
                 )
-                gross_comm = round(deposit * config["gross_rate"] / 100, 2)
+                # Only apply 80% land cost base for new itemized invoices; old invoices use full deposit
+                has_itemization = invoice.get("land_cost") is not None
+                commission_base = deposit * 0.80 if has_itemization else deposit
+                gross_comm = round(commission_base * config["gross_rate"] / 100, 2)
                 wht_amt    = round(gross_comm * config["wht_rate"] / 100, 2)
                 net_comm   = gross_comm - wht_amt
 

@@ -33,12 +33,13 @@ def get_commission_config(sales_rep_id: str, estate_name: str, verification_date
         }
 
     # 3. Check if this is a Vendor Partner
-    vendor_res = db.table("vendors").select("gross_commission_rate, wht_rate").eq("id", sales_rep_id).eq("is_commission_partner", True).execute()
+    vendor_res = db.table("vendors").select("id, gross_commission_rate, wht_rate").eq("id", sales_rep_id).eq("is_commission_partner", True).execute()
     if vendor_res.data:
         v = vendor_res.data[0]
         return {
             "gross_rate": float(v.get("gross_commission_rate") or 15.0),
-            "wht_rate": float(v.get("wht_rate") or 5.0)
+            "wht_rate": float(v.get("wht_rate") or 5.0),
+            "vendor_id": v["id"]
         }
 
     return {"gross_rate": 10.0, "wht_rate": 5.0}
@@ -141,7 +142,10 @@ async def sync_invoice_commissions(invoice_id: str, db, performed_by: str = "sys
         )
         
         pay_amt = float(pay["amount"])
-        gross_comm = round(pay_amt * config["gross_rate"] / 100, 2)
+        # Only apply 80% land cost base for new itemized invoices; old invoices use full payment amount
+        has_itemization = invoice.get("land_cost") is not None
+        commission_base = pay_amt * 0.80 if has_itemization else pay_amt
+        gross_comm = round(commission_base * config["gross_rate"] / 100, 2)
         wht_amt = round(gross_comm * config["wht_rate"] / 100, 2)
         net_comm = gross_comm - wht_amt
         
