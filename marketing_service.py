@@ -238,7 +238,7 @@ async def send_marketing_email(campaign: Dict[str, Any], contact: Dict[str, Any]
                 html += unsub_footer
 
     try:
-        res = resend.Emails.send({
+        res = await asyncio.to_thread(resend.Emails.send, {
             "from": f"{MARKETING_FROM_NAME} <{MARKETING_FROM_EMAIL}>",
             "to": [contact["email"]],
             "subject": personalize_content(campaign["subject_a"], contact),
@@ -630,6 +630,7 @@ async def broadcast_campaign(campaign_id: str, segment_ids: List[str] = None, ma
         is_ab = campaign.get("is_ab_test", False)
         subject_b = campaign.get("subject_b")
         html_body_b = campaign.get("html_body_b")
+        preview_text_b = campaign.get("preview_text_b")
 
         if is_ab and subject_b and html_body_b:
             midpoint = len(recipients) // 2
@@ -647,12 +648,14 @@ async def broadcast_campaign(campaign_id: str, segment_ids: List[str] = None, ma
             if i < len(group_b):
                 targets.append((group_b[i], "B"))
 
-        async def send_variant(contact, variant_label, subject_override=None, body_override=None):
+        async def send_variant(contact, variant_label, subject_override=None, body_override=None, preview_override=None):
             camp_copy = dict(campaign)
             if subject_override:
                 camp_copy["subject_a"] = subject_override
             if body_override:
                 camp_copy["html_body_a"] = body_override
+            if preview_override:
+                camp_copy["preview_text"] = preview_override
             result = await send_marketing_email(camp_copy, contact)
             if result and campaign.get("status") != "test":
                 db.table("campaign_recipients").update({"variant": variant_label}).eq("campaign_id", campaign_id).eq("contact_id", contact["id"]).execute()
@@ -703,7 +706,7 @@ async def broadcast_campaign(campaign_id: str, segment_ids: List[str] = None, ma
                     tasks.append(send_marketing_email(campaign, contact))
                     batch_sent_a += 1
                 else:
-                    tasks.append(send_variant(contact, "B", subject_b, html_body_b))
+                    tasks.append(send_variant(contact, "B", subject_b, html_body_b, preview_text_b))
                     batch_sent_b += 1
 
             results = await asyncio.gather(*tasks, return_exceptions=True)

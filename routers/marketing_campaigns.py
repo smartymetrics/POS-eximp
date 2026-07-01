@@ -1,11 +1,14 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, UploadFile, File
 from typing import List, Optional
 from pydantic import BaseModel
-from database import get_db, db_execute
+from database import get_db, db_execute, supabase
 from routers.auth import verify_token
 from routers.analytics import log_activity
 from datetime import datetime, timedelta
 from marketing_service import broadcast_campaign, send_marketing_email, get_daily_quota_stats
+import time
+import io
+from PIL import Image
 
 router = APIRouter()
 
@@ -19,6 +22,7 @@ class CampaignCreate(BaseModel):
     subject_a: str
     subject_b: Optional[str] = None
     preview_text: Optional[str]
+    preview_text_b: Optional[str] = None
     html_body_a: str
     html_body_b: Optional[str] = None
     is_ab_test: Optional[bool] = False
@@ -31,6 +35,7 @@ class CampaignUpdate(BaseModel):
     subject_a: Optional[str] = None
     subject_b: Optional[str] = None
     preview_text: Optional[str] = None
+    preview_text_b: Optional[str] = None
     html_body_a: Optional[str] = None
     html_body_b: Optional[str] = None
     is_ab_test: Optional[bool] = None
@@ -45,6 +50,8 @@ class CampaignTest(BaseModel):
     email: str
     subject_a: Optional[str] = None
     subject_b: Optional[str] = None
+    preview_text: Optional[str] = None
+    preview_text_b: Optional[str] = None
     html_body_a: Optional[str] = None
     html_body_b: Optional[str] = None
     variant: Optional[str] = 'A'
@@ -154,9 +161,13 @@ async def send_test_email(id: str, data: CampaignTest, current_admin=Depends(ver
         
         if data.html_body_b: campaign["html_body_a"] = data.html_body_b
         elif campaign.get("html_body_b"): campaign["html_body_a"] = campaign["html_body_b"]
+        
+        if data.preview_text_b: campaign["preview_text"] = data.preview_text_b
+        elif campaign.get("preview_text_b"): campaign["preview_text"] = campaign["preview_text_b"]
     else:
         if data.subject_a: campaign["subject_a"] = data.subject_a
         if data.html_body_a: campaign["html_body_a"] = data.html_body_a
+        if data.preview_text: campaign["preview_text"] = data.preview_text
     
     # Look up the real contact by email so all tags (first_name, financial, etc.) resolve
     # exactly as they would in a real campaign send.
@@ -464,6 +475,7 @@ async def duplicate_campaign(id: str, current_admin=Depends(verify_token)):
         "subject_a": source.get("subject_a") or "",
         "subject_b": source.get("subject_b"),
         "preview_text": source.get("preview_text") or "",
+        "preview_text_b": source.get("preview_text_b"),
         "html_body_a": source.get("html_body_a") or "",
         "html_body_b": source.get("html_body_b"),
         "is_ab_test": source.get("is_ab_test") or False,
@@ -517,3 +529,57 @@ async def update_quota_settings(enabled: bool, limit: Optional[int] = 80, curren
         }).execute())
     
     return {"message": "Marketing quota settings updated.", "settings": new_value}
+
+
+def generate_animated_gif(image_bytes_list, duration=1500):
+    frames = []
+    target_size = (600, 400)
+    for img_bytes in image_bytes_list:
+        try:
+            img = Image.open(io.BytesIO(img_bytes))
+            img = img.convert('RGBA')
+            img.thumbnail(target_size, Image.Resampling.LANCZOS)
+            
+            # Create a centered transparent/white canvas
+            background = Image.new('RGBA', target_size, (255, 255, 255, 0))
+            offset = ((target_size[0] - img.size[0]) // 2, (target_size[1] - img.size[1]) // 2)
+            background.paste(img, offset, img)
+            frames.append(background.convert('RGB'))
+        except Exception as e:
+            print(f"Skipping frame generation for a file: {e}")
+            continue
+
+    if not frames:
+        return None
+
+    out = io.BytesIO()
+    # Save GIF with looping enabled
+    frames[0].save(out, format='GIF', save_all=True, append_images=frames[1:], duration=duration, loop=0)
+    out.seek(0)
+    return out.getvalue()
+
+
+@router.post("/assets/generate-gif")
+async def generate_gif_route(files: List[UploadFile] = File(...), duration: int = 1500, current_admin=Depends(verify_token)):
+    image_bytes_list = []
+    for file in files:
+        content = await file.read()
+        image_bytes_list.append(content)
+        
+    gif_data = generate_animated_gif(image_bytes_list, duration=duration)
+    if not gif_data:
+        raise HTTPException(status_code=400, detail="No valid images were provided to build a GIF.")
+    
+    # Upload to Supabase bucket
+    file_name = f"carousel_{int(time.time())}.gif"
+    try:
+        supabase.storage.from_("marketing").upload(
+            path=file_name,
+            file=gif_data,
+            file_options={"content-type": "image/gif"}
+        )
+        # Get public url
+        public_url = supabase.storage.from_("marketing").get_public_url(file_name)
+        return {"url": public_url}
+    except Exception as e:
+        raise HTTPException(status_code=500, detail=f"Failed to save generated GIF to storage: {str(e)}")

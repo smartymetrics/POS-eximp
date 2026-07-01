@@ -277,6 +277,11 @@ async def marketing_editor_page(request: Request, id: str):
     return templates.TemplateResponse(request, "marketing_editor.html", {"request": request, "campaign_id": id})
 
 
+@app.get("/marketing/editor_v2", response_class=HTMLResponse)
+async def marketing_editor_v2_page(request: Request, id: str):
+    return templates.TemplateResponse(request, "marketing_editor_v2.html", {"request": request, "campaign_id": id})
+
+
 @app.get("/marketing/manual", response_class=HTMLResponse)
 async def marketing_manual_page(request: Request):
     return templates.TemplateResponse(request, "marketing_manual.html", {"request": request})
