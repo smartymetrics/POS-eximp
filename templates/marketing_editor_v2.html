@@ -759,6 +759,9 @@
         <button class="bg-[#2a2a2a] text-white text-[9px] px-2.5 py-1 rounded font-bold border border-[#3a3a3a] hover:bg-[#333] transition flex items-center gap-1" onclick="openTemplates()">
           <span>📋</span> Templates
         </button>
+        <button class="bg-[#2a2a2a] text-white text-[9px] px-2.5 py-1 rounded font-bold border border-[#3a3a3a] hover:bg-[#333] transition flex items-center gap-1" onclick="openGeneralAssetManager()" title="Upload and insert a new image element directly into the template">
+          <span>📷</span> Add Image
+        </button>
         <button class="bg-[#2a2a2a] text-white text-[9px] px-2.5 py-1 rounded font-bold border border-amber-700/40 hover:border-brand-gold hover:bg-[#333] transition flex items-center gap-1" onclick="openGifBuilder()">
           <span>🎞️</span> GIF Builder
         </button>
@@ -2209,6 +2212,55 @@
             toggleMobileSidebar();
           }
         });
+      }
+    });
+
+    // ── GENERAL ASSET MANAGER ADD IMAGE UTILITY ──
+    window.gjsInsertingImage = false;
+    
+    function openGeneralAssetManager() {
+      window.gjsInsertingImage = true;
+      editor.runCommand('open-assets');
+    }
+
+    // Capture asset selection and insert as a new image element if in general insertion mode
+    editor.on('asset:select', (asset) => {
+      if (window.gjsInsertingImage) {
+        const url = typeof asset === 'string' ? asset : (asset.getSrc ? asset.getSrc() : asset.get('src'));
+        if (url) {
+          const selected = editor.getSelected();
+          const newImg = {
+            type: 'image',
+            src: url,
+            style: { 
+              width: '100%', 
+              height: 'auto', 
+              'max-width': '600px',
+              display: 'block',
+              margin: '10px auto'
+            }
+          };
+          
+          if (selected) {
+            const parent = selected.parent();
+            if (parent) {
+              const index = parent.components().indexOf(selected);
+              parent.components().add(newImg, { at: index + 1 });
+            } else {
+              selected.append(newImg);
+            }
+          } else {
+            // Append directly to the email body wrapper
+            const wrapper = editor.getWrapper();
+            if (wrapper) {
+              wrapper.append(newImg);
+            } else {
+              editor.addComponents(newImg);
+            }
+          }
+        }
+        window.gjsInsertingImage = false;
+        editor.Modal.close(); // Close the Asset Manager modal overlay
       }
     });
 
