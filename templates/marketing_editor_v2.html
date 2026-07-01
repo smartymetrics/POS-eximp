@@ -439,6 +439,39 @@
       display: none !important;
     }
 
+    /* Mobile / Tablet Responsive Drawer for GrapesJS Sidebar */
+    @media (max-width: 1024px) {
+      /* Force GrapesJS canvas to take 100% width on tablet/mobile by default */
+      .gjs-cv-canvas {
+        width: 100% !important;
+      }
+      
+      /* Position sidebar panels as a slide-out overlay drawer on the right */
+      .gjs-pn-views-container,
+      .gjs-pn-views {
+        transform: translateX(100%);
+        transition: transform 0.3s cubic-bezier(0.4, 0, 0.2, 1) !important;
+      }
+
+      /* Slide in sidebar drawer when sidebar-open class is active */
+      body.sidebar-open .gjs-pn-views-container,
+      body.sidebar-open .gjs-pn-views {
+        transform: translateX(0) !important;
+        z-index: 99999 !important;
+      }
+
+      /* Display dark canvas backdrop overlay when sidebar is open to block text selection and close drawer on click */
+      body.sidebar-open .gjs-cv-canvas::after {
+        content: '';
+        position: absolute;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.5);
+        pointer-events: all;
+        z-index: 9998;
+        cursor: pointer;
+      }
+    }
+
     /* Hide standard GrapesJS default top header bar to keep workspace ultra clean */
     .gjs-pn-commands, .gjs-pn-options, .gjs-pn-devices-c {
       display: none !important;
@@ -618,29 +651,37 @@
   <div class="editor-top-bar flex flex-col border-b-2 border-brand-gold bg-[#1A1A1A] z-[9999] relative">
     
     <!-- Row 1: Campaign Configuration & Primary Actions -->
-    <div class="flex flex-col lg:flex-row items-center justify-between p-3 border-b border-[#2b2b2b] gap-3">
+    <div class="flex flex-col md:flex-row items-center justify-between p-3 border-b border-[#2b2b2b] gap-3">
       <!-- Left side: Brand Logo & A/B Mode -->
-      <div class="flex items-center gap-3 shrink-0">
+      <div class="flex items-center justify-between w-full md:w-auto gap-3 shrink-0">
         <div class="brand-logo flex items-center gap-2">
           <img src="https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/marketing/logo_dark.svg" alt="Eximp & Cloves" class="h-7" onerror="this.style.display='none'">
           <span class="text-brand-gold font-bold text-sm tracking-wider hidden sm:inline">Marketing Editor v2</span>
         </div>
-        <!-- A/B Mode Toggle & Tabs -->
-        <div class="flex items-center gap-2 bg-[#111] px-2 py-1 rounded border border-[#333]">
-          <span class="text-[9px] font-black uppercase tracking-wider text-gray-400">A/B Mode</span>
-          <label class="inline-flex items-center cursor-pointer select-none">
-            <input type="checkbox" id="ab-toggle" class="sr-only peer">
-            <div class="relative w-8 h-4 bg-gray-800 rounded-full peer peer-checked:after:translate-x-4 after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-brand-gold border border-gray-700"></div>
-          </label>
-          <div id="variant-tabs" class="hidden flex bg-[#222] rounded p-0.5 border border-[#444] ml-1">
-            <button id="tab-a" onclick="switchVariant('A')" class="px-2 py-0.5 rounded text-[9px] font-bold transition-all bg-brand-gold text-white">A</button>
-            <button id="tab-b" onclick="switchVariant('B')" class="px-2 py-0.5 rounded text-[9px] font-bold transition-all text-gray-400 hover:text-white">B</button>
+        
+        <div class="flex items-center gap-2">
+          <!-- Toggle Settings Button (Mobile only) -->
+          <button onclick="toggleMobileSettings()" class="md:hidden px-2 py-1 bg-[#222] border border-[#333] text-[10px] font-bold text-gray-400 hover:text-white rounded flex items-center gap-1">
+            <span>⚙️</span> Setup
+          </button>
+          
+          <!-- A/B Mode Toggle & Tabs -->
+          <div class="flex items-center gap-2 bg-[#111] px-2 py-1 rounded border border-[#333]">
+            <span class="text-[9px] font-black uppercase tracking-wider text-gray-400">A/B Mode</span>
+            <label class="inline-flex items-center cursor-pointer select-none">
+              <input type="checkbox" id="ab-toggle" class="sr-only peer">
+              <div class="relative w-8 h-4 bg-gray-800 rounded-full peer peer-checked:after:translate-x-4 after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-brand-gold border border-gray-700"></div>
+            </label>
+            <div id="variant-tabs" class="hidden flex bg-[#222] rounded p-0.5 border border-[#444] ml-1">
+              <button id="tab-a" onclick="switchVariant('A')" class="px-2 py-0.5 rounded text-[9px] font-bold transition-all bg-brand-gold text-white">A</button>
+              <button id="tab-b" onclick="switchVariant('B')" class="px-2 py-0.5 rounded text-[9px] font-bold transition-all text-gray-400 hover:text-white">B</button>
+            </div>
           </div>
         </div>
       </div>
 
-      <!-- Center: Subject & Preview Text Inputs (Wide, side-by-side) -->
-      <div class="flex flex-1 max-w-[700px] gap-3 w-full">
+      <!-- Center: Subject & Preview Text Inputs (Wide, side-by-side, collapsible on mobile) -->
+      <div id="mobile-settings-panel" class="hidden md:flex flex-col sm:flex-row flex-1 max-w-[700px] gap-3 w-full">
         <!-- Subject Field -->
         <div class="flex items-center gap-2 bg-[#111] px-2.5 py-1 rounded border border-[#333] flex-1">
           <span class="text-[9px] text-gray-400 uppercase font-black tracking-wider shrink-0">Subject</span>
@@ -658,36 +699,44 @@
       </div>
 
       <!-- Right Side: Primary Actions -->
-      <div class="flex items-center gap-2 shrink-0">
+      <div class="flex items-center justify-between w-full md:w-auto gap-2 shrink-0 border-t border-[#222] pt-2 md:border-t-0 md:pt-0">
         <span class="save-status text-[10px] text-gray-500 font-medium mr-2" id="save-status"></span>
-        <button class="bg-brand-gold hover:bg-brand-gold/90 text-white text-xs px-3.5 py-1.5 rounded font-bold transition flex items-center gap-1.5 shadow shadow-brand-gold/10" id="save-campaign">
-          <span>💾</span> Save
-        </button>
-        <button class="bg-[#2a2a2a] text-white text-xs px-3 py-1.5 rounded font-bold border border-brand-gold/30 hover:border-brand-gold hover:bg-[#333] transition flex items-center gap-1.5" id="send-test">
-          <span>✉️</span> Test
-        </button>
-        <button class="bg-green-600 hover:bg-green-500 text-white text-xs px-3.5 py-1.5 rounded font-bold transition flex items-center gap-1.5 shadow shadow-green-600/10" onclick="openSendModal()">
-          <span>🚀</span> Send
-        </button>
+        <div class="flex items-center gap-2">
+          <button class="bg-brand-gold hover:bg-brand-gold/90 text-white text-xs px-3.5 py-1.5 rounded font-bold transition flex items-center gap-1.5 shadow shadow-brand-gold/10" id="save-campaign">
+            <span>💾</span> Save
+          </button>
+          <button class="bg-[#2a2a2a] text-white text-xs px-3 py-1.5 rounded font-bold border border-brand-gold/30 hover:border-brand-gold hover:bg-[#333] transition flex items-center gap-1.5" id="send-test">
+            <span>✉️</span> Test
+          </button>
+          <button class="bg-green-600 hover:bg-green-500 text-white text-xs px-3.5 py-1.5 rounded font-bold transition flex items-center gap-1.5 shadow shadow-green-600/10" onclick="openSendModal()">
+            <span>🚀</span> Send
+          </button>
+        </div>
       </div>
     </div>
 
     <!-- Row 2: Editor Workspace Utilities -->
-    <div class="flex items-center justify-between px-4 py-1.5 bg-[#141414] border-t border-[#111] gap-4">
-      <!-- Left side: Navigation / Back buttons -->
-      <div class="flex items-center gap-2">
-        <button class="bg-[#222] hover:bg-gray-800 text-white text-[10px] px-2 py-0.5 rounded border border-[#333] transition" onclick="window.location.href='/marketing'">
-          ← Back
-        </button>
-        <button onclick="window.location.href='/marketing/editor?id=' + campaignId" class="text-gray-400 hover:text-white text-[9px] px-2 py-0.5 transition-all rounded hover:bg-[#222]">
-          ← Back to Classic Editor
+    <div class="flex flex-col sm:flex-row items-center justify-between px-4 py-2 bg-[#141414] border-t border-[#111] gap-3">
+      <!-- Left side: Navigation / Back buttons & Sidebar Toggle on Mobile -->
+      <div class="flex items-center justify-between w-full sm:w-auto gap-2">
+        <div class="flex items-center gap-2">
+          <button class="bg-[#222] hover:bg-gray-800 text-white text-[10px] px-2 py-0.5 rounded border border-[#333] transition" onclick="window.location.href='/marketing'">
+            ← Back
+          </button>
+          <button onclick="window.location.href='/marketing/editor?id=' + campaignId" class="text-gray-400 hover:text-white text-[9px] px-2 py-0.5 transition-all rounded hover:bg-[#222] hidden xs:inline">
+            ← Back to Classic Editor
+          </button>
+        </div>
+        <!-- Sidebar Toggle for Mobile/Tablet overlay -->
+        <button id="btn-toggle-sidebar" onclick="toggleMobileSidebar()" class="lg:hidden px-2.5 py-1 bg-brand-gold hover:bg-brand-gold/90 text-white text-[9px] rounded font-bold transition flex items-center gap-1 shadow">
+          <span>⚙️</span> Sidebar
         </button>
       </div>
 
       <!-- Center: Workspace Device and View Toggles -->
-      <div class="flex items-center gap-3">
-        <!-- Device Selectors -->
-        <div class="flex items-center gap-1 bg-[#1f1f1f] px-2 py-0.5 rounded border border-[#333]">
+      <div class="flex items-center gap-2">
+        <!-- Device Selectors (Hidden on Mobile screens where viewport size is fixed) -->
+        <div class="hidden md:flex items-center gap-1 bg-[#1f1f1f] px-2 py-0.5 rounded border border-[#333]">
           <span class="text-[8px] uppercase tracking-wider text-gray-500 font-bold mr-1">Workspace</span>
           <button id="device-desktop" onclick="setEditorDevice('Desktop')" class="px-2 py-0.5 rounded text-[8px] font-bold transition-all bg-brand-gold text-white" title="Desktop Workspace">🖥️ Desktop</button>
           <button id="device-tablet" onclick="setEditorDevice('Tablet')" class="px-2 py-0.5 rounded text-[8px] font-bold transition-all text-gray-400 hover:text-white" title="Tablet Workspace">📟 Tablet</button>
@@ -703,7 +752,7 @@
       </div>
 
       <!-- Right side: Creative Utilities -->
-      <div class="flex items-center gap-2">
+      <div class="flex items-center gap-2 justify-end w-full sm:w-auto">
         <button class="bg-[#2a2a2a] text-white text-[9px] px-2.5 py-1 rounded font-bold border border-[#3a3a3a] hover:bg-[#333] transition flex items-center gap-1" onclick="openTags()">
           <span>🏷️</span> Tags
         </button>
@@ -1998,16 +2047,143 @@
     // Custom top bar device preview switch function
     function setEditorDevice(device) {
       editor.setDevice(device);
-      document.getElementById('device-desktop').className = device === 'Desktop' 
-        ? 'px-2 py-0.5 rounded text-[9px] font-bold transition-all bg-brand-gold text-white'
-        : 'px-2 py-0.5 rounded text-[9px] font-bold transition-all text-gray-400 hover:text-white';
-      document.getElementById('device-tablet').className = device === 'Tablet' 
-        ? 'px-2 py-0.5 rounded text-[9px] font-bold transition-all bg-brand-gold text-white'
-        : 'px-2 py-0.5 rounded text-[9px] font-bold transition-all text-gray-400 hover:text-white';
-      document.getElementById('device-mobile').className = device === 'Mobile' 
-        ? 'px-2 py-0.5 rounded text-[9px] font-bold transition-all bg-brand-gold text-white'
-        : 'px-2 py-0.5 rounded text-[9px] font-bold transition-all text-gray-400 hover:text-white';
+      const desktopBtn = document.getElementById('device-desktop');
+      const tabletBtn = document.getElementById('device-tablet');
+      const mobileBtn = document.getElementById('device-mobile');
+      
+      if (desktopBtn) desktopBtn.className = device === 'Desktop' 
+        ? 'px-2 py-0.5 rounded text-[8px] font-bold transition-all bg-brand-gold text-white'
+        : 'px-2 py-0.5 rounded text-[8px] font-bold transition-all text-gray-400 hover:text-white';
+      if (tabletBtn) tabletBtn.className = device === 'Tablet' 
+        ? 'px-2 py-0.5 rounded text-[8px] font-bold transition-all bg-brand-gold text-white'
+        : 'px-2 py-0.5 rounded text-[8px] font-bold transition-all text-gray-400 hover:text-white';
+      if (mobileBtn) mobileBtn.className = device === 'Mobile' 
+        ? 'px-2 py-0.5 rounded text-[8px] font-bold transition-all bg-brand-gold text-white'
+        : 'px-2 py-0.5 rounded text-[8px] font-bold transition-all text-gray-400 hover:text-white';
     }
+
+    // Toggle styling & blocks sidebar on mobile / tablet overlay
+    function toggleMobileSidebar() {
+      document.body.classList.toggle('sidebar-open');
+      const btn = document.getElementById('btn-toggle-sidebar');
+      if (btn) {
+        if (document.body.classList.contains('sidebar-open')) {
+          btn.innerHTML = '<span>✕</span> Sidebar';
+          btn.classList.add('bg-amber-600');
+        } else {
+          btn.innerHTML = '<span>⚙️</span> Sidebar';
+          btn.classList.remove('bg-amber-600');
+        }
+      }
+    }
+
+    // Toggle collapsible inputs setup panel on mobile
+    function toggleMobileSettings() {
+      const panel = document.getElementById('mobile-settings-panel');
+      if (panel) {
+        panel.classList.toggle('hidden');
+        panel.classList.toggle('flex');
+      }
+    }
+
+    // Register GrapesJS selected component custom commands for Mobile positioning (Move Up / Move Down)
+    editor.Commands.add('toolbar:move-up', {
+      run(editor) {
+        const selected = editor.getSelected();
+        if (selected) {
+          const parent = selected.parent();
+          if (parent) {
+            const index = parent.components().indexOf(selected);
+            if (index > 0) {
+              parent.components().add(selected, { at: index - 1 });
+              editor.select(selected); // Maintain selection wrapper
+            }
+          }
+        }
+      }
+    });
+
+    editor.Commands.add('toolbar:move-down', {
+      run(editor) {
+        const selected = editor.getSelected();
+        if (selected) {
+          const parent = selected.parent();
+          if (parent) {
+            const index = parent.components().indexOf(selected);
+            if (index < parent.components().length - 1) {
+              parent.components().add(selected, { at: index + 2 });
+              editor.select(selected); // Maintain selection wrapper
+            }
+          }
+        }
+      }
+    });
+
+    // Append custom ⬆️ and ⬇️ icons to floating editor toolbar on component selection (Touch-repositioning helpers)
+    editor.on('component:selected', (model) => {
+      const toolbar = model.get('toolbar');
+      const hasMoveUp = toolbar.some(item => item.id === 'move-up');
+      if (!hasMoveUp) {
+        toolbar.unshift(
+          {
+            id: 'move-up',
+            command: 'toolbar:move-up',
+            label: '⬆️',
+            title: 'Move Element Up'
+          },
+          {
+            id: 'move-down',
+            command: 'toolbar:move-down',
+            label: '⬇️',
+            title: 'Move Element Down'
+          }
+        );
+        model.set('toolbar', toolbar);
+      }
+    });
+
+    // Touch click-to-insert block insertion fallback for mobile/tablet screen sizes
+    document.addEventListener('click', (e) => {
+      const blockEl = e.target.closest('.gjs-block');
+      if (blockEl) {
+        // Detect if touch layout or mobile sidebar is active
+        const isMobileOrTablet = window.innerWidth <= 1024;
+        if (isMobileOrTablet) {
+          const label = blockEl.querySelector('.gjs-block-label')?.textContent;
+          const block = editor.BlockManager.getAll().find(b => b.get('label') === label || b.id === label);
+          if (block) {
+            const selected = editor.getSelected();
+            if (selected) {
+              const parent = selected.parent();
+              if (parent) {
+                const index = parent.components().indexOf(selected);
+                parent.components().add(block.getContent(), { at: index + 1 });
+              } else {
+                selected.append(block.getContent());
+              }
+            } else {
+              editor.addComponents(block.getContent());
+            }
+            // Auto close mobile sidebar after inserting block
+            if (document.body.classList.contains('sidebar-open')) {
+              toggleMobileSidebar();
+            }
+          }
+        }
+      }
+    });
+
+    // Touch-canvas close listener: Tap canvas to auto-close drawer sidebar
+    editor.on('load', () => {
+      const canvasEl = document.querySelector('.gjs-cv-canvas');
+      if (canvasEl) {
+        canvasEl.addEventListener('click', () => {
+          if (document.body.classList.contains('sidebar-open')) {
+            toggleMobileSidebar();
+          }
+        });
+      }
+    });
 
     // ── CUSTOM BLOCKS ──
     const bm = editor.BlockManager;
