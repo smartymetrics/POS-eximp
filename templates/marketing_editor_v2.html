@@ -2113,9 +2113,14 @@
         if (selected) {
           const parent = selected.parent();
           if (parent) {
-            const index = parent.components().indexOf(selected);
+            const index = selected.index ? selected.index() : parent.components().indexOf(selected);
             if (index > 0) {
-              parent.components().add(selected, { at: index - 1 });
+              if (selected.move) {
+                selected.move(parent, { at: index - 1 });
+              } else {
+                parent.components().remove(selected);
+                parent.components().add(selected, { at: index - 1 });
+              }
               editor.select(selected); // Maintain selection wrapper
             }
           }
@@ -2129,9 +2134,15 @@
         if (selected) {
           const parent = selected.parent();
           if (parent) {
-            const index = parent.components().indexOf(selected);
-            if (index < parent.components().length - 1) {
-              parent.components().add(selected, { at: index + 2 });
+            const index = selected.index ? selected.index() : parent.components().indexOf(selected);
+            const siblingsCount = parent.components().length;
+            if (index < siblingsCount - 1) {
+              if (selected.move) {
+                selected.move(parent, { at: index + 1 });
+              } else {
+                parent.components().remove(selected);
+                parent.components().add(selected, { at: index + 1 });
+              }
               editor.select(selected); // Maintain selection wrapper
             }
           }
@@ -2143,10 +2154,16 @@
       run(editor) {
         const selected = editor.getSelected();
         if (selected) {
-          editor.runCommand('open-assets', {
-            target: selected,
-            types: ['image'],
-            accept: 'image/*'
+          editor.AssetManager.open({
+            select(asset, complete) {
+              const url = typeof asset === 'string' ? asset : (asset.getSrc ? asset.getSrc() : asset.get('src'));
+              if (url) {
+                selected.set('src', url);
+              }
+              if (complete) {
+                editor.AssetManager.close();
+              }
+            }
           });
         }
       }
@@ -2233,53 +2250,48 @@
     });
 
     // ── GENERAL ASSET MANAGER ADD IMAGE UTILITY ──
-    window.gjsInsertingImage = false;
-    
     function openGeneralAssetManager() {
-      window.gjsInsertingImage = true;
-      editor.runCommand('open-assets');
-    }
-
-    // Capture asset selection and insert as a new image element if in general insertion mode
-    editor.on('asset:select', (asset) => {
-      if (window.gjsInsertingImage) {
-        const url = typeof asset === 'string' ? asset : (asset.getSrc ? asset.getSrc() : asset.get('src'));
-        if (url) {
-          const selected = editor.getSelected();
-          const newImg = {
-            type: 'image',
-            src: url,
-            style: { 
-              width: '100%', 
-              height: 'auto', 
-              'max-width': '600px',
-              display: 'block',
-              margin: '10px auto'
-            }
-          };
-          
-          if (selected) {
-            const parent = selected.parent();
-            if (parent) {
-              const index = parent.components().indexOf(selected);
-              parent.components().add(newImg, { at: index + 1 });
+      editor.AssetManager.open({
+        select(asset, complete) {
+          const url = typeof asset === 'string' ? asset : (asset.getSrc ? asset.getSrc() : asset.get('src'));
+          if (url) {
+            const selected = editor.getSelected();
+            const newImg = {
+              type: 'image',
+              src: url,
+              style: { 
+                width: '100%', 
+                height: 'auto', 
+                'max-width': '600px',
+                display: 'block',
+                margin: '10px auto'
+              }
+            };
+            
+            if (selected) {
+              const parent = selected.parent();
+              if (parent) {
+                const index = selected.index ? selected.index() : parent.components().indexOf(selected);
+                parent.add(newImg, { at: index + 1 });
+              } else {
+                selected.append(newImg);
+              }
             } else {
-              selected.append(newImg);
-            }
-          } else {
-            // Append directly to the email body wrapper
-            const wrapper = editor.getWrapper();
-            if (wrapper) {
-              wrapper.append(newImg);
-            } else {
-              editor.addComponents(newImg);
+              // Append directly to the email body wrapper
+              const wrapper = editor.getWrapper();
+              if (wrapper) {
+                wrapper.append(newImg);
+              } else {
+                editor.addComponents(newImg);
+              }
             }
           }
+          if (complete) {
+            editor.AssetManager.close();
+          }
         }
-        window.gjsInsertingImage = false;
-        editor.Modal.close(); // Close the Asset Manager modal overlay
-      }
-    });
+      });
+    }
 
     // ── CUSTOM BLOCKS ──
     const bm = editor.BlockManager;
