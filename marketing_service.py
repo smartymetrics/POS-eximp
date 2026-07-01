@@ -21,6 +21,9 @@ MARKETING_FROM_NAME = os.getenv("MARKETING_FROM_NAME", "Eximp & Cloves")
 MARKETING_REPLY_TO = os.getenv("MARKETING_REPLY_TO", "marketing@mail.eximps-cloves.com")
 MARKETING_BCC_EMAIL = os.getenv("MARKETING_BCC_EMAIL", "marketing@mail.eximps-cloves.com")
 
+# TODO (BUG-09): Switch to PNG once logo_dark.png is uploaded to the 'marketing' Supabase bucket.
+# Upload at: https://app.supabase.com → Storage → marketing → Upload logo_dark.png
+# Then change this to: .../public/marketing/logo_dark.png
 BRAND_LOGO_URL = "https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/marketing/logo_dark.svg"
 BRAND_FOOTER_HTML = f"""
 <table width="100%" cellpadding="0" cellspacing="0" style="background:#1A1A1A; margin-top:20px;">
@@ -182,7 +185,27 @@ async def send_marketing_email(campaign: Dict[str, Any], contact: Dict[str, Any]
     html = personalize_content(raw_html, contact)
     html = sanitize_urls(html)
     
-    # 3. Tracking (only for real campaigns, not tests)
+    # 3. Inject preview text preheader (BUG-08 fix)
+    # This must happen BEFORE tracking so it sits right after <body>.
+    # The invisible div + padding chars ensure Gmail/Yahoo/Outlook show the
+    # correct preview snippet instead of pulling from the brand header.
+    if campaign.get("status") != "test" and campaign.get("preview_text"):
+        preview_text_val = str(campaign["preview_text"]).strip()
+        if preview_text_val:
+            # Repeat hidden whitespace chars to prevent body text bleeding into preview
+            padding = '&#847;&zwnj;&nbsp;' * 80
+            preheader = (
+                f'<div style="display:none;max-height:0;overflow:hidden;'
+                f'mso-hide:all;font-size:1px;line-height:1px;'
+                f'color:transparent;">'
+                f'{preview_text_val} {padding}</div>'
+            )
+            if '<body>' in html:
+                html = html.replace('<body>', f'<body>{preheader}', 1)
+            else:
+                html = preheader + html
+
+    # 4. Tracking (only for real campaigns, not tests)
     if campaign.get("status") != "test":
         html = wrap_links(html, campaign_id, contact_id)
         html = inject_tracking_pixel(html, campaign_id, contact_id)
@@ -287,17 +310,30 @@ def apply_segment_filters(query, rules: List[Dict[str, Any]]):
         # Behavioral Subqueries (Industrial Grade)
         if field == "has_opened":
             # Contacts who opened specific campaign (val is UUID) or ANY (val is 'any')
+            # Two-step lookup: first get matching contact IDs, then filter.
+            _db = get_db()
             if val == "any":
-                query = query.filter("id", "in", "(select contact_id from campaign_recipients where opened_at is not null)")
+                rec_res = _db.table("campaign_recipients").select("contact_id").not_.is_("opened_at", "null").execute()
             else:
-                query = query.filter("id", "in", f"(select contact_id from campaign_recipients where campaign_id = '{val}' and opened_at is not null)")
+                rec_res = _db.table("campaign_recipients").select("contact_id").eq("campaign_id", str(val)).not_.is_("opened_at", "null").execute()
+            contact_ids = list({r["contact_id"] for r in (rec_res.data or []) if r.get("contact_id")})
+            if contact_ids:
+                query = query.in_("id", contact_ids)
+            else:
+                query = query.eq("id", "no-match-placeholder")  # force empty result
             continue
         
         if field == "has_clicked":
+            _db = get_db()
             if val == "any":
-                query = query.filter("id", "in", "(select contact_id from campaign_recipients where clicked_at is not null)")
+                rec_res = _db.table("campaign_recipients").select("contact_id").not_.is_("clicked_at", "null").execute()
             else:
-                query = query.filter("id", "in", f"(select contact_id from campaign_recipients where campaign_id = '{val}' and clicked_at is not null)")
+                rec_res = _db.table("campaign_recipients").select("contact_id").eq("campaign_id", str(val)).not_.is_("clicked_at", "null").execute()
+            contact_ids = list({r["contact_id"] for r in (rec_res.data or []) if r.get("contact_id")})
+            if contact_ids:
+                query = query.in_("id", contact_ids)
+            else:
+                query = query.eq("id", "no-match-placeholder")
             continue
 
         if op == "eq":

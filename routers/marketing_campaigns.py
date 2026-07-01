@@ -242,11 +242,11 @@ async def send_campaign_broadcast(id: str, target: Optional[CampaignSendTarget],
             if scheduled_dt <= datetime.now(scheduled_dt.tzinfo):
                  raise HTTPException(status_code=400, detail="Scheduled time must be in the future.")
             
-            db.table("email_campaigns").update({
+            await db_execute(lambda: db.table("email_campaigns").update({
                 "status": "scheduled",
                 "scheduled_for": target.scheduled_at,
                 "target_config": target.dict(exclude={'scheduled_at'})
-            }).eq("id", id).execute()
+            }).eq("id", id).execute())
 
             await log_activity(
                 "marketing_campaign_scheduled",
@@ -257,11 +257,11 @@ async def send_campaign_broadcast(id: str, target: Optional[CampaignSendTarget],
         except Exception as e:
             raise HTTPException(status_code=400, detail=f"Invalid date format: {str(e)}")
 
-    # Mark as scheduled (about to send immediately)
-    db.table("email_campaigns").update({
-        "status": "scheduled",
+    # Mark as sending (about to send immediately)
+    await db_execute(lambda: db.table("email_campaigns").update({
+        "status": "sending",
         "scheduled_at": datetime.utcnow().isoformat()
-    }).eq("id", id).execute()
+    }).eq("id", id).execute())
 
     background_tasks.add_task(broadcast_campaign, id, target.segment_ids if target else None, target.manual_emails if target else None)
     

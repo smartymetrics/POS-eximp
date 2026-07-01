@@ -75,23 +75,25 @@ async def delete_segment(id: str, current_admin=Depends(verify_token)):
     return {"status": "ok"}
 
 @router.get("/{id}/contacts")
-async def get_segment_contacts(id: str, current_admin=Depends(verify_token)):
-    """Preview contacts who match a dynamic or static segment."""
+async def get_segment_contacts(id: str, current_admin=Depends(verify_token), limit: int = 100, offset: int = 0):
+    """Preview contacts who match a dynamic or static segment with pagination."""
     db = get_db()
     
     # Handle Smart Segments
     if id == 'engaged':
-        res = await db_execute(lambda: db.table("marketing_contacts").select("*").gt("total_emails_opened", 0).eq("is_subscribed", True).execute())
+        res = await db_execute(lambda: db.table("marketing_contacts").select("*").gt("total_emails_opened", 0).eq("is_subscribed", True).range(offset, offset + limit - 1).execute())
         return await inject_ltv(res.data)
     elif id == 'hot':
-        res = await db_execute(lambda: db.table("marketing_contacts").select("*").gte("engagement_score", 70).eq("is_subscribed", True).execute())
+        res = await db_execute(lambda: db.table("marketing_contacts").select("*").gte("engagement_score", 70).eq("is_subscribed", True).range(offset, offset + limit - 1).execute())
         return await inject_ltv(res.data)
     elif id == 'recent':
         thirty_days_ago = (datetime.utcnow() - timedelta(days=30)).isoformat()
-        res = await db_execute(lambda: db.table("marketing_contacts").select("*").gt("created_at", thirty_days_ago).eq("is_subscribed", True).execute())
+        res = await db_execute(lambda: db.table("marketing_contacts").select("*").gt("created_at", thirty_days_ago).eq("is_subscribed", True).range(offset, offset + limit - 1).execute())
         return await inject_ltv(res.data)
     elif id.startswith("financial_"):
-        return get_financial_segment_contacts(id) # Already includes LTV from my last fix in marketing_service.py
+        contacts = get_financial_segment_contacts(id)
+        paginated_contacts = contacts[offset : offset + limit]
+        return paginated_contacts
 
     # Handle Custom Segments
     seg_res = await db_execute(lambda: db.table("marketing_segments").select("*").eq("id", id).execute())
@@ -103,6 +105,7 @@ async def get_segment_contacts(id: str, current_admin=Depends(verify_token)):
         res = db.table("marketing_segment_contacts")\
             .select("marketing_contacts(*)")\
             .eq("segment_id", id)\
+            .range(offset, offset + limit - 1)\
             .execute()
         contacts = [r["marketing_contacts"] for r in res.data if r.get("marketing_contacts")]
         return await inject_ltv(contacts)
@@ -110,7 +113,8 @@ async def get_segment_contacts(id: str, current_admin=Depends(verify_token)):
     rules = segment.get("filter_rules") or []
     query = db.table("marketing_contacts").select("*").eq("is_subscribed", True)
     query = apply_segment_filters(query, rules)
-    result = await db_execute(lambda: query.limit(100).execute())
+    query = query.range(offset, offset + limit - 1)
+    result = await db_execute(lambda: query.execute())
     return await inject_ltv(result.data)
 
 @router.post("/preview")

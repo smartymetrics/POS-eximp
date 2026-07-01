@@ -166,7 +166,7 @@ async def get_campaign_report(id: str, current_admin=Depends(verify_token)):
     campaign = camp_res.data[0]
     
     # 2. Recipient stats
-    recs = db.table("campaign_recipients").select("status, open_count, click_count").eq("campaign_id", id).execute().data
+    recs = db.table("campaign_recipients").select("status, open_count, click_count, variant").eq("campaign_id", id).execute().data or []
     
     total = len(recs)
     delivered = len([r for r in recs if r["status"] == "delivered"])
@@ -174,10 +174,13 @@ async def get_campaign_report(id: str, current_admin=Depends(verify_token)):
     clicked = len([r for r in recs if (r["click_count"] or 0) > 0])
     bounced = len([r for r in recs if r["status"] == "bounced"])
     
-    return {
+    is_ab_test = campaign.get("is_ab_test", False)
+    
+    report_data = {
         "campaign_id": id,
         "name": campaign["name"],
         "subject": campaign["subject_a"],
+        "is_ab_test": is_ab_test,
         "stats": {
             "total_recipients": total,
             "delivered": {"count": delivered, "percent": (delivered/total*100) if total > 0 else 0},
@@ -186,6 +189,43 @@ async def get_campaign_report(id: str, current_admin=Depends(verify_token)):
             "bounced": {"count": bounced, "percent": (bounced/total*100) if total > 0 else 0}
         }
     }
+    
+    if is_ab_test:
+        # Group by variant (A or B, treating None/null or "A" as A)
+        recs_a = [r for r in recs if r.get("variant") in [None, "", "A"]]
+        recs_b = [r for r in recs if r.get("variant") == "B"]
+        
+        total_a = len(recs_a)
+        delivered_a = len([r for r in recs_a if r["status"] == "delivered"])
+        opened_a = len([r for r in recs_a if (r["open_count"] or 0) > 0])
+        clicked_a = len([r for r in recs_a if (r["click_count"] or 0) > 0])
+        
+        total_b = len(recs_b)
+        delivered_b = len([r for r in recs_b if r["status"] == "delivered"])
+        opened_b = len([r for r in recs_b if (r["open_count"] or 0) > 0])
+        clicked_b = len([r for r in recs_b if (r["click_count"] or 0) > 0])
+        
+        report_data["ab_stats"] = {
+            "variant_a": {
+                "subject": campaign.get("subject_a"),
+                "sent": total_a,
+                "delivered": delivered_a,
+                "opened": opened_a,
+                "clicked": clicked_a,
+                "open_rate": (opened_a/total_a*100) if total_a > 0 else 0,
+                "click_rate": (clicked_a/total_a*100) if total_a > 0 else 0,
+            },
+            "variant_b": {
+                "subject": campaign.get("subject_b") or (campaign.get("subject_a") + " (Variant B)"),
+                "sent": total_b,
+                "delivered": delivered_b,
+                "opened": opened_b,
+                "clicked": clicked_b,
+                "open_rate": (opened_b/total_b*100) if total_b > 0 else 0,
+                "click_rate": (clicked_b/total_b*100) if total_b > 0 else 0,
+            }
+        }
+    return report_data
 
 @router.get("/campaign/{id}/recipients")
 async def get_campaign_recipients(id: str, current_admin=Depends(verify_token)):

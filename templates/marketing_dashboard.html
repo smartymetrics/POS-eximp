@@ -715,12 +715,17 @@
                 <div class="relative w-full lg:w-96 flex items-center gap-2">
                     <input type="text" id="contact-search" placeholder="Search contacts..."
                         oninput="handleContactSearch(this.value)"
-                        class="w-full pl-10 pr-4 py-2.5 border rounded-lg focus:ring-2 focus:ring-brand-gold focus:border-brand-gold outline-none">
-                    <svg class="w-5 h-5 text-gray-400 absolute left-3 top-3" fill="none" stroke="currentColor"
+                        class="w-full pl-10 pr-10 py-2.5 border rounded-lg focus:ring-2 focus:ring-brand-gold focus:border-brand-gold outline-none">
+                    <svg class="w-5 h-5 text-gray-400 absolute left-3 top-3.5" fill="none" stroke="currentColor"
                         viewBox="0 0 24 24">
                         <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2"
                             d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
                     </svg>
+                    <button id="search-clear-btn" onclick="clearContactSearch()" class="hidden absolute right-3 top-3.5 text-gray-400 hover:text-gray-600 transition">
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path>
+                        </svg>
+                    </button>
                     <div id="segment-filter-badge"
                         class="hidden flex items-center gap-2 bg-brand-gold bg-opacity-10 text-brand-gold px-3 py-1.5 rounded-lg border border-brand-gold whitespace-nowrap">
                         <span class="text-xs font-black uppercase tracking-wider" id="active-segment-name">Segment
@@ -761,6 +766,10 @@
                         </tbody>
                     </table>
                 </div>
+            </div>
+            <!-- Load More Contacts Button (BUG-19) -->
+            <div class="flex justify-center py-6" id="load-more-contacts-container" style="display: none;">
+                <button onclick="loadMoreContacts()" id="load-more-contacts-btn" class="bg-white border border-gray-200 px-6 py-2 rounded-lg text-sm font-bold shadow-sm hover:shadow-md transition">Load More Contacts</button>
             </div>
         </div>
 
@@ -947,7 +956,7 @@
                                     <p class="text-xl font-black text-gray-800" id="preview-count">Select a rule...</p>
                                 </div>
                             </div>
-                            <button onclick="previewSegment()" id="preview-btn"
+                            <button onclick="updatePreview()" id="preview-btn"
                                 class="bg-white border border-gray-200 px-4 py-2 rounded-lg text-sm font-bold shadow-sm hover:shadow-md transition">Update
                                 Preview</button>
                         </div>
@@ -1203,28 +1212,108 @@
             </div>
 
             <div class="flex-1 overflow-y-auto p-6 md:p-8 space-y-8">
-                <!-- KPI Row -->
-                <div class="grid grid-cols-2 md:grid-cols-4 gap-4">
-                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
-                        <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Delivered</p>
-                        <p id="rep-delivered" class="text-2xl font-black text-gray-800">0</p>
-                        <p id="rep-delivered-pct" class="text-[10px] text-gray-400 font-bold">0% of total</p>
+                <!-- A/B Comparison section (BUG-01 & BUG-02 fix) -->
+                <div id="ab-report-section" class="hidden space-y-8">
+                    <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
+                        <!-- Variant A Card -->
+                        <div class="border rounded-2xl p-6 bg-gray-50 bg-opacity-50 border-gray-100">
+                            <div class="flex justify-between items-center mb-4">
+                                <span class="px-3 py-1 bg-brand-gold text-white text-[10px] font-black rounded-full uppercase">Variant A</span>
+                                <span id="variant-a-status" class="text-xs font-bold text-green-600"></span>
+                            </div>
+                            <h3 class="font-bold text-gray-700 mb-2">Subject: <span id="variant-a-subject" class="font-normal italic">...</span></h3>
+                            <div class="grid grid-cols-3 gap-4 mt-6">
+                                <div class="text-center">
+                                    <div class="text-2xl font-black text-gray-800" id="v-a-sent">0</div>
+                                    <div class="text-[9px] uppercase font-bold text-gray-400">Sent</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="text-2xl font-black text-brand-gold" id="v-a-opens">0</div>
+                                    <div class="text-[9px] uppercase font-bold text-gray-400">Opens</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="text-2xl font-black text-blue-500" id="v-a-clicks">0</div>
+                                    <div class="text-[9px] uppercase font-bold text-gray-400">Clicks</div>
+                                </div>
+                            </div>
+                            <div class="mt-8">
+                                <div class="flex justify-between text-xs font-bold mb-2">
+                                    <span>Open Rate</span>
+                                    <span id="v-a-open-rate">0%</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-1.5">
+                                    <div id="v-a-open-bar" class="bg-brand-gold h-1.5 rounded-full" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
+
+                        <!-- Variant B Card -->
+                        <div class="border rounded-2xl p-6 bg-blue-50 bg-opacity-30 border-blue-100">
+                            <div class="flex justify-between items-center mb-4">
+                                <span class="px-3 py-1 bg-blue-500 text-white text-[10px] font-black rounded-full uppercase">Variant B</span>
+                                <span id="variant-b-status" class="text-xs font-bold text-green-600"></span>
+                            </div>
+                            <h3 class="font-bold text-gray-700 mb-2">Subject: <span id="variant-b-subject" class="font-normal italic">...</span></h3>
+                            <div class="grid grid-cols-3 gap-4 mt-6">
+                                <div class="text-center">
+                                    <div class="text-2xl font-black text-gray-800" id="v-b-sent">0</div>
+                                    <div class="text-[9px] uppercase font-bold text-gray-400">Sent</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="text-2xl font-black text-brand-gold" id="v-b-opens">0</div>
+                                    <div class="text-[9px] uppercase font-bold text-gray-400">Opens</div>
+                                </div>
+                                <div class="text-center">
+                                    <div class="text-2xl font-black text-blue-500" id="v-b-clicks">0</div>
+                                    <div class="text-[9px] uppercase font-bold text-gray-400">Clicks</div>
+                                </div>
+                            </div>
+                            <div class="mt-8">
+                                <div class="flex justify-between text-xs font-bold mb-2">
+                                    <span>Open Rate</span>
+                                    <span id="v-b-open-rate">0%</span>
+                                </div>
+                                <div class="w-full bg-gray-200 rounded-full h-1.5">
+                                    <div id="v-b-open-bar" class="bg-blue-500 h-1.5 rounded-full" style="width: 0%"></div>
+                                </div>
+                            </div>
+                        </div>
                     </div>
-                    <div class="bg-brand-gold bg-opacity-5 p-4 rounded-xl border border-brand-gold border-opacity-10">
-                        <p class="text-[10px] font-black text-brand-gold uppercase tracking-widest mb-1">Open Rate</p>
-                        <p id="rep-opened" class="text-2xl font-black text-brand-gold">0%</p>
-                        <p id="rep-opened-count" class="text-[10px] text-brand-gold text-opacity-60 font-bold">0 unique
-                            opens</p>
+                    <div class="p-6 bg-brand-gold bg-opacity-5 rounded-2xl border border-brand-gold border-opacity-10">
+                        <h4 class="font-black uppercase text-[10px] tracking-widest text-brand-gold mb-2">Actionable Insight</h4>
+                        <p id="ab-insight-text" class="text-sm text-gray-700 leading-relaxed font-medium">...</p>
                     </div>
-                    <div class="bg-blue-50 p-4 rounded-xl border border-blue-100">
-                        <p class="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">Click Rate</p>
-                        <p id="rep-clicked" class="text-2xl font-black text-blue-500">0%</p>
-                        <p id="rep-clicked-count" class="text-[10px] text-blue-400 font-bold">0 unique clicks</p>
+                </div>
+
+                <!-- KPI and Chart Row for Standard Campaign (will be hidden if A/B test) -->
+                <div id="standard-kpi-row" class="grid grid-cols-1 lg:grid-cols-3 gap-6">
+                    <div class="lg:col-span-2 grid grid-cols-2 gap-4">
+                        <div class="bg-gray-50 p-4 rounded-xl border border-gray-100">
+                            <p class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-1">Delivered</p>
+                            <p id="rep-delivered" class="text-2xl font-black text-gray-800">0</p>
+                            <p id="rep-delivered-pct" class="text-[10px] text-gray-400 font-bold">0% of total</p>
+                        </div>
+                        <div class="bg-brand-gold bg-opacity-5 p-4 rounded-xl border border-brand-gold border-opacity-10">
+                            <p class="text-[10px] font-black text-brand-gold uppercase tracking-widest mb-1">Open Rate</p>
+                            <p id="rep-opened" class="text-2xl font-black text-brand-gold">0%</p>
+                            <p id="rep-opened-count" class="text-[10px] text-brand-gold text-opacity-60 font-bold">0 unique opens</p>
+                        </div>
+                        <div class="bg-blue-50 p-4 rounded-xl border border-blue-100">
+                            <p class="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">Click Rate</p>
+                            <p id="rep-clicked" class="text-2xl font-black text-blue-500">0%</p>
+                            <p id="rep-clicked-count" class="text-[10px] text-blue-400 font-bold">0 unique clicks</p>
+                        </div>
+                        <div class="bg-red-50 p-4 rounded-xl border border-red-100">
+                            <p class="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1">Bounced</p>
+                            <p id="rep-bounced" class="text-2xl font-black text-red-500">0</p>
+                            <p id="rep-bounced-pct" class="text-[10px] text-red-400 font-bold">0% of total</p>
+                        </div>
                     </div>
-                    <div class="bg-red-50 p-4 rounded-xl border border-red-100">
-                        <p class="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1">Bounced</p>
-                        <p id="rep-bounced" class="text-2xl font-black text-red-500">0</p>
-                        <p id="rep-bounced-pct" class="text-[10px] text-red-400 font-bold">0% of total</p>
+                    <div class="bg-gray-50 p-4 rounded-xl border border-gray-100 flex flex-col items-center justify-center min-h-[160px]">
+                        <h4 class="text-[10px] font-black text-gray-400 uppercase tracking-widest mb-3 text-center">Engagement Split</h4>
+                        <div class="w-28 h-28 relative">
+                            <canvas id="reportChart"></canvas>
+                        </div>
                     </div>
                 </div>
 
@@ -1532,116 +1621,7 @@
     </div>
 
     <!-- Campaign Performance Report Modal (A/B Aware) -->
-    <div id="report-modal"
-        class="fixed inset-0 bg-black bg-opacity-50 hidden z-[110] flex items-center justify-center p-4">
-        <div class="bg-white rounded-xl w-full max-w-4xl max-h-[90vh] overflow-y-auto p-6 md:p-8 shadow-2xl">
-            <div class="flex justify-between items-center mb-8">
-                <div>
-                    <h2 class="text-2xl font-bold text-gray-800" id="report-camp-name">Campaign Report</h2>
-                    <p class="text-sm text-gray-500" id="report-camp-id-display">ID: ...</p>
-                </div>
-                <button onclick="closeReportModal()" class="text-gray-400 hover:text-gray-600"><svg class="w-6 h-6"
-                        fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
-                        </path>
-                    </svg></button>
-            </div>
 
-            <div id="ab-report-content" class="hidden">
-                <div class="grid grid-cols-1 md:grid-cols-2 gap-8">
-                    <!-- Variant A Card -->
-                    <div class="border rounded-2xl p-6 bg-gray-50 bg-opacity-50 border-gray-100">
-                        <div class="flex justify-between items-center mb-4">
-                            <span
-                                class="px-3 py-1 bg-brand-gold text-white text-[10px] font-black rounded-full uppercase">Variant
-                                A</span>
-                            <span id="variant-a-status" class="text-xs font-bold text-green-600"></span>
-                        </div>
-                        <h3 class="font-bold text-gray-700 mb-2">Subject: <span id="variant-a-subject"
-                                class="font-normal italic">...</span></h3>
-
-                        <div class="grid grid-cols-3 gap-4 mt-6">
-                            <div class="text-center">
-                                <div class="text-2xl font-black text-gray-800" id="v-a-sent">0</div>
-                                <div class="text-[9px] uppercase font-bold text-gray-400">Sent</div>
-                            </div>
-                            <div class="text-center">
-                                <div class="text-2xl font-black text-brand-gold" id="v-a-opens">0</div>
-                                <div class="text-[9px] uppercase font-bold text-gray-400">Opens</div>
-                            </div>
-                            <div class="text-center">
-                                <div class="text-2xl font-black text-blue-500" id="v-a-clicks">0</div>
-                                <div class="text-[9px] uppercase font-bold text-gray-400">Clicks</div>
-                            </div>
-                        </div>
-
-                        <div class="mt-8">
-                            <div class="flex justify-between text-xs font-bold mb-2">
-                                <span>Open Rate</span>
-                                <span id="v-a-open-rate">0%</span>
-                            </div>
-                            <div class="w-full bg-gray-200 rounded-full h-1.5">
-                                <div id="v-a-open-bar" class="bg-brand-gold h-1.5 rounded-full" style="width: 0%"></div>
-                            </div>
-                        </div>
-                    </div>
-
-                    <!-- Variant B Card -->
-                    <div class="border rounded-2xl p-6 bg-blue-50 bg-opacity-30 border-blue-100">
-                        <div class="flex justify-between items-center mb-4">
-                            <span
-                                class="px-3 py-1 bg-blue-500 text-white text-[10px] font-black rounded-full uppercase">Variant
-                                B</span>
-                            <span id="variant-b-status" class="text-xs font-bold text-green-600"></span>
-                        </div>
-                        <h3 class="font-bold text-gray-700 mb-2">Subject: <span id="variant-b-subject"
-                                class="font-normal italic">...</span></h3>
-
-                        <div class="grid grid-cols-3 gap-4 mt-6">
-                            <div class="text-center">
-                                <div class="text-2xl font-black text-gray-800" id="v-b-sent">0</div>
-                                <div class="text-[9px] uppercase font-bold text-gray-400">Sent</div>
-                            </div>
-                            <div class="text-center">
-                                <div class="text-2xl font-black text-brand-gold" id="v-b-opens">0</div>
-                                <div class="text-[9px] uppercase font-bold text-gray-400">Opens</div>
-                            </div>
-                            <div class="text-center">
-                                <div class="text-2xl font-black text-blue-500" id="v-b-clicks">0</div>
-                                <div class="text-[9px] uppercase font-bold text-gray-400">Clicks</div>
-                            </div>
-                        </div>
-
-                        <div class="mt-8">
-                            <div class="flex justify-between text-xs font-bold mb-2">
-                                <span>Open Rate</span>
-                                <span id="v-b-open-rate">0%</span>
-                            </div>
-                            <div class="w-full bg-gray-200 rounded-full h-1.5">
-                                <div id="v-b-open-bar" class="bg-blue-500 h-1.5 rounded-full" style="width: 0%"></div>
-                            </div>
-                        </div>
-                    </div>
-                </div>
-
-                <div
-                    class="mt-10 p-6 bg-brand-gold bg-opacity-5 rounded-2xl border border-brand-gold border-opacity-10">
-                    <h4 class="font-black uppercase text-[10px] tracking-widest text-brand-gold mb-2">Actionable Insight
-                    </h4>
-                    <p id="ab-insight-text" class="text-sm text-gray-700 leading-relaxed font-medium">Variant A is
-                        currently outperforming Variant B in open rates. We recommend using similar subject lines for
-                        future campaigns.</p>
-                </div>
-            </div>
-
-            <div id="standard-report-content" class="hidden text-center py-20">
-                <div class="text-4xl mb-4">📊</div>
-                <h3 class="text-xl font-bold text-gray-800">Standard Campaign</h3>
-                <p class="text-gray-500 max-w-sm mx-auto mt-2">Detailed per-recipient engagement stats are available in
-                    the main list. This was not an A/B test campaign.</p>
-            </div>
-        </div>
-    </div>
     <div id="pageLoader" class="page-loader">
         <div class="loader-card">
             <div class="spinner"></div>
@@ -2092,15 +2072,16 @@
                 if (res.ok) {
                     const campaign = await res.json();
                     await loadCampaigns();
-                    // Optional: open editor immediately
+                    showToast(`Campaign duplicated successfully!`);
                     if (confirm(`Campaign duplicated as "${campaign.name}". Open editor now?`)) {
                         window.open(`/marketing/editor?id=${campaign.id}`);
                     }
                 } else {
-                    let errMsg = "Failed to duplicate campaign (status " + res.status + ")."; try { res.json().then(b => { if(b.detail) alert(b.detail); else alert(errMsg); }).catch(() => alert(errMsg)); } catch(_){ alert(errMsg); }
+                    showToast("Failed to duplicate campaign", "error");
                 }
             } catch (e) {
-                console.error("Duplicate campaign error:", e); alert("An unexpected error occurred. Please try again.");
+                console.error("Duplicate campaign error:", e);
+                showToast("An unexpected error occurred", "error");
             } finally {
                 hidePageLoader();
             }
@@ -2108,84 +2089,131 @@
 
         let searchTimer;
         function handleContactSearch(val) {
+            const clearBtn = document.getElementById('search-clear-btn');
+            if (val) clearBtn.classList.remove('hidden');
+            else clearBtn.classList.add('hidden');
+
             clearTimeout(searchTimer);
             searchTimer = setTimeout(() => {
                 loadContacts(val);
             }, 500);
         }
 
-        async function loadContacts(q = '') {
-            let url = '/api/marketing/contacts';
+        function clearContactSearch() {
+            const input = document.getElementById('contact-search');
+            input.value = '';
+            document.getElementById('search-clear-btn').classList.add('hidden');
+            loadContacts();
+        }
+
+        let contactsOffset = 0;
+        const contactsLimit = 100;
+        let contactsQuery = '';
+
+        async function loadContacts(q = '', append = false) {
+            if (!append) {
+                contactsOffset = 0;
+                contactsQuery = q;
+            }
+            let url = `/api/marketing/contacts?limit=${contactsLimit}&offset=${contactsOffset}`;
             if (activeSegmentFilter) {
-                // If it's a smart segment (engaged, hot, recent), we use special logic or just pass ID
-                url = `/api/marketing/segments/${activeSegmentFilter}/contacts/`;
-            } else if (q) {
-                url += `?q=${encodeURIComponent(q)}`;
+                url = `/api/marketing/segments/${activeSegmentFilter}/contacts?limit=${contactsLimit}&offset=${contactsOffset}`;
+            } else if (contactsQuery) {
+                url += `&q=${encodeURIComponent(contactsQuery)}`;
             }
 
-          try {
-            const res = await fetch(url, {
-                headers: { 'Authorization': 'Bearer ' + token }
-            });
-            if (!res.ok) throw new Error(`Server returned ${res.status}`);
-            const data = await res.json();
-            const list = document.getElementById('contact-list');
+            try {
+                const res = await fetch(url, {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (!res.ok) throw new Error(`Server returned ${res.status}`);
+                const data = await res.json();
+                const list = document.getElementById('contact-list');
+                const loadMoreBtn = document.getElementById('load-more-contacts-container');
 
-            if (!data || data.length === 0) {
-                list.innerHTML = '<tr><td colspan="7" class="py-20 text-center text-gray-400">No contacts matching this filter.</td></tr>';
-                hidePageLoader();
-                return;
-            }
+                if (!append && (!data || data.length === 0)) {
+                    list.innerHTML = '<tr><td colspan="7" class="py-20 text-center text-gray-400">No contacts matching this filter.</td></tr>';
+                    if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+                    hidePageLoader();
+                    return;
+                }
 
-            list.innerHTML = data.map(c => `
-                <tr class="border-b hover:bg-gray-50 transition">
-                    <td class="py-4">
-                        <div class="font-bold">${c.first_name || ''} ${c.last_name || ''}</div>
-                        <div class="text-xs text-gray-400">${c.email}</div>
-                        ${c.source ? `<div class="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded w-fit mt-1 border border-blue-100 font-bold uppercase transition hover:bg-blue-100 cursor-help" title="Lead Source">${c.source}</div>` : ''}
-                    </td>
-                    <td class="capitalize text-sm">${c.contact_type}</td>
-                    <td>
-                        <div class="flex flex-col gap-1">
-                            <span class="px-2 py-0.5 bg-gray-100 rounded font-bold text-[10px] w-fit">Score: ${c.engagement_score || 0}</span>
-                            <div class="flex gap-2 text-[10px] text-gray-500">
-                                <span>👁️ ${c.total_emails_opened || 0}</span>
-                                <span>🖱️ ${c.total_emails_clicked || 0}</span>
+                const rowsHtml = data.map(c => `
+                    <tr class="border-b hover:bg-gray-50 transition">
+                        <td class="py-4">
+                            <div class="font-bold">${c.first_name || ''} ${c.last_name || ''}</div>
+                            <div class="text-xs text-gray-400">${c.email}</div>
+                            ${c.source ? `<div class="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded w-fit mt-1 border border-blue-100 font-bold uppercase transition hover:bg-blue-100 cursor-help" title="Lead Source">${c.source}</div>` : ''}
+                        </td>
+                        <td class="capitalize text-sm">${c.contact_type}</td>
+                        <td>
+                            <div class="flex flex-col gap-1">
+                                <span class="px-2 py-0.5 bg-gray-100 rounded font-bold text-[10px] w-fit">Score: ${c.engagement_score || 0}</span>
+                                <div class="flex gap-2 text-[10px] text-gray-500">
+                                    <span>👁️ ${c.total_emails_opened || 0}</span>
+                                    <span>🖱️ ${c.total_emails_clicked || 0}</span>
+                                </div>
                             </div>
-                        </div>
-                    </td>
-                    <td>
-                        <div class="text-sm font-black text-green-600">₦${(c.total_revenue_attributed || 0).toLocaleString()}</div>
-                        <div class="text-[9px] text-gray-400 font-bold uppercase tracking-tighter">Lifetime Value</div>
-                    </td>
-                    <td><span class="w-3 h-3 rounded-full inline-block ${c.is_subscribed ? 'bg-green-500' : 'bg-red-500'}" title="${c.is_subscribed ? 'Subscribed' : 'Unsubscribed'}"></span></td>
-                    <td class="text-[10px] text-gray-400 leading-tight">
-                        ${c.last_opened_at ? `Opened: ${new Date(c.last_opened_at).toLocaleDateString()}` : ''}
-                        ${c.last_clicked_at ? `<br>Clicked: ${new Date(c.last_clicked_at).toLocaleDateString()}` : (c.last_opened_at ? '' : 'No activity')}
-                    </td>
-                    <td>
-                        <div class="flex gap-2">
-                            <button onclick="openEnrollModal('${c.id}', '${(c.first_name || c.email).replace(/'/g, "")}')" 
-                                class="p-2 text-gray-400 hover:text-purple-500 hover:bg-purple-50 rounded-full transition" title="Enroll in Sequence">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
-                            </button>
-                            <button onclick="openEditContactModal('${c.id}')" class="p-2 text-gray-400 hover:text-blue-500 hover:bg-gray-100 rounded-full transition" title="Edit Contact">
-                                <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
-                            </button>
-                            <button onclick="openContactModal('${c.id}')" class="p-2 text-gray-400 hover:text-brand-gold hover:bg-gray-100 rounded-full transition" title="View Profile & History">
-                                <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg>
-                            </button>
-                        </div>
-                    </td>
-                </tr>
-            `).join('');
-          } catch (e) {
-            console.error('Failed to load contacts:', e);
-            const list = document.getElementById('contact-list');
-            if (list) list.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-red-500 font-medium">Failed to load contacts. Please refresh.</td></tr>';
-          } finally {
-            hidePageLoader();
-          }
+                        </td>
+                        <td>
+                            <div class="text-sm font-black text-green-600">₦${(c.total_revenue_attributed || 0).toLocaleString()}</div>
+                            <div class="text-[9px] text-gray-400 font-bold uppercase tracking-tighter">Lifetime Value</div>
+                        </td>
+                        <td>
+                            <span class="px-2 py-1 rounded-full text-xs font-bold ${
+                                c.is_subscribed ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'
+                            }">
+                                ${c.is_subscribed ? 'Subscribed' : 'Unsubscribed'}
+                            </span>
+                        </td>
+                        <td>
+                            <div class="text-xs text-gray-500">
+                                <div>Added: ${new Date(c.created_at).toLocaleDateString()}</div>
+                                ${c.last_emailed_at ? `<div>Emailed: ${new Date(c.last_emailed_at).toLocaleDateString()}</div>` : ''}
+                            </div>
+                        </td>
+                        <td class="text-right pr-6">
+                            <div class="flex justify-end gap-2">
+                                <button onclick="openEnrollModal('${c.id}', '${(c.first_name || c.email).replace(/'/g, "")}')" 
+                                    class="p-2 text-gray-400 hover:text-purple-500 hover:bg-purple-50 rounded-full transition" title="Enroll in Sequence">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 10V3L4 14h7v7l9-11h-7z"></path></svg>
+                                </button>
+                                <button onclick="openEditContactModal('${c.id}')" class="p-2 text-gray-400 hover:text-blue-500 hover:bg-gray-100 rounded-full transition" title="Edit Contact">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                                </button>
+                                <button onclick="openContactModal('${c.id}')" class="p-2 text-gray-400 hover:text-brand-gold hover:bg-gray-100 rounded-full transition" title="View Profile & History">
+                                    <svg class="w-5 h-5" fill="currentColor" viewBox="0 0 20 20"><path d="M10 6a2 2 0 110-4 2 2 0 010 4zM10 12a2 2 0 110-4 2 2 0 010 4zM10 18a2 2 0 110-4 2 2 0 010 4z"></path></svg>
+                                </button>
+                            </div>
+                        </td>
+                    </tr>
+                `).join('');
+
+                if (append) {
+                    list.innerHTML += rowsHtml;
+                } else {
+                    list.innerHTML = rowsHtml;
+                }
+
+                if (loadMoreBtn) {
+                    if (data.length < contactsLimit) {
+                        loadMoreBtn.style.display = 'none';
+                    } else {
+                        loadMoreBtn.style.display = 'flex';
+                    }
+                }
+            } catch (e) {
+                console.error('Failed to load contacts:', e);
+                const list = document.getElementById('contact-list');
+                if (list) list.innerHTML = '<tr><td colspan="7" class="py-8 text-center text-red-500 font-medium">Failed to load contacts. Please refresh.</td></tr>';
+            } finally {
+                hidePageLoader();
+            }
+        }
+
+        function loadMoreContacts() {
+            contactsOffset += contactsLimit;
+            loadContacts(contactsQuery, true);
         }
 
         function getStatusBadge(s) {
@@ -2203,42 +2231,6 @@
                 el.classList.remove('hidden');
                 el.classList.add('active');
                 el.style.display = 'flex';
-            }
-        }
-        function closeCampaignModal() {
-            const el = document.getElementById('campaign-modal');
-            if (el) {
-                el.classList.add('hidden');
-                el.classList.remove('active');
-                el.style.display = 'none';
-            }
-        }
-
-        async function createCampaign() {
-            const btn = document.getElementById('create-camp-btn');
-            btn.classList.add('btn-loading');
-            try {
-                const data = {
-                    name: document.getElementById('camp-name').value,
-                    subject_a: document.getElementById('camp-subject').value,
-                    preview_text: document.getElementById('camp-preview').value,
-                    html_body_a: '<h1>Start Designing!</h1>'
-                };
-
-                const res = await fetch('/api/marketing/campaigns', {
-                    method: 'POST',
-                    headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + token },
-                    body: JSON.stringify(data)
-                });
-
-                if (!res.ok) throw new Error("Failed to create campaign");
-
-                const camp = await res.json();
-                window.location.href = `/marketing/editor?id=${camp.id}`;
-            } catch (e) {
-                console.error(e);
-                alert(e.message || "Error creating campaign.");
-                btn.classList.remove('btn-loading');
             }
         }
 
@@ -2655,74 +2647,7 @@
             }
         }
 
-        function viewReport(id) {
-            const c = allCampaigns.find(camp => camp.id === id);
-            if (!c) return;
 
-            document.getElementById('report-camp-name').innerText = c.name;
-            document.getElementById('report-camp-id-display').innerText = `ID: ${c.id}`;
-
-            const abContent = document.getElementById('ab-report-content');
-            const stdContent = document.getElementById('standard-report-content');
-
-            if (c.is_ab_test) {
-                abContent.classList.remove('hidden');
-                stdContent.classList.add('hidden');
-
-                // Populate Variant A
-                document.getElementById('variant-a-subject').innerText = c.subject_a || 'No subject';
-                document.getElementById('v-a-sent').innerText = c.variant_a_sent || 0;
-                document.getElementById('v-a-opens').innerText = c.variant_a_opens || 0;
-                document.getElementById('v-a-clicks').innerText = c.variant_a_clicks || 0;
-
-                const aOpenRate = c.variant_a_sent > 0 ? (c.variant_a_opens / c.variant_a_sent * 100).toFixed(1) : 0;
-                document.getElementById('v-a-open-rate').innerText = aOpenRate + '%';
-                document.getElementById('v-a-open-bar').style.width = aOpenRate + '%';
-
-                // Populate Variant B
-                document.getElementById('variant-b-subject').innerText = c.subject_b || 'No subject';
-                document.getElementById('v-b-sent').innerText = c.variant_b_sent || 0;
-                document.getElementById('v-b-opens').innerText = c.variant_b_opens || 0;
-                document.getElementById('v-b-clicks').innerText = c.variant_b_clicks || 0;
-
-                const bOpenRate = c.variant_b_sent > 0 ? (c.variant_b_opens / c.variant_b_sent * 100).toFixed(1) : 0;
-                document.getElementById('v-b-open-rate').innerText = bOpenRate + '%';
-                document.getElementById('v-b-open-bar').style.width = bOpenRate + '%';
-
-                // Winning Logic
-                const insight = document.getElementById('ab-insight-text');
-                const badgeA = document.getElementById('variant-a-status');
-                const badgeB = document.getElementById('variant-b-status');
-
-                badgeA.innerText = '';
-                badgeB.innerText = '';
-
-                if (parseFloat(aOpenRate) > parseFloat(bOpenRate) + 0.5) {
-                    badgeA.innerText = '🏆 WINNING';
-                    insight.innerText = `Variant A is winning with a ${aOpenRate}% open rate. The subject line "${c.subject_a}" resonated better with your audience.`;
-                } else if (parseFloat(bOpenRate) > parseFloat(aOpenRate) + 0.5) {
-                    badgeB.innerText = '🏆 WINNING';
-                    insight.innerText = `Variant B is winning with a ${bOpenRate}% open rate. The subject line "${c.subject_b}" performed better than the original.`;
-                } else {
-                    insight.innerText = `The results are neck-and-neck! Both variants are performing similarly. You can continue monitoring or pick your favorite design for future campaigns.`;
-                }
-
-            } else {
-                abContent.classList.add('hidden');
-                stdContent.classList.remove('hidden');
-            }
-
-            document.getElementById('report-modal').classList.remove('hidden');
-            document.getElementById('report-modal').classList.add('active');
-            document.getElementById('report-modal').style.display = 'flex';
-        }
-
-        function closeReportModal() {
-            const el = document.getElementById('report-modal');
-            el.classList.add('hidden');
-            el.classList.remove('active');
-            el.style.display = 'none';
-        }
         async function updatePreview() {
             const rules = [];
             document.querySelectorAll('#rules-container > div').forEach(row => {
@@ -2785,9 +2710,14 @@
                 if (res.ok) {
                     closeSegmentModal();
                     loadSegments();
-                } else { alert("Failed to save segment."); }
+                    showToast("Segment saved successfully!");
+                } else {
+                    showToast("Failed to save segment.", "error");
+                }
             } catch (e) {
                 console.error(e);
+                showToast("An error occurred while saving.", "error");
+            }
             } finally {
                 if (btn) btn.classList.remove('btn-loading');
             }
@@ -2820,7 +2750,11 @@
                 headers: { 'Authorization': 'Bearer ' + token }
             });
             const data = await res.json();
-            alert(`Synced ${data.synced_count} clients to marketing list!`);
+            if (res.ok) {
+                showToast(`Synced ${data.synced_count} clients successfully!`);
+            } else {
+                showToast(data.detail || "Failed to sync clients", "error");
+            }
             loadContacts();
         }
 
@@ -3460,6 +3394,7 @@
                 document.getElementById('prof-initials').innerText = initials;
                 document.getElementById('prof-phone').innerText = contact.phone || 'No phone';
                 document.getElementById('prof-type').innerText = (contact.contact_type || 'lead').toUpperCase();
+                document.getElementById('prof-source').innerText = contact.source || 'Manual Entry';
 
                 // Load history
                 const histRes = await fetch(`/api/marketing/contacts/${id}/history`, {
@@ -3677,6 +3612,37 @@
             }
         }
 
+        let reportChartInstance = null;
+
+        function renderReportChart(opened, clicked, unopened, bounced) {
+            const ctx = document.getElementById('reportChart');
+            if (!ctx) return;
+            const context = ctx.getContext('2d');
+            if (reportChartInstance) {
+                reportChartInstance.destroy();
+            }
+            reportChartInstance = new Chart(context, {
+                type: 'doughnut',
+                data: {
+                    labels: ['Clicked', 'Opened Only', 'Unopened', 'Bounced'],
+                    datasets: [{
+                        data: [clicked, Math.max(0, opened - clicked), Math.max(0, unopened), bounced],
+                        backgroundColor: ['#3b82f6', '#c47d0a', '#e5e7eb', '#ef4444'],
+                        borderWidth: 0
+                    }]
+                },
+                options: {
+                    responsive: true,
+                    maintainAspectRatio: false,
+                    plugins: {
+                        legend: { display: false },
+                        tooltip: { enabled: true }
+                    },
+                    cutout: '70%'
+                }
+            });
+        }
+
         async function viewReport(id) {
             showPageLoader('Generating Campaign Report...');
             try {
@@ -3689,14 +3655,72 @@
                 // Populate KPIs
                 document.getElementById('report-title').innerText = summary.name;
                 document.getElementById('report-subject').innerText = `Subject: ${summary.subject}`;
-                document.getElementById('rep-delivered').innerText = summary.stats.delivered.count;
-                document.getElementById('rep-delivered-pct').innerText = `${summary.stats.delivered.percent.toFixed(1)}% of targets`;
-                document.getElementById('rep-opened').innerText = `${summary.stats.opened.percent.toFixed(1)}%`;
-                document.getElementById('rep-opened-count').innerText = `${summary.stats.opened.count} unique opens`;
-                document.getElementById('rep-clicked').innerText = `${summary.stats.clicked.percent.toFixed(1)}%`;
-                document.getElementById('rep-clicked-count').innerText = `${summary.stats.clicked.count} unique clicks`;
-                document.getElementById('rep-bounced').innerText = summary.stats.bounced.count;
-                document.getElementById('rep-bounced-pct').innerText = `${summary.stats.bounced.percent.toFixed(1)}% of total`;
+
+                const abSection = document.getElementById('ab-report-section');
+                const stdKpiRow = document.getElementById('standard-kpi-row');
+
+                if (summary.is_ab_test && summary.ab_stats) {
+                    abSection.classList.remove('hidden');
+                    stdKpiRow.classList.add('hidden');
+
+                    const vA = summary.ab_stats.variant_a;
+                    const vB = summary.ab_stats.variant_b;
+
+                    // Populate Variant A
+                    document.getElementById('variant-a-subject').innerText = vA.subject || 'No subject';
+                    document.getElementById('v-a-sent').innerText = vA.sent;
+                    document.getElementById('v-a-opens').innerText = vA.opened;
+                    document.getElementById('v-a-clicks').innerText = vA.clicked;
+                    document.getElementById('v-a-open-rate').innerText = `${vA.open_rate.toFixed(1)}%`;
+                    document.getElementById('v-a-open-bar').style.width = `${vA.open_rate.toFixed(1)}%`;
+
+                    // Populate Variant B
+                    document.getElementById('variant-b-subject').innerText = vB.subject || 'No subject';
+                    document.getElementById('v-b-sent').innerText = vB.sent;
+                    document.getElementById('v-b-opens').innerText = vB.opened;
+                    document.getElementById('v-b-clicks').innerText = vB.clicked;
+                    document.getElementById('v-b-open-rate').innerText = `${vB.open_rate.toFixed(1)}%`;
+                    document.getElementById('v-b-open-bar').style.width = `${vB.open_rate.toFixed(1)}%`;
+
+                    // Win logic
+                    const badgeA = document.getElementById('variant-a-status');
+                    const badgeB = document.getElementById('variant-b-status');
+                    const insight = document.getElementById('ab-insight-text');
+                    badgeA.innerText = '';
+                    badgeB.innerText = '';
+
+                    if (vA.open_rate > vB.open_rate + 0.5) {
+                        badgeA.innerText = '🏆 WINNING';
+                        insight.innerText = `Variant A is winning with a ${vA.open_rate.toFixed(1)}% open rate. The subject line "${vA.subject}" resonated better with your audience.`;
+                    } else if (vB.open_rate > vA.open_rate + 0.5) {
+                        badgeB.innerText = '🏆 WINNING';
+                        insight.innerText = `Variant B is winning with a ${vB.open_rate.toFixed(1)}% open rate. The subject line "${vB.subject}" performed better.`;
+                    } else {
+                        insight.innerText = `The results are neck-and-neck! Both variants are performing similarly.`;
+                    }
+                } else {
+                    abSection.classList.add('hidden');
+                    stdKpiRow.classList.remove('hidden');
+
+                    const deliveredCount = summary.stats.delivered.count;
+                    const openedCount = summary.stats.opened.count;
+                    const clickedCount = summary.stats.clicked.count;
+                    const bouncedCount = summary.stats.bounced.count;
+                    const totalRecipients = summary.stats.total_recipients;
+
+                    document.getElementById('rep-delivered').innerText = deliveredCount;
+                    document.getElementById('rep-delivered-pct').innerText = `${summary.stats.delivered.percent.toFixed(1)}% of targets`;
+                    document.getElementById('rep-opened').innerText = `${summary.stats.opened.percent.toFixed(1)}%`;
+                    document.getElementById('rep-opened-count').innerText = `${openedCount} unique opens`;
+                    document.getElementById('rep-clicked').innerText = `${summary.stats.clicked.percent.toFixed(1)}%`;
+                    document.getElementById('rep-clicked-count').innerText = `${clickedCount} unique clicks`;
+                    document.getElementById('rep-bounced').innerText = bouncedCount;
+                    document.getElementById('rep-bounced-pct').innerText = `${summary.stats.bounced.percent.toFixed(1)}% of total`;
+
+                    // Render chart
+                    const unopened = Math.max(0, totalRecipients - openedCount - bouncedCount);
+                    renderReportChart(openedCount, clickedCount, unopened, bouncedCount);
+                }
 
                 // 2. Fetch Recipients
                 const recsRes = await fetch(`/api/marketing/analytics/campaign/${id}/recipients`, {
@@ -3776,19 +3800,20 @@
                     body: formData
                 });
                 const data = await res.json();
-                alert(data.message);
+                if (res.ok) {
+                    showToast(data.message || "CSV imported successfully!");
+                } else {
+                    showToast(data.detail || "CSV import failed", "error");
+                }
                 loadContacts();
             } catch (e) {
                 console.error(e);
-                alert("Error importing CSV.");
+                showToast("Error importing CSV", "error");
             }
             input.value = ''; // Reset
         }
 
-        function toggleSidebar() {
-            document.getElementById('sidebar').classList.toggle('active');
-            document.getElementById('sidebar-overlay').classList.toggle('active');
-        }
+        // sidebar-overlay ID and duplicate toggleSidebar removed (BUG-05)
 
         // ═══════════════════════════════════════
         // PROFILE MANAGEMENT
@@ -3907,6 +3932,7 @@
                 badge.className = 'px-1 py-0.5 rounded text-[7px] font-black uppercase bg-green-100 text-green-700';
                 text.innerText = `${data.current} / ${data.limit} SENT`;
                 text.className = 'text-[11px] font-bold text-gray-700';
+                quotaLimit = data.limit;
 
                 if (percent >= 100) {
                     dot.className = 'w-2 h-2 rounded-full bg-red-500';
@@ -3922,10 +3948,12 @@
             }
         }
 
+        let quotaLimit = 80;
+
         async function toggleQuota() {
             const action = quotaEnabled ? 'DISABLE' : 'ENABLE';
 
-            if (!confirm(`Are you sure you want to ${action} the 80-email Daily Safety Quota?`)) return;
+            if (!confirm(`Are you sure you want to ${action} the ${quotaLimit}-email Daily Safety Quota?`)) return;
 
             try {
                 const res = await fetch(`/api/marketing/campaigns/settings/quota?enabled=${!quotaEnabled}`, {
@@ -3938,8 +3966,7 @@
                     throw new Error(errData.detail || "Server rejected the update.");
                 }
 
-                if (typeof showToast === 'function') showToast(`Safety Mode ${quotaEnabled ? 'Disabled' : 'Enabled'}`);
-                else alert(`Safety Mode ${quotaEnabled ? 'Disabled' : 'Enabled'}`);
+                showToast(`Safety Mode ${quotaEnabled ? 'Disabled' : 'Enabled'}`);
                 
                 loadQuotaStats();
             } catch (e) {
@@ -3948,8 +3975,34 @@
             }
         }
 
+        function showToast(message, type = 'success') {
+            const container = document.getElementById('toast-container');
+            if (!container) {
+                const div = document.createElement('div');
+                div.id = 'toast-container';
+                div.className = 'fixed bottom-5 right-5 z-[9999] flex flex-col gap-2';
+                document.body.appendChild(div);
+            }
+            const toast = document.createElement('div');
+            toast.className = `px-4 py-3 rounded-lg text-white font-bold text-sm shadow-lg transition-all transform translate-y-5 opacity-0 ${
+                type === 'error' ? 'bg-red-600' : 'bg-brand-gold'
+            }`;
+            toast.innerText = message;
+            document.getElementById('toast-container').appendChild(toast);
+            
+            setTimeout(() => {
+                toast.classList.remove('translate-y-5', 'opacity-0');
+            }, 10);
+            
+            setTimeout(() => {
+                toast.classList.add('translate-y-5', 'opacity-0');
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
         // Init is handled by checkAccessAndInit() above, which calls loadOverview() after role verification.
     </script>
+    <div id="toast-container" class="fixed bottom-5 right-5 z-[9999] flex flex-col gap-2"></div>
 
     <!-- ENROLL IN SEQUENCE MODAL -->
     <div id="enroll-modal" onclick="if(event.target === this) closeEnrollModal()"

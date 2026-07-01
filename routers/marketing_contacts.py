@@ -31,7 +31,7 @@ class ContactUpdate(BaseModel):
     contact_type: Optional[str] = None
 
 @router.get("/")
-async def list_contacts(current_admin=Depends(verify_token), type: Optional[str] = None, q: Optional[str] = None):
+async def list_contacts(current_admin=Depends(verify_token), type: Optional[str] = None, q: Optional[str] = None, limit: int = 100, offset: int = 0):
     db = get_db()
     query = db.table("marketing_contacts").select("*")
     
@@ -41,7 +41,8 @@ async def list_contacts(current_admin=Depends(verify_token), type: Optional[str]
         # Search across multiple fields
         query = query.or_(f"first_name.ilike.%{q}%,last_name.ilike.%{q}%,email.ilike.%{q}%")
         
-    result = await db_execute(lambda: query.order("created_at", desc=True).execute())
+    query = query.order("created_at", desc=True).range(offset, offset + limit - 1)
+    result = await db_execute(lambda: query.execute())
     contacts = result.data or []
     
     # Financial Bridge: Calculate LTV for each contact
