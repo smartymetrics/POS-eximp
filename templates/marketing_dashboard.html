@@ -1378,6 +1378,7 @@
                             <option value="manual">Manual Enrollment Only</option>
                             <option value="client_created">New Client Registered (ActiveCampaign Style)</option>
                             <option value="segment_entry">Member of Segment (Dynamic/Static)</option>
+                            <option value="birthday">🎂 Contact's Birthday (Annual Drip)</option>
                         </select>
                     </div>
                     <div id="seq-segment-container" class="hidden">
@@ -1507,6 +1508,12 @@
                         <option value="lead">Lead</option>
                         <option value="client">Client</option>
                     </select>
+                </div>
+                <div>
+                    <label class="block text-sm font-semibold mb-1">🎂 Date of Birth <span class="text-xs text-gray-400 font-normal">(for birthday automation)</span></label>
+                    <input type="date" id="edit-dob"
+                        class="w-full px-4 py-2 border rounded-lg outline-none focus:ring-2 focus:ring-brand-gold text-gray-700">
+                    <p class="text-xs text-gray-400 mt-1">Once set, the birthday sequence will auto-send every year on their birthday.</p>
                 </div>
             </div>
             <div class="flex gap-3 mt-8">
@@ -3108,7 +3115,7 @@
                         <div>
                             <h3 class="font-bold text-lg text-gray-800">${s.name}</h3>
                             <p class="text-[10px] text-brand-gold font-black uppercase tracking-widest mt-1">
-                                Trig: ${s.trigger_event === 'segment_entry' ? `Segment (${s.marketing_segments?.name || '...'})` : s.trigger_event}
+                                Trig: ${s.trigger_event === 'segment_entry' ? `Segment (${s.marketing_segments?.name || '...'})` : (s.trigger_event === 'birthday' ? '🎂 Birthday' : s.trigger_event)}
                             </p>
                         </div>
                         <span class="px-2 py-0.5 rounded text-[10px] font-black ${s.is_active ? 'bg-green-100 text-green-700' : 'bg-red-100 text-red-700'} uppercase">
@@ -3514,6 +3521,7 @@
             document.getElementById('edit-phone').value = contact.phone || '';
             document.getElementById('edit-source').value = contact.source || '';
             document.getElementById('edit-type').value = contact.contact_type;
+            document.getElementById('edit-dob').value = contact.dob || '';
 
             const el = document.getElementById('edit-contact-modal');
             if (el) {
@@ -3537,13 +3545,15 @@
             btn.classList.add('btn-loading');
             try {
                 const id = document.getElementById('edit-contact-id').value;
+                const dobVal = document.getElementById('edit-dob').value;
                 const data = {
                     first_name: document.getElementById('edit-first-name').value,
                     last_name: document.getElementById('edit-last-name').value,
                     email: document.getElementById('edit-email').value,
                     phone: document.getElementById('edit-phone').value,
                     source: document.getElementById('edit-source').value,
-                    contact_type: document.getElementById('edit-type').value
+                    contact_type: document.getElementById('edit-type').value,
+                    ...(dobVal ? { dob: dobVal } : { dob: null })
                 };
 
                 const res = await fetch(`/api/marketing/contacts/${id}`, {

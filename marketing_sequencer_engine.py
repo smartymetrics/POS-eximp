@@ -166,8 +166,20 @@ async def auto_enroll_contact(contact_id: str, trigger_event: str):
     
     for seq in seq_res.data:
         _seq_id = seq["id"]
-        # Check if already in it
-        existing = await db_execute(lambda _seq_id=_seq_id: db.table("contact_sequence_status").select("id").eq("contact_id", contact_id).eq("sequence_id", _seq_id).execute())
+        # Check if already enrolled. Birthday trigger is recurring annually, so we only check for active status.
+        if trigger_event == "birthday":
+            existing = await db_execute(lambda _seq_id=_seq_id: db.table("contact_sequence_status")\
+                .select("id")\
+                .eq("contact_id", contact_id)\
+                .eq("sequence_id", _seq_id)\
+                .eq("status", "active")\
+                .execute())
+        else:
+            existing = await db_execute(lambda _seq_id=_seq_id: db.table("contact_sequence_status")\
+                .select("id")\
+                .eq("contact_id", contact_id)\
+                .eq("sequence_id", _seq_id)\
+                .execute())
         if not existing.data:
             # Enroll starting at Step 1 (delay 0 usually)
             await db_execute(lambda _seq_id=_seq_id: db.table("contact_sequence_status").insert({

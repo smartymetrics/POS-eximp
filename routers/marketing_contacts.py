@@ -29,6 +29,8 @@ class ContactUpdate(BaseModel):
     is_subscribed: Optional[bool] = None
     engagement_score: Optional[int] = None
     contact_type: Optional[str] = None
+    dob: Optional[str] = None  # Date of Birth (YYYY-MM-DD) – used for birthday sequence trigger
+
 
 @router.get("/")
 async def list_contacts(current_admin=Depends(verify_token), type: Optional[str] = None, q: Optional[str] = None, limit: int = 100, offset: int = 0):
@@ -89,7 +91,14 @@ async def create_contact(data: ContactCreate, current_admin=Depends(verify_token
 @router.put("/{id}")
 async def update_contact(id: str, data: ContactUpdate, current_admin=Depends(verify_token)):
     db = get_db()
-    update_dict = {k: v for k, v in data.dict().items() if v is not None}
+    raw = data.dict()
+    # Allow explicit None for dob (so user can clear a birthday), filter only truly unset fields
+    update_dict = {}
+    for k, v in raw.items():
+        if k == "dob":
+            update_dict[k] = v  # always include dob (even if None, to allow clearing)
+        elif v is not None:
+            update_dict[k] = v
     update_dict["updated_at"] = datetime.utcnow().isoformat()
     
     result = await db_execute(lambda: db.table("marketing_contacts").update(update_dict).eq("id", id).execute())
