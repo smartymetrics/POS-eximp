@@ -420,6 +420,25 @@
       padding: 0 !important;
     }
 
+    /* Preview Mode Overrides: Hide custom top bar, right sidebar, and stretch canvas to 100% width */
+    body.preview-active .gjs-cv-canvas,
+    .gjs-editor.preview-active .gjs-cv-canvas {
+      width: 100% !important;
+    }
+    body.preview-active .gjs-pn-views-container,
+    body.preview-active .gjs-pn-views,
+    body.preview-active .editor-top-bar,
+    .gjs-editor.preview-active .gjs-pn-views-container,
+    .gjs-editor.preview-active .gjs-pn-views {
+      display: none !important;
+    }
+
+    /* Force GrapesJS hidden panels to be display: none (overrides our custom absolute placement flex/block styles) */
+    .gjs-pn-views-container.gjs-pn-hidden,
+    .gjs-pn-views.gjs-pn-hidden {
+      display: none !important;
+    }
+
     /* Hide standard GrapesJS default top header bar to keep workspace ultra clean */
     .gjs-pn-commands, .gjs-pn-options, .gjs-pn-devices-c {
       display: none !important;
@@ -595,86 +614,108 @@
 
 <body>
 
-  <!-- TOP BAR -->
-  <div class="editor-top-bar flex flex-col xl:flex-row xl:items-center justify-between border-b-2 border-brand-gold bg-[#1A1A1A] p-4 gap-4 z-[9999] relative">
+  <!-- TOP BAR (TWO ROWS) -->
+  <div class="editor-top-bar flex flex-col border-b-2 border-brand-gold bg-[#1A1A1A] z-[9999] relative">
     
-    <!-- Left Section: Logo & Title -->
-    <div class="flex items-center justify-between xl:justify-start gap-4">
-      <div class="brand-logo flex items-center gap-3">
-        <img src="https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/marketing/logo_dark.svg" alt="Eximp & Cloves" class="h-8" onerror="this.style.display='none'">
-        <span class="text-brand-gold font-bold text-lg tracking-wider">Marketing Editor v2</span>
-        <button onclick="window.location.href='/marketing/editor?id=' + campaignId" class="ml-2 bg-[#222] border border-[#333] hover:bg-gray-800 text-gray-400 hover:text-white text-[10px] px-2.5 py-1 rounded-full font-bold transition-all">← Back to Classic Editor</button>
-      </div>
-      <span class="save-status text-xs text-gray-500 font-medium xl:ml-4" id="save-status"></span>
-    </div>
-
-    <!-- Middle/Right Section: Campaign Meta Details & Controls -->
-    <div class="flex flex-col lg:flex-row lg:items-center gap-4 flex-1 justify-end">
-      
-      <!-- Inputs & Testing Mode (Subject, Preview, A/B Toggle) -->
-      <div class="flex flex-wrap items-center gap-3 w-full lg:w-auto flex-1 justify-end">
-        <!-- A/B Test Toggle & Tabs -->
-        <div class="flex items-center gap-2 bg-[#111] px-3 py-1.5 rounded-lg border border-[#333]">
+    <!-- Row 1: Campaign Configuration & Primary Actions -->
+    <div class="flex flex-col lg:flex-row items-center justify-between p-3 border-b border-[#2b2b2b] gap-3">
+      <!-- Left side: Brand Logo & A/B Mode -->
+      <div class="flex items-center gap-3 shrink-0">
+        <div class="brand-logo flex items-center gap-2">
+          <img src="https://scsdnstqtrqjsosbmxyf.supabase.co/storage/v1/object/public/marketing/logo_dark.svg" alt="Eximp & Cloves" class="h-7" onerror="this.style.display='none'">
+          <span class="text-brand-gold font-bold text-sm tracking-wider hidden sm:inline">Marketing Editor v2</span>
+        </div>
+        <!-- A/B Mode Toggle & Tabs -->
+        <div class="flex items-center gap-2 bg-[#111] px-2 py-1 rounded border border-[#333]">
           <span class="text-[9px] font-black uppercase tracking-wider text-gray-400">A/B Mode</span>
           <label class="inline-flex items-center cursor-pointer select-none">
             <input type="checkbox" id="ab-toggle" class="sr-only peer">
-            <div class="relative w-10 h-5 bg-gray-800 rounded-full peer peer-checked:after:translate-x-5 after:content-[''] after:absolute after:top-[2px] after:left-[2px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-4 after:w-4 after:transition-all peer-checked:bg-brand-gold border border-gray-700"></div>
+            <div class="relative w-8 h-4 bg-gray-800 rounded-full peer peer-checked:after:translate-x-4 after:content-[''] after:absolute after:top-[1px] after:left-[1px] after:bg-white after:border-gray-300 after:border after:rounded-full after:h-3 after:w-3 after:transition-all peer-checked:bg-brand-gold border border-gray-700"></div>
           </label>
-          <div id="variant-tabs" class="hidden flex bg-[#222] rounded p-0.5 border border-[#444] ml-2">
-            <button id="tab-a" onclick="switchVariant('A')" class="px-2.5 py-0.5 rounded text-[10px] font-bold transition-all bg-brand-gold text-white">A</button>
-            <button id="tab-b" onclick="switchVariant('B')" class="px-2.5 py-0.5 rounded text-[10px] font-bold transition-all text-gray-400 hover:text-white">B</button>
-          </div>
-          <!-- Device Preview Toggles -->
-          <div class="flex bg-[#222] rounded p-0.5 border border-[#444] ml-2 shrink-0">
-            <button id="device-desktop" onclick="setEditorDevice('Desktop')" class="px-2 py-0.5 rounded text-[9px] font-bold transition-all bg-brand-gold text-white" title="Desktop Workspace">🖥️ Desktop</button>
-            <button id="device-mobile" onclick="setEditorDevice('Mobile')" class="px-2 py-0.5 rounded text-[9px] font-bold transition-all text-gray-400 hover:text-white" title="Mobile Workspace">📱 Mobile</button>
+          <div id="variant-tabs" class="hidden flex bg-[#222] rounded p-0.5 border border-[#444] ml-1">
+            <button id="tab-a" onclick="switchVariant('A')" class="px-2 py-0.5 rounded text-[9px] font-bold transition-all bg-brand-gold text-white">A</button>
+            <button id="tab-b" onclick="switchVariant('B')" class="px-2 py-0.5 rounded text-[9px] font-bold transition-all text-gray-400 hover:text-white">B</button>
           </div>
         </div>
+      </div>
 
+      <!-- Center: Subject & Preview Text Inputs (Wide, side-by-side) -->
+      <div class="flex flex-1 max-w-[700px] gap-3 w-full">
         <!-- Subject Field -->
-        <div class="flex items-center gap-2 bg-[#111] px-3 py-1.5 rounded-lg border border-[#333] flex-1 max-w-[360px] min-w-[200px]">
+        <div class="flex items-center gap-2 bg-[#111] px-2.5 py-1 rounded border border-[#333] flex-1">
           <span class="text-[9px] text-gray-400 uppercase font-black tracking-wider shrink-0">Subject</span>
           <input type="text" id="subject-field"
-            class="bg-transparent text-sm w-full outline-none focus:ring-0 text-white"
+            class="bg-transparent text-xs w-full outline-none focus:ring-0 text-white"
             placeholder="Email Subject...">
         </div>
-
         <!-- Preview Field -->
-        <div class="flex items-center gap-2 bg-[#111] px-3 py-1.5 rounded-lg border border-[#333] flex-1 max-w-[360px] min-w-[200px]">
+        <div class="flex items-center gap-2 bg-[#111] px-2.5 py-1 rounded border border-[#333] flex-1">
           <span class="text-[9px] text-gray-400 uppercase font-black tracking-wider shrink-0">Preview</span>
           <input type="text" id="preview-text-field"
-            class="bg-transparent text-sm w-full outline-none focus:ring-0 text-white"
+            class="bg-transparent text-xs w-full outline-none focus:ring-0 text-white"
             placeholder="Teaser snippet...">
         </div>
       </div>
 
-      <!-- Action Button Group -->
-      <div class="flex items-center justify-end gap-2 flex-wrap">
-        <button class="bg-[#2a2a2a] text-white text-xs px-3 py-2 rounded-lg font-bold border border-[#3a3a3a] hover:bg-[#333] transition flex items-center gap-1.5" onclick="openTags()">
-          <span>🏷️</span> Tags
-        </button>
-        <button class="bg-[#2a2a2a] text-white text-xs px-3 py-2 rounded-lg font-bold border border-[#3a3a3a] hover:bg-[#333] transition flex items-center gap-1.5" onclick="openTemplates()">
-          <span>📋</span> Templates
-        </button>
-        <button class="bg-[#2a2a2a] text-white text-xs px-3 py-2 rounded-lg font-bold border border-amber-700/40 hover:border-brand-gold hover:bg-[#333] transition flex items-center gap-1.5" onclick="openGifBuilder()" title="Build an animated GIF from your photos and insert it into the email">
-          <span>🎞️</span> GIF Builder
-        </button>
-        <button class="bg-[#2a2a2a] text-white text-xs px-3 py-2 rounded-lg font-bold border border-brand-gold/30 hover:border-brand-gold hover:bg-[#333] transition flex items-center gap-1.5" id="send-test">
-          <span>✉️</span> Test
-        </button>
-        <button class="bg-brand-gold hover:bg-brand-gold/90 text-white text-xs px-4 py-2 rounded-lg font-bold transition flex items-center gap-1.5 shadow-lg shadow-brand-gold/10" id="save-campaign">
+      <!-- Right Side: Primary Actions -->
+      <div class="flex items-center gap-2 shrink-0">
+        <span class="save-status text-[10px] text-gray-500 font-medium mr-2" id="save-status"></span>
+        <button class="bg-brand-gold hover:bg-brand-gold/90 text-white text-xs px-3.5 py-1.5 rounded font-bold transition flex items-center gap-1.5 shadow shadow-brand-gold/10" id="save-campaign">
           <span>💾</span> Save
         </button>
-        <button class="bg-green-600 hover:bg-green-500 text-white text-xs px-4 py-2 rounded-lg font-bold transition flex items-center gap-1.5 shadow-lg shadow-green-600/10" onclick="openSendModal()">
+        <button class="bg-[#2a2a2a] text-white text-xs px-3 py-1.5 rounded font-bold border border-brand-gold/30 hover:border-brand-gold hover:bg-[#333] transition flex items-center gap-1.5" id="send-test">
+          <span>✉️</span> Test
+        </button>
+        <button class="bg-green-600 hover:bg-green-500 text-white text-xs px-3.5 py-1.5 rounded font-bold transition flex items-center gap-1.5 shadow shadow-green-600/10" onclick="openSendModal()">
           <span>🚀</span> Send
         </button>
-        <button class="bg-[#222] hover:bg-gray-800 text-white text-xs px-3 py-2 rounded-lg font-bold border border-[#333] transition" onclick="window.location.href='/marketing'">
+      </div>
+    </div>
+
+    <!-- Row 2: Editor Workspace Utilities -->
+    <div class="flex items-center justify-between px-4 py-1.5 bg-[#141414] border-t border-[#111] gap-4">
+      <!-- Left side: Navigation / Back buttons -->
+      <div class="flex items-center gap-2">
+        <button class="bg-[#222] hover:bg-gray-800 text-white text-[10px] px-2 py-0.5 rounded border border-[#333] transition" onclick="window.location.href='/marketing'">
           ← Back
+        </button>
+        <button onclick="window.location.href='/marketing/editor?id=' + campaignId" class="text-gray-400 hover:text-white text-[9px] px-2 py-0.5 transition-all rounded hover:bg-[#222]">
+          ← Back to Classic Editor
         </button>
       </div>
 
+      <!-- Center: Workspace Device and View Toggles -->
+      <div class="flex items-center gap-3">
+        <!-- Device Selectors -->
+        <div class="flex items-center gap-1 bg-[#1f1f1f] px-2 py-0.5 rounded border border-[#333]">
+          <span class="text-[8px] uppercase tracking-wider text-gray-500 font-bold mr-1">Workspace</span>
+          <button id="device-desktop" onclick="setEditorDevice('Desktop')" class="px-2 py-0.5 rounded text-[8px] font-bold transition-all bg-brand-gold text-white" title="Desktop Workspace">🖥️ Desktop</button>
+          <button id="device-tablet" onclick="setEditorDevice('Tablet')" class="px-2 py-0.5 rounded text-[8px] font-bold transition-all text-gray-400 hover:text-white" title="Tablet Workspace">📟 Tablet</button>
+          <button id="device-mobile" onclick="setEditorDevice('Mobile')" class="px-2 py-0.5 rounded text-[8px] font-bold transition-all text-gray-400 hover:text-white" title="Mobile Workspace">📱 Mobile</button>
+        </div>
+
+        <!-- View Mode Selectors -->
+        <div class="flex items-center gap-1 bg-[#1f1f1f] px-2 py-0.5 rounded border border-[#333]">
+          <span class="text-[8px] uppercase tracking-wider text-gray-500 font-bold mr-1">View</span>
+          <button id="btn-preview" onclick="toggleEditorPreview()" class="px-2 py-0.5 rounded text-[8px] font-bold transition-all text-gray-400 hover:text-white" title="Preview Mode (Hide Outlines)">👁️ Preview</button>
+          <button id="btn-fullscreen" onclick="toggleEditorFullscreen()" class="px-2 py-0.5 rounded text-[8px] font-bold transition-all text-gray-400 hover:text-white" title="Fullscreen Mode">⛶ Fullscreen</button>
+        </div>
+      </div>
+
+      <!-- Right side: Creative Utilities -->
+      <div class="flex items-center gap-2">
+        <button class="bg-[#2a2a2a] text-white text-[9px] px-2.5 py-1 rounded font-bold border border-[#3a3a3a] hover:bg-[#333] transition flex items-center gap-1" onclick="openTags()">
+          <span>🏷️</span> Tags
+        </button>
+        <button class="bg-[#2a2a2a] text-white text-[9px] px-2.5 py-1 rounded font-bold border border-[#3a3a3a] hover:bg-[#333] transition flex items-center gap-1" onclick="openTemplates()">
+          <span>📋</span> Templates
+        </button>
+        <button class="bg-[#2a2a2a] text-white text-[9px] px-2.5 py-1 rounded font-bold border border-amber-700/40 hover:border-brand-gold hover:bg-[#333] transition flex items-center gap-1" onclick="openGifBuilder()">
+          <span>🎞️</span> GIF Builder
+        </button>
+      </div>
     </div>
-  </div>
+
   </div>
 
   <!-- CANVAS -->
@@ -1688,8 +1729,53 @@
           'https://fonts.googleapis.com/css2?family=Playfair+Display:wght@700&family=Inter:wght@400;500;700&display=swap'
         ]
       },
+      deviceManager: {
+        devices: [
+          { id: 'Desktop', name: 'Desktop', width: '' },
+          { id: 'Tablet', name: 'Tablet', width: '768px', widthMedia: '992px' },
+          { id: 'Mobile', name: 'Mobile', width: '375px', widthMedia: '480px' }
+        ]
+      },
       resizer: {
         keepRatio: true
+      }
+    });
+
+    // Force text editing mode when double-clicking any component that supports editing
+    editor.on('component:dblclick', (component) => {
+      if (component && component.view && typeof component.view.enableEditing === 'function') {
+        component.view.enableEditing();
+      }
+    });
+
+    // Add a quick-edit button (✏️) to the component toolbar for all editable elements
+    editor.on('component:selected', (component) => {
+      if (component && component.view && typeof component.view.enableEditing === 'function') {
+        const toolbar = component.get('toolbar') || [];
+        const editCommand = 'custom:text-edit-trigger';
+        const hasEditBtn = toolbar.some(item => item.command === editCommand);
+
+        if (!hasEditBtn) {
+          toolbar.unshift({
+            attributes: { 
+              title: 'Edit Text',
+              style: 'cursor: pointer; display: flex; align-items: center; justify-content: center; font-size: 13px;'
+            },
+            command: editCommand,
+            label: '✏️'
+          });
+          component.set('toolbar', toolbar);
+        }
+      }
+    });
+
+    // Register command for the toolbar button
+    editor.Commands.add('custom:text-edit-trigger', {
+      run(editor) {
+        const selected = editor.getSelected();
+        if (selected && selected.view && typeof selected.view.enableEditing === 'function') {
+          selected.view.enableEditing();
+        }
       }
     });
 
@@ -1728,8 +1814,145 @@
       editor.Css.addRules(`
         .ec-btn { transition: all 0.2s ease-in-out !important; }
         .ec-link { transition: all 0.2s ease-in-out !important; }
-        img { max-width: 100% !important; height: auto !important; }
       `);
+
+      // Force any text-like elements to be parsed as 'text' components so the RTE triggers on double click
+      const domc = editor.DomComponents;
+      const textType = domc.getType('text');
+      if (textType) {
+        domc.addType('text', {
+          isComponent: el => {
+            if (el && typeof el.tagName === 'string') {
+              const tag = el.tagName.toUpperCase();
+              if (['P', 'SPAN', 'A', 'H1', 'H2', 'H3', 'H4', 'H5', 'H6', 'LI', 'B', 'I', 'STRONG', 'EM'].includes(tag)) {
+                return { type: 'text' };
+              }
+            }
+            return false;
+          }
+        });
+      }
+    });
+
+    // Listen for GrapesJS canvas head updates/loads and inject editor-only style helpers
+    editor.on('canvas:frame:load:head', ({ window }) => {
+      const doc = window.document;
+      if (doc && doc.head) {
+        const styleEl = doc.createElement('style');
+        styleEl.type = 'text/css';
+        styleEl.innerHTML = `
+          /* Prevent single-line or small text elements from collapsing and make them easy to double-click/edit */
+          p, span, a, h1, h2, h3, h4, h5, h6 {
+            min-height: 1.5em !important;
+            padding-top: 8px !important;
+            padding-bottom: 8px !important;
+            line-height: 1.5 !important;
+          }
+        `;
+        doc.head.appendChild(styleEl);
+      }
+    });
+
+    // ── PREVIEW & FULLSCREEN VIEW CONTROLS ──
+    function toggleEditorPreview() {
+      const isPreviewActive = editor.Commands.isActive('preview') || editor.Commands.isActive('core:preview');
+      if (isPreviewActive) {
+        editor.stopCommand('preview');
+        editor.stopCommand('core:preview');
+        stopPreview();
+      } else {
+        // Run only one command signature to avoid duplicate preview overlay button instantiation
+        try {
+          if (editor.Commands.get('preview')) {
+            editor.runCommand('preview');
+          } else {
+            editor.runCommand('core:preview');
+          }
+        } catch(e) {
+          try { editor.runCommand('core:preview'); } catch(err) {}
+        }
+        startPreview();
+      }
+    }
+
+    function toggleEditorFullscreen() {
+      const isFullscreenActive = editor.Commands.isActive('fullscreen') || editor.Commands.isActive('core:fullscreen');
+      if (isFullscreenActive) {
+        editor.stopCommand('fullscreen');
+        editor.stopCommand('core:fullscreen');
+      } else {
+        try {
+          if (editor.Commands.get('fullscreen')) {
+            editor.runCommand('fullscreen');
+          } else {
+            editor.runCommand('core:fullscreen');
+          }
+        } catch(e) {
+          try { editor.runCommand('core:fullscreen'); } catch(err) {}
+        }
+      }
+    }
+
+    // Sync button UI classes and container visibility when GrapesJS preview/fullscreen commands run or stop
+    const startPreview = () => {
+      document.body.classList.add('preview-active');
+      const gjsEl = document.querySelector('.gjs-editor');
+      if (gjsEl) gjsEl.classList.add('preview-active');
+      const btn = document.getElementById('btn-preview');
+      if (btn) btn.className = 'px-2 py-0.5 rounded text-[9px] font-bold transition-all bg-brand-gold text-white';
+    };
+
+    const stopPreview = () => {
+      document.body.classList.remove('preview-active');
+      const gjsEl = document.querySelector('.gjs-editor');
+      if (gjsEl) gjsEl.classList.remove('preview-active');
+      const btn = document.getElementById('btn-preview');
+      if (btn) btn.className = 'px-2 py-0.5 rounded text-[9px] font-bold transition-all text-gray-400 hover:text-white';
+    };
+
+    // Listen on editor events for maximum compatibility
+    editor.on('run:preview', startPreview);
+    editor.on('stop:preview', stopPreview);
+    editor.on('run:core:preview', startPreview);
+    editor.on('stop:core:preview', stopPreview);
+
+    // GrapesJS Command API specific listeners
+    editor.on('command:run:preview', startPreview);
+    editor.on('command:stop:preview', stopPreview);
+    editor.on('command:run:core:preview', startPreview);
+    editor.on('command:stop:core:preview', stopPreview);
+
+    // General command listeners as a fallback to capture command runs
+    editor.on('run', (commandId) => {
+      if (commandId === 'preview' || commandId === 'core:preview') startPreview();
+      if (commandId === 'fullscreen' || commandId === 'core:fullscreen') {
+        const btn = document.getElementById('btn-fullscreen');
+        if (btn) btn.className = 'px-2 py-0.5 rounded text-[9px] font-bold transition-all bg-brand-gold text-white';
+      }
+    });
+    editor.on('stop', (commandId) => {
+      if (commandId === 'preview' || commandId === 'core:preview') stopPreview();
+      if (commandId === 'fullscreen' || commandId === 'core:fullscreen') {
+        const btn = document.getElementById('btn-fullscreen');
+        if (btn) btn.className = 'px-2 py-0.5 rounded text-[9px] font-bold transition-all text-gray-400 hover:text-white';
+      }
+    });
+
+    editor.on('command:run', (cmd) => {
+      const id = cmd && typeof cmd === 'object' ? cmd.id : cmd;
+      if (id === 'preview' || id === 'core:preview') startPreview();
+      if (id === 'fullscreen' || id === 'core:fullscreen') {
+        const btn = document.getElementById('btn-fullscreen');
+        if (btn) btn.className = 'px-2 py-0.5 rounded text-[9px] font-bold transition-all bg-brand-gold text-white';
+      }
+    });
+    editor.on('command:stop', (cmd) => {
+      const id = cmd && typeof cmd === 'object' ? cmd.id : cmd;
+      if (id === 'preview' || id === 'core:preview') stopPreview();
+      if (id === 'fullscreen' || id === 'core:fullscreen') {
+        const btn = document.getElementById('btn-fullscreen');
+        if (btn) btn.className = 'px-2 py-0.5 rounded text-[9px] font-bold transition-all text-gray-400 hover:text-white';
+      }
     });
 
     // GIF Carousel Builder is now opened via toolbar button – no canvas events needed
@@ -1776,6 +1999,9 @@
     function setEditorDevice(device) {
       editor.setDevice(device);
       document.getElementById('device-desktop').className = device === 'Desktop' 
+        ? 'px-2 py-0.5 rounded text-[9px] font-bold transition-all bg-brand-gold text-white'
+        : 'px-2 py-0.5 rounded text-[9px] font-bold transition-all text-gray-400 hover:text-white';
+      document.getElementById('device-tablet').className = device === 'Tablet' 
         ? 'px-2 py-0.5 rounded text-[9px] font-bold transition-all bg-brand-gold text-white'
         : 'px-2 py-0.5 rounded text-[9px] font-bold transition-all text-gray-400 hover:text-white';
       document.getElementById('device-mobile').className = device === 'Mobile' 
@@ -2283,6 +2509,7 @@
 
       // 3. Load new variant state into editor
       document.getElementById('subject-field').value = variantData[v].subject || '';
+      document.getElementById('preview-text-field').value = variantData[v].preview || '';
       
       if (variantData[v].json) {
         editor.loadProjectData(variantData[v].json);
