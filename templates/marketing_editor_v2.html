@@ -2272,12 +2272,13 @@
               const parent = selected.parent();
               if (parent) {
                 const index = selected.index ? selected.index() : parent.components().indexOf(selected);
-                parent.add(newImg, { at: index + 1 });
+                parent.append(newImg, { at: index + 1 });
               } else {
                 selected.append(newImg);
               }
             } else {
               // Append directly to the email body wrapper
+
               const wrapper = editor.getWrapper();
               if (wrapper) {
                 wrapper.append(newImg);
@@ -2925,8 +2926,8 @@
         if (selected) {
           const parent = selected.parent();
           if (parent) {
-            const index = parent.components().indexOf(selected);
-            parent.components().add(newImg, { at: index + 1 });
+            const index = selected.index ? selected.index() : parent.components().indexOf(selected);
+            parent.append(newImg, { at: index + 1 });
           } else {
             selected.append(newImg);
           }
