@@ -2138,10 +2138,10 @@
             const siblingsCount = parent.components().length;
             if (index < siblingsCount - 1) {
               if (selected.move) {
-                selected.move(parent, { at: index + 1 });
+                selected.move(parent, { at: index + 2 });
               } else {
                 parent.components().remove(selected);
-                parent.components().add(selected, { at: index + 1 });
+                parent.components().add(selected, { at: index + 2 });
               }
               editor.select(selected); // Maintain selection wrapper
             }
