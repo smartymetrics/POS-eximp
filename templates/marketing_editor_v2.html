@@ -2119,9 +2119,36 @@
       }
     });
 
-    // Append custom ⬆️ and ⬇️ icons to floating editor toolbar on component selection (Touch-repositioning helpers)
+    editor.Commands.add('toolbar:upload-image', {
+      run(editor) {
+        const selected = editor.getSelected();
+        if (selected) {
+          editor.runCommand('open-assets', {
+            target: selected,
+            types: ['image'],
+            accept: 'image/*'
+          });
+        }
+      }
+    });
+
+    // Append custom ⬆️ and ⬇️ icons and image uploader button to floating editor toolbar on component selection
     editor.on('component:selected', (model) => {
       const toolbar = model.get('toolbar');
+      
+      // If it is an image element, prepend the upload helper button
+      if (model.get('type') === 'image') {
+        const hasUpload = toolbar.some(item => item.id === 'upload-image');
+        if (!hasUpload) {
+          toolbar.unshift({
+            id: 'upload-image',
+            command: 'toolbar:upload-image',
+            label: '📷 Replace',
+            title: 'Change/Upload Image'
+          });
+        }
+      }
+      
       const hasMoveUp = toolbar.some(item => item.id === 'move-up');
       if (!hasMoveUp) {
         toolbar.unshift(
