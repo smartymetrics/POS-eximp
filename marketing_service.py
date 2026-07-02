@@ -21,6 +21,22 @@ MARKETING_FROM_NAME = os.getenv("MARKETING_FROM_NAME", "Eximp & Cloves")
 MARKETING_REPLY_TO = os.getenv("MARKETING_REPLY_TO", "marketing@mail.eximps-cloves.com")
 MARKETING_BCC_EMAIL = os.getenv("MARKETING_BCC_EMAIL", "marketing@mail.eximps-cloves.com")
 
+# Email suppression list — contacts matching these domains are never mailed
+SUPPRESSED_DOMAINS = ["temp-eximps.com", "placeholder.com"]
+
+def is_suppressed(contact: dict) -> bool:
+    """Returns True if a contact should never receive marketing emails."""
+    email = (contact.get("email") or "").lower().strip()
+    if not email:
+        return True
+    if any(domain in email for domain in SUPPRESSED_DOMAINS):
+        return True
+    if contact.get("is_bounced"):
+        return True
+    if not contact.get("is_subscribed", True):
+        return True
+    return False
+
 # TODO (BUG-09): Switch to PNG once logo_dark.png is uploaded to the 'marketing' Supabase bucket.
 # Upload at: https://app.supabase.com → Storage → marketing → Upload logo_dark.png
 # Then change this to: .../public/marketing/logo_dark.png
@@ -57,7 +73,7 @@ def personalize_content(html: str, contact: Dict[str, Any]) -> str:
 
     # Basic Tags
     vars = {
-        "first_name": contact.get("first_name") or "there",
+        "first_name": contact.get("first_name") or "",
         "last_name": contact.get("last_name") or "",
         "full_name": f"{contact.get('first_name', '')} {contact.get('last_name', '')}".strip() or "Valued Client",
         "email": contact.get("email", ""),
@@ -110,6 +126,9 @@ def personalize_content(html: str, contact: Dict[str, Any]) -> str:
     
     # Clean up any remaining unresolved {{tags}} — render as empty string
     html = re.sub(r"\{\{.*?\}\}", "", html)
+    
+    # Clean up double spaces or spaces before punctuation caused by empty fallbacks
+    html = html.replace(" ,", ",").replace(" !", "!").replace(" .", ".").replace("  ", " ")
     return html
 
 def wrap_links(html: str, campaign_id: str, contact_id: str) -> str:
@@ -453,7 +472,7 @@ async def resolve_target_recipients(segment_ids: List[str] = None, manual_emails
     # Priority 0: All Subscribed Contacts shortcut
     if segment_ids and '__all_subscribed__' in segment_ids:
         res = db.table("marketing_contacts").select("*").eq("is_subscribed", True).execute()
-        return res.data or []
+        return [c for c in (res.data or []) if not is_suppressed(c)]
 
     # Priority 1: Manual Emails (specific manual reach-out)
     if manual_emails:
@@ -491,7 +510,7 @@ async def resolve_target_recipients(segment_ids: List[str] = None, manual_emails
                 if refetch.data:
                     existing_contacts.extend(refetch.data)
 
-        return existing_contacts
+        return [c for c in existing_contacts if not is_suppressed(c)]
 
     # Priority 2: Segments
     if segment_ids:
@@ -510,6 +529,13 @@ async def resolve_target_recipients(segment_ids: List[str] = None, manual_emails
                 # High engagement score
                 res = db.table("marketing_contacts").select("*").gt("engagement_score", 50).eq("is_subscribed", True).execute()
                 all_contacts.extend(res.data)
+            elif sid == 'failed_deliveries':
+                # Contacts who have failed delivery records in campaign_recipients
+                recs_res = db.table("campaign_recipients").select("contact_id").eq("status", "failed").execute()
+                failed_contact_ids = list({r["contact_id"] for r in (recs_res.data or [])})
+                if failed_contact_ids:
+                    res = db.table("marketing_contacts").select("*").in_("id", failed_contact_ids).eq("is_subscribed", True).execute()
+                    all_contacts.extend(res.data or [])
             elif sid in ['financial_overdue', 'financial_outstanding', 'financial_paid_fully']:
                 # Financial data aggregation
                 fin_contacts = get_financial_segment_contacts(sid)
@@ -536,13 +562,13 @@ async def resolve_target_recipients(segment_ids: List[str] = None, manual_emails
                             # Flatten the joined structure
                             all_contacts.extend([r["marketing_contacts"] for r in res.data if r.get("marketing_contacts")])
         
-        # De-duplicate by ID
+        # De-duplicate by ID, then filter suppressed
         unique_contacts = {c['id']: c for c in all_contacts}.values()
-        return list(unique_contacts)
+        return [c for c in unique_contacts if not is_suppressed(c)]
 
     # Default: All subscribed
     res = db.table("marketing_contacts").select("*").eq("is_subscribed", True).execute()
-    return res.data
+    return [c for c in (res.data or []) if not is_suppressed(c)]
 
 async def get_daily_quota_stats():
     """Checks the current daily send volume vs the safety quota."""
@@ -610,6 +636,10 @@ async def broadcast_campaign(campaign_id: str, segment_ids: List[str] = None, ma
         else:
             # 3. Fresh broadcast — resolve targets
             recipients = await resolve_target_recipients(segment_ids, manual_emails)
+            
+            # Shuffle list of recipients to ensure variants are randomly distributed across sends
+            import random
+            random.shuffle(recipients)
 
             if not recipients:
                 db.table("email_campaigns").update({"status": "failed"}).eq("id", campaign_id).execute()
@@ -713,6 +743,18 @@ async def broadcast_campaign(campaign_id: str, segment_ids: List[str] = None, ma
             actual_sent = len([r for r in results if r is not None and not isinstance(r, Exception)])
             sent_count += actual_sent
 
+            # Mark any suppressed/failed contacts in this batch as "failed"
+            failed_at = datetime.utcnow().isoformat()
+            for (contact, _variant), result in zip(batch, results):
+                if result is None or isinstance(result, Exception):
+                    try:
+                        db.table("campaign_recipients").update({
+                            "status": "failed",
+                            "failed_at": failed_at
+                        }).eq("campaign_id", campaign_id).eq("contact_id", contact["id"]).execute()
+                    except Exception as skip_err:
+                        logger.warning(f"Could not mark contact {contact.get('id')} as failed: {skip_err}")
+
             update_data = {
                 "total_sent": sent_count,
                 "variant_a_sent": (campaign.get("variant_a_sent") or 0) + batch_sent_a,
@@ -725,10 +767,11 @@ async def broadcast_campaign(campaign_id: str, segment_ids: List[str] = None, ma
             if i + batch_size < len(targets):
                 await asyncio.sleep(1)
 
-        # 7. Finalise
+        # 7. Finalise — total_recipients is set to actual delivered count (not raw queued count)
         db.table("email_campaigns").update({
             "status": "sent",
             "total_sent": sent_count,
+            "total_recipients": sent_count,
             "sent_at": datetime.utcnow().isoformat()
         }).eq("id", campaign_id).execute()
 

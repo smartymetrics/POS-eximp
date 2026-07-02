@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, UploadFile, File
+from fastapi import APIRouter, HTTPException, Depends, BackgroundTasks, UploadFile, File, Query
 from typing import List, Optional
 from pydantic import BaseModel
 from database import get_db, db_execute, supabase
@@ -368,23 +368,57 @@ async def resume_campaign(id: str, background_tasks: BackgroundTasks, current_ad
 
 @router.post("/{id}/sync")
 async def sync_campaign_stats(id: str, current_admin=Depends(verify_token)):
-    """Manually recalculates stats for a campaign from the recipients table."""
+    """Manually recalculates stats for a campaign from the recipients table.
+    Also corrects total_sent and total_recipients to reflect actual deliveries only."""
     db = get_db()
     
-    # 1. Count Opens (unique contacts who opened)
+    # 1. Count actual delivered emails (Resend webhook sets 'delivered' after confirming delivery;
+    #    the broadcast loop sets 'sent' but webhooks overwrite it with 'delivered'.)
+    sent_res = await db_execute(lambda: db.table("campaign_recipients").select("id", count="exact").eq("campaign_id", id).eq("status", "delivered").execute())
+    actual_sent = sent_res.count or 0
+
+    # 2. Count variant A and B delivered
+    sent_a_res = await db_execute(lambda: db.table("campaign_recipients").select("id", count="exact").eq("campaign_id", id).eq("status", "delivered").eq("variant", "A").execute())
+    sent_b_res = await db_execute(lambda: db.table("campaign_recipients").select("id", count="exact").eq("campaign_id", id).eq("status", "delivered").eq("variant", "B").execute())
+    variant_a_sent = sent_a_res.count or 0
+    variant_b_sent = sent_b_res.count or 0
+
+    # 3. Mark any stuck "pending" rows for suppressed-domain emails as "skipped"
+    pending_res = await db_execute(lambda: db.table("campaign_recipients")\
+        .select("id, contact_id, marketing_contacts(email)")\
+        .eq("campaign_id", id).eq("status", "pending").execute())
+    from marketing_service import SUPPRESSED_DOMAINS
+    skipped_at = datetime.utcnow().isoformat()
+    for row in (pending_res.data or []):
+        contact_email = ""
+        contact_data = row.get("marketing_contacts")
+        if isinstance(contact_data, dict):
+            contact_email = (contact_data.get("email") or "").lower()
+        elif isinstance(contact_data, list) and contact_data:
+            contact_email = (contact_data[0].get("email") or "").lower()
+        if any(d in contact_email for d in SUPPRESSED_DOMAINS):
+            await db_execute(lambda: db.table("campaign_recipients").update({
+                "status": "failed", "failed_at": skipped_at
+            }).eq("id", row["id"]).execute())
+    
+    # 4. Count Opens (unique contacts who opened)
     opens_res = await db_execute(lambda: db.table("campaign_recipients").select("contact_id", count="exact").eq("campaign_id", id).not_.is_("opened_at", "null").execute())
     total_opens = opens_res.count or 0
     
-    # 2. Count Clicks (unique contacts who clicked)
+    # 5. Count Clicks (unique contacts who clicked)
     clicks_res = await db_execute(lambda: db.table("campaign_recipients").select("contact_id", count="exact").eq("campaign_id", id).not_.is_("clicked_at", "null").execute())
     total_clicks = clicks_res.count or 0
     
-    # 3. Count Attributed revenue (sum of paid invoices linked to this campaign)
+    # 6. Count Attributed revenue (sum of paid invoices linked to this campaign)
     revenue_res = await db_execute(lambda: db.table("invoices").select("amount").eq("marketing_campaign_id", id).eq("status", "paid").execute())
     total_revenue = sum([i["amount"] for i in revenue_res.data]) if revenue_res.data else 0
     
-    # 4. Update Campaign Table
+    # 7. Update Campaign Table with corrected counts
     db.table("email_campaigns").update({
+        "total_sent": actual_sent,
+        "total_recipients": actual_sent,
+        "variant_a_sent": variant_a_sent,
+        "variant_b_sent": variant_b_sent,
         "total_opens": total_opens,
         "total_clicks": total_clicks,
         "attributed_revenue": total_revenue,
@@ -393,6 +427,10 @@ async def sync_campaign_stats(id: str, current_admin=Depends(verify_token)):
     
     return {
         "id": id,
+        "total_sent": actual_sent,
+        "total_recipients": actual_sent,
+        "variant_a_sent": variant_a_sent,
+        "variant_b_sent": variant_b_sent,
         "total_opens": total_opens,
         "total_clicks": total_clicks,
         "attributed_revenue": total_revenue
@@ -458,8 +496,12 @@ async def force_complete_stuck_campaign(id: str, current_admin=Depends(verify_to
     return {"message": f"Campaign marked as sent. Actual emails delivered: {actual_sent}.", "total_sent": actual_sent}
 
 @router.post("/{id}/duplicate")
-async def duplicate_campaign(id: str, current_admin=Depends(verify_token)):
-    """Creates a new draft copy of an existing campaign."""
+async def duplicate_campaign(
+    id: str,
+    name: Optional[str] = Query(None),
+    current_admin=Depends(verify_token)
+):
+    """Creates a new draft copy of an existing campaign with an optional custom name."""
     db = get_db()
     
     # 1. Fetch source
@@ -470,8 +512,9 @@ async def duplicate_campaign(id: str, current_admin=Depends(verify_token)):
     source = res.data[0]
     
     # 2. Create copy data using safe fallbacks for NULLs and missing keys
+    copy_name = name.strip() if name and name.strip() else f"{source.get('name') or 'Untitled Campaign'} (Copy)"
     copy_data = {
-        "name": f"{source.get('name') or 'Untitled Campaign'} (Copy)",
+        "name": copy_name,
         "subject_a": source.get("subject_a") or "",
         "subject_b": source.get("subject_b"),
         "preview_text": source.get("preview_text") or "",
@@ -583,3 +626,260 @@ async def generate_gif_route(files: List[UploadFile] = File(...), duration: int 
         return {"url": public_url}
     except Exception as e:
         raise HTTPException(status_code=500, detail=f"Failed to save generated GIF to storage: {str(e)}")
+
+
+@router.post("/{id}/resend")
+async def resend_failed_campaign_emails(
+    id: str,
+    background_tasks: BackgroundTasks,
+    current_admin=Depends(verify_token)
+):
+    """Resets failed recipient statuses to pending and resumes broadcasting them."""
+    db = get_db()
+    
+    # 1. Fetch Campaign
+    camp_res = await db_execute(lambda: db.table("email_campaigns").select("*").eq("id", id).execute())
+    if not camp_res.data:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+        
+    campaign = camp_res.data[0]
+    if campaign["status"] not in ["sent", "failed"]:
+        raise HTTPException(status_code=400, detail="Only completed sent or failed campaigns can be resent to undelivered contacts.")
+        
+    # 2. Find failed and pending recipient records along with their email addresses
+    recs_res = await db_execute(lambda: db.table("campaign_recipients").select("id, contact_id, status, marketing_contacts(email)").eq("campaign_id", id).in_("status", ["failed", "pending"]).execute())
+    
+    from marketing_service import SUPPRESSED_DOMAINS
+    
+    valid_failed_ids = []
+    pending_count = 0
+    
+    for r in (recs_res.data or []):
+        contact = r.get("marketing_contacts") or {}
+        email = (contact.get("email") or "").lower().strip()
+        is_supp = any(d in email for d in SUPPRESSED_DOMAINS)
+        if not is_supp:
+            if r["status"] == "failed":
+                valid_failed_ids.append(r["id"])
+            elif r["status"] == "pending":
+                pending_count += 1
+            
+    total_resend_count = len(valid_failed_ids) + pending_count
+    if total_resend_count == 0:
+        raise HTTPException(status_code=400, detail="No valid (non-suppressed) failed or pending recipients found for this campaign.")
+        
+    # 3. Reset failed rows back to pending if any exist
+    if valid_failed_ids:
+        batch_size = 100
+        for i in range(0, len(valid_failed_ids), batch_size):
+            batch_ids = valid_failed_ids[i:i+batch_size]
+            await db_execute(lambda: db.table("campaign_recipients").update({
+                "status": "pending",
+                "failed_at": None
+            }).in_("id", batch_ids).execute())
+    
+    # 4. Set campaign status back to sending
+    await db_execute(lambda: db.table("email_campaigns").update({
+        "status": "sending"
+    }).eq("id", id).execute())
+    
+    # 5. Trigger background broadcast job
+    background_tasks.add_task(broadcast_campaign, id, None, None)
+    
+    await log_activity(
+        "marketing_campaign_resend_initiated",
+        f"Resending/resuming campaign '{campaign.get('name', id)}' for {total_resend_count} recipient(s).",
+        current_admin["sub"]
+    )
+    
+    return {"message": f"Resend initiated for {failed_count} recipient(s) in the background.", "failed_count": failed_count}
+
+
+@router.post("/{id}/resend-single")
+async def resend_campaign_to_single_recipient(
+    id: str,
+    contact_id: str = Query(...),
+    current_admin=Depends(verify_token)
+):
+    """Resends a campaign to a single recipient."""
+    db = get_db()
+    
+    # 1. Fetch Campaign
+    camp_res = await db_execute(lambda: db.table("email_campaigns").select("*").eq("id", id).execute())
+    if not camp_res.data:
+        raise HTTPException(status_code=404, detail="Campaign not found")
+    campaign = camp_res.data[0]
+    
+    # 2. Fetch Contact
+    contact_res = await db_execute(lambda: db.table("marketing_contacts").select("*").eq("id", contact_id).execute())
+    if not contact_res.data:
+        raise HTTPException(status_code=404, detail="Contact not found")
+    contact = contact_res.data[0]
+    
+    # 3. Check if contact is suppressed
+    from marketing_service import is_suppressed, send_marketing_email
+    if is_suppressed(contact):
+        raise HTTPException(status_code=400, detail="Cannot send to a suppressed domain contact.")
+        
+    # 4. Check or create recipient record
+    rec_res = await db_execute(lambda: db.table("campaign_recipients").select("*").eq("campaign_id", id).eq("contact_id", contact_id).execute())
+    
+    # Determine variant to use (if existing record exists, use that variant; otherwise assign one)
+    variant_label = "A"
+    if rec_res.data:
+        variant_label = rec_res.data[0].get("variant") or "A"
+    else:
+        # Determine variant randomly if A/B
+        import random
+        if campaign.get("is_ab_test") and campaign.get("subject_b") and campaign.get("html_body_b"):
+            variant_label = random.choice(["A", "B"])
+        else:
+            variant_label = "A"
+        
+    # 5. Send email
+    # Customize campaign body/subject if variant is B
+    camp_copy = dict(campaign)
+    if variant_label == "B" and campaign.get("is_ab_test"):
+        if campaign.get("subject_b"):
+            camp_copy["subject_a"] = campaign["subject_b"]
+        if campaign.get("html_body_b"):
+            camp_copy["html_body_a"] = campaign["html_body_b"]
+        if campaign.get("preview_text_b"):
+            camp_copy["preview_text"] = campaign["preview_text_b"]
+            
+    success = await send_marketing_email(camp_copy, contact)
+    if not success:
+        # Update or insert status as failed
+        update_payload = {
+            "campaign_id": id,
+            "contact_id": contact_id,
+            "status": "failed",
+            "variant": variant_label,
+            "failed_at": datetime.utcnow().isoformat()
+        }
+        if rec_res.data:
+            await db_execute(lambda: db.table("campaign_recipients").update(update_payload).eq("id", rec_res.data[0]["id"]).execute())
+        else:
+            await db_execute(lambda: db.table("campaign_recipients").insert(update_payload).execute())
+        raise HTTPException(status_code=500, detail="Mail delivery failed.")
+        
+    # On success: update or insert status as sent
+    update_payload = {
+        "campaign_id": id,
+        "contact_id": contact_id,
+        "status": "sent",  # Initial status for successfully sent but webhook pending
+        "variant": variant_label,
+        "sent_at": datetime.utcnow().isoformat(),
+        "failed_at": None
+    }
+    if rec_res.data:
+        await db_execute(lambda: db.table("campaign_recipients").update(update_payload).eq("id", rec_res.data[0]["id"]).execute())
+    else:
+        await db_execute(lambda: db.table("campaign_recipients").insert(update_payload).execute())
+        
+    # Update aggregates on campaign
+    delivered_res = await db_execute(lambda: db.table("campaign_recipients").select("id", count="exact").eq("campaign_id", id).eq("status", "delivered").execute())
+    actual_delivered = delivered_res.count or 0
+    
+    delivered_a_res = await db_execute(lambda: db.table("campaign_recipients").select("id", count="exact").eq("campaign_id", id).eq("status", "delivered").eq("variant", "A").execute())
+    variant_a = delivered_a_res.count or 0
+    
+    delivered_b_res = await db_execute(lambda: db.table("campaign_recipients").select("id", count="exact").eq("campaign_id", id).eq("status", "delivered").eq("variant", "B").execute())
+    variant_b = delivered_b_res.count or 0
+    
+    total_recs_res = await db_execute(lambda: db.table("campaign_recipients").select("id", count="exact").eq("campaign_id", id).execute())
+    total_remaining = total_recs_res.count or 0
+    
+    await db_execute(lambda: db.table("email_campaigns").update({
+        "total_sent": actual_delivered,
+        "total_recipients": total_remaining,
+        "variant_a_sent": variant_a,
+        "variant_b_sent": variant_b
+    }).eq("id", id).execute())
+    
+    await log_activity(
+        "marketing_campaign_single_resend",
+        f"Resent campaign '{campaign.get('name', id)}' to contact {contact.get('email')}.",
+        current_admin["sub"]
+    )
+    
+    return {"message": "Email sent successfully to single recipient.", "status": "sent"}
+
+
+@router.get("/contacts/suppressed-list")
+async def get_suppressed_contacts(
+    search: Optional[str] = Query(None),
+    current_admin=Depends(verify_token)
+):
+    """Returns a list of all bounced, unsubscribed, and placeholder suppressed contacts."""
+    db = get_db()
+    
+    # Fetch contacts
+    query = db.table("marketing_contacts").select("id, first_name, last_name, email, is_bounced, is_subscribed, created_at, source")
+    res = await db_execute(lambda: query.execute())
+    contacts = res.data or []
+    
+    from marketing_service import SUPPRESSED_DOMAINS
+    
+    suppressed_list = []
+    for c in contacts:
+        email = (c.get("email") or "").lower().strip()
+        is_supp_domain = any(d in email for d in SUPPRESSED_DOMAINS)
+        is_bounced = bool(c.get("is_bounced"))
+        is_unsub = not bool(c.get("is_subscribed"))
+        
+        if is_supp_domain or is_bounced or is_unsub:
+            reasons = []
+            if is_supp_domain:
+                reasons.append("Suppressed Domain")
+            if is_bounced:
+                reasons.append("Hard Bounce")
+            if is_unsub:
+                reasons.append("Unsubscribed")
+                
+            c["suppression_reasons"] = reasons
+            
+            if search:
+                term = search.lower()
+                name = f"{c.get('first_name') or ''} {c.get('last_name') or ''}".lower()
+                if term not in email and term not in name:
+                    continue
+                    
+            suppressed_list.append(c)
+            
+    suppressed_list.sort(key=lambda x: x.get("created_at") or "", reverse=True)
+    return suppressed_list
+
+
+@router.post("/contacts/{contact_id}/remove-suppression")
+async def remove_contact_suppression(
+    contact_id: str,
+    current_admin=Depends(verify_token)
+):
+    """Resets the bounce and subscription flags for a contact to allow re-mailing."""
+    db = get_db()
+    
+    contact_res = await db_execute(lambda: db.table("marketing_contacts").select("id, email").eq("id", contact_id).execute())
+    if not contact_res.data:
+        raise HTTPException(status_code=404, detail="Contact not found")
+        
+    contact = contact_res.data[0]
+    email = (contact.get("email") or "").lower().strip()
+    
+    from marketing_service import SUPPRESSED_DOMAINS
+    if any(d in email for d in SUPPRESSED_DOMAINS):
+         raise HTTPException(status_code=400, detail="Cannot remove suppression for a placeholder domain email address.")
+         
+    await db_execute(lambda: db.table("marketing_contacts").update({
+        "is_bounced": False,
+        "is_subscribed": True,
+        "updated_at": datetime.utcnow().isoformat()
+    }).eq("id", contact_id).execute())
+    
+    await log_activity(
+        "marketing_contact_suppression_removed",
+        f"Suppression removed for contact '{email}'.",
+        current_admin["sub"]
+    )
+    
+    return {"message": f"Suppression restriction removed for {email}."}

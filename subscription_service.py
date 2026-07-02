@@ -219,11 +219,11 @@ class SubscriptionService:
                 
         final_total = max(0.0, total_amount - discount_amount)
         
-        # Split calculations (80 / 2.5 / 10 / 7.5)
-        land_cost = final_total * 0.80
+        # Split calculations (90 / 2.5 / 7.5 / 0)
+        land_cost = final_total * 0.90
         allocation_fee = final_total * 0.025
-        documentation_fee = final_total * 0.10
-        vat_amount = final_total * 0.075
+        documentation_fee = final_total * 0.075
+        vat_amount = 0.0
 
         # 5. Create Invoice record
         plot_size_sqm = target_size

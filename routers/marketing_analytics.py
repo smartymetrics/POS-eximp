@@ -12,12 +12,19 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
     """Fetch high-level KPIs for the marketing dashboard."""
     db = get_db()
     
-    # 1. Total Contacts stats
-    total_contacts_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").execute())
-    total_contacts = total_contacts_res.count or 0
+    # 1. Fetch contacts and filter out suppressed domains
+    all_contacts_res = await db_execute(lambda: db.table("marketing_contacts").select("id, email, is_subscribed, created_at").execute())
+    all_contacts = all_contacts_res.data or []
     
-    subscribed_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").eq("is_subscribed", True).execute())
-    subscribed = subscribed_res.count or 0
+    from marketing_service import SUPPRESSED_DOMAINS
+    valid_contacts = []
+    for c in all_contacts:
+        email = (c.get("email") or "").lower().strip()
+        if not any(d in email for d in SUPPRESSED_DOMAINS):
+            valid_contacts.append(c)
+            
+    total_contacts = len(valid_contacts)
+    subscribed = len([c for c in valid_contacts if c.get("is_subscribed")])
     
     # 2. Campaign Stats — fetch ALL campaigns (not limited to 30 days) so historical spend is included
     campaigns_res = await db_execute(lambda: db.table("email_campaigns").select("*").execute())
@@ -41,8 +48,7 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
     open_delta = f"↑ {avg_open_val:.1f}% vs avg" if avg_open_val > 0 else "↑ 0% vs avg"
     
     # 4. Deltas (Month over Month)
-    new_this_month_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").gte("created_at", last_30_days).execute())
-    new_this_month = new_this_month_res.count or 0
+    new_this_month = len([c for c in valid_contacts if c.get("created_at", "") >= last_30_days])
     previous_total = total_contacts - new_this_month
     
     if previous_total == 0 and new_this_month > 0:
@@ -60,8 +66,8 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
     for i in range(13, -1, -1):
         d = (datetime.utcnow() - timedelta(days=i)).date()
         date_str = d.isoformat()
-        day_res = await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").lte("created_at", (d + timedelta(days=1)).isoformat()).execute())
-        count = day_res.count or 0
+        cutoff = (d + timedelta(days=1)).isoformat()
+        count = len([c for c in valid_contacts if c.get("created_at", "") <= cutoff])
         growth_data.append({"date": date_str, "count": count})
 
     # 6. Total Attributed Revenue & Segment ROI/CPA
@@ -234,7 +240,7 @@ async def get_campaign_recipients(id: str, current_admin=Depends(verify_token)):
     
     # Fetch recipients joined with contact details
     res = db.table("campaign_recipients")\
-        .select("*, marketing_contacts(first_name, last_name, email)")\
+        .select("*, marketing_contacts(id, first_name, last_name, email)")\
         .eq("campaign_id", id)\
         .order("open_count", desc=True)\
         .execute()

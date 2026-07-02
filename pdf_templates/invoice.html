@@ -355,24 +355,6 @@
       </tr>
       {% endif %}
 
-      {% if invoice.land_cost and invoice.land_cost > 0 %}
-      <tr class="totals-row" style="font-size: 9pt; color: #555;">
-        <td>Land Cost</td>
-        <td align="right">{{ format_currency(invoice.land_cost) }}</td>
-      </tr>
-      <tr class="totals-row" style="font-size: 9pt; color: #555;">
-        <td>Allocation Fee</td>
-        <td align="right">{{ format_currency(invoice.allocation_fee) }}</td>
-      </tr>
-      <tr class="totals-row" style="font-size: 9pt; color: #555;">
-        <td>Documentation Fee</td>
-        <td align="right">{{ format_currency(invoice.documentation_fee) }}</td>
-      </tr>
-      <tr class="totals-row" style="font-size: 9pt; color: #555;">
-        <td>VAT</td>
-        <td align="right">{{ format_currency(invoice.vat_amount) }}</td>
-      </tr>
-      {% endif %}
 
       <tr class="totals-row">
         <td>Total Price</td>

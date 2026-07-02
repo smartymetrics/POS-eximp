@@ -142,9 +142,15 @@ async def sync_invoice_commissions(invoice_id: str, db, performed_by: str = "sys
         )
         
         pay_amt = float(pay["amount"])
-        # Only apply 80% land cost base for new itemized invoices; old invoices use full payment amount
+        # Handle legacy vs itemized invoices dynamically
         has_itemization = invoice.get("land_cost") is not None
-        commission_base = pay_amt * 0.80 if has_itemization else pay_amt
+        if has_itemization:
+            amount = float(invoice.get("amount") or 1.0)
+            land_cost = float(invoice.get("land_cost") or 0.0)
+            ratio = land_cost / amount if amount > 0 else 0.90
+            commission_base = pay_amt * ratio
+        else:
+            commission_base = pay_amt
         gross_comm = round(commission_base * config["gross_rate"] / 100, 2)
         wht_amt = round(gross_comm * config["wht_rate"] / 100, 2)
         net_comm = gross_comm - wht_amt

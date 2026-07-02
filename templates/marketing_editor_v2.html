@@ -681,7 +681,14 @@
       </div>
 
       <!-- Center: Subject & Preview Text Inputs (Wide, side-by-side, collapsible on mobile) -->
-      <div id="mobile-settings-panel" class="hidden md:flex flex-col sm:flex-row flex-1 max-w-[700px] gap-3 w-full">
+      <div id="mobile-settings-panel" class="hidden md:flex flex-col sm:flex-row flex-1 max-w-[850px] gap-3 w-full">
+        <!-- Campaign Name Field -->
+        <div class="flex items-center gap-2 bg-[#111] px-2.5 py-1 rounded border border-[#333] flex-1">
+          <span class="text-[9px] text-gray-400 uppercase font-black tracking-wider shrink-0">Name</span>
+          <input type="text" id="campaign-name-field"
+            class="bg-transparent text-xs w-full outline-none focus:ring-0 text-white"
+            placeholder="Campaign Name (internal)...">
+        </div>
         <!-- Subject Field -->
         <div class="flex items-center gap-2 bg-[#111] px-2.5 py-1 rounded border border-[#333] flex-1">
           <span class="text-[9px] text-gray-400 uppercase font-black tracking-wider shrink-0">Subject</span>
@@ -2659,6 +2666,8 @@
         document.getElementById('ab-toggle').checked = isAB;
         if(isAB) document.getElementById('variant-tabs').classList.remove('hidden');
 
+        document.getElementById('campaign-name-field').value = data.name || '';
+
         variantData['A'].html = data.html_body_a || '';
         variantData['A'].subject = data.subject_a || '';
         variantData['A'].preview = data.preview_text || '';
@@ -2718,6 +2727,7 @@
       }
 
       const payload = {
+        name: document.getElementById('campaign-name-field').value || 'Untitled Campaign',
         is_ab_test: isAB,
         html_body_a: variantData['A'].html,
         subject_a: variantData['A'].subject,

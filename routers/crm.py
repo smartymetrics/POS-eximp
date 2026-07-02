@@ -39,6 +39,7 @@ async def get_all_contacts(current_admin=Depends(verify_token)):
     all_invoices = (await db_execute(lambda: db.table("invoices")\
         .select("id, client_id, amount, amount_paid, status")\
         .in_("client_id", client_ids)\
+        .neq("status", "voided")\
         .execute())).data or []
         
     # Index invoices by client_id in memory
@@ -49,9 +50,13 @@ async def get_all_contacts(current_admin=Depends(verify_token)):
         inv_map[cid].append(inv)
     
     # Enrich in-memory (O(N))
+    filtered_contacts = []
     for contact in contacts:
         invoices = inv_map.get(contact["id"], [])
-        
+        # If client does not have any non-voided invoices, do not display them
+        if not invoices:
+            continue
+            
         total_value = sum(float(i["amount"]) for i in invoices)
         total_paid = sum(float(i["amount_paid"]) for i in invoices)
         unpaid_count = len([i for i in invoices if i["status"] in ["unpaid", "partial", "overdue"]])
@@ -61,8 +66,9 @@ async def get_all_contacts(current_admin=Depends(verify_token)):
         contact["balance"] = total_value - total_paid
         contact["unpaid_deals"] = unpaid_count
         contact["total_deals"] = len(invoices)
+        filtered_contacts.append(contact)
     
-    return contacts
+    return filtered_contacts
 
 
 @router.get("/contacts/{client_id}")
@@ -122,13 +128,14 @@ async def get_contact_details(client_id: str, current_admin=Depends(verify_token
         sent_at
     """).eq("client_id", client_id).order("sent_at", desc=True).limit(20).execute())).data or []
     
-    # Calculate totals
-    total_value = sum(float(i["amount"]) for i in invoices)
-    total_paid = sum(float(i["amount_paid"]) for i in invoices)
+    # Calculate totals (exclude voided invoices from summaries)
+    non_voided_invoices = [i for i in invoices if i.get("status") != "voided"]
+    total_value = sum(float(i["amount"]) for i in non_voided_invoices)
+    total_paid = sum(float(i["amount_paid"]) for i in non_voided_invoices)
     
     return {
         "client": client,
-        "invoices": invoices,
+        "invoices": invoices, # Return all so they show in timeline
         "payments": payments,
         "activities": activities,
         "emails": emails,
@@ -136,8 +143,8 @@ async def get_contact_details(client_id: str, current_admin=Depends(verify_token
             "total_value": total_value,
             "total_paid": total_paid,
             "balance": total_value - total_paid,
-            "total_deals": len(invoices),
-            "paid_deals": len([i for i in invoices if i["status"] == "paid"]),
+            "total_deals": len(non_voided_invoices),
+            "paid_deals": len([i for i in non_voided_invoices if i["status"] == "paid"]),
             "total_interactions": len(activities) + len(emails)
         }
     }
@@ -653,6 +660,7 @@ async def get_client_insights(current_admin=Depends(verify_token)):
     all_invoices = (await db_execute(lambda: db.table("invoices")\
         .select("id, client_id, amount, amount_paid, status")\
         .in_("client_id", client_ids)\
+        .neq("status", "voided")\
         .execute())).data or []
         
     all_activities = (await db_execute(lambda: db.table("activity_log")\
@@ -752,6 +760,7 @@ async def get_crm_dashboard_summary(current_admin=Depends(verify_token)):
         .select("id, invoice_number, due_date, client_id, amount")\
         .gte("due_date", datetime.now().date().isoformat())\
         .lte("due_date", (datetime.now().date() + timedelta(days=7)).isoformat())\
+        .neq("status", "voided")\
         .execute())).data or []
     
     return {

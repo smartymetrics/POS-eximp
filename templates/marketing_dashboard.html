@@ -436,6 +436,12 @@
                 </svg>
                 Audit Logs
             </div>
+            <div onclick="showTab('suppressions')" id="nav-suppressions" class="nav-link">
+                <svg class="w-5 h-5 mr-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                    <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"></path>
+                </svg>
+                Bounces & Suppressions
+            </div>
 
             <a href="/marketing/manual" target="_blank" class="nav-link group">
                 <svg class="w-5 h-5 mr-3 text-gray-400 group-hover:text-brand-gold transition-colors" fill="none"
@@ -887,6 +893,64 @@
                 </div>
             </div>
         </div>
+
+        <!-- Suppressions Tab -->
+        <div id="tab-content-suppressions" class="tab-pane hidden">
+            <div class="card p-0 overflow-hidden bg-white rounded-2xl border border-gray-100 shadow-sm">
+                <div class="flex flex-col md:flex-row justify-between items-start md:items-center p-6 border-b gap-4">
+                    <div>
+                        <h3 class="text-lg font-bold text-gray-800">Email Delivery Restrictions</h3>
+                        <p class="text-sm text-gray-500 mt-1">Manage contacts who have bounced, unsubscribed, or matching placeholder domain rules.</p>
+                    </div>
+                    <div class="flex flex-col sm:flex-row gap-3 w-full md:w-auto">
+                        <div class="relative">
+                            <input type="text" id="suppression-search" onkeyup="loadSuppressedContacts()" placeholder="Search email/name..." class="w-full sm:w-64 pl-9 pr-4 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-brand-gold outline-none">
+                            <svg class="w-4 h-4 text-gray-400 absolute left-3 top-3" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path>
+                            </svg>
+                        </div>
+                        <button onclick="loadSuppressedContacts()" class="px-4 py-2 bg-gray-50 hover:bg-gray-100 text-gray-700 rounded-lg text-sm font-bold shadow-sm transition flex items-center justify-center gap-2 border">
+                            <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                                <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                            </svg>
+                            Refresh
+                        </button>
+                    </div>
+                </div>
+
+                <div class="grid grid-cols-1 md:grid-cols-3 gap-6 p-6 bg-gray-50 border-b">
+                    <div class="bg-white p-4 rounded-xl border border-gray-200">
+                        <div class="text-[10px] font-black text-red-500 uppercase tracking-widest mb-1">Hard Bounced</div>
+                        <div id="supp-kpi-bounced" class="text-2xl font-black text-gray-800">0</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl border border-gray-200">
+                        <div class="text-[10px] font-black text-yellow-600 uppercase tracking-widest mb-1">Unsubscribed</div>
+                        <div id="supp-kpi-unsub" class="text-2xl font-black text-gray-800">0</div>
+                    </div>
+                    <div class="bg-white p-4 rounded-xl border border-gray-200">
+                        <div class="text-[10px] font-black text-blue-500 uppercase tracking-widest mb-1">Domain Blocked</div>
+                        <div id="supp-kpi-domain" class="text-2xl font-black text-gray-800">0</div>
+                    </div>
+                </div>
+
+                <div class="overflow-x-auto">
+                    <table class="w-full text-left min-w-[800px]">
+                        <thead>
+                            <tr class="text-xs uppercase tracking-wider text-gray-500 border-b bg-gray-50">
+                                <th class="py-4 px-6 text-left">Contact Name & Source</th>
+                                <th class="py-4 text-left">Email Address</th>
+                                <th class="py-4 text-left">Suppression Reason</th>
+                                <th class="py-4 text-left">Registered Date</th>
+                                <th class="py-4 px-6 text-right">Actions</th>
+                            </tr>
+                        </thead>
+                        <tbody id="suppression-list" class="divide-y divide-gray-100 bg-white">
+                            <!-- Loaded dynamically -->
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
     </div>
 
     <!-- Segment Builder Modal -->
@@ -1160,12 +1224,20 @@
                         Report</h2>
                     <p id="report-subject" class="text-xs text-gray-500 font-medium"></p>
                 </div>
-                <button onclick="closeReportModal()" class="text-gray-400 hover:text-gray-600 transition p-2">
-                    <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                        <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
-                        </path>
-                    </svg>
-                </button>
+                <div class="flex items-center gap-3">
+                    <button id="btn-resend-failed" onclick="resendFailedRecipients()" class="hidden px-3 py-1.5 bg-red-600 hover:bg-red-700 text-white rounded-lg text-xs font-black uppercase transition-all shadow-sm flex items-center gap-1.5">
+                        <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
+                        </svg>
+                        Resend / Resume (<span id="resend-failed-count">0</span>)
+                    </button>
+                    <button onclick="closeReportModal()" class="text-gray-400 hover:text-gray-600 transition p-2">
+                        <svg class="w-6 h-6" fill="none" stroke="currentColor" viewBox="0 0 24 24">
+                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12">
+                            </path>
+                        </svg>
+                    </button>
+                </div>
             </div>
 
             <!-- Conversion Audit Modal -->
@@ -1317,9 +1389,18 @@
 
                 <!-- Recipient Table -->
                 <div>
-                    <div class="flex justify-between items-center mb-4">
-                        <h3 class="font-black text-gray-800 uppercase tracking-widest text-sm">Individual Engagement
-                        </h3>
+                    <div class="flex flex-col sm:flex-row justify-between sm:items-center mb-4 gap-3">
+                        <h3 class="font-black text-gray-800 uppercase tracking-widest text-sm">Individual Engagement</h3>
+                        <!-- Filter Pills -->
+                        <div class="flex flex-wrap gap-1 bg-gray-100 p-1 rounded-lg border">
+                            <button onclick="setRecipientFilter('all')" id="pill-filter-all" class="pill-filter-btn px-2.5 py-1 text-[10px] font-black uppercase rounded bg-brand-gold text-white shadow-sm transition-all">All</button>
+                            <button onclick="setRecipientFilter('delivered')" id="pill-filter-delivered" class="pill-filter-btn px-2.5 py-1 text-[10px] font-black uppercase rounded text-gray-600 hover:bg-gray-200 transition-all">Delivered</button>
+                            <button onclick="setRecipientFilter('opened')" id="pill-filter-opened" class="pill-filter-btn px-2.5 py-1 text-[10px] font-black uppercase rounded text-gray-600 hover:bg-gray-200 transition-all">Opened</button>
+                            <button onclick="setRecipientFilter('clicked')" id="pill-filter-clicked" class="pill-filter-btn px-2.5 py-1 text-[10px] font-black uppercase rounded text-gray-600 hover:bg-gray-200 transition-all">Clicked</button>
+                            <button onclick="setRecipientFilter('bounced')" id="pill-filter-bounced" class="pill-filter-btn px-2.5 py-1 text-[10px] font-black uppercase rounded text-gray-600 hover:bg-gray-200 transition-all">Bounced</button>
+                            <button onclick="setRecipientFilter('failed')" id="pill-filter-failed" class="pill-filter-btn px-2.5 py-1 text-[10px] font-black uppercase rounded text-gray-600 hover:bg-gray-200 transition-all">Failed</button>
+                        </div>
+                    </div>
                         <div class="relative">
                             <input type="text" onkeyup="filterReportTable(this.value)"
                                 placeholder="Search recipients..."
@@ -1339,6 +1420,7 @@
                                     <th class="px-4 py-3 font-black text-gray-400 uppercase">Status</th>
                                     <th class="px-4 py-3 font-black text-gray-400 uppercase text-center">Opens</th>
                                     <th class="px-4 py-3 font-black text-gray-400 uppercase text-center">Clicks</th>
+                                    <th class="px-4 py-3 font-black text-gray-400 uppercase text-right">Actions</th>
                                 </tr>
                             </thead>
                             <tbody id="report-recipients-list" class="divide-y">
@@ -1775,7 +1857,8 @@
                 segments: ['Audience Segments', 'Target specific groups of people with precision.'],
                 sequences: ['Automated Sequences', 'ActiveCampaign-style drip campaigns that run while you sleep.'],
                 calendar: ['Marketing Calendar', 'Annual occasions and holiday campaigns.'],
-                audit: ['Marketing Audit Log', 'Track all actions performed by staff on the marketing dashboard.']
+                audit: ['Marketing Audit Log', 'Track all actions performed by staff on the marketing dashboard.'],
+                suppressions: ['Bounces & Suppressions', 'Manage unsubscribed, bounced, or suppressed email contacts.']
             };
 
             document.getElementById('tab-title').innerText = titles[tab][0];
@@ -1788,6 +1871,7 @@
             if (tab === 'sequences') { showPageLoader('Loading Automations...'); loadSequences(); }
             if (tab === 'calendar') { showPageLoader('Loading Calendar...'); loadCalendar(); }
             if (tab === 'audit') { showPageLoader('Loading Audit Logs...'); loadAuditLogs().then(hidePageLoader); }
+            if (tab === 'suppressions') { showPageLoader('Loading Suppressed Contacts...'); loadSuppressedContacts(); }
         }
 
         async function loadOverview() {
@@ -2012,6 +2096,9 @@
                                 <button onclick="window.open('/marketing/editor?id=${c.id}')" class="p-2 bg-brand-gold bg-opacity-10 text-brand-gold rounded hover:bg-opacity-20 transition" title="Edit Draft">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M11 5H6a2 2 0 00-2 2v11a2 2 0 002 2h11a2 2 0 002-2v-5m-1.414-9.414a2 2 0 112.828 2.828L11.828 15H9v-2.828l8.586-8.586z"></path></svg>
                                 </button>
+                                <button onclick="renameCampaign('${c.id}', '${c.name.replace(/'/g, "\\'")}')" class="p-2 bg-blue-500 bg-opacity-10 text-blue-600 rounded hover:bg-opacity-20 transition" title="Rename Campaign">
+                                    <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M15.232 5.232l3.536 3.536m-2.036-5.036a2.5 2.5 0 113.536 3.536L6.5 21.036H3v-3.572L16.732 3.732z"></path></svg>
+                                </button>
                                 <button onclick="openSendModal('${c.id}', '${c.name.replace(/'/g, "\\'")}')" class="p-2 bg-green-500 text-white rounded hover:bg-green-600 transition shadow-lg shadow-green-500/20" title="Send Campaign">
                                     <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M12 19l9 2-9-18-9 18 9-2zm0 0v-8"></path></svg>
                                 </button>
@@ -2067,10 +2154,16 @@
         }
 
         async function duplicateCampaign(id) {
-            if (!confirm("Duplicate this campaign? It will create a new editable draft copy.")) return;
+            const newName = prompt("Enter a name for the duplicated campaign (leave blank to auto-generate):");
+            if (newName === null) return; // User cancelled
+            
             showPageLoader('Duplicating Campaign...');
             try {
-                const res = await fetch(`/api/marketing/campaigns/${id}/duplicate`, {
+                let url = `/api/marketing/campaigns/${id}/duplicate`;
+                if (newName.trim()) {
+                    url += `?name=${encodeURIComponent(newName.trim())}`;
+                }
+                const res = await fetch(url, {
                     method: 'POST',
                     headers: { 'Authorization': 'Bearer ' + token }
                 });
@@ -2087,6 +2180,34 @@
             } catch (e) {
                 console.error("Duplicate campaign error:", e);
                 showToast("An unexpected error occurred", "error");
+            } finally {
+                hidePageLoader();
+            }
+        }
+
+        async function renameCampaign(id, currentName) {
+            const newName = prompt("Enter a new name for this campaign:", currentName);
+            if (newName === null || !newName.trim() || newName.trim() === currentName) return;
+
+            showPageLoader('Renaming Campaign...');
+            try {
+                const res = await fetch(`/api/marketing/campaigns/${id}`, {
+                    method: 'PUT',
+                    headers: { 
+                        'Content-Type': 'application/json',
+                        'Authorization': 'Bearer ' + token 
+                    },
+                    body: JSON.stringify({ name: newName.trim() })
+                });
+                if (res.ok) {
+                    showToast("Campaign renamed successfully!");
+                    loadCampaigns();
+                } else {
+                    showToast("Failed to rename campaign", "error");
+                }
+            } catch (e) {
+                console.error("Rename campaign error:", e);
+                showToast("An error occurred while renaming", "error");
             } finally {
                 hidePageLoader();
             }
@@ -2253,6 +2374,7 @@
                     <option value="engaged">Engaged (Users who opened your mails)</option>
                     <option value="hot">Hot Leads (Engagement Score > 50)</option>
                     <option value="recent">Recent Signups (Last 30 days)</option>
+                    <option value="failed_deliveries">⚠️ Undelivered (Had Campaign Errors)</option>
                     <optgroup label="Financial Activity">
                         <option value="financial_overdue">🔴 Overdue Clients (Missed Deadline)</option>
                         <option value="financial_outstanding">🟡 Outstanding Balance (Partial Paid)</option>
@@ -3736,6 +3858,49 @@
                 const responseData = await recsRes.json();
                 const recipients = responseData.data || responseData;
 
+                window.activeReportCampaignId = id;
+
+                let failedCount = 0;
+                let pendingCount = 0;
+                recipients.forEach(r => {
+                    const c = r.marketing_contacts || {};
+                    const email = (c.email || '').toLowerCase().trim();
+                    const isSuppressedDomain = email.includes('temp-eximps.com') || email.includes('placeholder.com');
+                    if (!isSuppressedDomain) {
+                        if (r.status === 'failed') failedCount++;
+                        if (r.status === 'pending') pendingCount++;
+                    }
+                });
+
+                const totalResend = failedCount + pendingCount;
+                const resendBtn = document.getElementById('btn-resend-failed');
+                const resendCountEl = document.getElementById('resend-failed-count');
+                if (resendBtn && resendCountEl) {
+                    if (totalResend > 0) {
+                        resendBtn.classList.remove('hidden');
+                        resendCountEl.innerText = totalResend;
+                    } else {
+                        resendBtn.classList.add('hidden');
+                    }
+                }
+
+                // Reset filters on opening
+                window.currentRecipientSearch = '';
+                window.currentRecipientStatus = 'all';
+                const searchInput = document.querySelector('input[placeholder="Search recipients..."]');
+                if (searchInput) searchInput.value = '';
+                
+                // Toggle active pill style to All
+                document.querySelectorAll('.pill-filter-btn').forEach(btn => {
+                    btn.classList.remove('bg-brand-gold', 'text-white', 'shadow-sm');
+                    btn.classList.add('text-gray-600', 'hover:bg-gray-100');
+                });
+                const activePill = document.getElementById('pill-filter-all');
+                if (activePill) {
+                    activePill.classList.remove('text-gray-600', 'hover:bg-gray-100');
+                    activePill.classList.add('bg-brand-gold', 'text-white', 'shadow-sm');
+                }
+
                 const list = document.getElementById('report-recipients-list');
                 list.innerHTML = recipients.map(r => {
                     const c = r.marketing_contacts || { first_name: 'Unknown', last_name: 'Recipient', email: 'N/A' };
@@ -3743,8 +3908,28 @@
                     if (r.open_count > 0) statusClass = "bg-brand-gold bg-opacity-10 text-brand-gold";
                     if (r.click_count > 0) statusClass = "bg-blue-100 text-blue-600";
 
+                    let statusType = "delivered";
+                    if (r.click_count > 0) statusType = "clicked";
+                    else if (r.open_count > 0) statusType = "opened";
+                    else if (r.status === 'bounced') statusType = "bounced";
+                    else if (r.status === 'failed') statusType = "failed";
+
+                    const email = (c.email || '').toLowerCase().trim();
+                    const isSuppressedDomain = email.includes('temp-eximps.com') || email.includes('placeholder.com');
+                    
+                    let actionButton = '';
+                    if (isSuppressedDomain) {
+                        actionButton = `<span class="text-[8px] tracking-wider font-extrabold uppercase text-red-500 bg-red-50 px-1.5 py-0.5 rounded">Suppressed</span>`;
+                    } else {
+                        actionButton = `
+                            <button onclick="resendToSingleRecipient('${id}', '${c.id}', '${c.email.replace(/'/g, "\\'")}')" class="px-2 py-0.5 bg-brand-gold hover:bg-brand-gold/90 text-white rounded text-[9px] font-bold transition-all flex items-center gap-1 ml-auto">
+                                <span>✉️</span> Resend
+                            </button>
+                        `;
+                    }
+
                     return `
-                        <tr class="report-row hover:bg-gray-50 transition">
+                        <tr class="report-row hover:bg-gray-50 transition" data-status="${statusType}">
                             <td class="px-4 py-3">
                                 <div class="font-bold text-gray-800">${c.first_name} ${c.last_name}</div>
                                 <div class="text-[10px] text-gray-400 font-mono">${c.email}</div>
@@ -3756,6 +3941,9 @@
                             </td>
                             <td class="px-4 py-3 text-center font-bold">${r.open_count || 0}</td>
                             <td class="px-4 py-3 text-center font-bold text-blue-500">${r.click_count || 0}</td>
+                            <td class="px-4 py-3 text-right">
+                                ${actionButton}
+                            </td>
                         </tr>
                     `;
                 }).join('');
@@ -3783,12 +3971,190 @@
             }
         }
 
+        window.currentRecipientSearch = '';
+        window.currentRecipientStatus = 'all';
+
         function filterReportTable(val) {
-            const filter = val.toLowerCase();
+            window.currentRecipientSearch = val.toLowerCase();
+            applyRecipientFilters();
+        }
+
+        function setRecipientFilter(status) {
+            window.currentRecipientStatus = status;
+            
+            document.querySelectorAll('.pill-filter-btn').forEach(btn => {
+                btn.classList.remove('bg-brand-gold', 'text-white', 'shadow-sm');
+                btn.classList.add('text-gray-600', 'hover:bg-gray-100');
+            });
+            const activePill = document.getElementById('pill-filter-' + status);
+            if (activePill) {
+                activePill.classList.remove('text-gray-600', 'hover:bg-gray-100');
+                activePill.classList.add('bg-brand-gold', 'text-white', 'shadow-sm');
+            }
+            
+            applyRecipientFilters();
+        }
+
+        function applyRecipientFilters() {
             document.querySelectorAll('.report-row').forEach(row => {
                 const text = row.innerText.toLowerCase();
-                row.style.display = text.includes(filter) ? '' : 'none';
+                const status = row.getAttribute('data-status');
+                
+                const matchesSearch = text.includes(window.currentRecipientSearch);
+                let matchesStatus = true;
+                
+                if (window.currentRecipientStatus !== 'all') {
+                    if (window.currentRecipientStatus === 'delivered') {
+                        matchesStatus = (status === 'delivered' || status === 'opened' || status === 'clicked');
+                    } else {
+                        matchesStatus = (status === window.currentRecipientStatus);
+                    }
+                }
+                
+                row.style.display = (matchesSearch && matchesStatus) ? '' : 'none';
             });
+        }
+
+        async function resendFailedRecipients() {
+            if (!window.activeReportCampaignId) return;
+            if (!confirm("Are you sure you want to resend this campaign to failed recipients and resume sending to any pending ones?\n\nThis will continue sending to those who have not yet received it.")) return;
+
+            showPageLoader('Initiating resend...');
+            try {
+                const res = await fetch(`/api/marketing/campaigns/${window.activeReportCampaignId}/resend`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || 'Failed to resend');
+                }
+                const data = await res.json();
+                showToast(`Resend initiated for ${data.failed_count} recipient(s).`, 'success');
+                closeReportModal();
+                loadCampaigns();
+            } catch (e) {
+                alert("Error: " + e.message);
+            } finally {
+                hidePageLoader();
+            }
+        }
+
+        async function resendToSingleRecipient(campaignId, contactId, email) {
+            if (!confirm(`Are you sure you want to resend this campaign to ${email}?`)) return;
+            
+            showPageLoader(`Resending to ${email}...`);
+            try {
+                const res = await fetch(`/api/marketing/campaigns/${campaignId}/resend-single?contact_id=${contactId}`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || 'Failed to resend to recipient.');
+                }
+                showToast(`Campaign resent to ${email} successfully!`, 'success');
+                // Reload report to show updated status
+                closeReportModal();
+                viewReport(campaignId);
+            } catch (e) {
+                alert("Error: " + e.message);
+            } finally {
+                hidePageLoader();
+            }
+        }
+
+        async function loadSuppressedContacts() {
+            const searchVal = document.getElementById('suppression-search')?.value || '';
+            const list = document.getElementById('suppression-list');
+            if (!list) return;
+
+            try {
+                const res = await fetch(`/api/marketing/campaigns/contacts/suppressed-list?search=${encodeURIComponent(searchVal)}`, {
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (!res.ok) throw new Error("Failed to load suppressions");
+                const data = await res.json();
+
+                let bounced = 0, unsubbed = 0, domainSuppressed = 0;
+                data.forEach(c => {
+                    const email = (c.email || '').toLowerCase();
+                    if (email.includes('temp-eximps.com') || email.includes('placeholder.com')) {
+                        domainSuppressed++;
+                    }
+                    if (c.is_bounced) bounced++;
+                    if (!c.is_subscribed) unsubbed++;
+                });
+
+                document.getElementById('supp-kpi-bounced').innerText = bounced;
+                document.getElementById('supp-kpi-unsub').innerText = unsubbed;
+                document.getElementById('supp-kpi-domain').innerText = domainSuppressed;
+
+                if (!data.length) {
+                    list.innerHTML = '<tr><td colspan="5" class="py-10 text-center text-gray-500 font-medium">No restricted or suppressed contacts found.</td></tr>';
+                    return;
+                }
+
+                list.innerHTML = data.map(c => {
+                    const name = `${c.first_name || ''} ${c.last_name || ''}`.trim() || 'Unnamed Contact';
+                    const date = c.created_at ? new Date(c.created_at).toLocaleDateString() : '—';
+                    
+                    const badges = c.suppression_reasons.map(r => {
+                        let colorClass = "bg-gray-100 text-gray-600";
+                        if (r === 'Hard Bounce') colorClass = "bg-red-100 text-red-700";
+                        if (r === 'Unsubscribed') colorClass = "bg-yellow-100 text-yellow-700";
+                        if (r === 'Suppressed Domain') colorClass = "bg-blue-100 text-blue-700";
+                        return `<span class="px-2 py-0.5 rounded text-[10px] font-black uppercase ${colorClass}">${r}</span>`;
+                    }).join(' ');
+
+                    const email = c.email || '';
+                    const isSuppressedDomain = email.includes('temp-eximps.com') || email.includes('placeholder.com');
+                    
+                    const actionBtn = isSuppressedDomain 
+                        ? `<span class="text-[10px] font-bold text-gray-400 italic">Unrestorable (Domain Filter)</span>`
+                        : `<button onclick="removeSuppression('${c.id}', '${email}')" class="px-3 py-1 bg-brand-gold hover:bg-gold-dark text-white rounded text-[10px] font-black uppercase transition-all shadow-sm">Remove Restriction</button>`;
+
+                    return `
+                        <tr class="hover:bg-gray-50 transition">
+                            <td class="py-4 px-6">
+                                <div class="font-bold text-gray-800">${name}</div>
+                                <div class="text-[10px] text-gray-400 font-medium">Source: ${c.source || 'Manual'}</div>
+                            </td>
+                            <td class="py-4 text-gray-600 font-mono">${email}</td>
+                            <td class="py-4 space-x-1">${badges}</td>
+                            <td class="py-4 text-gray-500">${date}</td>
+                            <td class="py-4 px-6 text-right">${actionBtn}</td>
+                        </tr>
+                    `;
+                }).join('');
+
+            } catch (e) {
+                console.error(e);
+                list.innerHTML = '<tr><td colspan="5" class="py-10 text-center text-red-500 font-bold">Failed to load suppressed contacts data.</td></tr>';
+            } finally {
+                hidePageLoader();
+            }
+        }
+
+        async function removeSuppression(contactId, email) {
+            if (!confirm(`Are you sure you want to remove the delivery restriction for "${email}"?\n\nThis resets the bounce flags and resubscribes the user.`)) return;
+
+            showPageLoader('Removing restriction...');
+            try {
+                const res = await fetch(`/api/marketing/campaigns/contacts/${contactId}/remove-suppression`, {
+                    method: 'POST',
+                    headers: { 'Authorization': 'Bearer ' + token }
+                });
+                if (!res.ok) {
+                    const err = await res.json();
+                    throw new Error(err.detail || 'Failed to remove suppression');
+                }
+                showToast(`Suppression restriction removed for ${email}.`, 'success');
+                loadSuppressedContacts();
+            } catch (e) {
+                alert("Error: " + e.message);
+                hidePageLoader();
+            }
         }
 
         async function uploadCSV(input) {

@@ -276,9 +276,15 @@ async def confirm_verification(
                     gross_rate = _pct("default_commission_rate", 0.10)
                 wht_rate = _pct("default_wht_rate", 0.05)
 
-                # Only apply 80% land cost base for new itemized invoices; old invoices use full deposit
+                # Handle legacy vs itemized invoices dynamically
                 has_itemization = invoice.get("land_cost") is not None
-                commission_base = deposit * 0.80 if has_itemization else deposit
+                if has_itemization:
+                    amount = float(invoice.get("amount") or 1.0)
+                    land_cost = float(invoice.get("land_cost") or 0.0)
+                    ratio = land_cost / amount if amount > 0 else 0.90
+                    commission_base = deposit * ratio
+                else:
+                    commission_base = deposit
                 gross_comm = round(commission_base * gross_rate, 2)
                 wht_amt    = round(gross_comm * wht_rate, 2)
                 net_comm   = gross_comm - wht_amt
@@ -290,9 +296,15 @@ async def confirm_verification(
                     verification_date=date.today(),
                     db=db
                 )
-                # Only apply 80% land cost base for new itemized invoices; old invoices use full deposit
+                # Handle legacy vs itemized invoices dynamically
                 has_itemization = invoice.get("land_cost") is not None
-                commission_base = deposit * 0.80 if has_itemization else deposit
+                if has_itemization:
+                    amount = float(invoice.get("amount") or 1.0)
+                    land_cost = float(invoice.get("land_cost") or 0.0)
+                    ratio = land_cost / amount if amount > 0 else 0.90
+                    commission_base = deposit * ratio
+                else:
+                    commission_base = deposit
                 gross_comm = round(commission_base * config["gross_rate"] / 100, 2)
                 wht_amt    = round(gross_comm * config["wht_rate"] / 100, 2)
                 net_comm   = gross_comm - wht_amt

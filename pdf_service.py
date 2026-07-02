@@ -236,6 +236,84 @@ def _render_with_xhtml2pdf(html_content: str) -> bytes:
     return result.getvalue()
 
 
+def generate_internal_payouts_pdf(invoices: list, start_date: str = None, end_date: str = None, generated_by: str = "Super Admin") -> bytes:
+    """Generates a branded PDF for the Internal Payouts ledger report."""
+    total_invoiced = 0.0
+    total_land_cost = 0.0
+    total_allocation = 0.0
+    total_documentation = 0.0
+    total_vat = 0.0
+    
+    estates = {}
+    client_invoices = []
+    
+    for inv in invoices:
+        amt = float(inv.get("amount") or 0.0)
+        lc = float(inv.get("land_cost") or 0.0) if inv.get("land_cost") is not None else 0.0
+        af = float(inv.get("allocation_fee") or 0.0) if inv.get("allocation_fee") is not None else 0.0
+        df = float(inv.get("documentation_fee") or 0.0) if inv.get("documentation_fee") is not None else 0.0
+        vat = float(inv.get("vat_amount") or 0.0) if inv.get("vat_amount") is not None else 0.0
+        
+        total_invoiced += amt
+        total_land_cost += lc
+        total_allocation += af
+        total_documentation += df
+        total_vat += vat
+        
+        est_name = inv.get("property_name") or "Unknown Estate"
+        if est_name not in estates:
+            estates[est_name] = {
+                "property_name": est_name,
+                "total_amount": 0.0,
+                "land_cost": 0.0,
+                "allocation_fee": 0.0,
+                "documentation_fee": 0.0,
+                "vat_amount": 0.0,
+                "payment_count": 0
+            }
+        estates[est_name]["total_amount"] += amt
+        estates[est_name]["land_cost"] += lc
+        estates[est_name]["allocation_fee"] += af
+        estates[est_name]["documentation_fee"] += df
+        estates[est_name]["vat_amount"] += vat
+        estates[est_name]["payment_count"] += 1
+        
+        client_info = inv.get("clients") or {}
+        client_invoices.append({
+            "invoice_number": inv.get("invoice_number", "—"),
+            "client_name": client_info.get("full_name") or "—",
+            "property_name": est_name,
+            "invoice_date": inv.get("invoice_date", "—"),
+            "amount": amt,
+            "land_cost": lc,
+            "allocation_fee": af,
+            "documentation_fee": df,
+            "vat_amount": vat
+        })
+        
+    totals = {
+        "total_invoiced": total_invoiced,
+        "total_land_cost": total_land_cost,
+        "total_allocation": total_allocation,
+        "total_documentation": total_documentation,
+        "total_vat": total_vat
+    }
+    
+    template = env.get_template("internal_payouts_report.html")
+    html_content = template.render(
+        invoices=invoices,
+        start_date=start_date,
+        end_date=end_date,
+        generated_at=datetime.now().strftime("%d %b %Y %H:%M"),
+        generated_by=generated_by,
+        totals=totals,
+        estate_breakdown=list(estates.values()),
+        client_invoices=client_invoices,
+        format_currency=format_currency,
+        company_logo_b64=None
+    )
+    
+    return _render_with_xhtml2pdf(html_content)
 
 
 def render_invoice_html(invoice: dict) -> str:

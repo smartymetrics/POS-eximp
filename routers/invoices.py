@@ -147,11 +147,11 @@ async def create_invoice(
             
     final_total = max(0.0, original_amount - discount_amount)
     
-    # Calculate split (80 / 2.5 / 10 / 7.5)
-    land_cost = final_total * 0.80
+    # Calculate split (90 / 2.5 / 7.5 / 0)
+    land_cost = final_total * 0.90
     allocation_fee = final_total * 0.025
-    documentation_fee = final_total * 0.10
-    vat_amount = final_total * 0.075
+    documentation_fee = final_total * 0.075
+    vat_amount = 0.0
 
     invoice_data = {
         "invoice_number": invoice_number,
@@ -520,11 +520,18 @@ async def edit_invoice(
         else:
             final_amount = float(update_data["amount"])
 
-        # Update itemized splits based on the final amount
-        update_data["land_cost"] = final_amount * 0.80
-        update_data["allocation_fee"] = final_amount * 0.025
-        update_data["documentation_fee"] = final_amount * 0.10
-        update_data["vat_amount"] = final_amount * 0.075
+        # Update itemized splits based on the final amount ONLY if this is not a legacy invoice.
+        is_legacy = invoice.get("land_cost") is None
+        if is_legacy:
+            update_data["land_cost"] = None
+            update_data["allocation_fee"] = None
+            update_data["documentation_fee"] = None
+            # Leave vat_amount as-is (do not force to 0.0)
+        else:
+            update_data["land_cost"] = final_amount * 0.90
+            update_data["allocation_fee"] = final_amount * 0.025
+            update_data["documentation_fee"] = final_amount * 0.075
+            update_data["vat_amount"] = 0.0
 
     # Update database
     await db_execute(lambda: db.table("invoices").update(jsonable_encoder(update_data)).eq("id", invoice_id).execute())

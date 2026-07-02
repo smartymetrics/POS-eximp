@@ -1354,6 +1354,14 @@
         </svg>
         Discount Codes
       </a>
+      <a class="nav-item" href="#" id="nav-internal-payouts" onclick="showSection('internal-payouts')" style="display: none;">
+        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="margin-right: 12px; opacity: 0.7;">
+          <rect x="2" y="4" width="20" height="16" rx="2" ry="2" />
+          <line x1="12" y1="4" x2="12" y2="20" />
+          <line x1="2" y1="12" x2="22" y2="12" />
+        </svg>
+        Internal Payouts
+      </a>
       <a class="nav-item super-admin-only" href="/finance/procurement" id="nav-procurement">
         <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"
           style="margin-right: 12px; opacity: 0.7;">
@@ -2219,6 +2227,239 @@
         </div>
       </div>
 
+    </div>
+
+
+    <!-- INTERNAL PAYOUTS SECTION -->
+    <div class="content" id="section-internal-payouts" style="display:none;">
+      <!-- Title & Filters Header -->
+      <div style="display:flex; justify-content:space-between; align-items:center; margin-bottom:24px;">
+        <div>
+          <h2 style="font-size:20px; font-weight:800; color:var(--dark); margin:0;">Internal Payouts Ledger</h2>
+          <p style="font-size:12px; color:#718096; margin-top:4px;">Secure internal revenue splits and payouts administration.</p>
+        </div>
+        <div style="display:flex; gap:8px; align-items:center;">
+          <input type="date" id="payout-start-date" class="form-control" style="width:140px; font-size:12px; height:36px;">
+          <input type="date" id="payout-end-date" class="form-control" style="width:140px; font-size:12px; height:36px;">
+          <button class="btn btn-primary" onclick="loadInternalPayouts()" style="padding:0 16px; height:36px; font-size:12px; display:flex; align-items:center; gap:6px;">
+            <svg width="12" height="12" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M21.5 2v6h-6M21.34 15.57a10 10 0 1 1-.57-8.38l5.67-5.67"/></svg>
+            Filter
+          </button>
+        </div>
+      </div>
+
+      <!-- Navigation Sub-Tabs -->
+      <div style="display:flex; border-bottom:1px solid #e2e8f0; margin-bottom:24px; gap:4px; overflow-x:auto;">
+        <button class="btn btn-ghost active" id="payout-btn-overview" onclick="switchPayoutTab('overview')" style="border-radius:6px 6px 0 0; padding:10px 16px; font-weight:600; font-size:13px; display:flex; align-items:center; gap:8px;">
+          📊 Overview
+        </button>
+        <button class="btn btn-ghost" id="payout-btn-estates" onclick="switchPayoutTab('estates')" style="border-radius:6px 6px 0 0; padding:10px 16px; font-weight:600; font-size:13px; display:flex; align-items:center; gap:8px;">
+          🏢 Estates Breakdown
+        </button>
+        <button class="btn btn-ghost" id="payout-btn-clients" onclick="switchPayoutTab('clients')" style="border-radius:6px 6px 0 0; padding:10px 16px; font-weight:600; font-size:13px; display:flex; align-items:center; gap:8px;">
+          👤 Client Ledgers
+        </button>
+        <button class="btn btn-ghost" id="payout-btn-exports" onclick="switchPayoutTab('exports')" style="border-radius:6px 6px 0 0; padding:10px 16px; font-weight:600; font-size:13px; display:flex; align-items:center; gap:8px;">
+          ✉️ Export & Email
+        </button>
+        <button class="btn btn-ghost" id="payout-btn-permissions" onclick="switchPayoutTab('permissions')" style="border-radius:6px 6px 0 0; padding:10px 16px; font-weight:600; font-size:13px; display:none; align-items:center; gap:8px;">
+          🔒 Access Control
+        </button>
+      </div>
+
+      <!-- Tab Content Area -->
+
+      <!-- 1. OVERVIEW TAB -->
+      <div class="payout-tab-content" id="payout-content-overview">
+        <!-- KPI Cards Grid -->
+        <div style="display:grid; grid-template-columns: repeat(auto-fit, minmax(220px, 1fr)); gap:16px; margin-bottom:24px;">
+          <div style="background:#fff; border:1px solid #e2e8f0; padding:18px; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+            <div style="font-size:11px; text-transform:uppercase; color:#718096; font-weight:700; letter-spacing:0.5px;">Total Company Inflow</div>
+            <div id="payout-stat-invoiced" style="font-size:18px; font-weight:800; color:#2b6cb0; margin-top:8px;">NGN 0.00</div>
+          </div>
+          <div style="background:#fff; border:1px solid #e2e8f0; padding:18px; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+            <div style="font-size:11px; text-transform:uppercase; color:#718096; font-weight:700; letter-spacing:0.5px;">Land Cost Portion</div>
+            <div id="payout-stat-land" style="font-size:18px; font-weight:800; color:#2f855a; margin-top:8px;">NGN 0.00</div>
+          </div>
+          <div style="background:#fff; border:1px solid #e2e8f0; padding:18px; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+            <div style="font-size:11px; text-transform:uppercase; color:#718096; font-weight:700; letter-spacing:0.5px;">Allocation Fee</div>
+            <div id="payout-stat-allocation" style="font-size:18px; font-weight:800; color:#c05621; margin-top:8px;">NGN 0.00</div>
+          </div>
+          <div style="background:#fff; border:1px solid #e2e8f0; padding:18px; border-radius:10px; box-shadow:0 1px 3px rgba(0,0,0,0.02);">
+            <div style="font-size:11px; text-transform:uppercase; color:#718096; font-weight:700; letter-spacing:0.5px;">Documentation Fee</div>
+            <div id="payout-stat-documentation" style="font-size:18px; font-weight:800; color:#7b341e; margin-top:8px;">NGN 0.00</div>
+          </div>
+        </div>
+
+        <!-- Charts Row -->
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px; margin-bottom:24px; min-height:350px;">
+          <!-- Chart Container -->
+          <div style="background:#fff; border:1px solid #e2e8f0; padding:20px; border-radius:10px;">
+            <h3 style="font-size:14px; font-weight:700; margin-bottom:16px;">Revenue Allocation Share</h3>
+            <div style="width:100%; height:260px; display:flex; justify-content:center; align-items:center;">
+              <canvas id="payoutDonutChart" style="max-height: 240px; max-width: 240px;"></canvas>
+            </div>
+          </div>
+          <!-- Top Estates List -->
+          <div style="background:#fff; border:1px solid #e2e8f0; padding:20px; border-radius:10px; display:flex; flex-direction:column;">
+            <h3 style="font-size:14px; font-weight:700; margin-bottom:16px;">Top Properties by Revenue Inflow</h3>
+            <div id="payout-top-estates-list" style="flex:1; display:flex; flex-direction:column; gap:12px; justify-content:center;">
+              <!-- Dynamic list of top properties with progress bars -->
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 2. ESTATES BREAKDOWN TAB -->
+      <div class="payout-tab-content" id="payout-content-estates" style="display:none;">
+        <div class="table-responsive" style="background:#fff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Estate / Project Name</th>
+                <th style="text-align:right;">Total Inflow</th>
+                <th style="text-align:right;">Land Cost</th>
+                <th style="text-align:right;">Allocation Fee</th>
+                <th style="text-align:right;">Doc Fee</th>
+                <th style="text-align:center;">Transactions</th>
+              </tr>
+            </thead>
+            <tbody id="payout-table-estates-body">
+              <!-- Dynamically populated rows -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 3. CLIENT LEDGERS TAB -->
+      <div class="payout-tab-content" id="payout-content-clients" style="display:none;">
+        <!-- Search bar -->
+        <div style="margin-bottom:16px; display:flex; gap:8px;">
+          <input type="text" id="payout-client-search" oninput="filterPayoutClients()" placeholder="Search client name, email, or invoice #..." class="form-control" style="max-width:360px; font-size:12px; height:36px;">
+        </div>
+        <div class="table-responsive" style="background:#fff; border:1px solid #e2e8f0; border-radius:10px; overflow:hidden;">
+          <table class="data-table">
+            <thead>
+              <tr>
+                <th>Invoice</th>
+                <th>Client Name</th>
+                <th>Property</th>
+                <th>Date</th>
+                <th style="text-align:right;">Total Paid</th>
+                <th style="text-align:right;">Land Cost</th>
+                <th style="text-align:right;">Allocation Fee</th>
+                <th style="text-align:right;">Doc Fee</th>
+              </tr>
+            </thead>
+            <tbody id="payout-table-clients-body">
+              <!-- Dynamically populated rows -->
+            </tbody>
+          </table>
+        </div>
+      </div>
+
+      <!-- 4. EXPORT & EMAIL REPORTS TAB -->
+      <div class="payout-tab-content" id="payout-content-exports" style="display:none;">
+        <div style="display:grid; grid-template-columns: 1fr 1fr; gap:24px;">
+          <!-- Left: Export Card -->
+          <div style="background:#fff; border:1px solid #e2e8f0; padding:24px; border-radius:10px;">
+            <h3 style="font-size:15px; font-weight:700; margin-bottom:8px; display:flex; align-items:center; gap:8px;">
+              📥 Direct File Export
+            </h3>
+            <p style="font-size:12px; color:#718096; margin-bottom:20px;">Download the compiled revenue splits dataset immediately to your device.</p>
+            
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <button class="btn btn-primary" onclick="exportPayoutsReport('csv')" style="padding:12px; display:flex; align-items:center; justify-content:center; gap:10px; font-weight:600;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4M7 10l5 5 5-5M12 15V3"/></svg>
+                Download Spreadsheet (CSV)
+              </button>
+              <button class="btn btn-secondary" onclick="exportPayoutsReport('pdf')" style="padding:12px; display:flex; align-items:center; justify-content:center; gap:10px; font-weight:600;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><path d="M14 2H6a2 2 0 0 0-2 2v16a2 2 0 0 0 2 2h12a2 2 0 0 0 2-2V8z"/><polyline points="14 2 14 8 20 8"/></svg>
+                Download Branded Ledger PDF
+              </button>
+            </div>
+          </div>
+
+          <!-- Right: Email Share Card -->
+          <div style="background:#fff; border:1px solid #e2e8f0; padding:24px; border-radius:10px;">
+            <h3 style="font-size:15px; font-weight:700; margin-bottom:8px; display:flex; align-items:center; gap:8px;">
+              ✉️ Email Ledger Report
+            </h3>
+            <p style="font-size:12px; color:#718096; margin-bottom:20px;">Attach and dispatch the filtered payouts ledger directly to team members or management.</p>
+            
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <div>
+                <label style="font-size:11px; font-weight:700; text-transform:uppercase; color:#718096; display:block; margin-bottom:6px;">Recipient Emails (comma separated)</label>
+                <input type="text" id="payout-email-recipients" placeholder="management@eximps-cloves.com, legal@eximps-cloves.com" class="form-control" style="font-size:12px; height:38px;">
+              </div>
+              
+              <div style="display:grid; grid-template-columns:1fr; gap:12px;">
+                <div>
+                  <label style="font-size:11px; font-weight:700; text-transform:uppercase; color:#718096; display:block; margin-bottom:6px;">Report Attachment Format</label>
+                  <select id="payout-email-format" class="form-control" style="font-size:12px; height:38px;">
+                    <option value="csv">Excel Spreadsheet (.CSV)</option>
+                    <option value="pdf">Branded PDF Document (.PDF)</option>
+                  </select>
+                </div>
+              </div>
+              
+              <div>
+                <label style="font-size:11px; font-weight:700; text-transform:uppercase; color:#718096; display:block; margin-bottom:6px;">Message Description (Optional)</label>
+                <textarea id="payout-email-message" rows="3" placeholder="Please find attached the Internal Payouts ledger report matching our filtered periods..." class="form-control" style="font-size:12px; resize:none; padding:8px;"></textarea>
+              </div>
+
+              <button class="btn btn-primary" onclick="emailPayoutsReport()" style="padding:12px; display:flex; align-items:center; justify-content:center; gap:10px; font-weight:600; margin-top:8px;">
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><line x1="22" y1="2" x2="11" y2="13"/><polygon points="22 2 15 22 11 13 2 9 22 2"/></svg>
+                Send Report Email
+              </button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- 5. PERMISSIONS TAB -->
+      <div class="payout-tab-content" id="payout-content-permissions" style="display:none;">
+        <div style="display:grid; grid-template-columns: 350px 1fr; gap:24px;">
+          <!-- Left: Grant Permission form -->
+          <div style="background:#fff; border:1px solid #e2e8f0; padding:20px; border-radius:10px;">
+            <h3 style="font-size:14px; font-weight:700; margin-bottom:16px;">Grant Dashboard Access</h3>
+            <div style="display:flex; flex-direction:column; gap:12px;">
+              <div>
+                <label style="font-size:11px; font-weight:700; text-transform:uppercase; color:#718096; display:block; margin-bottom:6px;">Select Staff Member</label>
+                <select id="payout-grant-admin-id" class="form-control" style="font-size:12px; height:38px;">
+                  <!-- Dynamically populated staff options -->
+                </select>
+              </div>
+              <button class="btn btn-primary" onclick="grantPayoutAccess()" style="padding:10px; font-weight:600; margin-top:8px; display:flex; align-items:center; justify-content:center; gap:8px;">
+                <svg width="14" height="14" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5"><path d="M16 21v-2a4 4 0 0 0-4-4H5a4 4 0 0 0-4 4v2"/><circle cx="9" cy="7" r="4"/><line x1="19" y1="8" x2="19" y2="14"/><line x1="16" y1="11" x2="22" y2="11"/></svg>
+                Grant Access
+              </button>
+            </div>
+          </div>
+
+          <!-- Right: Access List Table -->
+          <div style="background:#fff; border:1px solid #e2e8f0; padding:20px; border-radius:10px;">
+            <h3 style="font-size:14px; font-weight:700; margin-bottom:16px;">Active Access Authorizations</h3>
+            <div class="table-responsive">
+              <table class="data-table" style="font-size:11px;">
+                <thead>
+                  <tr>
+                    <th>Full Name</th>
+                    <th>Email</th>
+                    <th>Role</th>
+                    <th>Type of Access</th>
+                    <th>Granted By</th>
+                    <th style="text-align:center;">Action</th>
+                  </tr>
+                </thead>
+                <tbody id="payout-access-list-body">
+                  <!-- Dynamically populated rows -->
+                </tbody>
+              </table>
+            </div>
+          </div>
+        </div>
+      </div>
     </div>
 
 
@@ -4051,6 +4292,9 @@
       const hasRole = (r) => roles.includes(r);
       const isAdmin = hasRole('admin') || hasRole('super_admin');
 
+      if (name === 'internal-payouts' && !hasInternalPayoutsAccess) {
+        toast('Access restricted to authorized personnel', 'error'); return;
+      }
       if (['team', 'analytics-revenue', 'reports', 'sales-reps', 'commissions', 'refunds', 'discount-codes'].includes(name) && !isAdmin) {
         toast('Access restricted to administrators', 'error'); return;
       }
@@ -4060,7 +4304,7 @@
       if (name === 'marketing' && !isAdmin && !hasRole('marketing')) {
         toast('Access restricted to marketing staff', 'error'); return;
       }
-      ['dashboard', 'invoices', 'clients', 'properties', 'team', 'profile', 'verifications', 'analytics-revenue', 'reports', 'sales-reps', 'signatures', 'marketing', 'refunds', 'discount-codes'].forEach(s => {
+      ['dashboard', 'invoices', 'clients', 'properties', 'team', 'profile', 'verifications', 'analytics-revenue', 'reports', 'sales-reps', 'signatures', 'marketing', 'refunds', 'discount-codes', 'internal-payouts'].forEach(s => {
         const el = document.getElementById(s === 'marketing' ? 'marketingSection' : 'section-' + s);
         if (el) el.style.display = s === name ? '' : 'none';
       });
@@ -4081,7 +4325,8 @@
         'signatures': 'Company Signatures & Seal',
         'marketing': 'Email Marketing',
         'refunds': 'Refund Requests',
-        'discount-codes': 'Discount Codes & Promotions'
+        'discount-codes': 'Discount Codes & Promotions',
+        'internal-payouts': 'Internal Payouts Ledger'
       };
       document.getElementById('pageTitle').textContent = titles[name] || name;
 
@@ -4103,6 +4348,7 @@
       if (name === 'reports') { loadSchedules(); setReportDates('this_month'); }
       if (name === 'refunds') loadRefunds();
       if (name === 'discount-codes') loadDiscountCodes();
+      if (name === 'internal-payouts') loadInternalPayouts();
     }
     let currentUserRole = 'staff';
     let currentTimeframe = '30d';
@@ -7550,10 +7796,359 @@
     }
 
 
+    // ── INTERNAL PAYOUTS LEDGER ──────────────
+    let hasInternalPayoutsAccess = false;
+    let payoutClientInvoices = [];
+
+    async function verifyInternalPayoutsAccess() {
+      try {
+        const res = await apiFetch('/api/analytics/internal-payouts/check-access');
+        if (res.ok) {
+          const data = await res.json();
+          hasInternalPayoutsAccess = data.has_access;
+          if (hasInternalPayoutsAccess) {
+            document.getElementById('nav-internal-payouts').style.display = '';
+            const roles = currentUserRole.split(',').map(r => r.trim());
+            if (roles.includes('super_admin')) {
+              document.getElementById('payout-btn-permissions').style.display = '';
+            }
+          }
+        }
+      } catch (e) {
+        console.error('Error verifying internal payouts access:', e);
+      }
+    }
+
+    function switchPayoutTab(tabName) {
+      document.querySelectorAll('.payout-tab-content').forEach(el => el.style.display = 'none');
+      document.querySelectorAll('[id^="payout-btn-"]').forEach(btn => {
+        btn.classList.remove('active');
+        btn.style.borderBottom = '2px solid transparent';
+        btn.style.background = 'none';
+      });
+
+      const selectedContent = document.getElementById('payout-content-' + tabName);
+      if (selectedContent) selectedContent.style.display = '';
+
+      const selectedBtn = document.getElementById('payout-btn-' + tabName);
+      if (selectedBtn) {
+        selectedBtn.classList.add('active');
+        selectedBtn.style.borderBottom = '2px solid #F5A623';
+        selectedBtn.style.background = 'rgba(245, 166, 35, 0.05)';
+      }
+
+      if (tabName === 'permissions') {
+        loadPayoutAccessList();
+      }
+    }
+
+    async function loadInternalPayouts() {
+      const start = document.getElementById('payout-start-date').value;
+      const end = document.getElementById('payout-end-date').value;
+      
+      let url = '/api/analytics/internal-payouts';
+      const params = [];
+      if (start) params.push(`start_date=${start}`);
+      if (end) params.push(`end_date=${end}`);
+      if (params.length) url += '?' + params.join('&');
+
+      try {
+        const res = await apiFetch(url);
+        if (!res.ok) {
+          toast('Failed to load internal payouts ledger', 'error');
+          return;
+        }
+        const data = await res.json();
+        
+        const totals = data.company_totals;
+        document.getElementById('payout-stat-invoiced').innerText = '₦' + totals.total_invoiced.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById('payout-stat-land').innerText = '₦' + totals.total_land_cost.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById('payout-stat-allocation').innerText = '₦' + totals.total_allocation.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+        document.getElementById('payout-stat-documentation').innerText = '₦' + totals.total_documentation.toLocaleString(undefined, {minimumFractionDigits: 2, maximumFractionDigits: 2});
+
+        renderPayoutDonutChart(totals);
+        renderEstatesData(data.estate_breakdown);
+
+        payoutClientInvoices = data.client_invoices || [];
+        renderPayoutClientsTable(payoutClientInvoices);
+
+      } catch (e) {
+        console.error(e);
+        toast('Error fetching internal payouts ledger', 'error');
+      }
+    }
+
+    function renderPayoutDonutChart(totals) {
+      if (charts.payoutDonut) {
+        charts.payoutDonut.destroy();
+      }
+      const ctx = document.getElementById('payoutDonutChart').getContext('2d');
+      charts.payoutDonut = new Chart(ctx, {
+        type: 'doughnut',
+        data: {
+          labels: ['Land Cost Portion', 'Allocation Fee', 'Documentation Fee'],
+          datasets: [{
+            data: [totals.total_land_cost, totals.total_allocation, totals.total_documentation],
+            backgroundColor: ['#2f855a', '#c05621', '#7b341e'],
+            borderWidth: 1
+          }]
+        },
+        options: {
+          responsive: true,
+          maintainAspectRatio: false,
+          plugins: {
+            legend: {
+              position: 'bottom',
+              labels: {
+                boxWidth: 12,
+                font: { size: 10 }
+              }
+            }
+          }
+        }
+      });
+    }
+
+    function renderEstatesData(estates) {
+      const listEl = document.getElementById('payout-top-estates-list');
+      if (!estates || !estates.length) {
+        listEl.innerHTML = '<div style="color:#718096; text-align:center; font-size:12px;">No estate transactions.</div>';
+      } else {
+        const sorted = [...estates].sort((a,b) => b.total_amount - a.total_amount);
+        const maxVal = sorted[0].total_amount || 1;
+        
+        listEl.innerHTML = sorted.slice(0, 4).map(est => {
+          const pct = Math.round((est.total_amount / maxVal) * 100);
+          return `
+            <div>
+              <div style="display:flex; justify-content:space-between; font-size:12px; font-weight:600; margin-bottom:4px;">
+                <span>${est.property_name}</span>
+                <span>₦${est.total_amount.toLocaleString(undefined, {maximumFractionDigits:0})}</span>
+              </div>
+              <div style="width:100%; height:6px; background:#edf2f7; border-radius:3px; overflow:hidden;">
+                <div style="width:${pct}%; height:100%; background:#F5A623; border-radius:3px;"></div>
+              </div>
+            </div>
+          `;
+        }).join('');
+      }
+
+      const tbody = document.getElementById('payout-table-estates-body');
+      if (!estates || !estates.length) {
+        tbody.innerHTML = '<tr><td colspan="6" style="text-align:center; padding:20px; color:#718096;">No estate data.</td></tr>';
+      } else {
+        tbody.innerHTML = estates.map(est => `
+          <tr>
+            <td style="font-weight:700; color:var(--dark);">${est.property_name}</td>
+            <td style="text-align:right; font-weight:700;">₦${est.total_amount.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+            <td style="text-align:right; color:#2f855a;">₦${est.land_cost.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+            <td style="text-align:right; color:#c05621;">₦${est.allocation_fee.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+            <td style="text-align:right; color:#7b341e;">₦${est.documentation_fee.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+            <td style="text-align:center; font-weight:600; background:#f7fafc;">${est.payment_count}</td>
+          </tr>
+        `).join('');
+      }
+    }
+
+    function renderPayoutClientsTable(invoices) {
+      const tbody = document.getElementById('payout-table-clients-body');
+      if (!invoices || !invoices.length) {
+        tbody.innerHTML = '<tr><td colspan="8" style="text-align:center; padding:20px; color:#718096;">No transaction records found.</td></tr>';
+      } else {
+        tbody.innerHTML = invoices.map(inv => {
+          const splitBadge = inv.has_splits 
+            ? '' 
+            : ' <span style="background:#e53e3e; color:#fff; padding:1px 4px; border-radius:3px; font-size:8px; font-weight:700; vertical-align:middle;">LEGACY (100% Split)</span>';
+          return `
+            <tr>
+              <td style="font-family:monospace; font-weight:700; color:var(--gold-dark);">#${inv.invoice_number}</td>
+              <td style="font-weight:600;">${inv.client_name}<br><span style="font-size:10px; color:#718096; font-weight:normal;">${inv.client_email}</span></td>
+              <td>${inv.property_name}</td>
+              <td style="white-space:nowrap;">${inv.invoice_date}</td>
+              <td style="text-align:right; font-weight:700;">₦${inv.amount.toLocaleString(undefined, {minimumFractionDigits:2})}${splitBadge}</td>
+              <td style="text-align:right; font-weight:600; color:#2f855a;">₦${inv.land_cost.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+              <td style="text-align:right; color:#c05621;">₦${inv.allocation_fee.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+              <td style="text-align:right; color:#7b341e;">₦${inv.documentation_fee.toLocaleString(undefined, {minimumFractionDigits:2})}</td>
+            </tr>
+          `;
+        }).join('');
+      }
+    }
+
+    function filterPayoutClients() {
+      const q = document.getElementById('payout-client-search').value.toLowerCase().trim();
+      if (!q) {
+        renderPayoutClientsTable(payoutClientInvoices);
+        return;
+      }
+      const filtered = payoutClientInvoices.filter(inv => 
+        inv.invoice_number.toLowerCase().includes(q) ||
+        inv.client_name.toLowerCase().includes(q) ||
+        inv.client_email.toLowerCase().includes(q) ||
+        inv.property_name.toLowerCase().includes(q)
+      );
+      renderPayoutClientsTable(filtered);
+    }
+
+    async function exportPayoutsReport(format) {
+      const start = document.getElementById('payout-start-date').value;
+      const end = document.getElementById('payout-end-date').value;
+      let url = `/api/analytics/internal-payouts/export?format=${format}`;
+      if (start) url += `&start_date=${start}`;
+      if (end) url += `&end_date=${end}`;
+      
+      toast('Generating report...', 'info');
+      try {
+        const res = await apiFetch(url);
+        if (!res.ok) {
+          throw new Error('Export failed');
+        }
+        const blob = await res.blob();
+        const downloadUrl = window.URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = downloadUrl;
+        a.download = `Internal_Payouts_Report_${start || 'all'}_to_${end || 'all'}.${format}`;
+        document.body.appendChild(a);
+        a.click();
+        a.remove();
+        window.URL.revokeObjectURL(downloadUrl);
+        toast('Report downloaded successfully', 'success');
+      } catch (e) {
+        console.error(e);
+        toast('Failed to download report', 'error');
+      }
+    }
+
+    async function emailPayoutsReport() {
+      const recipientInput = document.getElementById('payout-email-recipients').value.trim();
+      if (!recipientInput) {
+        toast('Please enter at least one recipient email address', 'error');
+        return;
+      }
+      const emails = recipientInput.split(',').map(e => e.trim()).filter(e => e);
+      const format = document.getElementById('payout-email-format').value;
+      const message = document.getElementById('payout-email-message').value.trim();
+      const start_date = document.getElementById('payout-start-date').value;
+      const end_date = document.getElementById('payout-end-date').value;
+      
+      const payload = {
+        emails,
+        format,
+        message: message || null,
+        start_date: start_date || null,
+        end_date: end_date || null
+      };
+      
+      toast('Sending report email...', 'info');
+      try {
+        const res = await apiFetch('/api/analytics/internal-payouts/send-report', {
+          method: 'POST',
+          body: JSON.stringify(payload)
+        });
+        if (res.ok) {
+          toast('Report sent successfully!', 'success');
+          document.getElementById('payout-email-recipients').value = '';
+          document.getElementById('payout-email-message').value = '';
+        } else {
+          const err = await res.json();
+          toast(err.detail || 'Failed to send report email', 'error');
+        }
+      } catch (e) {
+        console.error(e);
+        toast('Error sending report email', 'error');
+      }
+    }
+
+    async function loadPayoutAccessList() {
+      const tbody = document.getElementById('payout-access-list-body');
+      tbody.innerHTML = '<tr><td colspan="6"><div class="loading"><span class="spinner"></span>Loading permissions...</div></td></tr>';
+      try {
+        const res = await apiFetch('/api/analytics/internal-payouts/access');
+        if (!res.ok) {
+          tbody.innerHTML = '<tr><td colspan="6">Failed to load permissions list</td></tr>';
+          return;
+        }
+        const list = await res.json();
+        
+        tbody.innerHTML = list.map(item => {
+          const revokeBtn = item.can_revoke
+            ? `<button class="action-btn" style="background:#e74c3c; color:#fff; border-color:#e74c3c; padding:2px 8px; font-size:10px;" onclick="revokePayoutAccess('${item.admin_id}')">Revoke</button>`
+            : '—';
+          return `
+            <tr>
+              <td style="font-weight:600;">${item.full_name}</td>
+              <td>${item.email}</td>
+              <td><span style="background:#edf2f7; padding:2px 6px; border-radius:4px; font-size:10px;">${item.role}</span></td>
+              <td style="font-weight:600; color: ${item.access_type.includes('Role') ? '#2b6cb0' : '#d69e2e'};">${item.access_type}</td>
+              <td>${item.granted_by}</td>
+              <td style="text-align:center;">${revokeBtn}</td>
+            </tr>
+          `;
+        }).join('');
+        
+        const teamRes = await apiFetch('/auth/admins');
+        if (teamRes.ok) {
+          const team = await teamRes.json();
+          const select = document.getElementById('payout-grant-admin-id');
+          const candidates = team.filter(member => {
+            const r = (member.role || '').toLowerCase();
+            return !r.includes('super_admin') && !member.is_archived;
+          });
+          select.innerHTML = candidates.map(c => `<option value="${c.id}">${c.full_name} (${c.role || 'Staff'}) - ${c.email}</option>`).join('');
+        }
+      } catch (e) {
+        console.error(e);
+        tbody.innerHTML = '<tr><td colspan="6">Error loading permissions</td></tr>';
+      }
+    }
+
+    async function grantPayoutAccess() {
+      const adminId = document.getElementById('payout-grant-admin-id').value;
+      if (!adminId) {
+        toast('Please select a staff member first', 'error');
+        return;
+      }
+      try {
+        const res = await apiFetch('/api/analytics/internal-payouts/access', {
+          method: 'POST',
+          body: JSON.stringify({ admin_id: adminId })
+        });
+        if (res.ok) {
+          toast('Access granted successfully', 'success');
+          loadPayoutAccessList();
+        } else {
+          toast('Failed to grant access', 'error');
+        }
+      } catch (e) {
+        console.error(e);
+        toast('Error granting access', 'error');
+      }
+    }
+
+    async function revokePayoutAccess(adminId) {
+      if (!confirm('Are you sure you want to revoke custom access for this staff member?')) return;
+      try {
+        const res = await apiFetch(`/api/analytics/internal-payouts/access/${adminId}`, {
+          method: 'DELETE'
+        });
+        if (res.ok) {
+          toast('Access revoked successfully', 'success');
+          loadPayoutAccessList();
+        } else {
+          toast('Failed to revoke access', 'error');
+        }
+      } catch (e) {
+        console.error(e);
+        toast('Error revoking access', 'error');
+      }
+    }
+
+
     // ── INIT ──────────────────────────────────
     checkAuth().then(() => {
       loadDashboard();
       updateVerificationsBadge();
+      verifyInternalPayoutsAccess();
     });
   </script>
   <script src="/static/js/commission.js"></script>
