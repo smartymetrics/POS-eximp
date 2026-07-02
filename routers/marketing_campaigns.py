@@ -409,9 +409,9 @@ async def sync_campaign_stats(id: str, current_admin=Depends(verify_token)):
     clicks_res = await db_execute(lambda: db.table("campaign_recipients").select("contact_id", count="exact").eq("campaign_id", id).not_.is_("clicked_at", "null").execute())
     total_clicks = clicks_res.count or 0
     
-    # 6. Count Attributed revenue (sum of paid invoices linked to this campaign)
-    revenue_res = await db_execute(lambda: db.table("invoices").select("amount").eq("marketing_campaign_id", id).eq("status", "paid").execute())
-    total_revenue = sum([i["amount"] for i in revenue_res.data]) if revenue_res.data else 0
+    # 6. Count Attributed revenue (sum of amount_paid of non-voided invoices linked to this campaign)
+    revenue_res = await db_execute(lambda: db.table("invoices").select("amount_paid").eq("marketing_campaign_id", id).neq("status", "voided").execute())
+    total_revenue = sum([i["amount_paid"] for i in revenue_res.data]) if revenue_res.data else 0
     
     # 7. Update Campaign Table with corrected counts
     db.table("email_campaigns").update({

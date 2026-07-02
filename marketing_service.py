@@ -615,13 +615,17 @@ async def broadcast_campaign(campaign_id: str, segment_ids: List[str] = None, ma
             return
 
         # 2. Check if recipients queue already exists (resuming from pause or safety brake)
-        existing_recipients_res = db.table("campaign_recipients").select("contact_id, status").eq("campaign_id", campaign_id).execute()
+        existing_recipients_res = db.table("campaign_recipients").select("contact_id, status, variant").eq("campaign_id", campaign_id).execute()
         has_existing_queue = bool(existing_recipients_res.data)
 
         if has_existing_queue:
             # Resuming — only process contacts still marked 'pending'. Never re-send to 'sent' ones.
-            pending_ids = [r["contact_id"] for r in existing_recipients_res.data if r["status"] == "pending"]
-            already_sent_count = len([r for r in existing_recipients_res.data if r["status"] == "sent"])
+            # Preserve the original variant assignment stored in DB — do NOT re-split.
+            pending_rows = [r for r in existing_recipients_res.data if r["status"] == "pending"]
+            pending_ids = [r["contact_id"] for r in pending_rows]
+            # Build a lookup: contact_id -> variant (so we can restore the correct variant per contact)
+            pending_variant_map = {r["contact_id"]: r.get("variant", "A") for r in pending_rows}
+            already_sent_count = len([r for r in existing_recipients_res.data if r["status"] in ("sent", "delivered")])
             if already_sent_count > 0:
                 logger.info(f"Resume: skipping {already_sent_count} already-sent contacts for campaign {campaign_id}.")
 
@@ -646,9 +650,24 @@ async def broadcast_campaign(campaign_id: str, segment_ids: List[str] = None, ma
                 logger.error(f"No recipients for campaign {campaign_id} with targets {segment_ids} / {manual_emails}")
                 return
 
-            queue_data = [{"campaign_id": campaign_id, "contact_id": r["id"], "status": "pending"} for r in recipients]
-            if queue_data:
-                db.table("campaign_recipients").upsert(queue_data).execute()
+            # Pre-assign variants BEFORE inserting into the queue.
+            # We split here so that the variant is recorded immediately — regardless of
+            # whether the actual send later succeeds or fails. This prevents all contacts
+            # from defaulting to 'A' when B-sends fail or the campaign is paused mid-batch.
+            is_ab_pre = campaign.get("is_ab_test", False)
+            subject_b_pre = campaign.get("subject_b")
+            html_body_b_pre = campaign.get("html_body_b")
+            if is_ab_pre and subject_b_pre and html_body_b_pre:
+                midpoint_pre = len(recipients) // 2
+                pre_queue_data = [
+                    {"campaign_id": campaign_id, "contact_id": r["id"], "status": "pending", "variant": "A" if idx < midpoint_pre else "B"}
+                    for idx, r in enumerate(recipients)
+                ]
+            else:
+                pre_queue_data = [{"campaign_id": campaign_id, "contact_id": r["id"], "status": "pending", "variant": "A"} for r in recipients]
+
+            if pre_queue_data:
+                db.table("campaign_recipients").upsert(pre_queue_data).execute()
 
         # 4. Update status to sending
         update_data = {"status": "sending"}
@@ -657,26 +676,33 @@ async def broadcast_campaign(campaign_id: str, segment_ids: List[str] = None, ma
         db.table("email_campaigns").update(update_data).eq("id", campaign_id).execute()
 
         # 5. A/B Split Logic
+        # Variants were already pre-assigned in the queue at insertion time (fresh send)
+        # or restored from DB (resume). We rebuild 'targets' list honoring those assignments.
         is_ab = campaign.get("is_ab_test", False)
         subject_b = campaign.get("subject_b")
         html_body_b = campaign.get("html_body_b")
         preview_text_b = campaign.get("preview_text_b")
 
-        if is_ab and subject_b and html_body_b:
+        if has_existing_queue:
+            # On resume: use the variant already recorded in the DB for each pending contact.
+            targets = []
+            for contact in recipients:
+                v = pending_variant_map.get(contact["id"], "A")
+                targets.append((contact, v))
+        elif is_ab and subject_b and html_body_b:
+            # Fresh send: split was pre-assigned in queue_data above; rebuild targets list
+            # in the same order so A/B interleaving matches the pre-assigned variants.
             midpoint = len(recipients) // 2
             group_a = recipients[:midpoint]
             group_b = recipients[midpoint:]
+            targets = []
+            for i in range(max(len(group_a), len(group_b))):
+                if i < len(group_a):
+                    targets.append((group_a[i], "A"))
+                if i < len(group_b):
+                    targets.append((group_b[i], "B"))
         else:
-            group_a = recipients
-            group_b = []
-
-        # Interleave A/B targets for even distribution per batch
-        targets = []
-        for i in range(max(len(group_a), len(group_b))):
-            if i < len(group_a):
-                targets.append((group_a[i], "A"))
-            if i < len(group_b):
-                targets.append((group_b[i], "B"))
+            targets = [(r, "A") for r in recipients]
 
         async def send_variant(contact, variant_label, subject_override=None, body_override=None, preview_override=None):
             camp_copy = dict(campaign)
@@ -687,8 +713,7 @@ async def broadcast_campaign(campaign_id: str, segment_ids: List[str] = None, ma
             if preview_override:
                 camp_copy["preview_text"] = preview_override
             result = await send_marketing_email(camp_copy, contact)
-            if result and campaign.get("status") != "test":
-                db.table("campaign_recipients").update({"variant": variant_label}).eq("campaign_id", campaign_id).eq("contact_id", contact["id"]).execute()
+            # NOTE: No need to update variant here — it was pre-assigned at queue time.
             return result
 
         # 6. Batch send (throttled)

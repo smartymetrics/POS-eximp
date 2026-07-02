@@ -72,8 +72,8 @@ async def get_marketing_overview(current_admin=Depends(verify_token)):
 
     # 6. Total Attributed Revenue & Segment ROI/CPA
     try:
-        revenue_res = await db_execute(lambda: db.table("invoices").select("amount, marketing_campaign_id").not_.is_("marketing_campaign_id", "null").eq("status", "paid").execute())
-        total_revenue = sum([i["amount"] for i in revenue_res.data]) if revenue_res.data else 0
+        revenue_res = await db_execute(lambda: db.table("invoices").select("amount_paid, marketing_campaign_id").not_.is_("marketing_campaign_id", "null").neq("status", "voided").execute())
+        total_revenue = sum([i["amount_paid"] for i in revenue_res.data]) if revenue_res.data else 0
         attributed_invoices = revenue_res.data or []
     except Exception:
         total_revenue = 0
@@ -214,21 +214,25 @@ async def get_campaign_report(id: str, current_admin=Depends(verify_token)):
         report_data["ab_stats"] = {
             "variant_a": {
                 "subject": campaign.get("subject_a"),
-                "sent": total_a,
+                "total_assigned": total_a,
+                # "sent" = actually sent or delivered (not pending/failed)
+                "sent": len([r for r in recs_a if r["status"] in ("sent", "delivered")]),
                 "delivered": delivered_a,
                 "opened": opened_a,
                 "clicked": clicked_a,
-                "open_rate": (opened_a/total_a*100) if total_a > 0 else 0,
-                "click_rate": (clicked_a/total_a*100) if total_a > 0 else 0,
+                # Rates use delivered as denominator (most accurate); fall back to total_a
+                "open_rate": (opened_a/delivered_a*100) if delivered_a > 0 else 0,
+                "click_rate": (clicked_a/delivered_a*100) if delivered_a > 0 else 0,
             },
             "variant_b": {
                 "subject": campaign.get("subject_b") or (campaign.get("subject_a") + " (Variant B)"),
-                "sent": total_b,
+                "total_assigned": total_b,
+                "sent": len([r for r in recs_b if r["status"] in ("sent", "delivered")]),
                 "delivered": delivered_b,
                 "opened": opened_b,
                 "clicked": clicked_b,
-                "open_rate": (opened_b/total_b*100) if total_b > 0 else 0,
-                "click_rate": (clicked_b/total_b*100) if total_b > 0 else 0,
+                "open_rate": (opened_b/delivered_b*100) if delivered_b > 0 else 0,
+                "click_rate": (clicked_b/delivered_b*100) if delivered_b > 0 else 0,
             }
         }
     return report_data
@@ -252,11 +256,11 @@ async def get_campaign_conversions(id: str, current_admin=Depends(verify_token))
     """Fetch the list of actual invoices and clients that make up the campaign ROI."""
     db = get_db()
     
-    # Fetch paid invoices attributed to this campaign joined with client names
+    # Fetch non-voided invoices attributed to this campaign joined with client names
     res = db.table("invoices")\
-        .select("invoice_number, amount, paid_at, clients(full_name)")\
+        .select("invoice_number, amount_paid, paid_at, clients(full_name)")\
         .eq("marketing_campaign_id", id)\
-        .eq("status", "paid")\
+        .neq("status", "voided")\
         .order("paid_at", desc=True)\
         .execute()
         

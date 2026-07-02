@@ -106,10 +106,10 @@ async def create_ticket(data: SupportTicketCreate):
         client_id = client_res.data[0]["id"]
         ticket_payload["client_id"] = client_id
         
-        # Calculate LTV
-        inv_res = await db_execute(lambda: db.table("invoices").select("amount").eq("client_id", client_id).eq("status", "paid").execute())
+        # Calculate LTV based on amount_paid of non-voided invoices
+        inv_res = await db_execute(lambda: db.table("invoices").select("amount_paid").eq("client_id", client_id).neq("status", "voided").execute())
         if inv_res.data:
-            total_ltv = sum(i["amount"] for i in inv_res.data)
+            total_ltv = sum(i["amount_paid"] for i in inv_res.data)
             if total_ltv >= 10_000_000:
                 ticket_payload["priority"] = "high"
                 if not ticket_payload["subject"].startswith("[VIP]"):

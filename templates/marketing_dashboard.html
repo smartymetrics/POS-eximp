@@ -1653,6 +1653,10 @@
                         <p id="prof-source" class="text-xs text-gray-500 italic mt-1">Manual Entry</p>
                     </div>
                     <div>
+                        <label class="text-[10px] font-black text-gray-400 uppercase">Birthday</label>
+                        <p id="prof-dob" class="font-bold text-gray-800 mt-1">🎂 Not provided</p>
+                    </div>
+                    <div>
                         <label class="text-[10px] font-black text-gray-400 uppercase">Subscription Status</label>
                         <div id="prof-sub-pill" class="mt-1">
                             <span class="px-2 py-1 rounded bg-green-100 text-green-700 text-xs font-bold">Active
@@ -2269,6 +2273,7 @@
                         <td class="py-4">
                             <div class="font-bold">${c.first_name || ''} ${c.last_name || ''}</div>
                             <div class="text-xs text-gray-400">${c.email}</div>
+                            ${c.dob ? `<div class="text-[10px] text-gray-500 mt-1 flex items-center gap-1">🎂 ${c.dob}</div>` : ''}
                             ${c.source ? `<div class="text-[9px] bg-blue-50 text-blue-600 px-1.5 py-0.5 rounded w-fit mt-1 border border-blue-100 font-bold uppercase transition hover:bg-blue-100 cursor-help" title="Lead Source">${c.source}</div>` : ''}
                         </td>
                         <td class="capitalize text-sm">${c.contact_type}</td>
@@ -3521,6 +3526,7 @@
                 document.getElementById('prof-phone').innerText = contact.phone || 'No phone';
                 document.getElementById('prof-type').innerText = (contact.contact_type || 'lead').toUpperCase();
                 document.getElementById('prof-source').innerText = contact.source || 'Manual Entry';
+                document.getElementById('prof-dob').innerText = contact.dob ? `🎂 ${contact.dob}` : '🎂 Not provided';
 
                 // Load history
                 const histRes = await fetch(`/api/marketing/contacts/${id}/history`, {

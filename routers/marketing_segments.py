@@ -10,8 +10,8 @@ from marketing_service import apply_segment_filters, get_financial_segment_conta
 async def inject_ltv(contacts: List[Dict]):
     if not contacts: return contacts
     db = get_db()
-    # Fetch all paid invoices to calculate LTV
-    inv_res = await db_execute(lambda: db.table("invoices").select("client_id, amount").eq("status", "paid").execute())
+    # Fetch all non-voided invoices to calculate LTV based on amount_paid
+    inv_res = await db_execute(lambda: db.table("invoices").select("client_id, amount_paid").neq("status", "voided").execute())
     invoices = inv_res.data or []
     
     # Map LTV to client_id
@@ -19,7 +19,7 @@ async def inject_ltv(contacts: List[Dict]):
     for inv in invoices:
         cid = inv.get("client_id")
         if cid:
-            ltv_map[cid] = ltv_map.get(cid, 0) + float(inv.get("amount") or 0)
+            ltv_map[cid] = ltv_map.get(cid, 0) + float(inv.get("amount_paid") or 0)
     
     # Inject LTV into contacts
     for contact in contacts:

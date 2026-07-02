@@ -47,10 +47,10 @@ async def list_contacts(current_admin=Depends(verify_token), type: Optional[str]
     result = await db_execute(lambda: query.execute())
     contacts = result.data or []
     
-    # Financial Bridge: Calculate LTV for each contact
+    # Financial Bridge: Calculate LTV and sync client DOBs for each contact
     if contacts:
-        # Fetch all paid invoices to calculate LTV
-        inv_res = await db_execute(lambda: db.table("invoices").select("client_id, amount").eq("status", "paid").execute())
+        # Fetch all non-voided invoices to calculate LTV based on amount_paid
+        inv_res = await db_execute(lambda: db.table("invoices").select("client_id, amount_paid").neq("status", "voided").execute())
         invoices = inv_res.data or []
         
         # Map LTV to client_id
@@ -58,12 +58,21 @@ async def list_contacts(current_admin=Depends(verify_token), type: Optional[str]
         for inv in invoices:
             cid = inv.get("client_id")
             if cid:
-                ltv_map[cid] = ltv_map.get(cid, 0) + float(inv.get("amount") or 0)
+                ltv_map[cid] = ltv_map.get(cid, 0) + float(inv.get("amount_paid") or 0)
         
-        # Inject LTV into contacts
+        # Fetch client DOBs
+        client_ids = [c.get("client_id") for c in contacts if c.get("client_id")]
+        client_dob_map = {}
+        if client_ids:
+            clients_res = await db_execute(lambda: db.table("clients").select("id, dob").in_("id", client_ids).execute())
+            client_dob_map = {cl["id"]: cl.get("dob") for cl in (clients_res.data or []) if cl.get("dob")}
+        
+        # Inject LTV and DOB into contacts
         for contact in contacts:
             cid = contact.get("client_id")
             contact["total_revenue_attributed"] = ltv_map.get(cid, 0) if cid else 0
+            if cid and not contact.get("dob") and cid in client_dob_map:
+                contact["dob"] = client_dob_map[cid]
             
     return contacts
 
@@ -102,7 +111,17 @@ async def update_contact(id: str, data: ContactUpdate, current_admin=Depends(ver
     update_dict["updated_at"] = datetime.utcnow().isoformat()
     
     result = await db_execute(lambda: db.table("marketing_contacts").update(update_dict).eq("id", id).execute())
-    return result.data[0]
+    if result.data:
+        updated_contact = result.data[0]
+        cid = updated_contact.get("client_id")
+        if cid and "dob" in update_dict:
+            # Sync DOB changes to the clients table
+            await db_execute(lambda: db.table("clients").update({
+                "dob": update_dict["dob"],
+                "updated_at": datetime.utcnow().isoformat()
+            }).eq("id", cid).execute())
+        return updated_contact
+    return None
 
 @router.patch("/{id}/unsubscribe")
 async def unsubscribe_contact(id: str, current_admin=Depends(verify_token)):
@@ -175,11 +194,16 @@ async def get_contact(id: str, current_admin=Depends(verify_token)):
     contact = res.data[0]
     cid = contact.get("client_id")
     
-    # Fetch LTV for this specific client
+    # Fetch LTV and DOB for this specific client
     ltv = 0
     if cid:
-        inv_res = await db_execute(lambda: db.table("invoices").select("amount").eq("client_id", cid).eq("status", "paid").execute())
-        ltv = sum([float(inv.get("amount") or 0) for inv in inv_res.data or []])
+        inv_res = await db_execute(lambda: db.table("invoices").select("amount_paid").eq("client_id", cid).neq("status", "voided").execute())
+        ltv = sum([float(inv.get("amount_paid") or 0) for inv in inv_res.data or []])
+        
+        if not contact.get("dob"):
+            client_res = await db_execute(lambda: db.table("clients").select("dob").eq("id", cid).execute())
+            if client_res.data and client_res.data[0].get("dob"):
+                contact["dob"] = client_res.data[0]["dob"]
     
     contact["total_revenue_attributed"] = ltv
     return contact

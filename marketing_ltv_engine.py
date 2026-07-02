@@ -16,7 +16,7 @@ async def refresh_marketing_ltv_stats():
         # 1. Fetch total paid per email from invoices
         revenue_res = db.table("invoices")\
             .select("amount_paid, clients(email)")\
-            .eq("status", "paid")\
+            .neq("status", "voided")\
             .execute()
         
         if not revenue_res.data:
