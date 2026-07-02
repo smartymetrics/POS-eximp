@@ -987,6 +987,46 @@
     </div>
   </div>
 
+  <!-- TEST SEND MODAL -->
+  <div id="test-send-modal" class="modal-overlay hidden">
+    <div class="modal-box" style="max-width:500px;">
+      <div class="modal-header">
+        <div>
+          <h2 style="font-family:'Playfair Display',serif;color:white;">🧪 Send Test Email</h2>
+          <p style="color:#888;font-size:0.85rem;">Test how your email looks before sending it to the public.</p>
+        </div>
+        <button class="modal-close" onclick="closeTestSendModal()">✕</button>
+      </div>
+      <div class="modal-body" style="padding:24px;">
+        <!-- Test Type Selector -->
+        <div style="display:flex;background:#111;border:1px solid #333;border-radius:8px;padding:4px;margin-bottom:20px;">
+          <button id="test-type-email-btn" onclick="setTestType('email')" style="flex:1;text-align:center;font-size:0.8rem;font-weight:700;padding:8px;border-radius:6px;background:#C47D0A;color:white;border:none;outline:none;cursor:pointer;transition:all 0.2s;">📧 Single Email</button>
+          <button id="test-type-segment-btn" onclick="setTestType('segment')" style="flex:1;text-align:center;font-size:0.8rem;font-weight:700;padding:8px;border-radius:6px;color:#888;border:none;outline:none;cursor:pointer;transition:all 0.2s;background:transparent;">🗂️ Entire Segment</button>
+        </div>
+
+        <!-- Single Email Input -->
+        <div id="test-email-container">
+          <label style="color:#aaa;font-size:0.8rem;text-transform:uppercase;font-weight:700;letter-spacing:1px;display:block;margin-bottom:8px;">Recipient Email Address</label>
+          <input type="email" id="test-email-input" style="width:100%;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#ccc;padding:10px;font-size:0.85rem;outline:none;margin-bottom:12px;" placeholder="e.g. tester@example.com">
+          <p style="color:#555;font-size:0.75rem;margin-top:2px;">Type a specific address. If it matches an active lead/client, their custom name/financial attributes will render.</p>
+        </div>
+
+        <!-- Segment Select -->
+        <div id="test-segment-container" class="hidden" style="display:none;">
+          <label style="color:#aaa;font-size:0.8rem;text-transform:uppercase;font-weight:700;letter-spacing:1px;display:block;margin-bottom:8px;">Target Segment</label>
+          <select id="test-segment-select" style="width:100%;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#ccc;padding:10px;font-size:0.85rem;outline:none;margin-bottom:12px;cursor:pointer;">
+            <option value="">Loading segments...</option>
+          </select>
+          <p style="color:#555;font-size:0.75rem;margin-top:2px;">Select a segment to send this test to. Helpful for reviewing bulk behavior and variables in dynamic pools.</p>
+        </div>
+      </div>
+      <div class="modal-footer">
+        <button class="btn btn-gray" onclick="closeTestSendModal()">Cancel</button>
+        <button class="btn" id="test-confirm-btn" onclick="executeTestSend()" style="background:#C47D0A;">🧪 Send Test</button>
+      </div>
+    </div>
+  </div>
+
   <!-- SEND CAMPAIGN MODAL -->
   <div id="send-modal" class="modal-overlay hidden">
     <div class="modal-box" style="max-width:600px;">
@@ -3103,9 +3143,97 @@
        // This is expensive to run on every keystroke, better to do it on switch or save
     });
 
-    document.getElementById('send-test').onclick = async () => {
-      const email = prompt('Enter an email address to send the test to:');
-      if (!email) return;
+    let testType = 'email';
+
+    document.getElementById('send-test').onclick = () => {
+      openTestSendModal();
+    };
+
+    function openTestSendModal() {
+      document.getElementById('test-email-input').value = '';
+      setTestType('email');
+      loadTestSegments();
+      
+      const el = document.getElementById('test-send-modal');
+      el.classList.remove('hidden');
+      el.style.display = 'flex';
+    }
+
+    function closeTestSendModal() {
+      const el = document.getElementById('test-send-modal');
+      el.classList.add('hidden');
+      el.style.display = 'none';
+    }
+
+    function setTestType(type) {
+      testType = type;
+      const emailBtn = document.getElementById('test-type-email-btn');
+      const segBtn = document.getElementById('test-type-segment-btn');
+      const emailContainer = document.getElementById('test-email-container');
+      const segContainer = document.getElementById('test-segment-container');
+
+      if (type === 'email') {
+        emailBtn.style.background = '#C47D0A';
+        emailBtn.style.color = 'white';
+        segBtn.style.background = 'transparent';
+        segBtn.style.color = '#888';
+        emailContainer.style.display = 'block';
+        segContainer.style.display = 'none';
+      } else {
+        segBtn.style.background = '#C47D0A';
+        segBtn.style.color = 'white';
+        emailBtn.style.background = 'transparent';
+        emailBtn.style.color = '#888';
+        emailContainer.style.display = 'none';
+        segContainer.style.display = 'block';
+      }
+    }
+
+    async function loadTestSegments() {
+      const select = document.getElementById('test-segment-select');
+      try {
+        const res = await fetch('/api/marketing/segments/', {
+          headers: { 'Authorization': 'Bearer ' + localStorage.getItem('ec_token') }
+        });
+        const customSegments = await res.json();
+        
+        let options = `
+          <option value="">Select a segment...</option>
+          <option value="engaged">Engaged (Users who opened your mails)</option>
+          <option value="hot">Hot Leads (Engagement Score > 50)</option>
+          <option value="recent">Recent Signups (Last 30 days)</option>
+          <option value="failed_deliveries">⚠️ Undelivered (Had Campaign Errors)</option>
+          <optgroup label="Financial Activity">
+              <option value="financial_overdue">🔴 Overdue Clients (Missed Deadline)</option>
+              <option value="financial_outstanding">🟡 Outstanding Balance (Partial Paid)</option>
+              <option value="financial_paid_fully">🟢 Fully Paid (Completed)</option>
+          </optgroup>
+          <optgroup label="Custom Segments">
+        `;
+        customSegments.forEach(s => {
+          options += `<option value="${s.id}">${s.name}</option>`;
+        });
+        options += `</optgroup>`;
+        select.innerHTML = options;
+      } catch (e) {
+        console.error("Error loading test segments:", e);
+        select.innerHTML = '<option value="">Failed to load segments</option>';
+      }
+    }
+
+    async function executeTestSend() {
+      const btn = document.getElementById('test-confirm-btn');
+      const email = document.getElementById('test-email-input').value.trim();
+      const segmentId = document.getElementById('test-segment-select').value;
+
+      if (testType === 'email' && !email) {
+        alert('Please enter a recipient email.');
+        return;
+      }
+      if (testType === 'segment' && !segmentId) {
+        alert('Please select a target segment.');
+        return;
+      }
 
       // Ensure current variant is in memory
       variantData[activeVariant].subject = document.getElementById('subject-field').value;
@@ -3116,7 +3244,8 @@
       }
 
       const payload = {
-        email: email,
+        email: testType === 'email' ? email : null,
+        segment_id: testType === 'segment' ? segmentId : null,
         variant: activeVariant,
         subject_a: variantData['A'].subject,
         html_body_a: variantData['A'].html,
@@ -3124,21 +3253,30 @@
         html_body_b: variantData['B'].html
       };
 
+      btn.disabled = true;
+      btn.innerText = '⏳ Sending...';
+
       try {
         const res = await fetch(`/api/marketing/campaigns/${campaignId}/send-test`, {
           method: 'POST',
           headers: { 'Content-Type': 'application/json', 'Authorization': 'Bearer ' + localStorage.getItem('ec_token') },
           body: JSON.stringify(payload)
         });
+        const data = await res.json();
         if (res.ok) {
-          alert(`✅ Test email (Variant ${activeVariant}) sent to ${email}`);
+          alert(data.message || `✅ Test email sent!`);
+          closeTestSendModal();
         } else {
-          alert("❌ Failed to send test email");
+          alert("❌ Failed: " + (data.detail || "Error sending test email"));
         }
       } catch (e) {
         console.error(e);
+        alert("❌ Error sending test email");
+      } finally {
+        btn.disabled = false;
+        btn.innerText = '🧪 Send Test';
       }
-    };
+    }
 
     function openEditorGuide() {
       document.getElementById('editor-guide-modal').classList.remove('hidden');

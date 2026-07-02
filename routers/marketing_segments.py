@@ -71,7 +71,15 @@ async def create_segment(data: SegmentCreate, current_admin=Depends(verify_token
 @router.delete("/{id}")
 async def delete_segment(id: str, current_admin=Depends(verify_token)):
     db = get_db()
+    # Fetch name before deleting for the log message
+    seg_res = await db_execute(lambda: db.table("marketing_segments").select("name").eq("id", id).execute())
+    seg_name = seg_res.data[0].get("name", id) if seg_res.data else id
     await db_execute(lambda: db.table("marketing_segments").delete().eq("id", id).execute())
+    await log_activity(
+        "marketing_segment_deleted",
+        f"Segment '{seg_name}' deleted.",
+        current_admin["sub"]
+    )
     return {"status": "ok"}
 
 @router.get("/{id}/contacts")

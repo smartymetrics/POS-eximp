@@ -47,7 +47,8 @@ class CampaignUpdate(BaseModel):
         extra = "ignore"
 
 class CampaignTest(BaseModel):
-    email: str
+    email: Optional[str] = None
+    segment_id: Optional[str] = None
     subject_a: Optional[str] = None
     subject_b: Optional[str] = None
     preview_text: Optional[str] = None
@@ -83,14 +84,42 @@ async def create_campaign(data: CampaignCreate, current_admin=Depends(verify_tok
     return result.data[0]
 
 @router.get("/audit-logs")
-async def get_marketing_audit_logs(limit: int = 50, admin: dict = Depends(verify_token)):
-    """Fetches the audit log of all marketing actions for the dashboard."""
+async def get_marketing_audit_logs(
+    limit: int = 50,
+    offset: int = 0,
+    category: Optional[str] = None,
+    q: Optional[str] = None,
+    admin: dict = Depends(verify_token)
+):
+    """Fetches the audit log of all marketing actions for the dashboard with pagination and filtering."""
     db = get_db()
-    query = db.table("activity_log").select("*, admins(full_name)").ilike("event_type", "marketing_%").order("created_at", desc=True).limit(limit)
+    query = db.table("activity_log").select("*, admins(full_name)")
+    
+    # Filter to marketing actions
+    query = query.ilike("event_type", "marketing_%")
+    
+    # Apply category filter
+    if category:
+        if category == "campaign":
+            query = query.ilike("event_type", "marketing_campaign_%")
+        elif category == "contact":
+            query = query.or_("event_type.ilike.marketing_contact%,event_type.ilike.marketing_contacts%,event_type.ilike.marketing_bulk%")
+        elif category == "segment":
+            query = query.ilike("event_type", "marketing_segment_%")
+        elif category == "quota":
+            query = query.or_("event_type.ilike.%quota%,event_type.ilike.%settings%")
+        elif category == "sequence":
+            query = query.ilike("event_type", "marketing_sequence_%")
+            
+    # Apply search filter
+    if q:
+        query = query.or_(f"description.ilike.%{q}%,event_type.ilike.%{q}%")
+        
+    query = query.order("created_at", desc=True).range(offset, offset + limit - 1)
     res = await db_execute(lambda: query.execute())
     
     logs = []
-    for item in res.data:
+    for item in (res.data or []):
         logs.append({
             "id": item["id"],
             "event_type": item["event_type"],
@@ -169,32 +198,59 @@ async def send_test_email(id: str, data: CampaignTest, current_admin=Depends(ver
         if data.html_body_a: campaign["html_body_a"] = data.html_body_a
         if data.preview_text: campaign["preview_text"] = data.preview_text
     
-    # Look up the real contact by email so all tags (first_name, financial, etc.) resolve
-    # exactly as they would in a real campaign send.
-    contact_res = await db_execute(lambda: db.table("marketing_contacts").select("*").eq("email", data.email.strip().lower()).limit(1).execute())
-    
-    if contact_res.data:
-        # Real contact found — use their full record so every tag personalises correctly
-        contact = contact_res.data[0]
-        # Force the send through even if they are unsubscribed (it's a test, not a broadcast)
-        contact = {**contact, "is_subscribed": True}
-        preview_note = "with real contact data"
-    else:
-        # No contact found for this email — fall back to a clearly-labelled placeholder
-        # so the tester knows tags won't be fully resolved
-        contact = {
-            "id": "test-id",
-            "first_name": "[First Name]",
-            "last_name": "[Last Name]",
-            "email": data.email,
-            "phone": "[Phone]",
-            "is_subscribed": True,
-        }
-        preview_note = "no contact found for this email — tag values are placeholders"
+    recipients_list = []
+    preview_note = ""
+    target_desc = ""
 
-    res = await send_marketing_email(campaign, contact)
-    if res:
-        return {"message": f"Test email (Variant {data.variant}) sent to {data.email} ({preview_note})"}
+    if data.segment_id:
+        from marketing_service import resolve_target_recipients
+        contacts = await resolve_target_recipients([data.segment_id], None)
+        if not contacts:
+            raise HTTPException(status_code=400, detail="Selected segment has no recipients.")
+        recipients_list = contacts
+        target_desc = f"segment '{data.segment_id}' ({len(contacts)} contacts)"
+        preview_note = f"segment send"
+    elif data.email:
+        # Look up the real contact by email so all tags (first_name, financial, etc.) resolve
+        # exactly as they would in a real campaign send.
+        contact_res = await db_execute(lambda: db.table("marketing_contacts").select("*").eq("email", data.email.strip().lower()).limit(1).execute())
+        if contact_res.data:
+            # Real contact found — use their full record so every tag personalises correctly
+            contact = contact_res.data[0]
+            # Force the send through even if they are unsubscribed (it's a test, not a broadcast)
+            contact = {**contact, "is_subscribed": True}
+            preview_note = "with real contact data"
+        else:
+            # No contact found for this email — fall back to a clearly-labelled placeholder
+            # so the tester knows tags won't be fully resolved
+            contact = {
+                "id": "test-id",
+                "first_name": "[First Name]",
+                "last_name": "[Last Name]",
+                "email": data.email,
+                "phone": "[Phone]",
+                "is_subscribed": True,
+            }
+            preview_note = "no contact found for this email — tag values are placeholders"
+        recipients_list = [contact]
+        target_desc = f"'{data.email}'"
+    else:
+        raise HTTPException(status_code=400, detail="Either email or segment_id must be provided.")
+
+    sent_count = 0
+    for contact in recipients_list:
+        success = await send_marketing_email(campaign, contact)
+        if success:
+            sent_count += 1
+
+    if sent_count > 0:
+        await log_activity(
+            "marketing_campaign_test_sent",
+            f"Test email (Variant {data.variant}) sent to {target_desc} for campaign '{campaign.get('name', id)}'.",
+            current_admin["sub"]
+        )
+        return {"message": f"Test email (Variant {data.variant}) sent to {sent_count} recipient(s) ({preview_note})"}
+    
     raise HTTPException(status_code=500, detail="Failed to send test email")
 
 @router.post("/{id}/send")
@@ -276,13 +332,11 @@ async def send_campaign_broadcast(id: str, target: Optional[CampaignSendTarget],
 
     background_tasks.add_task(broadcast_campaign, id, target.segment_ids if target else None, target.manual_emails if target else None)
     
-    await log_activity(
-        "marketing_campaign_broadcast_started",
-        f"Broadcast initiated for campaign ID: {id}.",
-        current_admin["sub"]
-    )
-    
-    # TASK 8: Estimate recipient count
+    # Fetch campaign name for a more descriptive log
+    camp_name_res = await db_execute(lambda: db.table("email_campaigns").select("name").eq("id", id).execute())
+    camp_name = camp_name_res.data[0].get("name", id) if camp_name_res.data else id
+
+    # Estimate recipient count
     estimated_count = 0
     if target and target.segment_ids:
         for sid in target.segment_ids:
@@ -291,6 +345,12 @@ async def send_campaign_broadcast(id: str, target: Optional[CampaignSendTarget],
     elif target and target.manual_emails:
         estimated_count = len(target.manual_emails)
 
+    await log_activity(
+        "marketing_campaign_broadcast_started",
+        f"Broadcast initiated for campaign '{camp_name}' targeting {estimated_count} estimated recipient(s).",
+        current_admin["sub"]
+    )
+    
     return {"message": "Broadcast started in the background.", "estimated_recipients": estimated_count}
 
 @router.post("/{id}/cancel-schedule")
@@ -331,10 +391,16 @@ async def pause_campaign(id: str, current_admin=Depends(verify_token)):
         raise HTTPException(status_code=400, detail="Only actively sending campaigns can be paused.")
     
     await db_execute(lambda: db.table("email_campaigns").update({"status": "paused"}).eq("id", id).execute())
-    
+
+    # Fetch campaign name for a descriptive log
+    paused_res = await db_execute(lambda: db.table("email_campaigns").select("name, total_sent, total_recipients").eq("id", id).execute())
+    camp_name = paused_res.data[0].get("name", id) if paused_res.data else id
+    sent_so_far = paused_res.data[0].get("total_sent", "?") if paused_res.data else "?"
+    total = paused_res.data[0].get("total_recipients", "?") if paused_res.data else "?"
+
     await log_activity(
         "marketing_campaign_paused",
-        f"Campaign '{id}' paused mid-send.",
+        f"Campaign '{camp_name}' paused mid-send ({sent_so_far}/{total} sent so far).",
         current_admin["sub"]
     )
     return {"message": "Campaign paused. Sending will stop after the current batch."}
@@ -358,10 +424,14 @@ async def resume_campaign(id: str, background_tasks: BackgroundTasks, current_ad
     
     # Use re-run broadcast_campaign
     background_tasks.add_task(broadcast_campaign, id, None, None)
+
+    # Fetch campaign name for a descriptive log
+    resumed_res = await db_execute(lambda: db.table("email_campaigns").select("name").eq("id", id).execute())
+    camp_name = resumed_res.data[0].get("name", id) if resumed_res.data else id
     
     await log_activity(
         "marketing_campaign_resumed",
-        f"Campaign '{id}' resumed. {pending_count} recipients remaining.",
+        f"Campaign '{camp_name}' resumed. {pending_count} recipient(s) still pending.",
         current_admin["sub"]
     )
     return {"message": f"Campaign resumed. {pending_count} recipients remaining.", "pending": pending_count}
@@ -425,6 +495,14 @@ async def sync_campaign_stats(id: str, current_admin=Depends(verify_token)):
         "updated_at": datetime.utcnow().isoformat()
     }).eq("id", id).execute()
     
+    camp_name_sync = (await db_execute(lambda: db.table("email_campaigns").select("name").eq("id", id).execute())).data
+    name_label = camp_name_sync[0].get("name", id) if camp_name_sync else id
+    await log_activity(
+        "marketing_campaign_stats_synced",
+        f"Stats manually re-synced for campaign '{name_label}': {actual_sent} delivered, {total_opens} opens, {total_clicks} clicks.",
+        current_admin["sub"]
+    )
+
     return {
         "id": id,
         "total_sent": actual_sent,
@@ -571,6 +649,12 @@ async def update_quota_settings(enabled: bool, limit: Optional[int] = 80, curren
             "updated_at": datetime.utcnow().isoformat()
         }).execute())
     
+    status_text = 'enabled' if enabled else 'disabled'
+    await log_activity(
+        "marketing_quota_settings_updated",
+        f"Daily email quota {status_text}. Limit set to {limit} emails/day.",
+        current_admin["sub"]
+    )
     return {"message": "Marketing quota settings updated.", "settings": new_value}
 
 

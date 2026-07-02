@@ -120,6 +120,15 @@ async def update_contact(id: str, data: ContactUpdate, current_admin=Depends(ver
                 "dob": update_dict["dob"],
                 "updated_at": datetime.utcnow().isoformat()
             }).eq("id", cid).execute())
+        # Build a human-readable summary of what changed
+        changed_fields = [k for k in update_dict.keys() if k not in ("updated_at",)]
+        field_summary = ", ".join(changed_fields) if changed_fields else "no fields changed"
+        email = updated_contact.get("email", id)
+        await log_activity(
+            "marketing_contact_updated",
+            f"Contact '{email}' profile updated. Changed: {field_summary}.",
+            current_admin["sub"]
+        )
         return updated_contact
     return None
 
@@ -261,6 +270,12 @@ async def import_contacts(source: Optional[str] = "csv_import", file: UploadFile
     else:
         import_count = 0
 
+    await log_activity(
+        "marketing_contacts_imported",
+        f"CSV import completed: {import_count} contact(s) processed, {skipped_count} row(s) skipped (invalid email). Source: '{source}'.",
+        current_admin["sub"]
+    )
+
     return {
         "message": f"Import complete. {import_count} contacts processed.",
         "skipped_invalid": skipped_count,
@@ -297,6 +312,11 @@ async def sync_clients(current_admin=Depends(verify_token)):
     
     if marketing_entries:
         res = await db_execute(lambda: db.table("marketing_contacts").upsert(marketing_entries, on_conflict="email").execute())
+        await log_activity(
+            "marketing_contacts_client_sync",
+            f"All active clients synced to marketing contacts list. {len(res.data)} contact(s) upserted.",
+            current_admin["sub"]
+        )
         return {"synced_count": len(res.data)}
     return {"synced_count": 0}
 
@@ -341,6 +361,11 @@ async def deduplicate_contacts(current_admin=Depends(verify_token)):
             await db_execute(lambda: db.table("marketing_contacts").delete().in_("id", chunk).execute())
             
     final_count = (await db_execute(lambda: db.table("marketing_contacts").select("id", count="exact").execute())).count
+    await log_activity(
+        "marketing_contacts_deduplicated",
+        f"Contact list deduplicated: {len(to_delete)} duplicate(s) removed. Final count: {final_count} contacts.",
+        current_admin["sub"]
+    )
     return {"status": "success", "deleted_duplicates": len(to_delete), "final_count": final_count}
 @router.get("/{id}/history")
 async def get_contact_history(id: str, current_admin=Depends(verify_token)):
@@ -417,6 +442,11 @@ async def sync_all_marketing_stats(current_admin=Depends(verify_token)):
         }).eq("id", uid).execute()
         updated_count += 1
         
+    await log_activity(
+        "marketing_bulk_stats_synced",
+        f"Bulk stats re-sync complete: {len(camp_stats)} campaign(s) and {updated_count} contact(s) updated.",
+        current_admin["sub"]
+    )
     return {
         "message": "Bulk stats sync complete.",
         "campaigns_updated": len(camp_stats),

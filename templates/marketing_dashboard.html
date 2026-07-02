@@ -864,23 +864,40 @@
         <!-- Audit Logs Tab -->
         <div id="tab-content-audit" class="tab-pane hidden">
             <div class="card p-0 overflow-hidden">
+                <!-- Header -->
                 <div class="flex flex-col md:flex-row justify-between items-start md:items-center p-6 border-b gap-4">
                     <div>
                         <h3 class="text-lg font-bold">Marketing Audit Trail</h3>
-                        <p class="text-sm text-gray-500 mt-1">A chronological log of all marketing activities and system events.</p>
+                        <p class="text-sm text-gray-500 mt-1">A chronological log of all marketing activities and system events performed by staff.</p>
                     </div>
                     <button onclick="loadAuditLogs()" class="w-full md:w-auto px-4 py-2 bg-gray-100 text-gray-700 rounded-lg text-sm font-bold shadow-sm hover:bg-gray-200 transition flex items-center justify-center gap-2">
-                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24">
-                            <path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path>
-                        </svg>
+                        <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M4 4v5h.582m15.356 2A8.001 8.001 0 004.582 9m0 0H9m11 11v-5h-.581m0 0a8.003 8.003 0 01-15.357-2m15.357 2H15"></path></svg>
                         Refresh Logs
                     </button>
                 </div>
+
+                <!-- Filter Bar -->
+                <div class="flex flex-wrap gap-3 p-4 bg-gray-50 border-b items-center">
+                    <div class="relative flex-1 min-w-[200px]">
+                        <svg class="w-4 h-4 text-gray-400 absolute left-3 top-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M21 21l-6-6m2-5a7 7 0 11-14 0 7 7 0 0114 0z"></path></svg>
+                        <input id="audit-search" type="text" placeholder="Search descriptions, actions..." oninput="filterAuditLogs()" class="w-full pl-9 pr-4 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-brand-gold outline-none">
+                    </div>
+                    <select id="audit-category" onchange="filterAuditLogs()" class="px-3 py-2 text-sm border rounded-lg focus:ring-2 focus:ring-brand-gold outline-none bg-white">
+                        <option value="">All Categories</option>
+                        <option value="campaign">📢 Campaign Actions</option>
+                        <option value="contact">👤 Contact Actions</option>
+                        <option value="segment">🗂️ Segment Actions</option>
+                        <option value="quota">⚙️ System / Quota</option>
+                        <option value="sequence">🔁 Sequences</option>
+                    </select>
+                    <span id="audit-count-label" class="text-xs text-gray-400 ml-auto"></span>
+                </div>
+
                 <div class="overflow-x-auto">
                     <table class="w-full text-left min-w-[800px]">
                         <thead>
                             <tr class="text-xs uppercase tracking-wider text-gray-500 border-b bg-gray-50">
-                                <th class="py-4 text-left px-6">Date & Time</th>
+                                <th class="py-4 text-left px-6">Date &amp; Time</th>
                                 <th class="py-4 text-left">Action</th>
                                 <th class="py-4 text-left">Description</th>
                                 <th class="py-4 text-left pr-6">Performed By</th>
@@ -890,6 +907,11 @@
                             <!-- Loaded dynamically -->
                         </tbody>
                     </table>
+                </div>
+
+                <!-- Load More Audit Logs Button -->
+                <div class="flex justify-center py-6 border-t border-gray-100 bg-white" id="load-more-audit-container" style="display: none;">
+                    <button onclick="loadMoreAuditLogs()" id="load-more-audit-btn" class="bg-white border border-gray-200 px-6 py-2 rounded-lg text-sm font-bold shadow-sm hover:shadow-md transition">Load More Logs</button>
                 </div>
             </div>
         </div>
@@ -1834,7 +1856,32 @@
             document.getElementById('sidebarOverlay').classList.toggle('active');
         }
 
+        let currentTab = 'overview';
+        let contactsLoadingMore = false;
+        let auditLoadingMore = false;
+
+        window.addEventListener('scroll', () => {
+            if ((window.innerHeight + window.pageYOffset) >= document.body.offsetHeight - 200) {
+                if (currentTab === 'contacts') {
+                    const loadMoreBtn = document.getElementById('load-more-contacts-container');
+                    if (loadMoreBtn && loadMoreBtn.style.display !== 'none' && !contactsLoadingMore) {
+                        contactsLoadingMore = true;
+                        loadMoreContacts();
+                        setTimeout(() => { contactsLoadingMore = false; }, 1000);
+                    }
+                } else if (currentTab === 'audit') {
+                    const loadMoreBtn = document.getElementById('load-more-audit-container');
+                    if (loadMoreBtn && loadMoreBtn.style.display !== 'none' && !auditLoadingMore) {
+                        auditLoadingMore = true;
+                        loadMoreAuditLogs();
+                        setTimeout(() => { auditLoadingMore = false; }, 1000);
+                    }
+                }
+            }
+        });
+
         function showTab(tab) {
+            currentTab = tab;
             document.querySelectorAll('.tab-pane').forEach(el => {
                 el.classList.add('hidden');
                 el.classList.remove('tab-pane-enter');
@@ -2890,45 +2937,141 @@
         }
 
         // --- AUDIT LOGS LOGIC ---
-        async function loadAuditLogs() {
+        const AUDIT_ICONS = {
+            // Campaign lifecycle
+            marketing_campaign_created:               { icon: '✨', color: 'bg-emerald-100 text-emerald-700' },
+            marketing_campaign_saved:                 { icon: '💾', color: 'bg-gray-100 text-gray-700' },
+            marketing_campaign_duplicated:            { icon: '📋', color: 'bg-teal-100 text-teal-700' },
+            marketing_campaign_scheduled:             { icon: '🗓️', color: 'bg-indigo-100 text-indigo-700' },
+            marketing_campaign_unscheduled:           { icon: '🚫', color: 'bg-gray-100 text-gray-500' },
+            marketing_campaign_broadcast_started:     { icon: '🚀', color: 'bg-blue-100 text-blue-700' },
+            marketing_campaign_paused:                { icon: '⏸️', color: 'bg-yellow-100 text-yellow-700' },
+            marketing_campaign_resumed:               { icon: '▶️', color: 'bg-blue-100 text-blue-700' },
+            marketing_campaign_resend_initiated:      { icon: '🔄', color: 'bg-blue-100 text-blue-700' },
+            marketing_campaign_single_resend:         { icon: '📨', color: 'bg-sky-100 text-sky-700' },
+            marketing_campaign_test_sent:             { icon: '🧪', color: 'bg-purple-100 text-purple-700' },
+            marketing_campaign_force_completed:       { icon: '✅', color: 'bg-green-100 text-green-700' },
+            marketing_campaign_failed_recipients_cleared: { icon: '🧹', color: 'bg-orange-100 text-orange-700' },
+            marketing_campaign_stats_synced:          { icon: '📊', color: 'bg-cyan-100 text-cyan-700' },
+            // Contacts
+            marketing_contact_created:                { icon: '👤', color: 'bg-emerald-100 text-emerald-700' },
+            marketing_contact_updated:                { icon: '✏️', color: 'bg-gray-100 text-gray-700' },
+            marketing_contact_unsubscribed:           { icon: '🔕', color: 'bg-red-100 text-red-700' },
+            marketing_contact_resubscribed:           { icon: '🔔', color: 'bg-green-100 text-green-700' },
+            marketing_contact_suppression_removed:    { icon: '🔓', color: 'bg-amber-100 text-amber-700' },
+            marketing_contacts_imported:              { icon: '📥', color: 'bg-teal-100 text-teal-700' },
+            marketing_contacts_client_sync:           { icon: '🔗', color: 'bg-sky-100 text-sky-700' },
+            marketing_contacts_deduplicated:          { icon: '🧬', color: 'bg-pink-100 text-pink-700' },
+            marketing_bulk_stats_synced:              { icon: '⚡', color: 'bg-violet-100 text-violet-700' },
+            // Segments
+            marketing_segment_created:                { icon: '🗂️', color: 'bg-emerald-100 text-emerald-700' },
+            marketing_segment_deleted:                { icon: '🗑️', color: 'bg-red-100 text-red-700' },
+            // System / Quota
+            marketing_quota_settings_updated:         { icon: '⚙️', color: 'bg-slate-100 text-slate-700' },
+            // Sequences
+            marketing_sequence_created:               { icon: '🔁', color: 'bg-purple-100 text-purple-700' },
+            marketing_sequence_deleted:               { icon: '🗑️', color: 'bg-red-100 text-red-700' },
+        };
+
+        let auditOffset = 0;
+        const auditLimit = 50;
+        let auditQuery = '';
+        let auditCategory = '';
+
+        async function loadAuditLogs(append = false) {
+            if (!append) {
+                auditOffset = 0;
+            }
             const list = document.getElementById('audit-list');
-            list.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-gray-500">Loading audit logs...</td></tr>';
+            const loadMoreBtn = document.getElementById('load-more-audit-container');
+            
+            if (!append) {
+                list.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-gray-500">Loading audit logs...</td></tr>';
+            }
+
+            auditQuery = (document.getElementById('audit-search')?.value || '').trim();
+            auditCategory = document.getElementById('audit-category')?.value || '';
+
+            let url = `/api/marketing/campaigns/audit-logs?limit=${auditLimit}&offset=${auditOffset}`;
+            if (auditCategory) {
+                url += `&category=${encodeURIComponent(auditCategory)}`;
+            }
+            if (auditQuery) {
+                url += `&q=${encodeURIComponent(auditQuery)}`;
+            }
+
             try {
-                const res = await fetch('/api/marketing/campaigns/audit-logs', {
+                const res = await fetch(url, {
                     headers: { 'Authorization': 'Bearer ' + token }
                 });
+                if (!res.ok) throw new Error(`Server returned ${res.status}`);
                 const data = await res.json();
-                
-                if (data.length === 0) {
-                    list.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-gray-500">No marketing activity found.</td></tr>';
+
+                if (!append && (!data || data.length === 0)) {
+                    list.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-gray-500">No marketing activity found matching these filters.</td></tr>';
+                    if (loadMoreBtn) loadMoreBtn.style.display = 'none';
+                    const countLabel = document.getElementById('audit-count-label');
+                    if (countLabel) countLabel.textContent = `Showing 0 logs`;
                     return;
                 }
 
-                list.innerHTML = data.map(log => {
+                const rowsHtml = data.map(log => {
                     const dateObj = new Date(log.created_at);
-                    const formattedDate = dateObj.toLocaleDateString() + ' ' + dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
-                    
-                    let actionBadge = 'bg-gray-100 text-gray-700';
-                    if (log.event_type.includes('send') || log.event_type.includes('broadcast') || log.event_type.includes('resume')) actionBadge = 'bg-blue-100 text-blue-700';
-                    if (log.event_type.includes('pause')) actionBadge = 'bg-yellow-100 text-yellow-700';
-                    if (log.event_type.includes('brake') || log.event_type.includes('limit')) actionBadge = 'bg-red-100 text-red-700';
-                    if (log.event_type.includes('create') || log.event_type.includes('duplicate')) actionBadge = 'bg-green-100 text-green-700';
+                    const formattedDate = dateObj.toLocaleDateString('en-GB') + ' · ' + dateObj.toLocaleTimeString([], {hour: '2-digit', minute:'2-digit'});
+
+                    const meta = AUDIT_ICONS[log.event_type] || { icon: '📝', color: 'bg-gray-100 text-gray-600' };
+                    const label = log.event_type.replace('marketing_', '').replace(/_/g, ' ');
 
                     return `
                         <tr class="hover:bg-gray-50 transition group">
-                            <td class="py-4 px-6 text-xs text-gray-500 whitespace-nowrap">${formattedDate}</td>
-                            <td class="py-4">
-                                <span class="px-2 py-1 ${actionBadge} text-[10px] font-bold rounded-full uppercase tracking-wider">${log.event_type.replace('marketing_', '').replace(/_/g, ' ')}</span>
+                            <td class="py-4 px-6 text-xs text-gray-400 whitespace-nowrap font-mono">${formattedDate}</td>
+                            <td class="py-4 pr-4">
+                                <span class="inline-flex items-center gap-1.5 px-2.5 py-1 ${meta.color} text-[10px] font-bold rounded-full uppercase tracking-wider whitespace-nowrap">
+                                    <span>${meta.icon}</span>
+                                    <span>${label}</span>
+                                </span>
                             </td>
-                            <td class="py-4 text-sm text-gray-700 pr-4">${log.description}</td>
-                            <td class="py-4 text-sm font-semibold text-gray-800 pr-6">${log.performed_by_name}</td>
+                            <td class="py-4 text-sm text-gray-700 pr-4 max-w-md">${log.description}</td>
+                            <td class="py-4 text-sm font-semibold text-gray-800 pr-6 whitespace-nowrap">${log.performed_by_name}</td>
                         </tr>
                     `;
                 }).join('');
+
+                if (append) {
+                    list.innerHTML += rowsHtml;
+                } else {
+                    list.innerHTML = rowsHtml;
+                }
+
+                if (loadMoreBtn) {
+                    if (data.length < auditLimit) {
+                        loadMoreBtn.style.display = 'none';
+                    } else {
+                        loadMoreBtn.style.display = 'flex';
+                    }
+                }
+
+                const countLabel = document.getElementById('audit-count-label');
+                if (countLabel) {
+                    const totalRows = list.children.length;
+                    countLabel.textContent = `Showing ${totalRows} logs`;
+                }
+
             } catch (e) {
                 console.error(e);
-                list.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-red-500">Failed to load audit logs.</td></tr>';
+                if (!append) {
+                    list.innerHTML = '<tr><td colspan="4" class="text-center py-8 text-red-500">Failed to load audit logs.</td></tr>';
+                }
             }
+        }
+
+        function filterAuditLogs() {
+            loadAuditLogs(false);
+        }
+
+        function loadMoreAuditLogs() {
+            auditOffset += auditLimit;
+            loadAuditLogs(true);
         }
 
         // --- CALENDAR LOGIC ---
