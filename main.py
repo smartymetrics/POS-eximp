@@ -47,6 +47,7 @@ from routers import (
     discount_codes
 )
 from routers import refunds
+from routers import feedback
 from routers.auth import require_roles, resolve_admin_token
 from database import init_db
 from scheduler import start_scheduler, stop_scheduler
@@ -60,11 +61,11 @@ async def lifespan(app: FastAPI):
     # Stop the background scheduler
     await stop_scheduler()
 
-# Raise multipart upload limit to 10 MB (default is 1 MB)
-# This affects file uploads on the guarantor form (passport photo / ID document)
+# Raise multipart upload limit to 50 MB (default is 1 MB)
+# This affects file uploads on the guarantor form and video uploads on feedback forms
 try:
     from starlette.formparsers import MultiPartParser
-    MultiPartParser.max_part_size = 10 * 1024 * 1024  # 10 MB
+    MultiPartParser.max_part_size = 50 * 1024 * 1024  # 50 MB
 except Exception:
     pass  # Non-fatal — falls back to starlette default
 
@@ -204,6 +205,7 @@ app.include_router(kyc_links.router, tags=["kyc-links"])
 app.include_router(discount_codes.router, prefix="/api/discount-codes", tags=["discount-codes"])
 
 app.include_router(refunds.router, prefix="/api/refunds", tags=["refunds"])
+app.include_router(feedback.router, prefix="/api/feedback", tags=["feedback"])
 
 
 

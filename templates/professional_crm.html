@@ -638,6 +638,9 @@
                 <div class="nav-link" onclick="switchView('support-desk')">
                     <i class="fas fa-headset"></i> Support Desk
                 </div>
+                <div class="nav-link" onclick="switchView('feedback')">
+                    <i class="fas fa-comments"></i> Client Feedback
+                </div>
             </div>
 
             <!-- Analytics -->
@@ -1608,6 +1611,121 @@
                                         <i class="fas fa-spinner fa-spin text-2xl text-[#C47D0A]"></i>
                                         <span>Loading verifications...</span>
                                     </div>
+                                </td>
+                            </tr>
+                        </tbody>
+                    </table>
+                </div>
+            </div>
+        </div>
+        
+        <!-- CLIENT FEEDBACK VIEW -->
+        <div id="feedback" class="view-section">
+            <div class="header-section">
+                <div>
+                    <h1 class="page-title" style="color: white !important;">Client & Lead Feedback</h1>
+                    <p style="color: #888; margin-top: 8px;">Review Net Promoter Scores (NPS) and customer satisfaction ratings</p>
+                </div>
+                <div class="flex gap-2">
+                    <button class="btn btn-secondary" onclick="copyFeedbackLink(event)">
+                        <i class="fas fa-link"></i> Copy Form Link
+                    </button>
+                    <button class="btn btn-secondary" onclick="loadFeedback()">
+                        <i class="fas fa-sync"></i> Refresh
+                    </button>
+                </div>
+            </div>
+
+            <!-- Stats grid -->
+            <div class="grid-4 mb-8">
+                <div class="stat-card">
+                    <div style="font-size: 14px; color: #888;"><i class="fas fa-heart text-red-500"></i> Net Promoter Score</div>
+                    <div class="stat-value" id="feedback-nps-val">-</div>
+                    <div class="stat-label" id="feedback-nps-label">Promoters - Detractors</div>
+                </div>
+                <div class="stat-card">
+                    <div style="font-size: 14px; color: #888;"><i class="fas fa-star text-amber-500"></i> Overall Experience</div>
+                    <div class="stat-value" id="feedback-experience-val">-</div>
+                    <div class="stat-label">Out of 5.0 stars</div>
+                </div>
+                <div class="stat-card">
+                    <div style="font-size: 14px; color: #888;"><i class="fas fa-comments text-blue-500"></i> Communication</div>
+                    <div class="stat-value" id="feedback-communication-val">-</div>
+                    <div class="stat-label">Out of 5.0 stars</div>
+                </div>
+                <div class="stat-card">
+                    <div style="font-size: 14px; color: #888;"><i class="fas fa-file-alt"></i> Total Feedback</div>
+                    <div class="stat-value" id="feedback-total-val">-</div>
+                    <div class="stat-label">Submissions count</div>
+                </div>
+            </div>
+
+            <!-- Filters -->
+            <div class="card mb-6" style="padding: 16px;">
+                <div style="display: flex; gap: 16px; flex-wrap: wrap;">
+                    <div style="flex: 1; min-width: 150px;">
+                        <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">User Type</label>
+                        <select id="filter-feedback-usertype" class="w-full bg-[#111] border border-[#333] text-white rounded-lg p-2 text-sm outline-none" onchange="loadFeedback()">
+                            <option value="">All Types</option>
+                            <option value="client">Client</option>
+                            <option value="lead">Lead</option>
+                            <option value="other">Other</option>
+                        </select>
+                    </div>
+                    <div style="flex: 1; min-width: 150px;">
+                        <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">Feedback Type</label>
+                        <select id="filter-feedback-type" class="w-full bg-[#111] border border-[#333] text-white rounded-lg p-2 text-sm outline-none" onchange="loadFeedback()">
+                            <option value="">All Categories</option>
+                            <option value="satisfaction">Satisfaction</option>
+                            <option value="complaint">Complaint</option>
+                            <option value="suggestion">Suggestion</option>
+                            <option value="inquiry">Inquiry</option>
+                            <option value="general">General</option>
+                            <option value="inspection">Site Inspection</option>
+                            <option value="allocation">Land Allocation</option>
+                        </select>
+                    </div>
+                    <div style="flex: 1; min-width: 150px;">
+                        <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">Status</label>
+                        <select id="filter-feedback-status" class="w-full bg-[#111] border border-[#333] text-white rounded-lg p-2 text-sm outline-none" onchange="loadFeedback()">
+                            <option value="">All Statuses</option>
+                            <option value="new">New</option>
+                            <option value="reviewed">Reviewed</option>
+                            <option value="contacted">Contacted</option>
+                            <option value="resolved">Resolved</option>
+                        </select>
+                    </div>
+                    <div style="flex: 1; min-width: 150px;">
+                        <label style="font-size:11px; color:#888; display:block; margin-bottom:4px;">NPS Score</label>
+                        <select id="filter-feedback-nps" class="w-full bg-[#111] border border-[#333] text-white rounded-lg p-2 text-sm outline-none" onchange="loadFeedback()">
+                            <option value="">All Scores</option>
+                            <option value="promoter">Promoters (9-10)</option>
+                            <option value="passive">Passives (7-8)</option>
+                            <option value="detractor">Detractors (0-6)</option>
+                        </select>
+                    </div>
+                </div>
+            </div>
+
+            <!-- List Card -->
+            <div class="card p-0 overflow-hidden" style="background: rgba(0,0,0,0.2); border: 1px solid #333;">
+                <div style="overflow-x: auto;">
+                    <table style="width: 100%; border-collapse: collapse; font-size: 13px;">
+                        <thead style="background: rgba(255,255,255,0.03); border-bottom: 2px solid #333;">
+                            <tr>
+                                <th style="text-align: left; padding: 16px; font-weight: 700; color: #aaa; text-transform: uppercase; font-size: 10px; letter-spacing: 1px;">Date</th>
+                                <th style="text-align: left; padding: 16px; font-weight: 700; color: #aaa; text-transform: uppercase; font-size: 10px; letter-spacing: 1px;">Submitter</th>
+                                <th style="text-align: left; padding: 16px; font-weight: 700; color: #aaa; text-transform: uppercase; font-size: 10px; letter-spacing: 1px;">Category</th>
+                                <th style="text-align: center; padding: 16px; font-weight: 700; color: #aaa; text-transform: uppercase; font-size: 10px; letter-spacing: 1px;">Ratings</th>
+                                <th style="text-align: left; padding: 16px; font-weight: 700; color: #aaa; text-transform: uppercase; font-size: 10px; letter-spacing: 1px;">Comments</th>
+                                <th style="text-align: center; padding: 16px; font-weight: 700; color: #aaa; text-transform: uppercase; font-size: 10px; letter-spacing: 1px;">Status</th>
+                                <th style="text-align: right; padding: 16px; font-weight: 700; color: #aaa; text-transform: uppercase; font-size: 10px; letter-spacing: 1px;">Action</th>
+                            </tr>
+                        </thead>
+                        <tbody id="crmFeedbackTable">
+                            <tr>
+                                <td colspan="7" style="padding: 40px; text-align: center; color: #666;">
+                                    No feedback submissions loaded.
                                 </td>
                             </tr>
                         </tbody>
@@ -4522,6 +4640,7 @@
         switchView = function(viewName) {
             _origSwitchViewCRM(viewName);  // → calls first override → calls originalSwitchView
             if (viewName === 'contacts-list') loadContactsList();
+            if (viewName === 'feedback') loadFeedback();
             if (viewName === 'manager-feed') {
                 loadManagerFeed();
                 loadOutstandingPanel();
@@ -4566,6 +4685,271 @@
                 }
             } catch(e) {}
         });
+
+        // ============================================================
+        // CLIENT FEEDBACK JS IMPLEMENTATION
+        // ============================================================
+        async function loadFeedback() {
+            const container = document.getElementById("crmFeedbackTable");
+            renderSkeletons("crmFeedbackTable", "table-row", 6);
+            
+            // Fetch stats
+            await loadFeedbackStats();
+            
+            // Build query params
+            const userType = document.getElementById("filter-feedback-usertype").value;
+            const feedbackType = document.getElementById("filter-feedback-type").value;
+            const status = document.getElementById("filter-feedback-status").value;
+            const nps = document.getElementById("filter-feedback-nps").value;
+            
+            let query = `?limit=100`;
+            if (userType) query += `&user_type=${userType}`;
+            if (feedbackType) query += `&feedback_type=${feedbackType}`;
+            if (status) query += `&status=${status}`;
+            if (nps) query += `&nps_group=${nps}`;
+            
+            try {
+                const res = await fetch(`/api/feedback/${query}`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const submissions = await res.json();
+                
+                if (!submissions || submissions.length === 0) {
+                    container.innerHTML = '<tr><td colspan="7" style="padding: 40px; text-align: center; color: #666;">No feedback submissions match filters.</td></tr>';
+                    return;
+                }
+                
+                container.innerHTML = submissions.map((f, idx) => {
+                    const stars = '★'.repeat(f.experience_rating) + '☆'.repeat(5 - f.experience_rating);
+                    const npsColor = f.nps_score >= 9 ? 'text-emerald-500 bg-emerald-500/10' : 
+                                     f.nps_score >= 7 ? 'text-amber-500 bg-amber-500/10' : 'text-red-500 bg-red-500/10';
+                    const statusClass = f.status === 'new' ? 'bg-blue-500/10 text-blue-500' :
+                                      f.status === 'reviewed' ? 'bg-amber-500/10 text-amber-500' :
+                                      f.status === 'contacted' ? 'bg-purple-500/10 text-purple-500' : 'bg-emerald-500/10 text-emerald-500';
+                    
+                    const dateStr = new Date(f.created_at).toLocaleDateString('en-NG', {day:'numeric', month:'short', year:'numeric'});
+                    const commentSnippet = f.comments.length > 50 ? f.comments.substring(0, 50) + '...' : f.comments;
+                    
+                    return `
+                        <tr style="border-bottom: 1px solid #222; transition: background 0.2s;" class="hover:bg-white/5">
+                            <td style="padding: 16px; color: #666; font-size: 11px;">${dateStr}</td>
+                            <td style="padding: 16px;">
+                                <div>
+                                    <div style="font-weight: 700; color: #fff;">${f.name || 'Anonymous'}</div>
+                                    <div style="font-size: 11px; color: #9ca3af;">${f.email || 'No email'}</div>
+                                </div>
+                            </td>
+                            <td style="padding: 16px;">
+                                <div style="color: #fff; font-weight: 600; text-transform: capitalize;">${f.feedback_type}</div>
+                                <div style="font-size: 11px; color: #666; text-transform: uppercase;">${f.user_type}</div>
+                            </td>
+                            <td style="padding: 16px; text-align: center;">
+                                <div style="color: #C47D0A; font-size: 12px; margin-bottom: 2px;">${stars}</div>
+                                <span class="px-2 py-0.5 rounded text-[10px] font-bold ${npsColor}">NPS: ${f.nps_score}</span>
+                            </td>
+                            <td style="padding: 16px; color: #ccc; max-width: 250px; overflow: hidden; text-overflow: ellipsis; white-space: nowrap;">
+                                ${commentSnippet}
+                            </td>
+                            <td style="padding: 16px; text-align: center;">
+                                <span style="font-size: 10px; padding: 4px 10px; border-radius: 99px; font-weight: 700; text-transform: uppercase;" class="${statusClass}">
+                                    ${f.status}
+                                </span>
+                            </td>
+                            <td style="padding: 16px; text-align: right;">
+                                <button class="btn btn-secondary btn-sm" onclick="openFeedbackDetail('${f.id}')" style="padding: 6px 12px; font-size: 11px;">
+                                    <i class="fas fa-eye"></i> View
+                                </button>
+                            </td>
+                        </tr>
+                    `;
+                }).join("");
+                
+            } catch (err) {
+                console.error("Error loading feedback submissions:", err);
+                container.innerHTML = '<tr><td colspan="7" style="padding: 40px; text-align: center; color: #EF4444;">Error loading feedback submissions.</td></tr>';
+            }
+        }
+        
+        async function loadFeedbackStats() {
+            try {
+                const res = await fetch("/api/feedback/stats", {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const s = await res.json();
+                
+                document.getElementById("feedback-total-val").textContent = s.total_count || 0;
+                document.getElementById("feedback-experience-val").textContent = s.avg_experience ? s.avg_experience.toFixed(1) : "-";
+                document.getElementById("feedback-communication-val").textContent = s.avg_communication ? s.avg_communication.toFixed(1) : "-";
+                
+                const npsEl = document.getElementById("feedback-nps-val");
+                const labelEl = document.getElementById("feedback-nps-label");
+                
+                if (s.total_count === 0) {
+                    npsEl.textContent = "-";
+                    npsEl.style.color = "#fff";
+                    labelEl.textContent = "No feedback received";
+                } else {
+                    const nps = s.nps_score;
+                    npsEl.textContent = (nps > 0 ? "+" : "") + nps;
+                    
+                    if (nps >= 50) {
+                        npsEl.style.color = "#10B981"; // Emerald
+                        labelEl.innerHTML = `Excellent (${s.promoters_pct}% Promoters)`;
+                    } else if (nps >= 0) {
+                        npsEl.style.color = "#F59E0B"; // Amber
+                        labelEl.innerHTML = `Good (${s.promoters_pct}% Promoters)`;
+                    } else {
+                        npsEl.style.color = "#EF4444"; // Red
+                        labelEl.innerHTML = `Critical (${s.detractors_pct}% Detractors)`;
+                    }
+                }
+            } catch (err) {
+                console.error("Error loading feedback stats:", err);
+            }
+        }
+        
+        async function openFeedbackDetail(id) {
+            try {
+                const res = await fetch(`/api/feedback/${id}`, {
+                    headers: { "Authorization": `Bearer ${token}` }
+                });
+                const f = await res.json();
+                
+                document.getElementById("detail-feedback-id").value = f.id;
+                document.getElementById("detail-feedback-name").textContent = f.name || "Anonymous";
+                
+                const utEl = document.getElementById("detail-feedback-usertype");
+                utEl.textContent = f.user_type;
+                
+                document.getElementById("detail-feedback-email").textContent = f.email || "No email provided";
+                document.getElementById("detail-feedback-phone").textContent = f.phone || "No phone provided";
+                
+                document.getElementById("detail-feedback-exp-stars").textContent = '★'.repeat(f.experience_rating) + '☆'.repeat(5 - f.experience_rating);
+                document.getElementById("detail-feedback-comm-stars").textContent = '★'.repeat(f.communication_rating) + '☆'.repeat(5 - f.communication_rating);
+                
+                const npsEl = document.getElementById("detail-feedback-nps");
+                npsEl.textContent = f.nps_score;
+                if (f.nps_score >= 9) {
+                    npsEl.style.background = "rgba(16, 185, 129, 0.1)";
+                    npsEl.style.color = "#10B981";
+                } else if (f.nps_score >= 7) {
+                    npsEl.style.background = "rgba(245, 158, 11, 0.1)";
+                    npsEl.style.color = "#F59E0B";
+                } else {
+                    npsEl.style.background = "rgba(239, 68, 68, 0.1)";
+                    npsEl.style.color = "#EF4444";
+                }
+                
+                document.getElementById("detail-feedback-comments").textContent = f.comments;
+                
+                // Property Interest
+                const propContainer = document.getElementById("detail-feedback-property-container");
+                if (f.properties && f.properties.name) {
+                    document.getElementById("detail-feedback-property").textContent = f.properties.name;
+                    propContainer.style.display = "block";
+                } else {
+                    propContainer.style.display = "none";
+                }
+                
+                // Consent status
+                const consentIcon = document.getElementById("detail-feedback-consent-icon");
+                const consentText = document.getElementById("detail-feedback-consent-text");
+                if (f.contact_consent) {
+                    consentIcon.innerHTML = "✅";
+                    consentIcon.style.color = "#10B981";
+                    consentText.textContent = "Yes — Follow up requested";
+                    consentText.style.color = "#10B981";
+                } else {
+                    consentIcon.innerHTML = "❌";
+                    consentIcon.style.color = "#ef4444";
+                    consentText.textContent = "No follow-up requested";
+                    consentText.style.color = "#6b7280";
+                }
+                
+                // File Attachments
+                const attachSection = document.getElementById("detail-feedback-attachments-section");
+                const attachList = document.getElementById("detail-feedback-attachments");
+                attachList.innerHTML = "";
+                
+                if (f.attachments && f.attachments.length > 0) {
+                    attachSection.style.display = "block";
+                    attachList.innerHTML = f.attachments.map(att => {
+                        let icon = "fa-paperclip";
+                        const ext = att.filename.split('.').pop().toLowerCase();
+                        if (['jpg', 'jpeg', 'png', 'gif', 'webp'].includes(ext)) icon = "fa-file-image";
+                        else if (['mp4', 'mov', 'webm', 'avi', 'mpeg'].includes(ext)) icon = "fa-file-video";
+                        else if (ext === 'pdf') icon = "fa-file-pdf";
+                        
+                        return `
+                            <div class="flex justify-between items-center bg-black/40 border border-[#333] p-3 rounded-lg">
+                                <span class="text-xs text-gray-300 font-semibold truncate max-w-[250px]"><i class="fas ${icon} mr-2 text-gray-500"></i>${att.filename}</span>
+                                <a href="${att.url}" target="_blank" class="btn btn-secondary btn-sm text-xs py-1 px-3">
+                                    <i class="fas fa-external-link-alt mr-1"></i> View File
+                                </a>
+                            </div>
+                        `;
+                    }).join("");
+                } else {
+                    attachSection.style.display = "none";
+                }
+                
+                // Review Status Form
+                document.getElementById("detail-feedback-status").value = f.status;
+                document.getElementById("detail-feedback-notes").value = f.admin_notes || "";
+                
+                document.getElementById("feedbackDetailModal").style.display = "flex";
+            } catch (err) {
+                console.error("Error opening feedback detail modal:", err);
+                showToast("Failed to load feedback details", "error");
+            }
+        }
+        
+        async function saveFeedbackReview() {
+            const id = document.getElementById("detail-feedback-id").value;
+            const status = document.getElementById("detail-feedback-status").value;
+            const adminNotes = document.getElementById("detail-feedback-notes").value.trim();
+            const btn = document.getElementById("save-feedback-btn");
+            
+            btn.disabled = true;
+            btn.textContent = "Saving...";
+            
+            try {
+                const res = await fetch(`/api/feedback/${id}/review`, {
+                    method: "PUT",
+                    headers: {
+                        "Content-Type": "application/json",
+                        "Authorization": `Bearer ${token}`
+                    },
+                    body: JSON.stringify({ status, admin_notes: adminNotes })
+                });
+                
+                if (res.ok) {
+                    document.getElementById("feedbackDetailModal").style.display = "none";
+                    showToast("Feedback review saved successfully ✓", "success");
+                    loadFeedback();
+                } else {
+                    const err = await res.json();
+                    showToast(err.detail || "Failed to save review", "error");
+                }
+            } catch (err) {
+                showToast("Network error", "error");
+            } finally {
+                btn.disabled = false;
+                btn.textContent = "Save Review";
+            }
+        }
+        
+        function copyFeedbackLink(e) {
+            const domain = window.location.hostname === 'localhost' ? 'http://localhost:5173' : window.location.origin.replace('api.', '').replace('backend.', '');
+            const feedbackUrl = `${domain}/feedback`;
+            
+            navigator.clipboard.writeText(feedbackUrl).then(() => {
+                const origText = e.target.innerHTML;
+                e.target.innerHTML = '<i class="fas fa-check"></i> Copied!';
+                showToast("Feedback form link copied to clipboard", "success");
+                setTimeout(() => { e.target.innerHTML = origText; }, 1500);
+            });
+        }
     </script>
 
     <!-- ADD PROPERTY MODAL -->
@@ -4756,31 +5140,101 @@
         </div>
     </div>
 
-    <!-- CALL OUTCOME MODAL (Section 5c) -->
-    <div id="callOutcomeModal" style="display:none; position:fixed; inset:0; background:rgba(0,0,0,0.85); z-index:2000; align-items:center; justify-content:center;">
-        <div style="background:#1A1A1A; width:420px; border-radius:16px; border:1px solid #333; overflow:hidden;">
-            <div style="padding:20px 24px; border-bottom:1px solid #333; display:flex; justify-content:space-between; align-items:center;">
-                <div>
-                    <div style="font-size:11px; color:#888; text-transform:uppercase; font-weight:700;">Log Call Outcome</div>
-                    <div id="callOutcomeClientName" style="font-size:16px; font-weight:800; color:#fff; margin-top:4px;"></div>
-                </div>
-                <div style="font-size:11px; color:#666;" id="callOutcomeFromRefresh"></div>
-            </div>
-            <div style="padding:24px;">
-                <div style="font-size:11px; color:#888; text-transform:uppercase; font-weight:700; margin-bottom:12px;">How did the call go?</div>
-                <div style="display:grid; grid-template-columns:1fr 1fr; gap:10px; margin-bottom:20px;">
-                    <button onclick="selectOutcome('answered')" class="outcome-btn" data-outcome="answered" style="padding:12px; border-radius:8px; border:1px solid #333; background:#111; color:#22c55e; font-weight:700; cursor:pointer;">✅ Answered</button>
-                    <button onclick="selectOutcome('no_answer')" class="outcome-btn" data-outcome="no_answer" style="padding:12px; border-radius:8px; border:1px solid #333; background:#111; color:#ef4444; font-weight:700; cursor:pointer;">📵 No Answer</button>
-                    <button onclick="selectOutcome('callback')" class="outcome-btn" data-outcome="callback" style="padding:12px; border-radius:8px; border:1px solid #333; background:#111; color:#f59e0b; font-weight:700; cursor:pointer;">🔁 Callback</button>
-                    <button onclick="selectOutcome('not_interested')" class="outcome-btn" data-outcome="not_interested" style="padding:12px; border-radius:8px; border:1px solid #333; background:#111; color:#6b7280; font-weight:700; cursor:pointer;">❌ Not Interested</button>
-                </div>
-                <input type="hidden" id="selectedOutcome" value="">
-                <textarea id="callOutcomeNotes" placeholder="Add notes (optional)..." style="width:100%; height:80px; background:#111; border:1px solid #333; border-radius:8px; padding:12px; color:#fff; outline:none; resize:none; font-size:13px; margin-bottom:16px; box-sizing:border-box;"></textarea>
-                <div style="margin-bottom:16px;">
-                    <label style="font-size:11px; color:#888; text-transform:uppercase; font-weight:700; display:block; margin-bottom:8px;">Follow-up Date (optional)</label>
-                    <input type="date" id="callFollowUpDate" style="width:100%; background:#111; border:1px solid #333; border-radius:8px; padding:10px; color:#fff; outline:none; font-size:13px; box-sizing:border-box;">
-                </div>
                 <button onclick="submitCallOutcome()" style="width:100%; padding:14px; background:var(--gold); border:none; border-radius:8px; color:#000; font-weight:800; cursor:pointer; font-size:14px;">Save Outcome</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- MODAL: FEEDBACK DETAIL -->
+    <div id="feedbackDetailModal" class="modal-overlay" style="display: none; position: fixed; inset: 0; background: rgba(0,0,0,0.8); z-index: 2050; align-items: center; justify-content: center; backdrop-filter: blur(8px);">
+        <div class="modal-content text-white" style="background: #111; width: 600px; border-radius: 16px; border: 1px solid #333; overflow: hidden; max-height: 90vh; display: flex; flex-direction: column;">
+            <div style="padding: 20px 24px; border-bottom: 1px solid #333; display: flex; justify-content: space-between; align-items: center; flex-shrink: 0;">
+                <h2 style="font-size: 18px; font-weight: 800; color: var(--gold);"><i class="fas fa-comment-dots mr-2"></i> Feedback Details</h2>
+                <button onclick="document.getElementById('feedbackDetailModal').style.display='none'" style="color: #666; font-size: 18px; background: none; border: none; cursor: pointer;"><i class="fas fa-times"></i></button>
+            </div>
+            
+            <div style="padding: 24px; overflow-y: auto; flex: 1;">
+                <div class="grid-2 mb-6">
+                    <div style="background: rgba(255,255,255,0.02); padding: 14px; border-radius: 8px; border: 1px solid #222;">
+                        <label style="font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 4px;">Submitter Name</label>
+                        <span id="detail-feedback-name" style="font-weight: 700; color: #fff; font-size: 14px;">-</span>
+                        <span id="detail-feedback-usertype" class="text-[10px] ml-2 px-2 py-0.5 rounded font-bold uppercase" style="background: rgba(255,255,255,0.08); color: #ccc;">-</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.02); padding: 14px; border-radius: 8px; border: 1px solid #222;">
+                        <label style="font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 4px;">Contact Info</label>
+                        <div id="detail-feedback-email" style="color: #ccc; font-size: 13px; word-break: break-all;">-</div>
+                        <div id="detail-feedback-phone" style="color: #888; font-size: 12px; margin-top: 2px;">-</div>
+                    </div>
+                </div>
+
+                <div class="grid-3 mb-6">
+                    <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid #222; text-align: center;">
+                        <label style="font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 6px;">Experience</label>
+                        <div id="detail-feedback-exp-stars" style="color: #C47D0A; font-size: 14px;">-</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid #222; text-align: center;">
+                        <label style="font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 6px;">NPS Recommend</label>
+                        <div id="detail-feedback-nps" class="font-bold text-sm" style="margin: 0 auto; width: fit-content; padding: 2px 8px; border-radius: 4px;">-</div>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid #222; text-align: center;">
+                        <label style="font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 6px;">Communication</label>
+                        <div id="detail-feedback-comm-stars" style="color: #C47D0A; font-size: 14px;">-</div>
+                    </div>
+                </div>
+
+                <div class="mb-6">
+                    <label style="font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 6px;">Feedback Comments</label>
+                    <div id="detail-feedback-comments" style="background: #0A0A0A; border: 1px solid #222; padding: 16px; border-radius: 10px; font-size: 14px; line-height: 1.6; color: #eee; white-space: pre-wrap; max-height: 120px; overflow-y: auto;">-</div>
+                </div>
+
+                <!-- Dynamic Property Interest / Consent -->
+                <div class="grid-2 mb-6">
+                    <div id="detail-feedback-property-container" style="display:none; background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid #222;">
+                        <label style="font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 4px;">Property of Interest</label>
+                        <span id="detail-feedback-property" style="font-weight: 600; color: #fff; font-size: 13px;">-</span>
+                    </div>
+                    <div style="background: rgba(255,255,255,0.02); padding: 12px; border-radius: 8px; border: 1px solid #222; display: flex; align-items: center; gap: 8px;">
+                        <div id="detail-feedback-consent-icon" style="font-size: 16px;">-</div>
+                        <div>
+                            <label style="font-size: 10px; color: #888; text-transform: uppercase; display: block;">Follow-up Consent</label>
+                            <span id="detail-feedback-consent-text" style="font-weight: 600; font-size: 12px;">-</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Attachments List -->
+                <div class="mb-6" id="detail-feedback-attachments-section" style="display: none;">
+                    <label style="font-size: 10px; color: #888; text-transform: uppercase; display: block; margin-bottom: 6px;">Attachments</label>
+                    <div id="detail-feedback-attachments" class="space-y-2">
+                        <!-- attachments render here -->
+                    </div>
+                </div>
+
+                <!-- Review Section -->
+                <div class="pt-6 border-t border-[#333]">
+                    <h3 style="font-size: 14px; font-weight: 700; color: #fff; margin-bottom: 12px;"><i class="fas fa-user-edit text-[#C47D0A] mr-2"></i> Administrative Review</h3>
+                    <input type="hidden" id="detail-feedback-id">
+                    
+                    <div class="mb-4">
+                        <label style="font-size: 11px; color: #888; display: block; margin-bottom: 6px;">Review Status</label>
+                        <select id="detail-feedback-status" style="width: 100%; background: #000; border: 1px solid #333; color: #fff; border-radius: 8px; padding: 10px; font-size: 13px; outline: none;">
+                            <option value="new">New</option>
+                            <option value="reviewed">Reviewed</option>
+                            <option value="contacted">Contacted</option>
+                            <option value="resolved">Resolved</option>
+                        </select>
+                    </div>
+
+                    <div class="mb-6">
+                        <label style="font-size: 11px; color: #888; display: block; margin-bottom: 6px;">Follow-up Notes / Internal Remarks</label>
+                        <textarea id="detail-feedback-notes" placeholder="Log details of call, action taken or resolution notes..." style="width: 100%; height: 80px; background: #000; border: 1px solid #333; border-radius: 8px; padding: 10px; color: #fff; outline: none; resize: none; font-size: 13px;"></textarea>
+                    </div>
+
+                    <div style="display: flex; gap: 12px; justify-content: flex-end;">
+                        <button class="btn btn-secondary" onclick="document.getElementById('feedbackDetailModal').style.display='none'">Cancel</button>
+                        <button class="btn btn-primary" id="save-feedback-btn" onclick="saveFeedbackReview()">Save Review</button>
+                    </div>
+                </div>
             </div>
         </div>
     </div>

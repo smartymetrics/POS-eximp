@@ -754,3 +754,27 @@ class DiscountCodeValidateResponse(BaseModel):
     discount_type: Optional[str] = None
     discount_value: Optional[Decimal] = None
     discount_amount: Optional[Decimal] = None
+
+
+# ─── CLIENT FEEDBACK ──────────────────────────────────────────
+class ClientFeedbackCreate(BaseModel):
+    contact_id: Optional[str] = None
+    client_id: Optional[str] = None
+    name: Optional[str] = None
+    email: Optional[EmailStr] = None
+    phone: Optional[str] = None
+    user_type: str = "other"  # 'client', 'lead', 'other'
+    feedback_type: str = "general"  # 'satisfaction', 'complaint', 'suggestion', 'inquiry', 'general'
+    experience_rating: int  # 1 to 5
+    nps_score: int  # 0 to 10
+    communication_rating: int  # 1 to 5
+    comments: str
+    property_interest_id: Optional[str] = None
+    contact_consent: bool = False
+    attachment_urls: Optional[List[str]] = []
+
+
+class ClientFeedbackReview(BaseModel):
+    status: str  # 'new', 'reviewed', 'contacted', 'resolved'
+    admin_notes: Optional[str] = None
+
