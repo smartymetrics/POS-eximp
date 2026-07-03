@@ -49,6 +49,7 @@ class CampaignUpdate(BaseModel):
 class CampaignTest(BaseModel):
     email: Optional[str] = None
     segment_id: Optional[str] = None
+    force_external_test: Optional[bool] = False
     subject_a: Optional[str] = None
     subject_b: Optional[str] = None
     preview_text: Optional[str] = None
@@ -207,6 +208,26 @@ async def send_test_email(id: str, data: CampaignTest, current_admin=Depends(ver
         contacts = await resolve_target_recipients([data.segment_id], None)
         if not contacts:
             raise HTTPException(status_code=400, detail="Selected segment has no recipients.")
+        
+        # SAFETY BLOCK: Prevent sending test segment emails to real clients unless forced
+        if not data.force_external_test:
+            allowed_domains = ["eximps-cloves.com", "resend.dev", "smartymetrics.com"]
+            allowed_emails = ["chkscaleb.ifeanyi@outlook.com", "eximpcloves@gmail.com", "smartymetric@gmail.com"]
+            
+            external_contacts = []
+            for c in contacts:
+                email = c.get("email", "").lower().strip()
+                domain = email.split("@")[-1] if "@" in email else ""
+                if domain not in allowed_domains and email not in allowed_emails:
+                    external_contacts.append(email)
+            if external_contacts:
+                raise HTTPException(
+                    status_code=403,
+                    detail=f"Safety Block: Test segment send contains {len(external_contacts)} external contact(s) (e.g. {external_contacts[0]}). "
+                           f"To prevent accidental spam, test segment sends containing external clients are blocked. "
+                           f"Please check the safety override option to proceed."
+                )
+
         recipients_list = contacts
         target_desc = f"segment '{data.segment_id}' ({len(contacts)} contacts)"
         preview_note = f"segment send"
@@ -776,7 +797,7 @@ async def resend_failed_campaign_emails(
         current_admin["sub"]
     )
     
-    return {"message": f"Resend initiated for {failed_count} recipient(s) in the background.", "failed_count": failed_count}
+    return {"message": f"Resend initiated for {total_resend_count} recipient(s) in the background.", "total_resend_count": total_resend_count}
 
 
 @router.post("/{id}/resend-single")

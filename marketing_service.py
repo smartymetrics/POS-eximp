@@ -530,8 +530,8 @@ async def resolve_target_recipients(segment_ids: List[str] = None, manual_emails
                 res = db.table("marketing_contacts").select("*").gt("engagement_score", 50).eq("is_subscribed", True).execute()
                 all_contacts.extend(res.data)
             elif sid == 'failed_deliveries':
-                # Contacts who have failed delivery records in campaign_recipients
-                recs_res = db.table("campaign_recipients").select("contact_id").eq("status", "failed").execute()
+                # Contacts who have failed or pending delivery records in campaign_recipients
+                recs_res = db.table("campaign_recipients").select("contact_id").in_("status", ["failed", "pending"]).execute()
                 failed_contact_ids = list({r["contact_id"] for r in (recs_res.data or [])})
                 if failed_contact_ids:
                     res = db.table("marketing_contacts").select("*").in_("id", failed_contact_ids).eq("is_subscribed", True).execute()

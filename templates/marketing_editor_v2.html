@@ -1017,6 +1017,13 @@
           <select id="test-segment-select" style="width:100%;background:#1a1a1a;border:1px solid #333;border-radius:6px;color:#ccc;padding:10px;font-size:0.85rem;outline:none;margin-bottom:12px;cursor:pointer;">
             <option value="">Loading segments...</option>
           </select>
+          
+          <!-- Safety Override Checkbox -->
+          <div style="display:flex;align-items:center;gap:8px;margin-bottom:12px;margin-top:8px;">
+            <input type="checkbox" id="test-force-checkbox" style="width:16px;height:16px;accent-color:#C47D0A;cursor:pointer;">
+            <label for="test-force-checkbox" style="color:#ccc;font-size:0.8rem;cursor:pointer;user-select:none;">Allow test send to external/customer email domains</label>
+          </div>
+          
           <p style="color:#555;font-size:0.75rem;margin-top:2px;">Select a segment to send this test to. Helpful for reviewing bulk behavior and variables in dynamic pools.</p>
         </div>
       </div>
@@ -3243,9 +3250,11 @@
         variantData[activeVariant].html = editor.getHtml();
       }
 
+      const forceCheck = document.getElementById('test-force-checkbox');
       const payload = {
         email: testType === 'email' ? email : null,
         segment_id: testType === 'segment' ? segmentId : null,
+        force_external_test: forceCheck ? forceCheck.checked : false,
         variant: activeVariant,
         subject_a: variantData['A'].subject,
         html_body_a: variantData['A'].html,

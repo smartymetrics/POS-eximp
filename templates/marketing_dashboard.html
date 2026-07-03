@@ -1421,6 +1421,7 @@
                             <button onclick="setRecipientFilter('clicked')" id="pill-filter-clicked" class="pill-filter-btn px-2.5 py-1 text-[10px] font-black uppercase rounded text-gray-600 hover:bg-gray-200 transition-all">Clicked</button>
                             <button onclick="setRecipientFilter('bounced')" id="pill-filter-bounced" class="pill-filter-btn px-2.5 py-1 text-[10px] font-black uppercase rounded text-gray-600 hover:bg-gray-200 transition-all">Bounced</button>
                             <button onclick="setRecipientFilter('failed')" id="pill-filter-failed" class="pill-filter-btn px-2.5 py-1 text-[10px] font-black uppercase rounded text-gray-600 hover:bg-gray-200 transition-all">Failed</button>
+                            <button onclick="setRecipientFilter('pending')" id="pill-filter-pending" class="pill-filter-btn px-2.5 py-1 text-[10px] font-black uppercase rounded text-gray-600 hover:bg-gray-200 transition-all">Pending</button>
                         </div>
                     </div>
                         <div class="relative">
@@ -4054,14 +4055,24 @@
                 list.innerHTML = recipients.map(r => {
                     const c = r.marketing_contacts || { first_name: 'Unknown', last_name: 'Recipient', email: 'N/A' };
                     let statusClass = "bg-gray-100 text-gray-500";
-                    if (r.open_count > 0) statusClass = "bg-brand-gold bg-opacity-10 text-brand-gold";
-                    if (r.click_count > 0) statusClass = "bg-blue-100 text-blue-600";
-
+                    
                     let statusType = "delivered";
-                    if (r.click_count > 0) statusType = "clicked";
-                    else if (r.open_count > 0) statusType = "opened";
-                    else if (r.status === 'bounced') statusType = "bounced";
-                    else if (r.status === 'failed') statusType = "failed";
+                    if (r.status === 'failed') {
+                        statusClass = "bg-red-100 text-red-600";
+                        statusType = "failed";
+                    } else if (r.status === 'bounced') {
+                        statusClass = "bg-red-100 text-red-700 font-black";
+                        statusType = "bounced";
+                    } else if (r.status === 'pending') {
+                        statusClass = "bg-amber-100 text-amber-700";
+                        statusType = "pending";
+                    } else if (r.click_count > 0) {
+                        statusClass = "bg-blue-100 text-blue-600";
+                        statusType = "clicked";
+                    } else if (r.open_count > 0) {
+                        statusClass = "bg-brand-gold bg-opacity-10 text-brand-gold";
+                        statusType = "opened";
+                    }
 
                     const email = (c.email || '').toLowerCase().trim();
                     const isSuppressedDomain = email.includes('temp-eximps.com') || email.includes('placeholder.com');
