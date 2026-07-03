@@ -1,4 +1,4 @@
-from fastapi import APIRouter, HTTPException, Depends, Form, Request
+from fastapi import APIRouter, HTTPException, Depends, Form, Request, BackgroundTasks
 from typing import Optional, List
 from pydantic import EmailStr
 from database import get_db, db_execute
@@ -13,9 +13,43 @@ logger = logging.getLogger(__name__)
 
 router = APIRouter()
 
+async def create_feedback_notifications(feedback_payload: dict):
+    """Background task to notify all admins authorized to view feedback."""
+    try:
+        db = get_db()
+        # Query all admins
+        admins_res = await db_execute(lambda: db.table("admins").select("id, role").execute())
+        if not admins_res.data:
+            return
+        
+        target_admin_ids = []
+        for adm in admins_res.data:
+            roles = [r.strip().lower() for r in (adm.get("role") or "").split(",") if r.strip()]
+            if any(r in {"admin", "super_admin", "operations", "customer_support"} for r in roles):
+                target_admin_ids.append(adm["id"])
+                
+        if not target_admin_ids:
+            return
+            
+        notifications = [
+            {
+                "admin_id": admin_id,
+                "title": "New Client Feedback",
+                "message": f"New feedback submitted by {feedback_payload.get('name') or 'Anonymous'} ({feedback_payload.get('feedback_type', 'general')}). NPS: {feedback_payload.get('nps_score')}/10.",
+                "notification_type": "general",
+                "is_read": False,
+                "created_at": datetime.utcnow().isoformat()
+            }
+            for admin_id in target_admin_ids
+        ]
+        await db_execute(lambda: db.table("notifications").insert(notifications).execute())
+    except Exception as ex:
+        logger.error(f"Failed to create feedback notifications for admins: {ex}")
+
 @router.post("/submit")
 async def submit_client_feedback(
     request: Request,
+    background_tasks: BackgroundTasks,
     user_type: str = Form(...),
     feedback_type: str = Form(...),
     experience_rating: int = Form(...),
@@ -192,6 +226,8 @@ async def submit_client_feedback(
     res = await db_execute(lambda: db.table("client_feedback").insert(payload).execute())
     if not res.data:
         raise HTTPException(status_code=500, detail="Failed to save feedback submission")
+
+    background_tasks.add_task(create_feedback_notifications, payload)
 
     return {"message": "Feedback submitted successfully", "id": res.data[0]["id"]}
 
