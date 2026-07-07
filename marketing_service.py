@@ -340,7 +340,7 @@ async def send_marketing_email(campaign: Dict[str, Any], contact: Dict[str, Any]
     # so Outlook, Gmail, and all email clients render correctly.
     raw_html = campaign["html_body_a"]
     try:
-        raw_html = inline_css(raw_html, remove_classes=False, strip_important=False)
+        raw_html = inline_css(raw_html, remove_classes=False, strip_important=False, keep_style_tags=True)
     except Exception as e:
         logger.warning(f"CSS inlining failed, sending as-is: {e}")
 
