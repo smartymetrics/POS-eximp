@@ -166,6 +166,150 @@ def sanitize_urls(html: str) -> str:
     pattern = r"http://(?:localhost|127\.0\.0\.1):\d+/"
     return re.sub(pattern, f"{APP_BASE_URL.rstrip('/')}/", html)
 
+def optimize_html_for_mobile(html: str) -> str:
+    """Post-processes HTML to ensure responsive mobile rendering in email clients.
+    
+    1. Finds all <img> tags that are content/fluid images and ensures they have 
+       max-width: 100% !important; height: auto !important; in their inline style. 
+       This prevents mobile Gmail from shrinking font sizes after loading images.
+    2. Ensures the viewport meta tag is present.
+    3. Injects -webkit-text-size-adjust resets and mobile media queries in a <style> block.
+    """
+    # 1. Force responsive styles on large or unspecified width images (ignoring small icons/logos)
+    img_pattern = re.compile(r'<img([^>]+)>', re.IGNORECASE)
+    
+    def img_replacer(match):
+        img_tag = match.group(0)
+        attrs = match.group(1)
+        
+        # Check for width attribute or style
+        width_attr_match = re.search(r'width\s*=\s*["\']([^"\']*)["\']', attrs, re.IGNORECASE)
+        width_style_match = re.search(r'width\s*:\s*([^;\'"]+)', attrs, re.IGNORECASE)
+        
+        is_large_or_fluid = False
+        
+        if width_attr_match:
+            width_val = width_attr_match.group(1).strip()
+            if '%' in width_val:
+                is_large_or_fluid = True
+            else:
+                try:
+                    val = int(re.sub(r'[^\d]', '', width_val))
+                    if val > 150:
+                        is_large_or_fluid = True
+                except:
+                    pass
+        elif width_style_match:
+            width_val = width_style_match.group(1).strip()
+            if '%' in width_val:
+                is_large_or_fluid = True
+            else:
+                try:
+                    val = int(re.sub(r'[^\d]', '', width_val))
+                    if val > 150:
+                        is_large_or_fluid = True
+                except:
+                    pass
+
+        # Check for height attribute or style to identify small icons/logos
+        has_small_height = False
+        height_attr_match = re.search(r'height\s*=\s*["\']([^"\']*)["\']', attrs, re.IGNORECASE)
+        height_style_match = re.search(r'height\s*:\s*([^;\'"]+)', attrs, re.IGNORECASE)
+        
+        if height_attr_match:
+            try:
+                val = int(re.sub(r'[^\d]', '', height_attr_match.group(1)))
+                if val <= 150:
+                    has_small_height = True
+            except:
+                pass
+        elif height_style_match:
+            try:
+                val = int(re.sub(r'[^\d]', '', height_style_match.group(1)))
+                if val <= 150:
+                    has_small_height = True
+            except:
+                pass
+
+        has_width = width_attr_match or width_style_match
+        
+        # Apply responsive overrides if it's explicitly large/fluid,
+        # OR if it doesn't specify a width and does not have a small height (e.g. typical custom images)
+        if is_large_or_fluid or (not has_width and not has_small_height):
+            # Check if style attribute already exists
+            style_match = re.search(r'style\s*=\s*["\']([^"\']*)["\']', attrs, re.IGNORECASE)
+            if style_match:
+                orig_style = style_match.group(1)
+                new_style = orig_style
+                if 'max-width' not in orig_style.lower():
+                    new_style += '; max-width: 100% !important'
+                if 'height' not in orig_style.lower():
+                    new_style += '; height: auto !important'
+                
+                # Normalize semicolons
+                new_style = re.sub(r';+', ';', new_style).strip(';')
+                attrs_new = attrs.replace(style_match.group(0), f'style="{new_style}"')
+            else:
+                attrs_new = attrs + ' style="max-width: 100% !important; height: auto !important;"'
+            
+            return f'<img{attrs_new}>'
+            
+        return img_tag
+
+    html = img_pattern.sub(img_replacer, html)
+    
+    # 2. Inject resets, viewport meta tag, and mobile media queries
+    reset_styles = """
+    <style type="text/css">
+      :root {
+        color-scheme: light dark;
+        supported-color-schemes: light dark;
+      }
+      body, table, td, a { -webkit-text-size-adjust: 100% !important; -ms-text-size-adjust: 100% !important; }
+      table, td { mso-table-lspace: 0pt !important; mso-table-rspace: 0pt !important; }
+      img { -ms-interpolation-mode: bicubic !important; }
+      
+      /* Mobile media query to cap layout elements */
+      @media only screen and (max-width: 600px) {
+        table, div, td { max-width: 100% !important; }
+        img { max-width: 100% !important; height: auto !important; }
+      }
+      
+      /* Dark mode contrast preservation: forces intended white/grey text to remain bright */
+      @media (prefers-color-scheme: dark) {
+        [style*="color:#ffffff"], [style*="color:#fff"], [style*="color: #ffffff"], [style*="color: #fff"] {
+          color: #ffffff !important;
+        }
+        [style*="color:#cccccc"], [style*="color:#ccc"], [style*="color: #cccccc"], [style*="color: #ccc"] {
+          color: #cccccc !important;
+        }
+        [style*="color:#ffffff"] *, [style*="color:#fff"] *, [style*="color: #ffffff"] *, [style*="color: #fff"] * {
+          color: #ffffff !important;
+        }
+        [style*="color:#cccccc"] *, [style*="color:#ccc"] *, [style*="color: #cccccc"] *, [style*="color: #ccc"] * {
+          color: #cccccc !important;
+        }
+      }
+    </style>
+    """
+    viewport_meta = """<meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta name="color-scheme" content="light dark">
+    <meta name="supported-color-schemes" content="light dark">"""
+    
+    # Check for <head> tag
+    if '<head>' in html.lower():
+        # Inject right after <head>
+        idx = html.lower().find('<head>') + 6
+        html = html[:idx] + '\n' + viewport_meta + reset_styles + html[idx:]
+    elif '<body>' in html.lower():
+        idx = html.lower().find('<body>')
+        html = html[:idx] + f'<head>{viewport_meta}{reset_styles}</head>' + html[idx:]
+    else:
+        # Fallback: prepend
+        html = f'<head>{viewport_meta}{reset_styles}</head>' + html
+        
+    return html
+
 async def send_marketing_email(campaign: Dict[str, Any], contact: Dict[str, Any]):
     """Sends a single personalized marketing email with tracking."""
     campaign_id = campaign["id"]
@@ -203,6 +347,9 @@ async def send_marketing_email(campaign: Dict[str, Any], contact: Dict[str, Any]
     # 2. Personalize & Sanitize
     html = personalize_content(raw_html, contact)
     html = sanitize_urls(html)
+    
+    # Apply mobile/Gmail responsiveness optimizations
+    html = optimize_html_for_mobile(html)
     
     # 3. Inject preview text preheader (BUG-08 fix)
     # This must happen BEFORE tracking so it sits right after <body>.
